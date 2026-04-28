@@ -5,7 +5,8 @@ import { cn } from './lib/utils'
 
 type ReviewStatus = 'open' | 'accepted' | 'rejected'
 type ImplStatus = 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
-type StatusFilter = 'all' | 'open' | 'accepted' | 'rejected' | 'done'
+type StatusFilter = 'all' | 'open' | 'ready' | 'done'
+type DisplayStatus = 'open' | 'ready' | 'done' | 'rejected'
 
 interface Comment {
   id: string
@@ -160,26 +161,18 @@ function isInactive(c: Comment) {
   return c.reviewStatus === 'rejected' || c.implementationStatus === 'done'
 }
 
-const REVIEW_STATUS_LABELS: Record<ReviewStatus, string> = {
+function getDisplayStatus(c: Comment): DisplayStatus {
+  if (c.reviewStatus === 'rejected') return 'rejected'
+  if (c.implementationStatus === 'done') return 'done'
+  if (c.reviewStatus === 'accepted') return 'ready'
+  return 'open'
+}
+
+const DISPLAY_STATUS_LABELS: Record<DisplayStatus, string> = {
   open: 'Open',
-  accepted: 'Accepted',
-  rejected: 'Rejected',
-}
-
-const IMPL_STATUS_LABELS: Record<ImplStatus, string> = {
-  unassigned: 'To do',
-  claimed: 'Claimed',
-  in_progress: 'In progress',
-  blocked: 'Blocked',
+  ready: 'Ready for Agent',
   done: 'Done',
-}
-
-const IMPL_STATUS_COLORS: Record<ImplStatus, string> = {
-  unassigned: 'bg-status-open-bg text-status-open',
-  claimed: 'bg-status-claimed-bg text-status-claimed',
-  in_progress: 'bg-status-in-progress-bg text-status-in-progress',
-  blocked: 'bg-status-blocked-bg text-status-blocked',
-  done: 'bg-status-done-bg text-status-done',
+  rejected: 'Rejected',
 }
 
 // ─── App ────────────────────────────────────────────────────────────
@@ -196,7 +189,20 @@ export function App() {
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
+  const [bulkMode, setBulkMode] = useState(false)
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'dark'
+    try { return (localStorage.getItem('dashboard-theme') as 'light' | 'dark') || 'dark' } catch { return 'dark' }
+  })
   const [, setTick] = useState(0)
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (theme === 'light') root.classList.add('light')
+    else root.classList.remove('light')
+    try { localStorage.setItem('dashboard-theme', theme) } catch {}
+  }, [theme])
 
   useEffect(() => {
     const t = setInterval(() => setTick((n) => n + 1), 15000)
@@ -208,9 +214,9 @@ export function App() {
   [comments, selectedProject])
 
   const filteredComments = useMemo(() => {
-    const filtered = statusFilter === 'all' ? projectComments
-      : statusFilter === 'done' ? projectComments.filter((c) => c.implementationStatus === 'done')
-      : projectComments.filter((c) => c.reviewStatus === statusFilter)
+    const filtered = statusFilter === 'all'
+      ? projectComments
+      : projectComments.filter((c) => getDisplayStatus(c) === statusFilter)
 
     return [...filtered].sort((a, b) => Number(isInactive(a)) - Number(isInactive(b)))
   }, [projectComments, statusFilter])
@@ -220,13 +226,11 @@ export function App() {
   const counts = useMemo(() => projectComments.reduce(
     (acc, c) => {
       acc.all++
-      if (c.reviewStatus === 'open') acc.open++
-      else if (c.reviewStatus === 'accepted') acc.accepted++
-      else if (c.reviewStatus === 'rejected') acc.rejected++
-      if (c.implementationStatus === 'done') acc.done++
+      const ds = getDisplayStatus(c)
+      acc[ds]++
       return acc
     },
-    { all: 0, open: 0, accepted: 0, rejected: 0, done: 0 },
+    { all: 0, open: 0, ready: 0, done: 0, rejected: 0 },
   ), [projectComments])
 
   const handleReviewStatus = useCallback((id: string, status: ReviewStatus) => {
@@ -244,6 +248,41 @@ export function App() {
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
   }, [handleReviewStatus])
+
+  const toggleBulkSelect = useCallback((id: string) => {
+    setBulkSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
+
+  const exitBulkMode = useCallback(() => {
+    setBulkMode(false)
+    setBulkSelectedIds(new Set())
+  }, [])
+
+  const applyBulkAction = useCallback((action: 'ready' | 'done' | 'reject') => {
+    const ids = bulkSelectedIds
+    if (ids.size === 0) return
+    setComments((prev) => prev.map((c) => {
+      if (!ids.has(c.id)) return c
+      const ts = new Date().toISOString()
+      if (action === 'ready') return { ...c, reviewStatus: 'accepted' as ReviewStatus, updatedAt: ts }
+      if (action === 'done') return { ...c, reviewStatus: 'accepted' as ReviewStatus, implementationStatus: 'done' as ImplStatus, updatedAt: ts }
+      return { ...c, reviewStatus: 'rejected' as ReviewStatus, updatedAt: ts }
+    }))
+    exitBulkMode()
+  }, [bulkSelectedIds, exitBulkMode])
+
+  const toggleSelectAllVisible = useCallback(() => {
+    const visibleIds = filteredComments.map((c) => c.id)
+    setBulkSelectedIds((prev) => {
+      const allSelected = visibleIds.every((id) => prev.has(id))
+      return allSelected ? new Set() : new Set(visibleIds)
+    })
+  }, [filteredComments])
 
   const selectedIdx = filteredComments.findIndex((c) => c.id === selectedCommentId)
 
@@ -271,6 +310,11 @@ export function App() {
         return
       }
 
+      if (e.key === 'Escape' && bulkMode) {
+        exitBulkMode()
+        return
+      }
+
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
@@ -290,7 +334,7 @@ export function App() {
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen])
+  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -306,8 +350,7 @@ export function App() {
     if (action === 'toggle-sidebar') setSidebarOpen((v) => !v)
     if (action === 'filter-all') selectFilter('all')
     if (action === 'filter-open') selectFilter('open')
-    if (action === 'filter-accepted') selectFilter('accepted')
-    if (action === 'filter-rejected') selectFilter('rejected')
+    if (action === 'filter-ready') selectFilter('ready')
     if (action === 'filter-done') selectFilter('done')
     if (selectedComment && action === 'accept') toggleReview(selectedComment, 'accepted')
     if (selectedComment && action === 'reject') toggleReview(selectedComment, 'rejected')
@@ -400,6 +443,22 @@ export function App() {
               <span className="text-[11px]">⌘</span>K
             </kbd>
           </button>
+          <button
+            onClick={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
+            title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
+            className="w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            {theme === 'light' ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="4" />
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+              </svg>
+            )}
+          </button>
           <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
             TO
           </div>
@@ -417,25 +476,32 @@ export function App() {
               <h2 className="text-base font-bold text-foreground tracking-tight">
                 {counts.all} Feedback Items
               </h2>
-              <button className="text-[11px] font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-                <CheckboxIcon /> Select
+              <button
+                onClick={() => bulkMode ? exitBulkMode() : setBulkMode(true)}
+                className={cn(
+                  'text-[11px] font-medium transition-colors flex items-center gap-1',
+                  bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
               </button>
             </div>
             <div className="flex gap-1">
-              {(['all', 'open', 'accepted', 'rejected', 'done'] as StatusFilter[]).map((f) => {
+              {(['all', 'open', 'ready', 'done'] as StatusFilter[]).map((f) => {
                 const count = counts[f as keyof typeof counts] ?? 0
+                const label = f === 'all' ? 'All' : f === 'open' ? 'Open' : f === 'ready' ? 'Ready for Agent' : 'Done'
                 return (
                   <button
                     key={f}
                     onClick={() => selectFilter(f)}
                     className={cn(
-                      'px-2.5 py-1 rounded-md text-[11px] font-semibold capitalize transition-all',
+                      'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all',
                       statusFilter === f
                         ? 'bg-primary text-primary-foreground'
                         : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                     )}
                   >
-                    {f}
+                    {label}
                     <span className={cn(
                       'ml-1.5 text-[10px] font-bold min-w-[18px] text-center py-0.5 px-1 rounded-full',
                       statusFilter === f
@@ -447,6 +513,43 @@ export function App() {
               })}
             </div>
           </div>
+
+          {/* Bulk action bar */}
+          {bulkMode && (
+            <div className="px-4 py-2.5 border-b border-border bg-accent/40 flex items-center gap-2 whitespace-nowrap">
+              <button
+                onClick={toggleSelectAllVisible}
+                className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+              >
+                {filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id)) ? 'Deselect all' : 'Select all'}
+              </button>
+              <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+                {bulkSelectedIds.size} selected
+              </span>
+              <div className="flex-1" />
+              <button
+                disabled={bulkSelectedIds.size === 0}
+                onClick={() => applyBulkAction('ready')}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-accepted-bg text-status-accepted hover:bg-status-accepted hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
+              >
+                Ready
+              </button>
+              <button
+                disabled={bulkSelectedIds.size === 0}
+                onClick={() => applyBulkAction('done')}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-done-bg text-status-done hover:bg-status-done hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
+              >
+                Done
+              </button>
+              <button
+                disabled={bulkSelectedIds.size === 0}
+                onClick={() => applyBulkAction('reject')}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-rejected-bg text-status-rejected hover:bg-status-rejected hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
+              >
+                Reject
+              </button>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto">
             {filteredComments.length === 0 ? (
@@ -461,6 +564,7 @@ export function App() {
               <div className="animate-stagger">
               {filteredComments.map((comment) => {
                 const isActive = comment.id === selectedCommentId
+                const isChecked = bulkSelectedIds.has(comment.id)
                 const inactive = isInactive(comment)
                 const borderColor =
                   comment.implementationStatus === 'done' ? 'border-l-status-done' :
@@ -471,22 +575,35 @@ export function App() {
                 return (
                   <button
                     key={comment.id}
-                    onClick={() => setSelectedCommentId(comment.id)}
+                    onClick={() => bulkMode ? toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
                     className={cn(
                       'w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
                       borderColor,
-                      isActive ? 'bg-accent' : 'hover:bg-accent/40',
-                      inactive && 'opacity-50'
+                      bulkMode && isChecked ? 'bg-primary/10' : isActive && !bulkMode ? 'bg-accent' : 'hover:bg-accent/40',
+                      inactive && !isChecked && 'opacity-50'
                     )}
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        <div
-                          className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold text-white"
-                          style={{ background: comment.authorColor }}
-                        >
-                          {comment.authorInitial}
-                        </div>
+                        {bulkMode ? (
+                          <div className={cn(
+                            'w-[18px] h-[18px] rounded shrink-0 flex items-center justify-center border-2 transition-colors',
+                            isChecked ? 'bg-primary border-primary' : 'border-muted-foreground/40'
+                          )}>
+                            {isChecked && (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                            )}
+                          </div>
+                        ) : (
+                          <div
+                            className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold text-white"
+                            style={{ background: comment.authorColor }}
+                          >
+                            {comment.authorInitial}
+                          </div>
+                        )}
                         <span className="text-[13px] font-bold text-foreground">{comment.author}</span>
                       </div>
                       <span className="text-[10px] text-muted-foreground/60">{timeAgo(comment.createdAt)}</span>
@@ -500,10 +617,7 @@ export function App() {
                     </p>
 
                     <div className="flex items-center gap-1.5 pl-[26px] flex-wrap">
-                      <StatusBadge status={comment.reviewStatus} />
-                      {comment.implementationStatus !== 'unassigned' && (
-                        <ImplBadge status={comment.implementationStatus} />
-                      )}
+                      <StatusBadge comment={comment} />
                       {comment.claimedByAgentId && (
                         <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-in-progress">
                           <span className="w-1.5 h-1.5 rounded-full bg-status-in-progress animate-pulse-dot" />
@@ -532,20 +646,20 @@ export function App() {
                   <span>·</span>
                   <span className="font-mono">{truncateUrl(selectedComment.pageUrl)}</span>
                   <span>·</span>
-                  <span className={cn(
-                    'font-semibold',
-                    selectedComment.reviewStatus === 'accepted' ? 'text-status-accepted' :
-                    selectedComment.reviewStatus === 'rejected' ? 'text-status-rejected' :
-                    'text-muted-foreground'
-                  )}>
-                    {REVIEW_STATUS_LABELS[selectedComment.reviewStatus]}
-                  </span>
-                  {selectedComment.implementationStatus !== 'unassigned' && (
-                    <>
-                      <span>·</span>
-                      <ImplBadge status={selectedComment.implementationStatus} />
-                    </>
-                  )}
+                  {(() => {
+                    const ds = getDisplayStatus(selectedComment)
+                    return (
+                      <span className={cn(
+                        'font-semibold',
+                        ds === 'ready' && 'text-status-accepted',
+                        ds === 'rejected' && 'text-status-rejected',
+                        ds === 'done' && 'text-status-done',
+                        ds === 'open' && 'text-muted-foreground',
+                      )}>
+                        {DISPLAY_STATUS_LABELS[ds]}
+                      </span>
+                    )
+                  })()}
                 </div>
               </div>
 
@@ -627,12 +741,20 @@ export function App() {
               <div className="shrink-0 border-t border-border bg-card px-6 py-3">
                 <div className="flex items-center gap-2 max-w-2xl mx-auto">
                   <ActionBtn
-                    active={selectedComment.reviewStatus === 'accepted'}
+                    active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
                     variant="accept"
                     onClick={() => toggleReview(selectedComment, 'accepted')}
                     shortcut="A"
                   >
-                    <CheckIcon size={14} /> Accept
+                    <BotIcon size={14} /> Ready for Agent
+                  </ActionBtn>
+                  <ActionBtn
+                    active={selectedComment.implementationStatus === 'done'}
+                    variant="done"
+                    onClick={() => handleToggleDone(selectedComment.id)}
+                    shortcut="M"
+                  >
+                    <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Done' : 'Mark Done'}
                   </ActionBtn>
                   <ActionBtn
                     active={selectedComment.reviewStatus === 'rejected'}
@@ -641,17 +763,6 @@ export function App() {
                     shortcut="D"
                   >
                     <XIcon size={14} /> Reject
-                  </ActionBtn>
-
-                  <div className="w-px h-5 bg-border mx-1" />
-
-                  <ActionBtn
-                    active={selectedComment.implementationStatus === 'done'}
-                    variant="done"
-                    onClick={() => handleToggleDone(selectedComment.id)}
-                    shortcut="M"
-                  >
-                    <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Done' : 'Mark done'}
                   </ActionBtn>
 
                   <div className="w-px h-5 bg-border mx-1" />
@@ -694,7 +805,7 @@ export function App() {
               <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">
                 <Kbd>J</Kbd><Kbd>K</Kbd> navigate
                 <span className="mx-1">·</span>
-                <Kbd>A</Kbd> accept
+                <Kbd>A</Kbd> ready
                 <span className="mx-1">·</span>
                 <Kbd>D</Kbd> reject
               </div>
@@ -712,7 +823,7 @@ export function App() {
                   <XIcon size={14} />
                 </button>
               </div>
-              <p className="text-xs text-muted-foreground">Let AI agents fix your accepted feedback automatically</p>
+              <p className="text-xs text-muted-foreground">Let AI agents fix your Ready for Agent items automatically</p>
             </div>
 
             {/* Session link — the core handoff */}
@@ -729,9 +840,9 @@ export function App() {
               <div className="mt-3 rounded-md bg-muted/60 border border-border px-3 py-2.5">
                 <p className="text-[11px] text-foreground font-medium mb-1.5">How it works</p>
                 <ol className="text-[10px] text-muted-foreground leading-relaxed space-y-1 list-decimal list-inside">
-                  <li>You review feedback and mark items as <span className="text-status-accepted font-semibold">Accepted</span></li>
+                  <li>You review feedback and mark items as <span className="text-status-accepted font-semibold">Ready for Agent</span></li>
                   <li>Copy this link and paste it into any AI agent</li>
-                  <li>The agent only sees <span className="text-status-accepted font-semibold">accepted</span> items — nothing else</li>
+                  <li>The agent only sees <span className="text-status-accepted font-semibold">Ready for Agent</span> items — nothing else</li>
                   <li>It claims, fixes, and marks them <span className="text-status-done font-semibold">Done</span></li>
                 </ol>
               </div>
@@ -840,9 +951,9 @@ export function App() {
 
       {/* ── Status Bar ── */}
       <footer className="flex items-center gap-5 px-5 h-[32px] shrink-0 border-t border-border bg-card text-[10px] font-mono text-muted-foreground">
-        <span><Kbd>A</Kbd> accept</span>
-        <span><Kbd>D</Kbd> reject</span>
+        <span><Kbd>A</Kbd> ready</span>
         <span><Kbd>M</Kbd> done</span>
+        <span><Kbd>D</Kbd> reject</span>
         <span><Kbd>Space</Kbd> next</span>
         <span><Kbd>J</Kbd>/<Kbd>K</Kbd> nav</span>
         <span><Kbd>S</Kbd> sidebar</span>
@@ -874,15 +985,14 @@ type CmdIconType = 'comment' | 'check' | 'x' | 'filter' | 'sidebar'
 type CmdItem = { id: string; type: 'comment' | 'action'; label: string; detail: string; icon: CmdIconType }
 
 const CMD_ACTIONS: CmdItem[] = [
-  { id: 'accept', type: 'action', label: 'Toggle accept', detail: 'A', icon: 'check' },
-  { id: 'reject', type: 'action', label: 'Toggle reject', detail: 'D', icon: 'x' },
-  { id: 'done', type: 'action', label: 'Toggle done', detail: 'M', icon: 'check' },
+  { id: 'accept', type: 'action', label: 'Toggle Ready for Agent', detail: 'A', icon: 'check' },
+  { id: 'done', type: 'action', label: 'Toggle Done', detail: 'M', icon: 'check' },
+  { id: 'reject', type: 'action', label: 'Toggle Reject', detail: 'D', icon: 'x' },
   { id: 'toggle-sidebar', type: 'action', label: 'Toggle agent panel', detail: 'S', icon: 'sidebar' },
-  { id: 'filter-all', type: 'action', label: 'Filter: Show all', detail: '', icon: 'filter' },
-  { id: 'filter-open', type: 'action', label: 'Filter: Open only', detail: '', icon: 'filter' },
-  { id: 'filter-accepted', type: 'action', label: 'Filter: Accepted only', detail: '', icon: 'filter' },
-  { id: 'filter-rejected', type: 'action', label: 'Filter: Rejected only', detail: '', icon: 'filter' },
-  { id: 'filter-done', type: 'action', label: 'Filter: Done only', detail: '', icon: 'filter' },
+  { id: 'filter-all', type: 'action', label: 'Filter: All', detail: '', icon: 'filter' },
+  { id: 'filter-open', type: 'action', label: 'Filter: Open', detail: '', icon: 'filter' },
+  { id: 'filter-ready', type: 'action', label: 'Filter: Ready for Agent', detail: '', icon: 'filter' },
+  { id: 'filter-done', type: 'action', label: 'Filter: Done', detail: '', icon: 'filter' },
 ]
 
 interface CommandPaletteProps {
@@ -1162,23 +1272,17 @@ function ReturnIcon() {
 
 // ─── Small Components ───────────────────────────────────────────────
 
-function StatusBadge({ status }: { status: ReviewStatus }) {
+function StatusBadge({ comment }: { comment: Comment }) {
+  const ds = getDisplayStatus(comment)
   return (
     <span className={cn(
       'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold',
-      status === 'accepted' && 'bg-status-accepted-bg text-status-accepted',
-      status === 'rejected' && 'bg-status-rejected-bg text-status-rejected',
-      status === 'open' && 'bg-status-open-bg text-status-open',
+      ds === 'ready' && 'bg-status-accepted-bg text-status-accepted',
+      ds === 'rejected' && 'bg-status-rejected-bg text-status-rejected',
+      ds === 'open' && 'bg-status-open-bg text-status-open',
+      ds === 'done' && 'bg-status-done-bg text-status-done',
     )}>
-      {REVIEW_STATUS_LABELS[status]}
-    </span>
-  )
-}
-
-function ImplBadge({ status }: { status: ImplStatus }) {
-  return (
-    <span className={cn('inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold', IMPL_STATUS_COLORS[status])}>
-      {IMPL_STATUS_LABELS[status]}
+      {DISPLAY_STATUS_LABELS[ds]}
     </span>
   )
 }
@@ -1201,15 +1305,15 @@ function ActionBtn({ children, variant, active, onClick, shortcut, disabled }: {
         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
         'disabled:opacity-40 disabled:pointer-events-none btn-press',
         variant === 'accept' && (active
-          ? 'bg-status-accepted text-white'
+          ? 'bg-status-accepted-bg text-status-accepted border border-status-accepted/30'
           : 'border border-border bg-card text-foreground hover:bg-status-accepted-bg hover:text-status-accepted hover:border-status-accepted/30'
         ),
         variant === 'reject' && (active
-          ? 'bg-status-rejected text-white'
+          ? 'bg-status-rejected-bg text-status-rejected border border-status-rejected/30'
           : 'border border-border bg-card text-foreground hover:bg-status-rejected-bg hover:text-status-rejected hover:border-status-rejected/30'
         ),
         variant === 'done' && (active
-          ? 'bg-status-done text-white'
+          ? 'bg-status-done-bg text-status-done border border-status-done/30'
           : 'border border-border bg-card text-foreground hover:bg-status-done-bg hover:text-status-done hover:border-status-done/30'
         ),
         variant === 'neutral' && 'border border-border bg-card text-foreground hover:bg-accent',
