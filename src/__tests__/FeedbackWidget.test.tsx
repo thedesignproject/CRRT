@@ -173,7 +173,7 @@ describe('<FeedbackWidget />', () => {
 
     await waitFor(() => expect(document.body.textContent).toContain('resolve me'))
     const resolveButton = await waitFor(() => {
-      const button = document.querySelector<HTMLButtonElement>('button[title="Mark as resolved"]')
+      const button = document.querySelector<HTMLButtonElement>('button[title="Approve"]')
       if (!button) throw new Error('resolve button not mounted yet')
       return button
     })
