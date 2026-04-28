@@ -5,6 +5,7 @@ import path from 'path'
 
 export default defineConfig({
   root: __dirname,
+  envDir: path.resolve(__dirname, '../..'),
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {

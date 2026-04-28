@@ -165,6 +165,72 @@ export async function listProjects() {
   return (data || []).map((row) => mapProject(row as ProjectRow))
 }
 
+function slugify(name: string) {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+}
+
+function randomSuffix() {
+  return Math.random().toString(36).slice(2, 8)
+}
+
+export async function createProject(input: { name: string }) {
+  const trimmed = input.name.trim()
+  if (!trimmed) throw new Error('Project name required')
+
+  const supabase = getSupabase()
+  const baseSlug = slugify(trimmed) || `project-${randomSuffix()}`
+
+  let slug = baseSlug
+  let projectData: ProjectRow | null = null
+  let lastError: { code?: string; message: string } | null = null
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data, error } = await supabase
+      .from('projects')
+      .insert([{
+        public_key: slug,
+        slug,
+        name: trimmed,
+        allowed_origins: [],
+      }] as never)
+      .select('public_key, slug, name, created_at, updated_at')
+      .single()
+
+    if (!error) {
+      projectData = data as ProjectRow
+      break
+    }
+
+    // 23505 = unique_violation. Retry with new suffix; bail on anything else.
+    if (error.code !== '23505') throw new Error(error.message)
+    lastError = error
+    slug = `${baseSlug}-${randomSuffix()}`
+  }
+
+  if (!projectData) {
+    throw new Error(lastError?.message || 'Could not allocate unique project slug')
+  }
+
+  const { error: repoError } = await supabase
+    .from('project_repo_configs')
+    .insert([{
+      project_key: slug,
+      default_branch: 'main',
+    }] as never)
+
+  if (repoError) {
+    await supabase.from('projects').delete().eq('public_key', slug)
+    throw new Error(repoError.message)
+  }
+
+  return mapProject(projectData)
+}
+
 export async function getProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase

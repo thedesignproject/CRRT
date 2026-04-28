@@ -27,7 +27,8 @@
   ],
   "scripts": {
     "dev": "vite --config demo/vite.config.ts",
-    "dev:dashboard": "vite --config apps/dashboard/vite.config.ts",
+    "dev:dashboard": "bash -c 'trap \"kill 0\" EXIT INT TERM; bunx vercel dev --listen 3000 & vite --config apps/dashboard/vite.config.ts'",
+    "dev:dashboard:ui-only": "vite --config apps/dashboard/vite.config.ts",
     "typecheck": "tsc --project tsconfig.check.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
