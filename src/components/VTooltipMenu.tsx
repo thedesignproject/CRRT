@@ -21,6 +21,7 @@ type VtooltipContextValue = {
   setIconRef: (index: number, el: HTMLButtonElement | null) => void
   setTooltipRef: (index: number, el: HTMLDivElement | null) => void
   registerContent: (index: number, content: React.ReactNode) => void
+  unregisterContent: (index: number) => void
   itemsCountRef: React.MutableRefObject<number>
 }
 
@@ -120,6 +121,15 @@ export function VtooltipRoot({
     }
   }, [])
 
+  const unregisterContent = useCallback((index: number) => {
+    if (contentMapRef.current.delete(index)) {
+      itemsCountRef.current = contentMapRef.current.size
+      delete ToolTipRef.current[index]
+      delete IconRefs.current[index]
+      forceUpdate()
+    }
+  }, [])
+
   const contentItems = Array.from(contentMapRef.current.entries()).sort(([a], [b]) => a - b)
 
   const clipPath = useMotionTemplate`inset(${clipPathTop}% 0 ${clipPathBottom}% 0 round 10px )`
@@ -139,6 +149,7 @@ export function VtooltipRoot({
         setIconRef,
         setTooltipRef,
         registerContent,
+        unregisterContent,
         itemsCountRef,
       }}
     >
@@ -189,7 +200,7 @@ export function VtooltipItem({
   children: React.ReactNode
   index: number
 }) {
-  const { registerContent } = useVtooltipContext()
+  const { registerContent, unregisterContent } = useVtooltipContext()
   const prevRef = useRef<React.ReactNode>(null)
 
   useEffect(() => {
@@ -204,6 +215,10 @@ export function VtooltipItem({
       registerContent(index, content)
     }
   }, [children, index, registerContent])
+
+  useEffect(() => {
+    return () => unregisterContent(index)
+  }, [index, unregisterContent])
 
   return (
     <div>
