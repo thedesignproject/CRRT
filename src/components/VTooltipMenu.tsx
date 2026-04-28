@@ -2,6 +2,7 @@ import {
   motion,
   type MotionValue,
   useMotionTemplate,
+  useReducedMotion,
   useSpring,
 } from 'framer-motion'
 import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react'
@@ -49,16 +50,22 @@ export function VtooltipRoot({
   const contentMapRef = useRef<Map<number, React.ReactNode>>(new Map())
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0)
 
+  const prefersReducedMotion = useReducedMotion()
   const tooltipPosition = useSpring(0, { stiffness: 350, damping: 30 })
   const clipPathTop = useSpring(0, springConfig)
   const clipPathBottom = useSpring(79, springConfig)
   const opacity = useSpring(0, { stiffness: 300, damping: 30, mass: 0.8 })
 
+  const setMV = (mv: MotionValue<number>, v: number) => {
+    if (prefersReducedMotion) mv.jump(v)
+    else mv.set(v)
+  }
+
   const calculateClipPath = (index: number | null) => {
     if (index === null) {
-      clipPathTop.set(0)
-      clipPathBottom.set(0)
-      opacity.set(0)
+      setMV(clipPathTop, 0)
+      setMV(clipPathBottom, 0)
+      setMV(opacity, 0)
       return
     }
 
@@ -77,9 +84,9 @@ export function VtooltipRoot({
       0,
     )
 
-    clipPathTop.set(totalHeight > 0 ? (topHeight / totalHeight) * 100 : 20)
-    clipPathBottom.set(totalHeight > 0 ? (bottomHeight / totalHeight) * 100 : 20)
-    opacity.set(1)
+    setMV(clipPathTop, totalHeight > 0 ? (topHeight / totalHeight) * 100 : 20)
+    setMV(clipPathBottom, totalHeight > 0 ? (bottomHeight / totalHeight) * 100 : 20)
+    setMV(opacity, 1)
   }
 
   const onMouseEnterOnIcon = (e: React.MouseEvent<HTMLButtonElement>, index: number) => {
@@ -94,14 +101,14 @@ export function VtooltipRoot({
       }
       const centerY = activeIcon.top + activeIcon.height / 2
       const activePos = (parentTooltip.top || 0) + heightBefore + activeTooltip.height / 2
-      tooltipPosition.set(centerY - activePos)
+      setMV(tooltipPosition, centerY - activePos)
     }
 
     calculateClipPath(index)
   }
 
   const onMouseLeave = () => {
-    opacity.set(0)
+    setMV(opacity, 0)
   }
 
   const setIconRef = (index: number, el: HTMLButtonElement | null) => {
