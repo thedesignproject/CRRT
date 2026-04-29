@@ -1,5 +1,7 @@
 # @thedesignproject/feedback-widget
 
+[![codecov](https://codecov.io/gh/thedesignproject/feedback-widget/branch/main/graph/badge.svg)](https://codecov.io/gh/thedesignproject/feedback-widget)
+
 Visual feedback capture for React sites, plus a private reviewer console and a Proof-style agent bridge.
 
 ## What changed

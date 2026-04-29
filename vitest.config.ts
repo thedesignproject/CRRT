@@ -8,7 +8,7 @@ export default defineConfig({
     globals: false,
     setupFiles: ['./src/__tests__/setup.ts'],
     coverage: {
-      reporter: ['text', 'text-summary'],
+      reporter: ['text', 'text-summary', 'lcov'],
       include: ['src/**/*.{ts,tsx}', 'api/**/*.ts'],
       exclude: ['src/__tests__/**', '**/*.test.*', '**/*.d.ts'],
     },
