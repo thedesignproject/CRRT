@@ -29,6 +29,7 @@ export interface UseAgentSessionResult {
 
 const POLL_INTERVAL_MS = 4000
 const EVENT_LIMIT = 100
+const POLL_FAIL_THRESHOLD = 3
 
 export function useAgentSession(apiBase: string, projectId: string | null): UseAgentSessionResult {
   const [session, setSession] = useState<AgentSession | null>(null)
@@ -75,39 +76,46 @@ export function useAgentSession(apiBase: string, projectId: string | null): UseA
   useEffect(() => {
     if (!session) return
     let cancelled = false
+    let consecutiveFails = 0
 
-    const refreshState = () => {
-      getShareState(apiBase, session.slug, session.token)
-        .then((next) => {
-          if (!cancelled) setShareState(next)
-        })
-        .catch(() => {})
+    const tick = async () => {
+      const [stateRes, eventsRes] = await Promise.allSettled([
+        getShareState(apiBase, session.slug, session.token),
+        getShareEvents(apiBase, session.slug, session.token, cursorRef.current),
+      ])
+      if (cancelled) return
+
+      if (stateRes.status === 'fulfilled') setShareState(stateRes.value)
+      if (eventsRes.status === 'fulfilled') {
+        const res = eventsRes.value
+        if (res.events.length > 0) {
+          setEvents((prev) => {
+            const seen = new Set(prev.map((e) => e.id))
+            const merged = [...prev, ...res.events.filter((e) => !seen.has(e.id))]
+            return merged.slice(-EVENT_LIMIT)
+          })
+          cursorRef.current = res.nextCursor
+        }
+      }
+
+      const failures = [stateRes, eventsRes].filter((r) => r.status === 'rejected') as PromiseRejectedResult[]
+      if (failures.length > 0) {
+        consecutiveFails++
+        for (const f of failures) console.warn('Agent session poll failed', f.reason)
+        if (consecutiveFails >= POLL_FAIL_THRESHOLD) {
+          setError('Lost connection to agent session — retrying')
+        }
+      } else if (consecutiveFails > 0) {
+        consecutiveFails = 0
+        setError(null)
+      }
     }
 
-    const refreshEvents = () => {
-      getShareEvents(apiBase, session.slug, session.token, cursorRef.current)
-        .then((res) => {
-          if (cancelled) return
-          if (res.events.length > 0) {
-            setEvents((prev) => {
-              const seen = new Set(prev.map((e) => e.id))
-              const merged = [...prev, ...res.events.filter((e) => !seen.has(e.id))]
-              return merged.slice(-EVENT_LIMIT)
-            })
-            cursorRef.current = res.nextCursor
-          }
-        })
-        .catch(() => {})
-    }
-
-    refreshState()
-    refreshEvents()
-    const stateInterval = window.setInterval(refreshState, POLL_INTERVAL_MS)
-    const eventsInterval = window.setInterval(refreshEvents, POLL_INTERVAL_MS)
+    tick()
+    const interval = window.setInterval(tick, POLL_INTERVAL_MS)
     return () => {
       cancelled = true
-      window.clearInterval(stateInterval)
-      window.clearInterval(eventsInterval)
+      window.clearInterval(interval)
     }
   }, [apiBase, session])
 

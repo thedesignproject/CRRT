@@ -205,7 +205,12 @@ export function getPromptByShare(
   target: 'codex' | 'claude-code' | 'generic',
 ) {
   return requestJson<SharePromptResponse>(
-    `${apiBase}/v1/shares/${encodeURIComponent(slug)}/prompt?token=${encodeURIComponent(token)}&target=${encodeURIComponent(target)}`,
+    `${apiBase}/v1/shares/${encodeURIComponent(slug)}/prompt?target=${encodeURIComponent(target)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
   )
 }
 
