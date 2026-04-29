@@ -34,6 +34,13 @@ jobs:
             "@types/react-dom@$REACT_MAJOR"
       - run: bun run typecheck
       - run: bun run test:coverage
+      - name: Upload coverage to Codecov
+        if: matrix.react == '19'
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
       - run: bun run build
       - name: Enforce bundle size ceiling
         run: |
