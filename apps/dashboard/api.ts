@@ -23,6 +23,19 @@ export interface CommentRecord {
   updatedAt: string
 }
 
+export interface ProjectSessionResponse {
+  projectKey: string
+  projectName: string
+  doc: { slug: string; token: string; docUrl: string; promptUrl: string }
+}
+
+export interface SharePromptResponse {
+  slug: string
+  target: string
+  prompt: string
+  docUrl: string
+}
+
 export interface ShareCreationResponse {
   shareId: string
   slug: string
@@ -176,6 +189,23 @@ export function getPrompt(apiBase: string, reviewerToken: string, shareId: strin
         ...authHeaders(reviewerToken),
       },
     },
+  )
+}
+
+export function fetchProjectSession(apiBase: string, projectKey: string) {
+  return requestJson<ProjectSessionResponse>(
+    `${apiBase}/v1/public/project?projectKey=${encodeURIComponent(projectKey)}`,
+  )
+}
+
+export function getPromptByShare(
+  apiBase: string,
+  slug: string,
+  token: string,
+  target: 'codex' | 'claude-code' | 'generic',
+) {
+  return requestJson<SharePromptResponse>(
+    `${apiBase}/v1/shares/${encodeURIComponent(slug)}/prompt?token=${encodeURIComponent(token)}&target=${encodeURIComponent(target)}`,
   )
 }
 

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from './lib/utils'
-import type { CommentRecord } from './api'
+import type { CommentRecord, ShareEventsResponse } from './api'
 import { updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
+import { useAgentSession, type PromptTarget } from './hooks/useAgentSession'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const REVIEWER_TOKEN = import.meta.env.VITE_REVIEWER_TOKEN || ''
@@ -35,32 +36,49 @@ interface Comment {
   screenshotUrl: string | null
 }
 
-interface AgentEvent {
-  id: number
-  type: string
-  description: string
-  timestamp: string
-  agentId: string
-}
+// ─── Static Data ─────────────────────────────────────────────────────
 
-// ─── Static / Mock Data (non-Supabase) ──────────────────────────────
-
-const AGENTS = [
-  { id: 'claude-code', name: 'Claude Code', hint: 'Paste link in chat' },
-  { id: 'codex', name: 'Codex', hint: 'Paste link in prompt' },
-  { id: 'cursor', name: 'Cursor', hint: 'Paste link in composer' },
-  { id: 'windsurf', name: 'Windsurf', hint: 'Paste link in Cascade' },
-  { id: 'cline', name: 'Cline', hint: 'Paste link in chat' },
+const AGENTS: Array<{ id: string; name: string; hint: string; target: PromptTarget }> = [
+  { id: 'claude-code', name: 'Claude Code', hint: 'Paste prompt in chat', target: 'claude-code' },
+  { id: 'codex', name: 'Codex', hint: 'Paste prompt in prompt', target: 'codex' },
+  { id: 'cursor', name: 'Cursor', hint: 'Paste prompt in composer', target: 'generic' },
+  { id: 'windsurf', name: 'Windsurf', hint: 'Paste prompt in Cascade', target: 'generic' },
+  { id: 'cline', name: 'Cline', hint: 'Paste prompt in chat', target: 'generic' },
 ]
 
 const AUTHOR_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#0EA5E9']
 
-const FAKE_AGENT_EVENTS: AgentEvent[] = [
-  { id: 1, type: 'claim', description: 'Claimed comment: "Sync now button too small"', timestamp: '2026-04-21T16:02:00Z', agentId: 'claude-code' },
-  { id: 2, type: 'connect', description: 'Connected to share /shares/rf2-q3c3e', timestamp: '2026-04-21T16:00:00Z', agentId: 'claude-code' },
-  { id: 3, type: 'done', description: 'Done · replaced illustration asset', timestamp: '2026-04-21T15:55:00Z', agentId: 'claude-code' },
-  { id: 4, type: 'file', description: '1 file (feat/fix): swap empty-state illustration', timestamp: '2026-04-21T15:54:00Z', agentId: 'claude-code' },
-]
+type FeedbackEvent = ShareEventsResponse['events'][number]
+
+function describeEvent(ev: FeedbackEvent): { kind: 'done' | 'claim' | 'file' | 'other'; text: string } {
+  const actor = ev.actorId || 'agent'
+  const summary = typeof ev.payload?.summary === 'string' ? ev.payload.summary as string : null
+  const note = typeof ev.payload?.note === 'string' ? ev.payload.note as string : null
+  switch (ev.eventType) {
+    case 'comment.claimed':
+      return { kind: 'claim', text: `${actor} claimed comment` }
+    case 'comment.started':
+      return { kind: 'file', text: `${actor} started${summary ? ` · ${summary}` : ''}` }
+    case 'comment.noted':
+      return { kind: 'other', text: `${actor} note${note ? ` · ${note}` : ''}` }
+    case 'comment.blocked':
+      return { kind: 'other', text: `${actor} blocked${note ? ` · ${note}` : ''}` }
+    case 'comment.completed':
+      return { kind: 'done', text: `${actor} done${summary ? ` · ${summary}` : ''}` }
+    case 'comment.reopened':
+      return { kind: 'other', text: `${actor} reopened comment` }
+    case 'comment.reviewed':
+      return { kind: 'other', text: `Reviewer marked ${ev.payload?.reviewStatus ?? 'updated'}` }
+    case 'comment.implementation_changed':
+      return { kind: 'other', text: `Status → ${ev.payload?.implementationStatus ?? 'updated'}` }
+    case 'presence.updated':
+      return { kind: 'other', text: `${actor} ${typeof ev.payload?.status === 'string' ? ev.payload.status as string : 'present'}${summary ? ` · ${summary}` : ''}` }
+    case 'share.created':
+      return { kind: 'other', text: `Session opened` }
+    default:
+      return { kind: 'other', text: ev.eventType }
+  }
+}
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -74,6 +92,18 @@ function timeAgo(iso: string) {
 
 function truncateUrl(url: string) {
   return url.startsWith('/') ? url : url.replace(/^https?:\/\/[^/]+/, '')
+}
+
+function formatDocUrl(url: string) {
+  try {
+    const u = new URL(url)
+    const slug = u.searchParams.get('fw_share') ?? ''
+    const token = u.searchParams.get('token') ?? ''
+    const tokenShort = token.length > 8 ? `${token.slice(0, 6)}…${token.slice(-3)}` : token
+    return `${u.host}/?fw_share=${slug}&token=${tokenShort}`
+  } catch {
+    return url
+  }
 }
 
 function buildIntegrationPrompt(projectId: string, apiBase: string) {
@@ -168,12 +198,15 @@ export function App() {
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, REVIEWER_TOKEN, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
-  const [agentConnected] = useState(true)
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, selectedProject || null)
+  const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
+  const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
@@ -385,6 +418,19 @@ export function App() {
     if (selectedComment && action === 'done') handleToggleDone(selectedComment.id)
     setCmdOpen(false)
   }, [selectedComment, toggleReview, handleToggleDone, selectFilter])
+
+  const handleCopySessionLink = useCallback(async () => {
+    if (!agentSession) return
+    try {
+      await copyPrompt(selectedAgentMeta.target)
+      setCopyStatus('copied')
+      window.setTimeout(() => setCopyStatus('idle'), 1600)
+    } catch (err) {
+      console.error('Copy prompt failed:', err)
+      setCopyStatus('error')
+      window.setTimeout(() => setCopyStatus('idle'), 1600)
+    }
+  }, [agentSession, copyPrompt, selectedAgentMeta])
 
   const handleAddProject = useCallback(async (name: string) => {
     setAddProjectError(null)
@@ -888,20 +934,41 @@ export function App() {
 
             {/* Session link — the core handoff */}
             <div className="px-4 py-4 border-b border-sidebar-border animate-fade-in">
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Session link</p>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-2">Agent prompt</p>
               <div className="rounded-lg border border-border bg-card p-3 mb-3">
                 <p className="text-[11px] font-mono text-foreground break-all leading-relaxed select-all">
-                  feedbackwidget.com/d/<wbr />hubsync-4f4G<wbr />?token=sk_live_…f7y
+                  {agentError ? (
+                    <span className="text-status-rejected">{agentError}</span>
+                  ) : agentSession ? (
+                    formatDocUrl(agentSession.docUrl)
+                  ) : selectedProject ? (
+                    'Starting session…'
+                  ) : (
+                    'Select a project to start a session'
+                  )}
                 </p>
               </div>
-              <button className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity btn-press">
-                <CopyIcon size={13} /> Copy session link
+              <button
+                onClick={handleCopySessionLink}
+                disabled={!agentSession}
+                className={cn(
+                  'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity btn-press',
+                  copyStatus === 'copied'
+                    ? 'bg-status-done text-white'
+                    : copyStatus === 'error'
+                    ? 'bg-status-rejected text-white'
+                    : 'bg-primary text-primary-foreground hover:opacity-90',
+                  !agentSession && 'opacity-40 pointer-events-none',
+                )}
+              >
+                <CopyIcon size={13} />
+                {copyStatus === 'copied' ? 'Copied ✓' : copyStatus === 'error' ? 'Copy failed' : `Copy ${selectedAgentMeta.name} prompt`}
               </button>
               <div className="mt-3 rounded-md bg-muted/60 border border-border px-3 py-2.5">
                 <p className="text-[11px] text-foreground font-medium mb-1.5">How it works</p>
                 <ol className="text-[10px] text-muted-foreground leading-relaxed space-y-1 list-decimal list-inside">
                   <li>You review feedback and mark items as <span className="text-status-accepted font-semibold">Ready for Agent</span></li>
-                  <li>Copy this link and paste it into any AI agent</li>
+                  <li>Copy this prompt and paste it into your AI agent</li>
                   <li>The agent only sees <span className="text-status-accepted font-semibold">Ready for Agent</span> items — nothing else</li>
                   <li>It claims, fixes, and marks them <span className="text-status-done font-semibold">Done</span></li>
                 </ol>
@@ -959,51 +1026,66 @@ export function App() {
               </p>
             </div>
 
-            {agentConnected && (
+            {agentConnected && agentShareState && (
               <div className="px-4 py-3 border-b border-sidebar-border animate-fade-in">
                 <div className="flex items-center gap-2 mb-2.5">
                   <div className="relative">
                     <div className="w-2 h-2 rounded-full bg-agent-active animate-pulse-dot" />
                     <div className="absolute inset-0 w-2 h-2 rounded-full animate-pulse-ring" />
                   </div>
-                  <span className="text-[10px] font-bold text-agent-active uppercase tracking-wider">Connected</span>
+                  <span className="text-[10px] font-bold text-agent-active uppercase tracking-wider">
+                    {agentShareState.presence.length === 1 ? 'Connected' : `${agentShareState.presence.length} connected`}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2.5 rounded-lg border border-border bg-card p-2.5 animate-scale-in">
-                  <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <BotIcon size={14} className="text-primary" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-semibold text-foreground">{AGENTS.find((a) => a.id === selectedAgent)?.name}</p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      Editing components/Nav.tsx
-                    </p>
-                  </div>
-                  <div className="w-1.5 h-1.5 rounded-full bg-agent-active animate-pulse-dot shrink-0" />
+                <div className="flex flex-col gap-2">
+                  {agentShareState.presence.map((p) => (
+                    <div key={p.agentId} className="flex items-center gap-2.5 rounded-lg border border-border bg-card p-2.5 animate-scale-in">
+                      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                        <BotIcon size={14} className="text-primary" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground truncate">{p.agentId}</p>
+                        <p className="text-[11px] text-muted-foreground truncate">
+                          {p.summary ?? p.status}
+                        </p>
+                      </div>
+                      <div className="w-1.5 h-1.5 rounded-full bg-agent-active animate-pulse-dot shrink-0" />
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
             <div className="px-4 py-3 flex-1">
               <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-3">Activity</p>
-              <div className="space-y-0 animate-activity">
-                {FAKE_AGENT_EVENTS.map((ev) => (
-                  <div key={ev.id} className="flex gap-3 py-2 border-b border-border/40 last:border-0">
-                    <div className="mt-1.5 shrink-0">
-                      <div className={cn(
-                        'w-2 h-2 rounded-full',
-                        ev.type === 'done' ? 'bg-status-accepted' :
-                        ev.type === 'claim' ? 'bg-status-claimed' :
-                        ev.type === 'file' ? 'bg-status-in-progress' :
-                        'bg-muted-foreground/30'
-                      )} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] text-foreground leading-snug">{ev.description}</p>
-                      <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(ev.timestamp)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+              {agentEvents.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground/70 leading-relaxed">
+                  {agentSession ? 'No agent activity yet. Paste the prompt into your agent to begin.' : 'Activity will appear once a session starts.'}
+                </p>
+              ) : (
+                <div className="space-y-0 animate-activity">
+                  {[...agentEvents].reverse().map((ev) => {
+                    const desc = describeEvent(ev)
+                    return (
+                      <div key={ev.id} className="flex gap-3 py-2 border-b border-border/40 last:border-0">
+                        <div className="mt-1.5 shrink-0">
+                          <div className={cn(
+                            'w-2 h-2 rounded-full',
+                            desc.kind === 'done' ? 'bg-status-accepted' :
+                            desc.kind === 'claim' ? 'bg-status-claimed' :
+                            desc.kind === 'file' ? 'bg-status-in-progress' :
+                            'bg-muted-foreground/30'
+                          )} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] text-foreground leading-snug">{desc.text}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">{timeAgo(ev.createdAt)}</p>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
             </div>
           </aside>
         )}
