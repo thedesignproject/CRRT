@@ -27,7 +27,7 @@ export function App() {
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
   const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, selectedProject || null)
   const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
@@ -245,6 +245,7 @@ export function App() {
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return
+    setCopyStatus('copying')
     try {
       await copyPrompt(selectedAgentMeta.target)
       setCopyStatus('copied')

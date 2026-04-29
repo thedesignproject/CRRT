@@ -3,10 +3,10 @@ import type { ShareState, ShareEventsResponse } from '../api'
 import { describeEvent, formatDocUrl, timeAgo } from '../lib/format'
 import { AGENTS, type AgentMeta } from '../lib/types'
 import type { AgentSession } from '../hooks/useAgentSession'
-import { BotIcon, CheckIcon, ChevronDownIcon, CopyIcon, XIcon } from './icons'
+import { BotIcon, CheckIcon, ChevronDownIcon, CopyIcon, SpinnerIcon, XIcon } from './icons'
 import { AddToCodeButton } from './AddToCodeButton'
 
-type CopyStatus = 'idle' | 'copied' | 'error'
+type CopyStatus = 'idle' | 'copying' | 'copied' | 'error'
 
 interface AgentSidebarProps {
   apiBase: string
@@ -82,7 +82,7 @@ export function AgentSidebar({
         </div>
         <button
           onClick={onCopySessionLink}
-          disabled={!agentSession}
+          disabled={!agentSession || copyStatus === 'copying'}
           className={cn(
             'w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-opacity btn-press',
             copyStatus === 'copied'
@@ -90,11 +90,17 @@ export function AgentSidebar({
               : copyStatus === 'error'
               ? 'bg-status-rejected text-white'
               : 'bg-primary text-primary-foreground hover:opacity-90',
-            !agentSession && 'opacity-40 pointer-events-none',
+            (!agentSession || copyStatus === 'copying') && 'opacity-70 pointer-events-none',
           )}
         >
-          <CopyIcon size={13} />
-          {copyStatus === 'copied' ? 'Copied ✓' : copyStatus === 'error' ? 'Copy failed' : `Copy ${selectedAgentMeta.name} prompt`}
+          {copyStatus === 'copying' ? <SpinnerIcon size={13} /> : <CopyIcon size={13} />}
+          {copyStatus === 'copying'
+            ? 'Copying…'
+            : copyStatus === 'copied'
+            ? 'Copied ✓'
+            : copyStatus === 'error'
+            ? 'Copy failed'
+            : `Copy ${selectedAgentMeta.name} prompt`}
         </button>
         <div className="mt-3 rounded-md bg-muted/60 border border-border px-3 py-2.5">
           <p className="text-[11px] text-foreground font-medium mb-1.5">How it works</p>
