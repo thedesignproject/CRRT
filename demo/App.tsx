@@ -45,7 +45,7 @@ export function App() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <a href="#" style={{ fontSize: 13, color: '#888', textDecoration: 'none', fontWeight: 500 }}>Log in</a>
+            <a href="#login" style={{ fontSize: 13, color: '#888', textDecoration: 'none', fontWeight: 500 }}>Log in</a>
             <button className="fw-cta-primary" style={{
               padding: '8px 18px', fontSize: 13, fontWeight: 600, color: '#fff', background: '#111',
               border: 'none', borderRadius: 8, cursor: 'pointer',
@@ -466,7 +466,7 @@ export function App() {
           <span style={{ fontSize: 13, color: '#444' }}>Feedback Widget &copy; 2026</span>
           <div style={{ display: 'flex', gap: 24 }}>
             {['GitHub', 'Docs', 'Twitter', 'Contact'].map((t) => (
-              <a key={t} href="#" style={{ fontSize: 13, color: '#555', textDecoration: 'none' }}>{t}</a>
+              <a key={t} href={`#${t.toLowerCase()}`} style={{ fontSize: 13, color: '#555', textDecoration: 'none' }}>{t}</a>
             ))}
           </div>
         </footer>

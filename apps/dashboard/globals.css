@@ -2,68 +2,158 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Default theme (dark) — Zen Inspired */
+:root {
+  --background: oklch(0.14 0.005 90);
+  --foreground: oklch(0.90 0.01 90);
+  --card: oklch(0.18 0.005 90);
+  --card-foreground: oklch(0.90 0.01 90);
+  --popover: oklch(0.18 0.005 90);
+  --popover-foreground: oklch(0.90 0.01 90);
+  --primary: oklch(0.85 0.02 85);
+  --primary-foreground: oklch(0.14 0.005 90);
+  --secondary: oklch(0.22 0.005 90);
+  --secondary-foreground: oklch(0.85 0.01 90);
+  --muted: oklch(0.22 0.005 90);
+  --muted-foreground: oklch(0.55 0.01 90);
+  --accent: oklch(0.22 0.008 85);
+  --accent-foreground: oklch(0.85 0.01 90);
+  --destructive: oklch(0.60 0.2 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.26 0.005 90);
+  --input: oklch(0.26 0.005 90);
+  --ring: oklch(0.85 0.02 85);
+
+  --sidebar: oklch(0.16 0.005 90);
+  --sidebar-foreground: oklch(0.90 0.01 90);
+  --sidebar-primary: oklch(0.85 0.02 85);
+  --sidebar-primary-foreground: oklch(0.14 0.005 90);
+  --sidebar-accent: oklch(0.22 0.008 85);
+  --sidebar-accent-foreground: oklch(0.85 0.01 90);
+  --sidebar-border: oklch(0.26 0.005 90);
+  --sidebar-ring: oklch(0.85 0.02 85);
+
+  --status-open: oklch(0.60 0.01 90);
+  --status-open-bg: oklch(0.24 0.005 90);
+  --status-accepted: oklch(0.65 0.17 155);
+  --status-accepted-bg: oklch(0.22 0.03 155);
+  --status-rejected: oklch(0.65 0.2 25);
+  --status-rejected-bg: oklch(0.22 0.03 25);
+  --status-done: oklch(0.65 0.15 300);
+  --status-done-bg: oklch(0.22 0.03 300);
+  --status-claimed: oklch(0.65 0.15 70);
+  --status-claimed-bg: oklch(0.22 0.03 70);
+  --status-in-progress: oklch(0.65 0.15 250);
+  --status-in-progress-bg: oklch(0.22 0.03 250);
+  --status-blocked: oklch(0.65 0.2 25);
+  --status-blocked-bg: oklch(0.22 0.03 25);
+  --agent-active: oklch(0.65 0.17 155);
+
+  --scrollbar-thumb: oklch(0.30 0.005 90);
+  --scrollbar-thumb-hover: oklch(0.40 0.005 90);
+}
+
+/* Light mode overrides — applied when .light class is on document root */
+.light {
+  --background: oklch(0.99 0.005 90);
+  --foreground: oklch(0.18 0.01 90);
+  --card: oklch(1.0 0 0);
+  --card-foreground: oklch(0.18 0.01 90);
+  --popover: oklch(1.0 0 0);
+  --popover-foreground: oklch(0.18 0.01 90);
+  --primary: oklch(0.20 0.01 90);
+  --primary-foreground: oklch(0.98 0.005 90);
+  --secondary: oklch(0.94 0.005 90);
+  --secondary-foreground: oklch(0.20 0.01 90);
+  --muted: oklch(0.94 0.005 90);
+  --muted-foreground: oklch(0.50 0.01 90);
+  --accent: oklch(0.93 0.008 85);
+  --accent-foreground: oklch(0.20 0.01 90);
+  --destructive: oklch(0.55 0.20 25);
+  --destructive-foreground: oklch(0.98 0 0);
+  --border: oklch(0.90 0.005 90);
+  --input: oklch(0.90 0.005 90);
+  --ring: oklch(0.30 0.01 90);
+
+  --sidebar: oklch(0.96 0.005 90);
+  --sidebar-foreground: oklch(0.18 0.01 90);
+  --sidebar-primary: oklch(0.20 0.01 90);
+  --sidebar-primary-foreground: oklch(0.98 0.005 90);
+  --sidebar-accent: oklch(0.93 0.008 85);
+  --sidebar-accent-foreground: oklch(0.20 0.01 90);
+  --sidebar-border: oklch(0.88 0.005 90);
+  --sidebar-ring: oklch(0.30 0.01 90);
+
+  --status-open: oklch(0.45 0.01 90);
+  --status-open-bg: oklch(0.94 0.005 90);
+  --status-accepted: oklch(0.50 0.17 155);
+  --status-accepted-bg: oklch(0.94 0.05 155);
+  --status-rejected: oklch(0.55 0.20 25);
+  --status-rejected-bg: oklch(0.94 0.05 25);
+  --status-done: oklch(0.50 0.15 300);
+  --status-done-bg: oklch(0.94 0.04 300);
+  --status-claimed: oklch(0.55 0.15 70);
+  --status-claimed-bg: oklch(0.95 0.04 70);
+  --status-in-progress: oklch(0.50 0.15 250);
+  --status-in-progress-bg: oklch(0.94 0.04 250);
+  --status-blocked: oklch(0.55 0.20 25);
+  --status-blocked-bg: oklch(0.94 0.04 25);
+  --agent-active: oklch(0.50 0.17 155);
+
+  --scrollbar-thumb: oklch(0.85 0.005 90);
+  --scrollbar-thumb-hover: oklch(0.75 0.005 90);
+}
+
 @theme inline {
   --radius: 0.5rem;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-serif: "Playfair Display", ui-serif, Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 
-  /* Dark mode colors — Zen Inspired */
-  --color-background: oklch(0.14 0.005 90);
-  --color-foreground: oklch(0.90 0.01 90);
-  --color-card: oklch(0.18 0.005 90);
-  --color-card-foreground: oklch(0.90 0.01 90);
-  --color-popover: oklch(0.18 0.005 90);
-  --color-popover-foreground: oklch(0.90 0.01 90);
-  --color-primary: oklch(0.85 0.02 85);
-  --color-primary-foreground: oklch(0.14 0.005 90);
-  --color-secondary: oklch(0.22 0.005 90);
-  --color-secondary-foreground: oklch(0.85 0.01 90);
-  --color-muted: oklch(0.22 0.005 90);
-  --color-muted-foreground: oklch(0.55 0.01 90);
-  --color-accent: oklch(0.22 0.008 85);
-  --color-accent-foreground: oklch(0.85 0.01 90);
-  --color-destructive: oklch(0.60 0.2 25);
-  --color-destructive-foreground: oklch(0.98 0 0);
-  --color-border: oklch(0.26 0.005 90);
-  --color-input: oklch(0.26 0.005 90);
-  --color-ring: oklch(0.85 0.02 85);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 
-  /* Sidebar */
-  --color-sidebar: oklch(0.16 0.005 90);
-  --color-sidebar-foreground: oklch(0.90 0.01 90);
-  --color-sidebar-primary: oklch(0.85 0.02 85);
-  --color-sidebar-primary-foreground: oklch(0.14 0.005 90);
-  --color-sidebar-accent: oklch(0.22 0.008 85);
-  --color-sidebar-accent-foreground: oklch(0.85 0.01 90);
-  --color-sidebar-border: oklch(0.26 0.005 90);
-  --color-sidebar-ring: oklch(0.85 0.02 85);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
 
-  /* Chart colors */
-  --color-chart-1: oklch(0.65 0.15 150);
-  --color-chart-2: oklch(0.65 0.12 200);
-  --color-chart-3: oklch(0.60 0.1 60);
-  --color-chart-4: oklch(0.65 0.15 300);
-  --color-chart-5: oklch(0.60 0.2 25);
-}
-
-/* Status colors — dark mode optimized */
-@theme inline {
-  --color-status-open: oklch(0.60 0.01 90);
-  --color-status-open-bg: oklch(0.24 0.005 90);
-  --color-status-accepted: oklch(0.65 0.17 155);
-  --color-status-accepted-bg: oklch(0.22 0.03 155);
-  --color-status-rejected: oklch(0.65 0.2 25);
-  --color-status-rejected-bg: oklch(0.22 0.03 25);
-  --color-status-done: oklch(0.65 0.15 300);
-  --color-status-done-bg: oklch(0.22 0.03 300);
-  --color-status-claimed: oklch(0.65 0.15 70);
-  --color-status-claimed-bg: oklch(0.22 0.03 70);
-  --color-status-in-progress: oklch(0.65 0.15 250);
-  --color-status-in-progress-bg: oklch(0.22 0.03 250);
-  --color-status-blocked: oklch(0.65 0.2 25);
-  --color-status-blocked-bg: oklch(0.22 0.03 25);
-  --color-agent-active: oklch(0.65 0.17 155);
+  --color-status-open: var(--status-open);
+  --color-status-open-bg: var(--status-open-bg);
+  --color-status-accepted: var(--status-accepted);
+  --color-status-accepted-bg: var(--status-accepted-bg);
+  --color-status-rejected: var(--status-rejected);
+  --color-status-rejected-bg: var(--status-rejected-bg);
+  --color-status-done: var(--status-done);
+  --color-status-done-bg: var(--status-done-bg);
+  --color-status-claimed: var(--status-claimed);
+  --color-status-claimed-bg: var(--status-claimed-bg);
+  --color-status-in-progress: var(--status-in-progress);
+  --color-status-in-progress-bg: var(--status-in-progress-bg);
+  --color-status-blocked: var(--status-blocked);
+  --color-status-blocked-bg: var(--status-blocked-bg);
+  --color-agent-active: var(--agent-active);
 }
 
 @layer base {
@@ -86,11 +176,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.30 0.005 90);
+  background: var(--scrollbar-thumb);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.40 0.005 90);
+  background: var(--scrollbar-thumb-hover);
 }
 
 /* Animations */

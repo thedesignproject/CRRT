@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircle, Menu, X, Bot } from 'lucide-react'
+import { MessageCircle, Menu, X, Bot, SlidersHorizontal, Eye, EyeOff, Check } from 'lucide-react'
 import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from './VTooltipMenu'
 import { getSelector } from '../lib/getSelector'
 import { useScreenshotCapture } from '../lib/screenshotCapture'
@@ -170,7 +170,7 @@ function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDe
       {!isResolved && (
         <button
           onClick={(e) => { e.stopPropagation(); onResolve() }}
-          title="Mark as resolved"
+          title="Approve"
           style={{
             width: 22, height: 22, borderRadius: '50%',
             border: '1.5px solid #d4d4d4',
@@ -228,7 +228,7 @@ function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDe
               onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-              {isResolved ? 'Reopen' : 'Mark as resolved'}
+              {isResolved ? 'Reopen' : 'Approve'}
             </button>
             <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
@@ -362,6 +362,10 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [badgeAnim, setBadgeAnim] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
+  const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
+  const [pinsVisible, setPinsVisible] = useState(true)
+  const [agentsRevealed, setAgentsRevealed] = useState(false)
+  const [headerPopover, setHeaderPopover] = useState<'filter' | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   // Synchronous guard — state updates are async, so double-firing handleSend
@@ -380,6 +384,11 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       cancelled = true
     }
   }, [projectId, apiBase])
+
+  // Close agent modal if agents get hidden while it's open
+  useEffect(() => {
+    if (!agentsRevealed) setAgentOpen(false)
+  }, [agentsRevealed])
 
   // --- Set crosshair cursor when selecting ---
   useEffect(() => {
@@ -573,6 +582,12 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       // Single-key shortcuts — skip when typing in an input
       if (isTyping) return
 
+      // Shift+A — reveal/hide agent bridge icon (hidden pro shortcut)
+      if (e.shiftKey && e.key.toLowerCase() === 'a') {
+        setAgentsRevealed((v) => !v)
+        return
+      }
+
       if (e.key === 'c' || e.key === 'C') {
         if (mode !== 'idle') { exitFeedbackMode() } else { enterFeedbackMode() }
       }
@@ -581,6 +596,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       }
       if (e.key === 'm' || e.key === 'M' || e.key === 'f' || e.key === 'F') {
         setSidebarOpen((v) => !v)
+      }
+      if (e.key === 'h' || e.key === 'H') {
+        setPinsVisible((v) => !v)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -715,13 +733,19 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     const commentUrl = c.pageUrl.split('?')[0].split('#')[0]
     return commentUrl === currentUrl
   }), [comments, currentUrl])
-  const sortedComments = useMemo(() => [...visibleComments].sort((a, b) => {
+  const filteredComments = useMemo(() => visibleComments.filter((c) => {
+    const status = c.reviewStatus ?? 'open'
+    if (filterStatus === 'open') return status === 'open'
+    if (filterStatus === 'approved') return status === 'accepted'
+    return true
+  }), [visibleComments, filterStatus])
+  const sortedComments = useMemo(() => [...filteredComments].sort((a, b) => {
     const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
     const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
-  }), [visibleComments])
-  const commentCount = visibleComments.length
+  }), [filteredComments])
+  const commentCount = filteredComments.length
 
   // Only sync on scroll when a viewport-anchored popover is open or commenting.
   // Persisted pins/tooltip are absolute (page-anchored), so scroll moves them natively.
@@ -1014,9 +1038,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       })()}
 
       {/* Persisted comment pins */}
-      {visibleComments.map((c, i) => {
+      {pinsVisible && filteredComments.map((c, i) => {
         const { pageX: pinPageX, pageY: pinPageY } = fromPagePercent(c.x, c.y)
-        const pinNumber = visibleComments.length - i
+        const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
         const isHovered = hoveredPin === c.id && !isSelected
         const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
@@ -1239,35 +1263,117 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         }}
       >
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #2a2a2a' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #2a2a2a', position: 'relative' }}>
           <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', flex: 1 }}>
             Comments
           </span>
-          <span style={{ fontSize: 11, color: '#666', marginRight: 10 }}>
+          <span style={{ fontSize: 11, color: '#888', marginRight: 10 }}>
             {commentCount}
           </span>
+
+          {/* Filter button */}
+          <button
+            onClick={(e) => { e.stopPropagation(); setHeaderPopover((v) => v === 'filter' ? null : 'filter') }}
+            title="Filter"
+            style={{
+              background: headerPopover === 'filter' ? '#2a2a2a' : 'none',
+              border: 'none',
+              color: filterStatus !== 'all' ? '#0ea5e9' : '#bbb',
+              cursor: 'pointer',
+              padding: 6,
+              borderRadius: 6,
+              display: 'flex',
+              marginRight: 2,
+              transition: 'color 0.15s, background 0.15s',
+            }}
+            onMouseEnter={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#fff' }}
+            onMouseLeave={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#bbb' }}
+          >
+            <SlidersHorizontal style={{ width: 14, height: 14 }} />
+          </button>
+
+          {/* Close button */}
           <button
             onClick={() => setSidebarOpen(false)}
-            style={{ background: 'none', border: 'none', color: '#555', cursor: 'pointer', padding: 4, display: 'flex' }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+            style={{ background: 'none', border: 'none', color: '#bbb', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', transition: 'color 0.15s, background 0.15s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = '#2a2a2a' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#bbb'; e.currentTarget.style.background = 'transparent' }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
+
+          {/* Filter popover */}
+          {headerPopover === 'filter' && (
+            <>
+              <div
+                onClick={() => setHeaderPopover(null)}
+                style={{ position: 'fixed', inset: 0, zIndex: 100000 }}
+              />
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  right: 38,
+                  marginTop: 4,
+                  zIndex: 100001,
+                  background: '#222',
+                  border: '1px solid #333',
+                  borderRadius: 8,
+                  padding: 4,
+                  minWidth: 180,
+                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+                  animation: 'fw-slide-in 0.15s ease both',
+                }}
+              >
+                {(['all', 'open', 'approved'] as const).map((f) => {
+                  const active = filterStatus === f
+                  const label = f === 'all' ? 'All' : f === 'open' ? 'Open' : 'Approved'
+                  return (
+                    <button
+                      key={f}
+                      onClick={() => { setFilterStatus(f); setHeaderPopover(null) }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 8,
+                        width: '100%',
+                        padding: '8px 10px',
+                        fontSize: 13,
+                        fontWeight: 500,
+                        borderRadius: 6,
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#ddd',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                        textAlign: 'left',
+                      }}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = '#2e2e2e')}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                    >
+                      <span style={{ width: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {active && <Check style={{ width: 14, height: 14, color: '#0ea5e9' }} />}
+                      </span>
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+            </>
+          )}
         </div>
 
         {/* Comment list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
-          {visibleComments.length === 0 && (
+          {sortedComments.length === 0 && (
             <div style={{ color: '#555', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
-              No comments yet
+              {visibleComments.length === 0 ? 'No comments yet' : 'No comments match this filter'}
             </div>
           )}
           {sortedComments.map((c, i) => {
-              const pinNum = visibleComments.length - visibleComments.indexOf(c)
+              const pinNum = filteredComments.length - filteredComments.indexOf(c)
               const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
               const isPending = !c.reviewStatus || c.reviewStatus === 'open'
               const isEditing = editingId === c.id
@@ -1378,7 +1484,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                       {isPending && (
                         <button
                           onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
-                          title="Mark as resolved"
+                          title="Approve"
                           style={{
                             width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #555',
                             background: 'transparent', cursor: 'pointer', display: 'flex',
@@ -1435,7 +1541,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                        {c.reviewStatus === 'accepted' ? 'Unresolve' : 'Mark as resolved'}
+                        {c.reviewStatus === 'accepted' ? 'Reopen' : 'Approve'}
                       </button>
                       <button
                         onClick={() => { setEditingId(c.id); setEditText(c.body); setMenuOpenId(null) }}
@@ -1465,19 +1571,20 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #2a2a2a' }}>
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #2a2a2a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
           <button
             onClick={() => { enterFeedbackMode(); setSidebarOpen(false) }}
             style={{
-              width: '100%', padding: '9px 0', fontSize: 15, fontWeight: 500,
-              color: '#fff', background: '#3b82f6', border: 'none', borderRadius: 8,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              gap: 6, transition: 'background 0.15s',
+              padding: '6px 12px', fontSize: 12, fontWeight: 500,
+              color: '#888', background: 'transparent', border: 'none', borderRadius: 6,
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'color 0.15s',
+              fontFamily: 'inherit',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = '#2563eb')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#3b82f6')}
+            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
           >
-            + New feedback
+            + Leave feedback
           </button>
         </div>
       </div>
@@ -1536,28 +1643,51 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               </VtooltipContent>
             </VtooltipItem>
 
-            {/* Agent bridge */}
+            {/* Hide pins toggle */}
             <VtooltipItem index={1}>
               <VtooltipTrigger
                 onClick={(e) => {
                   if (didDrag.current) { e.preventDefault(); return }
-                  setAgentOpen(true)
+                  setPinsVisible((v) => !v)
                 }}
               >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999 }}>
-                  <Bot style={{ width: 18, height: 18 }} />
+                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, background: !pinsVisible ? '#333333' : 'transparent' }}>
+                  {pinsVisible ? <Eye style={{ width: 18, height: 18 }} /> : <EyeOff style={{ width: 18, height: 18 }} />}
                 </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Connect agent</span>
+                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>{pinsVisible ? 'Hide pins' : 'Show pins'}</span>
               </VtooltipTrigger>
               <VtooltipContent>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  Connect agent
+                  {pinsVisible ? 'Hide pins' : 'Show pins'}
+                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>H</span>
                 </div>
               </VtooltipContent>
             </VtooltipItem>
 
+            {/* Agent bridge — hidden by default, revealed via Shift+A */}
+            {agentsRevealed && (
+              <VtooltipItem index={2} key="agent">
+                <VtooltipTrigger
+                  onClick={(e) => {
+                    if (didDrag.current) { e.preventDefault(); return }
+                    setAgentOpen(true)
+                  }}
+                >
+                  <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, animation: 'fw-agent-reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
+                    <Bot style={{ width: 18, height: 18 }} />
+                  </div>
+                  <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Connect agent</span>
+                </VtooltipTrigger>
+                <VtooltipContent>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+                    Connect agent
+                  </div>
+                </VtooltipContent>
+              </VtooltipItem>
+            )}
+
             {/* Menu */}
-            <VtooltipItem index={2}>
+            <VtooltipItem index={agentsRevealed ? 3 : 2} key={`menu-${agentsRevealed}`}>
               <VtooltipTrigger
                 onClick={(e) => {
                   if (didDrag.current) { e.preventDefault(); return }
@@ -1606,6 +1736,10 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         @keyframes fw-slide-in {
           0% { opacity: 0; transform: translateY(8px); }
           100% { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fw-agent-reveal {
+          0% { opacity: 0; transform: scale(0.4); }
+          100% { opacity: 1; transform: scale(1); }
         }
         @keyframes fw-slide-in-new {
           0% { opacity: 0; transform: translateY(-12px); }

@@ -17,6 +17,8 @@ export interface CommentRecord {
   reviewStatus: 'open' | 'accepted' | 'rejected'
   implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
   claimedByAgentId: string | null
+  imageUrl: string | null
+  authorName: string | null
   createdAt: string
   updatedAt: string
 }
@@ -89,12 +91,18 @@ function authHeaders(reviewerToken?: string) {
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
+  const text = await response.text()
+
   if (!response.ok) {
-    const payload = await response.text()
-    throw new Error(payload || `Request failed with ${response.status}`)
+    throw new Error(text || `Request failed with ${response.status}`)
   }
 
-  return response.json() as Promise<T>
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    const preview = text.slice(0, 80).replace(/\s+/g, ' ').trim()
+    throw new Error(`Expected JSON from ${url} but got: ${preview || '(empty body)'}. Is the API server running?`)
+  }
 }
 
 export function listProjects(apiBase: string, reviewerToken: string) {
@@ -102,6 +110,17 @@ export function listProjects(apiBase: string, reviewerToken: string) {
     headers: {
       ...authHeaders(reviewerToken),
     },
+  })
+}
+
+export function createProject(apiBase: string, reviewerToken: string, name: string) {
+  return requestJson<Project>(`${apiBase}/v1/projects`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(reviewerToken),
+    },
+    body: JSON.stringify({ name }),
   })
 }
 
@@ -124,6 +143,17 @@ export function updateReviewStatus(apiBase: string, reviewerToken: string, comme
       ...authHeaders(reviewerToken),
     },
     body: JSON.stringify({ reviewStatus }),
+  })
+}
+
+export function updateImplementationStatus(apiBase: string, reviewerToken: string, commentId: string, implementationStatus: CommentRecord['implementationStatus']) {
+  return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/implementation-status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(reviewerToken),
+    },
+    body: JSON.stringify({ implementationStatus }),
   })
 }
 
