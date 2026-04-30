@@ -154,7 +154,7 @@ describe('<FeedbackWidget />', () => {
   })
 
   it('PATCHes review status through the public comments endpoint', async () => {
-    const pageUrl = window.location.href.split('?')[0].split('#')[0]
+    const pageUrl = window.location.href.split('#')[0]
     const calls = mockFetch(undefined, () => new Response(JSON.stringify([
       {
         id: 'comment-1',
