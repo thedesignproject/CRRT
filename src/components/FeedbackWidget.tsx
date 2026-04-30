@@ -340,21 +340,16 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [editText, setEditText] = useState('')
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
-  // Track current URL for SPA navigation (pins scoped to page)
-  const [currentUrl, setCurrentUrl] = useState(() => window.location.href.split('?')[0].split('#')[0])
+  // Track current URL for SPA navigation (pins scoped to page).
+  // Poll location.href because some routers (e.g. Next.js App Router) cache
+  // history.pushState at module load and bypass any wrapper we install.
+  const [currentUrl, setCurrentUrl] = useState(() => window.location.href.split('#')[0])
   useEffect(() => {
-    const update = () => setCurrentUrl(window.location.href.split('?')[0].split('#')[0])
-    window.addEventListener('popstate', update)
-    // Patch pushState/replaceState to detect SPA navigation
-    const origPush = history.pushState.bind(history)
-    const origReplace = history.replaceState.bind(history)
-    history.pushState = (...args) => { origPush(...args); update() }
-    history.replaceState = (...args) => { origReplace(...args); update() }
-    return () => {
-      window.removeEventListener('popstate', update)
-      history.pushState = origPush
-      history.replaceState = origReplace
-    }
+    const id = window.setInterval(() => {
+      const next = window.location.href.split('#')[0]
+      setCurrentUrl((prev) => (prev === next ? prev : next))
+    }, 300)
+    return () => window.clearInterval(id)
   }, [])
 
   // Sidebar state
@@ -730,7 +725,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const cutoff = new Date('2026-04-19T00:00:00Z')
   const visibleComments = useMemo(() => comments.filter((c) => {
     if (new Date(c.createdAt) < cutoff) return false
-    const commentUrl = c.pageUrl.split('?')[0].split('#')[0]
+    const commentUrl = c.pageUrl.split('#')[0]
     return commentUrl === currentUrl
   }), [comments, currentUrl])
   const filteredComments = useMemo(() => visibleComments.filter((c) => {
@@ -745,6 +740,34 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
   }), [filteredComments])
+  // Pin only renders if its selector still resolves on the current DOM.
+  // Driven by a MutationObserver so we only recompute on real DOM changes,
+  // and only re-render when the live set actually differs.
+  const [liveCommentIds, setLiveCommentIds] = useState<Set<string>>(() => new Set())
+  const filteredCommentsRef = useRef(filteredComments)
+  filteredCommentsRef.current = filteredComments
+  useEffect(() => {
+    const recompute = () => {
+      const next = new Set<string>()
+      for (const c of filteredCommentsRef.current) {
+        try { if (document.querySelector(c.selector)) next.add(c.id) } catch { /* invalid selector */ }
+      }
+      setLiveCommentIds((prev) => {
+        if (prev.size !== next.size) return next
+        for (const id of next) if (!prev.has(id)) return next
+        return prev
+      })
+    }
+    recompute()
+    let pending = false
+    const obs = new MutationObserver(() => {
+      if (pending) return
+      pending = true
+      window.setTimeout(() => { pending = false; recompute() }, 250)
+    })
+    obs.observe(document.body, { childList: true, subtree: true, attributes: true })
+    return () => obs.disconnect()
+  }, [filteredComments])
   const commentCount = filteredComments.length
 
   // Only sync on scroll when a viewport-anchored popover is open or commenting.
@@ -1039,6 +1062,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
       {/* Persisted comment pins */}
       {pinsVisible && filteredComments.map((c, i) => {
+        if (!liveCommentIds.has(c.id)) return null
         const { pageX: pinPageX, pageY: pinPageY } = fromPagePercent(c.x, c.y)
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
