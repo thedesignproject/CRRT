@@ -17,13 +17,12 @@ jobs:
       - name: POST + GET round trip, then clean up
         env:
           DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+          PROJECT_KEY: ${{ secrets.SMOKE_PROJECT_KEY }}
           CLEANUP_TOKEN: ${{ secrets.SMOKE_CLEANUP_TOKEN }}
           BYPASS_TOKEN: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
           GITHUB_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          PROBE="smoke-$(date +%s)-${GITHUB_SHA:0:7}"
-          echo "Probing $DEPLOY_URL/api/comments with projectId=$PROBE"
 
           # Vercel Deployment Protection gates the per-deployment URL behind
           # SSO. The smoke job can't authenticate, so we pass the project's
@@ -34,15 +33,27 @@ jobs:
             exit 1
           fi
 
+          # The API requires projectKey to reference a real row in the
+          # projects table. Use a dedicated smoke project (seeded once in the
+          # DB, public_key stored as SMOKE_PROJECT_KEY secret) and identify
+          # each run by a unique marker in the comment body.
+          if [ -z "${PROJECT_KEY:-}" ]; then
+            echo "::error::SMOKE_PROJECT_KEY not set — seed a smoke project in the DB and store its public_key as a GH secret"
+            exit 1
+          fi
+          if [ -z "${CLEANUP_TOKEN:-}" ]; then
+            echo "::error::SMOKE_CLEANUP_TOKEN not set — required to purge probe rows after the round-trip"
+            exit 1
+          fi
+
+          MARKER="smoke-$(date +%s)-${GITHUB_SHA:0:7}"
+          echo "Probing $DEPLOY_URL/api/comments with projectKey=$PROJECT_KEY (marker=$MARKER)"
+
           cleanup() {
-            if [ -n "${CLEANUP_TOKEN:-}" ]; then
-              curl -sS -o /dev/null -w "cleanup: %{http_code}\n" \
-                -X DELETE "$DEPLOY_URL/api/comments?projectId=$PROBE" \
-                -H "x-vercel-protection-bypass: $BYPASS_TOKEN" \
-                -H "x-smoke-cleanup-token: $CLEANUP_TOKEN" || true
-            else
-              echo "::warning::SMOKE_CLEANUP_TOKEN not set — leaving probe row behind"
-            fi
+            curl -sS -o /dev/null -w "cleanup: %{http_code}\n" \
+              -X DELETE "$DEPLOY_URL/api/comments?projectKey=$PROJECT_KEY" \
+              -H "x-vercel-protection-bypass: $BYPASS_TOKEN" \
+              -H "x-smoke-cleanup-token: $CLEANUP_TOKEN" || true
           }
           trap cleanup EXIT
 
@@ -50,25 +61,24 @@ jobs:
             -X POST "$DEPLOY_URL/api/comments" \
             -H 'Content-Type: application/json' \
             -H "x-vercel-protection-bypass: $BYPASS_TOKEN" \
-            --data "{\"projectId\":\"$PROBE\",\"url\":\"https://smoke\",\"x\":1,\"y\":1,\"element\":\"body\",\"comment\":\"ci smoke test\"}")
-          if [ "$POST_RES" != "200" ]; then
+            --data "{\"projectKey\":\"$PROJECT_KEY\",\"url\":\"https://smoke\",\"x\":1,\"y\":1,\"element\":\"body\",\"comment\":\"$MARKER\"}")
+          if [ "$POST_RES" != "201" ]; then
             echo "::error::POST returned $POST_RES: $(cat /tmp/post.json)"
             exit 1
           fi
 
           GET_RES=$(curl -sS -o /tmp/get.json -w "%{http_code}" \
             -H "x-vercel-protection-bypass: $BYPASS_TOKEN" \
-            "$DEPLOY_URL/api/comments?projectId=$PROBE")
+            "$DEPLOY_URL/api/comments?projectKey=$PROJECT_KEY")
           if [ "$GET_RES" != "200" ]; then
             echo "::error::GET returned $GET_RES: $(cat /tmp/get.json)"
             exit 1
           fi
 
-          # Match on the unique probe id, not a shared string. A generic grep
-          # would false-positive against any prior row that happened to carry
-          # the same literal.
-          if ! grep -F -q -- "$PROBE" /tmp/get.json; then
-            echo "::error::Round-trip failed — POSTed row (projectId=$PROBE) not returned by GET"
+          # Match on the unique per-run marker so a stale row from a previous
+          # cleanup failure can't false-positive this run.
+          if ! grep -F -q -- "$MARKER" /tmp/get.json; then
+            echo "::error::Round-trip failed — POSTed row (marker=$MARKER) not returned by GET"
             cat /tmp/get.json
             exit 1
           fi

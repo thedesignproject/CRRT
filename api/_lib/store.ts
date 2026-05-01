@@ -339,6 +339,16 @@ export async function listAcceptedCommentsByIds(projectKey: string, commentIds: 
   return (data || []).map((row) => mapComment(row as CommentRow))
 }
 
+export async function deleteCommentsForProject(projectKey: string) {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('project_id', projectKey)
+
+  if (error) throw new Error(error.message)
+}
+
 export async function getComment(commentId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
