@@ -7,8 +7,8 @@ import v1Handler from './v1/public/comments.js'
  * Remove once all clients are on the new widget.
  */
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // GET: map ?projectId= to ?projectKey=
-  if (req.method === 'GET') {
+  // GET / DELETE: map ?projectId= to ?projectKey=
+  if (req.method === 'GET' || req.method === 'DELETE') {
     if (req.query.projectId && !req.query.projectKey) {
       req.query.projectKey = req.query.projectId
     }
@@ -26,6 +26,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return v1Handler(req, res)
   }
 
-  // OPTIONS, PATCH, DELETE — forward as-is
+  // OPTIONS, PATCH — forward as-is
   return v1Handler(req, res)
 }
