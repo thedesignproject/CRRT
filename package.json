@@ -37,7 +37,14 @@
     "preview": "vite preview",
     "preview:dashboard": "vite preview --config apps/dashboard/vite.config.ts",
     "prepublishOnly": "npm run build",
-    "local": "bun run build && bunx vercel dev"
+    "local": "bun run build && bunx vercel dev",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "bun db/migrate.ts",
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "bun db/seed.ts",
+    "db:baseline": "bun db/baseline.ts",
+    "vercel-build": "bun run typecheck && vite build --config demo/vite.config.ts && bun run db:migrate"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -62,7 +69,10 @@
     "@vitest/coverage-v8": "^4.1.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "happy-dom": "^20.9.0",
+    "postgres": "^3.4.9",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "tailwind-merge": "^3.5.0",
