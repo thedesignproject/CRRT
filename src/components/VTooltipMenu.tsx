@@ -1,5 +1,7 @@
 import {
-  motion,
+  domAnimation,
+  LazyMotion,
+  m,
   type MotionValue,
   useMotionTemplate,
   useReducedMotion,
@@ -160,40 +162,42 @@ export function VtooltipRoot({
         itemsCountRef,
       }}
     >
-      <div style={{ position: 'relative', color: '#fff' }}>
-        {/* Tooltip container — positioned to the left */}
-        <div
-          ref={ToolTipParentRef}
-          style={{ position: 'absolute', right: 52, top: 0 }}
-        >
-          <motion.div
-            style={{
-              opacity,
-              y: tooltipPosition,
-              clipPath,
-              background: '#000',
-              display: 'flex',
-              flexDirection: 'column',
-            }}
+      <LazyMotion features={domAnimation} strict>
+        <div style={{ position: 'relative', color: '#fff' }}>
+          {/* Tooltip container — positioned to the left */}
+          <div
+            ref={ToolTipParentRef}
+            style={{ position: 'absolute', right: 52, top: 0 }}
           >
-            {contentItems.map(([idx, content]) => (
-              <div
-                ref={(el) => setTooltipRef(idx, el)}
-                key={idx}
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  height: 32,
-                }}
-              >
-                {content}
-              </div>
-            ))}
-          </motion.div>
+            <m.div
+              style={{
+                opacity,
+                y: tooltipPosition,
+                clipPath,
+                background: '#000',
+                display: 'flex',
+                flexDirection: 'column',
+              }}
+            >
+              {contentItems.map(([idx, content]) => (
+                <div
+                  ref={(el) => setTooltipRef(idx, el)}
+                  key={idx}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: 32,
+                  }}
+                >
+                  {content}
+                </div>
+              ))}
+            </m.div>
+          </div>
+          {children}
         </div>
-        {children}
-      </div>
+      </LazyMotion>
     </VtooltipContext.Provider>
   )
 }

@@ -29,7 +29,7 @@ export function App() {
         <nav style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '14px 48px', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', top: 0,
-          background: 'rgba(250,250,250,0.85)', backdropFilter: 'blur(16px)', zIndex: 100,
+          background: 'rgba(250,250,250,0.9)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', zIndex: 100,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
