@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Menu, X, Bot, SlidersHorizontal, Eye, EyeOff, Check } from 'lucide-react'
-import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from './VTooltipMenu'
-import { getSelector } from '../lib/getSelector'
-import { useScreenshotCapture } from '../lib/screenshotCapture'
-import { AgentBridgeModal } from './AgentBridgeModal'
+import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from '../VTooltipMenu'
+import { getSelector } from '../../lib/getSelector'
+import { useScreenshotCapture } from '../../lib/screenshotCapture'
+import { AgentBridgeModal } from '../AgentBridgeModal'
 
 interface FeedbackWidgetProps {
   projectId: string
