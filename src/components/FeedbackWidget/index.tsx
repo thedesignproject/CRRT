@@ -15,6 +15,7 @@ import { useElementSelection } from './hooks/useElementSelection'
 import { useLiveSelectors } from './hooks/useLiveSelectors'
 import { usePillDrag } from './hooks/usePillDrag'
 import { usePositionSync } from './hooks/usePositionSync'
+import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -170,59 +171,36 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }, [comment, target, projectId, apiBase, encodeImage, clearImage])
 
-  // --- Keyboard shortcuts ---
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName
-      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
-
-      if (e.key === 'Escape') {
-        if (showNameModal) {
-          setShowNameModal(false)
-          setNameInput('')
-        } else if (selectedPin) {
-          setSelectedPin(null)
-        } else if (mode === 'commenting') {
-          setTarget(null)
-          setComment('')
-          clearImage()
-          setSending(false)
-          setMode('selecting')
-        } else if (mode === 'selecting') {
-          exitFeedbackMode()
-        } else if (sidebarOpen) {
-          setSidebarOpen(false)
-        }
+  useKeyboardShortcuts({
+    mode,
+    sidebarOpen,
+    selectedPin,
+    showNameModal,
+    onEscape: () => {
+      if (showNameModal) {
+        setShowNameModal(false)
+        setNameInput('')
+      } else if (selectedPin) {
+        setSelectedPin(null)
+      } else if (mode === 'commenting') {
+        setTarget(null)
+        setComment('')
+        clearImage()
+        setSending(false)
+        setMode('selecting')
+      } else if (mode === 'selecting') {
+        exitFeedbackMode()
+      } else if (sidebarOpen) {
+        setSidebarOpen(false)
       }
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && mode === 'commenting') {
-        handleSend()
-      }
-
-      // Single-key shortcuts — skip when typing in an input
-      if (isTyping) return
-
-      // Shift+A — reveal/hide agent bridge icon (hidden pro shortcut)
-      if (e.shiftKey && e.key.toLowerCase() === 'a') {
-        setAgentsRevealed((v) => !v)
-        return
-      }
-
-      if (e.key === 'c' || e.key === 'C') {
-        if (mode !== 'idle') { exitFeedbackMode() } else { enterFeedbackMode() }
-      }
-      if (e.key === 's' || e.key === 'S') {
-        enterFeedbackMode()
-      }
-      if (e.key === 'm' || e.key === 'M' || e.key === 'f' || e.key === 'F') {
-        setSidebarOpen((v) => !v)
-      }
-      if (e.key === 'h' || e.key === 'H') {
-        setPinsVisible((v) => !v)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [mode, handleSend, sidebarOpen, selectedPin, showNameModal])
+    },
+    onCmdEnter: handleSend,
+    onToggleAgents: () => setAgentsRevealed((v) => !v),
+    onToggleMode: () => { if (mode !== 'idle') exitFeedbackMode(); else enterFeedbackMode() },
+    onEnterFeedback: enterFeedbackMode,
+    onToggleSidebar: () => setSidebarOpen((v) => !v),
+    onTogglePins: () => setPinsVisible((v) => !v),
+  })
 
   function exitFeedbackMode() {
     setMode('idle')

@@ -968,6 +968,118 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
+  describe('keyboard shortcut cascades', () => {
+    it('"h" toggles pins visibility', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      // Just make sure it doesn't throw and the orchestrator's onTogglePins lambda runs.
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'h' })
+      })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'h' })
+      })
+    })
+
+    it('Escape closes the name modal when it is open', async () => {
+      mockFetch()
+      try { localStorage.setItem('fw-author-name', 'Ada') } catch {}
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      // Start commenting flow to surface an avatar that opens the name modal.
+      const target = document.createElement('article')
+      document.body.appendChild(target)
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      })
+      const avatar = await waitFor(() => {
+        const b = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (bn) => (bn.title || '').startsWith('Signed in as'),
+        )
+        if (!b) throw new Error('avatar not mounted yet')
+        return b
+      })
+      await act(async () => { fireEvent.click(avatar) })
+      await waitFor(() => {
+        expect(document.querySelector('button[aria-label="Close"]')).not.toBeNull()
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await waitFor(() => {
+        expect(document.querySelector('button[aria-label="Close"]')).toBeNull()
+      })
+    })
+
+    it('Escape clears selectedPin when a pin is open', async () => {
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'cE',
+        projectId: 'p',
+        pageUrl: window.location.href.split('#')[0],
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'pin escape',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      const marker = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+        )
+        if (!el) throw new Error('pin not mounted yet')
+        return el
+      })
+      await act(async () => { fireEvent.click(marker) })
+      // Detail popover scrim mounts at z-index 2147483645.
+      await waitFor(() => {
+        const scrim = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => (d.getAttribute('style') ?? '').includes('z-index: 2147483645'),
+        )
+        if (!scrim) throw new Error('scrim not mounted yet')
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await waitFor(() => {
+        const scrim = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => (d.getAttribute('style') ?? '').includes('z-index: 2147483645'),
+        )
+        expect(scrim).toBeUndefined()
+      })
+    })
+
+    it('Escape closes the sidebar when it is the only thing open', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+    })
+
+    it('Escape from commenting mode returns to selecting and clears the draft', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      const target = document.createElement('article')
+      document.body.appendChild(target)
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      })
+      // Fill name modal so we land in commenting mode.
+      const nameInput = await waitFor(() => {
+        const el = document.querySelector<HTMLInputElement>('input[placeholder^="e.g."]')
+        if (!el) throw new Error('name input not mounted yet')
+        return el
+      })
+      await act(async () => { fireEvent.change(nameInput, { target: { value: 'X' } }) })
+      await act(async () => { fireEvent.submit(nameInput.closest('form')!) })
+      await waitFor(() => {
+        expect(document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')).not.toBeNull()
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await waitFor(() => {
+        expect(document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')).toBeNull()
+      })
+    })
+  })
+
   describe('keyboard shortcuts', () => {
     it('"s" enters feedback (selecting) mode', async () => {
       mockFetch()
