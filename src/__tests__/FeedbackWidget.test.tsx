@@ -284,6 +284,27 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
+    it('clicking the popover scrim cancels and returns to selecting mode', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const { textarea } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'never sent' } })
+
+      // The scrim is the fixed-inset div behind the popover with the dim background.
+      const scrim = Array.from(
+        document.querySelectorAll<HTMLDivElement>('[data-fw]'),
+      ).find((el) => el.style.background?.includes('rgba(0, 0, 0, 0.05)'))
+      expect(scrim).toBeDefined()
+      await act(async () => {
+        fireEvent.click(scrim!)
+      })
+
+      await waitFor(() => {
+        expect(document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')).toBeNull()
+      })
+    })
+
     it('a failed POST does not add a ghost comment to the sidebar', async () => {
       const calls = mockFetch(
         () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),
