@@ -434,6 +434,55 @@ describe('<FeedbackWidget />', () => {
       }
     }
 
+    it('sidebar X button closes the sidebar and the kebab Reopen menu toggles status', async () => {
+      mockFetch(undefined, commentsResponse([seedComment({ reviewStatus: 'accepted' })]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('sidebar entry')) {
+          throw new Error('comment not rendered yet')
+        }
+      })
+
+      // Open sidebar via shortcut.
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
+
+      // Click the X close button in the sidebar header. It's the second
+      // button right after the filter button in the header.
+      const closeBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => {
+        const svg = b.querySelector('svg')
+        return svg && svg.querySelector('line') && b.title === ''
+      })
+      expect(closeBtn).toBeDefined()
+      await act(async () => {
+        fireEvent.click(closeBtn!)
+      })
+
+      // Re-open and click the kebab Reopen menu (status=accepted).
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
+
+      const card = document.querySelector('[data-fw] .fw-sidebar-card')!
+      // Hover reveals the action buttons; the kebab "More" is the second one.
+      const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')!
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
+
+      const reopen = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent?.trim() === 'Reopen')
+      expect(reopen).toBeDefined()
+      await act(async () => {
+        fireEvent.click(reopen!)
+      })
+    })
+
     it('clicking a card body switches to inline edit mode and Save updates the comment text', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)

@@ -61,6 +61,16 @@ describe('<NameModal />', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('paint handlers fire on close-button hover and input blur', () => {
+    renderModal({ hasExistingName: true, nameInput: 'Ada' })
+    const close = screen.getByLabelText('Close')
+    fireEvent.mouseEnter(close)
+    fireEvent.mouseLeave(close)
+    const input = screen.getByPlaceholderText('e.g. Tomas')
+    fireEvent.focus(input)
+    fireEvent.blur(input)
+  })
+
   it('forwards typing to onNameInputChange', () => {
     const { onNameInputChange } = renderModal()
     const input = screen.getByPlaceholderText('e.g. Tomas')
