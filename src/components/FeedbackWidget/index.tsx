@@ -14,6 +14,7 @@ import { useCurrentUrl } from './hooks/useCurrentUrl'
 import { useElementSelection } from './hooks/useElementSelection'
 import { useLiveSelectors } from './hooks/useLiveSelectors'
 import { usePillDrag } from './hooks/usePillDrag'
+import { usePositionSync } from './hooks/usePositionSync'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -38,32 +39,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   const { pillRef, pillPos, draggingRef: dragging, didDragRef: didDrag, onPointerDown: onPillPointerDown } = usePillDrag()
 
-  // Pins/popovers use position:fixed, so their viewport coords must be recomputed
-  // on scroll (and on resize / body reflow, which shift the page-percent mapping).
-  // RAF-coalesced and gated by needsPositionSyncRef so idle pages stay cheap.
-  const [, forceUpdate] = useState(0)
-  const needsPositionSyncRef = useRef(false)
-  useEffect(() => {
-    let raf = 0
-    const bump = () => {
-      if (!needsPositionSyncRef.current) return
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => forceUpdate(n => n + 1))
-    }
-
-    window.addEventListener('scroll', bump, { passive: true })
-    window.addEventListener('resize', bump)
-
-    const ro = new ResizeObserver(bump)
-    ro.observe(document.body)
-
-    return () => {
-      cancelAnimationFrame(raf)
-      window.removeEventListener('scroll', bump)
-      window.removeEventListener('resize', bump)
-      ro.disconnect()
-    }
-  }, [])
 
   // Pin state
   const [selectedPin, setSelectedPin] = useState<string | null>(null)
@@ -315,7 +290,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   // Only sync on scroll when a viewport-anchored popover is open or commenting.
   // Persisted pins/tooltip are absolute (page-anchored), so scroll moves them natively.
-  needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target
+  usePositionSync(selectedPin !== null || mode !== 'idle' || !!target)
 
   return (
     <div {...{ [WIDGET_ATTR]: '' }}>
