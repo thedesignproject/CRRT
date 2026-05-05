@@ -13,6 +13,7 @@ import { useAuthorName } from './hooks/useAuthorName'
 import { useCurrentUrl } from './hooks/useCurrentUrl'
 import { useElementSelection } from './hooks/useElementSelection'
 import { useLiveSelectors } from './hooks/useLiveSelectors'
+import { usePillDrag } from './hooks/usePillDrag'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -35,9 +36,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     openNameEditor,
   } = useAuthorName()
 
-  // Draggable pill state
-  const [pillPos, setPillPos] = useState({ x: window.innerWidth - 72, y: window.innerHeight - 200 })
-  const dragging = useRef(false)
+  const { pillRef, pillPos, draggingRef: dragging, didDragRef: didDrag, onPointerDown: onPillPointerDown } = usePillDrag()
 
   // Pins/popovers use position:fixed, so their viewport coords must be recomputed
   // on scroll (and on resize / body reflow, which shift the page-percent mapping).
@@ -52,29 +51,19 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       raf = requestAnimationFrame(() => forceUpdate(n => n + 1))
     }
 
-    function onResize() {
-      bump()
-      setPillPos(prev => ({
-        x: Math.max(0, Math.min(window.innerWidth - 48, prev.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 160, prev.y)),
-      }))
-    }
-    window.addEventListener('resize', onResize)
     window.addEventListener('scroll', bump, { passive: true })
+    window.addEventListener('resize', bump)
 
     const ro = new ResizeObserver(bump)
     ro.observe(document.body)
 
     return () => {
       cancelAnimationFrame(raf)
-      window.removeEventListener('resize', onResize)
       window.removeEventListener('scroll', bump)
+      window.removeEventListener('resize', bump)
       ro.disconnect()
     }
   }, [])
-  const dragOffset = useRef({ x: 0, y: 0 })
-  const didDrag = useRef(false)
-  const pillRef = useRef<HTMLDivElement>(null)
 
   // Pin state
   const [selectedPin, setSelectedPin] = useState<string | null>(null)
@@ -273,33 +262,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     // Keep sidebar open — user can comment while viewing the list
     setMode('selecting')
   }
-
-  // --- Drag handlers for pill ---
-  function onPillPointerDown(e: React.PointerEvent) {
-    dragging.current = true
-    didDrag.current = false
-    dragOffset.current = { x: e.clientX - pillPos.x, y: e.clientY - pillPos.y }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
-  }
-
-  useEffect(() => {
-    function onMove(e: PointerEvent) {
-      if (!dragging.current) return
-      didDrag.current = true
-      const x = Math.max(0, Math.min(window.innerWidth - 48, e.clientX - dragOffset.current.x))
-      const y = Math.max(0, Math.min(window.innerHeight - 160, e.clientY - dragOffset.current.y))
-      setPillPos({ x, y })
-    }
-    function onUp() {
-      dragging.current = false
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [])
 
   function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
