@@ -4,67 +4,11 @@ import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from '..
 import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
-
-interface FeedbackWidgetProps {
-  projectId: string
-  apiBase: string
-}
-
-type Mode = 'idle' | 'selecting' | 'commenting'
-type ReviewStatus = 'open' | 'accepted' | 'rejected'
-
-interface ClickTarget {
-  selector: string
-  x: number  // page-relative px
-  y: number  // page-relative px
-  url: string
-}
-
-interface Comment {
-  id: string
-  projectId: string
-  pageUrl: string
-  x: number
-  y: number
-  selector: string
-  body: string
-  reviewStatus: ReviewStatus
-  imageUrl?: string | null
-  createdAt: string
-  authorName?: string
-}
-
-
-function toPagePercent(pageX: number, pageY: number) {
-  const { scrollWidth, scrollHeight } = document.documentElement
-  return {
-    x: (pageX / scrollWidth) * 100,
-    y: (pageY / scrollHeight) * 100,
-  }
-}
-
-function fromPagePercent(x: number, y: number) {
-  const { scrollWidth, scrollHeight } = document.documentElement
-  // Legacy rows stored absolute pixels (often > 100). Fall back to pixel coords.
-  if (x > 100 || y > 100) {
-    return { pageX: x, pageY: y }
-  }
-  return {
-    pageX: (x / 100) * scrollWidth,
-    pageY: (y / 100) * scrollHeight,
-  }
-}
-
-function fromPagePercentFixed(x: number, y: number) {
-  const { pageX, pageY } = fromPagePercent(x, y)
-  return { fixedX: pageX - window.scrollX, fixedY: pageY - window.scrollY }
-}
-
-const WIDGET_ATTR = 'data-fw'
-
-const PIN_GRADIENT = 'radial-gradient(circle at 50% 40%, #ffffff 0%, #ffffff 6%, #c4d6ff 25%, #5b87e8 65%, #2563eb 100%)'
-
-const NOISE_OVERLAY_BG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>\")"
+import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
+import { AUTHOR_NAME_KEY, AVATAR_COLORS, COMMENT_CUTOFF, NOISE_OVERLAY_BG, PIN_GRADIENT, WIDGET_ATTR } from './constants'
+import { fromPagePercent, fromPagePercentFixed, toPagePercent } from './coords'
+import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
+import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 
 function PinMarker({ outline = false }: { outline?: boolean }) {
   return (
@@ -98,61 +42,6 @@ function PinMarker({ outline = false }: { outline?: boolean }) {
       }} />
     </div>
   )
-}
-
-const AVATAR_COLORS = ['#8b5cf6', '#f97316', '#3b82f6', '#ec4899', '#14b8a6', '#f43f5e', '#6366f1', '#84cc16']
-function avatarColor(id: string) {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
-
-const AUTHOR_NAME_KEY = 'fw-author-name'
-
-function getInitials(name: string | null | undefined): string | null {
-  if (!name) return null
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return null
-  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase()
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
-}
-
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-  if (seconds < 5) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function normalizeReviewStatus(value: unknown): ReviewStatus {
-  if (value === 'accepted' || value === 'rejected') return value
-  return 'open'
-}
-
-async function fetchProjectComments(apiBase: string, projectId: string): Promise<Comment[]> {
-  try {
-    const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
-    if (!res.ok) return []
-
-    const data: unknown = await res.json()
-    if (!Array.isArray(data)) return []
-
-    return data.map((comment) => {
-      const c = comment as Comment
-      return {
-        ...c,
-        reviewStatus: normalizeReviewStatus((comment as { reviewStatus?: unknown }).reviewStatus),
-      }
-    })
-  } catch {
-    // Endpoint not ready yet; keep the widget usable with an empty sidebar.
-    return []
-  }
 }
 
 interface PinActionClusterProps {
@@ -501,18 +390,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         payload.imageMimeType = encoded.mimeType
       }
 
-      const res = await fetch(`${apiBase}/v1/public/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        console.warn('[FeedbackWidget] API returned', res.status)
-        return
-      }
-
-      const data = await res.json() as Partial<Comment>
+      const data = await postComment(apiBase, payload)
+      if (!data) return
 
       const newComment: Comment = {
         id: data.id ?? crypto.randomUUID(),
@@ -642,21 +521,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }, [])
 
-  async function patchReviewStatus(id: string, reviewStatus: string) {
-    try {
-      await fetch(`${apiBase}/v1/public/comments`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, reviewStatus }),
-      })
-    } catch (err) {
-      console.warn('[FeedbackWidget] PATCH failed:', err)
-    }
-  }
-
   function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
-    patchReviewStatus(commentId, reviewStatus)
+    apiPatchReviewStatus(apiBase, commentId, reviewStatus)
   }
 
   function deleteComment(commentId: string) {
@@ -722,9 +589,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }
 
-  const cutoff = new Date('2026-04-19T00:00:00Z')
   const visibleComments = useMemo(() => comments.filter((c) => {
-    if (new Date(c.createdAt) < cutoff) return false
+    if (new Date(c.createdAt) < COMMENT_CUTOFF) return false
     const commentUrl = c.pageUrl.split('#')[0]
     return commentUrl === currentUrl
   }), [comments, currentUrl])
