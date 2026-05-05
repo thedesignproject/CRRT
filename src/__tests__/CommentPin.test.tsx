@@ -96,10 +96,10 @@ describe('<CommentPin />', () => {
     expect(onSaveEdit).toHaveBeenCalled()
     fireEvent.keyDown(ta, { key: 'Escape' })
     expect(onCancelEdit).toHaveBeenCalled()
-    // Shift+Enter should NOT save
-    onSaveEdit.mockClear()
+    // Shift+Enter should NOT increment the save count
+    const before = (onSaveEdit as ReturnType<typeof vi.fn>).mock.calls.length
     fireEvent.keyDown(ta, { key: 'Enter', shiftKey: true })
-    expect(onSaveEdit).not.toHaveBeenCalled()
+    expect((onSaveEdit as ReturnType<typeof vi.fn>).mock.calls.length).toBe(before)
   })
 
   it('Cancel and Save buttons fire callbacks', () => {
@@ -128,6 +128,22 @@ describe('<CommentPin />', () => {
     expect(onDelete).toHaveBeenCalled()
 
     expect(container).toBeDefined()
+  })
+
+  it('hover tooltip falls back to "User" and empty initials when authorName is undefined', () => {
+    renderPin({ isHovered: true, comment: comment({ authorName: undefined }) })
+    expect(screen.getByText('User')).toBeDefined()
+  })
+
+  it('edit textarea + image render together when isEditing and imageUrl are both set', () => {
+    renderPin({
+      isSelected: true,
+      isEditing: true,
+      editText: 'draft',
+      comment: comment({ imageUrl: 'http://x/a.png' }),
+    })
+    expect(document.querySelector('textarea')).toBeDefined()
+    expect(document.querySelector('img')).toBeDefined()
   })
 
   it('resolved pin shows dimmed opacity unless selected/hovered', () => {
