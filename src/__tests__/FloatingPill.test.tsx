@@ -90,6 +90,12 @@ describe('<FloatingPill />', () => {
     expect(badge!.style.animation).toContain('fw-badge-pop')
   })
 
+  it('renders grabbing cursor when draggingRef.current is true', () => {
+    const { container } = renderPill({ draggingRef: { current: true } })
+    const root = container.firstElementChild as HTMLElement
+    expect(root.style.cursor).toBe('grabbing')
+  })
+
   it('suppresses agent click when didDragRef is true', () => {
     const { onOpenAgent, container } = renderPill({ agentsRevealed: true, didDragRef: { current: true } })
     fireEvent.click(pillButtons(container)[2]!)

@@ -9,7 +9,7 @@ import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './form
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { PinMarker } from './pin/PinMarker'
-import { PinActionCluster } from './pin/PinActionCluster'
+import { CommentPin } from './pin/CommentPin'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -442,23 +442,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }
 
-  const pinPopoverStyle = (c: Comment): React.CSSProperties => {
-    const pad = 16
-    const popW = 280
-    const { fixedX, fixedY } = fromPagePercentFixed(c.x, c.y)
-    let leftFixed = fixedX + pad
-    let topFixed = fixedY - 20
-    if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
-    if (leftFixed < pad) leftFixed = pad
-    if (topFixed < pad) topFixed = fixedY + 40
-    return {
-      position: 'fixed',
-      left: leftFixed,
-      top: topFixed,
-      zIndex: 2147483646,
-    }
-  }
-
   const visibleComments = useMemo(() => comments.filter((c) => {
     if (new Date(c.createdAt) < COMMENT_CUTOFF) return false
     const commentUrl = c.pageUrl.split('#')[0]
@@ -745,201 +728,33 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         )
       })()}
 
-      {/* Persisted comment pins */}
       {pinsVisible && filteredComments.map((c, i) => {
         if (!liveCommentIds.has(c.id)) return null
-        const { pageX: pinPageX, pageY: pinPageY } = fromPagePercent(c.x, c.y)
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
         const isHovered = hoveredPin === c.id && !isSelected
         const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
         return (
-          <div key={c.id} {...{ [WIDGET_ATTR]: '' }}>
-            {/* Pin marker */}
-            <div
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelectedPin(isSelected ? null : c.id)
-              }}
-              onMouseEnter={() => setHoveredPin(c.id)}
-              onMouseLeave={() => setHoveredPin(null)}
-              style={{
-                position: 'absolute',
-                left: pinPageX,
-                top: pinPageY - 44,
-                zIndex: isSelected ? 2147483646 : isHovered ? 2147483642 : 2147483640,
-                cursor: 'pointer',
-                transition: 'transform 0.15s, opacity 0.2s',
-                transform: isSelected || isHovered ? 'scale(1.15)' : 'scale(1)',
-                transformOrigin: 'bottom left',
-                opacity: isResolved && !isSelected && !isHovered ? 0.4 : 1,
-                animation: 'fw-pin-glow-pulse 2.4s ease-in-out infinite',
-              }}
-            >
-              <PinMarker outline={isSelected} />
-            </div>
-
-            {/* Hover tooltip — same material as pin, expanded card */}
-            {isHovered && (
-              <div
-                style={{
-                  position: 'absolute',
-                  left: pinPageX,
-                  top: pinPageY - 12,
-                  zIndex: 2147483643,
-                  pointerEvents: 'none',
-                  transform: 'translateY(-100%)',
-                }}
-              >
-                <div style={{
-                  position: 'relative',
-                  width: 280,
-                  background: 'rgba(255, 255, 255, 0.65)',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                  borderRadius: '14px 14px 14px 0',
-                  padding: 14,
-                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.5)',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                  animation: 'fw-tooltip-liquid 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
-                  transformOrigin: '0% 100%',
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10,
-                }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: PIN_GRADIENT,
-                    flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontSize: 12, fontWeight: 700,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.25)',
-                  }}>
-                    {getInitials(c.authorName) ?? ''}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>{c.authorName ?? 'User'}</span>
-                      <span style={{ fontSize: 12, color: '#888' }}>{timeAgo(c.createdAt)}</span>
-                    </div>
-                    <div style={{ fontSize: 13, color: '#333', lineHeight: 1.4, wordBreak: 'break-word' }}>
-                      {c.body}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Pin detail popover */}
-            {isSelected && (() => {
-              const avColor = avatarColor(c.id)
-              const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
-              const stBadge = c.reviewStatus === 'accepted'
-                ? { bg: '#ecfdf5', color: '#059669', label: 'Approved' }
-                : c.reviewStatus === 'rejected'
-                  ? { bg: '#fef2f2', color: '#dc2626', label: 'Rejected' }
-                  : { bg: '#fffbeb', color: '#d97706', label: 'Pending' }
-              return (
-                <>
-                  <div
-                    onClick={() => setSelectedPin(null)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 2147483645 }}
-                  />
-                  <div
-                    style={{
-                      ...pinPopoverStyle(c),
-                      width: 300,
-                      background: '#fff',
-                      borderRadius: 16,
-                      boxShadow: '0 12px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
-                      padding: 16,
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-                      animation: 'fw-tooltip-in 0.15s ease both',
-                    }}
-                  >
-                    {/* Header */}
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
-                      {/* Avatar */}
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                        background: avColor,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: 13, fontWeight: 700,
-                      }}>
-                        {initial}
-                      </div>
-                      {/* Name + meta */}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>{c.authorName ?? 'User'}</div>
-                        <div style={{ fontSize: 12, color: '#aaa' }}>
-                          #{pinNumber} &middot; {timeAgo(c.createdAt)}
-                        </div>
-                      </div>
-                      <PinActionCluster
-                        key={c.id}
-                        isResolved={isResolved}
-                        onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
-                        onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
-                        onEdit={() => { setEditingId(c.id); setEditText(c.body) }}
-                        onDelete={() => { deleteComment(c.id); setSelectedPin(null) }}
-                      />
-                    </div>
-
-                    {/* Comment text — editable when editingId matches */}
-                    {editingId === c.id ? (
-                      <div style={{ marginBottom: c.imageUrl ? 10 : 14 }}>
-                        <textarea
-                          autoFocus
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(c.id) }
-                            if (e.key === 'Escape') { setEditingId(null) }
-                          }}
-                          rows={3}
-                          style={{
-                            width: '100%', boxSizing: 'border-box',
-                            fontSize: 14, lineHeight: 1.5, color: '#111',
-                            border: '1px solid #d4d4d4', borderRadius: 8,
-                            padding: '8px 10px', fontFamily: 'inherit',
-                            outline: 'none', resize: 'vertical', background: '#fff',
-                          }}
-                          onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                          onBlur={(e) => (e.target.style.borderColor = '#d4d4d4')}
-                        />
-                        <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            style={{ fontSize: 12, color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}
-                          >Cancel</button>
-                          <button
-                            onClick={() => saveEdit(c.id)}
-                            style={{ fontSize: 12, color: '#fff', background: '#3b82f6', fontWeight: 600, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}
-                          >Save</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: 14, lineHeight: 1.6, color: '#333', marginBottom: c.imageUrl ? 10 : 14 }}>
-                        {c.body}
-                      </div>
-                    )}
-
-                    {/* Screenshot */}
-                    {c.imageUrl && (
-                      <img
-                        src={c.imageUrl}
-                        alt=""
-                        onClick={() => window.open(c.imageUrl!, '_blank')}
-                        style={{ width: '100%', borderRadius: 8, border: '1px solid #eee', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
-                      />
-                    )}
-
-                  </div>
-                </>
-              )
-            })()}
-          </div>
+          <CommentPin
+            key={c.id}
+            comment={c}
+            pinNumber={pinNumber}
+            isSelected={isSelected}
+            isHovered={isHovered}
+            isEditing={editingId === c.id}
+            editText={editText}
+            onSelect={() => setSelectedPin(isSelected ? null : c.id)}
+            onClearSelection={() => setSelectedPin(null)}
+            onHoverEnter={() => setHoveredPin(c.id)}
+            onHoverLeave={() => setHoveredPin(null)}
+            onApprove={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
+            onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
+            onStartEdit={() => { setEditingId(c.id); setEditText(c.body) }}
+            onSaveEdit={() => saveEdit(c.id)}
+            onCancelEdit={() => setEditingId(null)}
+            onEditTextChange={setEditText}
+            onDelete={() => { deleteComment(c.id); setSelectedPin(null) }}
+          />
         )
       })}
 

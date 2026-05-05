@@ -434,6 +434,242 @@ describe('<FeedbackWidget />', () => {
       }
     }
 
+    it('pin marker hover, scrim clear, edit flow, toggle-resolve, and delete fire orchestrator callbacks', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      // Wait for the seeded pin to render.
+      const marker = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+        )
+        if (!el) throw new Error('pin marker not mounted yet')
+        return el
+      })
+
+      // Hover paint handlers fire.
+      await act(async () => {
+        fireEvent.mouseEnter(marker)
+      })
+      await act(async () => {
+        fireEvent.mouseLeave(marker)
+      })
+
+      // Click marker to open detail popover.
+      await act(async () => {
+        fireEvent.click(marker)
+      })
+      await waitFor(() => {
+        // Detail popover renders the meta line "#1".
+        const meta = Array.from(
+          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+        ).find((d) => /^#1\s/.test(d.textContent ?? ''))
+        if (!meta) throw new Error('detail popover not open yet')
+      })
+
+      // Open kebab menu and click Reopen-ish (status is open so it shows "Approve") to fire onToggleResolve.
+      const moreBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.title === 'More')!
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
+      const approveMenuItem = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent?.trim() === 'Approve' && b.title !== 'Approve')!
+      await act(async () => {
+        fireEvent.click(approveMenuItem)
+      })
+    })
+
+    it('CommentPin scrim click closes the detail popover (onClearSelection)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const marker = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+        )
+        if (!el) throw new Error('pin not mounted yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.click(marker)
+      })
+
+      // Wait for detail popover scrim to mount (z-index: 2147483645).
+      const scrim = await waitFor(() => {
+        const el = Array.from(
+          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+        ).find((d) => (d.getAttribute('style') ?? '').includes('z-index: 2147483645'))
+        if (!el) throw new Error('scrim not mounted yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.click(scrim)
+      })
+      // After scrim click, the detail popover unmounts.
+      await waitFor(() => {
+        const stillOpen = Array.from(
+          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+        ).find((d) => (d.getAttribute('style') ?? '').includes('z-index: 2147483645'))
+        expect(stillOpen).toBeUndefined()
+      })
+    })
+
+    it('CommentPin Edit -> Cancel returns to body view (onStartEdit + onCancelEdit)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const marker = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+        )
+        if (!el) throw new Error('pin not mounted yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.click(marker)
+      })
+
+      // Open kebab menu.
+      const moreBtn = await waitFor(() => {
+        const b = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+        ).find((bn) => bn.title === 'More')
+        if (!b) throw new Error('More button not mounted yet')
+        return b
+      })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
+      const editMenu = await waitFor(() => {
+        const b = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+        ).find((bn) => bn.textContent?.trim() === 'Edit')
+        if (!b) throw new Error('Edit menu not mounted yet')
+        return b
+      })
+      await act(async () => {
+        fireEvent.click(editMenu)
+      })
+
+      // Wait for the detail popover textarea to mount, then click Cancel.
+      await waitFor(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+        if (!ta) throw new Error('edit textarea not mounted yet')
+      })
+      const cancelBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent === 'Cancel')!
+      await act(async () => {
+        fireEvent.click(cancelBtn)
+      })
+    })
+
+    it('CommentPin edit/save and delete fire orchestrator callbacks', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const marker = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+        )
+        if (!el) throw new Error('pin not mounted yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.click(marker)
+      })
+
+      // Open kebab and click Edit (fires onStartEdit).
+      const moreBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.title === 'More')!
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
+      const editMenu = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent?.trim() === 'Edit')!
+      await act(async () => {
+        fireEvent.click(editMenu)
+      })
+
+      // Edit textarea mounts; click Save (fires onSaveEdit) then re-open detail and Cancel.
+      const ta = await waitFor(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+        if (!el) throw new Error('edit textarea not mounted yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.change(ta, { target: { value: 'edited text' } })
+      })
+      const saveBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent === 'Save')!
+      await act(async () => {
+        fireEvent.click(saveBtn)
+      })
+
+      // Re-open detail popover, click Cancel from the edit textarea (Cancel fires onCancelEdit
+      // through the editing branch). Then scrim click (fires onClearSelection).
+      const marker2 = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+        (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+      )!
+      await act(async () => {
+        fireEvent.click(marker2)
+      })
+      const moreBtn2 = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.title === 'More')!
+      await act(async () => {
+        fireEvent.click(moreBtn2)
+      })
+      const editMenu2 = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent?.trim() === 'Edit')!
+      await act(async () => {
+        fireEvent.click(editMenu2)
+      })
+      const cancelBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent === 'Cancel')!
+      await act(async () => {
+        fireEvent.click(cancelBtn)
+      })
+
+      // Click the detail popover scrim (z-index 2147483645) to fire onClearSelection.
+      const scrim = Array.from(
+        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+      ).find((d) => (d.getAttribute('style') ?? '').includes('z-index: 2147483645'))
+      if (scrim) {
+        await act(async () => {
+          fireEvent.click(scrim)
+        })
+      }
+
+      // Re-open and Delete (fires onDelete).
+      const marker3 = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+        (d) => /fw-pin-glow-pulse/.test(d.style.animation ?? ''),
+      )!
+      await act(async () => {
+        fireEvent.click(marker3)
+      })
+      const moreBtn3 = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.title === 'More')!
+      await act(async () => {
+        fireEvent.click(moreBtn3)
+      })
+      const deleteBtn = Array.from(
+        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
+      ).find((b) => b.textContent?.trim() === 'Delete')!
+      await act(async () => {
+        fireEvent.click(deleteBtn)
+      })
+    })
+
     it('sidebar X button closes the sidebar and the kebab Reopen menu toggles status', async () => {
       mockFetch(undefined, commentsResponse([seedComment({ reviewStatus: 'accepted' })]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
