@@ -824,7 +824,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
             padding: '1px 6px',
             borderRadius: 4,
             border: '1px solid #d1d5db',
-            fontSize: 11,
+            fontSize: 12,
             fontWeight: 600,
             color: '#888',
             lineHeight: 1.4,
@@ -890,7 +890,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   marginTop: comment.length > 0 ? 2 : 0,
                   border: 'none', padding: 0, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                  color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
                 }}
               >
                 {getInitials(authorName) ?? ''}
@@ -961,7 +961,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   alt="captured element"
                   style={{ height: 48, maxWidth: 100, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #333' }}
                 />
-                <span style={{ fontSize: 11, color: '#666', flex: 1 }}>Screenshot captured</span>
+                <span style={{ fontSize: 12, color: '#666', flex: 1 }}>Screenshot captured</span>
                 <button
                   onClick={() => clearImage()}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: 2, display: 'flex', flexShrink: 0 }}
@@ -1128,7 +1128,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     background: PIN_GRADIENT,
                     flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontSize: 11, fontWeight: 700,
+                    color: '#fff', fontSize: 12, fontWeight: 700,
                     textShadow: '0 1px 2px rgba(0,0,0,0.25)',
                   }}>
                     {getInitials(c.authorName) ?? ''}
@@ -1187,7 +1187,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                       {/* Name + meta */}
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>{c.authorName ?? 'User'}</div>
-                        <div style={{ fontSize: 11, color: '#aaa' }}>
+                        <div style={{ fontSize: 12, color: '#aaa' }}>
                           #{pinNumber} &middot; {timeAgo(c.createdAt)}
                         </div>
                       </div>
@@ -1291,7 +1291,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
           <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', flex: 1 }}>
             Comments
           </span>
-          <span style={{ fontSize: 11, color: '#888', marginRight: 10 }}>
+          <span style={{ fontSize: 12, color: '#888', marginRight: 10 }}>
             {commentCount}
           </span>
 
@@ -1437,9 +1437,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {/* Meta line */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                      <span style={{ fontSize: 11, color: '#888' }}>#{pinNum}</span>
+                      <span style={{ fontSize: 12, color: '#888' }}>#{pinNum}</span>
                       <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M2 4h4M4.5 2L6.5 4L4.5 6" stroke="#555" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      <span style={{ fontSize: 11, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 12, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c.pageUrl.replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '') || '/'}
                       </span>
                     </div>
@@ -1447,7 +1447,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     {/* Author + time */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>{c.authorName ?? 'User'}</span>
-                      <span style={{ fontSize: 11, color: '#555' }}>{timeAgo(c.createdAt)}</span>
+                      <span style={{ fontSize: 12, color: '#555' }}>{timeAgo(c.createdAt)}</span>
                     </div>
 
                     {/* Comment text */}
@@ -1473,8 +1473,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                           onBlur={(e) => (e.target.style.borderColor = '#444')}
                         />
                         <div style={{ display: 'flex', gap: 6, marginTop: 4, justifyContent: 'flex-end' }}>
-                          <button onClick={() => setEditingId(null)} style={{ fontSize: 11, color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Cancel</button>
-                          <button onClick={() => saveEdit(c.id)} style={{ fontSize: 11, color: '#3b82f6', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Save</button>
+                          <button onClick={() => setEditingId(null)} style={{ fontSize: 12, color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Cancel</button>
+                          <button onClick={() => saveEdit(c.id)} style={{ fontSize: 12, color: '#3b82f6', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Save</button>
                         </div>
                       </div>
                     ) : (

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import html2canvas from 'html2canvas'
 
 const MODERN_COLOR_FUNCTION_RE = /\b(oklab|oklch)\(([^()]*)\)/gi
 const UNSUPPORTED_COLOR_RE = /\b(?:oklab|oklch)\(/i
@@ -147,6 +146,7 @@ function sanitizeModernColorFunctions(clonedDocument: Document) {
 
 export async function captureElement(el: HTMLElement): Promise<Blob | null> {
   try {
+    const { default: html2canvas } = await import('html2canvas')
     const rect = el.getBoundingClientRect()
     const canvas = await html2canvas(document.body, {
       useCORS: true,

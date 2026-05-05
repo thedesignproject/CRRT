@@ -54,6 +54,17 @@ jobs:
             exit 1
           fi
 
+  drizzle:
+    runs-on: ubuntu-latest
+    name: drizzle (snapshot consistency)
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bunx drizzle-kit check
+
   audit:
     runs-on: ubuntu-latest
     steps:
