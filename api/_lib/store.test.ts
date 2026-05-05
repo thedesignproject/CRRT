@@ -105,6 +105,20 @@ describe('ensurePublicProject', () => {
     expect(result.publicKey).toBe('pk')
   })
 
+  it('throws when a 23505 hits but the refetch still finds nothing', async () => {
+    vi.mocked(getSupabase).mockReturnValue(
+      buildSupabase({
+        maybeSingleResults: [
+          { data: null, error: null },
+          { data: null, error: null },
+        ],
+        insertSingleResult: { data: null, error: { code: '23505', message: 'dup' } },
+      }) as never,
+    )
+
+    await expect(ensurePublicProject('pk')).rejects.toThrow('dup')
+  })
+
   it('throws when the project insert fails with a non-conflict error', async () => {
     vi.mocked(getSupabase).mockReturnValue(
       buildSupabase({
