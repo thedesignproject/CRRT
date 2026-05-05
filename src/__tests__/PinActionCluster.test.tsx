@@ -45,6 +45,23 @@ describe('<PinActionCluster />', () => {
     expect(onDelete).toHaveBeenCalledOnce()
   })
 
+  it('mouse hover handlers paint the buttons without throwing', () => {
+    const { getByTitle } = renderCluster()
+    const approve = getByTitle('Approve')
+    fireEvent.mouseEnter(approve)
+    fireEvent.mouseLeave(approve)
+    const more = getByTitle('More')
+    fireEvent.mouseEnter(more)
+    fireEvent.mouseLeave(more)
+
+    fireEvent.click(more)
+    for (const label of ['Approve', 'Edit', 'Delete']) {
+      const btn = screen.getByText(label)
+      fireEvent.mouseEnter(btn)
+      fireEvent.mouseLeave(btn)
+    }
+  })
+
   it('toggles the kebab menu off when clicking the backdrop', () => {
     const { getByTitle, container } = renderCluster()
     fireEvent.click(getByTitle('More'))

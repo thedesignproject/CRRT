@@ -12,6 +12,8 @@ import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postCo
 import { FeedbackWidgetStyles } from './styles'
 import { PinMarker } from './pin/PinMarker'
 import { PinActionCluster } from './pin/PinActionCluster'
+import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
+import { NameModal } from './modal/NameModal'
 
 export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [mode, setMode] = useState<Mode>('idle')
@@ -524,58 +526,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         />
       )}
 
-      {/* Instruction tooltip */}
-      {mode === 'selecting' && (
-        <div
-          {...{ [WIDGET_ATTR]: '' }}
-          style={{
-            position: 'fixed',
-            top: 16,
-            left: '50%',
-            transform: 'translateX(-50%)',
-            zIndex: 2147483647,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '8px 14px',
-            borderRadius: 9999,
-            background: '#fff',
-            border: '1px solid #e5e7eb',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-            fontSize: 13,
-            color: '#111',
-            whiteSpace: 'nowrap',
-            animation: 'fw-instruction-in 0.3s ease both',
-          }}
-        >
-          <span className="fw-rec-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: '#E5502A', flexShrink: 0 }} />
-          <span style={{ fontWeight: 500 }}>Click any element to leave feedback</span>
-          <span style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '1px 6px',
-            borderRadius: 4,
-            border: '1px solid #d1d5db',
-            fontSize: 12,
-            fontWeight: 600,
-            color: '#888',
-            lineHeight: 1.4,
-          }}>Esc</span>
-          <span
-            onClick={exitFeedbackMode}
-            style={{
-              color: '#999',
-              fontSize: 12,
-              cursor: 'pointer',
-              marginLeft: 2,
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#111')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#999')}
-          >exit</span>
-        </div>
-      )}
+      {mode === 'selecting' && <SelectingInstructionBar onExit={exitFeedbackMode} />}
 
       {/* Popover */}
       {mode === 'commenting' && target && (
@@ -1486,110 +1437,20 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
       <FeedbackWidgetStyles />
 
-      {showNameModal && (
-        <div
-          {...{ [WIDGET_ATTR]: '' }}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 2147483647,
-            background: 'rgba(10, 10, 15, 0.55)',
-            backdropFilter: 'blur(6px)',
-            WebkitBackdropFilter: 'blur(6px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            animation: 'fw-modal-overlay-in 0.18s ease both',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault()
-              if (!nameInput.trim()) return
-              const wasCommenting = mode === 'commenting'
-              saveAuthorName(nameInput)
-              setShowNameModal(false)
-              setNameInput('')
-              if (!wasCommenting && target) setMode('commenting')
-            }}
-            style={{
-              width: 360, maxWidth: 'calc(100vw - 32px)',
-              background: '#fff', borderRadius: 16, padding: 24,
-              boxShadow: '0 24px 64px rgba(0, 0, 0, 0.25), 0 4px 12px rgba(0, 0, 0, 0.12)',
-              animation: 'fw-modal-card-in 0.22s cubic-bezier(0.16, 1, 0.3, 1) both',
-              display: 'flex', flexDirection: 'column', gap: 16,
-              position: 'relative',
-            }}
-          >
-            {authorNameRef.current && (
-              <button
-                type="button"
-                onClick={() => { setShowNameModal(false); setNameInput('') }}
-                aria-label="Close"
-                style={{
-                  position: 'absolute', top: 12, right: 12,
-                  width: 28, height: 28, borderRadius: '50%',
-                  border: 'none', background: 'transparent',
-                  cursor: 'pointer', color: '#888',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f5f5f5'; e.currentTarget.style.color = '#111' }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#888' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-                  <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </button>
-            )}
-            <div style={{
-              width: 44, height: 44, borderRadius: '50% 50% 50% 0',
-              background: PIN_GRADIENT,
-              alignSelf: 'flex-start',
-            }} />
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 700, color: '#111', margin: 0, marginBottom: 6 }}>
-                {authorNameRef.current ? 'Change your name' : "What's your name?"}
-              </h2>
-              <p style={{ fontSize: 13, color: '#666', margin: 0, lineHeight: 1.4 }}>
-                Your name will appear on the comments you leave.
-              </p>
-            </div>
-            <input
-              autoFocus
-              type="text"
-              value={nameInput}
-              onChange={(e) => setNameInput(e.target.value)}
-              placeholder="e.g. Tomas"
-              required
-              maxLength={40}
-              style={{
-                width: '100%', boxSizing: 'border-box',
-                padding: '10px 12px', fontSize: 14, color: '#111',
-                background: '#fafafa',
-                border: '1px solid #e5e5e5', borderRadius: 8,
-                outline: 'none', fontFamily: 'inherit',
-                transition: 'border-color 0.15s, background 0.15s',
-              }}
-              onFocus={(e) => { e.currentTarget.style.borderColor = '#2563eb'; e.currentTarget.style.background = '#fff' }}
-              onBlur={(e) => { e.currentTarget.style.borderColor = '#e5e5e5'; e.currentTarget.style.background = '#fafafa' }}
-            />
-            <button
-              type="submit"
-              disabled={!nameInput.trim()}
-              style={{
-                width: '100%', padding: '11px 0', fontSize: 14, fontWeight: 600,
-                color: '#fff',
-                background: nameInput.trim() ? '#111' : '#ccc',
-                border: 'none', borderRadius: 8,
-                cursor: nameInput.trim() ? 'pointer' : 'not-allowed',
-                transition: 'background 0.15s',
-                fontFamily: 'inherit',
-              }}
-            >
-              {authorNameRef.current ? 'Save' : 'Continue'}
-            </button>
-          </form>
-        </div>
-      )}
+      <NameModal
+        open={showNameModal}
+        hasExistingName={!!authorNameRef.current}
+        nameInput={nameInput}
+        onNameInputChange={setNameInput}
+        onClose={() => { setShowNameModal(false); setNameInput('') }}
+        onSubmit={(name) => {
+          const wasCommenting = mode === 'commenting'
+          saveAuthorName(name)
+          setShowNameModal(false)
+          setNameInput('')
+          if (!wasCommenting && target) setMode('commenting')
+        }}
+      />
     </div>
   )
 }

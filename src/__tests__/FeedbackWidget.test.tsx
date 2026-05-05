@@ -284,6 +284,56 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
+    it('opens the name editor from the popover avatar and closes it via the X button', async () => {
+      mockFetch()
+      try { localStorage.setItem('fw-author-name', 'Existing User') } catch {}
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      // With a stored name, enterCommentingMode does NOT pop the name modal,
+      // so we drive a fresh selection inline here and click the avatar.
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      document.body.appendChild(targetNode)
+
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) {
+          throw new Error('widget root not mounted yet')
+        }
+      })
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 80 }))
+      })
+
+      // Avatar button has the "Signed in as ..." title.
+      const avatar = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => (b.title || '').startsWith('Signed in as'),
+        )
+        if (!btn) throw new Error('avatar not mounted yet')
+        return btn
+      })
+      await act(async () => {
+        fireEvent.click(avatar)
+      })
+
+      const closeBtn = await waitFor(() => {
+        const btn = document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')
+        if (!btn) throw new Error('close button not mounted yet')
+        return btn
+      })
+      await act(async () => {
+        fireEvent.click(closeBtn)
+      })
+
+      await waitFor(() => {
+        expect(document.querySelector('button[aria-label="Close"]')).toBeNull()
+      })
+    })
+
     it('clicking the popover scrim cancels and returns to selecting mode', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
