@@ -12,6 +12,7 @@ import { CommentInputPopover } from './pin/CommentInputPopover'
 import { useAuthorName } from './hooks/useAuthorName'
 import { useCurrentUrl } from './hooks/useCurrentUrl'
 import { useElementSelection } from './hooks/useElementSelection'
+import { useLiveSelectors } from './hooks/useLiveSelectors'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -347,34 +348,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
   }), [filteredComments])
-  // Pin only renders if its selector still resolves on the current DOM.
-  // Driven by a MutationObserver so we only recompute on real DOM changes,
-  // and only re-render when the live set actually differs.
-  const [liveCommentIds, setLiveCommentIds] = useState<Set<string>>(() => new Set())
-  const filteredCommentsRef = useRef(filteredComments)
-  filteredCommentsRef.current = filteredComments
-  useEffect(() => {
-    const recompute = () => {
-      const next = new Set<string>()
-      for (const c of filteredCommentsRef.current) {
-        try { if (document.querySelector(c.selector)) next.add(c.id) } catch { /* invalid selector */ }
-      }
-      setLiveCommentIds((prev) => {
-        if (prev.size !== next.size) return next
-        for (const id of next) if (!prev.has(id)) return next
-        return prev
-      })
-    }
-    recompute()
-    let pending = false
-    const obs = new MutationObserver(() => {
-      if (pending) return
-      pending = true
-      window.setTimeout(() => { pending = false; recompute() }, 250)
-    })
-    obs.observe(document.body, { childList: true, subtree: true, attributes: true })
-    return () => obs.disconnect()
-  }, [filteredComments])
+  const liveCommentIds = useLiveSelectors(filteredComments)
   const commentCount = filteredComments.length
 
   // Only sync on scroll when a viewport-anchored popover is open or commenting.
