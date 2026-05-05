@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createPublicComment, getProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getSupabase } from '../../_lib/supabase.js'
@@ -110,10 +110,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    const project = await getProject(resolvedProjectKey)
-    if (!project) {
-      return jsonError(req, res, 404, 'Project not found')
-    }
+    await ensurePublicProject(resolvedProjectKey)
 
     let imageUrl: string | null = null
     if (imageBase64 && imageMimeType) {
