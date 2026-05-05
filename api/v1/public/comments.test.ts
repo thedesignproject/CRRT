@@ -5,9 +5,10 @@ vi.mock('../../_lib/store.js', () => ({
   createPublicComment: vi.fn(),
   listComments: vi.fn(),
   updateReviewStatus: vi.fn(),
+  deleteCommentsForProject: vi.fn(),
 }))
 
-import { createPublicComment, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import handler from './comments.js'
 
 interface MockRes {
@@ -54,6 +55,9 @@ beforeEach(() => {
   vi.mocked(createPublicComment).mockReset()
   vi.mocked(listComments).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
+  vi.mocked(deleteCommentsForProject).mockReset()
+  delete process.env.SMOKE_CLEANUP_TOKEN
+  delete process.env.SMOKE_PROJECT_KEY
 })
 
 describe('api/v1/public/comments', () => {
@@ -170,6 +174,61 @@ describe('api/v1/public/comments', () => {
       body: 'Hello',
       imageUrl: null,
       authorName: null,
+    })
+  })
+
+  describe('DELETE (smoke cleanup)', () => {
+    it('returns 405 when cleanup is not configured on the server', async () => {
+      const res = mockRes()
+      await call(mockReq({ method: 'DELETE', query: { projectKey: 'smoke' }, headers: { 'x-smoke-cleanup-token': 'tok' } }), res)
+      expect(res.statusCode).toBe(405)
+      expect(deleteCommentsForProject).not.toHaveBeenCalled()
+    })
+
+    it('returns 401 when token is missing or wrong', async () => {
+      process.env.SMOKE_CLEANUP_TOKEN = 'expected'
+      process.env.SMOKE_PROJECT_KEY = 'smoke'
+
+      const noTokenRes = mockRes()
+      await call(mockReq({ method: 'DELETE', query: { projectKey: 'smoke' }, headers: {} }), noTokenRes)
+      expect(noTokenRes.statusCode).toBe(401)
+
+      const wrongTokenRes = mockRes()
+      await call(mockReq({ method: 'DELETE', query: { projectKey: 'smoke' }, headers: { 'x-smoke-cleanup-token': 'wrong' } }), wrongTokenRes)
+      expect(wrongTokenRes.statusCode).toBe(401)
+
+      expect(deleteCommentsForProject).not.toHaveBeenCalled()
+    })
+
+    it('returns 403 when projectKey does not match the configured smoke project', async () => {
+      process.env.SMOKE_CLEANUP_TOKEN = 'expected'
+      process.env.SMOKE_PROJECT_KEY = 'smoke'
+
+      const res = mockRes()
+      await call(mockReq({
+        method: 'DELETE',
+        query: { projectKey: 'demo-project' },
+        headers: { 'x-smoke-cleanup-token': 'expected' },
+      }), res)
+
+      expect(res.statusCode).toBe(403)
+      expect(deleteCommentsForProject).not.toHaveBeenCalled()
+    })
+
+    it('deletes comments for the smoke project when token and key match', async () => {
+      process.env.SMOKE_CLEANUP_TOKEN = 'expected'
+      process.env.SMOKE_PROJECT_KEY = 'smoke'
+      vi.mocked(deleteCommentsForProject).mockResolvedValue(undefined)
+
+      const res = mockRes()
+      await call(mockReq({
+        method: 'DELETE',
+        query: { projectKey: 'smoke' },
+        headers: { 'x-smoke-cleanup-token': 'expected' },
+      }), res)
+
+      expect(res.statusCode).toBe(204)
+      expect(deleteCommentsForProject).toHaveBeenCalledWith('smoke')
     })
   })
 

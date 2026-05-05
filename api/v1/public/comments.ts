@@ -1,10 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createPublicComment, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getSupabase } from '../../_lib/supabase.js'
 
-const METHODS = ['GET', 'POST', 'PATCH', 'OPTIONS']
+const METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 const VALID_STATUSES = new Set(['open', 'accepted', 'approved', 'rejected', 'pending'])
 
 function normalizePatchStatus(value: unknown): ReviewStatus | null {
@@ -19,7 +19,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET') return handleGet(req, res)
   if (req.method === 'POST') return handlePost(req, res)
   if (req.method === 'PATCH') return handlePatch(req, res)
+  if (req.method === 'DELETE') return handleDelete(req, res)
   return methodNotAllowed(req, res, METHODS)
+}
+
+function timingSafeEqual(a: string, b: string) {
+  if (a.length !== b.length) return false
+  let mismatch = 0
+  for (let i = 0; i < a.length; i++) mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return mismatch === 0
+}
+
+// Smoke-only cleanup. Gated by SMOKE_CLEANUP_TOKEN and locked to the
+// SMOKE_PROJECT_KEY env var so a leaked token cannot wipe a real project.
+async function handleDelete(req: VercelRequest, res: VercelResponse) {
+  try {
+    const expectedToken = process.env.SMOKE_CLEANUP_TOKEN
+    const expectedProjectKey = process.env.SMOKE_PROJECT_KEY
+    if (!expectedToken || !expectedProjectKey) {
+      return jsonError(req, res, 405, 'Cleanup not configured')
+    }
+
+    const presented = req.headers['x-smoke-cleanup-token']
+    const token = typeof presented === 'string' ? presented : ''
+    if (!token || !timingSafeEqual(token, expectedToken)) {
+      return jsonError(req, res, 401, 'Invalid cleanup token')
+    }
+
+    const projectKey = getStringQuery(req.query.projectKey) ?? getStringQuery(req.query.projectId)
+    if (!projectKey || projectKey !== expectedProjectKey) {
+      return jsonError(req, res, 403, 'Cleanup scoped to smoke project only')
+    }
+
+    await deleteCommentsForProject(projectKey)
+    setCors(req, res, METHODS)
+    return res.status(204).end()
+  } catch (error) {
+    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+  }
 }
 
 async function handleGet(req: VercelRequest, res: VercelResponse) {
