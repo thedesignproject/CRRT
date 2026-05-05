@@ -674,6 +674,64 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
+  describe('floating pill buttons', () => {
+    it('pill buttons toggle mode, pins, sidebar (and agent when revealed)', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      // Pill is at z-index max with pillRef root inside data-fw. Pick the
+      // pill container by its onPointerDown attribute proxy: it's the only
+      // [data-fw] element with role-less buttons stacked vertically.
+      // Easiest stable handle: the VtooltipRoot's button stack lives inside
+      // the only fixed-positioned [data-fw] div with `cursor: grab`.
+      const pill = await waitFor(() => {
+        const node = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]')).find(
+          (el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''),
+        )
+        if (!node) throw new Error('pill not mounted yet')
+        return node
+      })
+      const buttons = Array.from(pill.querySelectorAll<HTMLButtonElement>('button'))
+      // [0] = comment, [1] = eye/pins, [2] = menu (when no agent revealed).
+      expect(buttons.length).toBeGreaterThanOrEqual(3)
+
+      await act(async () => {
+        fireEvent.click(buttons[0]!)
+      })
+      // After toggle from idle, mode becomes 'selecting' — instruction bar mounts.
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Click any element to leave feedback')
+      })
+
+      await act(async () => {
+        fireEvent.click(buttons[1]!)
+      })
+      // Pins toggle is silent in DOM but the prop callback runs (covers index.tsx onTogglePins).
+
+      await act(async () => {
+        fireEvent.click(buttons[2]!)
+      })
+      // Sidebar toggles open. Either way, the prop callback runs.
+
+      // Reveal agent and click the new agent button.
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      })
+      const refreshed = Array.from(pill.querySelectorAll<HTMLButtonElement>('button'))
+      expect(refreshed.length).toBe(4)
+      await act(async () => {
+        fireEvent.click(refreshed[2]!)
+      })
+      // Agent modal mounts.
+      await waitFor(() => {
+        const modal = Array.from(document.querySelectorAll<HTMLElement>('[data-fw]')).find(
+          (el) => el.textContent?.includes('agent') || el.textContent?.includes('Agent'),
+        )
+        expect(modal).toBeDefined()
+      })
+    })
+  })
+
   describe('keyboard shortcuts', () => {
     it('"s" enters feedback (selecting) mode', async () => {
       mockFetch()

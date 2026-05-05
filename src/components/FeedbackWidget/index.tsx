@@ -1,6 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircle, Menu, X, Bot, SlidersHorizontal, Eye, EyeOff, Check } from 'lucide-react'
-import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from '../VTooltipMenu'
 import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
@@ -15,6 +13,7 @@ import { PinActionCluster } from './pin/PinActionCluster'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
+import { FloatingPill } from './pill/FloatingPill'
 
 export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [mode, setMode] = useState<Mode>('idle')
@@ -970,139 +969,22 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         onEnterFeedback={enterFeedbackMode}
       />
 
-      {/* Floating draggable pill with tooltip menu */}
-      <div
-        ref={pillRef}
-        {...{ [WIDGET_ATTR]: '' }}
+      <FloatingPill
+        pillRef={pillRef}
+        pillPos={pillPos}
+        draggingRef={dragging}
+        didDragRef={didDrag}
         onPointerDown={onPillPointerDown}
-        style={{
-          position: 'fixed',
-          left: pillPos.x,
-          top: pillPos.y,
-          zIndex: 2147483647,
-          cursor: dragging.current ? 'grabbing' : 'grab',
-          userSelect: 'none',
-          touchAction: 'none',
-        }}
-      >
-        <VtooltipRoot springConfig={{ type: 'spring' as const, stiffness: 400, damping: 30, mass: 0.8 }}>
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              padding: '6px 6px',
-              borderRadius: 9999,
-              background: '#000',
-              flexDirection: 'column',
-              gap: 2,
-            }}
-          >
-            {/* Comment */}
-            <VtooltipItem index={0}>
-              <VtooltipTrigger
-                onClick={(e) => {
-                  if (didDrag.current) { e.preventDefault(); return }
-                  if (mode !== 'idle') { exitFeedbackMode() } else { enterFeedbackMode() }
-                }}
-              >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, background: mode !== 'idle' ? '#333333' : 'transparent' }}>
-                  {mode !== 'idle' ? (
-                    <X style={{ width: 18, height: 18 }} />
-                  ) : (
-                    <MessageCircle style={{ width: 18, height: 18 }} />
-                  )}
-                </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Comment</span>
-              </VtooltipTrigger>
-              <VtooltipContent>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  {mode !== 'idle' ? 'Exit' : 'Comment'}
-                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>C</span>
-                </div>
-              </VtooltipContent>
-            </VtooltipItem>
-
-            {/* Hide pins toggle */}
-            <VtooltipItem index={1}>
-              <VtooltipTrigger
-                onClick={(e) => {
-                  if (didDrag.current) { e.preventDefault(); return }
-                  setPinsVisible((v) => !v)
-                }}
-              >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, background: !pinsVisible ? '#333333' : 'transparent' }}>
-                  {pinsVisible ? <Eye style={{ width: 18, height: 18 }} /> : <EyeOff style={{ width: 18, height: 18 }} />}
-                </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>{pinsVisible ? 'Hide pins' : 'Show pins'}</span>
-              </VtooltipTrigger>
-              <VtooltipContent>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  {pinsVisible ? 'Hide pins' : 'Show pins'}
-                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>H</span>
-                </div>
-              </VtooltipContent>
-            </VtooltipItem>
-
-            {/* Agent bridge — hidden by default, revealed via Shift+A */}
-            {agentsRevealed && (
-              <VtooltipItem index={2} key="agent">
-                <VtooltipTrigger
-                  onClick={(e) => {
-                    if (didDrag.current) { e.preventDefault(); return }
-                    setAgentOpen(true)
-                  }}
-                >
-                  <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, animation: 'fw-agent-reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
-                    <Bot style={{ width: 18, height: 18 }} />
-                  </div>
-                  <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Connect agent</span>
-                </VtooltipTrigger>
-                <VtooltipContent>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                    Connect agent
-                  </div>
-                </VtooltipContent>
-              </VtooltipItem>
-            )}
-
-            {/* Menu */}
-            <VtooltipItem index={agentsRevealed ? 3 : 2} key={`menu-${agentsRevealed}`}>
-              <VtooltipTrigger
-                onClick={(e) => {
-                  if (didDrag.current) { e.preventDefault(); return }
-                  setSidebarOpen((v) => !v)
-                }}
-              >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999 }}>
-                  <Menu style={{ width: 18, height: 18 }} />
-                  {commentCount > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      right: 2,
-                      top: 2,
-                      width: 6,
-                      height: 6,
-                      borderRadius: 9999,
-                      border: '1.7px solid #000',
-                      background: '#0ea5e9',
-                      animation: badgeAnim ? 'fw-badge-pop 0.4s ease' : 'none',
-                    }} />
-                  )}
-                </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Menu</span>
-              </VtooltipTrigger>
-              <VtooltipContent>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  Feedback
-                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>F</span>
-                </div>
-              </VtooltipContent>
-            </VtooltipItem>
-          </div>
-        </VtooltipRoot>
-      </div>
+        mode={mode}
+        pinsVisible={pinsVisible}
+        onTogglePins={() => setPinsVisible((v) => !v)}
+        agentsRevealed={agentsRevealed}
+        onOpenAgent={() => setAgentOpen(true)}
+        badgeAnim={badgeAnim}
+        commentCount={commentCount}
+        onToggleSidebar={() => setSidebarOpen((v) => !v)}
+        onToggleMode={() => { if (mode !== 'idle') exitFeedbackMode(); else enterFeedbackMode() }}
+      />
 
       {/* Agent bridge modal */}
       {agentOpen && <AgentBridgeModal apiBase={apiBase} projectId={projectId} onClose={() => setAgentOpen(false)} />}
