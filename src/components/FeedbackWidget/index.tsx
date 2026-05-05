@@ -3,7 +3,6 @@ import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { COMMENT_CUTOFF, WIDGET_ATTR } from './constants'
-import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { PinMarker } from './pin/PinMarker'
@@ -62,7 +61,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [agentsRevealed, setAgentsRevealed] = useState(false)
   const [headerPopover, setHeaderPopover] = useState<'filter' | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const popoverRef = useRef<HTMLDivElement>(null)
   // Synchronous guard — state updates are async, so double-firing handleSend
   // in the same tick (e.g. Cmd+Enter held down) would otherwise slip past `sending`.
   const sendingRef = useRef(false)
