@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 import { PIN_GRADIENT, WIDGET_ATTR } from '../constants'
 import { fromPagePercent, fromPagePercentFixed } from '../coords'
-import { avatarColor, getInitials, timeAgo } from '../format'
+import { avatarColor, getInitials, isResolved as isResolvedStatus, timeAgo } from '../format'
 import type { Comment } from '../types'
 import { PinMarker } from './PinMarker'
 import { PinActionCluster } from './PinActionCluster'
@@ -63,7 +63,7 @@ export function CommentPin({
   onDelete,
 }: CommentPinProps) {
   const { pageX: pinPageX, pageY: pinPageY } = fromPagePercent(c.x, c.y)
-  const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
+  const isResolved = isResolvedStatus(c.reviewStatus)
   const avColor = avatarColor(c.id)
   const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
 

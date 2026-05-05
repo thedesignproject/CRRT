@@ -7,9 +7,6 @@ import type { Mode } from '../components/FeedbackWidget/types'
 function setup(overrides: Partial<Parameters<typeof useKeyboardShortcuts>[0]> = {}) {
   const handlers = {
     mode: 'idle' as Mode,
-    sidebarOpen: false,
-    selectedPin: null as string | null,
-    showNameModal: false,
     onEscape: vi.fn(),
     onCmdEnter: vi.fn(),
     onToggleAgents: vi.fn(),

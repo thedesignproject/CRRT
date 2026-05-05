@@ -1,4 +1,4 @@
-import { getInitials, timeAgo } from '../format'
+import { getInitials, isResolved as isResolvedStatus, timeAgo } from '../format'
 import type { Comment } from '../types'
 
 interface CommentSidebarCardProps {
@@ -42,7 +42,7 @@ export function CommentSidebarCard({
   onMenuEditEnter,
   onDelete,
 }: CommentSidebarCardProps) {
-  const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
+  const isResolved = isResolvedStatus(c.reviewStatus)
   const isPending = !c.reviewStatus || c.reviewStatus === 'open'
   const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
   return (

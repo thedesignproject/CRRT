@@ -157,6 +157,26 @@ describe('<FeedbackWidget /> submit flow', () => {
     })
   })
 
+  it('a network error during POST is caught and logged without throwing', async () => {
+    const calls: { url: string; init?: RequestInit }[] = []
+    const impl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init })
+      if (init?.method === 'POST') throw new Error('network down')
+      return new Response('[]', { status: 200 })
+    })
+    vi.stubGlobal('fetch', impl)
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+    const { textarea, getSendButton } = await enterCommentingMode()
+    fireEvent.change(textarea, { target: { value: 'will throw' } })
+    fireEvent.click(getSendButton())
+
+    await waitFor(() => {
+      expect(console.warn).toHaveBeenCalledWith('[FeedbackWidget] API error:', expect.any(Error))
+    })
+  })
+
   it('a failed POST does not add a ghost comment to the sidebar', async () => {
     const calls = mockFetch(
       () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),

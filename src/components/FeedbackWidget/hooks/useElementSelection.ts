@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getSelector } from '../../../lib/getSelector'
 import { WIDGET_ATTR } from '../constants'
 import { toPagePercent } from '../coords'
@@ -11,6 +11,8 @@ interface UseElementSelectionArgs {
 
 export function useElementSelection({ mode, onPick }: UseElementSelectionArgs) {
   const [hovered, setHovered] = useState<Element | null>(null)
+  const onPickRef = useRef(onPick)
+  onPickRef.current = onPick
 
   useEffect(() => {
     if (mode !== 'selecting') return
@@ -64,7 +66,7 @@ export function useElementSelection({ mode, onPick }: UseElementSelectionArgs) {
       e.stopPropagation()
 
       const pct = toPagePercent(e.pageX, e.pageY)
-      onPick({
+      onPickRef.current({
         selector: getSelector(el),
         x: pct.x,
         y: pct.y,
@@ -74,5 +76,5 @@ export function useElementSelection({ mode, onPick }: UseElementSelectionArgs) {
 
     window.addEventListener('click', onClick, true)
     return () => window.removeEventListener('click', onClick, true)
-  }, [mode, onPick])
+  }, [mode])
 }

@@ -1,7 +1,7 @@
 import { SlidersHorizontal } from 'lucide-react'
 import { WIDGET_ATTR } from '../constants'
-import type { Comment, ReviewStatus } from '../types'
-import { FilterPopover, type FilterValue } from './FilterPopover'
+import type { Comment, FilterValue, ReviewStatus } from '../types'
+import { FilterPopover } from './FilterPopover'
 import { CommentSidebarCard } from './CommentSidebarCard'
 
 interface CommentSidebarProps {
@@ -132,8 +132,10 @@ export function CommentSidebar({
               {visibleComments.length === 0 ? 'No comments yet' : 'No comments match this filter'}
             </div>
           )}
-          {sortedComments.map((c, i) => {
-            const pinNum = filteredComments.length - filteredComments.indexOf(c)
+          {(() => {
+            const indexById = new Map(filteredComments.map((c, idx) => [c.id, idx]))
+            return sortedComments.map((c, i) => {
+            const pinNum = filteredComments.length - (indexById.get(c.id) ?? 0)
             const isMenuOpen = menuOpenId === c.id
             const isEditing = editingId === c.id
             return (
@@ -159,7 +161,8 @@ export function CommentSidebar({
                 onDelete={() => onDelete(c.id)}
               />
             )
-          })}
+            })
+          })()}
         </div>
 
         <div style={{ padding: '12px 16px', borderTop: '1px solid #2a2a2a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>

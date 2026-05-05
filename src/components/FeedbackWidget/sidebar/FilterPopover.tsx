@@ -1,6 +1,5 @@
 import { Check } from 'lucide-react'
-
-export type FilterValue = 'all' | 'open' | 'approved'
+import type { FilterValue } from '../types'
 
 interface FilterPopoverProps {
   filterStatus: FilterValue

@@ -31,3 +31,7 @@ export function normalizeReviewStatus(value: unknown): ReviewStatus {
   if (value === 'accepted' || value === 'rejected') return value
   return 'open'
 }
+
+export function isResolved(status: ReviewStatus | undefined | null): boolean {
+  return status === 'accepted' || status === 'rejected'
+}

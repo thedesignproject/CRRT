@@ -11,10 +11,10 @@ describe('useAuthorName', () => {
     vi.restoreAllMocks()
   })
 
-  it('returns null when no name is stored', () => {
+  it('returns undefined when no name is stored', () => {
     const { result } = renderHook(() => useAuthorName())
-    expect(result.current.authorName).toBeNull()
-    expect(result.current.authorNameRef.current).toBeNull()
+    expect(result.current.authorName).toBeUndefined()
+    expect(result.current.authorNameRef.current).toBeUndefined()
   })
 
   it('hydrates from localStorage on mount', () => {
@@ -39,7 +39,7 @@ describe('useAuthorName', () => {
     act(() => {
       result.current.saveAuthorName('   ')
     })
-    expect(result.current.authorName).toBeNull()
+    expect(result.current.authorName).toBeUndefined()
     expect(localStorage.getItem(AUTHOR_NAME_KEY)).toBeNull()
   })
 
@@ -53,7 +53,7 @@ describe('useAuthorName', () => {
     expect(result.current.nameInput).toBe('Ada')
   })
 
-  it('openNameEditor pre-fills empty when ref is null', () => {
+  it('openNameEditor pre-fills empty when ref is undefined', () => {
     const { result } = renderHook(() => useAuthorName())
     act(() => {
       result.current.openNameEditor()

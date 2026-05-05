@@ -5,6 +5,7 @@ export interface FeedbackWidgetProps {
 
 export type Mode = 'idle' | 'selecting' | 'commenting'
 export type ReviewStatus = 'open' | 'accepted' | 'rejected'
+export type FilterValue = 'all' | 'open' | 'approved'
 
 export interface ClickTarget {
   selector: string

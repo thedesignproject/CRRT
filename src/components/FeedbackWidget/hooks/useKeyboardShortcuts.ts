@@ -1,11 +1,8 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Mode } from '../types'
 
 interface UseKeyboardShortcutsArgs {
   mode: Mode
-  sidebarOpen: boolean
-  selectedPin: string | null
-  showNameModal: boolean
   onEscape: () => void
   onCmdEnter: () => void
   onToggleAgents: () => void
@@ -15,64 +12,44 @@ interface UseKeyboardShortcutsArgs {
   onTogglePins: () => void
 }
 
-export function useKeyboardShortcuts({
-  mode,
-  sidebarOpen,
-  selectedPin,
-  showNameModal,
-  onEscape,
-  onCmdEnter,
-  onToggleAgents,
-  onToggleMode,
-  onEnterFeedback,
-  onToggleSidebar,
-  onTogglePins,
-}: UseKeyboardShortcutsArgs) {
+export function useKeyboardShortcuts(args: UseKeyboardShortcutsArgs) {
+  const argsRef = useRef(args)
+  argsRef.current = args
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      const a = argsRef.current
       const tag = (e.target as HTMLElement).tagName
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
 
       if (e.key === 'Escape') {
-        onEscape()
+        a.onEscape()
       }
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && mode === 'commenting') {
-        onCmdEnter()
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && a.mode === 'commenting') {
+        a.onCmdEnter()
       }
 
       if (isTyping) return
 
       if (e.shiftKey && e.key.toLowerCase() === 'a') {
-        onToggleAgents()
+        a.onToggleAgents()
         return
       }
 
       if (e.key === 'c' || e.key === 'C') {
-        onToggleMode()
+        a.onToggleMode()
       }
       if (e.key === 's' || e.key === 'S') {
-        onEnterFeedback()
+        a.onEnterFeedback()
       }
       if (e.key === 'm' || e.key === 'M' || e.key === 'f' || e.key === 'F') {
-        onToggleSidebar()
+        a.onToggleSidebar()
       }
       if (e.key === 'h' || e.key === 'H') {
-        onTogglePins()
+        a.onTogglePins()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [
-    mode,
-    sidebarOpen,
-    selectedPin,
-    showNameModal,
-    onEscape,
-    onCmdEnter,
-    onToggleAgents,
-    onToggleMode,
-    onEnterFeedback,
-    onToggleSidebar,
-    onTogglePins,
-  ])
+  }, [])
 }

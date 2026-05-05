@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
-import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
+import type { ClickTarget, Comment, FeedbackWidgetProps, FilterValue, Mode, ReviewStatus } from './types'
 import { COMMENT_CUTOFF, WIDGET_ATTR } from './constants'
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import { isResolved } from './format'
 import { FeedbackWidgetStyles } from './styles'
 import { PinMarker } from './pin/PinMarker'
 import { CommentPin } from './pin/CommentPin'
@@ -39,24 +40,20 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   const { pillRef, pillPos, draggingRef: dragging, didDragRef: didDrag, onPointerDown: onPillPointerDown } = usePillDrag()
 
-
-  // Pin state
   const [selectedPin, setSelectedPin] = useState<string | null>(null)
   const [hoveredPin, setHoveredPin] = useState<string | null>(null)
 
-  // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editText, setEditText] = useState('')
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
   const currentUrl = useCurrentUrl()
 
-  // Sidebar state
   const [comments, setComments] = useState<Comment[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [badgeAnim, setBadgeAnim] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
-  const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
+  const [filterStatus, setFilterStatus] = useState<FilterValue>('all')
   const [pinsVisible, setPinsVisible] = useState(true)
   const [agentsRevealed, setAgentsRevealed] = useState(false)
   const [headerPopover, setHeaderPopover] = useState<'filter' | null>(null)
@@ -67,7 +64,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   const { image, previewUrl: imagePreviewUrl, capture: captureImage, clear: clearImage, toBase64: encodeImage } = useScreenshotCapture()
 
-  // --- Fetch comments on mount ---
   useEffect(() => {
     let cancelled = false
     fetchProjectComments(apiBase, projectId).then((nextComments) => {
@@ -78,7 +74,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }, [projectId, apiBase])
 
-  // Close agent modal if agents get hidden while it's open
   useEffect(() => {
     if (!agentsRevealed) setAgentOpen(false)
   }, [agentsRevealed])
@@ -98,14 +93,12 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     },
   })
 
-  // --- Auto-focus textarea ---
   useEffect(() => {
     if (mode === 'commenting' && textareaRef.current) {
       textareaRef.current.focus()
     }
   }, [mode])
 
-  // --- Send comment ---
   const handleSend = useCallback(async () => {
     if (!comment.trim() || !target || sendingRef.current) return
 
@@ -149,7 +142,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         reviewStatus: 'open',
         imageUrl: data.imageUrl ?? null,
         createdAt: data.createdAt ?? new Date().toISOString(),
-        authorName: data.authorName ?? authorNameRef.current ?? undefined,
+        authorName: data.authorName ?? authorNameRef.current,
       }
 
       setComments((prev) => [newComment, ...prev])
@@ -171,9 +164,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   useKeyboardShortcuts({
     mode,
-    sidebarOpen,
-    selectedPin,
-    showNameModal,
     onEscape: () => {
       if (showNameModal) {
         setShowNameModal(false)
@@ -210,7 +200,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   }
 
   function enterFeedbackMode() {
-    // Keep sidebar open — user can comment while viewing the list
     setMode('selecting')
   }
 
@@ -230,7 +219,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     setEditingId(null)
   }
 
-  // --- Highlight element from comment ---
   function highlightElement(selector: string) {
     try {
       const el = document.querySelector(selector)
@@ -256,8 +244,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     return true
   }), [visibleComments, filterStatus])
   const sortedComments = useMemo(() => [...filteredComments].sort((a, b) => {
-    const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
-    const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
+    const aResolved = isResolved(a.reviewStatus)
+    const bResolved = isResolved(b.reviewStatus)
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
   }), [filteredComments])
@@ -270,20 +258,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   return (
     <div {...{ [WIDGET_ATTR]: '' }}>
-      {/* Overlay — purely visual, clicks pass through */}
-      {mode === 'selecting' && (
-        <div
-          {...{ [WIDGET_ATTR]: '' }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 2147483644,
-            pointerEvents: 'none',
-            background: 'transparent',
-          }}
-        />
-      )}
-
       {mode === 'selecting' && <SelectingInstructionBar onExit={exitFeedbackMode} />}
 
       {mode === 'commenting' && target && (
@@ -314,7 +288,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
         const isHovered = hoveredPin === c.id && !isSelected
-        const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
+        const resolved = isResolved(c.reviewStatus)
         return (
           <CommentPin
             key={c.id}
@@ -329,7 +303,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
             onHoverEnter={() => setHoveredPin(c.id)}
             onHoverLeave={() => setHoveredPin(null)}
             onApprove={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
-            onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
+            onToggleResolve={() => { updateStatus(c.id, resolved ? 'open' : 'accepted'); setSelectedPin(null) }}
             onStartEdit={() => { setEditingId(c.id); setEditText(c.body) }}
             onSaveEdit={() => saveEdit(c.id)}
             onCancelEdit={() => setEditingId(null)}
@@ -339,7 +313,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         )
       })}
 
-      {/* Sidebar overlay — click outside to close */}
       <CommentSidebar
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -382,7 +355,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         onToggleMode={() => { if (mode !== 'idle') exitFeedbackMode(); else enterFeedbackMode() }}
       />
 
-      {/* Agent bridge modal */}
       {agentOpen && <AgentBridgeModal apiBase={apiBase} projectId={projectId} onClose={() => setAgentOpen(false)} />}
 
       <FeedbackWidgetStyles />

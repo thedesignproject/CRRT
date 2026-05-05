@@ -14,7 +14,7 @@ function renderPopover(overrides: Partial<Parameters<typeof CommentInputPopover>
     sending: false,
     imagePreviewUrl: null as string | null,
     hasImage: false,
-    authorName: null as string | null,
+    authorName: undefined as string | undefined,
     onSend: vi.fn(),
     onCancel: vi.fn(),
     onEditName: vi.fn(),
@@ -45,7 +45,7 @@ describe('<CommentInputPopover />', () => {
     expect(onEditName).toHaveBeenCalled()
   })
 
-  it('avatar shows "Set your name" title when authorName is null', () => {
+  it('avatar shows "Set your name" title when authorName is undefined', () => {
     const { container } = renderPopover()
     const avatar = Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find(
       (b) => b.title === 'Set your name',

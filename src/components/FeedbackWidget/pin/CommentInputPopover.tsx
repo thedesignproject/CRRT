@@ -12,7 +12,7 @@ interface CommentInputPopoverProps {
   sending: boolean
   imagePreviewUrl: string | null
   hasImage: boolean
-  authorName: string | null
+  authorName: string | undefined
   onSend: () => void
   onCancel: () => void
   onEditName: () => void

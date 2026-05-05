@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AUTHOR_NAME_KEY } from '../constants'
 
 export function useAuthorName() {
-  const [authorName, setAuthorName] = useState<string | null>(null)
-  const authorNameRef = useRef<string | null>(null)
+  const [authorName, setAuthorName] = useState<string | undefined>(undefined)
+  const authorNameRef = useRef<string | undefined>(undefined)
   const [showNameModal, setShowNameModal] = useState(false)
   const [nameInput, setNameInput] = useState('')
 
