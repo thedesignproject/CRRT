@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { COMMENT_CUTOFF, WIDGET_ATTR } from './constants'
-import { fromPagePercent, fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
@@ -13,6 +11,7 @@ import { CommentPin } from './pin/CommentPin'
 import { CommentInputPopover } from './pin/CommentInputPopover'
 import { useAuthorName } from './hooks/useAuthorName'
 import { useCurrentUrl } from './hooks/useCurrentUrl'
+import { useElementSelection } from './hooks/useElementSelection'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -23,7 +22,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
   const [sending, setSending] = useState(false)
-  const [hovered, setHovered] = useState<Element | null>(null)
 
   const {
     authorName,
@@ -121,84 +119,20 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     if (!agentsRevealed) setAgentOpen(false)
   }, [agentsRevealed])
 
-  // --- Set crosshair cursor when selecting ---
-  useEffect(() => {
-    if (mode !== 'selecting') return
-    const prev = document.body.style.cursor
-    document.body.style.cursor = 'crosshair'
-    return () => {
-      document.body.style.cursor = prev
-    }
-  }, [mode])
-
-  // --- Highlight hovered element ---
-  useEffect(() => {
-    if (mode !== 'selecting') {
-      setHovered(null)
-      return
-    }
-
-    function onMove(e: MouseEvent) {
-      const el = e.target as HTMLElement
-      if (el && !el.closest?.(`[${WIDGET_ATTR}]`)) {
-        setHovered(el)
-      } else {
-        setHovered(null)
-      }
-    }
-
-    window.addEventListener('mousemove', onMove)
-    return () => window.removeEventListener('mousemove', onMove)
-  }, [mode])
-
-  // --- Apply/remove highlight outline on hovered element ---
-  useEffect(() => {
-    if (!hovered) return
-    const el = hovered as HTMLElement
-    const prev = el.style.outline
-    const prevOffset = el.style.outlineOffset
-    el.style.outline = '2px solid rgba(59, 130, 246, 0.6)'
-    el.style.outlineOffset = '2px'
-    return () => {
-      el.style.outline = prev
-      el.style.outlineOffset = prevOffset
-    }
-  }, [hovered])
-
-  // --- Handle element click in selecting mode ---
-  useEffect(() => {
-    if (mode !== 'selecting') return
-
-    function onClick(e: MouseEvent) {
-      const el = e.target as HTMLElement
-      if (el.closest?.(`[${WIDGET_ATTR}]`)) return
-
-      e.preventDefault()
-      e.stopPropagation()
-
+  useElementSelection({
+    mode,
+    onPick: (pickedTarget, el) => {
       setSelectedPin(null)
       clearImage()
-      const pct = toPagePercent(e.pageX, e.pageY)
-      setTarget({
-        selector: getSelector(el),
-        x: pct.x,
-        y: pct.y,
-        url: window.location.href,
-      })
-
+      setTarget(pickedTarget)
       captureImage(el)
-
       if (!authorNameRef.current) {
         setShowNameModal(true)
         return
       }
-
       setMode('commenting')
-    }
-
-    window.addEventListener('click', onClick, true)
-    return () => window.removeEventListener('click', onClick, true)
-  }, [mode])
+    },
+  })
 
   // --- Auto-focus textarea ---
   useEffect(() => {
@@ -262,7 +196,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       setTarget(null)
       setComment('')
       clearImage()
-      setHovered(null)
       setMode('selecting')
     } catch (err) {
       console.warn('[FeedbackWidget] API error:', err)
@@ -332,7 +265,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     setComment('')
     clearImage()
     setSending(false)
-    setHovered(null)
     setSelectedPin(null)
   }
 
