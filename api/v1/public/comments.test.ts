@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/store.js', () => ({
-  getProject: vi.fn(),
+  ensurePublicProject: vi.fn(),
   createPublicComment: vi.fn(),
   listComments: vi.fn(),
   updateReviewStatus: vi.fn(),
 }))
 
-import { createPublicComment, getProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import handler from './comments.js'
 
 interface MockRes {
@@ -50,7 +50,7 @@ const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
-  vi.mocked(getProject).mockReset()
+  vi.mocked(ensurePublicProject).mockReset()
   vi.mocked(createPublicComment).mockReset()
   vi.mocked(listComments).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
@@ -81,10 +81,32 @@ describe('api/v1/public/comments', () => {
     expect(res.headers['Access-Control-Allow-Origin']).toBe('*')
   })
 
-  it('returns 404 when the project key is unknown', async () => {
-    vi.mocked(getProject).mockResolvedValue(null)
-    const res = mockRes()
+  it('auto-creates the project when the key is unknown', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'missing',
+      slug: 'missing',
+      name: 'missing',
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'missing',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hi',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      createdAt: '',
+      updatedAt: '',
+    })
 
+    const res = mockRes()
     await call(mockReq({
       body: {
         projectKey: 'missing',
@@ -96,11 +118,12 @@ describe('api/v1/public/comments', () => {
       },
     }), res)
 
-    expect(res.statusCode).toBe(404)
+    expect(ensurePublicProject).toHaveBeenCalledWith('missing')
+    expect(res.statusCode).toBe(201)
   })
 
   it('creates a public comment', async () => {
-    vi.mocked(getProject).mockResolvedValue({
+    vi.mocked(ensurePublicProject).mockResolvedValue({
       publicKey: 'demo-project',
       slug: 'demo-project',
       name: 'Demo',
