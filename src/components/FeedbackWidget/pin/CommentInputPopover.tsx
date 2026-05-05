@@ -1,4 +1,4 @@
-import type { CSSProperties, RefObject } from 'react'
+import type { CSSProperties, Ref } from 'react'
 import { WIDGET_ATTR } from '../constants'
 import { fromPagePercent, fromPagePercentFixed } from '../coords'
 import { getInitials } from '../format'
@@ -17,7 +17,7 @@ interface CommentInputPopoverProps {
   onCancel: () => void
   onEditName: () => void
   onClearImage: () => void
-  textareaRef: RefObject<HTMLTextAreaElement | null>
+  textareaRef: Ref<HTMLTextAreaElement>
 }
 
 function popoverStyle(target: ClickTarget): CSSProperties {

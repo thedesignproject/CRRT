@@ -1,11 +1,11 @@
-import type { MutableRefObject, RefObject } from 'react'
+import type { MutableRefObject, Ref } from 'react'
 import { Bot, Eye, EyeOff, Menu, MessageCircle, X } from 'lucide-react'
 import { VtooltipContent, VtooltipItem, VtooltipRoot, VtooltipTrigger } from '../../VTooltipMenu'
 import { WIDGET_ATTR } from '../constants'
 import type { Mode } from '../types'
 
 interface FloatingPillProps {
-  pillRef: RefObject<HTMLDivElement | null>
+  pillRef: Ref<HTMLDivElement>
   pillPos: { x: number; y: number }
   draggingRef: MutableRefObject<boolean>
   didDragRef: MutableRefObject<boolean>
