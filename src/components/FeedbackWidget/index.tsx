@@ -12,6 +12,7 @@ import { PinMarker } from './pin/PinMarker'
 import { CommentPin } from './pin/CommentPin'
 import { CommentInputPopover } from './pin/CommentInputPopover'
 import { useAuthorName } from './hooks/useAuthorName'
+import { useCurrentUrl } from './hooks/useCurrentUrl'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -85,17 +86,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [editText, setEditText] = useState('')
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
-  // Track current URL for SPA navigation (pins scoped to page).
-  // Poll location.href because some routers (e.g. Next.js App Router) cache
-  // history.pushState at module load and bypass any wrapper we install.
-  const [currentUrl, setCurrentUrl] = useState(() => window.location.href.split('#')[0])
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      const next = window.location.href.split('#')[0]
-      setCurrentUrl((prev) => (prev === next ? prev : next))
-    }, 300)
-    return () => window.clearInterval(id)
-  }, [])
+  const currentUrl = useCurrentUrl()
 
   // Sidebar state
   const [comments, setComments] = useState<Comment[]>([])
