@@ -3,7 +3,7 @@ import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
-import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, PIN_GRADIENT, WIDGET_ATTR } from './constants'
+import { COMMENT_CUTOFF, WIDGET_ATTR } from './constants'
 import { fromPagePercent, fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
@@ -11,6 +11,7 @@ import { FeedbackWidgetStyles } from './styles'
 import { PinMarker } from './pin/PinMarker'
 import { CommentPin } from './pin/CommentPin'
 import { CommentInputPopover } from './pin/CommentInputPopover'
+import { useAuthorName } from './hooks/useAuthorName'
 import { SelectingInstructionBar } from './modal/SelectingInstructionBar'
 import { NameModal } from './modal/NameModal'
 import { CommentSidebar } from './sidebar/CommentSidebar'
@@ -23,32 +24,16 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [sending, setSending] = useState(false)
   const [hovered, setHovered] = useState<Element | null>(null)
 
-  const [authorName, setAuthorName] = useState<string | null>(null)
-  const authorNameRef = useRef<string | null>(null)
-  const [showNameModal, setShowNameModal] = useState(false)
-  const [nameInput, setNameInput] = useState('')
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(AUTHOR_NAME_KEY)
-      if (stored) {
-        authorNameRef.current = stored
-        setAuthorName(stored)
-      }
-    } catch {}
-  }, [])
-
-  function saveAuthorName(name: string) {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    authorNameRef.current = trimmed
-    setAuthorName(trimmed)
-    try { localStorage.setItem(AUTHOR_NAME_KEY, trimmed) } catch {}
-  }
-
-  function openNameEditor() {
-    setNameInput(authorNameRef.current ?? '')
-    setShowNameModal(true)
-  }
+  const {
+    authorName,
+    authorNameRef,
+    showNameModal,
+    setShowNameModal,
+    nameInput,
+    setNameInput,
+    saveAuthorName,
+    openNameEditor,
+  } = useAuthorName()
 
   // Draggable pill state
   const [pillPos, setPillPos] = useState({ x: window.innerWidth - 72, y: window.innerHeight - 200 })
