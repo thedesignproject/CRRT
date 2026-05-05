@@ -29,7 +29,7 @@ export function App() {
         <nav style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           padding: '14px 48px', borderBottom: '1px solid rgba(0,0,0,0.06)', position: 'sticky', top: 0,
-          background: 'rgba(250,250,250,0.85)', backdropFilter: 'blur(16px)', zIndex: 100,
+          background: 'rgba(250,250,250,0.9)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', zIndex: 100,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 32 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -81,7 +81,7 @@ export function App() {
               fontSize: 12, fontWeight: 600, color: '#666', marginBottom: 28,
               boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
             }}>
-              <span style={{ padding: '2px 8px', borderRadius: 9999, background: '#6366f1', color: '#fff', fontSize: 10, fontWeight: 700 }}>NEW</span>
+              <span style={{ padding: '2px 8px', borderRadius: 9999, background: '#6366f1', color: '#fff', fontSize: 12, fontWeight: 700 }}>NEW</span>
               Now in public beta
             </div>
 
@@ -242,7 +242,7 @@ export function App() {
           <div style={{ textAlign: 'center', marginBottom: 56 }}>
             <div style={{
               display: 'inline-block', padding: '4px 12px', borderRadius: 9999,
-              background: '#f3f0ff', fontSize: 11, fontWeight: 600, color: '#6366f1', marginBottom: 16,
+              background: '#f3f0ff', fontSize: 12, fontWeight: 600, color: '#6366f1', marginBottom: 16,
             }}>
               Features
             </div>
@@ -320,7 +320,7 @@ export function App() {
             <div style={{ textAlign: 'center', marginBottom: 64 }}>
               <div style={{
                 display: 'inline-block', padding: '4px 12px', borderRadius: 9999,
-                background: 'rgba(255,255,255,0.06)', fontSize: 11, fontWeight: 600, color: '#888', marginBottom: 16,
+                background: 'rgba(255,255,255,0.06)', fontSize: 12, fontWeight: 600, color: '#888', marginBottom: 16,
                 border: '1px solid rgba(255,255,255,0.08)',
               }}>
                 How it works
@@ -360,7 +360,7 @@ export function App() {
           <div style={{ textAlign: 'center', marginBottom: 56 }}>
             <div style={{
               display: 'inline-block', padding: '4px 12px', borderRadius: 9999,
-              background: '#f0fdf4', fontSize: 11, fontWeight: 600, color: '#22c55e', marginBottom: 16,
+              background: '#f0fdf4', fontSize: 12, fontWeight: 600, color: '#22c55e', marginBottom: 16,
             }}>
               Pricing
             </div>
@@ -404,7 +404,7 @@ export function App() {
             }}>
               <div style={{
                 position: 'absolute', top: 12, right: 12, padding: '3px 10px', borderRadius: 9999,
-                background: 'linear-gradient(135deg, #6366f1, #a855f7)', fontSize: 10, fontWeight: 700, color: '#fff',
+                background: 'linear-gradient(135deg, #6366f1, #a855f7)', fontSize: 12, fontWeight: 700, color: '#fff',
               }}>
                 Popular
               </div>

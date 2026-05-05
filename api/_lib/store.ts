@@ -243,6 +243,45 @@ export async function getProject(projectKey: string) {
   return data ? mapProject(data as ProjectRow) : null
 }
 
+export async function ensurePublicProject(publicKey: string) {
+  const existing = await getProject(publicKey)
+  if (existing) return existing
+
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('projects')
+    .insert([{
+      public_key: publicKey,
+      slug: publicKey,
+      name: publicKey,
+      allowed_origins: [],
+    }] as never)
+    .select('public_key, slug, name, created_at, updated_at')
+    .single()
+
+  if (error) {
+    // 23505 = unique_violation. Concurrent insert won the race; refetch.
+    if (error.code === '23505') {
+      const refetched = await getProject(publicKey)
+      if (refetched) return refetched
+    }
+    throw new Error(error.message)
+  }
+
+  const { error: repoError } = await supabase
+    .from('project_repo_configs')
+    .insert([{
+      project_key: publicKey,
+      default_branch: 'main',
+    }] as never)
+
+  if (repoError && repoError.code !== '23505') {
+    throw new Error(repoError.message)
+  }
+
+  return mapProject(data as ProjectRow)
+}
+
 export async function getRepoConfig(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase

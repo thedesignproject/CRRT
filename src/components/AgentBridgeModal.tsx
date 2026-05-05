@@ -487,7 +487,7 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, color: '#111', lineHeight: 1.5, marginBottom: 6 }}>{comment.body}</div>
-                            <div style={{ fontSize: 11, color: '#999', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <div style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                               {author && <span style={{ fontWeight: 600, color: '#666' }}>{author}</span>}
                               {author && <span aria-hidden="true">·</span>}
                               <span>{timeAgo(comment.createdAt)}</span>
@@ -565,7 +565,7 @@ function TargetButton({ target, label, hint, ready, copied, selected, onCopy }: 
           width: 16, height: 16, borderRadius: '50%',
           background: '#0f172a', color: '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 10, fontWeight: 700,
+          fontSize: 12, fontWeight: 700,
         }}>
           ✓
         </div>

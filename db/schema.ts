@@ -1,0 +1,168 @@
+import { sql } from 'drizzle-orm'
+import {
+  bigint,
+  check,
+  doublePrecision,
+  index,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core'
+
+export const projects = pgTable('projects', {
+  publicKey: text('public_key').primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  allowedOrigins: text('allowed_origins').array().notNull().default(sql`'{}'`),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const projectRepoConfigs = pgTable('project_repo_configs', {
+  projectKey: text('project_key')
+    .primaryKey()
+    .references(() => projects.publicKey, { onDelete: 'cascade' }),
+  repoUrl: text('repo_url'),
+  localPath: text('local_path'),
+  defaultBranch: text('default_branch').notNull().default('main'),
+  installCommand: text('install_command'),
+  devCommand: text('dev_command'),
+  testCommand: text('test_command'),
+  buildCommand: text('build_command'),
+  agentInstructions: text('agent_instructions'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const comments = pgTable(
+  'comments',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    projectId: text('project_id'),
+    url: text('url'),
+    x: doublePrecision('x'),
+    y: doublePrecision('y'),
+    element: text('element'),
+    comment: text('comment'),
+    status: text('status').default('pending'),
+    implementationStatus: text('implementation_status').default('unassigned'),
+    claimedByAgentId: text('claimed_by_agent_id'),
+    createdBy: text('created_by').default('public'),
+    imageUrl: text('image_url'),
+    authorName: text('author_name'),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
+  },
+  (t) => ({
+    projectCreatedIdx: index('comments_project_created_idx').on(t.projectId, t.createdAt.desc()),
+    projectUrlIdx: index('comments_project_url_idx').on(t.projectId, t.url, t.createdAt.desc()),
+    projectStatusIdx: index('comments_project_status_idx').on(
+      t.projectId,
+      t.status,
+      t.implementationStatus,
+    ),
+  }),
+)
+
+export const feedbackShares = pgTable(
+  'feedback_shares',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    scopeType: text('scope_type').notNull(),
+    scopePageUrl: text('scope_page_url'),
+    slug: text('slug').notNull().unique(),
+    accessTokenHash: text('access_token_hash').notNull(),
+    accessTokenCiphertext: text('access_token_ciphertext').notNull(),
+    createdBy: text('created_by').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    scopeTypeCheck: check(
+      'feedback_shares_scope_type_check',
+      sql`${t.scopeType} in ('page', 'selection', 'project')`,
+    ),
+    oneProjectScopePerProject: uniqueIndex('feedback_shares_one_project_scope_per_project')
+      .on(t.projectId)
+      .where(sql`scope_type = 'project' and revoked_at is null`),
+  }),
+)
+
+export const feedbackShareItems = pgTable(
+  'feedback_share_items',
+  {
+    shareId: uuid('share_id')
+      .notNull()
+      .references(() => feedbackShares.id, { onDelete: 'cascade' }),
+    commentId: uuid('comment_id')
+      .notNull()
+      .references(() => comments.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.shareId, t.commentId] }),
+  }),
+)
+
+export const feedbackEvents = pgTable(
+  'feedback_events',
+  {
+    id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
+    shareId: uuid('share_id')
+      .notNull()
+      .references(() => feedbackShares.id, { onDelete: 'cascade' }),
+    commentId: uuid('comment_id').references(() => comments.id, { onDelete: 'set null' }),
+    actorType: text('actor_type').notNull(),
+    actorId: text('actor_id').notNull(),
+    eventType: text('event_type').notNull(),
+    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    shareIdIdx: index('feedback_events_share_id_idx').on(t.shareId, t.id),
+  }),
+)
+
+export const agentPresence = pgTable(
+  'agent_presence',
+  {
+    shareId: uuid('share_id')
+      .notNull()
+      .references(() => feedbackShares.id, { onDelete: 'cascade' }),
+    agentId: text('agent_id').notNull(),
+    status: text('status').notNull(),
+    summary: text('summary'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.shareId, t.agentId] }),
+    shareSeenIdx: index('agent_presence_share_seen_idx').on(t.shareId, t.lastSeenAt.desc()),
+  }),
+)
+
+export const feedbackOperationKeys = pgTable(
+  'feedback_operation_keys',
+  {
+    shareId: uuid('share_id')
+      .notNull()
+      .references(() => feedbackShares.id, { onDelete: 'cascade' }),
+    agentId: text('agent_id').notNull(),
+    idempotencyKey: text('idempotency_key').notNull(),
+    feedbackEventId: bigint('feedback_event_id', { mode: 'bigint' }).references(
+      () => feedbackEvents.id,
+      { onDelete: 'set null' },
+    ),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.shareId, t.agentId, t.idempotencyKey] }),
+  }),
+)
