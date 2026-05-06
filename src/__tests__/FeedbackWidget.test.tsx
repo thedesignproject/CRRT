@@ -552,6 +552,21 @@ describe('<FeedbackWidget />', () => {
       expect(cards[1].textContent).toContain('#2')
       expect(cards[2].textContent).toContain('#1')
     })
+
+    it('hides comments created before COMMENT_CUTOFF and shows ones after', async () => {
+      mockFetch(undefined, commentsResponse([
+        seedComment({ id: 'pre', body: 'legacy comment', createdAt: '2026-04-18T00:00:00Z' }),
+        seedComment({ id: 'post', body: 'fresh comment', createdAt: '2026-04-22T00:00:00Z' }),
+      ]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('fresh comment')) {
+          throw new Error('post-cutoff comment not loaded yet')
+        }
+      })
+      expect(document.body.textContent).not.toContain('legacy comment')
+    })
   })
 
   describe('keyboard shortcuts', () => {
