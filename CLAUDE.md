@@ -11,3 +11,7 @@ Supabase client (`@supabase/supabase-js`) stays the runtime query layer. Do **no
 ## Legacy schema files
 
 `supabase/legacy/` is frozen historical record from before Drizzle. Do not add new files there. Do not run those SQLs against any environment.
+
+## Diff coverage
+
+After any code change, MUST invoke `diff-coverage` skill before handing work back. Both line and branch diff coverage vs `trunk` required at 100%.

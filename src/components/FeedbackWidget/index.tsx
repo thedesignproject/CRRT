@@ -1,70 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { MessageCircle, Menu, X, Bot, SlidersHorizontal, Eye, EyeOff, Check } from 'lucide-react'
-import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from './VTooltipMenu'
-import { getSelector } from '../lib/getSelector'
-import { useScreenshotCapture } from '../lib/screenshotCapture'
-import { AgentBridgeModal } from './AgentBridgeModal'
-
-interface FeedbackWidgetProps {
-  projectId: string
-  apiBase: string
-}
-
-type Mode = 'idle' | 'selecting' | 'commenting'
-type ReviewStatus = 'open' | 'accepted' | 'rejected'
-
-interface ClickTarget {
-  selector: string
-  x: number  // page-relative px
-  y: number  // page-relative px
-  url: string
-}
-
-interface Comment {
-  id: string
-  projectId: string
-  pageUrl: string
-  x: number
-  y: number
-  selector: string
-  body: string
-  reviewStatus: ReviewStatus
-  imageUrl?: string | null
-  createdAt: string
-  authorName?: string
-}
-
-
-function toPagePercent(pageX: number, pageY: number) {
-  const { scrollWidth, scrollHeight } = document.documentElement
-  return {
-    x: (pageX / scrollWidth) * 100,
-    y: (pageY / scrollHeight) * 100,
-  }
-}
-
-function fromPagePercent(x: number, y: number) {
-  const { scrollWidth, scrollHeight } = document.documentElement
-  // Legacy rows stored absolute pixels (often > 100). Fall back to pixel coords.
-  if (x > 100 || y > 100) {
-    return { pageX: x, pageY: y }
-  }
-  return {
-    pageX: (x / 100) * scrollWidth,
-    pageY: (y / 100) * scrollHeight,
-  }
-}
-
-function fromPagePercentFixed(x: number, y: number) {
-  const { pageX, pageY } = fromPagePercent(x, y)
-  return { fixedX: pageX - window.scrollX, fixedY: pageY - window.scrollY }
-}
-
-const WIDGET_ATTR = 'data-fw'
-
-const PIN_GRADIENT = 'radial-gradient(circle at 50% 40%, #ffffff 0%, #ffffff 6%, #c4d6ff 25%, #5b87e8 65%, #2563eb 100%)'
-
-const NOISE_OVERLAY_BG = "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.55'/></svg>\")"
+import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from '../VTooltipMenu'
+import { getSelector } from '../../lib/getSelector'
+import { useScreenshotCapture } from '../../lib/screenshotCapture'
+import { AgentBridgeModal } from '../AgentBridgeModal'
+import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
+import { AUTHOR_NAME_KEY, AVATAR_COLORS, COMMENT_CUTOFF, NOISE_OVERLAY_BG, PIN_GRADIENT, WIDGET_ATTR } from './constants'
+import { fromPagePercent, fromPagePercentFixed, toPagePercent } from './coords'
+import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
+import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import { FeedbackWidgetStyles } from './styles'
 
 function PinMarker({ outline = false }: { outline?: boolean }) {
   return (
@@ -98,61 +43,6 @@ function PinMarker({ outline = false }: { outline?: boolean }) {
       }} />
     </div>
   )
-}
-
-const AVATAR_COLORS = ['#8b5cf6', '#f97316', '#3b82f6', '#ec4899', '#14b8a6', '#f43f5e', '#6366f1', '#84cc16']
-function avatarColor(id: string) {
-  let hash = 0
-  for (let i = 0; i < id.length; i++) hash = ((hash << 5) - hash + id.charCodeAt(i)) | 0
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
-
-const AUTHOR_NAME_KEY = 'fw-author-name'
-
-function getInitials(name: string | null | undefined): string | null {
-  if (!name) return null
-  const parts = name.trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return null
-  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase()
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
-}
-
-function timeAgo(date: string): string {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000)
-  if (seconds < 5) return 'just now'
-  if (seconds < 60) return `${seconds}s ago`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes} min ago`
-  const hours = Math.floor(minutes / 60)
-  if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
-}
-
-function normalizeReviewStatus(value: unknown): ReviewStatus {
-  if (value === 'accepted' || value === 'rejected') return value
-  return 'open'
-}
-
-async function fetchProjectComments(apiBase: string, projectId: string): Promise<Comment[]> {
-  try {
-    const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
-    if (!res.ok) return []
-
-    const data: unknown = await res.json()
-    if (!Array.isArray(data)) return []
-
-    return data.map((comment) => {
-      const c = comment as Comment
-      return {
-        ...c,
-        reviewStatus: normalizeReviewStatus((comment as { reviewStatus?: unknown }).reviewStatus),
-      }
-    })
-  } catch {
-    // Endpoint not ready yet; keep the widget usable with an empty sidebar.
-    return []
-  }
 }
 
 interface PinActionClusterProps {
@@ -501,18 +391,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         payload.imageMimeType = encoded.mimeType
       }
 
-      const res = await fetch(`${apiBase}/v1/public/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-
-      if (!res.ok) {
-        console.warn('[FeedbackWidget] API returned', res.status)
-        return
-      }
-
-      const data = await res.json() as Partial<Comment>
+      const data = await postComment(apiBase, payload)
+      if (!data) return
 
       const newComment: Comment = {
         id: data.id ?? crypto.randomUUID(),
@@ -642,21 +522,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }, [])
 
-  async function patchReviewStatus(id: string, reviewStatus: string) {
-    try {
-      await fetch(`${apiBase}/v1/public/comments`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, reviewStatus }),
-      })
-    } catch (err) {
-      console.warn('[FeedbackWidget] PATCH failed:', err)
-    }
-  }
-
   function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
-    patchReviewStatus(commentId, reviewStatus)
+    apiPatchReviewStatus(apiBase, commentId, reviewStatus)
   }
 
   function deleteComment(commentId: string) {
@@ -722,9 +590,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     }
   }
 
-  const cutoff = new Date('2026-04-19T00:00:00Z')
   const visibleComments = useMemo(() => comments.filter((c) => {
-    if (new Date(c.createdAt) < cutoff) return false
+    if (new Date(c.createdAt) < COMMENT_CUTOFF) return false
     const commentUrl = c.pageUrl.split('#')[0]
     return commentUrl === currentUrl
   }), [comments, currentUrl])
@@ -1750,101 +1617,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       {/* Agent bridge modal */}
       {agentOpen && <AgentBridgeModal apiBase={apiBase} projectId={projectId} onClose={() => setAgentOpen(false)} />}
 
-      {/* Keyframes */}
-      <style>{`
-        @keyframes fw-badge-pop {
-          0% { transform: scale(1); }
-          30% { transform: scale(1.3); }
-          100% { transform: scale(1); }
-        }
-        @keyframes fw-slide-in {
-          0% { opacity: 0; transform: translateY(8px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fw-agent-reveal {
-          0% { opacity: 0; transform: scale(0.4); }
-          100% { opacity: 1; transform: scale(1); }
-        }
-        @keyframes fw-slide-in-new {
-          0% { opacity: 0; transform: translateY(-12px); }
-          50% { background: #1e3a1e; }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        [data-fw] button:focus,
-        [data-fw] button:focus-visible {
-          outline: none;
-          box-shadow: none;
-        }
-        @keyframes fw-instruction-in {
-          0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
-          100% { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-        .fw-rec-dot {
-          animation: fw-rec-pulse 1.5s ease-in-out infinite;
-        }
-        @keyframes fw-rec-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.3; }
-        }
-        @keyframes fw-tooltip-in {
-          0% { opacity: 0; transform: translateY(4px); }
-          100% { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fw-pin-drop {
-          0% { transform: translateY(-20px); opacity: 0; }
-          60% { transform: translateY(4px); opacity: 1; }
-          100% { transform: translateY(0); opacity: 1; }
-        }
-        @keyframes fw-pin-glow-pulse {
-          0%, 100% {
-            filter:
-              drop-shadow(0 0 8px rgba(91, 135, 232, 0.5))
-              drop-shadow(0 0 16px rgba(91, 135, 232, 0.25))
-              drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
-          }
-          50% {
-            filter:
-              drop-shadow(0 0 12px rgba(91, 135, 232, 0.65))
-              drop-shadow(0 0 26px rgba(91, 135, 232, 0.35))
-              drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
-          }
-        }
-        @keyframes fw-pin-inner-pulse {
-          0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); }
-          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
-        }
-        @keyframes fw-tooltip-liquid {
-          0% { opacity: 0; transform: scale(0.08); filter: blur(10px); }
-          35% { opacity: 1; }
-          100% { opacity: 1; transform: scale(1); filter: blur(0); }
-        }
-        .fw-sidebar-card:hover .fw-card-actions {
-          display: flex !important;
-        }
-        .fw-pill-icon:hover {
-          background: rgba(255, 255, 255, 0.15);
-        }
-        .fw-highlight {
-          outline: 2px solid #3b82f6 !important;
-          outline-offset: 2px !important;
-          background-color: rgba(59, 130, 246, 0.15) !important;
-          animation: fw-highlight-pulse 1.4s ease both !important;
-        }
-        @keyframes fw-highlight-pulse {
-          0% { outline-color: transparent; background-color: transparent; }
-          14% { outline-color: #3b82f6; background-color: rgba(59, 130, 246, 0.15); }
-          71% { outline-color: #3b82f6; background-color: rgba(59, 130, 246, 0.15); }
-          100% { outline-color: transparent; background-color: transparent; }
-        }
-        @keyframes fw-modal-overlay-in {
-          0% { opacity: 0; }
-          100% { opacity: 1; }
-        }
-        @keyframes fw-modal-card-in {
-          0% { opacity: 0; transform: scale(0.94) translateY(8px); }
-          100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-      `}</style>
+      <FeedbackWidgetStyles />
 
       {showNameModal && (
         <div
