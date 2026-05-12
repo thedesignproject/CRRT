@@ -686,4 +686,146 @@ describe('<FeedbackWidget />', () => {
       })
     })
   })
+
+  describe('name modal cancel', () => {
+    it('form submit with empty value early-returns and leaves modal open', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      document.body.appendChild(targetNode)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) {
+          throw new Error('widget not mounted')
+        }
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', {
+          bubbles: true, cancelable: true, clientX: 80, clientY: 80,
+        }))
+      })
+
+      const nameInput = await waitFor(() => {
+        const el = document.querySelector<HTMLInputElement>('input[placeholder^="e.g."]')
+        if (!el) throw new Error('name input not mounted')
+        return el
+      })
+
+      // Fire form submit while value is still empty — handleNameSubmit must
+      // hit the trim-guard early return, leaving the modal mounted.
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
+      expect(document.querySelector('input[placeholder^="e.g."]')).not.toBeNull()
+      expect(localStorage.getItem('fw-author-name')).toBeNull()
+    })
+
+    it('re-edit name while in commenting mode does not re-flip mode', async () => {
+      try { localStorage.setItem('fw-author-name', 'Tomas') } catch {}
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      document.body.appendChild(targetNode)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) {
+          throw new Error('widget not mounted')
+        }
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', {
+          bubbles: true, cancelable: true, clientX: 80, clientY: 80,
+        }))
+      })
+
+      // Wait for the commenting popover textarea — confirms mode='commenting'.
+      await waitFor(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('textarea')
+        if (!el) throw new Error('commenting textarea not mounted')
+        return el
+      })
+
+      const avatar = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>(
+          'button[title^="Signed in as Tomas"]',
+        )
+        if (!el) throw new Error('avatar button not mounted')
+        return el
+      })
+      await act(async () => { fireEvent.click(avatar) })
+
+      const nameInput = await waitFor(() => {
+        const el = document.querySelector<HTMLInputElement>('input[placeholder^="e.g."]')
+        if (!el) throw new Error('name input not mounted')
+        return el
+      })
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: 'Alex' } })
+      })
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
+
+      // Name saved, modal closed, textarea still mounted (mode stayed 'commenting').
+      await waitFor(() => {
+        expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
+      })
+      expect(localStorage.getItem('fw-author-name')).toBe('Alex')
+      expect(document.querySelector('textarea')).not.toBeNull()
+    })
+
+    it('avatar click reopens modal and Close button cancels without saving', async () => {
+      try { localStorage.setItem('fw-author-name', 'Tomas') } catch {}
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      // Drop a pin to enter the commenting popover (author already saved, so
+      // the modal does NOT pop on first click).
+      document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      document.body.appendChild(targetNode)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) {
+          throw new Error('widget not mounted')
+        }
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', {
+          bubbles: true, cancelable: true, clientX: 100, clientY: 100,
+        }))
+      })
+
+      // Avatar in the popover → click to reopen the name modal.
+      const avatar = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>(
+          'button[title^="Signed in as Tomas"]',
+        )
+        if (!el) throw new Error('avatar button not mounted yet')
+        return el
+      })
+      await act(async () => { fireEvent.click(avatar) })
+
+      // Close button visible (existingName=Tomas branch).
+      const closeBtn = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')
+        if (!el) throw new Error('close button not mounted yet')
+        return el
+      })
+      await act(async () => { fireEvent.click(closeBtn) })
+
+      await waitFor(() => {
+        expect(document.querySelector('button[aria-label="Close"]')).toBeNull()
+      })
+      // localStorage author name unchanged — cancel does not save.
+      expect(localStorage.getItem('fw-author-name')).toBe('Tomas')
+    })
+  })
 })
