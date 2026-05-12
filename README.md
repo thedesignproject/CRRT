@@ -34,8 +34,10 @@ The old `/api/comments` route still exists as a compatibility path and for the s
   - public demo site for the widget
 - `api/`
   - Vercel serverless API routes
+- `db/`
+  - Drizzle schema, migrations, seed
 - `supabase/`
-  - schema and migrations
+  - legacy SQL (`supabase/legacy/`) and storage policies (`supabase/policies/`) — schema management has moved to `db/`
 
 ## Public widget
 
@@ -122,9 +124,9 @@ POST /api/v1/agent/shares/:slug/presence
 POST /api/v1/agent/shares/:slug/ops
 ```
 
-## Supabase schema
+## Database schema
 
-Run `supabase/schema.sql`. It creates or updates:
+Schema is managed with [Drizzle ORM](https://orm.drizzle.team). The source of truth is `db/schema.ts`, which defines:
 
 - `projects`
 - `project_repo_configs`
@@ -135,7 +137,21 @@ Run `supabase/schema.sql`. It creates or updates:
 - `agent_presence`
 - `feedback_operation_keys`
 
-The schema also seeds a `demo-project` project and repo config for local development.
+### Applying the schema
+
+- **Development:** `bun db:push` — syncs the schema directly to your database. Fast iteration, skips migration history.
+- **Production:** `bun db:migrate` — applies versioned migrations from `db/migrations/`. `vercel-build` runs this on every deploy.
+
+### Generating a new migration
+
+```bash
+bun db:generate    # writes a new migration file under db/migrations/
+bun db:migrate     # applies it
+```
+
+`bun db:seed` runs `db/seed.ts`, which inserts a `demo-project` row and a matching repo config for local development.
+
+> The hand-managed SQL files used before Drizzle live under `supabase/legacy/` for reference only — do not run them against a current database.
 
 ## Environment variables
 
