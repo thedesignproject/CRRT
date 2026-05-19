@@ -1,18 +1,72 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MessageCircle, Menu, X, Bot, SlidersHorizontal, Eye, EyeOff, Check } from 'lucide-react'
-import { VtooltipRoot, VtooltipItem, VtooltipTrigger, VtooltipContent } from '../VTooltipMenu'
+import { X, SlidersHorizontal, Check } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, PIN_GRADIENT, WIDGET_ATTR } from './constants'
-import { fromPagePercent, fromPagePercentFixed, toPagePercent } from './coords'
+import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
+
+function getElementFixedPos(
+  selector: string,
+  xPct: number,
+  yPct: number,
+): { left: number; top: number } | null {
+  try {
+    const el = document.querySelector(selector)
+    if (!el) return null
+    const rect = (el as HTMLElement).getBoundingClientRect()
+    if (rect.width === 0 && rect.height === 0) return null
+    const pageX = (xPct / 100) * document.documentElement.scrollWidth
+    const pageY = (yPct / 100) * document.documentElement.scrollHeight
+    return { left: pageX - window.scrollX, top: pageY - window.scrollY }
+  } catch {
+    return null
+  }
+}
+
+function CarrotPixelIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      shapeRendering="crispEdges"
+      style={{ imageRendering: 'pixelated', display: 'block' }}
+      aria-hidden="true"
+    >
+      <rect x="7" y="1" width="2" height="2" fill="#5ABF35" />
+      <rect x="5" y="2" width="2" height="2" fill="#3E9020" />
+      <rect x="9" y="2" width="2" height="2" fill="#5ABF35" />
+      <rect x="6" y="3" width="4" height="1" fill="#5ABF35" />
+      <rect x="4" y="4" width="8" height="1" fill="#E8853D" />
+      <rect x="11" y="4" width="1" height="1" fill="#B85F1F" />
+      <rect x="4" y="5" width="8" height="1" fill="#E8853D" />
+      <rect x="11" y="5" width="1" height="1" fill="#B85F1F" />
+      <rect x="5" y="6" width="6" height="1" fill="#E8853D" />
+      <rect x="10" y="6" width="1" height="1" fill="#B85F1F" />
+      <rect x="5" y="7" width="6" height="1" fill="#E8853D" />
+      <rect x="10" y="7" width="1" height="1" fill="#B85F1F" />
+      <rect x="5" y="8" width="5" height="1" fill="#E8853D" />
+      <rect x="9" y="8" width="1" height="1" fill="#B85F1F" />
+      <rect x="6" y="9" width="4" height="1" fill="#E8853D" />
+      <rect x="9" y="9" width="1" height="1" fill="#B85F1F" />
+      <rect x="6" y="10" width="3" height="1" fill="#E8853D" />
+      <rect x="8" y="10" width="1" height="1" fill="#B85F1F" />
+      <rect x="7" y="11" width="2" height="1" fill="#E8853D" />
+      <rect x="8" y="11" width="1" height="1" fill="#B85F1F" />
+      <rect x="7" y="12" width="1" height="1" fill="#E8853D" />
+      <rect x="8" y="12" width="1" height="1" fill="#B85F1F" />
+      <rect x="7" y="13" width="1" height="1" fill="#B85F1F" />
+    </svg>
+  )
+}
 
 export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [mode, setMode] = useState<Mode>('idle')
@@ -54,7 +108,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     saveAuthorName(nameInput)
     setShowNameModal(false)
     setNameInput('')
-    if (!wasCommenting && target) setMode('commenting')
+    if (!wasCommenting && target) {
+      setMode('commenting')
+    }
   }
 
   function handleNameCancel() {
@@ -62,8 +118,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     setNameInput('')
   }
 
-  // Draggable pill state
-  const [pillPos, setPillPos] = useState({ x: window.innerWidth - 72, y: window.innerHeight - 200 })
+  // Draggable pill state — null means CSS default (bottom: 24, right: 24)
+  const [draggedPos, setDraggedPos] = useState<{ x: number; y: number } | null>(null)
+  const [pillHover, setPillHover] = useState(false)
   const dragging = useRef(false)
 
   // Pins/popovers use position:fixed, so their viewport coords must be recomputed
@@ -81,10 +138,11 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
     function onResize() {
       bump()
-      setPillPos(prev => ({
-        x: Math.max(0, Math.min(window.innerWidth - 48, prev.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 160, prev.y)),
-      }))
+      // CSS bottom/right handles viewport resize automatically when not dragged
+      setDraggedPos(prev => prev ? ({
+        x: Math.max(0, Math.min(window.innerWidth - 180, prev.x)),
+        y: Math.max(0, Math.min(window.innerHeight - 56, prev.y)),
+      }) : null)
     }
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', bump, { passive: true })
@@ -130,6 +188,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [badgeAnim, setBadgeAnim] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
+  const [sidebarTab, setSidebarTab] = useState<'comments' | 'ready'>('comments')
   const [pinsVisible, setPinsVisible] = useState(true)
   const [agentsRevealed, setAgentsRevealed] = useState(false)
   const [headerPopover, setHeaderPopover] = useState<'filter' | null>(null)
@@ -138,6 +197,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   // Synchronous guard — state updates are async, so double-firing handleSend
   // in the same tick (e.g. Cmd+Enter held down) would otherwise slip past `sending`.
   const sendingRef = useRef(false)
+
+  const [successToast, setSuccessToast] = useState(false)
 
   const { image, previewUrl: imagePreviewUrl, capture: captureImage, clear: clearImage, toBase64: encodeImage } = useScreenshotCapture()
 
@@ -193,7 +254,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     const el = hovered as HTMLElement
     const prev = el.style.outline
     const prevOffset = el.style.outlineOffset
-    el.style.outline = '2px solid rgba(59, 130, 246, 0.6)'
+    el.style.outline = '2px solid rgba(232, 133, 61, 0.6)'
     el.style.outlineOffset = '2px'
     return () => {
       el.style.outline = prev
@@ -295,6 +356,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       setBadgeAnim(true)
       setTimeout(() => setBadgeAnim(false), 400)
 
+      setSuccessToast(true)
+      setTimeout(() => setSuccessToast(false), 2000)
+
       setTarget(null)
       setComment('')
       clearImage()
@@ -339,9 +403,10 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       // Single-key shortcuts — skip when typing in an input
       if (isTyping) return
 
-      // Shift+A — reveal/hide agent bridge icon (hidden pro shortcut)
+      // Shift+A — open Agent bridge modal directly (no reveal step now that aux chips are gone)
       if (e.shiftKey && e.key.toLowerCase() === 'a') {
-        setAgentsRevealed((v) => !v)
+        setAgentsRevealed(true)
+        setAgentOpen(true)
         return
       }
 
@@ -381,7 +446,12 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   function onPillPointerDown(e: React.PointerEvent) {
     dragging.current = true
     didDrag.current = false
-    dragOffset.current = { x: e.clientX - pillPos.x, y: e.clientY - pillPos.y }
+    const rect = pillRef.current?.getBoundingClientRect()
+    /* v8 ignore next 2 */
+    dragOffset.current = {
+      x: e.clientX - (rect?.left ?? e.clientX),
+      y: e.clientY - (rect?.top ?? e.clientY),
+    }
     ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
   }
 
@@ -391,7 +461,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       didDrag.current = true
       const x = Math.max(0, Math.min(window.innerWidth - 48, e.clientX - dragOffset.current.x))
       const y = Math.max(0, Math.min(window.innerHeight - 160, e.clientY - dragOffset.current.y))
-      setPillPos({ x, y })
+      setDraggedPos({ x, y })
     }
     function onUp() {
       dragging.current = false
@@ -439,7 +509,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     if (!target) return { display: 'none' }
     const pad = 16
     const popW = 300
-    const popH = 180
+    const popH = 300
     const { fixedX, fixedY } = fromPagePercentFixed(target.x, target.y)
     let leftFixed = fixedX + pad
     let topFixed = fixedY + pad
@@ -479,10 +549,12 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   }), [comments, currentUrl])
   const filteredComments = useMemo(() => visibleComments.filter((c) => {
     const status = c.reviewStatus ?? 'open'
+    // Tab gate first: "Ready for agent" only shows approved comments (ready to ship).
+    if (sidebarTab === 'ready' && status !== 'accepted') return false
     if (filterStatus === 'open') return status === 'open'
     if (filterStatus === 'approved') return status === 'accepted'
     return true
-  }), [visibleComments, filterStatus])
+  }), [visibleComments, filterStatus, sidebarTab])
   const sortedComments = useMemo(() => [...filteredComments].sort((a, b) => {
     const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
     const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
@@ -521,7 +593,11 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   // Only sync on scroll when a viewport-anchored popover is open or commenting.
   // Persisted pins/tooltip are absolute (page-anchored), so scroll moves them natively.
-  needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target
+  needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target || (pinsVisible && filteredComments.length > 0)
+
+  const pathDisplay = (window.location.pathname || '/').slice(0, 28) || '/'
+  const avatarInitial = authorName ? (getInitials(authorName) ?? authorName[0]?.toUpperCase() ?? 'U') : 'U'
+  const badgeAnimation = badgeAnim ? 'fw-badge-pop 0.4s ease' : 'crrt-pulse 2.4s ease-in-out infinite'
 
   return (
     <div {...{ [WIDGET_ATTR]: '' }}>
@@ -568,33 +644,64 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               ...popoverStyle(),
               display: 'flex',
               flexDirection: 'column',
-              width: comment.length > 0 || !!image ? 300 : 'auto',
-              background: '#1e1e1e',
-              borderRadius: comment.length > 0 || !!image ? 14 : 9999,
-              padding: comment.length > 0 || !!image ? '10px 10px 6px' : '6px 6px 6px 10px',
-              fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-              transition: 'border-radius 0.2s, width 0.2s, padding 0.2s',
+              width: 340,
+              background: '#181818',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              borderRadius: 14,
+              fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+              boxShadow: '0 12px 32px rgba(10, 10, 10, 0.4), 0 2px 8px rgba(10, 10, 10, 0.2)',
+              overflow: 'hidden',
             }}
           >
-            {/* Top row: avatar + input + send */}
-            <div style={{ display: 'flex', alignItems: comment.length > 0 || !!image ? 'flex-start' : 'center', gap: 10 }}>
-              {/* Avatar — click to edit name */}
-              <button
-                type="button"
-                onClick={openNameEditor}
-                title={authorName ? `Signed in as ${authorName} — click to change` : 'Set your name'}
-                style={{
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: '#3b82f6', flexShrink: 0,
-                  marginTop: comment.length > 0 ? 2 : 0,
-                  border: 'none', padding: 0, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  color: '#fff', fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
-                }}
-              >
-                {getInitials(authorName) ?? ''}
-              </button>
-              {/* Textarea (single row when empty, expands when typing) */}
+            {/* Header: time pill (Phosphor amber) + location chip (Carrot tint) */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 12px 8px',
+            }}>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '3px 8px',
+                borderRadius: 4,
+                background: 'rgba(255, 176, 0, 0.18)',
+                color: '#FFB000',
+                fontFamily: "'VT323', 'JetBrains Mono', monospace",
+                fontSize: 13,
+                letterSpacing: '0.04em',
+                lineHeight: 1,
+              }}>
+                Just now
+              </span>
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '3px 8px',
+                borderRadius: 4,
+                background: 'rgba(232, 133, 61, 0.15)',
+                color: '#E8853D',
+                fontFamily: "'JetBrains Mono', monospace",
+                fontSize: 11,
+                lineHeight: 1,
+                maxWidth: 180,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {pathDisplay}
+                </span>
+              </span>
+            </div>
+
+            {/* Textarea */}
+            <div style={{ padding: '0 14px 4px' }}>
               <textarea
                 ref={textareaRef}
                 value={comment}
@@ -605,67 +712,47 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     if (comment.trim()) handleSend()
                   }
                 }}
-                placeholder="Add a comment"
-                rows={comment.length > 0 || !!image ? 3 : 1}
+                placeholder="Leave your comment…"
+                rows={3}
                 style={{
-                  flex: 1,
-                  background: 'none',
+                  width: '100%',
+                  background: 'transparent',
                   border: 'none',
                   outline: 'none',
-                  color: '#fff',
+                  color: '#FFFFFF',
                   fontSize: 14,
                   fontFamily: 'inherit',
-                  minWidth: 0,
-                  resize: 'none',
                   lineHeight: 1.5,
+                  resize: 'none',
                   padding: 0,
-                  transition: 'height 0.15s ease',
                 }}
               />
-              {/* Send button (inline when collapsed) */}
-              {comment.length === 0 && (
-                <button
-                  onClick={handleSend}
-                  disabled
-                  aria-label="Send"
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    border: 'none',
-                    background: '#333',
-                    cursor: 'default',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                    <polyline points="12 5 19 12 12 19" />
-                  </svg>
-                </button>
-              )}
             </div>
 
-            {/* Screenshot thumbnail (auto-captured) */}
+            {/* Screenshot thumbnail */}
             {imagePreviewUrl && (
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                marginTop: 6, paddingTop: 6, borderTop: '1px solid #333',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '8px 12px',
+                margin: '0 14px 6px',
+                background: 'rgba(255, 255, 255, 0.03)',
+                border: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRadius: 8,
               }}>
                 <img
                   src={imagePreviewUrl}
                   alt="captured element"
-                  style={{ height: 48, maxWidth: 100, objectFit: 'cover', borderRadius: 6, flexShrink: 0, border: '1px solid #333' }}
+                  style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid rgba(255,255,255,0.08)' }}
                 />
-                <span style={{ fontSize: 12, color: '#666', flex: 1 }}>Screenshot captured</span>
+                <span style={{ fontSize: 12, color: '#A8A29A', flex: 1, fontFamily: 'inherit' }}>Screenshot</span>
                 <button
                   onClick={() => clearImage()}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#555', padding: 2, display: 'flex', flexShrink: 0 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+                  aria-label="Remove screenshot"
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6560', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 4 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -674,103 +761,158 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               </div>
             )}
 
-            {/* Bottom toolbar (visible when typing or image captured) */}
-            {(comment.length > 0 || !!image) && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 6,
-                paddingTop: 6,
-                borderTop: '1px solid #333',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                  {/* Emoji */}
-                  <button style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, color: '#888' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
+            {/* Footer toolbar: avatar + emoji + cancel + send */}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '8px 10px 10px',
+              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+              marginTop: 4,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                {authorName && (
+                  <button
+                    title={`Signed in as ${authorName}`}
+                    onClick={openNameEditor}
+                    style={{
+                      width: 28, height: 28,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: avatarColor(authorName),
+                      border: 'none', borderRadius: '50%',
+                      cursor: 'pointer', flexShrink: 0,
+                      color: '#FFFFFF', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                      <line x1="9" y1="9" x2="9.01" y2="9" />
-                      <line x1="15" y1="9" x2="15.01" y2="9" />
-                    </svg>
+                    {avatarInitial}
                   </button>
-                  {/* Mention */}
-                  <button style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, color: '#888' }}
-                    onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-                    onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="4" />
-                      <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-3.92 7.94" />
-                    </svg>
-                  </button>
-                </div>
-                {/* Send button */}
+                )}
+                <button
+                  aria-label="Add emoji"
+                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, color: '#6B6560' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+                    <line x1="9" y1="9" x2="9.01" y2="9" />
+                    <line x1="15" y1="9" x2="15.01" y2="9" />
+                  </svg>
+                </button>
+                <button
+                  aria-label="React"
+                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, color: '#6B6560' }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button
+                  onClick={() => {
+                    setTarget(null)
+                    setComment('')
+                    clearImage()
+                    setSending(false)
+                    setMode('selecting')
+                  }}
+                  style={{
+                    height: 30,
+                    padding: '0 12px',
+                    borderRadius: 9999,
+                    background: 'transparent',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    color: '#A8A29A',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'background 150ms ease, color 150ms ease',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#FFFFFF' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' }}
+                >
+                  Cancel
+                </button>
                 <button
                   onClick={handleSend}
                   disabled={!comment.trim() || sending}
                   aria-label="Send"
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: '50%',
-                    border: 'none',
-                    background: !comment.trim() || sending ? '#333' : '#3b82f6',
-                    cursor: !comment.trim() || sending ? 'default' : 'pointer',
-                    display: 'flex',
+                    display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    flexShrink: 0,
-                    transition: 'background 0.2s',
+                    gap: 6,
+                    height: 30,
+                    padding: '0 14px',
+                    borderRadius: 9999,
+                    border: '1px solid ' + (!comment.trim() || sending ? 'rgba(255,255,255,0.06)' : '#B85F1F'),
+                    background: !comment.trim() || sending ? 'rgba(255,255,255,0.04)' : '#E8853D',
+                    color: !comment.trim() || sending ? '#6B6560' : '#FFFFFF',
+                    fontSize: 13,
+                    fontWeight: 500,
+                    cursor: !comment.trim() || sending ? 'default' : 'pointer',
+                    fontFamily: 'inherit',
+                    transition: 'background 150ms ease',
                   }}
+                  onMouseEnter={(e) => { if (comment.trim() && !sending) e.currentTarget.style.background = '#B85F1F' }}
+                  onMouseLeave={(e) => { if (comment.trim() && !sending) e.currentTarget.style.background = '#E8853D' }}
                 >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={!comment.trim() || sending ? '#666' : '#fff'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <span>Send</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12" />
                     <polyline points="12 5 19 12 12 19" />
                   </svg>
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </>
       )}
 
       {/* New comment pin at clicked position */}
       {mode === 'commenting' && target && (() => {
-        const { pageX, pageY } = fromPagePercent(target.x, target.y)
+        const { fixedX, fixedY } = fromPagePercentFixed(target.x, target.y)
         return (
-        <div
-          {...{ [WIDGET_ATTR]: '' }}
-          style={{
-            position: 'absolute',
-            left: pageX,
-            top: pageY - 44,
-            zIndex: 2147483646,
-            pointerEvents: 'none',
-            animation: 'fw-pin-glow-pulse 2.4s ease-in-out infinite',
-            transformOrigin: 'bottom left',
-          }}
-        >
-          <PinMarker />
-        </div>
+          <div
+            {...{ [WIDGET_ATTR]: '' }}
+            style={{
+              position: 'fixed',
+              left: fixedX,
+              top: fixedY - 11,
+              zIndex: 2147483646,
+              pointerEvents: 'none',
+              animation: 'fw-pin-drop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
+              transformOrigin: 'bottom left',
+            }}
+          >
+            <PinMarker />
+          </div>
         )
       })()}
 
       {/* Persisted comment pins */}
       {pinsVisible && filteredComments.map((c, i) => {
         if (!liveCommentIds.has(c.id)) return null
-        const { pageX: pinPageX, pageY: pinPageY } = fromPagePercent(c.x, c.y)
+        const pinPos = getElementFixedPos(c.selector, c.x, c.y)
+        if (!pinPos) return null
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
         const isHovered = hoveredPin === c.id && !isSelected
         const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
+        const pinAuthor = c.authorName ?? 'User'
         return (
           <div key={c.id} {...{ [WIDGET_ATTR]: '' }}>
             {/* Pin marker */}
             <div
+              data-fw-pin
               onClick={(e) => {
                 e.stopPropagation()
                 setSelectedPin(isSelected ? null : c.id)
@@ -778,44 +920,42 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               onMouseEnter={() => setHoveredPin(c.id)}
               onMouseLeave={() => setHoveredPin(null)}
               style={{
-                position: 'absolute',
-                left: pinPageX,
-                top: pinPageY - 44,
+                position: 'fixed',
+                left: pinPos.left,
+                top: pinPos.top - 11,
                 zIndex: isSelected ? 2147483646 : isHovered ? 2147483642 : 2147483640,
                 cursor: 'pointer',
                 transition: 'transform 0.15s, opacity 0.2s',
                 transform: isSelected || isHovered ? 'scale(1.15)' : 'scale(1)',
                 transformOrigin: 'bottom left',
                 opacity: isResolved && !isSelected && !isHovered ? 0.4 : 1,
-                animation: 'fw-pin-glow-pulse 2.4s ease-in-out infinite',
               }}
             >
               <PinMarker outline={isSelected} />
             </div>
 
-            {/* Hover tooltip — same material as pin, expanded card */}
+            {/* Hover tooltip — dark CRRT glass */}
             {isHovered && (
               <div
                 style={{
-                  position: 'absolute',
-                  left: pinPageX,
-                  top: pinPageY - 12,
+                  position: 'fixed',
+                  left: pinPos.left,
+                  top: pinPos.top - 11,
                   zIndex: 2147483643,
                   pointerEvents: 'none',
                   transform: 'translateY(-100%)',
                 }}
               >
                 <div style={{
-                  position: 'relative',
                   width: 280,
-                  background: 'rgba(255, 255, 255, 0.65)',
-                  backdropFilter: 'blur(20px) saturate(180%)',
-                  WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                  background: 'rgba(18, 18, 18, 0.96)',
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
                   borderRadius: '14px 14px 14px 0',
                   padding: 14,
-                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.6)',
-                  border: '1px solid rgba(255, 255, 255, 0.5)',
-                  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
                   animation: 'fw-tooltip-liquid 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
                   transformOrigin: '0% 100%',
                   display: 'flex',
@@ -828,16 +968,15 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     color: '#fff', fontSize: 12, fontWeight: 700,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.25)',
                   }}>
                     {getInitials(c.authorName) ?? ''}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>{c.authorName ?? 'User'}</span>
-                      <span style={{ fontSize: 12, color: '#888' }}>{timeAgo(c.createdAt)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>{pinAuthor}</span>
+                      <span style={{ fontSize: 12, color: '#6B6560' }}>{timeAgo(c.createdAt)}</span>
                     </div>
-                    <div style={{ fontSize: 13, color: '#333', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                    <div style={{ fontSize: 13, color: '#E8E5DF', lineHeight: 1.4, wordBreak: 'break-word' }}>
                       {c.body}
                     </div>
                   </div>
@@ -849,11 +988,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
             {isSelected && (() => {
               const avColor = avatarColor(c.id)
               const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
-              const stBadge = c.reviewStatus === 'accepted'
-                ? { bg: '#ecfdf5', color: '#059669', label: 'Approved' }
-                : c.reviewStatus === 'rejected'
-                  ? { bg: '#fef2f2', color: '#dc2626', label: 'Rejected' }
-                  : { bg: '#fffbeb', color: '#d97706', label: 'Pending' }
+              const bodyMarginBottom = c.imageUrl ? 10 : 14
               return (
                 <>
                   <div
@@ -864,17 +999,17 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     style={{
                       ...pinPopoverStyle(c),
                       width: 300,
-                      background: '#fff',
+                      background: '#181818',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
                       borderRadius: 16,
-                      boxShadow: '0 12px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)',
+                      boxShadow: '0 12px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
                       padding: 16,
-                      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+                      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
                       animation: 'fw-tooltip-in 0.15s ease both',
                     }}
                   >
                     {/* Header */}
                     <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
-                      {/* Avatar */}
                       <div style={{
                         width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                         background: avColor,
@@ -883,10 +1018,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                       }}>
                         {initial}
                       </div>
-                      {/* Name + meta */}
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 2 }}>{c.authorName ?? 'User'}</div>
-                        <div style={{ fontSize: 12, color: '#aaa' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#FFFFFF', marginBottom: 2 }}>{pinAuthor}</div>
+                        <div style={{ fontSize: 12, color: '#6B6560' }}>
                           #{pinNumber} &middot; {timeAgo(c.createdAt)}
                         </div>
                       </div>
@@ -900,7 +1034,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                       />
                     </div>
 
-                    {/* Comment text — editable when editingId matches */}
                     {editingId === c.id ? (
                       <div style={{ marginBottom: c.imageUrl ? 10 : 14 }}>
                         <textarea
@@ -914,41 +1047,39 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                           rows={3}
                           style={{
                             width: '100%', boxSizing: 'border-box',
-                            fontSize: 14, lineHeight: 1.5, color: '#111',
-                            border: '1px solid #d4d4d4', borderRadius: 8,
+                            fontSize: 14, lineHeight: 1.5, color: '#FFFFFF',
+                            border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
                             padding: '8px 10px', fontFamily: 'inherit',
-                            outline: 'none', resize: 'vertical', background: '#fff',
+                            outline: 'none', resize: 'vertical', background: '#222',
                           }}
-                          onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                          onBlur={(e) => (e.target.style.borderColor = '#d4d4d4')}
+                          onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
+                          onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
                         />
                         <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
                           <button
                             onClick={() => setEditingId(null)}
-                            style={{ fontSize: 12, color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}
+                            style={{ fontSize: 12, color: '#A8A29A', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}
                           >Cancel</button>
                           <button
                             onClick={() => saveEdit(c.id)}
-                            style={{ fontSize: 12, color: '#fff', background: '#3b82f6', fontWeight: 600, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}
+                            style={{ fontSize: 12, color: '#fff', background: '#E8853D', fontWeight: 600, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}
                           >Save</button>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: 14, lineHeight: 1.6, color: '#333', marginBottom: c.imageUrl ? 10 : 14 }}>
+                      <div style={{ fontSize: 14, lineHeight: 1.6, color: '#E8E5DF', marginBottom: bodyMarginBottom }}>
                         {c.body}
                       </div>
                     )}
 
-                    {/* Screenshot */}
                     {c.imageUrl && (
                       <img
                         src={c.imageUrl}
                         alt=""
                         onClick={() => window.open(c.imageUrl!, '_blank')}
-                        style={{ width: '100%', borderRadius: 8, border: '1px solid #eee', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
+                        style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
                       />
                     )}
-
                   </div>
                 </>
               )
@@ -957,8 +1088,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         )
       })}
 
-      {/* Sidebar overlay — click outside to close */}
-      {sidebarOpen && (
+      {/* Sidebar overlay — only when NOT selecting/commenting, so user can click page elements to drop pins */}
+      {sidebarOpen && mode === 'idle' && (
         <div
           {...{ [WIDGET_ATTR]: '' }}
           onClick={() => setSidebarOpen(false)}
@@ -976,22 +1107,83 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
           bottom: 0,
           width: 340,
           zIndex: 2147483647,
-          background: '#1a1a1a',
+          background: '#0A0A0A',
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
           display: 'flex',
           flexDirection: 'column',
-          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
-          boxShadow: sidebarOpen ? '-8px 0 32px rgba(0,0,0,0.3)' : 'none',
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          boxShadow: sidebarOpen ? '-8px 0 32px rgba(0,0,0,0.5)' : 'none',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '14px 16px', borderBottom: '1px solid #2a2a2a', position: 'relative' }}>
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#fff', flex: 1 }}>
-            Comments
-          </span>
-          <span style={{ fontSize: 12, color: '#888', marginRight: 10 }}>
-            {commentCount}
+        {/* Tabs row */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '10px 12px',
+          gap: 4,
+          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+        }}>
+          <div style={{
+            display: 'inline-flex',
+            background: 'rgba(255, 255, 255, 0.04)',
+            borderRadius: 9999,
+            padding: 3,
+            gap: 2,
+            flex: 1,
+          }}>
+            {([
+              { id: 'comments', label: 'Comments' },
+              { id: 'ready', label: 'Ready for agent' },
+            ] as const).map((t) => {
+              const active = sidebarTab === t.id
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setSidebarTab(t.id)}
+                  style={{
+                    flex: 1,
+                    padding: '6px 10px',
+                    borderRadius: 9999,
+                    border: 'none',
+                    background: active ? 'rgba(232, 133, 61, 0.18)' : 'transparent',
+                    color: active ? '#E8853D' : '#A8A29A',
+                    fontSize: 12,
+                    fontWeight: 500,
+                    fontFamily: 'inherit',
+                    cursor: 'pointer',
+                    transition: 'background 150ms ease, color 150ms ease',
+                  }}
+                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#FFFFFF' }}
+                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#A8A29A' }}
+                >
+                  {t.label}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Close button — closes sidebar AND exits selecting if active */}
+          <button
+            onClick={() => { if (mode !== 'idle') exitFeedbackMode(); setSidebarOpen(false) }}
+            aria-label="Close"
+            style={{ background: 'none', border: 'none', color: '#A8A29A', cursor: 'pointer', padding: 8, borderRadius: 6, display: 'flex', transition: 'color 0.15s, background 0.15s' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29A'; e.currentTarget.style.background = 'transparent' }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Title + filter row */}
+        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px 10px', position: 'relative' }}>
+          <span style={{ fontSize: 13, color: '#FFFFFF', flex: 1, fontWeight: 500 }}>
+            {sidebarTab === 'ready' ? 'Ready for agent' : 'All comments'}
+            <span style={{ marginLeft: 8, color: '#6B6560', fontSize: 12, fontWeight: 400 }}>{commentCount}</span>
           </span>
 
           {/* Filter button */}
@@ -999,33 +1191,19 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
             onClick={(e) => { e.stopPropagation(); setHeaderPopover((v) => v === 'filter' ? null : 'filter') }}
             title="Filter"
             style={{
-              background: headerPopover === 'filter' ? '#2a2a2a' : 'none',
+              background: headerPopover === 'filter' ? 'rgba(255,255,255,0.06)' : 'transparent',
               border: 'none',
-              color: filterStatus !== 'all' ? '#0ea5e9' : '#bbb',
+              color: filterStatus !== 'all' ? '#E8853D' : '#6B6560',
               cursor: 'pointer',
               padding: 6,
               borderRadius: 6,
               display: 'flex',
-              marginRight: 2,
               transition: 'color 0.15s, background 0.15s',
             }}
-            onMouseEnter={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#fff' }}
-            onMouseLeave={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#bbb' }}
+            onMouseEnter={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#FFFFFF' }}
+            onMouseLeave={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#6B6560' }}
           >
             <SlidersHorizontal style={{ width: 14, height: 14 }} />
-          </button>
-
-          {/* Close button */}
-          <button
-            onClick={() => setSidebarOpen(false)}
-            style={{ background: 'none', border: 'none', color: '#bbb', cursor: 'pointer', padding: 6, borderRadius: 6, display: 'flex', transition: 'color 0.15s, background 0.15s' }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#fff'; e.currentTarget.style.background = '#2a2a2a' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#bbb'; e.currentTarget.style.background = 'transparent' }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              <line x1="12" y1="4" x2="4" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-            </svg>
           </button>
 
           {/* Filter popover */}
@@ -1077,7 +1255,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                     >
                       <span style={{ width: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {active && <Check style={{ width: 14, height: 14, color: '#0ea5e9' }} />}
+                        {active && <Check style={{ width: 14, height: 14, color: '#E8853D' }} />}
                       </span>
                       {label}
                     </button>
@@ -1091,8 +1269,12 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         {/* Comment list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {sortedComments.length === 0 && (
-            <div style={{ color: '#555', fontSize: 13, textAlign: 'center', marginTop: 40 }}>
-              {visibleComments.length === 0 ? 'No comments yet' : 'No comments match this filter'}
+            <div style={{ color: '#555', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
+              {visibleComments.length === 0
+                ? 'No comments yet'
+                : sidebarTab === 'ready'
+                  ? 'Approve comments to queue them here'
+                  : 'No comments match this filter'}
             </div>
           )}
           {sortedComments.map((c, i) => {
@@ -1108,136 +1290,179 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   className="fw-sidebar-card"
                   onClick={() => { if (!isEditing && !isMenuOpen) { setSelectedPin(c.id); highlightElement(c.selector) } }}
                   style={{
-                    padding: '12px 16px',
+                    padding: '14px 16px',
                     cursor: isEditing ? 'default' : 'pointer',
                     position: 'relative',
                     zIndex: isMenuOpen ? 100000 : 'auto',
-                    display: 'flex',
-                    gap: 10,
-                    borderBottom: '1px solid #2a2a2a',
-                    opacity: isResolved ? 0.5 : 1,
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                    opacity: isResolved ? 0.55 : 1,
                     transition: 'background 0.1s, opacity 0.2s',
                     animation: sidebarOpen ? `fw-slide-in 0.2s ease ${i * 0.04}s both` : 'none',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#222' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  {/* Avatar */}
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0, marginTop: 1,
-                    background: isResolved ? '#333' : '#3b82f6',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontSize: 12, fontWeight: 700,
-                  }}>
-                    {initial}
-                  </div>
-
-                  {/* Content */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    {/* Meta line */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                      <span style={{ fontSize: 12, color: '#888' }}>#{pinNum}</span>
-                      <svg width="8" height="8" viewBox="0 0 8 8" fill="none"><path d="M2 4h4M4.5 2L6.5 4L4.5 6" stroke="#555" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" /></svg>
-                      <span style={{ fontSize: 12, color: '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.pageUrl.replace(/^https?:\/\/[^/]+/, '').replace(/\/$/, '') || '/'}
+                  {/* Top row: avatar + name + time + meta on right */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    {/* Avatar */}
+                    <div style={{
+                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+                      background: isResolved ? '#2C2C2C' : avatarColor(c.authorName ?? c.id),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#FFFFFF', fontSize: 11, fontWeight: 700,
+                      fontFamily: 'inherit',
+                    }}>
+                      {initial}
+                    </div>
+                    {/* Name + time */}
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {c.authorName ?? 'User'}
+                      </span>
+                      <span style={{ fontSize: 12, color: '#6B6560', flexShrink: 0 }}>
+                        {timeAgo(c.createdAt)}
                       </span>
                     </div>
-
-                    {/* Author + time */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: '#ddd' }}>{c.authorName ?? 'User'}</span>
-                      <span style={{ fontSize: 12, color: '#555' }}>{timeAgo(c.createdAt)}</span>
+                    {/* Meta on right: #N + URL */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontFamily: "'JetBrains Mono', monospace" }}>
+                      <span style={{ fontSize: 11, color: '#6B6560' }}>#{pinNum}</span>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6B6560" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                      </svg>
                     </div>
-
-                    {/* Comment text */}
-                    {isEditing ? (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <textarea
-                          autoFocus
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(c.id) }
-                            if (e.key === 'Escape') { setEditingId(null) }
-                          }}
-                          rows={2}
-                          style={{
-                            width: '100%', boxSizing: 'border-box',
-                            fontSize: 13, lineHeight: 1.4, color: '#fff',
-                            border: '1px solid #444', borderRadius: 5,
-                            padding: '6px 8px', fontFamily: 'inherit',
-                            outline: 'none', resize: 'none', background: '#2a2a2a',
-                          }}
-                          onFocus={(e) => (e.target.style.borderColor = '#3b82f6')}
-                          onBlur={(e) => (e.target.style.borderColor = '#444')}
-                        />
-                        <div style={{ display: 'flex', gap: 6, marginTop: 4, justifyContent: 'flex-end' }}>
-                          <button onClick={() => setEditingId(null)} style={{ fontSize: 12, color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Cancel</button>
-                          <button onClick={() => saveEdit(c.id)} style={{ fontSize: 12, color: '#3b82f6', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}>Save</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        <div
-                          onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditText(c.body) }}
-                          style={{ fontSize: 13, lineHeight: 1.4, color: isResolved ? '#555' : '#ccc', cursor: 'text' }}
-                        >
-                          {c.body}
-                        </div>
-                        {c.imageUrl && (
-                          <img
-                            src={c.imageUrl}
-                            alt=""
-                            onClick={(e) => { e.stopPropagation(); window.open(c.imageUrl!, '_blank') }}
-                            style={{ marginTop: 8, maxWidth: '100%', borderRadius: 6, border: '1px solid #2a2a2a', cursor: 'zoom-in', display: 'block', filter: isResolved ? 'grayscale(0.7) brightness(0.5)' : 'none' }}
-                          />
-                        )}
-                      </>
-                    )}
                   </div>
 
-                  {/* Top-right area: hover actions + blue dot */}
-                  <div style={{
-                    position: 'absolute', top: 10, right: 12,
-                    display: 'flex', alignItems: 'center', gap: 6,
-                  }}>
-                    <div className="fw-card-actions" style={{
-                      display: 'none', alignItems: 'center', gap: 2,
-                    }}>
-                      {isPending && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
-                          title="Approve"
-                          style={{
-                            width: 22, height: 22, borderRadius: '50%', border: '1.5px solid #555',
-                            background: 'transparent', cursor: 'pointer', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center', color: '#888', padding: 0,
-                            transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.color = '#22c55e' }}
-                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#555'; e.currentTarget.style.color = '#888' }}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                        </button>
-                      )}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
-                        title="More"
-                        style={{
-                          width: 24, height: 24, borderRadius: 4, border: 'none',
-                          background: isMenuOpen ? '#333' : 'transparent', cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#888', padding: 0,
+                  {/* Body */}
+                  {isEditing ? (
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <textarea
+                        autoFocus
+                        value={editText}
+                        onChange={(e) => setEditText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(c.id) }
+                          if (e.key === 'Escape') { setEditingId(null) }
                         }}
-                        onMouseEnter={(e) => { if (!isMenuOpen) e.currentTarget.style.background = '#333' }}
-                        onMouseLeave={(e) => { if (!isMenuOpen) e.currentTarget.style.background = 'transparent' }}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                      </button>
+                        rows={2}
+                        style={{
+                          width: '100%', boxSizing: 'border-box',
+                          fontSize: 14, lineHeight: 1.5, color: '#FFFFFF',
+                          border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6,
+                          padding: '8px 10px', fontFamily: 'inherit',
+                          outline: 'none', resize: 'none', background: '#181818',
+                        }}
+                        onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
+                        onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
+                      />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
+                        <button onClick={() => setEditingId(null)} style={{ fontSize: 12, color: '#A8A29A', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Cancel</button>
+                        <button onClick={() => saveEdit(c.id)} style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 600, background: '#E8853D', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}>Save</button>
+                      </div>
                     </div>
-                    {isPending && !isEditing && (
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', flexShrink: 0 }} />
+                  ) : (
+                    <>
+                      <div
+                        onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditText(c.body) }}
+                        style={{
+                          fontSize: 13.5,
+                          lineHeight: 1.5,
+                          color: isResolved ? '#6B6560' : '#E8E5DF',
+                          cursor: 'text',
+                          marginLeft: 32,
+                          wordBreak: 'break-word',
+                        }}
+                      >
+                        {c.body}
+                      </div>
+                      {c.imageUrl && (
+                        <img
+                          src={c.imageUrl}
+                          alt=""
+                          onClick={(e) => { e.stopPropagation(); window.open(c.imageUrl!, '_blank') }}
+                          style={{
+                            marginTop: 8,
+                            marginLeft: 32,
+                            maxWidth: 'calc(100% - 32px)',
+                            borderRadius: 6,
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            cursor: 'zoom-in',
+                            display: 'block',
+                            filter: isResolved ? 'grayscale(0.7) brightness(0.5)' : 'none',
+                          }}
+                        />
+                      )}
+                      {/* Reply link (visual only — affordance, no thread logic yet) */}
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        style={{
+                          marginTop: 8,
+                          marginLeft: 32,
+                          padding: 0,
+                          fontSize: 12,
+                          color: '#6B6560',
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontFamily: 'inherit',
+                          transition: 'color 150ms ease',
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
+                      >
+                        Reply
+                      </button>
+                    </>
+                  )}
+
+                  {/* Hover actions (Approve + More) — bottom-right corner, only on card hover */}
+                  <div
+                    className="fw-card-actions"
+                    style={{
+                      position: 'absolute',
+                      bottom: 10,
+                      right: 12,
+                      display: 'none',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: 'rgba(10, 10, 10, 0.7)',
+                      backdropFilter: 'blur(6px)',
+                      WebkitBackdropFilter: 'blur(6px)',
+                      borderRadius: 6,
+                      padding: 2,
+                    }}
+                  >
+                    {isPending && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
+                        title="Approve"
+                        style={{
+                          width: 22, height: 22, borderRadius: 4, border: 'none',
+                          background: 'transparent', cursor: 'pointer', display: 'flex',
+                          alignItems: 'center', justifyContent: 'center', color: '#A8A29A', padding: 0,
+                          transition: 'background 150ms ease, color 150ms ease',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#E8853D' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                      </button>
                     )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
+                      title="More"
+                      style={{
+                        width: 22, height: 22, borderRadius: 4, border: 'none',
+                        background: isMenuOpen ? 'rgba(255,255,255,0.06)' : 'transparent', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: '#A8A29A', padding: 0,
+                      }}
+                      onMouseEnter={(e) => { if (!isMenuOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
+                      onMouseLeave={(e) => { if (!isMenuOpen) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
+                    </button>
                   </div>
 
                   {/* Dropdown menu */}
@@ -1293,158 +1518,219 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
             })}
         </div>
 
-        {/* Footer */}
-        <div style={{ padding: '12px 16px', borderTop: '1px solid #2a2a2a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          <button
-            onClick={() => { enterFeedbackMode(); setSidebarOpen(false) }}
-            style={{
-              padding: '6px 12px', fontSize: 12, fontWeight: 500,
-              color: '#888', background: 'transparent', border: 'none', borderRadius: 6,
-              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'color 0.15s',
-              fontFamily: 'inherit',
-            }}
-            onMouseEnter={(e) => (e.currentTarget.style.color = '#fff')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#888')}
-          >
-            + Leave feedback
-          </button>
+        {/* Footer — toggles "+ Leave feedback" / "Cancel" based on mode. Sidebar stays open. */}
+        <div style={{ padding: '14px 16px', borderTop: '1px solid #2a2a2a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+          {mode === 'idle' ? (
+            <button
+              onClick={() => enterFeedbackMode()}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 10,
+                height: 40,
+                padding: '0 18px 0 6px',
+                borderRadius: 9999,
+                background: '#E8853D',
+                border: '1px solid #B85F1F',
+                color: '#FFFFFF',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                boxShadow: '0 4px 10px rgba(232, 133, 61, 0.32)',
+                transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#B85F1F')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = '#E8853D')}
+            >
+              <CarrotPixelIcon size={20} />
+              <span>Leave feedback</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => { exitFeedbackMode(); setSidebarOpen(false) }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                height: 40,
+                padding: '0 18px',
+                borderRadius: 9999,
+                background: 'transparent',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                color: '#A8A29A',
+                fontSize: 13,
+                fontWeight: 500,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1), color 220ms ease',
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#FFFFFF' }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' }}
+            >
+              <X style={{ width: 14, height: 14 }} />
+              <span>Cancel</span>
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Floating draggable pill with tooltip menu */}
+      {/* CRRT trigger — single pill. Hidden while sidebar is open (sidebar owns the chrome). */}
       <div
         ref={pillRef}
         {...{ [WIDGET_ATTR]: '' }}
         onPointerDown={onPillPointerDown}
+        onMouseEnter={() => setPillHover(true)}
+        onMouseLeave={() => setPillHover(false)}
         style={{
           position: 'fixed',
-          left: pillPos.x,
-          top: pillPos.y,
+          ...(draggedPos ? { left: draggedPos.x, top: draggedPos.y } : { bottom: 24, right: 24 }),
           zIndex: 2147483647,
           cursor: dragging.current ? 'grabbing' : 'grab',
           userSelect: 'none',
           touchAction: 'none',
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          opacity: sidebarOpen ? 0 : 1,
+          transform: sidebarOpen ? 'translateY(8px)' : 'translateY(0)',
+          pointerEvents: sidebarOpen ? 'none' : 'auto',
+          transition: 'opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        <VtooltipRoot springConfig={{ type: 'spring' as const, stiffness: 400, damping: 30, mass: 0.8 }}>
-          <div
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          {/* Primary pill */}
+          <button
+            type="button"
+            onClick={(e) => {
+              if (didDrag.current) { e.preventDefault(); return }
+              if (mode !== 'idle') {
+                exitFeedbackMode()
+              } else {
+                enterFeedbackMode()
+                setSidebarOpen(true)
+              }
+            }}
             style={{
+              position: 'relative',
               display: 'inline-flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              overflow: 'hidden',
-              padding: '6px 6px',
+              gap: 10,
+              height: 44,
+              padding: mode !== 'idle' ? '0 18px' : '0 18px 0 6px',
               borderRadius: 9999,
-              background: '#000',
-              flexDirection: 'column',
-              gap: 2,
+              background: mode !== 'idle' ? '#E8853D' : 'rgba(10, 10, 10, 0.72)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: `1px solid ${mode !== 'idle' ? '#B85F1F' : 'rgba(255, 255, 255, 0.06)'}`,
+              color: '#FFFFFF',
+              fontSize: 13,
+              fontWeight: 500,
+              lineHeight: 1,
+              whiteSpace: 'nowrap',
+              cursor: dragging.current ? 'grabbing' : 'pointer',
+              fontFamily: 'inherit',
+              boxShadow: '0 12px 28px rgba(10, 10, 10, 0.32), 0 2px 6px rgba(10, 10, 10, 0.18)',
+              transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
-            {/* Comment */}
-            <VtooltipItem index={0}>
-              <VtooltipTrigger
-                onClick={(e) => {
-                  if (didDrag.current) { e.preventDefault(); return }
-                  if (mode !== 'idle') { exitFeedbackMode() } else { enterFeedbackMode() }
-                }}
-              >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, background: mode !== 'idle' ? '#333333' : 'transparent' }}>
-                  {mode !== 'idle' ? (
-                    <X style={{ width: 18, height: 18 }} />
-                  ) : (
-                    <MessageCircle style={{ width: 18, height: 18 }} />
-                  )}
-                </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Comment</span>
-              </VtooltipTrigger>
-              <VtooltipContent>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  {mode !== 'idle' ? 'Exit' : 'Comment'}
-                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>C</span>
-                </div>
-              </VtooltipContent>
-            </VtooltipItem>
-
-            {/* Hide pins toggle */}
-            <VtooltipItem index={1}>
-              <VtooltipTrigger
-                onClick={(e) => {
-                  if (didDrag.current) { e.preventDefault(); return }
-                  setPinsVisible((v) => !v)
-                }}
-              >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, background: !pinsVisible ? '#333333' : 'transparent' }}>
-                  {pinsVisible ? <Eye style={{ width: 18, height: 18 }} /> : <EyeOff style={{ width: 18, height: 18 }} />}
-                </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>{pinsVisible ? 'Hide pins' : 'Show pins'}</span>
-              </VtooltipTrigger>
-              <VtooltipContent>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  {pinsVisible ? 'Hide pins' : 'Show pins'}
-                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>H</span>
-                </div>
-              </VtooltipContent>
-            </VtooltipItem>
-
-            {/* Agent bridge — hidden by default, revealed via Shift+A */}
-            {agentsRevealed && (
-              <VtooltipItem index={2} key="agent">
-                <VtooltipTrigger
-                  onClick={(e) => {
-                    if (didDrag.current) { e.preventDefault(); return }
-                    setAgentOpen(true)
-                  }}
-                >
-                  <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999, animation: 'fw-agent-reveal 0.3s cubic-bezier(0.16, 1, 0.3, 1) both' }}>
-                    <Bot style={{ width: 18, height: 18 }} />
-                  </div>
-                  <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Connect agent</span>
-                </VtooltipTrigger>
-                <VtooltipContent>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                    Connect agent
-                  </div>
-                </VtooltipContent>
-              </VtooltipItem>
+            {mode !== 'idle' ? (
+              <X style={{ width: 16, height: 16, color: '#FFFFFF' }} />
+            ) : (
+              <CarrotPixelIcon size={22} />
             )}
-
-            {/* Menu */}
-            <VtooltipItem index={agentsRevealed ? 3 : 2} key={`menu-${agentsRevealed}`}>
-              <VtooltipTrigger
-                onClick={(e) => {
-                  if (didDrag.current) { e.preventDefault(); return }
-                  setSidebarOpen((v) => !v)
+            <span>{mode !== 'idle' ? 'Cancel' : 'Drop a carrot'}</span>
+            {mode === 'idle' && commentCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 9999,
+                  border: '1.5px solid rgba(10, 10, 10, 0.9)',
+                  background: '#E8853D',
+                  animation: badgeAnimation,
                 }}
-              >
-                <div className="fw-pill-icon" style={{ position: 'relative', display: 'flex', width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: 9999 }}>
-                  <Menu style={{ width: 18, height: 18 }} />
-                  {commentCount > 0 && (
-                    <div style={{
-                      position: 'absolute',
-                      right: 2,
-                      top: 2,
-                      width: 6,
-                      height: 6,
-                      borderRadius: 9999,
-                      border: '1.7px solid #000',
-                      background: '#0ea5e9',
-                      animation: badgeAnim ? 'fw-badge-pop 0.4s ease' : 'none',
-                    }} />
-                  )}
-                </div>
-                <span style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0 }}>Menu</span>
-              </VtooltipTrigger>
-              <VtooltipContent>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, whiteSpace: 'nowrap', padding: '0 8px', fontSize: 14, fontWeight: 500, lineHeight: 1.2, letterSpacing: '-0.01em', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
-                  Feedback
-                  <span style={{ display: 'inline-flex', width: 20, height: 20, alignItems: 'center', justifyContent: 'center', borderRadius: 3, border: '1px solid rgba(255,255,255,0.3)', padding: 2, fontSize: 12, color: '#fff' }}>F</span>
-                </div>
-              </VtooltipContent>
-            </VtooltipItem>
-          </div>
-        </VtooltipRoot>
+              />
+            )}
+          </button>
+
+          {/* Drag handle — Granola-style. Appears below the pill on hover. Visual only; drag works on the whole wrapper. */}
+          {mode === 'idle' && (
+            <div
+              aria-hidden
+              style={{
+                position: 'absolute',
+                left: '50%',
+                bottom: -12,
+                transform: `translate(-50%, ${pillHover && !dragging.current ? '0' : '-8px'})`,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 3,
+                height: 14,
+                padding: '0 8px',
+                borderRadius: '0 0 9999px 9999px',
+                background: 'rgba(10, 10, 10, 0.72)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
+                borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                opacity: pillHover && !dragging.current ? 1 : 0,
+                pointerEvents: 'none',
+                transition: 'opacity 180ms cubic-bezier(0.16, 1, 0.3, 1), transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+              }}
+            >
+              {[0, 1, 2, 3, 4, 5].map((i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: 2,
+                    height: 2,
+                    borderRadius: '50%',
+                    background: 'rgba(255, 255, 255, 0.5)',
+                    display: 'block',
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Success toast */}
+      {successToast && (
+        <div
+          {...{ [WIDGET_ATTR]: '' }}
+          style={{
+            position: 'fixed',
+            bottom: 80,
+            left: '50%',
+            zIndex: 2147483647,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 14px',
+            borderRadius: 9999,
+            background: 'rgba(31, 58, 47, 0.96)',
+            border: '1px solid rgba(232, 133, 61, 0.2)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+            fontSize: 13,
+            fontWeight: 500,
+            color: '#E8853D',
+            whiteSpace: 'nowrap',
+            animation: 'fw-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
+            pointerEvents: 'none',
+          }}
+        >
+          <CarrotPixelIcon size={14} />
+          <span>Carrot dropped</span>
+        </div>
+      )}
 
       {/* Agent bridge modal */}
       {agentOpen && <AgentBridgeModal apiBase={apiBase} projectId={projectId} onClose={() => setAgentOpen(false)} />}

@@ -21,8 +21,8 @@ describe('SelectingInstructionBar', () => {
     const { getByText } = render(<SelectingInstructionBar onCancel={vi.fn()} />)
     const exit = getByText('exit') as HTMLElement
     fireEvent.mouseEnter(exit)
-    expect(exit.style.color).toBe('#111')
+    expect(exit.style.color).toBe('#FFFFFF')
     fireEvent.mouseLeave(exit)
-    expect(exit.style.color).toBe('#999')
+    expect(exit.style.color).toBe('#6B6560')
   })
 })

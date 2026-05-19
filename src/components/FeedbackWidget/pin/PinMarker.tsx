@@ -1,35 +1,43 @@
-import { NOISE_OVERLAY_BG, PIN_GRADIENT } from '../constants'
+/**
+ * CRRT pin — simple Carrot dot circle with a number.
+ * 22×22 footprint (smaller than the original 32 so it's less invasive on content).
+ */
+export function PinMarker({
+  outline = false,
+  number,
+  resolved = false,
+}: {
+  outline?: boolean
+  number?: number
+  resolved?: boolean
+}) {
+  const fill = resolved ? 'transparent' : '#E8853D'
+  const ringColor = resolved ? '#6B6560' : '#0A0A0A'
+  const numberColor = resolved ? '#6B6560' : '#FFFFFF'
 
-export function PinMarker({ outline = false }: { outline?: boolean }) {
   return (
-    <div style={{
-      width: 32, height: 32,
-      borderRadius: '50% 50% 50% 0',
-      background: PIN_GRADIENT,
-      outline: outline ? '2px solid #fff' : 'none',
-      outlineOffset: outline ? 1 : 0,
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      <div style={{
-        position: 'absolute',
-        left: '50%', top: '40%',
-        width: 22, height: 22,
+    <div
+      style={{
+        width: 22,
+        height: 22,
         borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 65%)',
-        animation: 'fw-pin-inner-pulse 1.8s ease-in-out infinite',
-        pointerEvents: 'none',
-        mixBlendMode: 'screen',
-      }} />
-      <div style={{
-        position: 'absolute',
-        inset: 0,
-        borderRadius: 'inherit',
-        backgroundImage: NOISE_OVERLAY_BG,
-        mixBlendMode: 'overlay',
-        opacity: 0.5,
-        pointerEvents: 'none',
-      }} />
+        background: fill,
+        boxShadow: `0 0 0 2px ${ringColor}, 0 2px 6px rgba(10, 10, 10, 0.35)`,
+        outline: outline ? '2px solid #fff' : 'none',
+        outlineOffset: outline ? 1 : 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+        fontWeight: 700,
+        fontSize: 11,
+        lineHeight: 1,
+        color: numberColor,
+        userSelect: 'none',
+        transition: 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+      }}
+    >
+      {typeof number === 'number' && number > 0 ? number : ''}
     </div>
   )
 }

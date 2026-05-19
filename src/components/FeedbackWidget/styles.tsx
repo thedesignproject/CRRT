@@ -16,13 +16,15 @@ export function FeedbackWidgetStyles() {
         }
         @keyframes fw-slide-in-new {
           0% { opacity: 0; transform: translateY(-12px); }
-          50% { background: #1e3a1e; }
+          50% { background: #1F3A2F; }
           100% { opacity: 1; transform: translateY(0); }
         }
-        [data-fw] button:focus,
-        [data-fw] button:focus-visible {
+        [data-fw-crrt] button:focus {
           outline: none;
-          box-shadow: none;
+        }
+        [data-fw-crrt] button:focus-visible {
+          outline: none;
+          box-shadow: 0 0 0 2px #E8853D;
         }
         @keyframes fw-instruction-in {
           0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
@@ -47,20 +49,16 @@ export function FeedbackWidgetStyles() {
         @keyframes fw-pin-glow-pulse {
           0%, 100% {
             filter:
-              drop-shadow(0 0 8px rgba(91, 135, 232, 0.5))
-              drop-shadow(0 0 16px rgba(91, 135, 232, 0.25))
+              drop-shadow(0 0 8px rgba(232, 133, 61, 0.5))
+              drop-shadow(0 0 16px rgba(232, 133, 61, 0.25))
               drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
           }
           50% {
             filter:
-              drop-shadow(0 0 12px rgba(91, 135, 232, 0.65))
-              drop-shadow(0 0 26px rgba(91, 135, 232, 0.35))
+              drop-shadow(0 0 12px rgba(232, 133, 61, 0.65))
+              drop-shadow(0 0 26px rgba(232, 133, 61, 0.35))
               drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
           }
-        }
-        @keyframes fw-pin-inner-pulse {
-          0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(0.8); }
-          50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
         }
         @keyframes fw-tooltip-liquid {
           0% { opacity: 0; transform: scale(0.08); filter: blur(10px); }
@@ -74,15 +72,15 @@ export function FeedbackWidgetStyles() {
           background: rgba(255, 255, 255, 0.15);
         }
         .fw-highlight {
-          outline: 2px solid #3b82f6 !important;
+          outline: 2px solid #E8853D !important;
           outline-offset: 2px !important;
-          background-color: rgba(59, 130, 246, 0.15) !important;
+          background-color: rgba(232, 133, 61, 0.15) !important;
           animation: fw-highlight-pulse 1.4s ease both !important;
         }
         @keyframes fw-highlight-pulse {
           0% { outline-color: transparent; background-color: transparent; }
-          14% { outline-color: #3b82f6; background-color: rgba(59, 130, 246, 0.15); }
-          71% { outline-color: #3b82f6; background-color: rgba(59, 130, 246, 0.15); }
+          14% { outline-color: #E8853D; background-color: rgba(232, 133, 61, 0.15); }
+          71% { outline-color: #E8853D; background-color: rgba(232, 133, 61, 0.15); }
           100% { outline-color: transparent; background-color: transparent; }
         }
         @keyframes fw-modal-overlay-in {
@@ -92,6 +90,21 @@ export function FeedbackWidgetStyles() {
         @keyframes fw-modal-card-in {
           0% { opacity: 0; transform: scale(0.94) translateY(8px); }
           100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes fw-toast-in {
+          0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
+          100% { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes fw-toast-out {
+          0% { opacity: 1; transform: translateX(-50%) translateY(0); }
+          100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          [data-fw-crrt] * {
+            animation-duration: 0.01ms !important;
+            transition-duration: 0.01ms !important;
+          }
+          .fw-rec-dot { animation: none !important; }
         }
     `}</style>
   )
