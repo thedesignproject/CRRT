@@ -103,6 +103,15 @@ export function FeedbackWidgetStyles() {
           0%, 100% { opacity: 1;   transform: scale(1); }
           50%      { opacity: 0.6; transform: scale(0.85); }
         }
+        @keyframes crrt-pin-seed-bounce {
+          0%, 100% { transform: scale(1);    box-shadow: 0 0 0 2px rgba(10,10,10,0.9), 0 0 14px rgba(232,133,61,0.55), 0 2px 6px rgba(10,10,10,0.4); }
+          50%      { transform: scale(1.1); box-shadow: 0 0 0 2px rgba(10,10,10,0.9), 0 0 22px rgba(232,133,61,0.75), 0 2px 8px rgba(10,10,10,0.4); }
+        }
+        @keyframes crrt-pin-seed-halo {
+          0%   { opacity: 0.7;  transform: translate(-50%, -50%) scale(1); }
+          80%  { opacity: 0;    transform: translate(-50%, -50%) scale(3.2); }
+          100% { opacity: 0;    transform: translate(-50%, -50%) scale(3.2); }
+        }
         @media (prefers-reduced-motion: reduce) {
           [data-fw-crrt] * {
             animation-duration: 0.01ms !important;

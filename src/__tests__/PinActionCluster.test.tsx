@@ -136,4 +136,27 @@ describe('PinActionCluster', () => {
     fireEvent.mouseLeave(deleteItem)
     expect((deleteItem as HTMLElement).style.background).toBe('none none')
   })
+
+  it('omits the Ver lista item when onViewList is not provided', () => {
+    const { getByLabelText, queryByText } = render(<PinActionCluster {...makeProps()} />)
+    fireEvent.click(getByLabelText('More options'))
+    expect(queryByText('Ver lista')).toBeNull()
+  })
+
+  it('renders Ver lista when onViewList is provided and fires the callback + hover paints', () => {
+    const onViewList = vi.fn()
+    const { getByLabelText, getByText, queryByText } = render(
+      <PinActionCluster {...makeProps({ onViewList })} />,
+    )
+    fireEvent.click(getByLabelText('More options'))
+    const verLista = getByText('Ver lista') as HTMLButtonElement
+    fireEvent.mouseEnter(verLista)
+    expect(verLista.style.background).toBe('rgba(255, 255, 255, 0.04)')
+    fireEvent.mouseLeave(verLista)
+    expect(verLista.style.background).toBe('none none')
+    fireEvent.click(verLista)
+    expect(onViewList).toHaveBeenCalledTimes(1)
+    // Menu closes after click.
+    expect(queryByText('Ver lista')).toBeNull()
+  })
 })

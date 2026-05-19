@@ -6,9 +6,10 @@ export interface PinActionClusterProps {
   onToggleResolve: () => void
   onEdit: () => void
   onDelete: () => void
+  onViewList?: () => void
 }
 
-export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete }: PinActionClusterProps) {
+export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList }: PinActionClusterProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, position: 'relative', flexShrink: 0 }}>
@@ -84,6 +85,17 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
               Edit
             </button>
+            {onViewList && (
+              <button
+                onClick={() => { onViewList(); setMenuOpen(false) }}
+                style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#E8E5DF', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
+              Ver lista
+              </button>
+            )}
             <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.06)', margin: '4px 0' }} />
             <button
               onClick={() => { onDelete(); setMenuOpen(false) }}

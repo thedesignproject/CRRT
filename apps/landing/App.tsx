@@ -1,7 +1,12 @@
 import { Hero } from './sections/Hero'
+import { HowItWorks } from './sections/HowItWorks'
 import { FakeDashboard } from './sections/FakeDashboard'
-import { FakeArticle } from './sections/FakeArticle'
 import { Closing } from './sections/Closing'
+import { Pricing } from './sections/Pricing'
+import { Footer } from './sections/Footer'
+import { EasterEgg } from './components/EasterEgg'
+import { ScrollRuler } from './components/ScrollRuler'
+import { useScrollProgress } from './lib/useScrollProgress'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 
@@ -29,14 +34,19 @@ function getDemoProjectId(prefix: string) {
 export function App() {
   const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
   const projectId = getDemoProjectId(import.meta.env.VITE_PROJECT_KEY ?? 'crrt-landing-demo')
+  useScrollProgress()
 
   return (
     <>
+      <ScrollRuler />
       <Hero />
+      <HowItWorks />
       <FakeDashboard />
-      <FakeArticle />
       <Closing />
+      <Pricing />
+      <Footer />
       <FeedbackWidget apiBase={apiBase} projectId={projectId} />
+      <EasterEgg />
     </>
   )
 }

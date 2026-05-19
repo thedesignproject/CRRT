@@ -7,7 +7,7 @@ import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } fr
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
 import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
-import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import { deleteComment as apiDeleteComment, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
@@ -127,11 +127,18 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
     function onResize() {
       bump()
-      // CSS bottom/right handles viewport resize automatically when not dragged
-      setDraggedPos(prev => prev ? ({
-        x: Math.max(0, Math.min(window.innerWidth - 180, prev.x)),
-        y: Math.max(0, Math.min(window.innerHeight - 56, prev.y)),
-      }) : null)
+      // CSS bottom/right handles viewport resize automatically when not dragged.
+      // For dragged state, draggedPos stores right/bottom offsets — clamp them
+      // so the pill stays inside the viewport after a resize.
+      setDraggedPos(prev => {
+        if (!prev) return null
+        const pillW = pillRef.current?.offsetWidth ?? 64
+        const pillH = pillRef.current?.offsetHeight ?? 64
+        return {
+          x: Math.max(0, Math.min(window.innerWidth - pillW, prev.x)),
+          y: Math.max(0, Math.min(window.innerHeight - pillH, prev.y)),
+        }
+      })
     }
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', bump, { passive: true })
@@ -457,9 +464,18 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     function onMove(e: PointerEvent) {
       if (!dragging.current) return
       didDrag.current = true
-      const x = Math.max(0, Math.min(window.innerWidth - 48, e.clientX - dragOffset.current.x))
-      const y = Math.max(0, Math.min(window.innerHeight - 160, e.clientY - dragOffset.current.y))
-      setDraggedPos({ x, y })
+      // Store the drag position as right/bottom offsets (distance from those
+      // edges) so the wrapper stays anchored to the right/bottom. That keeps
+      // the hover-expansion of the pill growing LEFTWARDS into the viewport
+      // instead of off the right edge.
+      const pillW = pillRef.current?.offsetWidth ?? 64
+      const pillH = pillRef.current?.offsetHeight ?? 64
+      const desiredLeft = Math.max(0, Math.min(window.innerWidth - pillW, e.clientX - dragOffset.current.x))
+      const desiredTop = Math.max(0, Math.min(window.innerHeight - pillH, e.clientY - dragOffset.current.y))
+      setDraggedPos({
+        x: window.innerWidth - desiredLeft - pillW,
+        y: window.innerHeight - desiredTop - pillH,
+      })
     }
     function onUp() {
       dragging.current = false
@@ -487,6 +503,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
 
   function deleteComment(commentId: string) {
     setComments((prev) => prev.filter((c) => c.id !== commentId))
+    apiDeleteComment(apiBase, commentId, projectId)
   }
 
   function saveEdit(commentId: string) {
@@ -938,7 +955,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                 opacity: isResolved && !isSelected && !isHovered ? 0.4 : 1,
               }}
             >
-              <PinMarker outline={isSelected} />
+              <PinMarker outline={isSelected} hovered={isHovered} number={pinNumber} resolved={isResolved} />
             </div>
 
             {/* Hover tooltip — dark CRRT glass */}
@@ -1037,6 +1054,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
                         onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
+                        onViewList={() => { setSelectedPin(null); setSidebarOpen(true) }}
                         onEdit={() => { setEditingId(c.id); setEditText(c.body) }}
                         onDelete={() => { deleteComment(c.id); setSelectedPin(null) }}
                       />
@@ -1310,7 +1328,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
-                  {/* Top row: avatar + name + time + meta on right */}
+                  {/* Top row: avatar + name + meta + actions */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                     {/* Avatar */}
                     <div style={{
@@ -1322,23 +1340,63 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     }}>
                       {initial}
                     </div>
-                    {/* Name + time */}
+                    {/* Name + meta inline */}
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c.authorName ?? 'User'}
                       </span>
-                      <span style={{ fontSize: 12, color: '#6B6560', flexShrink: 0 }}>
-                        {timeAgo(c.createdAt)}
+                      <span style={{ fontSize: 12, color: '#6B6560', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {timeAgo(c.createdAt)} <span style={{ color: '#3A3A3A' }}>·</span> <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>#{pinNum}</span>
                       </span>
                     </div>
-                    {/* Meta on right: #N + URL */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, fontFamily: "'JetBrains Mono', monospace" }}>
-                      <span style={{ fontSize: 11, color: '#6B6560' }}>#{pinNum}</span>
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#6B6560" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="2" y1="12" x2="22" y2="12" />
-                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                      </svg>
+                    {/* Actions inline — same row as the author */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      {isPending && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
+                          title="Approve"
+                          aria-label="Approve"
+                          style={{
+                            width: 28, height: 28, borderRadius: 7,
+                            border: '1px solid rgba(232, 133, 61, 0.35)',
+                            background: 'rgba(232, 133, 61, 0.08)',
+                            cursor: 'pointer', display: 'flex',
+                            alignItems: 'center', justifyContent: 'center',
+                            color: '#E8853D', padding: 0,
+                            transition: 'background 150ms ease, color 150ms ease, border-color 150ms ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#E8853D'
+                            e.currentTarget.style.color = '#FFFFFF'
+                            e.currentTarget.style.borderColor = '#B85F1F'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'rgba(232, 133, 61, 0.08)'
+                            e.currentTarget.style.color = '#E8853D'
+                            e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.35)'
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
+                        title="More"
+                        aria-label="More"
+                        style={{
+                          width: 28, height: 28, borderRadius: 7,
+                          border: '1px solid ' + (isMenuOpen ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'),
+                          background: isMenuOpen ? 'rgba(255,255,255,0.06)' : 'transparent',
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#A8A29A', padding: 0,
+                          transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
+                        }}
+                        onMouseEnter={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#FFFFFF' } }}
+                        onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' } }}
+                      >
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
+                      </button>
                     </div>
                   </div>
 
@@ -1423,55 +1481,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                       </button>
                     </>
                   )}
-
-                  {/* Hover actions (Approve + More) — bottom-right corner, only on card hover */}
-                  <div
-                    className="fw-card-actions"
-                    style={{
-                      position: 'absolute',
-                      bottom: 10,
-                      right: 12,
-                      display: 'none',
-                      alignItems: 'center',
-                      gap: 4,
-                      background: 'rgba(10, 10, 10, 0.7)',
-                      backdropFilter: 'blur(6px)',
-                      WebkitBackdropFilter: 'blur(6px)',
-                      borderRadius: 6,
-                      padding: 2,
-                    }}
-                  >
-                    {isPending && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
-                        title="Approve"
-                        style={{
-                          width: 22, height: 22, borderRadius: 4, border: 'none',
-                          background: 'transparent', cursor: 'pointer', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', color: '#A8A29A', padding: 0,
-                          transition: 'background 150ms ease, color 150ms ease',
-                        }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#E8853D' }}
-                        onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' }}
-                      >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
-                      title="More"
-                      style={{
-                        width: 22, height: 22, borderRadius: 4, border: 'none',
-                        background: isMenuOpen ? 'rgba(255,255,255,0.06)' : 'transparent', cursor: 'pointer',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#A8A29A', padding: 0,
-                      }}
-                      onMouseEnter={(e) => { if (!isMenuOpen) e.currentTarget.style.background = 'rgba(255,255,255,0.06)' }}
-                      onMouseLeave={(e) => { if (!isMenuOpen) e.currentTarget.style.background = 'transparent' }}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                    </button>
-                  </div>
 
                   {/* Dropdown menu */}
                   {isMenuOpen && (
@@ -1592,7 +1601,10 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         onMouseLeave={() => setPillHover(false)}
         style={{
           position: 'fixed',
-          ...(draggedPos ? { left: draggedPos.x, top: draggedPos.y } : { bottom: 24, right: 24 }),
+          // draggedPos stores right/bottom offsets (see onMove handler). This
+          // keeps the wrapper anchored to the right/bottom so hover-expansion
+          // grows leftwards, never overflowing the viewport.
+          ...(draggedPos ? { right: draggedPos.x, bottom: draggedPos.y } : { bottom: 24, right: 24 }),
           zIndex: 2147483647,
           cursor: dragging.current ? 'grabbing' : 'grab',
           userSelect: 'none',
@@ -1605,7 +1617,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         }}
       >
         <div style={{ position: 'relative', display: 'inline-block' }}>
-          {/* Primary pill */}
+          {/* Primary pill — circle by default, expands to full pill on hover */}
           <button
             type="button"
             onClick={(e) => {
@@ -1616,14 +1628,14 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               position: 'relative',
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 10,
-              height: 44,
-              padding: '0 18px 0 6px',
-              borderRadius: 9999,
-              background: 'rgba(10, 10, 10, 0.72)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              justifyContent: 'center',
+              gap: pillHover ? 12 : 0,
+              height: 64,
+              width: pillHover ? 'auto' : 64,
+              padding: pillHover ? '0 22px 0 12px' : 0,
+              borderRadius: 32,
+              background: pillHover ? '#0A0A0A' : '#141414',
+              border: '1px solid ' + (pillHover ? '#2F2F2F' : 'rgba(255, 255, 255, 0.09)'),
               color: '#FFFFFF',
               fontSize: 13,
               fontWeight: 500,
@@ -1631,24 +1643,39 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               whiteSpace: 'nowrap',
               cursor: dragging.current ? 'grabbing' : 'pointer',
               fontFamily: 'inherit',
-              boxShadow: '0 12px 28px rgba(10, 10, 10, 0.32), 0 2px 6px rgba(10, 10, 10, 0.18)',
-              transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+              boxShadow: pillHover
+                ? '0 10px 18px rgba(10, 10, 10, 0.22), 0 2px 4px rgba(10, 10, 10, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04)'
+                : '0 14px 36px rgba(10, 10, 10, 0.42), 0 4px 10px rgba(10, 10, 10, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
+              transition: 'gap 360ms cubic-bezier(0.32, 0.72, 0, 1), height 360ms cubic-bezier(0.32, 0.72, 0, 1), width 360ms cubic-bezier(0.32, 0.72, 0, 1), padding 360ms cubic-bezier(0.32, 0.72, 0, 1), border-radius 360ms cubic-bezier(0.32, 0.72, 0, 1), background-color 240ms ease, border-color 240ms ease, box-shadow 320ms cubic-bezier(0.32, 0.72, 0, 1)',
+              overflow: 'hidden',
             }}
           >
-            <CarrotPixelIcon size={22} />
-            <span>Drop a carrot</span>
+            <CarrotPixelIcon size={pillHover ? 28 : 46} />
+            <span
+              style={{
+                maxWidth: pillHover ? 160 : 0,
+                opacity: pillHover ? 1 : 0,
+                overflow: 'hidden',
+                transition: pillHover
+                  ? 'max-width 360ms cubic-bezier(0.32, 0.72, 0, 1), opacity 240ms ease 120ms'
+                  : 'max-width 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 140ms ease',
+              }}
+            >
+              Drop a CRRT
+            </span>
             {mode === 'idle' && commentCount > 0 && (
               <span
                 style={{
                   position: 'absolute',
-                  top: -2,
-                  right: -2,
+                  top: pillHover ? -2 : 6,
+                  right: pillHover ? -2 : 6,
                   width: 8,
                   height: 8,
                   borderRadius: 9999,
                   border: '1.5px solid rgba(10, 10, 10, 0.9)',
                   background: '#E8853D',
                   animation: badgeAnimation,
+                  transition: 'top 240ms cubic-bezier(0.16, 1, 0.3, 1), right 240ms cubic-bezier(0.16, 1, 0.3, 1)',
                 }}
               />
             )}

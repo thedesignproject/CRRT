@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Wordmark } from '../components/Wordmark'
 import { PillButton } from '../components/PillButton'
 import { activateCRRT } from '../lib/crrt'
 
@@ -10,7 +9,10 @@ export default function App() {
   return (
     <>
       <YourApp />
-      <FeedbackWidget projectId="your-key" apiBase="https://api.example.com/api" />
+      <FeedbackWidget
+        projectId="your-key"
+        apiBase="https://api.example.com/api"
+      />
     </>
   )
 }`
@@ -46,50 +48,39 @@ export function Closing() {
             maxWidth: 720,
           }}
         >
-          Drop a carrot,<br />
-          <span style={{ color: 'var(--crrt-carrot)' }}>ship faster.</span>
+          Drop a CRRT.<br />
+          <span style={{ color: 'var(--crrt-carrot)' }}>Ship a better product.</span>
         </h2>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 16, marginBottom: 64 }}>
-          <Snippet title="1. install" code={npmSnippet} />
-          <Snippet title="2. mount" code={reactSnippet} />
+          <Snippet
+            number="01"
+            title="INSTALL"
+            description="Add the package to your project. Works with pnpm, npm, yarn, or bun."
+            code={npmSnippet}
+          />
+          <Snippet
+            number="02"
+            title="MOUNT IN YOUR APP ROOT"
+            description="Drop the widget into your app. projectId scopes the feedback; apiBase points at your CRRT backend."
+            code={reactSnippet}
+          />
         </div>
 
         <div className="flex items-center gap-3 flex-wrap" style={{ marginBottom: 80 }}>
           <PillButton variant="carrot" size="lg" onClick={activateCRRT}>
-            Drop your first carrot
+            Drop a CRRT →
           </PillButton>
           <PillButton variant="ghost" size="lg" withCarrot={false}>
             Read the docs
           </PillButton>
-        </div>
-
-        {/* Big wordmark footer */}
-        <div
-          style={{
-            borderTop: '1px solid var(--crrt-rule-dark)',
-            paddingTop: 64,
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-end',
-            flexWrap: 'wrap',
-            gap: 32,
-          }}
-        >
-          <div style={{ transform: 'scale(2.5)', transformOrigin: 'left bottom' }}>
-            <Wordmark level="display" />
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--crrt-ink-mute)', fontFamily: 'var(--crrt-font-crt)', letterSpacing: '0.08em', textAlign: 'right' }}>
-            <div>visual feedback,</div>
-            <div>freshly picked.</div>
-          </div>
         </div>
       </div>
     </section>
   )
 }
 
-function Snippet({ title, code }: { title: string; code: string }) {
+function Snippet({ number, title, description, code }: { number: string; title: string; description: string; code: string }) {
   const [copied, setCopied] = useState(false)
   return (
     <div
@@ -98,6 +89,7 @@ function Snippet({ title, code }: { title: string; code: string }) {
         border: '1px solid var(--crrt-rule-dark)',
         borderRadius: 'var(--crrt-radius-2xl)',
         overflow: 'hidden',
+        minWidth: 0,
       }}
     >
       <div
@@ -105,18 +97,35 @@ function Snippet({ title, code }: { title: string; code: string }) {
         style={{
           padding: '12px 16px',
           borderBottom: '1px solid var(--crrt-rule-dark)',
+          gap: 12,
         }}
       >
-        <span
-          style={{
-            fontFamily: 'var(--crrt-font-crt)',
-            fontSize: 14,
-            letterSpacing: '0.08em',
-            color: 'var(--crrt-ink-faint)',
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
+        <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+          <span
+            style={{
+              fontFamily: 'var(--crrt-font-mono)',
+              fontSize: 14,
+              fontWeight: 700,
+              color: 'var(--crrt-carrot)',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {number}.
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--crrt-font-crt)',
+              fontSize: 13,
+              letterSpacing: '0.08em',
+              color: 'var(--crrt-ink-faint)',
+              textTransform: 'uppercase',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {title}
+          </span>
         </span>
         <button
           type="button"
@@ -143,6 +152,17 @@ function Snippet({ title, code }: { title: string; code: string }) {
           {copied ? 'copied' : 'copy'}
         </button>
       </div>
+      <div
+        style={{
+          padding: '14px 16px 4px',
+          fontFamily: 'var(--crrt-font-sans)',
+          fontSize: 13,
+          lineHeight: 1.55,
+          color: 'var(--crrt-ink-faint)',
+        }}
+      >
+        {description}
+      </div>
       <pre
         style={{
           margin: 0,
@@ -151,6 +171,8 @@ function Snippet({ title, code }: { title: string; code: string }) {
           fontSize: 13,
           lineHeight: 1.55,
           color: 'var(--crrt-white)',
+          whiteSpace: 'pre-wrap',
+          wordBreak: 'break-word',
           overflowX: 'auto',
         }}
       >
@@ -159,3 +181,4 @@ function Snippet({ title, code }: { title: string; code: string }) {
     </div>
   )
 }
+
