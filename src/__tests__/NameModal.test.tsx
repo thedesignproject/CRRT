@@ -115,6 +115,14 @@ describe('NameModal', () => {
     const { getByText } = render(<NameModal {...makeProps({ value: '' })} />)
     const btn = getByText('Continue') as HTMLButtonElement
     const bgBefore = btn.style.background
+    // Disabled buttons swallow React's synthetic onMouseEnter via fireEvent
+    // (mouseenter), so dispatch native bubbling mouseover/mouseout to exercise
+    // the handler's `if (trimmed)` falsy branch.
+    btn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }))
+    expect(btn.style.background).toBe(bgBefore)
+    btn.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, cancelable: true }))
+    expect(btn.style.background).toBe(bgBefore)
+    // Also fire the original non-bubbling events for completeness.
     fireEvent.mouseEnter(btn)
     expect(btn.style.background).toBe(bgBefore)
     fireEvent.mouseLeave(btn)

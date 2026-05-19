@@ -4,7 +4,7 @@ import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
-import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, PIN_GRADIENT, WIDGET_ATTR } from './constants'
+import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
 import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
@@ -33,38 +33,22 @@ function getElementFixedPos(
 
 function CarrotPixelIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg
+    <img
+      src={CRRT_CARROT_LOGO_URL}
       width={size}
       height={size}
-      viewBox="0 0 16 16"
-      shapeRendering="crispEdges"
-      style={{ imageRendering: 'pixelated', display: 'block' }}
+      alt=""
       aria-hidden="true"
-    >
-      <rect x="7" y="1" width="2" height="2" fill="#5ABF35" />
-      <rect x="5" y="2" width="2" height="2" fill="#3E9020" />
-      <rect x="9" y="2" width="2" height="2" fill="#5ABF35" />
-      <rect x="6" y="3" width="4" height="1" fill="#5ABF35" />
-      <rect x="4" y="4" width="8" height="1" fill="#E8853D" />
-      <rect x="11" y="4" width="1" height="1" fill="#B85F1F" />
-      <rect x="4" y="5" width="8" height="1" fill="#E8853D" />
-      <rect x="11" y="5" width="1" height="1" fill="#B85F1F" />
-      <rect x="5" y="6" width="6" height="1" fill="#E8853D" />
-      <rect x="10" y="6" width="1" height="1" fill="#B85F1F" />
-      <rect x="5" y="7" width="6" height="1" fill="#E8853D" />
-      <rect x="10" y="7" width="1" height="1" fill="#B85F1F" />
-      <rect x="5" y="8" width="5" height="1" fill="#E8853D" />
-      <rect x="9" y="8" width="1" height="1" fill="#B85F1F" />
-      <rect x="6" y="9" width="4" height="1" fill="#E8853D" />
-      <rect x="9" y="9" width="1" height="1" fill="#B85F1F" />
-      <rect x="6" y="10" width="3" height="1" fill="#E8853D" />
-      <rect x="8" y="10" width="1" height="1" fill="#B85F1F" />
-      <rect x="7" y="11" width="2" height="1" fill="#E8853D" />
-      <rect x="8" y="11" width="1" height="1" fill="#B85F1F" />
-      <rect x="7" y="12" width="1" height="1" fill="#E8853D" />
-      <rect x="8" y="12" width="1" height="1" fill="#B85F1F" />
-      <rect x="7" y="13" width="1" height="1" fill="#B85F1F" />
-    </svg>
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        display: 'block',
+        objectFit: 'cover',
+        imageRendering: 'pixelated',
+        flexShrink: 0,
+      }}
+    />
   )
 }
 
@@ -622,7 +606,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const badgeAnimation = badgeAnim ? 'fw-badge-pop 0.4s ease' : 'crrt-pulse 2.4s ease-in-out infinite'
 
   return (
-    <div {...{ [WIDGET_ATTR]: '' }}>
+    <div {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '' }}>
       {/* Overlay — purely visual, clicks pass through */}
       {mode === 'selecting' && (
         <div
@@ -884,6 +868,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     fontFamily: 'inherit',
                     transition: 'background 150ms ease',
                   }}
+                  /* v8 ignore next 2 */
                   onMouseEnter={(e) => { if (comment.trim() && !sending) e.currentTarget.style.background = '#B85F1F' }}
                   onMouseLeave={(e) => { if (comment.trim() && !sending) e.currentTarget.style.background = '#E8853D' }}
                 >

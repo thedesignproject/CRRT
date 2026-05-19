@@ -1,4 +1,8 @@
+import crrtCarrotLogoUrl from './assets/crrt-carrot.png'
+
 export const WIDGET_ATTR = 'data-fw'
+
+export const CRRT_CARROT_LOGO_URL = crrtCarrotLogoUrl
 
 /* CRRT carrot gradient — replaces the blue dot.
  * Bright highlight at top, carrot body, deeper carrot shadow at the edge. */

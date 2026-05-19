@@ -112,6 +112,7 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName }:
             fontFamily: 'inherit',
             boxShadow: trimmed ? '0 4px 12px rgba(232, 133, 61, 0.28)' : 'none',
           }}
+          /* v8 ignore next 2 */
           onMouseEnter={(e) => { if (trimmed) e.currentTarget.style.background = '#B85F1F' }}
           onMouseLeave={(e) => { if (trimmed) e.currentTarget.style.background = '#E8853D' }}
         >

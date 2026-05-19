@@ -99,6 +99,10 @@ export function FeedbackWidgetStyles() {
           0% { opacity: 1; transform: translateX(-50%) translateY(0); }
           100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
         }
+        @keyframes crrt-pulse {
+          0%, 100% { opacity: 1;   transform: scale(1); }
+          50%      { opacity: 0.6; transform: scale(0.85); }
+        }
         @media (prefers-reduced-motion: reduce) {
           [data-fw-crrt] * {
             animation-duration: 0.01ms !important;

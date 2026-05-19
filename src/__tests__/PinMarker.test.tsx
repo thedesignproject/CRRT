@@ -33,4 +33,12 @@ describe('PinMarker', () => {
     const { container } = render(<PinMarker />)
     expect(container.textContent).toBe('')
   })
+
+  it('renders muted styling when resolved=true', () => {
+    const { container } = render(<PinMarker number={5} resolved />)
+    const root = container.firstChild as HTMLElement
+    expect(root.style.background).toBe('transparent')
+    expect(root.style.color).toBe('#6B6560')
+    expect(root.style.boxShadow).toContain('#6B6560')
+  })
 })

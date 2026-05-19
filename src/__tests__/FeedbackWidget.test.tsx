@@ -2229,6 +2229,25 @@ describe('<FeedbackWidget />', () => {
       // No pin rendered — rect is zero, getElementFixedPos returns null
       expect(document.querySelector('[data-fw-pin]')).toBeNull()
     })
+
+    it('pin renders when width=0 but height is non-zero (L25 height-falsy branch)', async () => {
+      // Width=0 alone is not enough to skip; the guard requires BOTH dims = 0.
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+        width: 0, height: 100, top: 0, left: 0, right: 0, bottom: 100, x: 0, y: 0, toJSON: () => {},
+      })
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'l25b', projectId: 'proj', pageUrl,
+        x: 10, y: 10, selector: 'body',
+        body: 'l25 height branch', authorName: 'Ada',
+        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('l25 height branch')) throw new Error('not loaded')
+      })
+      expect(document.querySelector('[data-fw-pin]')).not.toBeNull()
+    })
   })
 
   describe('resize with dragged pill position (L142 branch)', () => {
@@ -2413,6 +2432,385 @@ describe('<FeedbackWidget />', () => {
       })
       // Second click: close menu
       await act(async () => { fireEvent.click(moreBtn) })
+      await waitFor(() => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
+      })
+    })
+  })
+
+  describe('residual diff-coverage gaps', () => {
+    function commentsResponse(arr: unknown[]) {
+      return () => new Response(JSON.stringify(arr), { status: 200 })
+    }
+    function seedComment(overrides: Record<string, unknown> = {}) {
+      const pageUrl = window.location.href.split('#')[0]
+      return {
+        id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body',
+        body: 'gap test', authorName: 'Ada', reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z', ...overrides,
+      }
+    }
+
+    it('preloads author name from localStorage on mount (L69-70)', async () => {
+      const store: Record<string, string> = { 'fw-crrt-author-name': 'Stored User' }
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => store[k] ?? null,
+        setItem: (k: string, v: string) => { store[k] = v },
+        removeItem: (k: string) => { delete store[k] },
+        clear: () => { for (const k of Object.keys(store)) delete store[k] },
+        key: () => null,
+        length: 0,
+      })
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      // Author is preloaded → first comment skips the name modal.
+      document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      document.body.appendChild(targetNode)
+
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('no widget')
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 50 }))
+      })
+
+      // Textarea appears directly — no name modal interstitial.
+      await waitFor(() => {
+        if (!document.querySelector<HTMLTextAreaElement>('textarea')) {
+          throw new Error('textarea not mounted')
+        }
+      })
+      expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
+    })
+
+    it('Escape while name modal is open closes it (L380 first arm)', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      document.body.appendChild(targetNode)
+
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('no widget')
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 50 }))
+      })
+
+      await waitFor(() => {
+        if (!document.querySelector('input[placeholder^="e.g."]')) throw new Error('name modal not open')
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await waitFor(() => {
+        expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
+      })
+    })
+
+    it('pill pointer drag pointerup ends the drag (L464-465)', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const pill = await waitFor(() => {
+        const el = document.querySelector<HTMLElement>('[data-fw] [data-fw-pill]')
+          ?? Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
+            .find((d) => d.textContent?.includes('Drop a carrot') || /cursor:\s*grab/.test(d.getAttribute('style') ?? ''))
+        if (!el) throw new Error('pill not mounted')
+        return el
+      })
+      await act(async () => {
+        fireEvent.pointerDown(pill, { clientX: 100, clientY: 100, pointerId: 1 })
+      })
+      await act(async () => {
+        window.dispatchEvent(new PointerEvent('pointermove', { clientX: 200, clientY: 200 }))
+      })
+      await act(async () => {
+        window.dispatchEvent(new PointerEvent('pointerup'))
+      })
+      // No crash + further pointermove should not re-trigger drag math.
+      await act(async () => {
+        window.dispatchEvent(new PointerEvent('pointermove', { clientX: 300, clientY: 300 }))
+      })
+      expect(document.querySelector('[data-fw]')).not.toBeNull()
+    })
+
+    it('saveEdit with only whitespace returns early without mutating (L493)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('gap test')) throw new Error('comment not rendered')
+      })
+      const bodyDiv = Array.from(
+        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+      ).find((el) =>
+        /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'gap test',
+      )
+      fireEvent.click(bodyDiv!)
+
+      const editArea = await waitFor(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+        if (!ta) throw new Error('edit textarea not mounted')
+        return ta
+      })
+      fireEvent.change(editArea, { target: { value: '   ' } })
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        .find((b) => b.textContent === 'Save')
+      fireEvent.click(save!)
+
+      // Early return: still in edit mode, textarea preserves whitespace draft.
+      const stillEditing = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+      expect(stillEditing).not.toBeNull()
+      expect(stillEditing!.value).toBe('   ')
+    })
+
+    it('saveEdit leaves non-matching comments unchanged when multiple exist (L495 false arm)', async () => {
+      mockFetch(undefined, commentsResponse([
+        seedComment({ id: 'a', body: 'keep me' }),
+        seedComment({ id: 'b', body: 'edit me' }),
+      ]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('edit me')) throw new Error('seed not rendered')
+      })
+      const targetDiv = Array.from(
+        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+      ).find((el) =>
+        /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'edit me',
+      )
+      fireEvent.click(targetDiv!)
+
+      const editArea = await waitFor(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+        if (!ta) throw new Error('edit textarea not mounted')
+        return ta
+      })
+      fireEvent.change(editArea, { target: { value: 'edited' } })
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        .find((b) => b.textContent === 'Save')
+      fireEvent.click(save!)
+
+      await waitFor(() => {
+        if (document.querySelector('[data-fw] textarea')) throw new Error('still in edit mode')
+      })
+      expect(document.body.textContent).toContain('edited')
+      expect(document.body.textContent).toContain('keep me')
+    })
+
+    it('Send button hover paints/reverts when comment has text and idle (L871 all branches)', async () => {
+      mockFetch(undefined, commentsResponse([]))
+      const { textarea, getSendButton } = await (async () => {
+        render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+        return enterCommentingMode()
+      })()
+      fireEvent.change(textarea, { target: { value: 'hover me' } })
+      const sendBtn = getSendButton()
+
+      // Active path (comment present, not sending) — hover deepens, leave reverts.
+      fireEvent.mouseEnter(sendBtn)
+      expect(sendBtn.style.background).toBe('#B85F1F')
+      fireEvent.mouseLeave(sendBtn)
+      expect(sendBtn.style.background).toBe('#E8853D')
+
+      // Disabled path (no text) — hover is a no-op.
+      fireEvent.change(textarea, { target: { value: '' } })
+      const disabledSend = getSendButton()
+      const bgBefore = disabledSend.style.background
+      fireEvent.mouseEnter(disabledSend)
+      expect(disabledSend.style.background).toBe(bgBefore)
+      fireEvent.mouseLeave(disabledSend)
+      expect(disabledSend.style.background).toBe(bgBefore)
+    })
+
+    it('pin mouseLeave clears hoveredPin (L927)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment({ body: 'hover & leave' })]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not mounted')
+        return el
+      })
+      fireEvent.mouseEnter(pin)
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('hover & leave')
+      })
+      fireEvent.mouseLeave(pin)
+      // hover tooltip should unmount on leave.
+      await waitFor(() => {
+        const tooltips = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
+          .filter((el) => el.textContent === 'hover & leave')
+        expect(tooltips.length).toBe(0)
+      })
+    })
+
+    it('hover tooltip renders empty initials when authorName is blank (L978 ?? "" branch)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment({ authorName: '   ' })]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not mounted')
+        return el
+      })
+      // L978 is inside the HOVER tooltip (`{isHovered && (...)}`), not the
+      // selected popover. Trigger mouseEnter to mount it.
+      await act(async () => { fireEvent.mouseEnter(pin) })
+      const avatar = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('div'))
+          .find((d) => {
+            const style = d.getAttribute('style') ?? ''
+            return /width:\s*28px/.test(style)
+              && /border-radius:\s*50%/.test(style)
+              && /gradient/.test(style)
+          })
+        if (!el) throw new Error('hover tooltip avatar not mounted')
+        return el
+      })
+      expect(avatar.textContent).toBe('')
+    })
+
+    it('editing a pin-popover comment with imageUrl uses the image-margin branch (L1045)', async () => {
+      mockFetch(undefined, commentsResponse([
+        seedComment({ body: 'with image', imageUrl: 'https://x.example/img.png' }),
+      ]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      // Select the pin to open the popover (which contains PinActionCluster).
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not mounted')
+        return el
+      })
+      await act(async () => { fireEvent.click(pin) })
+
+      // Open the More-options menu inside the popover.
+      const moreBtn = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>('[data-fw] button[aria-label="More options"]')
+        if (!el) throw new Error('More options button not mounted')
+        return el
+      })
+      await act(async () => { fireEvent.click(moreBtn) })
+
+      // Click the Edit item to enter pin-popover edit mode.
+      const editItem = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.trim() === 'Edit')
+        if (!el) throw new Error('Edit menu item not mounted')
+        return el
+      })
+      await act(async () => { fireEvent.click(editItem) })
+
+      const editArea = await waitFor(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+        if (!ta) throw new Error('edit textarea not mounted')
+        return ta
+      })
+      const container = editArea.parentElement as HTMLElement
+      expect(container.getAttribute('style') ?? '').toContain('margin-bottom: 10px')
+    })
+
+    it('filter button closes the popover when clicked twice (L1198 toggle false arm)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const filterBtn = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>('[data-fw] button[title="Filter"]')
+        if (!el) throw new Error('filter button not mounted')
+        return el
+      })
+      fireEvent.click(filterBtn)
+      // Open
+      await waitFor(() => {
+        const opts = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        if (!opts.some((b) => b.textContent?.includes('Open'))) throw new Error('filter not open')
+      })
+      // Close (toggle)
+      fireEvent.click(filterBtn)
+      await waitFor(() => {
+        const opts = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        expect(opts.some((b) => b.textContent?.includes('Open') && b.textContent !== 'Open comments'))
+          .toBe(false)
+      })
+    })
+
+    it('sidebar card click is suppressed while menu is open (L1298 isMenuOpen branch)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const card = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw] .fw-sidebar-card')
+        if (!el) throw new Error('card not mounted')
+        return el
+      })
+      const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
+      // Open menu first so isMenuOpen=true.
+      await act(async () => { fireEvent.click(moreBtn!) })
+      await waitFor(() => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+      })
+      // Click the card — the guard `!isMenuOpen` should short-circuit, no edit mode.
+      fireEvent.click(card)
+      expect(document.querySelector('[data-fw] textarea')).toBeNull()
+    })
+
+    it('More button hover paints/reverts when menu is closed (L1468-1469 true arm)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const moreBtn = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>('[data-fw] .fw-sidebar-card button[title="More"]')
+        if (!el) throw new Error('more button not mounted')
+        return el
+      })
+      fireEvent.mouseEnter(moreBtn)
+      expect(moreBtn.style.background).toBe('rgba(255, 255, 255, 0.06)')
+      fireEvent.mouseLeave(moreBtn)
+      expect(moreBtn.style.background).toBe('transparent')
+    })
+
+    it('More button hover is a no-op when menu is already open (L1468-1469 false arm)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const moreBtn = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>('[data-fw] .fw-sidebar-card button[title="More"]')
+        if (!el) throw new Error('more button not mounted')
+        return el
+      })
+      await act(async () => { fireEvent.click(moreBtn) })
+      await waitFor(() => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+      })
+      const bgBefore = moreBtn.style.background
+      fireEvent.mouseEnter(moreBtn)
+      expect(moreBtn.style.background).toBe(bgBefore)
+      fireEvent.mouseLeave(moreBtn)
+      expect(moreBtn.style.background).toBe(bgBefore)
+    })
+
+    it('menu backdrop click closes the menu (L1479)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const card = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw] .fw-sidebar-card')
+        if (!el) throw new Error('card not mounted')
+        return el
+      })
+      const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
+      await act(async () => { fireEvent.click(moreBtn!) })
+      await waitFor(() => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+      })
+      // Backdrop is the fixed inset:0 div with zIndex 99998.
+      const backdrop = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
+        .find((el) => /z-index:\s*99998/.test(el.getAttribute('style') ?? ''))
+      expect(backdrop).toBeDefined()
+      await act(async () => { fireEvent.click(backdrop!) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
