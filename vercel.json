@@ -1,7 +1,7 @@
 {
   "buildCommand": "bun run vercel-build",
-  "devCommand": "vite --config demo/vite.config.ts --port $PORT",
-  "outputDirectory": "demo/dist",
+  "devCommand": "vite --config apps/landing/vite.config.ts --port $PORT",
+  "outputDirectory": "apps/landing/dist",
   "functions": {
     "api/**/*.ts": {
       "memory": 128,

@@ -18,6 +18,9 @@ It now has three product surfaces:
   - accept or reject feedback
   - create agent shares
   - copy prompts for Codex or Claude Code
+- **Public landing/demo** in `apps/landing/`
+  - CRRT marketing page
+  - live widget demo mounted against the same published widget source
 - **Agent bridge API** in `api/v1/`
   - expose page-scoped or selection-scoped feedback to coding agents
   - track presence, events, and implementation updates
@@ -30,8 +33,8 @@ The old `/api/comments` route still exists as a compatibility path and for the s
   - published widget package
 - `apps/dashboard/`
   - private reviewer UI
-- `demo/`
-  - public demo site for the widget
+- `apps/landing/`
+  - public CRRT landing/demo site for the widget
 - `api/`
   - Vercel serverless API routes
 - `db/`

@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.github/dependabot.yml` groups weekly dev / prod / actions updates so advisory churn does not drown signal.
 - `scripts/bootstrap-branch-protection.sh` + `scripts/branch-protection.json` codify the required-checks rule so the protection config is reproducible from disk rather than tribal `gh api` lore.
 - `consumer-smoke` job in the publish pipeline: `npm pack` the tarball, install it into a throwaway React 18 and React 19 app, and typecheck the import. Catches `exports` / `peerDependencies` / types mistakes that in-repo tests cannot.
-- `npm run typecheck` script that type-checks `src/`, `api/`, and `demo/` together.
+- `npm run typecheck` script that type-checks `src/`, `api/`, and app surfaces together.
 - `npm run test:coverage` script + v8 coverage reporter.
 - GitHub Actions CI workflow:
   - `check (react 18)` / `check (react 19)` — matrix job running typecheck, tests-with-coverage, build, and a hard 50 KB ceiling on `dist/feedback-widget.es.js`.

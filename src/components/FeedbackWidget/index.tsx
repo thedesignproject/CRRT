@@ -102,13 +102,18 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     setShowNameModal(true)
   }
 
+  const pendingSendAfterName = useRef(false)
+
   function handleNameSubmit() {
     if (!nameInput.trim()) return
     const wasCommenting = mode === 'commenting'
     saveAuthorName(nameInput)
     setShowNameModal(false)
     setNameInput('')
-    if (!wasCommenting && target) {
+    if (pendingSendAfterName.current) {
+      pendingSendAfterName.current = false
+      handleSend()
+    } else if (!wasCommenting && target) {
       setMode('commenting')
     }
   }
@@ -274,6 +279,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       e.stopPropagation()
 
       setSelectedPin(null)
+      setSidebarOpen(false)
       clearImage()
       const pct = toPagePercent(e.pageX, e.pageY)
       setTarget({
@@ -307,6 +313,13 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   // --- Send comment ---
   const handleSend = useCallback(async () => {
     if (!comment.trim() || !target || sendingRef.current) return
+
+    if (!authorNameRef.current) {
+      pendingSendAfterName.current = true
+      setNameInput('')
+      setShowNameModal(true)
+      return
+    }
 
     sendingRef.current = true
     setSending(true)
@@ -364,6 +377,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       clearImage()
       setHovered(null)
       setMode('selecting')
+      setSidebarOpen(true)
     } catch (err) {
       console.warn('[FeedbackWidget] API error:', err)
     } finally {
@@ -438,7 +452,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   }
 
   function enterFeedbackMode() {
-    // Keep sidebar open — user can comment while viewing the list
+    setSidebarOpen(false)
     setMode('selecting')
   }
 
@@ -473,6 +487,14 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       window.removeEventListener('pointerup', onUp)
     }
   }, [])
+
+  // External trigger — landing page "Drop a carrot" buttons dispatch this event.
+  useEffect(() => {
+    const handler = () => { if (mode === 'idle') enterFeedbackMode() }
+    window.addEventListener('crrt:activate', handler)
+    return () => window.removeEventListener('crrt:activate', handler)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode])
 
   function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
@@ -992,6 +1014,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               return (
                 <>
                   <div
+                    data-fw-pin-backdrop
                     onClick={() => setSelectedPin(null)}
                     style={{ position: 'fixed', inset: 0, zIndex: 2147483645 }}
                   />
@@ -1590,9 +1613,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
           userSelect: 'none',
           touchAction: 'none',
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          opacity: sidebarOpen ? 0 : 1,
-          transform: sidebarOpen ? 'translateY(8px)' : 'translateY(0)',
-          pointerEvents: sidebarOpen ? 'none' : 'auto',
+          opacity: (sidebarOpen || mode !== 'idle') ? 0 : 1,
+          transform: (sidebarOpen || mode !== 'idle') ? 'translateY(8px)' : 'translateY(0)',
+          pointerEvents: (sidebarOpen || mode !== 'idle') ? 'none' : 'auto',
           transition: 'opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
@@ -1602,12 +1625,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
             type="button"
             onClick={(e) => {
               if (didDrag.current) { e.preventDefault(); return }
-              if (mode !== 'idle') {
-                exitFeedbackMode()
-              } else {
-                enterFeedbackMode()
-                setSidebarOpen(true)
-              }
+              enterFeedbackMode()
             }}
             style={{
               position: 'relative',
@@ -1615,12 +1633,12 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               alignItems: 'center',
               gap: 10,
               height: 44,
-              padding: mode !== 'idle' ? '0 18px' : '0 18px 0 6px',
+              padding: '0 18px 0 6px',
               borderRadius: 9999,
-              background: mode !== 'idle' ? '#E8853D' : 'rgba(10, 10, 10, 0.72)',
+              background: 'rgba(10, 10, 10, 0.72)',
               backdropFilter: 'blur(12px)',
               WebkitBackdropFilter: 'blur(12px)',
-              border: `1px solid ${mode !== 'idle' ? '#B85F1F' : 'rgba(255, 255, 255, 0.06)'}`,
+              border: '1px solid rgba(255, 255, 255, 0.06)',
               color: '#FFFFFF',
               fontSize: 13,
               fontWeight: 500,
@@ -1632,12 +1650,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1), border-color 220ms cubic-bezier(0.16, 1, 0.3, 1)',
             }}
           >
-            {mode !== 'idle' ? (
-              <X style={{ width: 16, height: 16, color: '#FFFFFF' }} />
-            ) : (
-              <CarrotPixelIcon size={22} />
-            )}
-            <span>{mode !== 'idle' ? 'Cancel' : 'Drop a carrot'}</span>
+            <CarrotPixelIcon size={22} />
+            <span>Drop a carrot</span>
             {mode === 'idle' && commentCount > 0 && (
               <span
                 style={{

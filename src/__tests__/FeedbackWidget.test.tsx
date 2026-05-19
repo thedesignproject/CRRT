@@ -1582,7 +1582,7 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('pill button behavior (lines 1595-1601)', () => {
-    it('clicking the pill in idle mode enters selecting mode and opens sidebar', async () => {
+    it('clicking the pill in idle mode enters selecting mode without opening the sidebar', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -1599,14 +1599,14 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(pill) })
 
       await waitFor(() => {
-        // Sidebar should now be open — its transform is translateX(0).
+        expect(document.body.textContent).toContain('Click any element to leave feedback')
         const sidebar = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
           .find((el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''))
-        expect(sidebar?.getAttribute('style')).toMatch(/translateX\(0/)
+        expect(sidebar?.getAttribute('style')).toMatch(/translateX\(100%\)/)
       })
     })
 
-    it('clicking the pill while in selecting mode exits feedback mode (line 1597-1598)', async () => {
+    it('hides the launcher pill while selecting mode is active', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -1619,19 +1619,10 @@ describe('<FeedbackWidget />', () => {
         expect(document.body.textContent).toContain('Click any element to leave feedback')
       })
 
-      // The pill should now show "Cancel" (mode !== 'idle').
-      const cancelPill = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Cancel') && b.type === 'button')
-        if (!btn) throw new Error('cancel pill not found')
-        return btn
-      })
-
-      await act(async () => { fireEvent.click(cancelPill) })
-
-      await waitFor(() => {
-        expect(document.body.textContent).not.toContain('Click any element to leave feedback')
-      })
+      const launcher = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
+        .find((el) => /pointer-events:\s*none/.test(el.getAttribute('style') ?? '')
+          && /opacity:\s*0/.test(el.getAttribute('style') ?? ''))
+      expect(launcher?.getAttribute('style')).toMatch(/translateY\(8px\)/)
     })
   })
 
@@ -2047,6 +2038,385 @@ describe('<FeedbackWidget />', () => {
       expect(avatar.style.opacity).toBe('0.8')
       fireEvent.mouseLeave(avatar)
       expect(avatar.style.opacity).toBe('1')
+    })
+  })
+
+  describe('crrt:activate event listener', () => {
+    it('dispatching crrt:activate on window enters selecting mode when idle', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
+      await act(async () => { window.dispatchEvent(new CustomEvent('crrt:activate')) })
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Click any element to leave feedback')
+      })
+    })
+
+    it('crrt:activate while not idle is ignored', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => expect(document.body.textContent).toContain('Click any element'))
+      await act(async () => { window.dispatchEvent(new CustomEvent('crrt:activate')) })
+      // Still in selecting mode (not re-entered), no crash
+      expect(document.body.textContent).toContain('Click any element to leave feedback')
+    })
+  })
+
+  describe('comment textarea Enter key (lines 718-719)', () => {
+    it('Enter without Shift in comment textarea triggers send', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'enter-key send' } })
+      await act(async () => {
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+      })
+      await waitFor(() => {
+        expect(calls.some((c) => c.init?.method === 'POST')).toBe(true)
+      })
+    })
+
+    it('Enter without Shift with empty comment does not send', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea } = await enterCommentingMode()
+      // textarea is empty — Enter should hit the branch but not send
+      await act(async () => {
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+      })
+      await new Promise<void>((r) => setTimeout(r, 50))
+      expect(calls.some((c) => c.init?.method === 'POST')).toBe(false)
+    })
+
+    it('Shift+Enter in comment textarea does not trigger send', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'shift enter' } })
+      await act(async () => {
+        fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+      })
+      await new Promise<void>((r) => setTimeout(r, 50))
+      expect(calls.some((c) => c.init?.method === 'POST')).toBe(false)
+    })
+  })
+
+  describe('pin click and backdrop deselect (lines 924-925, 1003)', () => {
+    function commentsResponse(arr: unknown[]) {
+      return () => new Response(JSON.stringify(arr), { status: 200 })
+    }
+    function seedComment(overrides: Record<string, unknown> = {}) {
+      const pageUrl = window.location.href.split('#')[0]
+      return { id: 'pc1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'pin click test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+    }
+
+    it('clicking a pin marker opens the detail popover (lines 924-925)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered')
+        return el
+      })
+      await act(async () => { fireEvent.click(pin) })
+      await waitFor(() => {
+        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
+          .find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        if (!meta) throw new Error('pin detail popover not rendered')
+      })
+    })
+
+    it('clicking backdrop closes the pin detail popover (line 1003)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered')
+        return el
+      })
+      await act(async () => { fireEvent.click(pin) })
+      // Popover is open — find the backdrop (fixed inset:0 overlay behind popover)
+      const backdrop = await waitFor(() => {
+        const el = document.querySelector<HTMLElement>('[data-fw-pin-backdrop]')
+        if (!el) throw new Error('backdrop not found')
+        return el
+      })
+      await act(async () => { fireEvent.click(backdrop) })
+      await waitFor(() => {
+        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
+          .find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        expect(meta).toBeUndefined()
+      })
+    })
+
+    it('clicking a selected pin again deselects it (L924 isSelected branch)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered')
+        return el
+      })
+      // First click: select
+      await act(async () => { fireEvent.click(pin) })
+      await waitFor(() => {
+        if (!Array.from(document.querySelectorAll('[data-fw] div')).find((el) => /#1\s*·/.test(el.textContent ?? '')))
+          throw new Error('not selected')
+      })
+      // Second click: deselect
+      await act(async () => { fireEvent.click(pin) })
+      await waitFor(() => {
+        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
+          .find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        expect(meta).toBeUndefined()
+      })
+    })
+  })
+
+  describe('getElementFixedPos null-element branch (L23)', () => {
+    it('pin is hidden when querySelector returns null after liveCommentIds is populated', async () => {
+      const el = document.createElement('div')
+      el.id = 'l23-test-el'
+      document.body.appendChild(el)
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'l23id', projectId: 'proj', pageUrl,
+        x: 10, y: 10, selector: '#l23-test-el',
+        body: 'l23 test', authorName: 'Ada',
+        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('l23 test')) throw new Error('not loaded')
+      })
+      // Spy after liveCommentIds is populated: querySelector returns null for our selector
+      const origQS = document.querySelector.bind(document)
+      const spy = vi.spyOn(document, 'querySelector').mockImplementation((sel: string) => {
+        if (sel === '#l23-test-el') return null
+        return origQS(sel)
+      })
+      // Scroll triggers bump → RAF → re-render (no DOM mutation → MutationObserver won't re-run)
+      await act(async () => {
+        window.dispatchEvent(new Event('scroll'))
+        await new Promise<void>((r) => setTimeout(r, 50))
+      })
+      // Widget still alive, pin not rendered (getElementFixedPos returned null)
+      expect(document.body.textContent).toContain('l23 test')
+      spy.mockRestore()
+      el.remove()
+    })
+  })
+
+  describe('getElementFixedPos zero-rect branch (L25)', () => {
+    it('pin is hidden when getBoundingClientRect returns zero dimensions', async () => {
+      // Override the beforeEach spy to return zero dimensions
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+        width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => {},
+      })
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'l25id', projectId: 'proj', pageUrl,
+        x: 10, y: 10, selector: 'body',
+        body: 'l25 test', authorName: 'Ada',
+        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('l25 test')) throw new Error('not loaded')
+      })
+      // No pin rendered — rect is zero, getElementFixedPos returns null
+      expect(document.querySelector('[data-fw-pin]')).toBeNull()
+    })
+  })
+
+  describe('resize with dragged pill position (L142 branch)', () => {
+    it('resize event clamps draggedPos when it is non-null', async () => {
+      mockFetch()
+      const { container } = render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
+      // Simulate a drag to set draggedPos
+      const pillRef = container.querySelector<HTMLElement>('[data-fw] button')
+      if (pillRef) {
+        fireEvent.pointerDown(pillRef, { clientX: 100, clientY: 100 })
+        fireEvent.pointerMove(window, { clientX: 200, clientY: 300 })
+      }
+      // Now fire resize — should hit the `prev ? {...} : null` true branch
+      await act(async () => { window.dispatchEvent(new Event('resize')) })
+      expect(document.querySelectorAll('[data-fw]').length).toBeGreaterThan(0)
+    })
+  })
+
+  describe('sidebar tab hover on inactive tab (L1166-1167)', () => {
+    it('mouseEnter on inactive tab changes color; mouseLeave restores it', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
+      // Open sidebar via keyboard shortcut 'm'
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      // Find the 'Ready for agent' tab (inactive by default)
+      const inactiveTab = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Ready for agent'))
+        if (!btn) throw new Error('inactive tab not found')
+        return btn
+      })
+      fireEvent.mouseEnter(inactiveTab)
+      expect(inactiveTab.style.color).toBe('#FFFFFF')
+      fireEvent.mouseLeave(inactiveTab)
+      expect(inactiveTab.style.color).toBe('#A8A29A')
+    })
+
+    it('mouseEnter on active tab does nothing', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      const activeTab = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Comments'))
+        if (!btn) throw new Error('active tab not found')
+        return btn
+      })
+      const colorBefore = activeTab.style.color
+      fireEvent.mouseEnter(activeTab)
+      expect(activeTab.style.color).toBe(colorBefore)
+    })
+  })
+
+  describe('getInitials null fallback in pin popover (L1293)', () => {
+    it('uses body[0] as initial when authorName is null', async () => {
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'init1', projectId: 'proj', pageUrl,
+        x: 20, y: 30, selector: 'body',
+        body: 'xray comment', authorName: null,
+        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered')
+        return el
+      })
+      await act(async () => { fireEvent.click(pin) })
+      // Popover should be open — body[0].toUpperCase() = 'X'
+      await waitFor(() => {
+        if (!Array.from(document.querySelectorAll('[data-fw] div')).find((el) => /#1\s*·/.test(el.textContent ?? '')))
+          throw new Error('popover not open')
+      })
+      expect(document.body.textContent).toContain('xray comment')
+    })
+
+    it('uses U as initial when authorName is null and body is empty', async () => {
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'init2', projectId: 'proj', pageUrl,
+        x: 20, y: 30, selector: 'body',
+        body: '', authorName: null,
+        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered')
+        return el
+      })
+      await act(async () => { fireEvent.click(pin) })
+      await waitFor(() => {
+        if (!Array.from(document.querySelectorAll('[data-fw] div')).find((el) => /#1\s*·/.test(el.textContent ?? '')))
+          throw new Error('popover not open')
+      })
+    })
+  })
+
+  describe('edit textarea keyboard shortcuts (L1353)', () => {
+    function commentsResponse(arr: unknown[]) {
+      return () => new Response(JSON.stringify(arr), { status: 200 })
+    }
+    function seedComment(overrides: Record<string, unknown> = {}) {
+      const pageUrl = window.location.href.split('#')[0]
+      return { id: 'edit1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'edit kbd test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+    }
+
+    async function openEditMode() {
+      await waitFor(() => {
+        if (!document.body.textContent?.includes('edit kbd test')) throw new Error('not loaded')
+      })
+      const bodyDiv = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
+        .find((el) => /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'edit kbd test')
+      if (!bodyDiv) throw new Error('body div not found')
+      fireEvent.click(bodyDiv)
+      return waitFor(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
+        if (!ta) throw new Error('edit textarea not mounted')
+        return ta
+      })
+    }
+
+    it('Cmd+Enter in edit textarea saves the edit (L1353 metaKey branch)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const editArea = await openEditMode()
+      fireEvent.change(editArea, { target: { value: 'cmd enter saved' } })
+      await act(async () => { fireEvent.keyDown(editArea, { key: 'Enter', metaKey: true }) })
+      await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
+      expect(document.body.textContent).toContain('cmd enter saved')
+    })
+
+    it('Ctrl+Enter in edit textarea saves the edit (L1353 ctrlKey branch)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const editArea = await openEditMode()
+      fireEvent.change(editArea, { target: { value: 'ctrl enter saved' } })
+      await act(async () => { fireEvent.keyDown(editArea, { key: 'Enter', ctrlKey: true }) })
+      await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
+      expect(document.body.textContent).toContain('ctrl enter saved')
+    })
+
+    it('Escape in edit textarea cancels without saving', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const editArea = await openEditMode()
+      fireEvent.change(editArea, { target: { value: 'discarded' } })
+      await act(async () => { fireEvent.keyDown(editArea, { key: 'Escape' }) })
+      await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
+      expect(document.body.textContent).not.toContain('discarded')
+    })
+  })
+
+  describe('menu button toggles closed when already open (L1461)', () => {
+    function commentsResponse(arr: unknown[]) {
+      return () => new Response(JSON.stringify(arr), { status: 200 })
+    }
+    function seedComment(overrides: Record<string, unknown> = {}) {
+      const pageUrl = window.location.href.split('#')[0]
+      return { id: 'menu2', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'menu toggle test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+    }
+
+    it('clicking More again when menu is open closes it (isMenuOpen → null)', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const card = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw] .fw-sidebar-card')
+        if (!el) throw new Error('card not rendered')
+        return el
+      })
+      const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
+      if (!moreBtn) throw new Error('More button not found')
+      // First click: open menu
+      await act(async () => { fireEvent.click(moreBtn) })
+      await waitFor(() => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+      })
+      // Second click: close menu
+      await act(async () => { fireEvent.click(moreBtn) })
+      await waitFor(() => {
+        const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
+      })
     })
   })
 })
