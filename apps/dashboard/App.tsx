@@ -3,6 +3,7 @@ import { updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiU
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
+import { useAuth } from './hooks/useAuth'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
@@ -11,11 +12,13 @@ import { CommentDetail } from './components/CommentDetail'
 import { AgentSidebar } from './components/AgentSidebar'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
+import { LoginPage } from './components/LoginPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
 const REVIEWER_TOKEN = import.meta.env.VITE_REVIEWER_TOKEN || ''
 
 export function App() {
+  const { session, loading: authLoading, signIn, signOut } = useAuth()
   const { projects, loading: projectsLoading, error: projectsError, createProject } = useProjects(API_BASE, REVIEWER_TOKEN)
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -43,8 +46,8 @@ export function App() {
 
   useEffect(() => {
     const root = document.documentElement
-    if (theme === 'light') root.classList.add('light')
-    else root.classList.remove('light')
+    if (theme === 'light') root.setAttribute('data-theme', 'light')
+    else root.removeAttribute('data-theme')
     try { localStorage.setItem('dashboard-theme', theme) } catch {}
   }, [theme])
 
@@ -273,6 +276,9 @@ export function App() {
     }
   }, [createProject])
 
+  if (authLoading) return null
+  if (!session) return <LoginPage onSignIn={signIn} />
+
   return (
     <div className="flex flex-col h-screen overflow-hidden">
       <Header
@@ -293,6 +299,8 @@ export function App() {
         onOpenCmd={() => setCmdOpen(true)}
         theme={theme}
         toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
+        userEmail={session?.user?.email ?? undefined}
+        onSignOut={session?.user ? signOut : undefined}
       />
 
       <div className="flex flex-1 overflow-hidden">

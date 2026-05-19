@@ -1,7 +1,7 @@
 import { cn } from '../lib/utils'
 import type { Project } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { LogoIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
+import { MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
 
@@ -23,6 +23,8 @@ interface HeaderProps {
   onOpenCmd: () => void
   theme: 'light' | 'dark'
   toggleTheme: () => void
+  userEmail?: string | null
+  onSignOut?: () => void
 }
 
 export function Header({
@@ -43,14 +45,21 @@ export function Header({
   onOpenCmd,
   theme,
   toggleTheme,
+  userEmail,
+  onSignOut,
 }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 px-5 h-[52px] shrink-0 border-b border-border bg-card">
       <div className="flex items-center gap-2 mr-2">
-        <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-          <LogoIcon />
-        </div>
-        <span className="text-sm font-bold tracking-tight text-foreground font-serif italic">feedback</span>
+        <img
+          src="/crrt-isologo.png"
+          alt="CRRT"
+          className="w-6 h-6"
+          style={{ imageRendering: 'pixelated' }}
+        />
+        <span style={{ fontFamily: 'var(--crrt-font-crt)', fontSize: 16, letterSpacing: '0.06em', color: 'var(--foreground)' }}>
+          CRRT.
+        </span>
       </div>
 
       <div className="w-px h-5 bg-border" />
@@ -134,9 +143,20 @@ export function Header({
         >
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
-        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-          TO
-        </div>
+        {userEmail && (
+          <span className="text-xs text-muted-foreground hidden md:block truncate max-w-[120px]" title={userEmail}>
+            {userEmail}
+          </span>
+        )}
+        {onSignOut && (
+          <button
+            onClick={onSignOut}
+            className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded hover:bg-accent transition-colors"
+            title="Sign out"
+          >
+            out
+          </button>
+        )}
       </div>
     </header>
   )

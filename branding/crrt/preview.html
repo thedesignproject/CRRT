@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRRT.AI — Component Preview</title>
+  <link rel="stylesheet" href="./tokens.css" />
+  <!-- TEMP: Figma capture — remove after capture completes -->
+  <script src="https://mcp.figma.com/mcp/html-to-design/capture.js" async></script>
+  <style>
+    /* ============ Page chrome ============ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--background);
+      color: var(--foreground);
+      font-family: var(--crrt-font-sans);
+      font-size: var(--crrt-text-body);
+      line-height: var(--crrt-leading-body);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      min-height: 100vh;
+    }
+    a { color: inherit; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: var(--crrt-space-10) var(--crrt-space-8) var(--crrt-space-11); }
+
+    /* ============ Nav ============ */
+    .topnav {
+      position: sticky; top: 0; z-index: 80;
+      background: color-mix(in oklab, var(--background) 92%, transparent);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 0;
+    }
+    .topnav-inner { display: flex; align-items: center; justify-content: space-between; gap: 32px; max-width: 1180px; margin: 0 auto; padding: 0 var(--crrt-space-8); }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 16px; letter-spacing: 0.02em; }
+    .brand .ai { color: var(--muted-foreground); }
+    .brand img { width: 32px; height: 32px; image-rendering: pixelated; border-radius: 50%; }
+    .theme-toggle {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-family: var(--crrt-font-crt);
+      font-size: 16px;
+      letter-spacing: var(--crrt-tracking-crt);
+      color: var(--muted-foreground);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 6px 14px;
+      border-radius: var(--crrt-radius-pill);
+    }
+    .theme-toggle:hover { color: var(--foreground); }
+
+    /* ============ Headings ============ */
+    .eyebrow {
+      font-family: var(--crrt-font-crt);
+      font-size: 22px;
+      letter-spacing: 0.06em;
+      color: var(--crrt-carrot-deep);
+      margin-bottom: 24px;
+    }
+    .eyebrow::before { content: '> '; }
+    h1 {
+      font-weight: 800;
+      font-size: var(--crrt-text-display);
+      line-height: var(--crrt-leading-display);
+      letter-spacing: var(--crrt-tracking-display);
+      max-width: 18ch;
+      margin-bottom: 28px;
+    }
+    h1 em { font-style: normal; color: var(--primary); }
+    .lede { font-size: 18px; line-height: var(--crrt-leading-relaxed); color: var(--muted-foreground); max-width: 64ch; }
+    h2 {
+      font-weight: 700;
+      font-size: var(--crrt-text-h2);
+      line-height: var(--crrt-leading-h2);
+      letter-spacing: var(--crrt-tracking-h2);
+      margin-bottom: 12px;
+    }
+    h2 em { font-style: normal; color: var(--primary); }
+    section { padding: var(--crrt-space-11) 0; border-bottom: 1px solid var(--border); }
+    .section-num { font-family: var(--crrt-font-crt); font-size: 18px; color: var(--muted-foreground); letter-spacing: 0.06em; }
+    .section-tag { display: flex; align-items: baseline; gap: 16px; margin-bottom: 12px; }
+    .section-desc { font-size: 15px; color: var(--muted-foreground); max-width: 64ch; margin-bottom: 40px; }
+
+    /* ============ Demo grid ============ */
+    .demo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--crrt-space-6);
+    }
+    .demo-card {
+      background: var(--card);
+      color: var(--card-foreground);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-2xl);
+      padding: var(--crrt-space-8);
+      display: flex;
+      flex-direction: column;
+      gap: var(--crrt-space-6);
+      min-height: 260px;
+    }
+    .demo-card-head { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+    .demo-card-name { font-weight: 700; font-size: 18px; }
+    .demo-card-meta {
+      font-family: var(--crrt-font-crt);
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+    }
+    .demo-card-stage {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: var(--crrt-space-5);
+      flex-wrap: wrap;
+      padding: var(--crrt-space-7);
+      border-radius: var(--crrt-radius-xl);
+      background: var(--background);
+      border: 1px dashed var(--border);
+    }
+    .demo-card-stage.invert[data-theme="light"] { background: var(--crrt-bg); }
+    .demo-card-foot { font-size: 13px; color: var(--muted-foreground); }
+
+    /* Light-theme inversion blocks (independent of page theme) */
+    [data-theme="light"] {
+      color: var(--foreground);
+      background: var(--background);
+    }
+
+    /* ============================================================
+     * Naming — carrot → CRRT → CRT
+     * ========================================================== */
+    .naming-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--crrt-space-5);
+      margin-bottom: var(--crrt-space-8);
+    }
+    .naming-step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-xl);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .naming-step-num {
+      font-family: var(--crrt-font-crt);
+      font-size: 22px;
+      color: var(--muted-foreground);
+      letter-spacing: 0.06em;
+    }
+    .naming-step-title {
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: -0.01em;
+    }
+    .naming-glyph {
+      font-weight: 800;
+      font-size: 40px;
+      letter-spacing: -0.025em;
+      line-height: 1.1;
+      color: var(--foreground);
+      margin: 12px 0;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .naming-glyph .strike { position: relative; color: var(--muted-foreground); opacity: 0.55; }
+    .naming-glyph .strike::after {
+      content: '';
+      position: absolute;
+      left: -2px; right: -2px;
+      top: 50%;
+      height: 3px;
+      background: var(--crrt-carrot);
+      transform: translateY(-50%) rotate(-8deg);
+      pointer-events: none;
+    }
+    .naming-glyph .arrow {
+      font-family: var(--crrt-font-crt);
+      font-size: 28px;
+      color: var(--muted-foreground);
+      font-weight: normal;
+      letter-spacing: 0;
+    }
+    .naming-glyph .equiv {
+      font-size: 34px;
+      color: var(--muted-foreground);
+      font-weight: 400;
+      line-height: 1;
+    }
+    .naming-note {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      line-height: 1.55;
+    }
+    .naming-callout {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      padding: 28px 32px;
+      background: var(--crrt-bg-deep);
+      color: var(--crrt-white);
+      border-radius: var(--crrt-radius-xl);
+      max-width: 720px;
+    }
+    .naming-callout img {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      image-rendering: pixelated;
+      flex-shrink: 0;
+    }
+    .naming-callout-text {
+      font-family: var(--crrt-font-crt);
+      font-size: 22px;
+      line-height: 1.4;
+      letter-spacing: 0.02em;
+    }
+    .naming-callout-text strong { color: var(--crrt-carrot); font-weight: normal; }
+    @media (max-width: 880px) {
+      .naming-grid { grid-template-columns: 1fr; }
+      .naming-callout { flex-direction: column; align-items: flex-start; }
+    }
+
+    /* ============================================================
+     * Color palette
+     * ========================================================== */
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--crrt-space-5);
+    }
+    .swatch {
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-xl);
+      overflow: hidden;
+      background: var(--card);
+    }
+    .swatch-color {
+      height: 128px;
+      display: flex;
+      align-items: flex-end;
+      padding: 14px;
+    }
+    .swatch-color span {
+      font-family: var(--crrt-font-mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 3px 7px;
+      border-radius: var(--crrt-radius-sm);
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--crrt-ink);
+    }
+    .swatch-color.dark span {
+      background: rgba(10, 10, 10, 0.78);
+      color: var(--crrt-white);
+    }
+    .swatch-meta { padding: 16px 18px; border-top: 1px solid var(--border); }
+    .swatch-name { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .swatch-hex { font-family: var(--crrt-font-mono); font-size: 11px; color: var(--muted-foreground); letter-spacing: 0.04em; }
+    .swatch-usage { font-size: 12px; color: var(--muted-foreground); margin-top: 8px; line-height: 1.5; }
+    @media (max-width: 880px) {
+      .palette { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    /* ============================================================
+     * Typography blocks
+     * ========================================================== */
+    .type-block {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-xl);
+      padding: 32px;
+      margin-bottom: 16px;
+    }
+    .type-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .type-meta-name { font-weight: 700; font-size: 20px; }
+    .type-meta-spec { font-family: var(--crrt-font-crt); font-size: 16px; color: var(--muted-foreground); letter-spacing: 0.04em; }
+    .type-spec-row {
+      display: grid;
+      grid-template-columns: 130px 1fr;
+      gap: 24px;
+      align-items: baseline;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .type-spec-row:last-child { border-bottom: none; }
+    .type-spec-label {
+      font-family: var(--crrt-font-crt);
+      font-size: 16px;
+      color: var(--muted-foreground);
+      letter-spacing: 0.04em;
+      padding-top: 4px;
+    }
+    .type-sample-display { font-family: var(--crrt-font-sans); font-size: 64px; line-height: 0.95; letter-spacing: -0.035em; font-weight: 800; }
+    .type-sample-display .ai { color: var(--muted-foreground); }
+    .type-sample-h2 { font-family: var(--crrt-font-sans); font-size: 36px; line-height: 1.05; letter-spacing: -0.025em; font-weight: 700; }
+    .type-sample-body { font-family: var(--crrt-font-sans); font-size: 18px; line-height: 1.55; }
+    .type-sample-crt-lg { font-family: var(--crrt-font-crt); font-size: 28px; line-height: 1.2; color: var(--crrt-carrot-deep); }
+    .type-sample-crt-md { font-family: var(--crrt-font-crt); font-size: 22px; color: var(--foreground); }
+    .type-sample-crt-sm { font-family: var(--crrt-font-crt); font-size: 18px; color: var(--muted-foreground); letter-spacing: 0.05em; }
+    .type-sample-mono { font-family: var(--crrt-font-mono); font-size: 14px; font-weight: 500; }
+    .type-sample-mono-sm { font-family: var(--crrt-font-mono); font-size: 13px; color: var(--muted-foreground); }
+
+    /* ============================================================
+     * Operational wordmark — CRRT.>_
+     * ========================================================== */
+    .ops-wordmark {
+      display: inline-flex;
+      align-items: baseline;
+      font-family: var(--crrt-font-sans);
+      font-weight: 800;
+      letter-spacing: var(--crrt-tracking-display);
+      color: var(--foreground);
+      line-height: 1;
+    }
+    .ops-wordmark .name { font-family: var(--crrt-font-sans); }
+    .ops-wordmark .dot { font-family: var(--crrt-font-sans); }
+    .ops-wordmark .gt {
+      font-family: var(--crrt-font-mono);
+      font-weight: 500;
+      padding: 0 0.05em;
+      letter-spacing: 0;
+    }
+    .ops-wordmark .cursor {
+      font-family: var(--crrt-font-mono);
+      font-weight: 500;
+      letter-spacing: 0;
+      animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
+    }
+    .ops-wordmark.allmono .name,
+    .ops-wordmark.allmono .dot {
+      font-family: var(--crrt-font-mono);
+      font-weight: 500;
+    }
+    .ops-wordmark.carrot .gt { color: var(--crrt-carrot); }
+    @media (prefers-reduced-motion: reduce) {
+      .ops-wordmark .cursor { animation: none; opacity: 1; }
+    }
+
+    .ops-hero {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-3xl);
+      padding: 96px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--crrt-space-7);
+      text-align: center;
+      margin-bottom: var(--crrt-space-8);
+    }
+    .ops-hero .ops-wordmark { font-size: 88px; }
+    .ops-hero .ops-caption {
+      font-family: var(--crrt-font-crt);
+      font-size: 18px;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+    }
+
+    .ops-flow-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: var(--crrt-space-5);
+      margin-bottom: var(--crrt-space-8);
+    }
+    .ops-flow-step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-xl);
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ops-flow-num {
+      font-family: var(--crrt-font-crt);
+      font-size: 22px;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+    }
+    .ops-flow-title { font-weight: 700; font-size: 16px; letter-spacing: -0.01em; }
+    .ops-flow-glyph {
+      font-family: var(--crrt-font-mono);
+      font-weight: 500;
+      font-size: 28px;
+      letter-spacing: -0.01em;
+      color: var(--foreground);
+      margin: 8px 0;
+      line-height: 1.1;
+    }
+    .ops-flow-glyph .flag { color: var(--crrt-carrot); }
+    .ops-flow-note { font-size: 13px; color: var(--muted-foreground); line-height: 1.55; }
+
+    .ops-legend-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--crrt-space-5);
+      margin-bottom: var(--crrt-space-8);
+    }
+    .ops-legend {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-xl);
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .ops-legend-glyph {
+      font-family: var(--crrt-font-mono);
+      font-weight: 500;
+      font-size: 56px;
+      line-height: 1;
+      color: var(--foreground);
+    }
+    .ops-legend-glyph.blink {
+      animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
+    }
+    .ops-legend-name {
+      font-family: var(--crrt-font-sans);
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: -0.01em;
+    }
+    .ops-legend-note { font-size: 12px; color: var(--muted-foreground); line-height: 1.5; }
+
+    .ops-sizes {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-xl);
+      padding: 40px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .ops-size-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 24px;
+      align-items: baseline;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+    .ops-size-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .ops-size-label {
+      font-family: var(--crrt-font-crt);
+      font-size: 16px;
+      letter-spacing: 0.04em;
+      color: var(--muted-foreground);
+    }
+    .ops-size-row .ops-wordmark.s88 { font-size: 72px; }
+    .ops-size-row .ops-wordmark.s48 { font-size: 48px; }
+    .ops-size-row .ops-wordmark.s32 { font-size: 32px; }
+    .ops-size-row .ops-wordmark.s24 { font-size: 24px; }
+    .ops-size-row .ops-wordmark.s16 { font-size: 16px; }
+
+    @media (max-width: 880px) {
+      .ops-flow-grid { grid-template-columns: 1fr; }
+      .ops-legend-grid { grid-template-columns: repeat(2, 1fr); }
+      .ops-hero { padding: 56px 24px; }
+      .ops-hero .ops-wordmark { font-size: 48px; }
+    }
+
+    /* ============================================================
+     * 1. FeedbackBadge — recreates the React component visually
+     * ========================================================== */
+    .fb-badge {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      border-radius: var(--crrt-radius-full);
+      transition: transform var(--crrt-duration-default) var(--crrt-easing-emphasis);
+      filter: var(--crrt-shadow-trigger);
+    }
+    .fb-badge:hover { transform: scale(1.06) rotate(-3deg); filter: var(--crrt-shadow-trigger-hover); }
+    .fb-badge:active { transform: scale(0.98); }
+    .fb-badge:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .fb-badge img { width: 100%; height: 100%; border-radius: 50%; image-rendering: pixelated; }
+    .fb-badge.sm { width: 40px; height: 40px; }
+    .fb-badge.md { width: 56px; height: 56px; }
+    .fb-badge.lg { width: 72px; height: 72px; }
+    .fb-badge[data-indicator="true"]::after {
+      content: '';
+      position: absolute;
+      right: 2px; top: 2px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--crrt-carrot);
+      box-shadow: 0 0 0 2px var(--background);
+      animation: crrt-pulse var(--crrt-pulse-duration) var(--crrt-easing-default) infinite;
+    }
+    .fb-badge.sm[data-indicator="true"]::after { width: 7px; height: 7px; }
+    .fb-badge.lg[data-indicator="true"]::after { width: 13px; height: 13px; }
+
+    /* ============================================================
+     * 2. DropCarrotButton
+     * ========================================================== */
+    .dc-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--crrt-space-4);
+      white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      font-family: var(--crrt-font-sans);
+      font-weight: 500;
+      border-radius: var(--crrt-radius-pill);
+      transition: transform var(--crrt-duration-fast) var(--crrt-easing-default),
+                  background-color var(--crrt-duration-fast) var(--crrt-easing-default);
+      box-shadow: var(--crrt-shadow-pill);
+    }
+    .dc-btn:active { transform: scale(0.98); }
+    .dc-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .dc-btn img, .dc-btn .dc-icon {
+      flex-shrink: 0;
+      border-radius: 50%;
+      image-rendering: pixelated;
+    }
+    .dc-btn.sm { height: 32px; padding: 0 14px 0 6px; font-size: 12px; }
+    .dc-btn.sm img { width: 24px; height: 24px; }
+    .dc-btn.md { height: 44px; padding: 0 18px 0 8px; font-size: 13px; }
+    .dc-btn.md img { width: 28px; height: 28px; }
+    .dc-btn.lg { height: 52px; padding: 0 22px 0 10px; font-size: 14px; }
+    .dc-btn.lg img { width: 36px; height: 36px; }
+
+    .dc-btn.tone-dark {
+      background: var(--crrt-bg-deep);
+      color: var(--crrt-white);
+      border: 1px solid var(--crrt-rule-dark);
+    }
+    .dc-btn.tone-dark:hover { background: var(--crrt-bg-deep-soft); transform: translateX(-2px); }
+    .dc-btn.tone-carrot {
+      background: var(--crrt-carrot);
+      color: var(--crrt-white);
+      border: 1px solid var(--crrt-carrot-deep);
+    }
+    .dc-btn.tone-carrot:hover { background: var(--crrt-carrot-deep); }
+    .dc-btn.tone-phosphor {
+      background: var(--crrt-phosphor);
+      color: var(--crrt-ink);
+      border: 1px solid var(--crrt-phosphor);
+    }
+    .dc-btn.tone-phosphor:hover { filter: brightness(0.95); }
+    .dc-btn[aria-busy="true"] .dc-icon-spinner {
+      display: inline-flex;
+      border: 2px solid currentColor;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: crrt-spin 0.8s linear infinite;
+    }
+
+    /* ============================================================
+     * 3. SeeFeedbackPanel
+     * ========================================================== */
+    .sf-wrap { display: flex; flex-direction: column; align-items: flex-end; }
+    .sf-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--crrt-space-4);
+      height: 44px;
+      padding: 0 18px 0 8px;
+      border-radius: var(--crrt-radius-pill);
+      background: var(--crrt-bg-deep);
+      color: var(--crrt-white);
+      border: 1px solid var(--crrt-rule-dark);
+      cursor: pointer;
+      box-shadow: var(--crrt-shadow-pill);
+      font-family: var(--crrt-font-sans);
+      font-size: 13px;
+      font-weight: 500;
+      transition: background-color var(--crrt-duration-fast) var(--crrt-easing-default),
+                  transform var(--crrt-duration-fast) var(--crrt-easing-default);
+    }
+    .sf-pill:hover { background: var(--crrt-bg-deep-soft); transform: translateX(-2px); }
+    .sf-pill:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+    .sf-pill-icon {
+      width: 28px; height: 28px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--crrt-rule-dark-strong);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .sf-pill-icon svg { width: 12px; height: 12px; color: var(--crrt-white); }
+    .sf-pill-count {
+      font-family: var(--crrt-font-crt);
+      font-size: 14px;
+      color: var(--crrt-ink-faint);
+    }
+
+    .sf-panel {
+      margin-top: 8px;
+      width: min(360px, 90vw);
+      max-height: 480px;
+      overflow-y: auto;
+      background: var(--crrt-bg-deep-soft);
+      color: var(--crrt-white);
+      border: 1px solid var(--crrt-rule-dark);
+      border-radius: var(--crrt-radius-2xl);
+      box-shadow: var(--crrt-shadow-md);
+    }
+    .sf-panel ul { list-style: none; margin: 0; padding: 0; }
+    .sf-panel li {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 14px;
+      border-bottom: 1px solid var(--crrt-rule-dark);
+    }
+    .sf-panel li:last-child { border-bottom: 0; }
+    .sf-item-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .sf-item-body { font-size: 13px; line-height: 1.45; color: var(--crrt-white); }
+    .sf-item-stamp { font-family: var(--crrt-font-crt); font-size: 14px; color: var(--crrt-ink-faint); flex-shrink: 0; }
+    .sf-item-foot { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--crrt-ink-faint); }
+    .sf-tag {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 8px;
+      border-radius: var(--crrt-radius-pill);
+      font-size: 11px;
+    }
+    .sf-tag.open { background: rgba(232, 133, 61, 0.15); color: var(--crrt-carrot); }
+    .sf-tag.resolved { background: var(--crrt-rule-dark); color: var(--crrt-ink-faint); }
+    .sf-panel-empty { padding: 20px 14px; text-align: center; font-size: 13px; color: var(--crrt-ink-faint); }
+
+    /* ============================================================
+     * 4. FeedbackPanel — full widget assembled
+     * ========================================================== */
+    .fp-fixture {
+      position: relative;
+      min-height: 420px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--crrt-radius-2xl);
+      overflow: hidden;
+    }
+    .fp-fixture .browser-bar {
+      background: color-mix(in oklab, var(--card) 70%, var(--background) 30%);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .browser-dots { display: flex; gap: 7px; }
+    .browser-dots span { width: 11px; height: 11px; border-radius: 50%; background: var(--muted-foreground); opacity: 0.32; }
+    .browser-url {
+      flex: 1;
+      background: var(--background);
+      padding: 6px 14px;
+      border-radius: var(--crrt-radius-md);
+      font-size: 12px;
+      color: var(--muted-foreground);
+    }
+    .fp-fixture .page {
+      position: relative;
+      padding: 48px 48px 96px;
+      min-height: 360px;
+    }
+    .fp-fixture .page-tag {
+      font-family: var(--crrt-font-crt);
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      color: var(--muted-foreground);
+      margin-bottom: 10px;
+    }
+    .fp-fixture .page-tag::before { content: '> '; }
+    .fp-fixture .page-title {
+      font-weight: 800;
+      font-size: 44px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      max-width: 14ch;
+      margin-bottom: 16px;
+    }
+    .fp-fixture .page-sub {
+      font-size: 15px;
+      color: var(--muted-foreground);
+      max-width: 50ch;
+      margin-bottom: 28px;
+      line-height: 1.55;
+    }
+    .fp-fixture .page-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .fp-fixture .page-card { background: var(--muted); border-radius: var(--crrt-radius-lg); aspect-ratio: 4/5; }
+
+    .fp-widget {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+    }
+    .fp-options {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 10px;
+      margin-bottom: 14px;
+      opacity: 0;
+      transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity var(--crrt-duration-default) var(--crrt-easing-emphasis),
+                  transform var(--crrt-duration-default) var(--crrt-easing-emphasis);
+    }
+    .fp-widget:hover .fp-options,
+    .fp-widget:focus-within .fp-options { opacity: 1; transform: translateY(0); pointer-events: auto; }
+
+    /* ============ Footer ============ */
+    footer { padding: 64px 0 80px; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 32px; flex-wrap: wrap; max-width: 1180px; margin: 0 auto; padding: 0 var(--crrt-space-8); }
+    .footer-meta { font-family: var(--crrt-font-crt); font-size: 16px; color: var(--muted-foreground); letter-spacing: 0.05em; }
+
+    @media (max-width: 880px) {
+      .demo-grid { grid-template-columns: 1fr; }
+      .fp-fixture .page { padding: 24px 24px 80px; }
+      .fp-fixture .page-title { font-size: 28px; }
+      .fp-fixture .page-grid { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Shared icon defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="icon-list" viewBox="0 0 12 12">
+        <rect x="2" y="3" width="8" height="1.2" fill="currentColor"/>
+        <rect x="2" y="5.4" width="8" height="1.2" fill="currentColor"/>
+        <rect x="2" y="7.8" width="8" height="1.2" fill="currentColor"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- =============== NAV =============== -->
+  <nav class="topnav">
+    <div class="topnav-inner">
+      <div class="brand">
+        <img src="../design-system-crrt/Frame 11.png" alt="CRRT.AI" />
+        CRRT<span class="ai">.AI</span>
+      </div>
+      <button class="theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme">
+        <span id="theme-label">/ dark</span>
+      </button>
+    </div>
+  </nav>
+
+  <main class="wrap">
+
+    <!-- =============== HEADER =============== -->
+    <header>
+      <div class="eyebrow">CRRT.AI / Component Preview / v0.2</div>
+      <h1>The CRRT.AI <em>library</em>.</h1>
+      <p style="font-family: var(--crrt-font-mono); font-size: 17px; color: var(--crrt-carrot); margin-bottom: 18px; letter-spacing: -0.005em;">
+        &gt; Carrots level up your product.
+      </p>
+      <p class="lede">
+        Tokens, type, and components. Everything resolves from
+        <code style="font-family: var(--crrt-font-mono); font-size: 13px;">branding/crrt/tokens.css</code>
+        — toggle the theme up top to flip the surface.
+      </p>
+    </header>
+
+    <!-- =============== 1. Naming — carrot → CRRT → CRT =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 01</span>
+        <h2>The <em>name</em></h2>
+      </div>
+      <p class="section-desc">
+        CRRT is <em>carrot</em> with the vowels removed. The contraction happens to
+        share an alphabet with <em>CRT</em> — the cathode-ray tube. The pixel-art
+        carrot is what follows: a carrot rendered as it would have looked on
+        the screens that invented the pixel.
+      </p>
+
+      <div class="naming-grid">
+        <div class="naming-step">
+          <div class="naming-step-num">/ 01</div>
+          <div class="naming-step-title">The vegetable</div>
+          <div class="naming-glyph">CARROT</div>
+          <p class="naming-note">
+            The literal subject. A "carrot" is also the unit of input —
+            users <strong>drop a carrot</strong> on what they want to flag.
+          </p>
+        </div>
+
+        <div class="naming-step">
+          <div class="naming-step-num">/ 02</div>
+          <div class="naming-step-title">Drop the vowels</div>
+          <div class="naming-glyph">
+            C<span class="strike">A</span>RR<span class="strike">O</span>T
+            <span class="arrow">→</span>
+            CRRT
+          </div>
+          <p class="naming-note">
+            No vowels. The mark contracts; the pronunciation stays "carrot."
+            The visual identity gets compact enough to live on a 16-pixel grid.
+          </p>
+        </div>
+
+        <div class="naming-step">
+          <div class="naming-step-num">/ 03</div>
+          <div class="naming-step-title">It's also a tube</div>
+          <div class="naming-glyph">
+            CRRT <span class="equiv">≈</span> CRT
+          </div>
+          <p class="naming-note">
+            Same alphabet as <strong>cathode-ray tube</strong>. The pixel-art
+            carrot is the visual hook — a sprite from the era of CRT screens.
+          </p>
+        </div>
+      </div>
+
+      <div class="naming-callout">
+        <img src="../design-system-crrt/Frame 11.png" alt="" />
+        <div class="naming-callout-text">
+          <strong>CRRT</strong> ≈ <strong>CRT</strong>. The name and the visual
+          share a world. That's the hook.
+        </div>
+      </div>
+
+      <p class="section-desc" style="margin-top: 32px; margin-bottom: 0;">
+        Bonus: <strong>.AI</strong> is treated as a TLD, not a slogan. Smaller weight,
+        often lighter color. The brand is CRRT; the .AI is where you find it.
+      </p>
+    </section>
+
+    <!-- =============== 2. Operational wordmark — CRRT.>_ =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 02</span>
+        <h2>Operational <em>wordmark</em></h2>
+      </div>
+      <p class="section-desc">
+        A second canonical lockup. <code style="font-family: var(--crrt-font-mono); font-size: 13px;">CRRT.AI</code>
+        says <em>where</em> we live; <code style="font-family: var(--crrt-font-mono); font-size: 13px;">CRRT.&gt;_</code>
+        says <em>what</em> we do. Every glyph is real shell syntax: the dot is method access,
+        <code style="font-family: var(--crrt-font-mono); font-size: 13px;">&gt;</code> is stream redirect,
+        <code style="font-family: var(--crrt-font-mono); font-size: 13px;">_</code> is the terminal cursor — always blinking, always ready.
+      </p>
+
+      <!-- Animated hero lockup -->
+      <div class="ops-hero">
+        <div class="ops-wordmark">
+          <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+        </div>
+        <div class="ops-caption">/ operational / animated / build_2026.05</div>
+      </div>
+
+      <!-- Symbol legend -->
+      <div class="ops-legend-grid">
+        <div class="ops-legend">
+          <div class="ops-legend-glyph">CRRT</div>
+          <div class="ops-legend-name">Variable</div>
+          <p class="ops-legend-note">The product name. Identifier in the syntax tree.</p>
+        </div>
+        <div class="ops-legend">
+          <div class="ops-legend-glyph">.</div>
+          <div class="ops-legend-name">Method access</div>
+          <p class="ops-legend-note"><code style="font-family: var(--crrt-font-mono); font-size: 12px;">obj.method()</code> or <code style="font-family: var(--crrt-font-mono); font-size: 12px;">./script</code> — "CRRT, do something."</p>
+        </div>
+        <div class="ops-legend">
+          <div class="ops-legend-glyph">&gt;</div>
+          <div class="ops-legend-name">Redirect / Output</div>
+          <p class="ops-legend-note"><code style="font-family: var(--crrt-font-mono); font-size: 12px;">cmd &gt; file</code> — CRRT redirects feedback out to Claude, Codex, anywhere.</p>
+        </div>
+        <div class="ops-legend">
+          <div class="ops-legend-glyph blink">_</div>
+          <div class="ops-legend-name">Ready state</div>
+          <p class="ops-legend-note">Terminal cursor. Always blinking. The system is waiting for your next instruction.</p>
+        </div>
+      </div>
+
+      <!-- 3-step operational flow -->
+      <p class="section-desc" style="margin-top: var(--crrt-space-8); margin-bottom: var(--crrt-space-7);">
+        The same syntax tells a story end-to-end. Three steps, one verb:
+      </p>
+      <div class="ops-flow-grid">
+        <div class="ops-flow-step">
+          <div class="ops-flow-num">/ 01</div>
+          <div class="ops-flow-title">Select</div>
+          <div class="ops-flow-glyph">CRRT <span class="flag">--select</span></div>
+          <p class="ops-flow-note">The user clicks an element on the page. A pin drops where their attention landed.</p>
+        </div>
+        <div class="ops-flow-step">
+          <div class="ops-flow-num">/ 02</div>
+          <div class="ops-flow-title">Prompt</div>
+          <div class="ops-flow-glyph">CRRT <span class="flag">--prompt</span></div>
+          <p class="ops-flow-note">The agent stitches the selection, the comment, and the context into an instruction.</p>
+        </div>
+        <div class="ops-flow-step">
+          <div class="ops-flow-num">/ 03</div>
+          <div class="ops-flow-title">Ship</div>
+          <div class="ops-flow-glyph">CRRT<span class="dot">.</span><span style="color: var(--crrt-carrot);">&gt;</span>_</div>
+          <p class="ops-flow-note">The prompt, redirected — ready to paste into Claude Code or Codex.</p>
+        </div>
+      </div>
+
+      <!-- Size scale -->
+      <div class="ops-sizes">
+        <div class="ops-size-row">
+          <div class="ops-size-label">72 / hero</div>
+          <div class="ops-wordmark s88">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+        <div class="ops-size-row">
+          <div class="ops-size-label">48 / section</div>
+          <div class="ops-wordmark s48">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+        <div class="ops-size-row">
+          <div class="ops-size-label">32 / UI</div>
+          <div class="ops-wordmark s32">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+        <div class="ops-size-row">
+          <div class="ops-size-label">24 / nav</div>
+          <div class="ops-wordmark s24">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+        <div class="ops-size-row">
+          <div class="ops-size-label">16 / footer</div>
+          <div class="ops-wordmark s16">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+        <div class="ops-size-row">
+          <div class="ops-size-label">all-mono</div>
+          <div class="ops-wordmark s32 allmono">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+        <div class="ops-size-row">
+          <div class="ops-size-label">carrot accent</div>
+          <div class="ops-wordmark s32 carrot">
+            <span class="name">CRRT</span><span class="dot">.</span><span class="gt">&gt;</span><span class="cursor">_</span>
+          </div>
+        </div>
+      </div>
+
+      <p class="section-desc" style="margin-top: var(--crrt-space-8); margin-bottom: 0;">
+        <strong>Hard rule:</strong> the <code style="font-family: var(--crrt-font-mono); font-size: 13px;">_</code> always
+        blinks in animated contexts and stays statically <em>visible</em> in print or reduced-motion. Never static-invisible
+        — that's a hidden cursor, not a ready cursor. Full spec in
+        <a href="../CRRT-DESIGN-SYSTEM.md" style="color: var(--crrt-carrot); text-decoration: underline;">CRRT-DESIGN-SYSTEM.md § 3.5</a>.
+      </p>
+    </section>
+
+    <!-- =============== 3. Color palette =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 03</span>
+        <h2>Color <em>palette</em></h2>
+      </div>
+      <p class="section-desc">
+        Black-and-white-and-cream carry the system. Carrot orange is the single
+        accent outside the logo. Phosphor amber and forest green are rare voice
+        and reserve moments.
+      </p>
+
+      <div class="palette">
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #0A0A0A;"><span>#0A0A0A</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Tube Black</div>
+            <div class="swatch-hex">--crrt-bg-deep</div>
+            <div class="swatch-usage">Logo ground. Dark-theme surface.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #181818;"><span>#181818</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Tube Soft</div>
+            <div class="swatch-hex">--crrt-bg-deep-soft</div>
+            <div class="swatch-usage">Dark-theme elevated surfaces, pill bg.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #FFFFFF;"><span>#FFFFFF</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Phosphor White</div>
+            <div class="swatch-hex">--crrt-white</div>
+            <div class="swatch-usage">Type on dark grounds. Max contrast.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #F2EBE0;"><span>#F2EBE0</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Cream</div>
+            <div class="swatch-hex">--crrt-bg</div>
+            <div class="swatch-usage">Light-theme page background.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #FFFCF6;"><span>#FFFCF6</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Cream Card</div>
+            <div class="swatch-hex">--crrt-bg-card</div>
+            <div class="swatch-usage">Light-theme cards / elevated surfaces.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #EDE3D2;"><span>#EDE3D2</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Warm Cream</div>
+            <div class="swatch-hex">--crrt-bg-warm</div>
+            <div class="swatch-usage">Secondary surfaces, browser chrome.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #2C2C2C;"><span>#2C2C2C</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Ink Soft</div>
+            <div class="swatch-hex">--crrt-ink-soft</div>
+            <div class="swatch-usage">Body text on light.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #6B6560;"><span style="background: rgba(255,255,255,0.82);">#6B6560</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Mute</div>
+            <div class="swatch-hex">--crrt-ink-mute</div>
+            <div class="swatch-usage">Captions, metadata, secondary text.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #A8A29A;"><span>#A8A29A</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Faint</div>
+            <div class="swatch-hex">--crrt-ink-faint</div>
+            <div class="swatch-usage">Tertiary text, on-dark muted, disabled.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #E8853D;"><span>#E8853D</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Carrot</div>
+            <div class="swatch-hex">--crrt-carrot</div>
+            <div class="swatch-usage">Primary accent. Logo body. Notification dot.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #B85F1F;"><span>#B85F1F</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Carrot Deep</div>
+            <div class="swatch-hex">--crrt-carrot-deep</div>
+            <div class="swatch-usage">Hover / pressed / accent shadow.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #FFB000;"><span>#FFB000</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Phosphor Amber</div>
+            <div class="swatch-hex">--crrt-phosphor</div>
+            <div class="swatch-usage">CRT voice moments. Terminal copy.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #1F3A2F;"><span>#1F3A2F</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Forest</div>
+            <div class="swatch-hex">--crrt-forest</div>
+            <div class="swatch-usage">Alternate logo ground. Reserve.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #33FF33;"><span>#33FF33</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Phosphor Green</div>
+            <div class="swatch-hex">--crrt-phosphor-green</div>
+            <div class="swatch-usage">Easter egg only. Retro mode.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== 2. Typography =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 04</span>
+        <h2><em>Typography</em></h2>
+      </div>
+      <p class="section-desc">
+        Three families. Inter for the system. VT323 for CRT voice moments —
+        eyebrows, captions, counts. JetBrains Mono for actual code.
+      </p>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">Inter</div>
+          <div class="type-meta-spec">Sans / Geometric / Display + UI</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">88 / 800</div>
+          <div class="type-sample-display">CRRT<span class="ai">.AI</span></div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">44 / 700</div>
+          <div class="type-sample-h2">Drop a carrot. Mark what's off.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">18 / 400</div>
+          <div class="type-sample-body">
+            Visual feedback widget for design teams. Drops in with one line of
+            script. Lives where your work lives.
+          </div>
+        </div>
+      </div>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">VT323</div>
+          <div class="type-meta-spec">Bitmap / CRT terminal / Voice moments</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">28 / —</div>
+          <div class="type-sample-crt-lg">&gt; system_init: ready_to_drop_carrots</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">22 / —</div>
+          <div class="type-sample-crt-md">// 04 carrots dropped. 02 resolved.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">18 / —</div>
+          <div class="type-sample-crt-sm">Vol_01 / No_01 / Build_2026.05</div>
+        </div>
+      </div>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">JetBrains Mono</div>
+          <div class="type-meta-spec">Monospace / Code / Specs</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">14 / 500</div>
+          <div class="type-sample-mono">bun add @crrt/widget</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">13 / 400</div>
+          <div class="type-sample-mono-sm">&lt;script src="https://cdn.crrt.ai/v1.js"&gt;&lt;/script&gt;</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== 3. FeedbackBadge =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 05</span>
+        <h2><em>FeedbackBadge</em></h2>
+      </div>
+      <p class="section-desc">
+        Floating circular trigger. The face is the canonical pixel-art carrot.
+        Pulsing carrot-orange dot in the top-right when there is unresolved
+        feedback. Hover any badge to feel the lift.
+      </p>
+
+      <div class="demo-grid">
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Sizes</span>
+            <span class="demo-card-meta">sm / md / lg</span>
+          </div>
+          <div class="demo-card-stage" style="gap: 32px;">
+            <button class="fb-badge sm" aria-label="Open feedback">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+            <button class="fb-badge md" aria-label="Open feedback">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+            <button class="fb-badge lg" aria-label="Open feedback">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+          </div>
+          <div class="demo-card-foot">40 / 56 (canonical) / 72 px</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">With indicator</span>
+            <span class="demo-card-meta">count = 4</span>
+          </div>
+          <div class="demo-card-stage" style="gap: 32px;">
+            <button class="fb-badge md" data-indicator="true" aria-label="Open feedback, 4 unresolved">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span class="sr-only">4 unresolved feedback items</span>
+            </button>
+            <button class="fb-badge lg" data-indicator="true" aria-label="Open feedback, 12 unresolved">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+          </div>
+          <div class="demo-card-foot">Dot pulses on a 2.4s cycle when count &gt; 0.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== 2. DropCarrotButton =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 06</span>
+        <h2><em>DropCarrotButton</em></h2>
+      </div>
+      <p class="section-desc">
+        Pill CTA. Canonical leading carrot, label, dark tone by default.
+        Carrot and phosphor tones are reserved for marketing surfaces.
+      </p>
+
+      <div class="demo-grid">
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Tones</span>
+            <span class="demo-card-meta">dark / carrot / phosphor</span>
+          </div>
+          <div class="demo-card-stage">
+            <button class="dc-btn md tone-dark" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+            <button class="dc-btn md tone-carrot" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+            <button class="dc-btn md tone-phosphor" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+          </div>
+          <div class="demo-card-foot">Dark is canonical inside the widget. Carrot/phosphor for hero CTAs.</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Sizes</span>
+            <span class="demo-card-meta">sm / md / lg</span>
+          </div>
+          <div class="demo-card-stage">
+            <button class="dc-btn sm tone-dark" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop</span>
+            </button>
+            <button class="dc-btn md tone-dark" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+            <button class="dc-btn lg tone-dark" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop your first carrot</span>
+            </button>
+          </div>
+          <div class="demo-card-foot">32 / 44 / 52 px tall.</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Loading</span>
+            <span class="demo-card-meta">aria-busy</span>
+          </div>
+          <div class="demo-card-stage">
+            <button class="dc-btn md tone-dark" type="button" aria-busy="true">
+              <span class="dc-icon dc-icon-spinner" style="width: 28px; height: 28px;"></span>
+              <span>Saving…</span>
+            </button>
+          </div>
+          <div class="demo-card-foot">Spinner replaces the icon while a request is in flight.</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Disabled</span>
+            <span class="demo-card-meta">opacity 60%</span>
+          </div>
+          <div class="demo-card-stage">
+            <button class="dc-btn md tone-dark" type="button" disabled style="opacity: 0.6; cursor: not-allowed;">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+          </div>
+          <div class="demo-card-foot">Native disabled attribute + 60% opacity.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== 3. SeeFeedbackPanel =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 07</span>
+        <h2><em>SeeFeedbackPanel</em></h2>
+      </div>
+      <p class="section-desc">
+        Pill-headed disclosure. The pill mirrors DropCarrotButton's shell, but
+        leads with a list icon and trails with a VT323 count chip.
+      </p>
+
+      <div class="demo-grid">
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Closed</span>
+            <span class="demo-card-meta">trigger only</span>
+          </div>
+          <div class="demo-card-stage">
+            <div class="sf-wrap">
+              <button class="sf-pill" type="button" aria-expanded="false">
+                <span class="sf-pill-icon"><svg><use href="#icon-list" /></svg></span>
+                <span>See feedback</span>
+                <span class="sf-pill-count">04</span>
+              </button>
+            </div>
+          </div>
+          <div class="demo-card-foot">Count zero-padded to two digits, rendered in VT323.</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Open — populated</span>
+            <span class="demo-card-meta">4 items</span>
+          </div>
+          <div class="demo-card-stage" style="align-items: flex-start;">
+            <div class="sf-wrap">
+              <button class="sf-pill" type="button" aria-expanded="true">
+                <span class="sf-pill-icon"><svg><use href="#icon-list" /></svg></span>
+                <span>See feedback</span>
+                <span class="sf-pill-count">04</span>
+              </button>
+              <div class="sf-panel" role="region" aria-label="Feedback list">
+                <ul>
+                  <li>
+                    <div class="sf-item-head">
+                      <span class="sf-item-body">Hero CTA feels too quiet — try carrot tone?</span>
+                      <span class="sf-item-stamp">May 10 14:22</span>
+                    </div>
+                    <div class="sf-item-foot">
+                      <span>tomas</span><span aria-hidden>·</span>
+                      <span class="sf-tag open">open</span>
+                    </div>
+                  </li>
+                  <li>
+                    <div class="sf-item-head">
+                      <span class="sf-item-body">Pricing table sticks awkwardly on mobile.</span>
+                      <span class="sf-item-stamp">May 10 12:08</span>
+                    </div>
+                    <div class="sf-item-foot">
+                      <span>review</span><span aria-hidden>·</span>
+                      <span class="sf-tag open">open</span>
+                    </div>
+                  </li>
+                  <li>
+                    <div class="sf-item-head">
+                      <span class="sf-item-body">Nav blur is too strong at top of page.</span>
+                      <span class="sf-item-stamp">May 09 18:55</span>
+                    </div>
+                    <div class="sf-item-foot">
+                      <span>tomas</span><span aria-hidden>·</span>
+                      <span class="sf-tag resolved">resolved</span>
+                    </div>
+                  </li>
+                  <li>
+                    <div class="sf-item-head">
+                      <span class="sf-item-body">Wordmark .AI is too prominent on the dark pill.</span>
+                      <span class="sf-item-stamp">May 09 09:17</span>
+                    </div>
+                    <div class="sf-item-foot">
+                      <span class="sf-tag open">open</span>
+                    </div>
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </div>
+          <div class="demo-card-foot">Panel scrolls past 480px, hairline dividers between rows.</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Open — empty</span>
+            <span class="demo-card-meta">0 items</span>
+          </div>
+          <div class="demo-card-stage" style="align-items: flex-start;">
+            <div class="sf-wrap">
+              <button class="sf-pill" type="button" aria-expanded="true">
+                <span class="sf-pill-icon"><svg><use href="#icon-list" /></svg></span>
+                <span>See feedback</span>
+                <span class="sf-pill-count">00</span>
+              </button>
+              <div class="sf-panel" role="region" aria-label="Feedback list">
+                <div class="sf-panel-empty">No feedback yet — drop a carrot.</div>
+              </div>
+            </div>
+          </div>
+          <div class="demo-card-foot">Empty label is overridable via prop.</div>
+        </div>
+
+        <div class="demo-card">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Sizes</span>
+            <span class="demo-card-meta">sm / md</span>
+          </div>
+          <div class="demo-card-stage" style="flex-direction: column; gap: 16px;">
+            <div class="sf-wrap">
+              <button class="sf-pill" type="button" style="height: 32px; padding: 0 14px 0 6px; font-size: 12px;">
+                <span class="sf-pill-icon" style="width: 24px; height: 24px;"><svg><use href="#icon-list" /></svg></span>
+                <span>See feedback</span>
+                <span class="sf-pill-count">04</span>
+              </button>
+            </div>
+            <div class="sf-wrap">
+              <button class="sf-pill" type="button">
+                <span class="sf-pill-icon"><svg><use href="#icon-list" /></svg></span>
+                <span>See feedback</span>
+                <span class="sf-pill-count">04</span>
+              </button>
+            </div>
+          </div>
+          <div class="demo-card-foot">Scale matches DropCarrotButton.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== 4. FeedbackPanel — full widget =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 08</span>
+        <h2>The <em>FeedbackPanel</em></h2>
+      </div>
+      <p class="section-desc">
+        Full widget composition. Hover (or focus) the carrot at the bottom-right
+        of the fake browser below — the two pill options rise into place.
+      </p>
+
+      <div class="fp-fixture">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url">studio-acme.com / projects / spring-2026</div>
+        </div>
+        <div class="page">
+          <div class="page-tag">spring_collection_2026</div>
+          <div class="page-title">A garden, in pixels.</div>
+          <div class="page-sub">
+            Latest editorial direction draws on 19th-century botanical
+            illustration, restrained typography, and a faint smell of soil.
+            Hover the carrot to drop a comment or open the feedback list.
+          </div>
+          <div class="page-grid">
+            <div class="page-card"></div>
+            <div class="page-card"></div>
+            <div class="page-card"></div>
+          </div>
+
+          <div class="fp-widget" tabindex="0" aria-haspopup="menu">
+            <div class="fp-options">
+              <button class="dc-btn md tone-dark" type="button">
+                <img src="../design-system-crrt/Frame 11.png" alt="" />
+                <span>Drop a carrot</span>
+              </button>
+              <button class="sf-pill" type="button">
+                <span class="sf-pill-icon"><svg><use href="#icon-list" /></svg></span>
+                <span>See feedback</span>
+                <span class="sf-pill-count">04</span>
+              </button>
+            </div>
+            <button class="fb-badge md" data-indicator="true" aria-label="Open CRRT.AI feedback, 4 unresolved">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== 5. Theme inversion check =============== -->
+    <section>
+      <div class="section-tag">
+        <span class="section-num">/ 09</span>
+        <h2>Theme <em>parity</em></h2>
+      </div>
+      <p class="section-desc">
+        Same components, light surface. The widget pills remain dark — the
+        product surface is dark-first regardless of host theme.
+      </p>
+
+      <div class="demo-grid">
+        <div class="demo-card" data-theme="light" style="background: var(--card); color: var(--card-foreground);">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Light surface</span>
+            <span class="demo-card-meta">[data-theme="light"]</span>
+          </div>
+          <div class="demo-card-stage invert" data-theme="light" style="background: var(--background); flex-direction: column; gap: 16px;">
+            <button class="fb-badge md" data-indicator="true" aria-label="Open feedback">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+            <button class="dc-btn md tone-dark" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+          </div>
+          <div class="demo-card-foot">Page surface is cream, widget pills still dark.</div>
+        </div>
+
+        <div class="demo-card" data-theme="dark" style="background: var(--card); color: var(--card-foreground);">
+          <div class="demo-card-head">
+            <span class="demo-card-name">Dark surface (canonical)</span>
+            <span class="demo-card-meta">:root default</span>
+          </div>
+          <div class="demo-card-stage" data-theme="dark" style="background: var(--background); flex-direction: column; gap: 16px;">
+            <button class="fb-badge md" data-indicator="true" aria-label="Open feedback">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+            </button>
+            <button class="dc-btn md tone-dark" type="button">
+              <img src="../design-system-crrt/Frame 11.png" alt="" />
+              <span>Drop a carrot</span>
+            </button>
+          </div>
+          <div class="demo-card-foot">Tube Black + cards in Tube Soft. Default.</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="footer-inner">
+      <div class="brand">
+        <img src="../design-system-crrt/Frame 11.png" alt="" />
+        CRRT<span class="ai">.AI</span>
+      </div>
+      <div class="footer-meta">
+        Every carrot is a <strong style="color: var(--crrt-carrot); font-weight: normal;">+1</strong>
+        &nbsp;·&nbsp; Preview / v_0.2 / build_2026.05.11
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Theme toggle — flips [data-theme] on <html>
+    (function () {
+      const html = document.documentElement
+      const btn = document.getElementById('theme-toggle')
+      const label = document.getElementById('theme-label')
+      function apply(theme) {
+        html.setAttribute('data-theme', theme)
+        label.textContent = '/ ' + theme
+        try { localStorage.setItem('crrt-preview-theme', theme) } catch {}
+      }
+      const stored = (() => { try { return localStorage.getItem('crrt-preview-theme') } catch { return null } })()
+      apply(stored || 'dark')
+      btn.addEventListener('click', () => {
+        apply(html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark')
+      })
+    })()
+  </script>
+</body>
+</html>
