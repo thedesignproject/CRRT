@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carrot — Brand Assets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F2EBE0;
+      --bg-card: #FFFCF6;
+      --bg-warm: #EDE3D2;
+      --bg-deep: #1A1A1A;
+      --rule: rgba(26, 26, 26, 0.12);
+      --rule-strong: rgba(26, 26, 26, 0.22);
+      --ink: #1A1A1A;
+      --ink-soft: #3A3631;
+      --ink-mute: #6B6560;
+      --ink-faint: #A8A29A;
+      --carrot: #E8853D;
+      --carrot-deep: #B85F1F;
+      --carrot-light: #F5C9A0;
+      --serif: 'EB Garamond', 'Times New Roman', Georgia, serif;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    /* ============ NAV ============ */
+    .ds-nav {
+      position: sticky;
+      top: 0;
+      background: rgba(242, 235, 224, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--rule);
+      z-index: 100;
+      padding: 18px 0;
+    }
+    .ds-nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+    }
+    .ds-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--serif);
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .ds-brand svg { width: 22px; height: 28px; }
+    .ds-nav-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: var(--ink-mute);
+      text-transform: uppercase;
+    }
+    .ds-toc {
+      display: flex;
+      gap: 28px;
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+    .ds-toc a:hover { color: var(--ink); }
+
+    /* ============ HEADER ============ */
+    .ds-header {
+      padding: 100px 0 72px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .ds-eyebrow {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--carrot-deep);
+      margin-bottom: 28px;
+    }
+    .ds-header h1 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: clamp(48px, 7vw, 88px);
+      line-height: 0.98;
+      letter-spacing: -0.025em;
+      max-width: 16ch;
+      margin-bottom: 28px;
+    }
+    .ds-header h1 em { font-style: italic; }
+    .ds-header p {
+      font-size: 18px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+      max-width: 60ch;
+    }
+
+    /* ============ SECTION HEADER ============ */
+    section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
+    .section-tag {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 56px;
+    }
+    .section-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.1em;
+    }
+    .section-title {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: clamp(32px, 4vw, 44px);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+    .section-title em { font-style: italic; }
+    .section-desc {
+      font-size: 15px;
+      color: var(--ink-soft);
+      max-width: 60ch;
+      margin-top: -36px;
+      margin-bottom: 56px;
+    }
+
+    /* ============ LOGO PROPOSALS ============ */
+    .logo-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 24px;
+    }
+    .logo-card {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .logo-stage {
+      flex: 1;
+      min-height: 360px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 56px;
+      background:
+        linear-gradient(45deg, rgba(26,26,26,0.02) 25%, transparent 25%, transparent 75%, rgba(26,26,26,0.02) 75%, rgba(26,26,26,0.02)) 0 0/24px 24px,
+        linear-gradient(45deg, rgba(26,26,26,0.02) 25%, transparent 25%, transparent 75%, rgba(26,26,26,0.02) 75%, rgba(26,26,26,0.02)) 12px 12px/24px 24px;
+    }
+    .logo-stage.dark {
+      background: var(--bg-deep);
+    }
+    .logo-stage svg.proposal { width: 140px; height: 175px; }
+    .logo-meta {
+      padding: 28px 32px;
+      border-top: 1px solid var(--rule);
+      background: var(--bg);
+    }
+    .logo-meta-num {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--ink-mute);
+      margin-bottom: 8px;
+    }
+    .logo-meta h3 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: 24px;
+      letter-spacing: -0.01em;
+      margin-bottom: 10px;
+    }
+    .logo-meta p {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+    .logo-meta .tags {
+      margin-top: 16px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 4px 8px;
+      border: 1px solid var(--rule-strong);
+      border-radius: 999px;
+      color: var(--ink-soft);
+    }
+    .tag.featured {
+      background: var(--ink);
+      color: var(--bg);
+      border-color: var(--ink);
+    }
+
+    /* ============ APP ICON MOCKUPS ============ */
+    .app-icons {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 24px;
+    }
+    .app-icon-card {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .app-icon {
+      width: 140px;
+      height: 140px;
+      border-radius: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow:
+        0 1px 0 rgba(255,255,255,0.4) inset,
+        0 4px 16px rgba(26,26,26,0.12),
+        0 12px 32px rgba(26,26,26,0.06);
+    }
+    .app-icon svg { width: 64px; height: 80px; }
+    .app-icon.cream { background: var(--bg-card); }
+    .app-icon.dark { background: var(--bg-deep); }
+    .app-icon.orange { background: var(--carrot); }
+    .app-icon.green { background: #1F3A2F; }
+    .app-icon-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* ============ SIZE SCALE ============ */
+    .size-scale {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 56px;
+      display: flex;
+      align-items: flex-end;
+      gap: 56px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .size-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .size-item .size-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.08em;
+    }
+
+    /* ============ COLOR PALETTE ============ */
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .swatch {
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      background: var(--bg-card);
+    }
+    .swatch-color {
+      height: 140px;
+      display: flex;
+      align-items: flex-end;
+      padding: 16px;
+    }
+    .swatch-color span {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.7);
+      border-radius: 4px;
+      color: var(--ink);
+    }
+    .swatch-color.dark span {
+      background: rgba(26,26,26,0.7);
+      color: var(--bg);
+    }
+    .swatch-meta {
+      padding: 18px 20px;
+      border-top: 1px solid var(--rule);
+    }
+    .swatch-name {
+      font-family: var(--serif);
+      font-size: 16px;
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    .swatch-hex {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink-mute);
+      letter-spacing: 0.04em;
+    }
+    .swatch-usage {
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    /* ============ TYPOGRAPHY ============ */
+    .type-block {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 48px;
+      margin-bottom: 24px;
+    }
+    .type-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 32px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .type-meta-name {
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 500;
+    }
+    .type-meta-spec {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--ink-mute);
+      letter-spacing: 0.04em;
+    }
+    .type-spec-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 24px;
+      align-items: baseline;
+      padding: 14px 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .type-spec-row:last-child { border-bottom: none; }
+    .type-spec-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding-top: 6px;
+    }
+    .type-spec-sample.serif { font-family: var(--serif); }
+    .type-spec-sample.sans { font-family: var(--sans); }
+
+    /* ============ WORDMARK PROPOSALS ============ */
+    .wordmark-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .wordmark-card {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 12px;
+      padding: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 200px;
+      position: relative;
+    }
+    .wordmark-card .wm-label {
+      position: absolute;
+      top: 20px;
+      left: 24px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--ink-mute);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .wordmark-serif {
+      font-family: var(--serif);
+      font-size: 56px;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .wordmark-serif svg { width: 38px; height: 48px; }
+    .wordmark-sans {
+      font-family: var(--sans);
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .wordmark-sans svg { width: 28px; height: 36px; }
+    .wordmark-mono {
+      font-family: var(--mono);
+      font-size: 22px;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .wordmark-mono svg { width: 24px; height: 30px; }
+
+    /* ============ FOOTER ============ */
+    footer {
+      padding: 72px 0 96px;
+      border-top: 1px solid var(--rule);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .footer-meta {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 880px) {
+      .ds-toc { display: none; }
+      .logo-grid { grid-template-columns: 1fr; }
+      .app-icons { grid-template-columns: repeat(2, 1fr); }
+      .palette { grid-template-columns: repeat(2, 1fr); }
+      .wordmark-grid { grid-template-columns: 1fr; }
+      .size-scale { padding: 32px; gap: 32px; }
+      section { padding: 64px 0; }
+      .ds-header { padding: 64px 0 48px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ============================================================
+       SVG SYMBOLS — All carrot proposals defined once, reused.
+       Each is named "logo-N" where N is the proposal number.
+       ViewBox 80x100, stem starts at top, body fills bottom 70%.
+       ============================================================ -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+
+      <!-- ============================================================
+           LOGO 1 — "Arrow-Leaf" Single Stem (closest to reference)
+           Single bold downward arrow as stem/leaf, geometric body.
+           Most reference-style. Mono version (black + orange).
+           ============================================================ -->
+      <symbol id="logo-1" viewBox="0 0 80 100">
+        <!-- Single big downward arrow -->
+        <path d="M37 0 L43 0 L43 18 L52 18 L40 32 L28 18 L37 18 Z" fill="currentColor"/>
+        <!-- Geometric carrot body -->
+        <path d="M40 28 C 56 28, 58 36, 56 50 C 54 68, 48 86, 40 96 C 32 86, 26 68, 24 50 C 22 36, 24 28, 40 28 Z"
+              fill="#E8853D"/>
+      </symbol>
+
+      <!-- ============================================================
+           LOGO 2 — "Three-Leaf Trident" (Carrot Express style)
+           Three downward leaf/arrow shapes, geometric body.
+           More organic feel than Logo 1, still clean.
+           ============================================================ -->
+      <symbol id="logo-2" viewBox="0 0 80 100">
+        <!-- Center stalk (downward arrow) -->
+        <path d="M37 2 L43 2 L43 24 L40 32 L37 24 Z" fill="currentColor"/>
+        <!-- Left leaf (curved arrow) -->
+        <path d="M37 14 C 24 8, 14 14, 14 22 C 22 22, 32 24, 37 28 Z" fill="currentColor"/>
+        <!-- Right leaf (curved arrow) -->
+        <path d="M43 14 C 56 8, 66 14, 66 22 C 58 22, 48 24, 43 28 Z" fill="currentColor"/>
+        <!-- Body -->
+        <path d="M40 30 C 56 30, 58 38, 56 52 C 54 70, 48 86, 40 96 C 32 86, 26 70, 24 52 C 22 38, 24 30, 40 30 Z"
+              fill="#E8853D"/>
+      </symbol>
+
+      <!-- ============================================================
+           LOGO 3 — "Negative-Space" Pin
+           Solid orange rounded square with cream carrot cut out.
+           App-icon native. Most modern/tech.
+           ============================================================ -->
+      <symbol id="logo-3" viewBox="0 0 80 100">
+        <!-- Background rounded square (orange) -->
+        <rect x="0" y="10" width="80" height="80" rx="18" fill="#E8853D"/>
+        <!-- Carrot shape cut out (mask) -->
+        <mask id="carrot-mask-3">
+          <rect x="0" y="10" width="80" height="80" fill="white"/>
+          <path d="M40 28 C 50 28, 52 34, 50 46 C 48 60, 44 74, 40 80 C 36 74, 32 60, 30 46 C 28 34, 30 28, 40 28 Z" fill="black"/>
+          <path d="M37 22 L43 22 L43 28 L37 28 Z M 37 26 L 30 23 L 33 30 L 37 28 Z M 43 26 L 50 23 L 47 30 L 43 28 Z" fill="black"/>
+        </mask>
+        <rect x="0" y="10" width="80" height="80" rx="18" fill="#E8853D" mask="url(#carrot-mask-3)"/>
+      </symbol>
+
+      <!-- ============================================================
+           LOGO 4 — "Geometric Outline" (Stripe/Vercel-style)
+           Pure outline, minimal. Single line for stem, outline body.
+           Ultra-tech, ultra-modern.
+           ============================================================ -->
+      <symbol id="logo-4" viewBox="0 0 80 100">
+        <!-- Stem (just a line with a small downward arrow) -->
+        <line x1="40" y1="0" x2="40" y2="22" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M32 18 L40 28 L48 18" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+        <!-- Body outline -->
+        <path d="M40 30 C 55 30, 56 38, 54 52 C 52 70, 47 86, 40 96 C 33 86, 28 70, 26 52 C 24 38, 25 30, 40 30 Z"
+              fill="none"
+              stroke="#E8853D"
+              stroke-width="3.5"
+              stroke-linejoin="round"/>
+      </symbol>
+
+      <!-- ============================================================
+           LOGO 5 — "Pin-First" Hybrid
+           Reads more as Maps pin than vegetable.
+           Has a clear circular indicator (the "drop point").
+           ============================================================ -->
+      <symbol id="logo-5" viewBox="0 0 80 100">
+        <!-- Stem -->
+        <path d="M37 4 L43 4 L43 18 L37 18 Z" fill="currentColor"/>
+        <!-- Body — wider top, sharper point (more pin-like) -->
+        <path d="M40 18 C 60 18, 64 30, 60 50 C 56 72, 48 90, 40 98 C 32 90, 24 72, 20 50 C 16 30, 20 18, 40 18 Z"
+              fill="#E8853D"/>
+        <!-- Circular "drop point" indicator -->
+        <circle cx="40" cy="42" r="9" fill="currentColor"/>
+        <circle cx="40" cy="42" r="5" fill="#E8853D"/>
+      </symbol>
+
+      <!-- ============================================================
+           LOGO 6 — "Solid Mono" (most reduced)
+           Single solid orange shape, stem integrated.
+           Simplest possible expression.
+           ============================================================ -->
+      <symbol id="logo-6" viewBox="0 0 80 100">
+        <!-- Combined stem + body in one shape -->
+        <path d="M37 2 L43 2 L43 22
+                 C 56 24, 58 36, 56 52
+                 C 54 70, 48 86, 40 96
+                 C 32 86, 26 70, 24 52
+                 C 22 36, 24 24, 37 22 Z"
+              fill="#E8853D"/>
+        <!-- Stem detail (darker overlay) -->
+        <path d="M37 2 L43 2 L43 22 L37 22 Z" fill="currentColor"/>
+      </symbol>
+
+    </defs>
+  </svg>
+
+  <!-- =================== NAV =================== -->
+  <nav class="ds-nav">
+    <div class="container ds-nav-inner">
+      <div class="ds-brand" style="color: var(--ink)">
+        <svg><use href="#logo-2"/></svg>
+        Carrot
+      </div>
+      <div class="ds-toc">
+        <a href="#logos">Logos</a>
+        <a href="#sizing">Sizing</a>
+        <a href="#app">App icon</a>
+        <a href="#color">Color</a>
+        <a href="#type">Type</a>
+        <a href="#wordmark">Wordmark</a>
+      </div>
+      <div class="ds-nav-meta">v0.1 · Working</div>
+    </div>
+  </nav>
+
+  <!-- =================== HEADER =================== -->
+  <header class="ds-header">
+    <div class="container">
+      <div class="ds-eyebrow">Brand Assets · Carrot · Document v0.1</div>
+      <h1>Six logos.<br/><em>One carrot.</em></h1>
+      <p>
+        A working set of mark proposals for Carrot, a visual feedback widget.
+        Each logo is built around the same insight — the carrot shape doubles
+        as a map pin — but executes that idea at different points on the
+        spectrum from organic to geometric. Color is held tight: ink, cream,
+        and a single carrot-orange accent. No green leaves; the leaf-shape
+        becomes a downward arrow that says "drop here."
+      </p>
+    </div>
+  </header>
+
+  <!-- =================== LOGOS =================== -->
+  <section id="logos">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">§ 01</span>
+        <h2 class="section-title">Logo proposals</h2>
+      </div>
+      <p class="section-desc">
+        Six directions, listed loosest to tightest. Each carrot uses the
+        single-orange accent. The "leaf" element is treated as a downward
+        arrow — the gesture of dropping a pin — instead of organic foliage.
+      </p>
+
+      <div class="logo-grid">
+
+        <div class="logo-card">
+          <div class="logo-stage" style="color: var(--ink);">
+            <svg class="proposal"><use href="#logo-1"/></svg>
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">№ 01 · Arrow-Leaf</div>
+            <h3>Single-stem arrow</h3>
+            <p>One bold downward arrow as the stalk. Geometric teardrop body.
+            Closest to the reference you shared, but reduced to a single mark
+            instead of three. Reads first as a pin, second as a carrot.</p>
+            <div class="tags">
+              <span class="tag featured">Recommended</span>
+              <span class="tag">App-icon ready</span>
+              <span class="tag">Mono</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage" style="color: var(--ink);">
+            <svg class="proposal"><use href="#logo-2"/></svg>
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">№ 02 · Trident</div>
+            <h3>Three-leaf carrot</h3>
+            <p>Center stalk with two curved side leaves. The most overtly
+            "vegetable" of the proposals — preserves the silhouette of a real
+            carrot top. Slightly more organic feel.</p>
+            <div class="tags">
+              <span class="tag">Organic</span>
+              <span class="tag">Reference-faithful</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage dark">
+            <svg class="proposal" style="color: var(--bg-card);"><use href="#logo-3"/></svg>
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">№ 03 · Negative Space</div>
+            <h3>Cut-out app icon</h3>
+            <p>Solid orange rounded square with the carrot shape carved out
+            of the cream. App-icon native — looks finished in iOS/Mac dock at
+            any size. Most modern/tech execution.</p>
+            <div class="tags">
+              <span class="tag">App-icon native</span>
+              <span class="tag">Most tech</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage" style="color: var(--ink);">
+            <svg class="proposal"><use href="#logo-4"/></svg>
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">№ 04 · Outline</div>
+            <h3>Geometric line</h3>
+            <p>Pure outline, no fills except the orange stroke. Stripe /
+            Vercel territory — minimal and architectural. Loses some warmth
+            but gains tech-modern legibility at small sizes.</p>
+            <div class="tags">
+              <span class="tag">Minimal</span>
+              <span class="tag">Stripe-style</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage" style="color: var(--ink);">
+            <svg class="proposal"><use href="#logo-5"/></svg>
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">№ 05 · Pin-Hybrid</div>
+            <h3>Maps-pin lean</h3>
+            <p>Bigger circular "drop point" indicator pushes this past
+            "carrot" into "Maps pin." Most explicitly product-coded — a user
+            sees a pin first. Loses some of the brand personality.</p>
+            <div class="tags">
+              <span class="tag">Pin-first</span>
+              <span class="tag">Product-coded</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage" style="color: var(--ink);">
+            <svg class="proposal"><use href="#logo-6"/></svg>
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">№ 06 · Reduced</div>
+            <h3>Single-shape carrot</h3>
+            <p>Stem and body merged into one continuous shape. Most reduced
+            execution — works at favicon sizes and as an emoji-replacement.
+            Closest to the kind of mark Slack or Mailchimp would use.</p>
+            <div class="tags">
+              <span class="tag">Smallest-size friendly</span>
+              <span class="tag">Iconic</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== SIZING =================== -->
+  <section id="sizing">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">§ 02</span>
+        <h2 class="section-title">Size scale</h2>
+      </div>
+      <p class="section-desc">
+        Logo No. 01 (recommended) at production sizes. Tests legibility from
+        favicon (16px) to brand mark (128px). The arrow-leaf survives at
+        16px because the stem dominates the silhouette.
+      </p>
+
+      <div class="size-scale">
+        <div class="size-item">
+          <svg style="width:128px; height:160px; color: var(--ink);"><use href="#logo-1"/></svg>
+          <span class="size-label">128px · Brand</span>
+        </div>
+        <div class="size-item">
+          <svg style="width:64px; height:80px; color: var(--ink);"><use href="#logo-1"/></svg>
+          <span class="size-label">64px · App icon</span>
+        </div>
+        <div class="size-item">
+          <svg style="width:32px; height:40px; color: var(--ink);"><use href="#logo-1"/></svg>
+          <span class="size-label">32px · UI</span>
+        </div>
+        <div class="size-item">
+          <svg style="width:24px; height:30px; color: var(--ink);"><use href="#logo-1"/></svg>
+          <span class="size-label">24px · Nav</span>
+        </div>
+        <div class="size-item">
+          <svg style="width:16px; height:20px; color: var(--ink);"><use href="#logo-1"/></svg>
+          <span class="size-label">16px · Favicon</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== APP ICONS =================== -->
+  <section id="app">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">§ 03</span>
+        <h2 class="section-title">App icon <em>treatments</em></h2>
+      </div>
+      <p class="section-desc">
+        The recommended mark (No. 01) on four background treatments.
+        iOS-style rounded squircle, 32px corner radius. Notice how the
+        cream-on-dark version has the closest energy to the reference
+        you shared.
+      </p>
+
+      <div class="app-icons">
+        <div class="app-icon-card">
+          <div class="app-icon cream">
+            <svg style="color: var(--ink);"><use href="#logo-1"/></svg>
+          </div>
+          <span class="app-icon-label">Cream · Default</span>
+        </div>
+        <div class="app-icon-card">
+          <div class="app-icon dark">
+            <svg style="color: var(--bg-card);"><use href="#logo-1"/></svg>
+          </div>
+          <span class="app-icon-label">Ink · Sharp</span>
+        </div>
+        <div class="app-icon-card">
+          <div class="app-icon orange">
+            <svg style="color: var(--ink);"><use href="#logo-6"/></svg>
+          </div>
+          <span class="app-icon-label">Carrot · Loud</span>
+        </div>
+        <div class="app-icon-card">
+          <div class="app-icon green">
+            <svg style="color: #F5EDE0;"><use href="#logo-1"/></svg>
+          </div>
+          <span class="app-icon-label">Forest · Reference</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== COLOR =================== -->
+  <section id="color">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">§ 04</span>
+        <h2 class="section-title">Color system</h2>
+      </div>
+      <p class="section-desc">
+        Strict monochrome plus one. Cream and ink carry 95% of the surface;
+        carrot orange is rationed for moments of attention. Forest is held
+        in reserve for app-icon backgrounds only.
+      </p>
+
+      <div class="palette">
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #F2EBE0;">
+            <span>#F2EBE0</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Newsprint Cream</div>
+            <div class="swatch-hex">--bg</div>
+            <div class="swatch-usage">Primary background. The paper.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #EDE3D2;">
+            <span>#EDE3D2</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Warm Cream</div>
+            <div class="swatch-hex">--bg-warm</div>
+            <div class="swatch-usage">Section breaks, soft surfaces.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #1A1A1A;">
+            <span>#1A1A1A</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Ink</div>
+            <div class="swatch-hex">--ink</div>
+            <div class="swatch-usage">Type, marks, primary action.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #6B6560;">
+            <span style="background: rgba(255,255,255,0.7);">#6B6560</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Mute</div>
+            <div class="swatch-hex">--ink-mute</div>
+            <div class="swatch-usage">Captions, metadata, secondary text.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #E8853D;">
+            <span>#E8853D</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Carrot</div>
+            <div class="swatch-hex">--carrot</div>
+            <div class="swatch-usage">The accent. Logo only, by default.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #B85F1F;">
+            <span style="background: rgba(255,255,255,0.7);">#B85F1F</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Carrot Deep</div>
+            <div class="swatch-hex">--carrot-deep</div>
+            <div class="swatch-usage">Eyebrow text, hover states, italics.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #F5C9A0;">
+            <span>#F5C9A0</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Carrot Light</div>
+            <div class="swatch-hex">--carrot-light</div>
+            <div class="swatch-usage">Tints, hover surfaces, illustrations.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #1F3A2F;">
+            <span>#1F3A2F</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Forest</div>
+            <div class="swatch-hex">--forest</div>
+            <div class="swatch-usage">Reserved. App-icon backgrounds only.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== TYPOGRAPHY =================== -->
+  <section id="type">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">§ 05</span>
+        <h2 class="section-title">Typography</h2>
+      </div>
+      <p class="section-desc">
+        Two families. Garamond does the editorial work — display, italics,
+        moments of voice. Inter does the system work — UI, body, captions.
+        JetBrains Mono shows up in monospace contexts (numbers, codes,
+        eyebrows).
+      </p>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">EB Garamond</div>
+          <div class="type-meta-spec">Serif · Old-style · Display</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">88px</div>
+          <div class="type-spec-sample serif" style="font-size: 88px; line-height: 0.95; letter-spacing: -0.025em; font-weight: 500;">Drop a <em style="font-style: italic;">carrot</em>.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">48px</div>
+          <div class="type-spec-sample serif" style="font-size: 48px; line-height: 1.05; letter-spacing: -0.02em; font-weight: 500;">Visual feedback, freshly picked.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">24px</div>
+          <div class="type-spec-sample serif" style="font-size: 24px; line-height: 1.3; font-style: italic;">"The friendliest way to leave feedback on the web."</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">18px</div>
+          <div class="type-spec-sample serif" style="font-size: 18px; line-height: 1.55;">Carrot is a visual feedback widget that lives on your site. Your team drops pins, leaves notes, and resolves issues — right on the page.</div>
+        </div>
+      </div>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">Inter</div>
+          <div class="type-meta-spec">Sans · Geometric · UI &amp; Body</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">28px / 700</div>
+          <div class="type-spec-sample sans" style="font-size: 28px; line-height: 1.15; letter-spacing: -0.02em; font-weight: 700;">Plant Carrot in your site</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">15px / 500</div>
+          <div class="type-spec-sample sans" style="font-size: 15px; line-height: 1.55; font-weight: 500;">Pins stick to elements, not coordinates. Resize, restyle, redesign — the carrot follows.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">13px / 400</div>
+          <div class="type-spec-sample sans" style="font-size: 13px; line-height: 1.5; color: var(--ink-soft);">Small print. Captions. Footer text. Quiet but legible.</div>
+        </div>
+      </div>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">JetBrains Mono</div>
+          <div class="type-meta-spec">Monospace · Code · Eyebrows</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">11px / UPPER</div>
+          <div class="type-spec-sample" style="font-family: var(--mono); font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--carrot-deep);">Vol. I · No. 01 · Brand Assets</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">14px</div>
+          <div class="type-spec-sample" style="font-family: var(--mono); font-size: 14px;">npm install @carrot/widget</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== WORDMARK =================== -->
+  <section id="wordmark">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">§ 06</span>
+        <h2 class="section-title">Wordmark <em>lockups</em></h2>
+      </div>
+      <p class="section-desc">
+        Three lockup directions. Pick one to commit. Each pairs the chosen
+        mark (No. 01) with the wordmark in different type registers.
+      </p>
+
+      <div class="wordmark-grid">
+
+        <div class="wordmark-card">
+          <span class="wm-label">Editorial · EB Garamond</span>
+          <div class="wordmark-serif" style="color: var(--ink);">
+            <svg><use href="#logo-1"/></svg>
+            Carrot
+          </div>
+        </div>
+
+        <div class="wordmark-card">
+          <span class="wm-label">Tech · Inter Bold UPPER</span>
+          <div class="wordmark-sans" style="color: var(--ink);">
+            <svg><use href="#logo-1"/></svg>
+            CARROT
+          </div>
+        </div>
+
+        <div class="wordmark-card">
+          <span class="wm-label">System · JetBrains Mono</span>
+          <div class="wordmark-mono" style="color: var(--ink);">
+            <svg><use href="#logo-1"/></svg>
+            carrot.app
+          </div>
+        </div>
+
+        <div class="wordmark-card" style="background: var(--bg-deep);">
+          <span class="wm-label" style="color: var(--ink-faint);">Editorial · Inverted</span>
+          <div class="wordmark-serif" style="color: var(--bg-card);">
+            <svg><use href="#logo-1"/></svg>
+            Carrot
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== FOOTER =================== -->
+  <footer>
+    <div class="container footer-inner">
+      <div class="ds-brand">
+        <svg><use href="#logo-1"/></svg>
+        Carrot
+      </div>
+      <div class="footer-meta">
+        Brand Assets · Document v0.1 · MMXXVI
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

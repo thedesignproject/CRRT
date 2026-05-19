@@ -1,0 +1,158 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-tube-black: var(--crrt-bg-deep);
+  --color-tube-soft: var(--crrt-bg-deep-soft);
+  --color-phosphor-white: var(--crrt-white);
+  --color-ink-mute: var(--crrt-ink-mute);
+  --color-ink-faint: var(--crrt-ink-faint);
+  --color-carrot: var(--crrt-carrot);
+  --color-carrot-deep: var(--crrt-carrot-deep);
+  --color-phosphor: var(--crrt-phosphor);
+  --color-forest: var(--crrt-forest);
+  --color-rule-dark: var(--crrt-rule-dark);
+
+  --font-sans: var(--crrt-font-sans);
+  --font-mono: var(--crrt-font-mono);
+  --font-crt: var(--crrt-font-crt);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--crrt-bg-deep);
+    color: var(--crrt-white);
+    font-family: var(--crrt-font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--crrt-carrot);
+    color: var(--crrt-bg-deep);
+  }
+}
+
+/* Subtle CRT scanline overlay — opt-in via .scanlines class on a section */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.012) 2px,
+    rgba(255, 255, 255, 0.012) 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Section marker — "/ 01 hero" — JetBrains Mono small label */
+.section-marker {
+  font-family: var(--crrt-font-mono);
+  font-size: 13px;
+  color: var(--crrt-ink-mute);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+/* Phosphor amber for terminal voice moments — tagline pills, eyebrows */
+.phosphor-eyebrow {
+  font-family: var(--crrt-font-crt);
+  font-size: 18px;
+  color: var(--crrt-phosphor);
+  letter-spacing: var(--crrt-tracking-crt);
+  text-transform: uppercase;
+}
+
+/* Pill button — 3 variants from Figma "/ 04 tone" */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--crrt-space-4);
+  border-radius: var(--crrt-radius-pill);
+  font-family: var(--crrt-font-sans);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform var(--crrt-duration-fast) var(--crrt-easing-default),
+              background var(--crrt-duration-fast) var(--crrt-easing-default),
+              box-shadow var(--crrt-duration-default) var(--crrt-easing-emphasis);
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+}
+.pill:active:not(:disabled) { transform: scale(0.97); }
+
+.pill-ghost {
+  background: var(--crrt-bg-deep);
+  color: var(--crrt-white);
+  border-color: var(--crrt-rule-dark);
+  box-shadow: 0 8px 12px rgba(10, 10, 10, 0.18);
+}
+.pill-ghost:hover { background: var(--crrt-bg-deep-soft); }
+
+.pill-carrot {
+  background: var(--crrt-carrot);
+  color: var(--crrt-bg-deep);
+  border-color: var(--crrt-carrot-deep);
+  box-shadow: 0 8px 12px rgba(10, 10, 10, 0.18);
+  font-weight: 600;
+}
+.pill-carrot:hover { background: var(--crrt-carrot-deep); }
+
+.pill-phosphor {
+  background: var(--crrt-phosphor);
+  color: var(--crrt-ink);
+  border-color: var(--crrt-phosphor);
+  box-shadow: 0 8px 12px rgba(10, 10, 10, 0.18);
+}
+
+.pill-sm { height: 32px; padding: 0 14px; font-size: 12px; gap: 8px; }
+.pill-md { height: 44px; padding: 0 18px; font-size: 13px; }
+.pill-lg { height: 52px; padding: 0 22px; font-size: 15px; letter-spacing: -0.01em; }
+
+/* Pixel carrot icon container — keeps the pixel-art crisp */
+.carrot-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--crrt-radius-3xl);
+  background: var(--crrt-bg-deep);
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+.pill-md .carrot-chip { width: 28px; height: 28px; border-radius: 14px; }
+.pill-sm .carrot-chip { width: 24px; height: 24px; border-radius: 12px; }
+.pill-lg .carrot-chip { width: 36px; height: 36px; border-radius: 18px; }
+
+/* Cursor blink for the wordmark */
+.cursor-blink {
+  display: inline-block;
+  animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
+}

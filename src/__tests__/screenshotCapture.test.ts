@@ -2,9 +2,21 @@ import { describe, expect, it, vi } from 'vitest'
 import { captureElement, convertModernColorFunctions } from '../lib/screenshotCapture'
 
 vi.mock('html2canvas', () => ({
-  default: vi.fn(async () => ({
-    toBlob: (cb: (blob: Blob | null) => void) => cb(new Blob(['x'], { type: 'image/png' })),
-  })),
+  default: vi.fn(async (_el: Element, opts?: { ignoreElements?: (n: Element) => boolean }) => {
+    // Exercise the ignoreElements callback so its body gets coverage
+    if (opts?.ignoreElements) {
+      const withFw = document.createElement('div')
+      withFw.setAttribute('data-fw', '')
+      opts.ignoreElements(withFw)
+      const withCrrt = document.createElement('div')
+      withCrrt.setAttribute('data-fw-crrt', '')
+      opts.ignoreElements(withCrrt)
+      opts.ignoreElements(document.createElement('div'))
+    }
+    return {
+      toBlob: (cb: (blob: Blob | null) => void) => cb(new Blob(['x'], { type: 'image/png' })),
+    }
+  }),
 }))
 
 describe('screenshot color conversion', () => {

@@ -160,7 +160,7 @@ export async function captureElement(el: HTMLElement): Promise<Blob | null> {
       scrollY: -window.scrollY,
       windowWidth: document.documentElement.offsetWidth,
       windowHeight: document.documentElement.offsetHeight,
-      ignoreElements: (node) => node.hasAttribute('data-fw'),
+      ignoreElements: (node) => node.hasAttribute('data-fw') || node.hasAttribute('data-fw-crrt'),
       onclone: sanitizeModernColorFunctions,
     })
     return new Promise((resolve) => {

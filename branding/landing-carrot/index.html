@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Carrot — Visual feedback, freshly picked.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F2EBE0;
+      --bg-warm: #EDE3D2;
+      --bg-deep: #E6DBC4;
+      --rule: rgba(26, 26, 26, 0.18);
+      --ink: #1A1A1A;
+      --ink-soft: #3A3631;
+      --ink-mute: #6B6560;
+      --carrot: #E8853D;
+      --serif: 'EB Garamond', 'Times New Roman', Georgia, serif;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      overflow-x: hidden;
+    }
+
+    /* Subtle paper texture using CSS noise */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.4;
+      mix-blend-mode: multiply;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.1, 0 0 0 0 0.1, 0 0 0 0 0.1, 0 0 0 0.06 0'/></filter><rect width='200' height='200' filter='url(%23n)' opacity='0.5'/></svg>");
+      z-index: 1;
+    }
+
+    main, nav, footer { position: relative; z-index: 2; }
+
+    a { color: inherit; text-decoration: none; }
+
+    .container {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 32px;
+    }
+
+    /* ============ NAV ============ */
+    nav {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--rule);
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+    }
+    .nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--serif);
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+    }
+    .brand svg { width: 26px; height: 32px; }
+    .nav-links {
+      display: flex;
+      gap: 36px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--ink-soft);
+    }
+    .nav-links a:hover { color: var(--ink); }
+    .nav-cta {
+      background: var(--ink);
+      color: var(--bg);
+      padding: 10px 18px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    .nav-cta:hover { background: var(--ink-soft); }
+
+    /* ============ HERO ============ */
+    .hero {
+      padding: 120px 0 100px;
+      text-align: center;
+      position: relative;
+    }
+    .hero-eyebrow {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 15px;
+      color: var(--ink-mute);
+      margin-bottom: 28px;
+      letter-spacing: 0.02em;
+    }
+    .hero-eyebrow::before,
+    .hero-eyebrow::after {
+      content: '·';
+      margin: 0 12px;
+      color: var(--carrot);
+    }
+    .hero h1 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: clamp(48px, 8vw, 104px);
+      line-height: 0.98;
+      letter-spacing: -0.025em;
+      max-width: 14ch;
+      margin: 0 auto 36px;
+    }
+    .hero h1 em {
+      font-style: italic;
+      font-weight: 500;
+    }
+    .hero-sub {
+      font-size: 19px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+      max-width: 52ch;
+      margin: 0 auto 44px;
+    }
+    .hero-ctas {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      background: var(--ink);
+      color: var(--bg);
+      padding: 16px 28px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 500;
+      transition: transform 0.2s, background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      background: var(--ink-soft);
+    }
+    .btn-secondary {
+      color: var(--ink);
+      padding: 16px 24px;
+      font-size: 15px;
+      font-weight: 500;
+      border-bottom: 1px solid var(--ink);
+      padding-bottom: 4px;
+    }
+    .btn-secondary:hover {
+      border-bottom-style: dashed;
+    }
+
+    .hero-carrot {
+      width: 64px;
+      height: 80px;
+      margin: 0 auto 40px;
+      display: block;
+    }
+
+    /* ============ EDITORIAL PULL ============ */
+    .editorial {
+      padding: 100px 0;
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+      background: var(--bg-warm);
+      position: relative;
+    }
+    .editorial-inner {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 0 32px;
+      text-align: center;
+    }
+    .editorial-quote {
+      font-family: var(--serif);
+      font-size: clamp(32px, 4.5vw, 56px);
+      line-height: 1.18;
+      letter-spacing: -0.015em;
+      font-weight: 500;
+    }
+    .editorial-quote em {
+      font-style: italic;
+      color: var(--carrot);
+    }
+    .editorial-attribution {
+      margin-top: 32px;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 16px;
+      color: var(--ink-mute);
+    }
+    .editorial-attribution::before { content: '— '; }
+
+    /* ============ HOW IT WORKS ============ */
+    .steps {
+      padding: 120px 0;
+    }
+    .section-header {
+      text-align: center;
+      margin-bottom: 80px;
+    }
+    .section-eyebrow {
+      font-family: var(--sans);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--carrot);
+      margin-bottom: 18px;
+    }
+    .section-header h2 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: clamp(36px, 5vw, 56px);
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+      max-width: 18ch;
+      margin: 0 auto;
+    }
+    .section-header h2 em { font-style: italic; }
+
+    .steps-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border-top: 1px solid var(--rule);
+    }
+    .step {
+      padding: 56px 36px;
+      border-right: 1px solid var(--rule);
+      position: relative;
+    }
+    .step:last-child { border-right: none; }
+    .step-number {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 14px;
+      color: var(--ink-mute);
+      margin-bottom: 24px;
+    }
+    .step-icon {
+      width: 56px;
+      height: 70px;
+      margin-bottom: 28px;
+    }
+    .step h3 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: 28px;
+      line-height: 1.15;
+      letter-spacing: -0.01em;
+      margin-bottom: 14px;
+    }
+    .step p {
+      font-size: 15px;
+      line-height: 1.6;
+      color: var(--ink-soft);
+    }
+
+    /* ============ DEMO ============ */
+    .demo-section {
+      padding: 100px 0 140px;
+      background: var(--bg-warm);
+      border-top: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+    .browser {
+      max-width: 1080px;
+      margin: 0 auto;
+      background: #FFFCF6;
+      border-radius: 12px;
+      box-shadow:
+        0 1px 0 rgba(26, 26, 26, 0.05),
+        0 12px 40px rgba(26, 26, 26, 0.08),
+        0 32px 80px rgba(26, 26, 26, 0.06);
+      overflow: hidden;
+      border: 1px solid var(--rule);
+    }
+    .browser-bar {
+      background: #F0E8DA;
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .browser-dots {
+      display: flex;
+      gap: 7px;
+    }
+    .browser-dots span {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+      background: var(--ink-mute);
+      opacity: 0.32;
+    }
+    .browser-url {
+      flex: 1;
+      background: var(--bg);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--sans);
+      color: var(--ink-mute);
+      letter-spacing: 0.01em;
+    }
+    .browser-content {
+      position: relative;
+      padding: 60px 64px 80px;
+      min-height: 480px;
+    }
+
+    /* Mock page content inside the browser */
+    .mock-page-tag {
+      font-family: var(--sans);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--ink-mute);
+      margin-bottom: 16px;
+    }
+    .mock-page-title {
+      font-family: var(--serif);
+      font-size: 56px;
+      line-height: 1;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      max-width: 14ch;
+      margin-bottom: 20px;
+    }
+    .mock-page-sub {
+      font-size: 16px;
+      color: var(--ink-soft);
+      max-width: 50ch;
+      margin-bottom: 40px;
+      line-height: 1.55;
+    }
+    .mock-page-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    .mock-card {
+      background: var(--bg-deep);
+      border-radius: 8px;
+      aspect-ratio: 16 / 10;
+      position: relative;
+    }
+    .mock-card.alt { background: var(--bg-warm); }
+
+    /* Carrot pins floating on the mock page */
+    .pin {
+      position: absolute;
+      width: 32px;
+      height: 40px;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .pin:hover { transform: scale(1.1); }
+    .pin.p1 { top: 60px; left: 380px; }
+    .pin.p2 { top: 220px; right: 110px; }
+    .pin.p3 { top: 380px; left: 240px; }
+    .pin.p4 { bottom: 120px; right: 260px; }
+
+    .pin-comment {
+      position: absolute;
+      top: 380px;
+      left: 280px;
+      background: var(--ink);
+      color: var(--bg);
+      padding: 16px 20px;
+      border-radius: 14px;
+      border-bottom-left-radius: 4px;
+      max-width: 280px;
+      font-size: 14px;
+      line-height: 1.5;
+      box-shadow: 0 8px 24px rgba(26, 26, 26, 0.18);
+    }
+    .pin-comment-author {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--carrot);
+      margin-bottom: 6px;
+    }
+    .pin-comment-time {
+      display: block;
+      margin-top: 8px;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 12px;
+      color: rgba(242, 235, 224, 0.55);
+    }
+
+    /* ============ FEATURES (small grid) ============ */
+    .features {
+      padding: 120px 0;
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 48px;
+      margin-top: 64px;
+    }
+    .feature-block {
+      padding-top: 28px;
+      border-top: 1px solid var(--ink);
+    }
+    .feature-block h4 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: 22px;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+    .feature-block p {
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--ink-soft);
+    }
+
+    /* ============ FINAL CTA ============ */
+    .cta {
+      padding: 140px 0 120px;
+      text-align: center;
+      background: var(--ink);
+      color: var(--bg);
+      position: relative;
+    }
+    .cta-eyebrow {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 16px;
+      color: var(--carrot);
+      margin-bottom: 24px;
+    }
+    .cta h2 {
+      font-family: var(--serif);
+      font-weight: 500;
+      font-size: clamp(48px, 7vw, 88px);
+      line-height: 1;
+      letter-spacing: -0.025em;
+      margin-bottom: 40px;
+    }
+    .cta h2 em { font-style: italic; }
+    .cta-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg);
+      color: var(--ink);
+      padding: 18px 32px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 500;
+      transition: transform 0.2s;
+    }
+    .cta-button:hover { transform: translateY(-1px); }
+    .cta-fineprint {
+      margin-top: 24px;
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 14px;
+      color: rgba(242, 235, 224, 0.55);
+    }
+
+    /* ============ FOOTER ============ */
+    footer {
+      padding: 56px 0 80px;
+      border-top: 1px solid var(--rule);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .footer-meta {
+      font-family: var(--serif);
+      font-style: italic;
+      font-size: 13px;
+      color: var(--ink-mute);
+    }
+    .footer-links {
+      display: flex;
+      gap: 28px;
+      font-size: 13px;
+      color: var(--ink-soft);
+    }
+    .footer-links a:hover { color: var(--ink); }
+
+    /* ============ RESPONSIVE ============ */
+    @media (max-width: 880px) {
+      .nav-links { display: none; }
+      .hero { padding: 80px 0 60px; }
+      .steps-grid { grid-template-columns: 1fr; }
+      .step { border-right: none; border-bottom: 1px solid var(--rule); }
+      .step:last-child { border-bottom: none; }
+      .features-grid { grid-template-columns: 1fr; }
+      .browser-content { padding: 40px 28px; min-height: auto; }
+      .mock-page-title { font-size: 36px; }
+      .pin.p1 { top: 40px; left: 60%; }
+      .pin.p2 { top: 160px; right: 20px; }
+      .pin.p3 { top: 280px; left: 30px; }
+      .pin.p4 { bottom: 60px; right: 40px; }
+      .pin-comment { top: 280px; left: 70px; max-width: 220px; }
+      .editorial { padding: 64px 0; }
+      .steps, .features { padding: 80px 0; }
+      .cta { padding: 96px 0; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =================== CARROT SVG (defs reused) =================== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="carrot" viewBox="0 0 80 100">
+        <!-- Center stem -->
+        <path d="M37 4 L43 4 L43 22 L37 22 Z" fill="#1A1A1A"/>
+        <!-- Left leaf -->
+        <path d="M40 22 C 28 10, 16 10, 12 18 C 18 22, 32 24, 40 22 Z" fill="#1A1A1A"/>
+        <!-- Right leaf -->
+        <path d="M40 22 C 52 10, 64 10, 68 18 C 62 22, 48 24, 40 22 Z" fill="#1A1A1A"/>
+        <!-- Carrot body (the pin) -->
+        <path d="M40 24 C 56 24, 60 30, 56 50 C 53 70, 48 88, 40 96 C 32 88, 27 70, 24 50 C 20 30, 24 24, 40 24 Z"
+              fill="#E8853D"
+              stroke="#1A1A1A"
+              stroke-width="2"/>
+        <!-- Hatching detail -->
+        <line x1="32" y1="42" x2="48" y2="42" stroke="#1A1A1A" stroke-width="1.4" opacity="0.55"/>
+        <line x1="33" y1="54" x2="47" y2="54" stroke="#1A1A1A" stroke-width="1.4" opacity="0.55"/>
+        <line x1="35" y1="66" x2="45" y2="66" stroke="#1A1A1A" stroke-width="1.4" opacity="0.55"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- =================== NAV =================== -->
+  <nav>
+    <div class="container nav-inner">
+      <a href="#" class="brand">
+        <svg><use href="#carrot"/></svg>
+        Carrot
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#demo">See it live</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#changelog">Changelog</a>
+      </div>
+      <a href="#" class="nav-cta">Get Carrot →</a>
+    </div>
+  </nav>
+
+  <main>
+
+    <!-- =================== HERO =================== -->
+    <section class="hero">
+      <div class="container">
+        <svg class="hero-carrot"><use href="#carrot"/></svg>
+        <div class="hero-eyebrow">Vol. I, No. 1 — Visual feedback, freshly picked</div>
+        <h1>Drop a carrot.<br/><em>Mark what's off.</em></h1>
+        <p class="hero-sub">
+          Carrot is a visual feedback widget that lives on your site. Your team
+          drops pins, leaves notes, and resolves issues — right on the page.
+          Made for designers who'd rather grow than gripe.
+        </p>
+        <div class="hero-ctas">
+          <a href="#" class="btn-primary">
+            Plant Carrot in your site
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M2 7H12M12 7L8 3M12 7L8 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </a>
+          <a href="#demo" class="btn-secondary">Watch a demo</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== EDITORIAL PULL =================== -->
+    <section class="editorial">
+      <div class="editorial-inner">
+        <p class="editorial-quote">
+          "Every great design has had a <em>carrot</em> dropped on it.
+          The bad ones never get past the first one."
+        </p>
+        <p class="editorial-attribution">No designer, ever, but it should have been</p>
+      </div>
+    </section>
+
+    <!-- =================== HOW IT WORKS =================== -->
+    <section class="steps" id="how">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-eyebrow">How it works</div>
+          <h2>Three steps. <em>No meetings.</em></h2>
+        </div>
+        <div class="steps-grid">
+          <div class="step">
+            <div class="step-number">No. 01</div>
+            <svg class="step-icon"><use href="#carrot"/></svg>
+            <h3>Plant a script</h3>
+            <p>
+              Drop one line of JavaScript in your <code>&lt;head&gt;</code>.
+              Carrot springs up wherever it's needed. No SDKs, no rebuilds.
+            </p>
+          </div>
+          <div class="step">
+            <div class="step-number">No. 02</div>
+            <svg class="step-icon"><use href="#carrot"/></svg>
+            <h3>Drop a carrot</h3>
+            <p>
+              Click anywhere on any page. A carrot appears. Type your note.
+              Tag a teammate. The pin sticks to the element, not the pixel.
+            </p>
+          </div>
+          <div class="step">
+            <div class="step-number">No. 03</div>
+            <svg class="step-icon"><use href="#carrot"/></svg>
+            <h3>Watch it grow</h3>
+            <p>
+              Comments turn into tickets. Tickets turn into commits.
+              Designs improve. Bugs wilt. Your team ships fewer arguments.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== DEMO =================== -->
+    <section class="demo-section" id="demo">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-eyebrow">In the wild</div>
+          <h2>What a page <em>full of carrots</em> looks like</h2>
+        </div>
+
+        <div class="browser">
+          <div class="browser-bar">
+            <div class="browser-dots"><span></span><span></span><span></span></div>
+            <div class="browser-url">acme-studio.com/projects/spring-collection</div>
+          </div>
+          <div class="browser-content">
+            <div class="mock-page-tag">Spring Collection · 2026</div>
+            <div class="mock-page-title">A garden, planted in pixels.</div>
+            <div class="mock-page-sub">
+              Our latest editorial direction draws on 19th-century botanical
+              illustration, restrained typography, and a faint smell of soil.
+            </div>
+            <div class="mock-page-grid">
+              <div class="mock-card"></div>
+              <div class="mock-card alt"></div>
+              <div class="mock-card alt"></div>
+              <div class="mock-card"></div>
+            </div>
+
+            <!-- The pins -->
+            <svg class="pin p1"><use href="#carrot"/></svg>
+            <svg class="pin p2"><use href="#carrot"/></svg>
+            <svg class="pin p3"><use href="#carrot"/></svg>
+            <svg class="pin p4"><use href="#carrot"/></svg>
+
+            <!-- An open comment -->
+            <div class="pin-comment">
+              <div class="pin-comment-author">Maya · Design</div>
+              The hierarchy here feels off — the title is competing with the
+              tag for attention. Try shrinking the tag and giving the title
+              more breathing room above.
+              <span class="pin-comment-time">dropped 4 minutes ago</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== FEATURES =================== -->
+    <section class="features">
+      <div class="container">
+        <div class="section-header">
+          <div class="section-eyebrow">What's in the basket</div>
+          <h2>Small features. <em>Quietly considered.</em></h2>
+        </div>
+        <div class="features-grid">
+          <div class="feature-block">
+            <h4>Element-anchored pins</h4>
+            <p>Pins stick to elements, not coordinates. Resize, restyle, or
+            redesign — the carrot follows.</p>
+          </div>
+          <div class="feature-block">
+            <h4>Threaded notes</h4>
+            <p>Each carrot is a thread. Reply, tag, mention. Resolve when the
+            field's been weeded.</p>
+          </div>
+          <div class="feature-block">
+            <h4>Linear, GitHub, Figma</h4>
+            <p>Pins flow into your tools. A carrot dropped here becomes a
+            ticket there. No double entry.</p>
+          </div>
+          <div class="feature-block">
+            <h4>Works on any framework</h4>
+            <p>React, Vue, plain HTML, Webflow, Framer, WordPress. If it
+            renders, Carrot grows on it.</p>
+          </div>
+          <div class="feature-block">
+            <h4>Read-only mode for clients</h4>
+            <p>Share a public link. Stakeholders drop carrots without seeing
+            internal threads or resolved notes.</p>
+          </div>
+          <div class="feature-block">
+            <h4>Self-host or cloud</h4>
+            <p>Run Carrot on our infrastructure or yours. Open core, with the
+            paid bits clearly labeled.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================== FINAL CTA =================== -->
+    <section class="cta">
+      <div class="container">
+        <p class="cta-eyebrow">A small invitation</p>
+        <h2>Less arguing.<br/><em>More growing.</em></h2>
+        <a href="#" class="cta-button">
+          Plant Carrot in your site
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M2 7H12M12 7L8 3M12 7L8 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </a>
+        <p class="cta-fineprint">Free for teams up to five. No credit card. No nagging.</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- =================== FOOTER =================== -->
+  <footer>
+    <div class="container footer-inner">
+      <div class="brand">
+        <svg><use href="#carrot"/></svg>
+        Carrot
+      </div>
+      <div class="footer-meta">
+        Made with care · Vol. I, MMXXVI
+      </div>
+      <div class="footer-links">
+        <a href="#">Twitter</a>
+        <a href="#">GitHub</a>
+        <a href="#">Privacy</a>
+        <a href="#">Contact</a>
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>
