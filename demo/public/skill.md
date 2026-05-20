@@ -1,6 +1,6 @@
-# Feedback Widget Agent Skill
+# CRRT 🥕 Agent Skill
 
-Feedback Widget is a visual feedback system. Humans leave comments pinned to real pixels on live pages. Agents implement the accepted ones.
+CRRT 🥕 is a visual feedback system. Humans leave comments pinned to real pixels on live pages. Agents implement the accepted ones.
 
 This file is the machine-readable contract for the agent bridge. Fetch it when you need setup details the prompt doesn't cover.
 

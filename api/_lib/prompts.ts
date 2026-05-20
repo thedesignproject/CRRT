@@ -46,7 +46,7 @@ function buildBody(input: PromptInput) {
   }
 
   return [
-    'Feedback Widget is a visual feedback system: humans drop comments pinned to real pixels on live pages, and you implement the accepted ones.',
+    'CRRT 🥕 is a visual feedback system: humans drop comments pinned to real pixels on live pages, and you implement the accepted ones.',
     '',
     'Join this session immediately so the human can see your presence:',
     docUrl,
@@ -60,7 +60,7 @@ function buildBody(input: PromptInput) {
     '2. Read state.',
     `   GET ${bridge}/state`,
     '',
-    '3. Flip presence to idle so the reviewer sees you finished connecting, then reply: Connected to Feedback Widget and ready.',
+    '3. Flip presence to idle so the reviewer sees you finished connecting, then reply: Connected to CRRT and ready.',
     `   POST ${bridge}/presence`,
     '   Body: {"status":"idle","summary":"Connected — ready to start"}',
     '',
@@ -88,12 +88,12 @@ export function buildPrompt(target: string, input: PromptInput) {
   const body = buildBody(input)
 
   if (target === 'claude-code') {
-    return `You are Claude Code working on a Feedback Widget session.\n\n${body}`
+    return `You are Claude Code working on a CRRT session.\n\n${body}`
   }
 
   if (target === 'codex') {
-    return `You are Codex working on a Feedback Widget session.\n\n${body}`
+    return `You are Codex working on a CRRT session.\n\n${body}`
   }
 
-  return `You are a coding agent working on a Feedback Widget session.\n\n${body}`
+  return `You are a coding agent working on a CRRT session.\n\n${body}`
 }
