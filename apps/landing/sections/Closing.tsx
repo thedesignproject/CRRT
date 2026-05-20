@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { PillButton } from '../components/PillButton'
 import { activateCRRT } from '../lib/crrt'
 
-const npmSnippet = `pnpm add @thedesignproject/feedback-widget`
-const reactSnippet = `import { FeedbackWidget } from '@thedesignproject/feedback-widget'
+const npmSnippet = `pnpm add @thedesignproject/crrt`
+const reactSnippet = `import { FeedbackWidget } from '@thedesignproject/crrt'
 
 export default function App() {
   return (
@@ -181,4 +181,3 @@ function Snippet({ number, title, description, code }: { number: string; title: 
     </div>
   )
 }
-

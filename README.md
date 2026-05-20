@@ -47,13 +47,13 @@ The old `/api/comments` route still exists as a compatibility path and for the s
 Install:
 
 ```bash
-bun add @thedesignproject/feedback-widget
+bun add @thedesignproject/crrt
 ```
 
 Usage:
 
 ```tsx
-import { FeedbackWidget } from '@thedesignproject/feedback-widget'
+import { FeedbackWidget } from '@thedesignproject/crrt'
 
 export default function App() {
   return (

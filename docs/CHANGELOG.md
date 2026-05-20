@@ -21,7 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `npm run typecheck` script that type-checks `src/`, `api/`, and app surfaces together.
 - `npm run test:coverage` script + v8 coverage reporter.
 - GitHub Actions CI workflow:
-  - `check (react 18)` / `check (react 19)` — matrix job running typecheck, tests-with-coverage, build, and a hard 50 KB ceiling on `dist/feedback-widget.es.js`.
+  - `check (react 18)` / `check (react 19)` — matrix job running typecheck, tests-with-coverage, build, and a hard 50 KB ceiling on `dist/crrt.es.js`.
   - `audit` — `npm audit --omit=dev --audit-level=high` fails on high/critical advisories in **shipped runtime** deps. Dev-tool advisories are tracked via Dependabot rather than blocking merges on upstream churn the maintainers cannot fix.
   - `secrets` — gitleaks (pinned by `sha256`) scans the full history for committed credentials.
   - Concurrency cancellation on repeat pushes to the same ref.

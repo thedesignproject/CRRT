@@ -44,11 +44,11 @@ jobs:
       - run: bun run build
       - name: Enforce bundle size ceiling
         run: |
-          SIZE=$(wc -c < dist/feedback-widget.es.js | tr -d ' ')
+          SIZE=$(wc -c < dist/crrt.es.js | tr -d ' ')
           # Screenshot capture currently bundles html2canvas; keep a modest
           # headroom over the current screenshot-enabled baseline.
           MAX=524288
-          echo "dist/feedback-widget.es.js: $SIZE bytes (max $MAX)"
+          echo "dist/crrt.es.js: $SIZE bytes (max $MAX)"
           if [ "$SIZE" -gt "$MAX" ]; then
             echo "::error::Bundle exceeds size ceiling"
             exit 1
