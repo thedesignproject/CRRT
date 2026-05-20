@@ -2249,7 +2249,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (!document.body.textContent?.includes('l25 height branch')) throw new Error('not loaded')
       })
-      expect(document.querySelector('[data-fw-pin]')).not.toBeNull()
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw-pin]')).not.toBeNull()
+      })
     })
   })
 
