@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "@thedesignproject/crrt",
+      "name": "@thedesignproject/feedback-widget",
       "dependencies": {
         "@supabase/supabase-js": "^2.49.4",
         "framer-motion": "^12.38.0",

@@ -61,11 +61,11 @@ export function buildIntegrationPrompt(projectId: string, apiBase: string) {
 
 1. Install the package:
 
-   npm install @thedesignproject/crrt
+   npm install @thedesignproject/feedback-widget
 
 2. Mount <FeedbackWidget /> in the root React component (e.g. App.tsx or a top-level layout) so it appears on every page:
 
-   import { FeedbackWidget } from '@thedesignproject/crrt'
+   import { FeedbackWidget } from '@thedesignproject/feedback-widget'
 
    export default function App() {
      return (
