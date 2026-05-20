@@ -11,8 +11,8 @@ export default defineConfig({
   build: {
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
-      name: 'FeedbackWidget',
-      fileName: (format) => `feedback-widget.${format}.js`,
+      name: 'CRRT',
+      fileName: (format) => `crrt.${format}.js`,
       formats: ['es', 'umd'],
     },
     rollupOptions: {

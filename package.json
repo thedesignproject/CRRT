@@ -1,6 +1,6 @@
 {
-  "name": "@thedesignproject/feedback-widget",
-  "version": "0.3.11",
+  "name": "@thedesignproject/crrt",
+  "version": "0.3.12",
   "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
@@ -12,14 +12,14 @@
     "url": "https://github.com/thedesignproject/CRRT/issues"
   },
   "type": "module",
-  "main": "dist/feedback-widget.umd.js",
-  "module": "dist/feedback-widget.es.js",
+  "main": "dist/crrt.umd.js",
+  "module": "dist/crrt.es.js",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/feedback-widget.es.js",
-      "require": "./dist/feedback-widget.umd.js"
+      "import": "./dist/crrt.es.js",
+      "require": "./dist/crrt.umd.js"
     }
   },
   "files": [
