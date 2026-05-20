@@ -1,4 +1,4 @@
-# Feedback Widget — Product Plan
+# CRRT 🥕 — Product Plan
 
 Visual feedback tool for React projects. The client visits their deployed URL, clicks any element, and leaves a comment. The developer sees everything in a dashboard.
 
