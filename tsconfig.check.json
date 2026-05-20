@@ -8,8 +8,9 @@
     "rootDir": ".",
     "types": ["node"],
     "paths": {
-      "feedback-widget": ["./src/index.ts"]
+      "feedback-widget": ["./src/index.ts"],
+      "@widget/*": ["./src/*"]
     }
   },
-  "include": ["src", "api", "demo", "apps/dashboard"]
+  "include": ["src", "api", "apps/dashboard", "apps/landing"]
 }

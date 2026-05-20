@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CRRT.AI — Brand Assets</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&family=VT323&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #F2EBE0;
+      --bg-card: #FFFCF6;
+      --bg-warm: #EDE3D2;
+      --bg-deep: #0A0A0A;
+      --bg-deep-soft: #181818;
+      --rule: rgba(10, 10, 10, 0.10);
+      --rule-strong: rgba(10, 10, 10, 0.20);
+      --ink: #0A0A0A;
+      --ink-soft: #2C2C2C;
+      --ink-mute: #6B6560;
+      --ink-faint: #A8A29A;
+      --white: #FFFFFF;
+      --carrot: #E8853D;
+      --carrot-deep: #B85F1F;
+      --phosphor: #FFB000;
+      --phosphor-green: #33FF33;
+      --forest: #1F3A2F;
+      --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, monospace;
+      --crt: 'VT323', 'JetBrains Mono', monospace;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    a { color: inherit; text-decoration: none; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 0 32px; }
+
+    /* Canonical logo asset — Frame 11.png — pixel-art carrot on black circle */
+    .crrt-logo {
+      display: block;
+      image-rendering: pixelated;
+      image-rendering: -moz-crisp-edges;
+      image-rendering: crisp-edges;
+      object-fit: contain;
+    }
+
+    /* ============ NAV ============ */
+    .ds-nav {
+      position: sticky;
+      top: 0;
+      background: rgba(242, 235, 224, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--rule);
+      z-index: 100;
+      padding: 14px 0;
+    }
+    .ds-nav-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+    }
+    .ds-brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 16px;
+      letter-spacing: 0.02em;
+    }
+    .ds-brand .ai { font-weight: 800; letter-spacing: 0.02em; color: var(--ink-mute); }
+    .ds-toc { display: flex; gap: 24px; font-size: 13px; color: var(--ink-soft); }
+    .ds-toc a:hover { color: var(--ink); }
+    .ds-nav-meta {
+      font-family: var(--crt);
+      font-size: 18px;
+      color: var(--ink-mute);
+      letter-spacing: 0.05em;
+    }
+
+    /* ============ HEADER ============ */
+    .ds-header {
+      padding: 100px 0 80px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .ds-eyebrow {
+      font-family: var(--crt);
+      font-size: 22px;
+      letter-spacing: 0.06em;
+      color: var(--carrot-deep);
+      margin-bottom: 28px;
+    }
+    .ds-eyebrow::before { content: '> '; }
+    .ds-header h1 {
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: clamp(48px, 7vw, 88px);
+      line-height: 1.0;
+      letter-spacing: -0.035em;
+      max-width: 18ch;
+      margin-bottom: 32px;
+    }
+    .ds-header h1 em { font-style: normal; color: var(--carrot); }
+    .ds-header p {
+      font-size: 18px;
+      line-height: 1.6;
+      color: var(--ink-soft);
+      max-width: 64ch;
+    }
+    .ds-header .crrt-callout {
+      margin-top: 48px;
+      padding: 28px 32px;
+      background: var(--bg-deep);
+      color: var(--white);
+      border-radius: 8px;
+      max-width: 640px;
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    .crrt-callout-text {
+      flex: 1;
+      font-family: var(--crt);
+      font-size: 20px;
+      line-height: 1.4;
+      letter-spacing: 0.02em;
+    }
+    .crrt-callout-text strong { color: var(--carrot); font-weight: normal; }
+
+    /* ============ SECTIONS ============ */
+    section { padding: 96px 0; border-bottom: 1px solid var(--rule); }
+    .section-tag {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .section-num {
+      font-family: var(--crt);
+      font-size: 18px;
+      color: var(--ink-mute);
+      letter-spacing: 0.06em;
+    }
+    .section-title {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: clamp(32px, 4vw, 44px);
+      line-height: 1.05;
+      letter-spacing: -0.025em;
+    }
+    .section-title em { font-style: normal; color: var(--carrot); }
+    .section-desc {
+      font-size: 15px;
+      color: var(--ink-soft);
+      max-width: 64ch;
+      margin-bottom: 56px;
+    }
+
+    /* ============ HERO LOGO PANEL ============ */
+    .hero-logo-panel {
+      background: var(--bg-deep);
+      border-radius: 16px;
+      padding: 80px 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      text-align: center;
+    }
+    .hero-logo-panel .logo-asset {
+      width: 240px;
+      height: 240px;
+    }
+    .hero-logo-panel .hero-wordmark {
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 56px;
+      letter-spacing: -0.025em;
+      color: var(--white);
+    }
+    .hero-logo-panel .hero-wordmark .ai { color: var(--ink-faint); }
+    .hero-logo-panel .hero-meta {
+      font-family: var(--crt);
+      font-size: 18px;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+    }
+
+    /* ============ CONCEPT CARDS ============ */
+    .concept-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .concept-card {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 36px 32px;
+    }
+    .concept-num {
+      font-family: var(--crt);
+      font-size: 64px;
+      color: var(--ink);
+      line-height: 1;
+      margin-bottom: 24px;
+    }
+    .concept-card h3 {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: 20px;
+      letter-spacing: -0.01em;
+      margin-bottom: 12px;
+    }
+    .concept-card p {
+      font-size: 14px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+
+    /* ============ LOGO PROPOSALS / IN CONTEXT ============ */
+    .logo-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+    .logo-card {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .logo-stage {
+      flex: 1;
+      min-height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      position: relative;
+      background:
+        linear-gradient(45deg, rgba(10,10,10,0.025) 25%, transparent 25%, transparent 75%, rgba(10,10,10,0.025) 75%, rgba(10,10,10,0.025)) 0 0/24px 24px,
+        linear-gradient(45deg, rgba(10,10,10,0.025) 25%, transparent 25%, transparent 75%, rgba(10,10,10,0.025) 75%, rgba(10,10,10,0.025)) 12px 12px/24px 24px;
+    }
+    .logo-stage.solid-cream { background: var(--bg-card); }
+    .logo-stage.solid-orange { background: var(--carrot); }
+    .logo-stage.solid-forest { background: var(--forest); }
+    .logo-stage.solid-warm { background: var(--bg-warm); }
+    .logo-stage.solid-deep { background: var(--bg-deep); }
+    .logo-asset { width: 128px; height: 128px; }
+    .logo-asset.large { width: 160px; height: 160px; }
+    .logo-asset.small { width: 80px; height: 80px; }
+
+    .logo-meta { padding: 24px 28px; border-top: 1px solid var(--rule); background: var(--bg); }
+    .logo-meta-num {
+      font-family: var(--crt);
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      color: var(--ink-mute);
+      margin-bottom: 6px;
+    }
+    .logo-meta h3 {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+    .logo-meta p {
+      font-size: 13px;
+      line-height: 1.55;
+      color: var(--ink-soft);
+    }
+    .logo-meta .tags {
+      margin-top: 12px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      font-family: var(--crt);
+      font-size: 13px;
+      letter-spacing: 0.05em;
+      padding: 2px 10px;
+      border: 1px solid var(--rule-strong);
+      border-radius: 999px;
+      color: var(--ink-soft);
+    }
+    .tag.featured {
+      background: var(--bg-deep);
+      color: var(--white);
+      border-color: var(--bg-deep);
+    }
+
+    /* ============ SIZE SCALE ============ */
+    .size-scale {
+      background: var(--bg-deep);
+      border-radius: 12px;
+      padding: 64px 48px;
+      display: flex;
+      align-items: flex-end;
+      gap: 48px;
+      justify-content: center;
+      flex-wrap: wrap;
+      color: var(--white);
+    }
+    .size-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    .size-item .size-label {
+      font-family: var(--crt);
+      font-size: 16px;
+      color: var(--ink-faint);
+      letter-spacing: 0.06em;
+    }
+
+    /* ============ COLOR PALETTE ============ */
+    .palette {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+    .swatch {
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--rule);
+      background: var(--bg-card);
+    }
+    .swatch-color {
+      height: 120px;
+      display: flex;
+      align-items: flex-end;
+      padding: 14px;
+    }
+    .swatch-color span {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: 0.04em;
+      padding: 3px 7px;
+      background: rgba(255,255,255,0.78);
+      border-radius: 4px;
+      color: var(--ink);
+    }
+    .swatch-color.dark span {
+      background: rgba(10,10,10,0.78);
+      color: var(--white);
+    }
+    .swatch-meta { padding: 16px 18px; border-top: 1px solid var(--rule); }
+    .swatch-name {
+      font-family: var(--sans);
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .swatch-hex {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--ink-mute);
+      letter-spacing: 0.04em;
+    }
+    .swatch-usage {
+      font-size: 12px;
+      color: var(--ink-soft);
+      margin-top: 8px;
+      line-height: 1.5;
+    }
+
+    /* ============ TYPOGRAPHY ============ */
+    .type-block {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 40px;
+      margin-bottom: 20px;
+    }
+    .type-meta {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      margin-bottom: 28px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .type-meta-name { font-family: var(--sans); font-size: 20px; font-weight: 700; }
+    .type-meta-spec { font-family: var(--crt); font-size: 16px; color: var(--ink-mute); letter-spacing: 0.04em; }
+    .type-spec-row {
+      display: grid;
+      grid-template-columns: 110px 1fr;
+      gap: 24px;
+      align-items: baseline;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--rule);
+    }
+    .type-spec-row:last-child { border-bottom: none; }
+    .type-spec-label {
+      font-family: var(--crt);
+      font-size: 16px;
+      color: var(--ink-mute);
+      letter-spacing: 0.04em;
+      padding-top: 4px;
+    }
+
+    /* ============ WORDMARK LOCKUPS ============ */
+    .wordmark-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .wordmark-card {
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 48px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 180px;
+      position: relative;
+    }
+    .wordmark-card.dark { background: var(--bg-deep); border-color: var(--bg-deep); color: var(--white); }
+    .wordmark-card.cream { background: var(--bg-card); }
+    .wordmark-card.orange { background: var(--carrot); }
+    .wordmark-card .wm-label {
+      position: absolute;
+      top: 16px;
+      left: 20px;
+      font-family: var(--crt);
+      font-size: 14px;
+      color: var(--ink-mute);
+      letter-spacing: 0.06em;
+    }
+    .wordmark-card.dark .wm-label { color: var(--ink-faint); }
+
+    .lockup {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 36px;
+      letter-spacing: 0.005em;
+    }
+    .lockup .ai { font-size: 36px; font-weight: 800; }
+    .lockup-pill {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 22px 8px 8px;
+      border-radius: 999px;
+    }
+    .lockup-pill.dark {
+      background: var(--bg-deep-soft);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: var(--white);
+    }
+    .lockup-pill .pill-text {
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: 0.005em;
+    }
+
+    /* ============ THE WIDGET (interactive demo) ============ */
+    .widget-demo {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 40px rgba(10,10,10,0.06);
+    }
+    .browser-bar {
+      background: var(--bg-warm);
+      padding: 14px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      border-bottom: 1px solid var(--rule);
+    }
+    .browser-dots { display: flex; gap: 7px; }
+    .browser-dots span {
+      width: 11px; height: 11px; border-radius: 50%;
+      background: var(--ink-mute); opacity: 0.32;
+    }
+    .browser-url {
+      flex: 1;
+      background: var(--bg);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-family: var(--sans);
+      color: var(--ink-mute);
+    }
+    .demo-page {
+      position: relative;
+      min-height: 540px;
+      padding: 64px 64px 96px;
+    }
+    .demo-page-tag {
+      font-family: var(--crt);
+      font-size: 16px;
+      letter-spacing: 0.06em;
+      color: var(--ink-mute);
+      margin-bottom: 12px;
+    }
+    .demo-page-tag::before { content: '> '; }
+    .demo-page-title {
+      font-family: var(--sans);
+      font-weight: 800;
+      font-size: 56px;
+      line-height: 1;
+      letter-spacing: -0.03em;
+      max-width: 14ch;
+      margin-bottom: 20px;
+    }
+    .demo-page-sub {
+      font-size: 16px;
+      color: var(--ink-soft);
+      max-width: 50ch;
+      margin-bottom: 36px;
+      line-height: 1.55;
+    }
+    .demo-page-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 16px;
+    }
+    .demo-card {
+      background: var(--bg-warm);
+      border-radius: 8px;
+      aspect-ratio: 4/5;
+    }
+
+    /* The widget */
+    .widget {
+      position: absolute;
+      bottom: 24px;
+      right: 24px;
+      z-index: 10;
+    }
+    .widget-options {
+      position: absolute;
+      bottom: calc(100% + 14px);
+      right: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: flex-end;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.22s ease, transform 0.22s ease;
+      pointer-events: none;
+    }
+    .widget:hover .widget-options,
+    .widget:focus-within .widget-options {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    .widget-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 18px 10px 8px;
+      background: var(--bg-deep);
+      color: var(--white);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      font-family: var(--sans);
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(10,10,10,0.18);
+      transition: transform 0.15s, background 0.15s;
+      white-space: nowrap;
+    }
+    .widget-option:hover { background: var(--bg-deep-soft); transform: translateX(-2px); }
+    .widget-option .opt-icon {
+      width: 28px; height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,0.08);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .widget-option .opt-icon svg { width: 12px; height: 12px; color: var(--white); }
+    .widget-option .opt-icon.carrot {
+      background: transparent;
+      padding: 0;
+    }
+    .widget-option .opt-icon.carrot img { width: 28px; height: 28px; border-radius: 50%; }
+    .widget-option .opt-count {
+      font-family: var(--crt);
+      font-size: 14px;
+      color: var(--ink-faint);
+      margin-left: 4px;
+    }
+
+    .widget-trigger {
+      width: 56px;
+      height: 56px;
+      border: none;
+      background: transparent;
+      padding: 0;
+      cursor: pointer;
+      transition: transform 0.18s, filter 0.18s;
+      position: relative;
+      display: block;
+      filter: drop-shadow(0 12px 32px rgba(10,10,10,0.32)) drop-shadow(0 4px 8px rgba(10,10,10,0.18));
+    }
+    .widget-trigger:hover {
+      transform: scale(1.06) rotate(-3deg);
+      filter: drop-shadow(0 16px 36px rgba(10,10,10,0.42)) drop-shadow(0 4px 12px rgba(10,10,10,0.22));
+    }
+    .widget-trigger img { width: 100%; height: 100%; border-radius: 50%; }
+    .widget-trigger::after {
+      content: '';
+      position: absolute;
+      top: 2px; right: 2px;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--carrot);
+      box-shadow: 0 0 0 2px var(--bg-card);
+      animation: pulse 2.4s ease-in-out infinite;
+      z-index: 2;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    .widget-states {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 32px;
+    }
+    .state-card {
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      padding: 28px;
+    }
+    .state-card-label {
+      font-family: var(--crt);
+      font-size: 16px;
+      color: var(--ink-mute);
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+    .state-card h4 {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: 18px;
+      margin-bottom: 12px;
+    }
+    .state-card p {
+      font-size: 13px;
+      color: var(--ink-soft);
+      line-height: 1.55;
+    }
+
+    .widget-spec-table {
+      margin-top: 36px;
+      background: var(--bg-card);
+      border: 1px solid var(--rule);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    .widget-spec-row {
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--rule);
+      font-size: 13px;
+      align-items: baseline;
+    }
+    .widget-spec-row:last-child { border-bottom: none; }
+    .widget-spec-row .key {
+      font-family: var(--crt);
+      font-size: 16px;
+      color: var(--ink-mute);
+      letter-spacing: 0.04em;
+    }
+    .widget-spec-row .val { color: var(--ink); }
+    .widget-spec-row .val code {
+      font-family: var(--mono);
+      font-size: 12px;
+      background: var(--bg-warm);
+      padding: 1px 6px;
+      border-radius: 4px;
+    }
+
+    /* ============ FOOTER ============ */
+    footer {
+      padding: 64px 0 80px;
+      border-top: 1px solid var(--rule);
+    }
+    .footer-inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+      flex-wrap: wrap;
+    }
+    .footer-meta {
+      font-family: var(--crt);
+      font-size: 16px;
+      color: var(--ink-mute);
+      letter-spacing: 0.05em;
+    }
+
+    @media (max-width: 880px) {
+      .ds-toc { display: none; }
+      .logo-grid, .concept-grid { grid-template-columns: 1fr; }
+      .palette { grid-template-columns: repeat(2, 1fr); }
+      .wordmark-grid { grid-template-columns: 1fr; }
+      .size-scale { padding: 32px; gap: 28px; }
+      section { padding: 64px 0; }
+      .ds-header { padding: 64px 0 56px; }
+      .demo-page { padding: 32px 28px 80px; }
+      .demo-page-title { font-size: 36px; }
+      .demo-page-grid { grid-template-columns: 1fr 1fr; }
+      .widget-states { grid-template-columns: 1fr; }
+      .hero-logo-panel { padding: 48px 24px; }
+      .hero-logo-panel .logo-asset { width: 180px; height: 180px; }
+      .hero-logo-panel .hero-wordmark { font-size: 36px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- =================== ICON SVG SYMBOLS (small UI icons only) =================== -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <symbol id="icon-list" viewBox="0 0 12 12">
+        <rect x="2" y="3" width="8" height="1.2" fill="currentColor"/>
+        <rect x="2" y="5.4" width="8" height="1.2" fill="currentColor"/>
+        <rect x="2" y="7.8" width="8" height="1.2" fill="currentColor"/>
+      </symbol>
+    </defs>
+  </svg>
+
+  <!-- =================== NAV =================== -->
+  <nav class="ds-nav">
+    <div class="container ds-nav-inner">
+      <div class="ds-brand">
+        <img src="Frame%2011.png" alt="CRRT.AI logo" class="crrt-logo" width="32" height="32">
+        CRRT<span class="ai">.AI</span>
+      </div>
+      <div class="ds-toc">
+        <a href="#concept">Concept</a>
+        <a href="#logos">Logos</a>
+        <a href="#sizing">Sizing</a>
+        <a href="#color">Color</a>
+        <a href="#type">Type</a>
+        <a href="#widget">Widget</a>
+      </div>
+      <div class="ds-nav-meta">v0.2 / WIP</div>
+    </div>
+  </nav>
+
+  <!-- =================== HEADER =================== -->
+  <header class="ds-header">
+    <div class="container">
+      <div class="ds-eyebrow">CRRT.AI / Brand Assets / Pixel-CRT direction</div>
+      <h1>Pixel-art with intent. The carrot from a <em>CRT</em>.</h1>
+      <p>
+        A working brand system for CRRT.AI — a visual feedback widget for
+        designers. The pixel-art carrot is not nostalgia for its own sake;
+        it's a semantic match for the name. CRRT and CRT (cathode-ray tube)
+        share an alphabet. The carrot rendered in pixels is what the carrot
+        looked like on the screens that invented the pixel.
+      </p>
+
+      <div class="crrt-callout">
+        <img src="Frame%2011.png" alt="CRRT.AI logo" class="crrt-logo" width="56" height="56">
+        <div class="crrt-callout-text">
+          <strong>CRRT</strong> ≈ <strong>CRT</strong>. The name and the visual
+          share a world. That's the hook.
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- =================== HERO LOGO =================== -->
+  <section>
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 01</span>
+        <h2 class="section-title">The <em>canonical</em> mark</h2>
+      </div>
+      <p class="section-desc">
+        One asset, one canonical lockup. The pixel-art carrot rendered on
+        a black circular ground. Diagonal orientation, multi-shade orange
+        body, two-tone green leaves. This is the brand.
+      </p>
+
+      <div class="hero-logo-panel">
+        <img src="Frame%2011.png" alt="CRRT.AI logo" class="crrt-logo logo-asset" width="240" height="240">
+        <div class="hero-wordmark">CRRT<span class="ai">.AI</span></div>
+        <div class="hero-meta">/ frame_11 / canonical / v0.2</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== CONCEPT =================== -->
+  <section id="concept">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 02</span>
+        <h2 class="section-title">Three rules</h2>
+      </div>
+      <p class="section-desc">
+        The brand operates on three constraints. Each one keeps the system
+        from drifting into "just retro" or "just toy."
+      </p>
+
+      <div class="concept-grid">
+        <div class="concept-card">
+          <div class="concept-num">01.</div>
+          <h3>Pixel-art is contained</h3>
+          <p>The pixel grid lives only in the carrot icon. The wordmark stays
+          in clean Inter sans. Mixing pixel-everything turns the brand into a
+          video game. Mixing pixel-icon + sans-wordmark keeps it tech.</p>
+        </div>
+        <div class="concept-card">
+          <div class="concept-num">02.</div>
+          <h3>Monochrome by default</h3>
+          <p>Black, white, cream. Carrot orange and leaf green appear in the
+          logo; outside the logo, the system is monochrome with carrot orange
+          as accent. No fluorescent neon.</p>
+        </div>
+        <div class="concept-card">
+          <div class="concept-num">03.</div>
+          <h3>The .AI is a TLD, not a slogan</h3>
+          <p>Treated as a domain suffix, not a positioning claim. Smaller
+          weight, sometimes lighter color. The brand is CRRT; the .AI is
+          where you find it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== LOGO IN CONTEXT =================== -->
+  <section id="logos">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 03</span>
+        <h2 class="section-title">In <em>context</em></h2>
+      </div>
+      <p class="section-desc">
+        The canonical mark on six surfaces. Because the black circular ground
+        is integral to the logo, the mark works on any background — it
+        carries its own contrast. No background-specific variants required.
+      </p>
+
+      <div class="logo-grid">
+
+        <div class="logo-card">
+          <div class="logo-stage solid-cream">
+            <img src="Frame%2011.png" alt="CRRT.AI logo on cream" class="crrt-logo logo-asset" width="128" height="128">
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">/ 01</div>
+            <h3>On cream</h3>
+            <p>Default light context. The black circle anchors against the
+            warm cream — high contrast, comfortable.</p>
+            <div class="tags">
+              <span class="tag featured">Default</span>
+              <span class="tag">Light mode</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage solid-deep">
+            <img src="Frame%2011.png" alt="CRRT.AI logo on black" class="crrt-logo logo-asset" width="128" height="128">
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">/ 02</div>
+            <h3>On black</h3>
+            <p>Dark context. The circle dissolves into the surface; only
+            the carrot remains visible. Most CRT-coherent — feels like a
+            sprite floating in a tube.</p>
+            <div class="tags">
+              <span class="tag">Dark mode</span>
+              <span class="tag">CRT-native</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage solid-warm">
+            <img src="Frame%2011.png" alt="CRRT.AI logo on warm" class="crrt-logo logo-asset" width="128" height="128">
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">/ 03</div>
+            <h3>On warm cream</h3>
+            <p>Soft section breaks, secondary surfaces. Same canonical
+            mark, slightly less contrast than default cream.</p>
+            <div class="tags">
+              <span class="tag">Section</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage solid-orange">
+            <img src="Frame%2011.png" alt="CRRT.AI logo on orange" class="crrt-logo logo-asset" width="128" height="128">
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">/ 04</div>
+            <h3>On carrot orange</h3>
+            <p>Brand-color-forward moments. The logo's own orange echoes
+            the ground; the black circle still does the contrast work.</p>
+            <div class="tags">
+              <span class="tag">Marketing</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage solid-forest">
+            <img src="Frame%2011.png" alt="CRRT.AI logo on forest" class="crrt-logo logo-asset" width="128" height="128">
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">/ 05</div>
+            <h3>On forest green</h3>
+            <p>Closest to the original Carrot Express reference. Held in
+            reserve as alternate (e.g., dock variation, holiday mode).</p>
+            <div class="tags">
+              <span class="tag">Reserve</span>
+              <span class="tag">Reference</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="logo-card">
+          <div class="logo-stage">
+            <img src="Frame%2011.png" alt="CRRT.AI logo on transparent" class="crrt-logo logo-asset" width="128" height="128">
+          </div>
+          <div class="logo-meta">
+            <div class="logo-meta-num">/ 06</div>
+            <h3>On transparent / pattern</h3>
+            <p>Worst-case test. Even on a busy ground, the black circle
+            and pixel sprite hold their own. The canonical asset is
+            self-contained.</p>
+            <div class="tags">
+              <span class="tag">Stress test</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== SIZE SCALE =================== -->
+  <section id="sizing">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 04</span>
+        <h2 class="section-title">Size <em>scale</em></h2>
+      </div>
+      <p class="section-desc">
+        The canonical asset rendered at production sizes. Pixel-art has an
+        inverse-scale advantage — the smaller it gets, the more it looks
+        intentional. At 16px the pixels become the actual screen pixels.
+      </p>
+
+      <div class="size-scale">
+        <div class="size-item">
+          <img src="Frame%2011.png" alt="CRRT.AI 120px" class="crrt-logo" width="120" height="120">
+          <span class="size-label">120px / Brand</span>
+        </div>
+        <div class="size-item">
+          <img src="Frame%2011.png" alt="CRRT.AI 64px" class="crrt-logo" width="64" height="64">
+          <span class="size-label">64px / App</span>
+        </div>
+        <div class="size-item">
+          <img src="Frame%2011.png" alt="CRRT.AI 32px" class="crrt-logo" width="32" height="32">
+          <span class="size-label">32px / UI</span>
+        </div>
+        <div class="size-item">
+          <img src="Frame%2011.png" alt="CRRT.AI 24px" class="crrt-logo" width="24" height="24">
+          <span class="size-label">24px / Nav</span>
+        </div>
+        <div class="size-item">
+          <img src="Frame%2011.png" alt="CRRT.AI 16px" class="crrt-logo" width="16" height="16">
+          <span class="size-label">16px / Favicon</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== COLOR =================== -->
+  <section id="color">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 05</span>
+        <h2 class="section-title">Color <em>system</em></h2>
+      </div>
+      <p class="section-desc">
+        Black-and-white-and-cream carry the system. The logo carries its own
+        orange and green internally. Outside the logo, carrot orange is the
+        one accent for marketing surfaces; CRT phosphor amber is the rare
+        voice moment.
+      </p>
+
+      <div class="palette">
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #0A0A0A;"><span>#0A0A0A</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Tube Black</div>
+            <div class="swatch-hex">--bg-deep</div>
+            <div class="swatch-usage">Logo ground. Dark mode surface.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #FFFFFF;"><span>#FFFFFF</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Phosphor White</div>
+            <div class="swatch-hex">--white</div>
+            <div class="swatch-usage">Type on dark grounds, contrast.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #F2EBE0;"><span>#F2EBE0</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Cream</div>
+            <div class="swatch-hex">--bg</div>
+            <div class="swatch-usage">Page background. The light side.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #6B6560;">
+            <span style="background: rgba(255,255,255,0.78);">#6B6560</span>
+          </div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Mute</div>
+            <div class="swatch-hex">--ink-mute</div>
+            <div class="swatch-usage">Captions, metadata, secondary text.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #E8853D;"><span>#E8853D</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Carrot</div>
+            <div class="swatch-hex">--carrot</div>
+            <div class="swatch-usage">Marketing accent. Logo body color.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color" style="background: #FFB000;"><span>#FFB000</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Phosphor Amber</div>
+            <div class="swatch-hex">--phosphor</div>
+            <div class="swatch-usage">CRT moments. Terminal copy, eyebrows.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #1F3A2F;"><span>#1F3A2F</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Forest</div>
+            <div class="swatch-hex">--forest</div>
+            <div class="swatch-usage">Alternate ground. Reserve.</div>
+          </div>
+        </div>
+
+        <div class="swatch">
+          <div class="swatch-color dark" style="background: #33FF33;"><span>#33FF33</span></div>
+          <div class="swatch-meta">
+            <div class="swatch-name">Phosphor Green</div>
+            <div class="swatch-hex">--phosphor-green</div>
+            <div class="swatch-usage">Easter egg only. Retro mode.</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== TYPOGRAPHY =================== -->
+  <section id="type">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 06</span>
+        <h2 class="section-title">Typography</h2>
+      </div>
+      <p class="section-desc">
+        Three families. Inter for the system (display, body, UI). VT323 for
+        CRT moments — eyebrows, captions, terminal voice. JetBrains Mono for
+        actual code blocks.
+      </p>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">Inter</div>
+          <div class="type-meta-spec">Sans / Geometric / Display + UI</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">88px / 800</div>
+          <div style="font-family: var(--sans); font-size: 88px; line-height: 0.95; letter-spacing: -0.035em; font-weight: 800;">CRRT<span style="color: var(--ink-mute);">.AI</span></div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">48px / 700</div>
+          <div style="font-family: var(--sans); font-size: 48px; line-height: 1.05; letter-spacing: -0.025em; font-weight: 700;">Drop a carrot. Mark what's off.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">18px / 400</div>
+          <div style="font-family: var(--sans); font-size: 18px; line-height: 1.55;">Visual feedback widget for design teams. Drops in with one line of script. Lives where your work lives.</div>
+        </div>
+      </div>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">VT323</div>
+          <div class="type-meta-spec">Bitmap / CRT terminal / Voice moments</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">32px</div>
+          <div style="font-family: var(--crt); font-size: 32px; line-height: 1.2; color: var(--carrot-deep);">> system_init: ready_to_drop_carrots</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">22px</div>
+          <div style="font-family: var(--crt); font-size: 22px; color: var(--ink);">// 04 carrots dropped. 02 resolved.</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">18px</div>
+          <div style="font-family: var(--crt); font-size: 18px; color: var(--ink-mute); letter-spacing: 0.05em;">Vol_01 / No_01 / Build_2026.05</div>
+        </div>
+      </div>
+
+      <div class="type-block">
+        <div class="type-meta">
+          <div class="type-meta-name">JetBrains Mono</div>
+          <div class="type-meta-spec">Monospace / Code / Specs</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">14px / 500</div>
+          <div style="font-family: var(--mono); font-size: 14px; font-weight: 500;">npm install @crrt/widget</div>
+        </div>
+        <div class="type-spec-row">
+          <div class="type-spec-label">13px / 400</div>
+          <div style="font-family: var(--mono); font-size: 13px; color: var(--ink-soft);">&lt;script src="https://cdn.crrt.ai/v1.js"&gt;&lt;/script&gt;</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== WORDMARK =================== -->
+  <section>
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 07</span>
+        <h2 class="section-title">Wordmark <em>lockups</em></h2>
+      </div>
+      <p class="section-desc">
+        Four lockups. The .AI suffix is always lighter or smaller than CRRT
+        — treated as a TLD, not the brand.
+      </p>
+
+      <div class="wordmark-grid">
+        <div class="wordmark-card cream">
+          <span class="wm-label">/ Standard / Cream</span>
+          <div class="lockup">
+            <img src="Frame%2011.png" alt="" class="crrt-logo" width="48" height="48">
+            <span>CRRT<span style="color: var(--ink-mute);">.AI</span></span>
+          </div>
+        </div>
+
+        <div class="wordmark-card cream">
+          <span class="wm-label">/ Compact / Cream</span>
+          <div class="lockup" style="font-size: 28px; gap: 10px;">
+            <img src="Frame%2011.png" alt="" class="crrt-logo" width="36" height="36">
+            <span>CRRT<span style="color: var(--ink-mute); font-size: 22px;">.AI</span></span>
+          </div>
+        </div>
+
+        <div class="wordmark-card dark">
+          <span class="wm-label">/ Standard / Dark</span>
+          <div class="lockup">
+            <img src="Frame%2011.png" alt="" class="crrt-logo" width="48" height="48">
+            <span>CRRT<span style="color: var(--ink-faint);">.AI</span></span>
+          </div>
+        </div>
+
+        <div class="wordmark-card dark">
+          <span class="wm-label">/ Pill / Dark</span>
+          <div class="lockup-pill dark">
+            <img src="Frame%2011.png" alt="" class="crrt-logo" width="32" height="32">
+            <span class="pill-text">CRRT<span style="color: var(--ink-faint); font-size: 16px;">.AI</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== THE WIDGET =================== -->
+  <section id="widget">
+    <div class="container">
+      <div class="section-tag">
+        <span class="section-num">/ 08</span>
+        <h2 class="section-title">The <em>widget</em></h2>
+      </div>
+      <p class="section-desc">
+        The product itself. A floating circular trigger that anchors to any
+        page. Hover (or focus) reveals the two primary actions — drop a new
+        carrot, or open the existing list. Try it: hover the carrot in the
+        bottom-right of the demo browser below.
+      </p>
+
+      <div class="widget-demo">
+        <div class="browser-bar">
+          <div class="browser-dots"><span></span><span></span><span></span></div>
+          <div class="browser-url">studio-acme.com / projects / spring-2026</div>
+        </div>
+        <div class="demo-page">
+          <div class="demo-page-tag">spring_collection_2026</div>
+          <div class="demo-page-title">A garden, in pixels.</div>
+          <div class="demo-page-sub">
+            Latest editorial direction draws on 19th-century botanical
+            illustration, restrained typography, and a faint smell of soil.
+            Hover the carrot to drop a comment or see the feedback list.
+          </div>
+          <div class="demo-page-grid">
+            <div class="demo-card"></div>
+            <div class="demo-card"></div>
+            <div class="demo-card"></div>
+          </div>
+
+          <!-- The actual widget -->
+          <div class="widget" tabindex="0">
+            <div class="widget-options">
+              <button class="widget-option" type="button">
+                <span class="opt-icon carrot">
+                  <img src="Frame%2011.png" alt="" class="crrt-logo" width="28" height="28">
+                </span>
+                Drop a carrot
+              </button>
+              <button class="widget-option" type="button">
+                <span class="opt-icon">
+                  <svg><use href="#icon-list"/></svg>
+                </span>
+                See feedback
+                <span class="opt-count">04</span>
+              </button>
+            </div>
+            <button class="widget-trigger" aria-label="Open CRRT.AI feedback">
+              <img src="Frame%2011.png" alt="CRRT.AI" class="crrt-logo" width="56" height="56">
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Widget states -->
+      <div class="widget-states">
+        <div class="state-card">
+          <div class="state-card-label">/ State 01</div>
+          <h4>Default — closed</h4>
+          <p>56×56 canonical logo, anchored bottom-right with 24px padding.
+          The black circle is the trigger; the pixel-art carrot is the
+          face. Pulsing carrot-orange dot in top-right indicates unresolved
+          feedback count. Resting state should feel like a tab on the page,
+          not a pop-up.</p>
+        </div>
+        <div class="state-card">
+          <div class="state-card-label">/ State 02</div>
+          <h4>Hover / focus — expanded</h4>
+          <p>Two pill options fly upward with 8px stagger and opacity
+          fade. "Drop a carrot" is the primary action — uses the canonical
+          mark as its leading icon. "See feedback" shows live count of
+          unresolved items in VT323. Click outside to dismiss.</p>
+        </div>
+      </div>
+
+      <!-- Widget spec -->
+      <div class="widget-spec-table">
+        <div class="widget-spec-row">
+          <div class="key">trigger.size</div>
+          <div class="val"><code>56px</code> / <code>56px</code></div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">trigger.asset</div>
+          <div class="val">Canonical logo (<code>Frame 11.png</code>)</div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">trigger.shape</div>
+          <div class="val">Circle (built into asset) / <code>border-radius: 50%</code></div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">trigger.indicator</div>
+          <div class="val">Carrot orange dot, top-right, pulse @ 2.4s</div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">trigger.shadow</div>
+          <div class="val"><code>drop-shadow(0 12px 32px rgba(10,10,10,0.32))</code></div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">expand.trigger</div>
+          <div class="val">Hover / focus-within</div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">expand.transition</div>
+          <div class="val"><code>opacity 0.22s ease, transform 0.22s ease</code></div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">option.shape</div>
+          <div class="val">Pill / <code>border-radius: 999px</code></div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">option.primary</div>
+          <div class="val">"Drop a carrot" — opens comment composer</div>
+        </div>
+        <div class="widget-spec-row">
+          <div class="key">option.secondary</div>
+          <div class="val">"See feedback" — opens list panel with live count</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =================== FOOTER =================== -->
+  <footer>
+    <div class="container footer-inner">
+      <div class="ds-brand">
+        <img src="Frame%2011.png" alt="CRRT.AI logo" class="crrt-logo" width="32" height="32">
+        CRRT<span class="ai">.AI</span>
+      </div>
+      <div class="footer-meta">
+        Brand_Assets / v_0.2 / build_2026.05.10
+      </div>
+    </div>
+  </footer>
+
+</body>
+</html>

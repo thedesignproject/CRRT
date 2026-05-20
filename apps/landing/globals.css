@@ -1,0 +1,303 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-tube-black: var(--crrt-bg-deep);
+  --color-tube-soft: var(--crrt-bg-deep-soft);
+  --color-phosphor-white: var(--crrt-white);
+  --color-ink-mute: var(--crrt-ink-mute);
+  --color-ink-faint: var(--crrt-ink-faint);
+  --color-carrot: var(--crrt-carrot);
+  --color-carrot-deep: var(--crrt-carrot-deep);
+  --color-phosphor: var(--crrt-phosphor);
+  --color-forest: var(--crrt-forest);
+  --color-rule-dark: var(--crrt-rule-dark);
+
+  --font-sans: var(--crrt-font-sans);
+  --font-mono: var(--crrt-font-mono);
+  --font-crt: var(--crrt-font-crt);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    background: var(--crrt-bg-deep);
+    color: var(--crrt-white);
+    font-family: var(--crrt-font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  ::selection {
+    background: var(--crrt-carrot);
+    color: var(--crrt-bg-deep);
+  }
+}
+
+/* Subtle CRT scanline overlay — opt-in via .scanlines class on a section */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.012) 2px,
+    rgba(255, 255, 255, 0.012) 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Section marker — "/ 01 hero" — JetBrains Mono small label */
+.section-marker {
+  font-family: var(--crrt-font-mono);
+  font-size: 13px;
+  color: var(--crrt-ink-mute);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+/* Phosphor amber for terminal voice moments — tagline pills, eyebrows */
+.phosphor-eyebrow {
+  font-family: var(--crrt-font-crt);
+  font-size: 18px;
+  color: var(--crrt-phosphor);
+  letter-spacing: var(--crrt-tracking-crt);
+  text-transform: uppercase;
+}
+
+/* Pill button — 3 variants from Figma "/ 04 tone" */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--crrt-space-4);
+  border-radius: var(--crrt-radius-pill);
+  font-family: var(--crrt-font-sans);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform var(--crrt-duration-fast) var(--crrt-easing-default),
+              background var(--crrt-duration-fast) var(--crrt-easing-default),
+              box-shadow var(--crrt-duration-default) var(--crrt-easing-emphasis);
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+}
+.pill:active:not(:disabled) { transform: scale(0.97); }
+
+.pill-ghost {
+  background: var(--crrt-bg-deep);
+  color: var(--crrt-white);
+  border-color: var(--crrt-rule-dark);
+  box-shadow: 0 8px 12px rgba(10, 10, 10, 0.18);
+}
+.pill-ghost:hover { background: var(--crrt-bg-deep-soft); }
+
+.pill-carrot {
+  background: var(--crrt-carrot);
+  color: var(--crrt-white);
+  border-color: var(--crrt-carrot-deep);
+  box-shadow: 0 8px 12px rgba(10, 10, 10, 0.18);
+}
+.pill-carrot:hover { background: var(--crrt-carrot-deep); }
+
+.pill-phosphor {
+  background: var(--crrt-phosphor);
+  color: var(--crrt-ink);
+  border-color: var(--crrt-phosphor);
+  box-shadow: 0 8px 12px rgba(10, 10, 10, 0.18);
+}
+
+.pill-sm { height: 32px; padding: 0 14px; font-size: 12px; gap: 8px; }
+.pill-md { height: 44px; padding: 0 18px 0 8px; font-size: 13px; }
+.pill-lg { height: 52px; padding: 0 22px 0 10px; font-size: 14px; }
+
+/* Symmetric padding when there's no carrot chip — keeps text-only pills balanced
+ * next to chip pills (same height, just narrower). Requires :has() (all modern
+ * browsers as of 2023). */
+.pill-md:not(:has(.carrot-chip)) { padding: 0 18px; }
+.pill-lg:not(:has(.carrot-chip)) { padding: 0 22px; }
+
+/* Pixel carrot icon container — keeps the pixel-art crisp */
+.carrot-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--crrt-radius-3xl);
+  background: var(--crrt-bg-deep);
+  image-rendering: pixelated;
+  flex-shrink: 0;
+}
+.pill-md .carrot-chip { width: 28px; height: 28px; border-radius: 14px; }
+.pill-sm .carrot-chip { width: 24px; height: 24px; border-radius: 12px; }
+.pill-lg .carrot-chip { width: 36px; height: 36px; border-radius: 18px; }
+
+/* Cursor blink for the wordmark */
+.cursor-blink {
+  display: inline-block;
+  animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
+}
+
+/* Demo-pin DROP — pin lands from above with a satisfying squash on impact.
+ * Used by the FakeDashboard demo so each pin reads as "just dropped" instead
+ * of "always was there". Opacity is front-loaded (full by 18%) so the pin
+ * reads as BRIGHT immediately when it appears, rather than dim through its
+ * descent. */
+@keyframes crrt-pin-drop {
+  0%   { opacity: 0; transform: translateY(-32px) scale(0.4) rotate(-12deg); }
+  18%  { opacity: 1; transform: translateY(-18px) scale(0.7) rotate(-8deg); }
+  55%  { opacity: 1; transform: translateY(6px)   scale(1.15) rotate(4deg); }
+  78%  { opacity: 1; transform: translateY(-2px)  scale(0.96) rotate(-1deg); }
+  100% { opacity: 1; transform: translateY(0)     scale(1)    rotate(0); }
+}
+
+/* Demo-popover expansion — pops out from the pin (origin top-left) once the
+ * pin has landed. Tiny overshoot before settling. */
+@keyframes crrt-popover-expand {
+  0%   { opacity: 0; transform: scale(0.4) translateY(-4px); }
+  60%  { opacity: 1; transform: scale(1.04) translateY(0); }
+  100% { opacity: 1; transform: scale(1)    translateY(0); }
+}
+
+/* Demo-comment swap — fade-in only. The previous comment unmounts the moment
+ * its key changes, so we don't need a fade-out (which used to leave the
+ * popover momentarily empty between swaps). */
+@keyframes crrt-comment-swap {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* Typing indicator — the 3 dots animation that plays between comment swaps.
+ * Each dot uses the same animation with a staggered `animation-delay`. */
+@keyframes crrt-typing-dot {
+  0%, 70%, 100% { opacity: 0.25; transform: translateY(0); }
+  35%           { opacity: 1;    transform: translateY(-3px); }
+}
+
+/* Scroll-reveal — sections fade + slide up when they enter the viewport.
+ * Triggered via `.is-revealed` class added by an IntersectionObserver. */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 720ms cubic-bezier(0.16, 1, 0.3, 1), transform 720ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reveal-on-scroll.is-revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Hover lift — applied to the editorial cards (HowItWorks, Features). The
+ * card rises 2px and the border glows softly. */
+.hover-lift {
+  transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 280ms ease,
+              box-shadow 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  border-color: rgba(232, 133, 61, 0.35);
+  box-shadow: 0 12px 24px rgba(10, 10, 10, 0.4), 0 0 24px rgba(232, 133, 61, 0.06);
+}
+
+/* Easter egg — pixel-carrot rain triggered by typing "crrt" anywhere on the
+ * page. Each carrot falls from above the viewport to below it, swaying
+ * horizontally (`--drift`) and spinning (`--spin`) for variety. The CSS
+ * variables are set per-element so a single keyframe drives many unique
+ * trajectories. */
+@keyframes crrt-rain {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg); opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% {
+    transform: translate3d(var(--drift, 0), calc(100vh + 120px), 0) rotate(var(--spin, 0deg));
+    opacity: 0;
+  }
+}
+
+/* Kinetic H1 — each letter rises from below with a soft bounce on initial
+ * load. Stagger applied via inline animation-delay per letter. */
+@keyframes crrt-letter-rise {
+  0%   { opacity: 0; transform: translateY(28px) scale(0.92); }
+  60%  { opacity: 1; transform: translateY(-2px) scale(1.02); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* CRT power-on for the H1 period — quick scan-line flash then fade to the
+ * resting carrot color. */
+@keyframes crrt-power-on {
+  0%   { opacity: 0; color: #FFFFFF; text-shadow: 0 0 24px rgba(255, 255, 255, 0.8); }
+  20%  { opacity: 1; color: #FFFFFF; text-shadow: 0 0 24px rgba(255, 255, 255, 0.9), 0 0 12px rgba(232, 133, 61, 0.6); }
+  60%  { opacity: 1; color: var(--crrt-carrot); text-shadow: 0 0 18px rgba(232, 133, 61, 0.7); }
+  100% { opacity: 1; color: var(--crrt-carrot); text-shadow: 0 0 8px rgba(232, 133, 61, 0.35); }
+}
+
+/* CRT chromatic glitch — RGB splits, scanline jitter. Triggered on hover via
+ * .crrt-glitch:hover. */
+@keyframes crrt-glitch-jitter {
+  0%, 100% { transform: translate(0, 0); text-shadow: none; }
+  20%      { transform: translate(-1px, 1px); text-shadow: -2px 0 #FF0066, 2px 0 #00CCFF; }
+  40%      { transform: translate(2px, -1px); text-shadow: 2px 0 #FF0066, -2px 0 #00CCFF; }
+  60%      { transform: translate(-1px, 0);   text-shadow: -1px 0 #FFB000, 1px 0 #00CCFF; }
+  80%      { transform: translate(1px, 1px);  text-shadow: none; }
+}
+.crrt-glitch:hover {
+  animation: crrt-glitch-jitter 240ms steps(5, end) 1;
+}
+
+/* HowItWorks pixel icons "ignite" — when their card reveals on scroll, the
+ * icon transitions from dim/desaturated to full color with a flicker. */
+@keyframes crrt-icon-ignite {
+  0%   { opacity: 0.2; filter: grayscale(1) brightness(0.4); transform: scale(0.92); }
+  35%  { opacity: 1;   filter: grayscale(0) brightness(1.4); transform: scale(1.05); }
+  50%  { opacity: 0.6; filter: grayscale(0) brightness(0.9); transform: scale(0.98); }
+  65%  { opacity: 1;   filter: grayscale(0) brightness(1.15); transform: scale(1.02); }
+  100% { opacity: 1;   filter: grayscale(0) brightness(1);    transform: scale(1); }
+}
+.crrt-icon-cell {
+  /* Initial state — dim, awaiting ignite */
+  opacity: 0.2;
+  filter: grayscale(1) brightness(0.4);
+}
+.crrt-icon-cell.is-ignited {
+  animation: crrt-icon-ignite 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Background scanlines parallax — only the overlay shifts (inverse to
+ * scroll), not the section itself. Keeps the CRT lines drifting subtly as
+ * the user scrolls. */
+.scanlines::after {
+  transform: translateY(calc(var(--scroll-y, 0) * -0.12px));
+  will-change: transform;
+}
+
+/* Carrot icons / decorative elements that should roll as the user scrolls.
+ * Apply via class. */
+.crrt-scroll-rotate {
+  transform: rotate(var(--scroll-rotate, 0deg));
+  transition: transform 80ms linear;
+  will-change: transform;
+}

@@ -1,0 +1,208 @@
+/* ============================================================
+ * CRRT.AI — Design Tokens
+ * Source of truth: branding/CRRT-DESIGN-SYSTEM.md
+ * Dark-first. Light theme via [data-theme="light"].
+ * ========================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Geist+Mono:wght@300;400;500;600;700&family=VT323&display=swap');
+
+/* -----------------------------------------------------------
+ * 1. Raw palette — never read directly by components.
+ *    Components read the semantic mapping further down.
+ * --------------------------------------------------------- */
+:root {
+  /* Backgrounds */
+  --crrt-bg:              #F2EBE0;
+  --crrt-bg-card:         #FFFCF6;
+  --crrt-bg-warm:         #EDE3D2;
+  --crrt-bg-deep:         #0A0A0A;
+  --crrt-bg-deep-soft:    #181818;
+
+  /* Ink */
+  --crrt-white:           #FFFFFF;
+  --crrt-ink:             #0A0A0A;
+  --crrt-ink-soft:        #2C2C2C;
+  --crrt-ink-mute:        #6B6560;
+  --crrt-ink-faint:       #A8A29A;
+
+  /* Brand */
+  --crrt-carrot:          #E8853D;
+  --crrt-carrot-deep:     #B85F1F;
+  --crrt-phosphor:        #FFB000;
+  --crrt-phosphor-green:  #33FF33;
+  --crrt-forest:          #1F3A2F;
+
+  /* Hairlines */
+  --crrt-rule:            rgba(10, 10, 10, 0.10);
+  --crrt-rule-strong:     rgba(10, 10, 10, 0.20);
+  --crrt-rule-dark:       rgba(255, 255, 255, 0.08);
+  --crrt-rule-dark-strong: rgba(255, 255, 255, 0.16);
+
+  /* Typography */
+  --crrt-font-sans: 'Geist Mono', ui-monospace, monospace;
+  --crrt-font-mono: 'Geist Mono', ui-monospace, monospace;
+  --crrt-font-crt:  'VT323', monospace;
+
+  --crrt-text-display:  clamp(48px, 7vw, 88px);
+  --crrt-text-h2:       clamp(32px, 4vw, 44px);
+  --crrt-text-h3:       28px;
+  --crrt-text-h4:       20px;
+  --crrt-text-body-lg:  18px;
+  --crrt-text-body:     15px;
+  --crrt-text-caption:  13px;
+
+  --crrt-leading-display: 1.0;
+  --crrt-leading-h2:      1.05;
+  --crrt-leading-h3:      1.1;
+  --crrt-leading-h4:      1.2;
+  --crrt-leading-body:    1.55;
+  --crrt-leading-relaxed: 1.6;
+
+  --crrt-tracking-display: -0.035em;
+  --crrt-tracking-h2:      -0.025em;
+  --crrt-tracking-h3:      -0.02em;
+  --crrt-tracking-h4:      -0.01em;
+  --crrt-tracking-normal:  0;
+  --crrt-tracking-crt:     0.05em;
+
+  /* Spacing — 8pt grid + 2px micro step */
+  --crrt-space-0:   0;
+  --crrt-space-1:   2px;
+  --crrt-space-2:   4px;
+  --crrt-space-3:   8px;
+  --crrt-space-4:   12px;
+  --crrt-space-5:   16px;
+  --crrt-space-6:   20px;
+  --crrt-space-7:   24px;
+  --crrt-space-8:   32px;
+  --crrt-space-9:   48px;
+  --crrt-space-10:  64px;
+  --crrt-space-11:  96px;
+
+  /* Radius */
+  --crrt-radius-none: 0;
+  --crrt-radius-sm:   4px;
+  --crrt-radius-md:   6px;
+  --crrt-radius-lg:   8px;
+  --crrt-radius-xl:   10px;
+  --crrt-radius-2xl:  12px;
+  --crrt-radius-3xl:  16px;
+  --crrt-radius-pill: 999px;
+  --crrt-radius-full: 50%;
+
+  /* Elevation */
+  --crrt-shadow-flat:           none;
+  --crrt-shadow-sm:             0 4px 12px rgba(10, 10, 10, 0.06);
+  --crrt-shadow-md:             0 12px 40px rgba(10, 10, 10, 0.06);
+  --crrt-shadow-pill:           0 8px 24px rgba(10, 10, 10, 0.18);
+  --crrt-shadow-trigger:        drop-shadow(0 12px 32px rgba(10, 10, 10, 0.32)) drop-shadow(0 4px 8px rgba(10, 10, 10, 0.18));
+  --crrt-shadow-trigger-hover:  drop-shadow(0 16px 36px rgba(10, 10, 10, 0.42)) drop-shadow(0 4px 12px rgba(10, 10, 10, 0.22));
+
+  /* Motion */
+  --crrt-duration-fast:    150ms;
+  --crrt-duration-default: 220ms;
+  --crrt-duration-slow:    320ms;
+  --crrt-easing-default:   ease;
+  --crrt-easing-emphasis:  cubic-bezier(0.2, 0.8, 0.2, 1);
+  --crrt-pulse-duration:   2400ms;
+
+  /* Image rendering — pixel-art carrot must stay crisp */
+  --crrt-image-rendering: pixelated;
+}
+
+/* -----------------------------------------------------------
+ * 2. Semantic mapping — DARK (default, applied at :root).
+ *    These are the names components actually read.
+ *    Compatible with shadcn/ui naming.
+ * --------------------------------------------------------- */
+:root {
+  --background:           var(--crrt-bg-deep);
+  --foreground:           var(--crrt-white);
+  --card:                 var(--crrt-bg-deep-soft);
+  --card-foreground:      var(--crrt-white);
+  --popover:              var(--crrt-bg-deep-soft);
+  --popover-foreground:   var(--crrt-white);
+  --primary:              var(--crrt-carrot);
+  --primary-foreground:   var(--crrt-white);
+  --secondary:            var(--crrt-bg-deep);
+  --secondary-foreground: var(--crrt-ink-faint);
+  --muted:                var(--crrt-bg-deep);
+  --muted-foreground:     var(--crrt-ink-faint);
+  --accent:               var(--crrt-phosphor);
+  --accent-foreground:    var(--crrt-ink);
+  --destructive:          var(--crrt-carrot-deep);
+  --destructive-foreground: var(--crrt-white);
+  --border:               var(--crrt-rule-dark);
+  --input:                var(--crrt-rule-dark-strong);
+  --ring:                 var(--crrt-carrot);
+  --radius:               var(--crrt-radius-xl);
+}
+
+/* -----------------------------------------------------------
+ * 3. Semantic mapping — LIGHT (opt-in via [data-theme="light"]).
+ * --------------------------------------------------------- */
+[data-theme='light'] {
+  --background:           var(--crrt-bg);
+  --foreground:           var(--crrt-ink);
+  --card:                 var(--crrt-bg-card);
+  --card-foreground:      var(--crrt-ink);
+  --popover:              var(--crrt-bg-card);
+  --popover-foreground:   var(--crrt-ink);
+  --primary:              var(--crrt-carrot);
+  --primary-foreground:   var(--crrt-white);
+  --secondary:            var(--crrt-bg-warm);
+  --secondary-foreground: var(--crrt-ink-soft);
+  --muted:                var(--crrt-bg-warm);
+  --muted-foreground:     var(--crrt-ink-mute);
+  --accent:               var(--crrt-carrot-deep);
+  --accent-foreground:    var(--crrt-white);
+  --destructive:          var(--crrt-carrot-deep);
+  --destructive-foreground: var(--crrt-white);
+  --border:               var(--crrt-rule);
+  --input:                var(--crrt-rule-strong);
+  --ring:                 var(--crrt-carrot);
+}
+
+/* -----------------------------------------------------------
+ * 4. Keyframes
+ * --------------------------------------------------------- */
+@keyframes crrt-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.6; transform: scale(0.85); }
+}
+
+@keyframes crrt-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Cursor blink for the operational wordmark CRRT.>_ — terminal cadence (~1060ms). */
+@keyframes crrt-cursor-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* -----------------------------------------------------------
+ * 5. Utilities (token-bound, not Tailwind)
+ * --------------------------------------------------------- */
+.crrt-pixelated {
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: crisp-edges;
+}
+
+.crrt-font-sans { font-family: var(--crrt-font-sans); }
+.crrt-font-mono { font-family: var(--crrt-font-mono); }
+.crrt-font-crt  { font-family: var(--crrt-font-crt); letter-spacing: var(--crrt-tracking-crt); }
+
+.crrt-focus-ring:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}

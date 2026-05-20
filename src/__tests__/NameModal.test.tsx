@@ -44,14 +44,14 @@ describe('NameModal', () => {
     const { getByText } = render(<NameModal {...makeProps({ value: 'Alex' })} />)
     const btn = getByText('Continue') as HTMLButtonElement
     expect(btn.disabled).toBe(false)
-    expect(btn.style.background).toBe('#111')
+    expect(btn.style.background).toBe('#E8853D')
     expect(btn.style.cursor).toBe('pointer')
   })
 
   it('disabled submit uses ccc background + not-allowed cursor', () => {
     const { getByText } = render(<NameModal {...makeProps({ value: '' })} />)
     const btn = getByText('Continue') as HTMLButtonElement
-    expect(btn.style.background).toBe('#ccc')
+    expect(btn.style.background).toBe('rgba(255, 255, 255, 0.04)')
     expect(btn.style.cursor).toBe('not-allowed')
   })
 
@@ -84,22 +84,49 @@ describe('NameModal', () => {
     )
     const close = getByLabelText('Close') as HTMLButtonElement
     fireEvent.mouseEnter(close)
-    expect(close.style.background).toBe('#f5f5f5')
-    expect(close.style.color).toBe('#111')
+    expect(close.style.background).toBe('rgba(255, 255, 255, 0.06)')
+    expect(close.style.color).toBe('#FFFFFF')
     fireEvent.mouseLeave(close)
     expect(close.style.background).toBe('transparent')
-    expect(close.style.color).toBe('#888')
+    expect(close.style.color).toBe('#6B6560')
   })
 
   it('input focus + blur swap border + background', () => {
     const { container } = render(<NameModal {...makeProps()} />)
     const input = container.querySelector('input') as HTMLInputElement
     fireEvent.focus(input)
-    expect(input.style.borderColor).toBe('#2563eb')
-    expect(input.style.background).toBe('#fff')
+    expect(input.style.borderColor).toBe('#E8853D')
+    expect(input.style.background).toBe('rgba(232, 133, 61, 0.06)')
     fireEvent.blur(input)
-    expect(input.style.borderColor).toBe('#e5e5e5')
-    expect(input.style.background).toBe('#fafafa')
+    expect(input.style.borderColor).toBe('rgba(255, 255, 255, 0.08)')
+    expect(input.style.background).toBe('rgba(255, 255, 255, 0.04)')
+  })
+
+  it('submit button hover deepens background when trimmed', () => {
+    const { getByText } = render(<NameModal {...makeProps({ value: 'Alex' })} />)
+    const btn = getByText('Continue') as HTMLButtonElement
+    fireEvent.mouseEnter(btn)
+    expect(btn.style.background).toBe('#B85F1F')
+    fireEvent.mouseLeave(btn)
+    expect(btn.style.background).toBe('#E8853D')
+  })
+
+  it('submit button hover does nothing when empty', () => {
+    const { getByText } = render(<NameModal {...makeProps({ value: '' })} />)
+    const btn = getByText('Continue') as HTMLButtonElement
+    const bgBefore = btn.style.background
+    // Disabled buttons swallow React's synthetic onMouseEnter via fireEvent
+    // (mouseenter), so dispatch native bubbling mouseover/mouseout to exercise
+    // the handler's `if (trimmed)` falsy branch.
+    btn.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }))
+    expect(btn.style.background).toBe(bgBefore)
+    btn.dispatchEvent(new MouseEvent('mouseout', { bubbles: true, cancelable: true }))
+    expect(btn.style.background).toBe(bgBefore)
+    // Also fire the original non-bubbling events for completeness.
+    fireEvent.mouseEnter(btn)
+    expect(btn.style.background).toBe(bgBefore)
+    fireEvent.mouseLeave(btn)
+    expect(btn.style.background).toBe(bgBefore)
   })
 
   it('overlay click stops propagation', () => {

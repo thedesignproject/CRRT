@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getSupabase } from '../../_lib/supabase.js'
@@ -30,9 +30,35 @@ function timingSafeEqual(a: string, b: string) {
   return mismatch === 0
 }
 
-// Smoke-only cleanup. Gated by SMOKE_CLEANUP_TOKEN and locked to the
-// SMOKE_PROJECT_KEY env var so a leaked token cannot wipe a real project.
+// Two DELETE flows, distinguished by query params:
+//
+// 1. Per-comment delete (`?id=…&projectKey=…`) — public; soft-authorized by
+//    projectKey match (same boundary as POST). Lets users tidy their own
+//    pins via the widget UI without a token.
+// 2. Bulk smoke cleanup (no `id` query) — gated by SMOKE_CLEANUP_TOKEN and
+//    locked to SMOKE_PROJECT_KEY so a leaked token cannot wipe a real project.
 async function handleDelete(req: VercelRequest, res: VercelResponse) {
+  const commentId = getStringQuery(req.query.id)
+  if (commentId) return handleDeleteOne(req, res, commentId)
+  return handleSmokeCleanup(req, res)
+}
+
+async function handleDeleteOne(req: VercelRequest, res: VercelResponse, commentId: string) {
+  try {
+    const projectKey = getStringQuery(req.query.projectKey) ?? getStringQuery(req.query.projectId)
+    if (!projectKey) return jsonError(req, res, 400, 'Missing projectKey')
+
+    const deleted = await deleteCommentById(commentId, projectKey)
+    if (!deleted) return jsonError(req, res, 404, 'Comment not found in project')
+
+    setCors(req, res, METHODS)
+    return res.status(204).end()
+  } catch (error) {
+    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+  }
+}
+
+async function handleSmokeCleanup(req: VercelRequest, res: VercelResponse) {
   try {
     const expectedToken = process.env.SMOKE_CLEANUP_TOKEN
     const expectedProjectKey = process.env.SMOKE_PROJECT_KEY

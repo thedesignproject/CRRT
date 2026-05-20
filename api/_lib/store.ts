@@ -388,6 +388,26 @@ export async function deleteCommentsForProject(projectKey: string) {
   if (error) throw new Error(error.message)
 }
 
+/**
+ * Delete a single comment scoped by project. The projectKey acts as a soft
+ * authorization boundary — same security model as `createPublicComment`: a
+ * caller who knows the project key can mutate within that project.
+ *
+ * Returns `true` if a row was deleted, `false` if no matching row existed.
+ */
+export async function deleteCommentById(commentId: string, projectKey: string): Promise<boolean> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('project_id', projectKey)
+    .select('id')
+
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) && data.length > 0
+}
+
 export async function getComment(commentId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase

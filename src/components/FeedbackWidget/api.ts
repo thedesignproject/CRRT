@@ -48,3 +48,14 @@ export async function patchReviewStatus(apiBase: string, id: string, reviewStatu
     console.warn('[FeedbackWidget] PATCH failed:', err)
   }
 }
+
+export async function deleteComment(apiBase: string, id: string, projectKey: string): Promise<void> {
+  try {
+    const url = new URL(`${apiBase}/v1/public/comments`, window.location.origin)
+    url.searchParams.set('id', id)
+    url.searchParams.set('projectKey', projectKey)
+    await fetch(url.toString(), { method: 'DELETE' })
+  } catch (err) {
+    console.warn('[FeedbackWidget] DELETE failed:', err)
+  }
+}
