@@ -31,7 +31,7 @@ function getElementFixedPos(
   }
 }
 
-function CarrotPixelIcon({ size = 20 }: { size?: number }) {
+function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
   return (
     <img
       src={CRRT_CARROT_LOGO_URL}
@@ -52,7 +52,7 @@ function CarrotPixelIcon({ size = 20 }: { size?: number }) {
   )
 }
 
-export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
+export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: FeedbackWidgetProps) {
   const [mode, setMode] = useState<Mode>('idle')
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
@@ -1631,7 +1631,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               justifyContent: 'center',
               gap: pillHover ? 12 : 0,
               height: 64,
-              width: pillHover ? 'auto' : 64,
+              // minWidth (not width) so hover-expanded width interpolates with
+              // the children instead of snapping between 64 and `auto`.
+              minWidth: 64,
               padding: pillHover ? '0 22px 0 12px' : 0,
               borderRadius: 32,
               background: pillHover ? '#0A0A0A' : '#141414',
@@ -1650,7 +1652,21 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               overflow: 'hidden',
             }}
           >
-            <CarrotPixelIcon size={pillHover ? 28 : 46} />
+            {/* Size on wrapper (CSS transition), not icon prop — prop change
+             * would snap one frame and re-trigger hover under the cursor. */}
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: pillHover ? 28 : 46,
+                height: pillHover ? 28 : 46,
+                flexShrink: 0,
+                transition: 'width 360ms cubic-bezier(0.32, 0.72, 0, 1), height 360ms cubic-bezier(0.32, 0.72, 0, 1)',
+              }}
+            >
+              <CarrotPixelIcon size="100%" />
+            </span>
             <span
               style={{
                 maxWidth: pillHover ? 160 : 0,
