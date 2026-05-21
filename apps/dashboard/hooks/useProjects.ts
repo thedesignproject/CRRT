@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { createProject as apiCreateProject, listProjects, type Project } from '../api'
+import { getMockProjects, mocksEnabled } from '../lib/mocks'
 
 export interface UseProjectsResult {
   projects: Project[]
@@ -17,6 +18,11 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
   const refresh = useCallback(async () => {
     setLoading(true)
     setError(null)
+    if (mocksEnabled) {
+      setProjects(getMockProjects())
+      setLoading(false)
+      return
+    }
     try {
       const data = await listProjects(apiBase, accessToken)
       setProjects(data)
@@ -32,6 +38,18 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
   }, [refresh])
 
   const createProject = useCallback(async (name: string) => {
+    if (mocksEnabled) {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+      const project: Project = {
+        publicKey: `proj_${slug || 'untitled'}`,
+        slug: slug || 'untitled',
+        name,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      setProjects((prev) => [...prev, project])
+      return project
+    }
     const project = await apiCreateProject(apiBase, accessToken, name)
     setProjects((prev) => [...prev, project])
     return project

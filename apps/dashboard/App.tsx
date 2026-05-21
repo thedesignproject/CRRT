@@ -15,7 +15,7 @@ import { CommandPalette } from './components/CommandPalette'
 import { LoginPage } from './components/LoginPage'
 import { Spinner } from './components/primitives'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 
 export function App() {
   const { session, user, loading: authLoading, signOut } = useAuth()
@@ -351,10 +351,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
         {sidebarOpen && (
           <AgentSidebar
-            apiBase={API_BASE}
             selectedProject={selectedProject}
+            projectComments={projectComments}
+            readyCount={counts.ready}
+            filtered={statusFilter === 'ready'}
+            selectedCommentId={selectedCommentId}
+            onSelectComment={setSelectedCommentId}
             agentSession={agentSession}
-            agentShareState={agentShareState}
             agentEvents={agentEvents}
             agentError={agentError}
             agentConnected={agentConnected}

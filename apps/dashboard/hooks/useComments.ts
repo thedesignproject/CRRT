@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { listComments, type CommentRecord } from '../api'
+import { getMockComments, mocksEnabled } from '../lib/mocks'
 
 export interface UseCommentsResult {
   comments: CommentRecord[]
@@ -24,6 +25,11 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
     }
     setLoading(true)
     setError(null)
+    if (mocksEnabled) {
+      setComments(getMockComments(projectId))
+      setLoading(false)
+      return
+    }
     try {
       const data = await listComments(apiBase, accessToken, projectId)
       // Race guard: drop response if user switched projects mid-flight.
