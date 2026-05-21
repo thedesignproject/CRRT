@@ -90,6 +90,7 @@ describe('api/v1/public/comments', () => {
       publicKey: 'missing',
       slug: 'missing',
       name: 'missing',
+      claimable: true,
       createdAt: '',
       updatedAt: '',
     })
@@ -131,6 +132,7 @@ describe('api/v1/public/comments', () => {
       publicKey: 'demo-project',
       slug: 'demo-project',
       name: 'Demo',
+      claimable: true,
       createdAt: '',
       updatedAt: '',
     })

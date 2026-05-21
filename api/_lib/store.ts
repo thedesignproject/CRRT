@@ -22,8 +22,19 @@ type ProjectRow = {
   public_key: string
   slug: string
   name: string
+  claimable: boolean
   created_at: string
   updated_at: string
+}
+
+export type ProjectRole = 'admin' | 'member'
+
+type InviteRow = {
+  project_key: string
+  email: string
+  role: ProjectRole
+  invited_by: string
+  created_at: string
 }
 
 type RepoConfigRow = {
@@ -95,8 +106,21 @@ function mapProject(row: ProjectRow) {
     publicKey: row.public_key,
     slug: row.slug,
     name: row.name,
+    claimable: row.claimable,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+  }
+}
+
+const PROJECT_COLS = 'public_key, slug, name, claimable, created_at, updated_at'
+
+function mapInvite(row: InviteRow) {
+  return {
+    projectKey: row.project_key,
+    email: row.email,
+    role: row.role,
+    invitedBy: row.invited_by,
+    createdAt: row.created_at,
   }
 }
 
@@ -158,7 +182,7 @@ export async function listProjects() {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('projects')
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLS)
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
@@ -178,18 +202,24 @@ function randomSuffix() {
   return Math.random().toString(36).slice(2, 8)
 }
 
-export async function createProject(input: { name: string }) {
+export async function createProject(input: {
+  name: string
+  publicKey?: string
+  userId?: string
+}) {
   const trimmed = input.name.trim()
   if (!trimmed) throw new Error('Project name required')
 
   const supabase = getSupabase()
-  const baseSlug = slugify(trimmed) || `project-${randomSuffix()}`
+  const explicitKey = input.publicKey?.trim()
+  const baseSlug = explicitKey || slugify(trimmed) || `project-${randomSuffix()}`
+  const maxAttempts = explicitKey ? 1 : 5
 
   let slug = baseSlug
   let projectData: ProjectRow | null = null
   let lastError: { code?: string; message: string } | null = null
 
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const { data, error } = await supabase
       .from('projects')
       .insert([{
@@ -198,7 +228,7 @@ export async function createProject(input: { name: string }) {
         name: trimmed,
         allowed_origins: [],
       }] as never)
-      .select('public_key, slug, name, created_at, updated_at')
+      .select(PROJECT_COLS)
       .single()
 
     if (!error) {
@@ -206,9 +236,9 @@ export async function createProject(input: { name: string }) {
       break
     }
 
-    // 23505 = unique_violation. Retry with new suffix; bail on anything else.
     if (error.code !== '23505') throw new Error(error.message)
     lastError = error
+    if (explicitKey) break
     slug = `${baseSlug}-${randomSuffix()}`
   }
 
@@ -223,19 +253,114 @@ export async function createProject(input: { name: string }) {
       default_branch: 'main',
     }] as never)
 
+  // Supabase REST has no transactions — on child-insert failure, drop the
+  // parent so the FKs cascade-clean repo + membership rows (see db/schema.ts).
   if (repoError) {
     await supabase.from('projects').delete().eq('public_key', slug)
     throw new Error(repoError.message)
   }
 
+  if (input.userId) {
+    const { error: memberError } = await supabase
+      .from('project_members')
+      .insert([{
+        project_key: slug,
+        user_id: input.userId,
+        role: 'admin',
+      }] as never)
+
+    if (memberError) {
+      await supabase.from('projects').delete().eq('public_key', slug)
+      throw new Error(memberError.message)
+    }
+  }
+
   return mapProject(projectData)
+}
+
+export async function getProjectMembership(userId: string, projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('role')
+    .eq('project_key', projectKey)
+    .eq('user_id', userId)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? (data as { role: ProjectRole }).role : null
+}
+
+export async function countProjectAdmins(projectKey: string) {
+  const supabase = getSupabase()
+  const { count, error } = await supabase
+    .from('project_members')
+    .select('user_id', { count: 'exact', head: true })
+    .eq('project_key', projectKey)
+    .eq('role', 'admin')
+
+  if (error) throw new Error(error.message)
+  return count ?? 0
+}
+
+export async function insertProjectMembership(input: {
+  projectKey: string
+  userId: string
+  role: ProjectRole
+}) {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from('project_members')
+    .insert([{
+      project_key: input.projectKey,
+      user_id: input.userId,
+      role: input.role,
+    }] as never)
+
+  // 23505 = duplicate (already a member). Idempotent — swallow.
+  if (error && error.code !== '23505') throw new Error(error.message)
+}
+
+export async function findInvite(projectKey: string, email: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .select('project_key, email, role, invited_by, created_at')
+    .eq('project_key', projectKey)
+    .eq('email', email.toLowerCase())
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapInvite(data as InviteRow) : null
+}
+
+export async function findInvitesForEmail(email: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .select('project_key, email, role, invited_by, created_at')
+    .eq('email', email.toLowerCase())
+
+  if (error) throw new Error(error.message)
+  return (data || []).map((row) => mapInvite(row as InviteRow))
+}
+
+export async function deleteInvite(projectKey: string, email: string) {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from('project_invites')
+    .delete()
+    .eq('project_key', projectKey)
+    .eq('email', email.toLowerCase())
+
+  if (error) throw new Error(error.message)
 }
 
 export async function getProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('projects')
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLS)
     .eq('public_key', projectKey)
     .maybeSingle()
 
@@ -256,7 +381,7 @@ export async function ensurePublicProject(publicKey: string) {
       name: publicKey,
       allowed_origins: [],
     }] as never)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLS)
     .single()
 
   if (error) {
