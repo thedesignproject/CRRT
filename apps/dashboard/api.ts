@@ -94,10 +94,10 @@ export interface ShareEventsResponse {
   nextCursor: number
 }
 
-function authHeaders(reviewerToken?: string) {
+function authHeaders(accessToken?: string) {
   const headers: Record<string, string> = {}
-  if (reviewerToken) {
-    headers.Authorization = `Bearer ${reviewerToken}`
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`
   }
   return headers
 }
@@ -118,75 +118,75 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 }
 
-export function listProjects(apiBase: string, reviewerToken: string) {
+export function listProjects(apiBase: string, accessToken: string) {
   return requestJson<Project[]>(`${apiBase}/v1/projects`, {
     headers: {
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
   })
 }
 
-export function createProject(apiBase: string, reviewerToken: string, name: string) {
+export function createProject(apiBase: string, accessToken: string, name: string) {
   return requestJson<Project>(`${apiBase}/v1/projects`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify({ name }),
   })
 }
 
-export function listComments(apiBase: string, reviewerToken: string, projectId: string, pageUrl?: string) {
+export function listComments(apiBase: string, accessToken: string, projectId: string, pageUrl?: string) {
   const query = new URLSearchParams()
   if (pageUrl) query.set('pageUrl', pageUrl)
   const suffix = query.toString() ? `?${query.toString()}` : ''
   return requestJson<CommentRecord[]>(`${apiBase}/v1/projects/${encodeURIComponent(projectId)}/comments${suffix}`, {
     headers: {
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
   })
 }
 
-export function updateReviewStatus(apiBase: string, reviewerToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus']) {
+export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus']) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify({ reviewStatus }),
   })
 }
 
-export function updateImplementationStatus(apiBase: string, reviewerToken: string, commentId: string, implementationStatus: CommentRecord['implementationStatus']) {
+export function updateImplementationStatus(apiBase: string, accessToken: string, commentId: string, implementationStatus: CommentRecord['implementationStatus']) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/implementation-status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify({ implementationStatus }),
   })
 }
 
-export function createShare(apiBase: string, reviewerToken: string, body: Record<string, unknown>) {
+export function createShare(apiBase: string, accessToken: string, body: Record<string, unknown>) {
   return requestJson<ShareCreationResponse>(`${apiBase}/v1/feedback-shares`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify(body),
   })
 }
 
-export function getPrompt(apiBase: string, reviewerToken: string, shareId: string, target: 'codex' | 'claude-code' | 'generic') {
+export function getPrompt(apiBase: string, accessToken: string, shareId: string, target: 'codex' | 'claude-code' | 'generic') {
   return requestJson<{ prompt: string, tokenUrl: string }>(
     `${apiBase}/v1/feedback-shares/${encodeURIComponent(shareId)}/prompt?target=${encodeURIComponent(target)}`,
     {
       headers: {
-        ...authHeaders(reviewerToken),
+        ...authHeaders(accessToken),
       },
     },
   )
