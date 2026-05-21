@@ -88,7 +88,7 @@ export function CommentList({
       </div>
 
       {bulkMode && (
-        <div className="px-4 py-2.5 border-b border-border bg-accent/40 flex items-center gap-2 whitespace-nowrap">
+        <div className="px-4 py-2.5 border-b border-border border-l-2 border-l-primary/40 bg-card flex items-center gap-2 whitespace-nowrap">
           <button
             onClick={toggleSelectAllVisible}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
