@@ -57,10 +57,7 @@ import { FeedbackWidget } from '@thedesignproject/crrt'
 
 export default function App() {
   return (
-    <FeedbackWidget
-      apiBase="https://your-deployment.example.com/api"
-      projectId="demo-project"
-    />
+    <FeedbackWidget projectId="demo-project" />
   )
 }
 ```
@@ -69,8 +66,8 @@ Props:
 
 | Prop | Type | Required | Description |
 | --- | --- | --- | --- |
-| `apiBase` | `string` | yes | Base URL of the backend that serves the widget API. For this repo's Vercel functions, use `https://<your-deployment>/api`. |
 | `projectId` | `string` | yes | Project public key used for comment capture. |
+| `apiBase` | `string` | no | Base URL of the backend that serves the widget API. Defaults to `https://crrt.ai/api`. Override to point at a self-hosted deployment. |
 
 ## API surfaces
 

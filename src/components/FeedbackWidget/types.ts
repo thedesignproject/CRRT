@@ -1,6 +1,6 @@
 export interface FeedbackWidgetProps {
   projectId: string
-  apiBase: string
+  apiBase?: string
 }
 
 export type Mode = 'idle' | 'selecting' | 'commenting'
