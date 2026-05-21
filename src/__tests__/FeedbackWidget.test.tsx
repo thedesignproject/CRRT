@@ -2951,23 +2951,26 @@ describe('<FeedbackWidget />', () => {
       // Notification dot is the only absolute-positioned <span> inside the pill.
       const dot = pill.querySelector<HTMLSpanElement>('span[style*="position: absolute"]')
       expect(dot).not.toBeNull()
-      // Rest: collapsed (width 56) — dot sits at top:6 / right:6.
-      expect(pill.style.width).toBe('64px')
+      // Icon box width = the pillHover signal (46 collapsed → 28 hovered).
+      // The icon container is the first <span> child of the pill button.
+      const iconBox = pill.firstElementChild as HTMLSpanElement
+      expect(pill.style.minWidth).toBe('64px')
+      expect(iconBox.style.width).toBe('46px')
       expect(dot!.style.top).toBe('6px')
       expect(dot!.style.right).toBe('6px')
 
       const wrapper = pill.parentElement!.parentElement!
       await act(async () => { fireEvent.mouseEnter(wrapper) })
       await waitFor(() => {
-        expect(pill.style.width).toBe('auto')
+        expect(iconBox.style.width).toBe('28px')
       })
-      // Hover: pill expands, dot snaps to top:-2 / right:-2.
+      // Hover: dot snaps to top:-2 / right:-2.
       expect(dot!.style.top).toBe('-2px')
       expect(dot!.style.right).toBe('-2px')
 
       await act(async () => { fireEvent.mouseLeave(wrapper) })
       await waitFor(() => {
-        expect(pill.style.width).toBe('64px')
+        expect(iconBox.style.width).toBe('46px')
       })
       expect(dot!.style.top).toBe('6px')
       expect(dot!.style.right).toBe('6px')
