@@ -39,9 +39,10 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
 
   const createProject = useCallback(async (name: string) => {
     if (mocksEnabled) {
+      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
       const project: Project = {
-        publicKey: `proj_mock_${Date.now()}`,
-        slug: name.toLowerCase().replace(/\s+/g, '-'),
+        publicKey: `proj_${slug || 'untitled'}`,
+        slug: slug || 'untitled',
         name,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
