@@ -23,6 +23,14 @@
 
   --scrollbar-thumb: oklch(0.30 0.005 90);
   --scrollbar-thumb-hover: oklch(0.40 0.005 90);
+
+  /* Dashboard override: --accent is for chrome hovers (filters, tabs, dropdown
+     rows, theme toggle, etc.). Brand phosphor amber (--crrt-phosphor) reads as
+     a status signal and is too loud for default hover surfaces. Map --accent
+     to a quiet elevated neutral instead; phosphor stays available where it
+     belongs via --crrt-phosphor and --color-status-* tokens. */
+  --accent: oklch(0.26 0.005 90);
+  --accent-foreground: var(--crrt-white);
 }
 
 [data-theme="light"] {
@@ -44,6 +52,9 @@
 
   --scrollbar-thumb: oklch(0.85 0.005 90);
   --scrollbar-thumb-hover: oklch(0.75 0.005 90);
+
+  --accent: oklch(0.94 0.005 90);
+  --accent-foreground: var(--crrt-ink);
 }
 
 @theme inline {
