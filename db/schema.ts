@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import {
   bigint,
+  boolean,
   check,
   doublePrecision,
   index,
@@ -18,9 +19,48 @@ export const projects = pgTable('projects', {
   slug: text('slug').notNull().unique(),
   name: text('name').notNull(),
   allowedOrigins: text('allowed_origins').array().notNull().default(sql`'{}'`),
+  claimable: boolean('claimable').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
+
+// userId / invitedBy reference auth.users(id). Drizzle can't model the auth
+// schema, so the FK is added in the migration SQL by hand (see DRIZZLE-GUIDE.md).
+export const projectMembers = pgTable(
+  'project_members',
+  {
+    projectKey: text('project_key')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    userId: uuid('user_id').notNull(),
+    role: text('role').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectKey, t.userId] }),
+    userIdx: index('project_members_user_id_idx').on(t.userId),
+    roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member')`),
+  }),
+)
+
+export const projectInvites = pgTable(
+  'project_invites',
+  {
+    projectKey: text('project_key')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    role: text('role').notNull().default('member'),
+    invitedBy: uuid('invited_by').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectKey, t.email] }),
+    emailIdx: index('project_invites_email_idx').on(t.email),
+    roleCheck: check('project_invites_role_check', sql`${t.role} in ('admin', 'member')`),
+    emailLowerCheck: check('project_invites_email_lower_check', sql`${t.email} = lower(${t.email})`),
+  }),
+)
 
 export const projectRepoConfigs = pgTable('project_repo_configs', {
   projectKey: text('project_key')
