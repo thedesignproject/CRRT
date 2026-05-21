@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireReviewer } from '../../../_lib/auth.js'
+import { requireUser } from '../../../_lib/auth.js'
 import { createFeedbackEvent, findActiveSharesForComment, updateImplementationStatus } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { IMPLEMENTATION_STATUSES, type ImplementationStatus } from '../../../_lib/status.js'
@@ -9,7 +9,8 @@ const VALID_STATUSES = new Set<ImplementationStatus>(IMPLEMENTATION_STATUSES)
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['PATCH', 'OPTIONS'])) return
   if (req.method !== 'PATCH') return methodNotAllowed(req, res, ['PATCH', 'OPTIONS'])
-  if (!requireReviewer(req, res)) return
+  // TODO(membership): fetch comment → require membership on comment.projectId.
+  if (!(await requireUser(req, res))) return
 
   try {
     const commentId = getStringQuery(req.query.commentId)

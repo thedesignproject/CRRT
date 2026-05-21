@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireReviewer } from '../../../_lib/auth.js'
+import { requireUser } from '../../../_lib/auth.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors, getStringQuery } from '../../../_lib/http.js'
 import { getProject, getRepoConfig, getShareById } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
@@ -8,7 +8,8 @@ import { decryptToken } from '../../../_lib/tokens.js'
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
   if (req.method !== 'GET') return methodNotAllowed(req, res, ['GET', 'OPTIONS'])
-  if (!requireReviewer(req, res)) return
+  // TODO(membership): fetch share → require membership on share.projectId.
+  if (!(await requireUser(req, res))) return
 
   try {
     const shareId = getStringQuery(req.query.shareId)

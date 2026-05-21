@@ -1,12 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireReviewer } from '../../_lib/auth.js'
+import { requireUser } from '../../_lib/auth.js'
 import { handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { createProject, listProjects } from '../../_lib/store.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'POST', 'OPTIONS'])) return
   if (req.method !== 'GET' && req.method !== 'POST') return methodNotAllowed(req, res, ['GET', 'POST', 'OPTIONS'])
-  if (!requireReviewer(req, res)) return
+  // TODO(membership): filter listProjects by membership + drop POST in favor of claim endpoint.
+  if (!(await requireUser(req, res))) return
 
   try {
     if (req.method === 'GET') {
