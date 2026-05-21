@@ -51,7 +51,7 @@ export function Header({
   onSignOut,
 }: HeaderProps) {
   return (
-    <header className="flex items-center gap-3 px-5 h-[52px] shrink-0 border-b border-border bg-card">
+    <header className="flex items-center gap-3 px-5 h-[60px] shrink-0 border-b border-border bg-card">
       <div className="flex items-center gap-2 mr-2">
         <img
           src="/crrt-isologo.png"
@@ -112,28 +112,28 @@ export function Header({
           })
         )}
 
-        <div data-add-project className="relative">
-          <button
-            onClick={() => setAddProjectOpen((v) => !v)}
-            className={cn(
-              'w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground transition-all',
-              addProjectOpen
-                ? 'bg-accent text-foreground'
-                : 'hover:bg-accent hover:text-foreground'
-            )}
-            title="Add project"
-          >
-            <PlusIcon size={14} />
-          </button>
-          {addProjectOpen && (
-            <AddProjectPopover
-              onAdd={onAddProject}
-              onClose={() => setAddProjectOpen(false)}
-              busy={addProjectBusy}
-              error={addProjectError}
-            />
+        <button
+          type="button"
+          onClick={() => setAddProjectOpen((v) => !v)}
+          aria-label="Add project"
+          className={cn(
+            'w-7 h-7 rounded-md flex items-center justify-center text-muted-foreground transition-colors shrink-0',
+            addProjectOpen
+              ? 'bg-accent text-foreground'
+              : 'hover:bg-accent hover:text-foreground',
           )}
-        </div>
+          title="Add project"
+        >
+          <PlusIcon size={14} />
+        </button>
+        {addProjectOpen && (
+          <AddProjectPopover
+            onAdd={onAddProject}
+            onClose={() => setAddProjectOpen(false)}
+            busy={addProjectBusy}
+            error={addProjectError}
+          />
+        )}
       </nav>
 
       <div className="flex items-center gap-2 ml-auto">
