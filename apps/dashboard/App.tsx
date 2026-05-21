@@ -351,10 +351,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
         {sidebarOpen && (
           <AgentSidebar
-            apiBase={API_BASE}
             selectedProject={selectedProject}
+            projectComments={projectComments}
+            readyCount={counts.ready}
+            filtered={statusFilter === 'ready'}
+            selectedCommentId={selectedCommentId}
+            onSelectComment={setSelectedCommentId}
             agentSession={agentSession}
-            agentShareState={agentShareState}
             agentEvents={agentEvents}
             agentError={agentError}
             agentConnected={agentConnected}
