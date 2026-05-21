@@ -3,6 +3,7 @@ import { updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiU
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
+import { useAuth } from './hooks/useAuth'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
@@ -11,16 +12,33 @@ import { CommentDetail } from './components/CommentDetail'
 import { AgentSidebar } from './components/AgentSidebar'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
+import { LoginPage } from './components/LoginPage'
+import { Spinner } from './components/primitives'
 
 const API_BASE = import.meta.env.VITE_API_BASE || '/api'
-const REVIEWER_TOKEN = import.meta.env.VITE_REVIEWER_TOKEN || ''
 
 export function App() {
-  const { projects, loading: projectsLoading, error: projectsError, createProject } = useProjects(API_BASE, REVIEWER_TOKEN)
+  const { session, user, loading: authLoading, signOut } = useAuth()
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Spinner size={20} />
+      </div>
+    )
+  }
+
+  if (!session || !user) return <LoginPage />
+
+  return <AuthenticatedApp accessToken={session.access_token} user={user} onSignOut={signOut} />
+}
+
+function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
+  const { projects, loading: projectsLoading, error: projectsError, createProject } = useProjects(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
-  const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, REVIEWER_TOKEN, selectedProject || null)
+  const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -90,7 +108,7 @@ export function App() {
   const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
     try {
-      await apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, status)
+      await apiUpdateReview(API_BASE, accessToken, id, status)
     } catch (err) {
       console.error('Failed to update review status:', err)
       refreshComments()
@@ -105,7 +123,7 @@ export function App() {
       ? { ...c, implementationStatus: nextStatus, updatedAt: new Date().toISOString() }
       : c))
     try {
-      await apiUpdateImpl(API_BASE, REVIEWER_TOKEN, id, nextStatus)
+      await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       refreshComments()
@@ -145,11 +163,11 @@ export function App() {
     exitBulkMode()
 
     const calls: Promise<unknown>[] = ids.flatMap((id) => {
-      if (action === 'ready') return [apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, 'accepted')]
-      if (action === 'reject') return [apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, 'rejected')]
+      if (action === 'ready') return [apiUpdateReview(API_BASE, accessToken, id, 'accepted')]
+      if (action === 'reject') return [apiUpdateReview(API_BASE, accessToken, id, 'rejected')]
       return [
-        apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, 'accepted'),
-        apiUpdateImpl(API_BASE, REVIEWER_TOKEN, id, 'done'),
+        apiUpdateReview(API_BASE, accessToken, id, 'accepted'),
+        apiUpdateImpl(API_BASE, accessToken, id, 'done'),
       ]
     })
 
@@ -293,6 +311,8 @@ export function App() {
         onOpenCmd={() => setCmdOpen(true)}
         theme={theme}
         toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
+        user={user}
+        onSignOut={onSignOut}
       />
 
       <div className="flex flex-1 overflow-hidden">

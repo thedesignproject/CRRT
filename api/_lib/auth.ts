@@ -1,5 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getReviewerToken, jsonError } from './http.js'
+import { getBearerToken, getReviewerToken, jsonError } from './http.js'
+import { getSupabase } from './supabase.js'
+
+export type AuthenticatedUser = { userId: string; email: string }
 
 export function requireReviewer(req: VercelRequest, res: VercelResponse) {
   const configured = process.env.REVIEWER_API_TOKEN
@@ -17,3 +20,25 @@ export function requireReviewer(req: VercelRequest, res: VercelResponse) {
   return true
 }
 
+export async function requireUser(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<AuthenticatedUser | null> {
+  const token = getBearerToken(req)
+  if (!token) {
+    jsonError(req, res, 401, 'Unauthorized')
+    return null
+  }
+
+  try {
+    const { data, error } = await getSupabase().auth.getUser(token)
+    if (error || !data?.user || !data.user.email) {
+      jsonError(req, res, 401, 'Unauthorized')
+      return null
+    }
+    return { userId: data.user.id, email: data.user.email }
+  } catch {
+    jsonError(req, res, 401, 'Unauthorized')
+    return null
+  }
+}

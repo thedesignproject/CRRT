@@ -9,7 +9,7 @@ export interface UseProjectsResult {
   createProject: (name: string) => Promise<Project>
 }
 
-export function useProjects(apiBase: string, reviewerToken: string): UseProjectsResult {
+export function useProjects(apiBase: string, accessToken: string): UseProjectsResult {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -18,24 +18,24 @@ export function useProjects(apiBase: string, reviewerToken: string): UseProjects
     setLoading(true)
     setError(null)
     try {
-      const data = await listProjects(apiBase, reviewerToken)
+      const data = await listProjects(apiBase, accessToken)
       setProjects(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load projects')
     } finally {
       setLoading(false)
     }
-  }, [apiBase, reviewerToken])
+  }, [apiBase, accessToken])
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
   const createProject = useCallback(async (name: string) => {
-    const project = await apiCreateProject(apiBase, reviewerToken, name)
+    const project = await apiCreateProject(apiBase, accessToken, name)
     setProjects((prev) => [...prev, project])
     return project
-  }, [apiBase, reviewerToken])
+  }, [apiBase, accessToken])
 
   return { projects, loading, error, refresh, createProject }
 }

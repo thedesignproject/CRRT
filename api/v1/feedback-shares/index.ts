@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireReviewer } from '../../_lib/auth.js'
+import { requireUser } from '../../_lib/auth.js'
 import { createFeedbackEvent, createShare, addShareItems, listAcceptedCommentsByIds, listAcceptedCommentsForPage } from '../../_lib/store.js'
 import { generateAccessToken, generateSlug, hashToken, encryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
@@ -7,7 +7,8 @@ import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['POST', 'OPTIONS'])) return
   if (req.method !== 'POST') return methodNotAllowed(req, res, ['POST', 'OPTIONS'])
-  if (!requireReviewer(req, res)) return
+  // TODO(membership): require membership on body.projectId.
+  if (!(await requireUser(req, res))) return
 
   try {
     const { projectId, scopeType, pageUrl, commentIds } = req.body ?? {}
