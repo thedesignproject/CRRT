@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
 import type { Project } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { LogoIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
+import { MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
 import { UserMenu } from './UserMenu'
@@ -53,10 +53,24 @@ export function Header({
   return (
     <header className="flex items-center gap-3 px-5 h-[52px] shrink-0 border-b border-border bg-card">
       <div className="flex items-center gap-2 mr-2">
-        <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-          <LogoIcon />
-        </div>
-        <span className="text-sm font-bold tracking-tight text-foreground font-serif italic">feedback</span>
+        <img
+          src="/crrt-isologo.png"
+          alt="CRRT"
+          width={24}
+          height={24}
+          className="shrink-0"
+          style={{ imageRendering: 'pixelated' }}
+        />
+        <span
+          className="text-foreground"
+          style={{
+            fontFamily: 'var(--crrt-font-crt)',
+            fontSize: 16,
+            letterSpacing: '0.06em',
+          }}
+        >
+          CRRT.
+        </span>
       </div>
 
       <div className="w-px h-5 bg-border" />
