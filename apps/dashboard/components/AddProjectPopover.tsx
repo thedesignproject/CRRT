@@ -35,10 +35,12 @@ export function AddProjectPopover({ onAdd, onClose, busy, error }: AddProjectPop
   return (
     <div
       data-add-project
-      className="absolute top-full left-0 mt-2 w-[260px] rounded-lg border border-border bg-card shadow-xl shadow-black/30 cmd-modal-enter z-50"
+      className="absolute top-full left-0 mt-2 w-[320px] rounded-lg border border-primary/20 bg-card shadow-2xl shadow-black/50 cmd-modal-enter z-50"
     >
-      <div className="p-3">
-        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-2">New project</p>
+      <div className="p-4">
+        <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider mb-3">
+          Create a project
+        </p>
         <form
           onSubmit={(e) => {
             e.preventDefault()
@@ -50,19 +52,28 @@ export function AddProjectPopover({ onAdd, onClose, busy, error }: AddProjectPop
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="Project name"
+            placeholder="e.g. Acme Marketing Site"
             disabled={busy}
+            aria-label="Project name"
             className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50"
             autoComplete="off"
             spellCheck={false}
           />
+          <p className="mt-2 text-[11px] text-muted-foreground/80 leading-relaxed">
+            We'll give you a public key after you save. Paste the snippet into the host app to start collecting feedback.
+          </p>
           {error && (
-            <p className="mt-2 text-[11px] text-status-rejected">{error}</p>
+            <p className="mt-2 text-[11px] text-status-rejected" role="alert" aria-live="polite">{error}</p>
           )}
-          <div className="flex items-center justify-between mt-3">
-            <p className="text-[10px] text-muted-foreground">
-              Paste your snippet after creating
-            </p>
+          <div className="flex items-center justify-end gap-2 mt-4">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={busy}
+              className="px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              Cancel
+            </button>
             <button
               type="submit"
               disabled={!canSubmit}
@@ -73,7 +84,7 @@ export function AddProjectPopover({ onAdd, onClose, busy, error }: AddProjectPop
                   : 'bg-muted text-muted-foreground cursor-not-allowed'
               )}
             >
-              {busy ? 'Creating…' : 'Create'}
+              {busy ? 'Creating…' : 'Create project'}
             </button>
           </div>
         </form>
