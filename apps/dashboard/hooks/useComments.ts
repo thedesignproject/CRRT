@@ -8,7 +8,7 @@ export interface UseCommentsResult {
   refresh: () => Promise<void>
 }
 
-export function useComments(apiBase: string, reviewerToken: string, projectId: string | null): UseCommentsResult {
+export function useComments(apiBase: string, accessToken: string, projectId: string | null): UseCommentsResult {
   const [comments, setComments] = useState<CommentRecord[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -25,7 +25,7 @@ export function useComments(apiBase: string, reviewerToken: string, projectId: s
     setLoading(true)
     setError(null)
     try {
-      const data = await listComments(apiBase, reviewerToken, projectId)
+      const data = await listComments(apiBase, accessToken, projectId)
       // Race guard: drop response if user switched projects mid-flight.
       if (activeProjectRef.current !== projectId) return
       setComments(data)
@@ -35,7 +35,7 @@ export function useComments(apiBase: string, reviewerToken: string, projectId: s
     } finally {
       if (activeProjectRef.current === projectId) setLoading(false)
     }
-  }, [apiBase, reviewerToken, projectId])
+  }, [apiBase, accessToken, projectId])
 
   // Clear previous project's data before the next fetch lands.
   useEffect(() => {

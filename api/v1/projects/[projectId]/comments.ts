@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireReviewer } from '../../../_lib/auth.js'
+import { requireUser } from '../../../_lib/auth.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { listComments } from '../../../_lib/store.js'
 import type { ImplementationStatus, ReviewStatus } from '../../../_lib/status.js'
@@ -10,7 +10,8 @@ const IMPLEMENTATION_STATUSES = new Set<ImplementationStatus>(['unassigned', 'cl
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
   if (req.method !== 'GET') return methodNotAllowed(req, res, ['GET', 'OPTIONS'])
-  if (!requireReviewer(req, res)) return
+  // TODO(membership): require requireProjectMembership(user, projectId).
+  if (!(await requireUser(req, res))) return
 
   try {
     const projectId = getStringQuery(req.query.projectId)

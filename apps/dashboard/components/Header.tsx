@@ -1,9 +1,11 @@
+import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
 import type { Project } from '../api'
 import type { StatusFilter } from '../lib/types'
 import { LogoIcon, MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
+import { UserMenu } from './UserMenu'
 
 interface HeaderProps {
   projects: Project[]
@@ -23,6 +25,8 @@ interface HeaderProps {
   onOpenCmd: () => void
   theme: 'light' | 'dark'
   toggleTheme: () => void
+  user: User
+  onSignOut: () => void
 }
 
 export function Header({
@@ -43,6 +47,8 @@ export function Header({
   onOpenCmd,
   theme,
   toggleTheme,
+  user,
+  onSignOut,
 }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 px-5 h-[52px] shrink-0 border-b border-border bg-card">
@@ -134,9 +140,7 @@ export function Header({
         >
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
-        <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-          TO
-        </div>
+        <UserMenu user={user} onSignOut={onSignOut} />
       </div>
     </header>
   )
