@@ -71,7 +71,14 @@ export function Closing() {
           <PillButton variant="carrot" size="lg" onClick={activateCRRT}>
             Drop a CRRT →
           </PillButton>
-          <PillButton variant="ghost" size="lg" withCarrot={false}>
+          <PillButton
+            variant="ghost"
+            size="lg"
+            withCarrot={false}
+            onClick={() => {
+              window.location.href = '/docs/install'
+            }}
+          >
             Read the docs
           </PillButton>
         </div>
