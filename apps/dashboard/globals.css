@@ -121,6 +121,52 @@
   }
 }
 
+/* Subtle CRT scanline overlay — mirrors apps/landing/globals.css so the
+   auth surface speaks the same visual language as the marketing site. */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.012) 2px,
+    rgba(255, 255, 255, 0.012) 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Neutral body font (sans-serif Geist) — used in places where Geist Mono
+   reads too technical for paragraph copy (auth page subtitles, helper text,
+   inputs). The mono and CRT fonts stay reserved for headings, labels,
+   buttons, and terminal-flavor moments. */
+:root {
+  --crrt-font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Section marker — same grammar as the landing's "/ 01 hero" labels. */
+.crrt-section-marker {
+  font-family: var(--crrt-font-mono);
+  font-size: 12px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+/* Blinking terminal cursor for headings. */
+.crrt-cursor::after {
+  content: '_';
+  display: inline-block;
+  margin-left: 0.05em;
+  color: var(--crrt-phosphor);
+  animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
