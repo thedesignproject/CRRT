@@ -2,11 +2,15 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { Spinner } from './primitives'
 
-type Mode = 'signin' | 'signup'
+type Mode = 'signin' | 'signup' | 'forgot'
 
 function modeFromPath(pathname: string): Mode {
-  return pathname === '/signup' ? 'signup' : 'signin'
+  if (pathname === '/signup') return 'signup'
+  if (pathname === '/forgot-password') return 'forgot'
+  return 'signin'
 }
+
+type AuthPath = '/login' | '/signup' | '/forgot-password' | '/'
 
 export function LoginPage() {
   const [mode, setMode] = useState<Mode>(() =>
@@ -17,22 +21,27 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [signupSent, setSignupSent] = useState(false)
+  const [resetSent, setResetSent] = useState(false)
 
   // Sync mode if the user uses browser back / forward.
   useEffect(() => {
     function onPop() {
       setMode(modeFromPath(window.location.pathname))
+      setError(null)
+      setSignupSent(false)
+      setResetSent(false)
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  function navigate(path: '/login' | '/signup' | '/') {
+  function navigate(path: AuthPath) {
     if (window.location.pathname === path) return
     window.history.pushState({}, '', path)
     setMode(modeFromPath(path))
     setError(null)
     setSignupSent(false)
+    setResetSent(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -44,7 +53,7 @@ export function LoginPage() {
         const { error: signinError } = await supabase.auth.signInWithPassword({ email, password })
         if (signinError) throw signinError
         navigate('/')
-      } else {
+      } else if (mode === 'signup') {
         const { error: signupError } = await supabase.auth.signUp({
           email,
           password,
@@ -52,6 +61,12 @@ export function LoginPage() {
         })
         if (signupError) throw signupError
         setSignupSent(true)
+      } else {
+        const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`,
+        })
+        if (resetError) throw resetError
+        setResetSent(true)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
@@ -60,9 +75,11 @@ export function LoginPage() {
     }
   }
 
-  if (signupSent) return <CheckEmail email={email} onBackToSignIn={() => navigate('/login')} />
+  if (signupSent) return <CheckEmail email={email} variant="signup" onBackToSignIn={() => navigate('/login')} />
+  if (resetSent) return <CheckEmail email={email} variant="reset" onBackToSignIn={() => navigate('/login')} />
 
   const isSignup = mode === 'signup'
+  const isForgot = mode === 'forgot'
 
   return (
     <div
@@ -156,7 +173,9 @@ export function LoginPage() {
           textWrap: 'balance',
         }}
       >
-        <span className="crrt-cursor">{isSignup ? 'create your crrt' : 'welcome back'}</span>
+        <span className="crrt-cursor">
+          {isSignup ? 'create your crrt' : isForgot ? 'reset your password' : 'welcome back'}
+        </span>
       </h1>
       <p
         style={{
@@ -173,7 +192,9 @@ export function LoginPage() {
       >
         {isSignup
           ? 'one account. unlimited projects. visual feedback for your team.'
-          : 'sign in to keep shipping fixes from real feedback.'}
+          : isForgot
+            ? "enter the email you signed up with. we'll send you a link to set a new password."
+            : 'sign in to keep shipping fixes from real feedback.'}
       </p>
 
       {/* Form */}
@@ -200,41 +221,46 @@ export function LoginPage() {
           disabled={busy}
         />
 
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
-          <FieldLabel htmlFor="auth-password">password</FieldLabel>
-          {!isSignup && (
-            <button
-              type="button"
-              onClick={() => {/* TODO: forgot password */}}
-              style={{
-                fontFamily: 'var(--crrt-font-body)',
-                fontSize: 13,
-                color: 'var(--muted-foreground)',
-                background: 'transparent',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-                transition: 'color 150ms',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--foreground)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted-foreground)')}
-            >
-              forgot password? →
-            </button>
-          )}
-        </div>
-        <AuthInput
-          id="auth-password"
-          type="password"
-          autoComplete={isSignup ? 'new-password' : 'current-password'}
-          required
-          minLength={6}
-          spellCheck={false}
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={busy}
-        />
+        {!isForgot && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 6 }}>
+              <FieldLabel htmlFor="auth-password">password</FieldLabel>
+              {!isSignup && (
+                <a
+                  href="/forgot-password"
+                  onClick={(e) => {
+                    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                    e.preventDefault()
+                    navigate('/forgot-password')
+                  }}
+                  style={{
+                    fontFamily: 'var(--crrt-font-body)',
+                    fontSize: 13,
+                    color: 'var(--muted-foreground)',
+                    textDecoration: 'none',
+                    transition: 'color 150ms',
+                  }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--foreground)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--muted-foreground)')}
+                >
+                  forgot password? →
+                </a>
+              )}
+            </div>
+            <AuthInput
+              id="auth-password"
+              type="password"
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              required
+              minLength={6}
+              spellCheck={false}
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={busy}
+            />
+          </>
+        )}
 
         {error && (
           <p
@@ -283,7 +309,7 @@ export function LoginPage() {
               authenticating…
             </>
           ) : (
-            <>▸ {isSignup ? 'create account' : 'authenticate'}</>
+            <>▸ {isSignup ? 'create account' : isForgot ? 'send reset link' : 'authenticate'}</>
           )}
         </button>
       </form>
@@ -303,6 +329,7 @@ export function LoginPage() {
             <a
               href="/login"
               onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
                 navigate('/login')
               }}
@@ -311,12 +338,28 @@ export function LoginPage() {
               sign in →
             </a>
           </>
+        ) : isForgot ? (
+          <>
+            remembered it?{' '}
+            <a
+              href="/login"
+              onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
+                e.preventDefault()
+                navigate('/login')
+              }}
+              style={{ color: 'var(--crrt-carrot)', textDecoration: 'none' }}
+            >
+              back to sign in →
+            </a>
+          </>
         ) : (
           <>
             new here?{' '}
             <a
               href="/signup"
               onClick={(e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
                 navigate('/signup')
               }}
@@ -378,7 +421,28 @@ function AuthInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   )
 }
 
-function CheckEmail({ email, onBackToSignIn }: { email: string; onBackToSignIn: () => void }) {
+function CheckEmail({
+  email,
+  variant,
+  onBackToSignIn,
+}: {
+  email: string
+  variant: 'signup' | 'reset'
+  onBackToSignIn: () => void
+}) {
+  const heading = variant === 'reset' ? '✓ check your inbox' : '✓ check your email'
+  const body =
+    variant === 'reset' ? (
+      <>
+        we sent a password reset link to{' '}
+        <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. open it to choose a new password.
+      </>
+    ) : (
+      <>
+        we sent a confirmation link to{' '}
+        <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. click it, then come back here to sign in.
+      </>
+    )
   return (
     <div
       className="scanlines"
@@ -435,7 +499,7 @@ function CheckEmail({ email, onBackToSignIn }: { email: string; onBackToSignIn: 
             marginBottom: 12,
           }}
         >
-          ✓ check your email
+          {heading}
         </p>
         <p
           style={{
@@ -448,9 +512,7 @@ function CheckEmail({ email, onBackToSignIn }: { email: string; onBackToSignIn: 
             textWrap: 'pretty',
           }}
         >
-          we sent a confirmation link to{' '}
-          <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. click it,
-          then come back here to sign in.
+          {body}
         </p>
         <button
           type="button"

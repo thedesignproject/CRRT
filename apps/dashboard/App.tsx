@@ -13,12 +13,46 @@ import { AgentSidebar } from './components/AgentSidebar'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
 import { LoginPage } from './components/LoginPage'
+import { ResetPasswordPage } from './components/ResetPasswordPage'
+import { WelcomeScreen } from './components/WelcomeScreen'
+import { AddProjectPopover } from './components/AddProjectPopover'
 import { Spinner } from './components/primitives'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
+const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
+
+function isOnboarded() {
+  try {
+    return window.localStorage.getItem(ONBOARDED_KEY) === '1'
+  } catch {
+    return true
+  }
+}
+
+function markOnboarded() {
+  try {
+    window.localStorage.setItem(ONBOARDED_KEY, '1')
+  } catch {
+    /* localStorage unavailable */
+  }
+}
 
 export function App() {
   const { session, user, loading: authLoading, signOut } = useAuth()
+  const [pathname, setPathname] = useState(typeof window === 'undefined' ? '/' : window.location.pathname)
+
+  useEffect(() => {
+    function onPop() {
+      setPathname(window.location.pathname)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // /reset-password handles its own auth state via the recovery deep link;
+  // render it regardless of session so the user can complete the flow even
+  // if their previous session is stale.
+  if (pathname === '/reset-password') return <ResetPasswordPage />
 
   if (authLoading) {
     return (
@@ -290,6 +324,35 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       setAddProjectBusy(false)
     }
   }, [createProject])
+
+  // Onboarding gate: show the welcome screen when this account has no
+  // projects and hasn't been onboarded before. Once they click the CTA we
+  // mark the flag so the welcome doesn't reappear if they cancel out of
+  // the create-project modal.
+  const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
+  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded
+
+  if (showWelcome) {
+    return (
+      <>
+        <WelcomeScreen
+          onCreateProject={() => {
+            markOnboarded()
+            setOnboarded(true)
+            setAddProjectOpen(true)
+          }}
+        />
+        {addProjectOpen && (
+          <AddProjectPopover
+            onAdd={handleAddProject}
+            onClose={() => setAddProjectOpen(false)}
+            busy={addProjectBusy}
+            error={addProjectError}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">

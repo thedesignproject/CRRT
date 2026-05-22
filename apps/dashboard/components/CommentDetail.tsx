@@ -14,7 +14,7 @@ import {
   XIcon,
 } from './icons'
 import { ActionBtn, Kbd } from './primitives'
-import { AddToCodeButton } from './AddToCodeButton'
+import { ProjectEmptyState } from './ProjectEmptyState'
 
 interface CommentDetailProps {
   selectedComment: Comment | null
@@ -187,13 +187,7 @@ export function CommentDetail({
           </div>
         </>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <p className="text-base font-semibold text-foreground mb-1">No feedback yet</p>
-          <p className="text-sm text-muted-foreground max-w-sm mb-6">
-            Mount the widget in your app to start collecting visual feedback. Reviewers can drop pins on any page and their comments land here.
-          </p>
-          <AddToCodeButton projectId={selectedProject} apiBase={apiBase} variant="large" />
-        </div>
+        <ProjectEmptyState projectId={selectedProject} apiBase={apiBase} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">

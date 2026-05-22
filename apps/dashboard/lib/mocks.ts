@@ -1,6 +1,11 @@
 import type { CommentRecord, Project } from '../api'
 
-export const mocksEnabled = import.meta.env.VITE_USE_MOCKS === '1'
+// VITE_USE_MOCKS:
+//   '1'     → populated fixtures (default mock mode)
+//   'empty' → empty account, useful for previewing the onboarding flow
+//   unset   → real API
+export const mocksEnabled = import.meta.env.VITE_USE_MOCKS === '1' || import.meta.env.VITE_USE_MOCKS === 'empty'
+export const mocksEmpty = import.meta.env.VITE_USE_MOCKS === 'empty'
 
 const now = Date.now()
 const ago = (mins: number) => new Date(now - mins * 60_000).toISOString()
@@ -142,9 +147,11 @@ const PROJECT_COMMENTS: Record<string, CommentRecord[]> = {
 }
 
 export function getMockProjects(): Project[] {
+  if (mocksEmpty) return []
   return MOCK_PROJECTS
 }
 
 export function getMockComments(projectId: string): CommentRecord[] {
+  if (mocksEmpty) return []
   return PROJECT_COMMENTS[projectId] ?? []
 }
