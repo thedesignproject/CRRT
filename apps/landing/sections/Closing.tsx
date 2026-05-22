@@ -10,8 +10,8 @@ export default function App() {
     <>
       <YourApp />
       <FeedbackWidget
-        projectId="your-key"
-        apiBase="https://api.example.com/api"
+        projectId="proj_your_app_name"
+        apiBase="https://crrt.ai/api"
       />
     </>
   )
