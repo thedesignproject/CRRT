@@ -1,5 +1,12 @@
 @import "tailwindcss";
 
+/* Neutral body font (sans-serif Geist) — used in /docs pages where Geist Mono
+   reads too technical for long-form copy. Headings, labels, and section
+   markers keep the mono / VT323 brand fonts. */
+:root {
+  --crrt-font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -9,7 +9,8 @@
     }
   },
   "rewrites": [
-    { "source": "/d/:slug", "destination": "/index.html" }
+    { "source": "/d/:slug", "destination": "/index.html" },
+    { "source": "/docs/:path*", "destination": "/index.html" }
   ],
   "headers": [
     {
