@@ -1,8 +1,12 @@
+import { useEffect, useRef, useState } from 'react'
 import { Wordmark } from '../components/Wordmark'
 import { PillButton } from '../components/PillButton'
 import { CarrotIcon } from '../components/CarrotIcon'
-import { activateCRRT } from '../lib/crrt'
 import { PIN_GRADIENT } from '@widget/components/FeedbackWidget/constants'
+
+// In dev the dashboard runs on its own Vite port; in prod we route /dashboard
+// from the landing deploy (see vercel.json rewrite — TODO when ready).
+const DASHBOARD_HREF = import.meta.env.DEV ? 'http://localhost:5173' : '/dashboard'
 
 export function Hero() {
   return (
@@ -29,10 +33,17 @@ export function Hero() {
       >
         <Wordmark level="nav" />
         <div className="flex items-center gap-6 text-[13px]" style={{ color: 'var(--crrt-ink-faint)' }}>
-          <a href="#try" className="hover:text-white transition-colors">Try it</a>
+          <a
+            href="https://github.com/thedesignproject/CRRT"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-white transition-colors"
+          >
+            GitHub
+          </a>
           <a href="#install" className="hover:text-white transition-colors">Install</a>
-          <PillButton variant="carrot" size="sm" withCarrot={false} onClick={activateCRRT}>
-            Get started
+          <PillButton variant="carrot" size="sm" withCarrot={false} onClick={() => { window.location.href = DASHBOARD_HREF }}>
+            Sign up →
           </PillButton>
         </div>
       </nav>
@@ -79,21 +90,18 @@ export function Hero() {
           }}
         >
           <SplitWord text="CRRTs" delayStart={0} />{' '}
-          <span style={{ position: 'relative', display: 'inline-block' }}>
-            <em
-              className="crrt-glitch"
-              style={{
-                color: 'var(--crrt-carrot)',
-                fontStyle: 'italic',
-                display: 'inline-block',
-                position: 'relative',
-              }}
-            >
-              <SplitWord text="level" delayStart={360} italic />{' '}
-              <SplitWord text="up" delayStart={720} italic />
-            </em>
-            <HeroDemoPin />
-          </span>{' '}
+          <em
+            className="crrt-glitch"
+            style={{
+              color: 'var(--crrt-carrot)',
+              fontStyle: 'italic',
+              display: 'inline-block',
+              position: 'relative',
+            }}
+          >
+            <SplitWord text="level" delayStart={360} italic />{' '}
+            <SplitWord text="up" delayStart={720} italic />
+          </em>{' '}
           <SplitWord text="your" delayStart={920} />{' '}
           <SplitWord text="product" delayStart={1120} />
           <span
@@ -118,19 +126,22 @@ export function Hero() {
           }}
         >
           Drop a CRRT on any element to leave visual feedback. Your team marks what's off, you ship the fix. Press{' '}
-          <kbd
-            style={{
-              fontFamily: 'var(--crrt-font-mono)',
-              fontSize: 13,
-              padding: '2px 8px',
-              borderRadius: 6,
-              background: 'var(--crrt-bg-deep-soft)',
-              border: '1px solid var(--crrt-rule-dark)',
-              color: 'var(--crrt-white)',
-            }}
-          >
-            C
-          </kbd>{' '}
+          <span style={{ position: 'relative', display: 'inline-block' }}>
+            <kbd
+              style={{
+                fontFamily: 'var(--crrt-font-mono)',
+                fontSize: 13,
+                padding: '2px 8px',
+                borderRadius: 6,
+                background: 'var(--crrt-bg-deep-soft)',
+                border: '1px solid var(--crrt-rule-dark)',
+                color: 'var(--crrt-white)',
+              }}
+            >
+              C
+            </kbd>
+            <HeroDemoPin />
+          </span>{' '}
           and try it on this page.
         </p>
 
@@ -191,66 +202,96 @@ function SplitWord({ text, delayStart, italic }: { text: string; delayStart: num
 }
 
 function HeroDemoPin() {
+  // Open/close state — auto-show after the H1 has had time to land, then
+  // auto-dismiss back into the pin. Hover keeps it open; leaving the pin
+  // restarts the auto-dismiss timer. The pin itself stays as a persistent
+  // invitation to re-explore.
+  const [open, setOpen] = useState(false)
+  const [hovering, setHovering] = useState(false)
+  const autoShownRef = useRef(false)
+
+  // First reveal: ~3.5s after page load.
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      autoShownRef.current = true
+      setOpen(true)
+    }, 3700)
+    return () => window.clearTimeout(t)
+  }, [])
+
+  // Auto-dismiss after 3.3s visible, unless the user is hovering.
+  useEffect(() => {
+    if (!open || hovering) return
+    const t = window.setTimeout(() => setOpen(false), 3300)
+    return () => window.clearTimeout(t)
+  }, [open, hovering])
+
   return (
     <span
       aria-hidden
+      onMouseEnter={() => {
+        setHovering(true)
+        setOpen(true)
+      }}
+      onMouseLeave={() => setHovering(false)}
       style={{
         position: 'absolute',
-        top: -6,
+        top: -10,
         right: -10,
-        pointerEvents: 'none',
-        // Inline-block + line-height reset so the absolute positioning sits
-        // exactly at the corner of the italic span instead of the line box.
         lineHeight: 1,
       }}
     >
-      {/* Pin — drops after a short beat */}
+      {/* Pin — drops after the H1 finishes animating in. */}
       <span
         style={{
           display: 'block',
-          width: 22,
-          height: 22,
+          width: 16,
+          height: 16,
           borderRadius: '50%',
           background: PIN_GRADIENT,
           outline: '2px solid #fff',
-          outlineOffset: 2,
+          outlineOffset: 1,
           boxShadow: [
             '0 0 0 1px rgba(255, 255, 255, 0.14)',
-            '0 0 0 2.5px rgba(10, 10, 10, 0.55)',
-            '0 0 16px rgba(232, 133, 61, 0.55)',
-            '0 4px 10px rgba(10, 10, 10, 0.45)',
+            '0 0 0 2px rgba(10, 10, 10, 0.55)',
+            '0 0 12px rgba(232, 133, 61, 0.55)',
+            '0 3px 8px rgba(10, 10, 10, 0.45)',
             'inset 0 1px 0 rgba(255, 255, 255, 0.35)',
           ].join(', '),
-          animation: 'crrt-pin-drop 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 1500ms both',
+          animation: 'crrt-pin-drop 600ms cubic-bezier(0.34, 1.56, 0.64, 1) 3500ms both',
+          cursor: 'pointer',
+          pointerEvents: 'auto',
         }}
       />
 
-      {/* Halo */}
+      {/* Halo — gentle pulse to invite the hover */}
       <span
         style={{
           position: 'absolute',
-          top: 11,
-          left: 11,
-          width: 22,
-          height: 22,
-          marginLeft: -11,
-          marginTop: -11,
+          top: 8,
+          left: 8,
+          width: 16,
+          height: 16,
+          marginLeft: -8,
+          marginTop: -8,
           borderRadius: '50%',
           background: 'rgba(232, 133, 61, 0.5)',
           transform: 'translate(-50%, -50%)',
           pointerEvents: 'none',
-          animation: 'crrt-pin-seed-halo 2400ms ease-out 2100ms infinite',
+          animation: 'crrt-pin-seed-halo 2400ms ease-out 4100ms infinite',
           zIndex: -1,
         }}
       />
 
-      {/* Popover — expands from the pin, then stays visible */}
+      {/* Popover — state-driven (initial reveal + hover). Floats above-right
+          into the empty space past the description paragraph so it never
+          covers the H1 or the description text. */}
       <span
         style={{
           position: 'absolute',
-          top: 32,
+          bottom: 'calc(100% + 10px)',
           left: -12,
-          width: 280,
+          width: 220,
           background: 'rgba(18, 18, 18, 0.96)',
           border: '1px solid rgba(255, 255, 255, 0.08)',
           borderRadius: 12,
@@ -259,15 +300,18 @@ function HeroDemoPin() {
           backdropFilter: 'blur(20px)',
           WebkitBackdropFilter: 'blur(20px)',
           display: 'block',
-          transformOrigin: 'top left',
-          animation: 'crrt-popover-expand 540ms cubic-bezier(0.34, 1.56, 0.64, 1) 1900ms both',
+          transformOrigin: 'bottom left',
+          opacity: open ? 1 : 0,
+          transform: open ? 'scale(1) translateY(0)' : 'scale(0.85) translateY(6px)',
+          transition: 'opacity 240ms ease, transform 280ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+          pointerEvents: open ? 'auto' : 'none',
         }}
       >
-        <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
           <span
             style={{
-              width: 22,
-              height: 22,
+              width: 20,
+              height: 20,
               borderRadius: '50%',
               background: 'var(--crrt-bg-deep)',
               border: '1px solid var(--crrt-rule-dark)',
@@ -278,12 +322,12 @@ function HeroDemoPin() {
               overflow: 'hidden',
             }}
           >
-            <CarrotIcon size={16} />
+            <CarrotIcon size={14} />
           </span>
-          <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 13, fontWeight: 600, color: '#FFFFFF', letterSpacing: 0 }}>
+          <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 12, fontWeight: 600, color: '#FFFFFF', letterSpacing: 0 }}>
             CRRT
           </span>
-          <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 12, color: '#6B6560', fontWeight: 400, letterSpacing: 0, fontStyle: 'normal' }}>
+          <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 11, color: '#6B6560', fontWeight: 400, letterSpacing: 0 }}>
             just now
           </span>
         </span>
@@ -291,20 +335,19 @@ function HeroDemoPin() {
           style={{
             display: 'block',
             fontFamily: 'var(--crrt-font-sans)',
-            fontSize: 14,
+            fontSize: 13,
             lineHeight: 1.5,
             color: '#E8E5DF',
             fontWeight: 400,
             letterSpacing: 0,
-            fontStyle: 'normal',
           }}
         >
-          meta: we just dropped this on our own H1. press{' '}
+          press{' '}
           <span
             style={{
               fontFamily: 'var(--crrt-font-mono)',
-              fontSize: 12,
-              padding: '1px 6px',
+              fontSize: 11,
+              padding: '1px 5px',
               borderRadius: 4,
               background: 'var(--crrt-bg-deep)',
               border: '1px solid var(--crrt-rule-dark)',
@@ -313,7 +356,7 @@ function HeroDemoPin() {
           >
             C
           </span>{' '}
-          to drop yours.
+          anywhere to drop one
         </span>
       </span>
     </span>
