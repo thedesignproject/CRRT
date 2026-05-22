@@ -7,6 +7,7 @@ import { Footer } from './sections/Footer'
 import { EasterEgg } from './components/EasterEgg'
 import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
+import { DocsApp } from './docs/DocsApp'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 
@@ -34,7 +35,22 @@ function getDemoProjectId(prefix: string) {
 export function App() {
   const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
   const projectId = getDemoProjectId(import.meta.env.VITE_PROJECT_KEY ?? 'crrt-landing-demo')
+
+  // /docs/* shows the docs surface. Anything else renders the marketing site.
+  // SSR-safe: location is read only after mount.
+  const initialPath = typeof window === 'undefined' ? '/' : window.location.pathname
+  const isDocs = initialPath.startsWith('/docs')
+
   useScrollProgress()
+
+  if (isDocs) {
+    return (
+      <>
+        <DocsApp initialPath={initialPath} />
+        <FeedbackWidget apiBase={apiBase} projectId={projectId} />
+      </>
+    )
+  }
 
   return (
     <>
