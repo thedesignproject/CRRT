@@ -53,11 +53,11 @@ describe('getServiceSupabase', () => {
 
   it('throws when SUPABASE_SERVICE_ROLE_KEY is missing', () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
-    expect(() => getServiceSupabase()).toThrow(/missing SUPABASE_SERVICE_ROLE_KEY/)
+    expect(() => getServiceSupabase()).toThrow(/missing Supabase credentials/)
   })
 
   it('throws when SUPABASE_URL is missing', () => {
     delete process.env.SUPABASE_URL
-    expect(() => getServiceSupabase()).toThrow(/missing SUPABASE_SERVICE_ROLE_KEY/)
+    expect(() => getServiceSupabase()).toThrow(/missing Supabase credentials/)
   })
 })

@@ -21,7 +21,7 @@ export function getServiceSupabase(): SupabaseClient {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !serviceKey) {
-    throw new Error('Server misconfigured: missing SUPABASE_SERVICE_ROLE_KEY')
+    throw new Error('Server misconfigured: missing Supabase credentials')
   }
 
   return createClient(supabaseUrl, serviceKey, {

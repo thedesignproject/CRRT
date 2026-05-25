@@ -16,6 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['GET', 'OPTIONS'])
     return res.status(200).json(notifications)
   } catch (error) {
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    console.error(error)
+    return jsonError(req, res, 500, 'Internal server error')
   }
 }

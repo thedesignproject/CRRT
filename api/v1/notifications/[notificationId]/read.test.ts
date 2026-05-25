@@ -33,13 +33,13 @@ describe('api/v1/notifications/[notificationId]/read', () => {
     expect(res.statusCode).toBe(204)
   })
 
-  it('falls back to "Unexpected error" on non-Error throws', async () => {
+  it('returns 500 on non-Error throws', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(markNotificationRead).mockImplementationOnce(() => { throw 'string-not-error' })
     const res = mockRes()
     await call({ method: 'POST', query: { notificationId: 'n' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
-    expect(res.body).toMatchObject({ error: 'Unexpected error' })
+    expect(res.body).toMatchObject({ error: 'Internal server error' })
   })
 
   it('non-POST 405; unauthed 401; missing id; happy / not_found / 500', async () => {
