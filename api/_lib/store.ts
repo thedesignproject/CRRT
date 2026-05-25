@@ -1,4 +1,4 @@
-import { getSupabase } from './supabase.js'
+import { getServiceSupabase, getSupabase } from './supabase.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
 
 type CommentRow = {
@@ -769,6 +769,88 @@ export async function saveOperationKey(shareId: string, agentId: string, idempot
       feedback_event_id: feedbackEventId,
     }] as never)
 
+  if (error) throw new Error(error.message)
+}
+
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined'
+
+type NotificationRow = {
+  id: string
+  user_id: string
+  kind: NotificationKind
+  payload: Record<string, unknown>
+  read_at: string | null
+  created_at: string
+}
+
+function mapNotification(row: NotificationRow) {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    kind: row.kind,
+    payload: row.payload || {},
+    readAt: row.read_at,
+    createdAt: row.created_at,
+  }
+}
+
+// Notifications uses the service-role client because the table has RLS
+// (`auth.uid() = user_id`) enabled for safe per-user realtime subscriptions.
+// The backend has no user JWT in its supabase client, so anon-key queries
+// would always see zero rows / fail to insert. Service role bypasses RLS;
+// these helpers enforce the user_id scope themselves.
+export async function createNotification(input: {
+  userId: string
+  kind: NotificationKind
+  payload?: Record<string, unknown>
+}) {
+  const supabase = getServiceSupabase()
+  const { data, error } = await supabase
+    .from('notifications')
+    .insert([{ user_id: input.userId, kind: input.kind, payload: input.payload ?? {} }] as never)
+    .select('id, user_id, kind, payload, read_at, created_at')
+    .single()
+  if (error) throw new Error(error.message)
+  return mapNotification(data as NotificationRow)
+}
+
+export async function listNotificationsForUser(
+  userId: string,
+  opts: { unreadOnly?: boolean; limit?: number } = {},
+) {
+  const supabase = getServiceSupabase()
+  let query = supabase
+    .from('notifications')
+    .select('id, user_id, kind, payload, read_at, created_at')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(opts.limit ?? 50)
+  if (opts.unreadOnly) query = query.is('read_at', null)
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  return (data || []).map((row) => mapNotification(row as NotificationRow))
+}
+
+export async function markNotificationRead(notificationId: string, userId: string): Promise<boolean> {
+  const supabase = getServiceSupabase()
+  const { data, error } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('id', notificationId)
+    .eq('user_id', userId)
+    .is('read_at', null)
+    .select('id')
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) && data.length > 0
+}
+
+export async function markAllNotificationsRead(userId: string) {
+  const supabase = getServiceSupabase()
+  const { error } = await supabase
+    .from('notifications')
+    .update({ read_at: new Date().toISOString() })
+    .eq('user_id', userId)
+    .is('read_at', null)
   if (error) throw new Error(error.message)
 }
 

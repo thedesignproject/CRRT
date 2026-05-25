@@ -15,6 +15,13 @@
       "when": 1779348294740,
       "tag": "0001_fluffy_nuke",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1779692374320,
+      "tag": "0002_wild_black_bird",
+      "breakpoints": true
     }
   ]
 }

@@ -1,14 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getSupabase: vi.fn() }))
+vi.mock('./supabase.js', () => ({ getSupabase: vi.fn(), getServiceSupabase: vi.fn() }))
 
-import { getSupabase } from './supabase.js'
+import { getServiceSupabase, getSupabase } from './supabase.js'
 import {
   claimProject,
+  createNotification,
   ensurePublicProject,
   getProjectMember,
   isProjectMember,
+  listNotificationsForUser,
   listProjectsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
 } from './store.js'
 
 type ProjectRow = {
@@ -69,6 +73,7 @@ const PROJECT_ROW: ProjectRow = {
 
 beforeEach(() => {
   vi.mocked(getSupabase).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
 })
 
 describe('ensurePublicProject', () => {
@@ -287,5 +292,106 @@ describe('membership helpers + claim', () => {
       projectsUpdate: { data: null, error: { message: 'db boom' } },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
+  })
+})
+
+type NotifMocks = {
+  notifSingle?: { data: unknown; error: { message: string } | null }
+  notifList?: { data: unknown[] | null; error: { message: string } | null }
+  notifUpdate?: { data: unknown[] | null; error: { message: string } | null }
+  notifUpdateAllError?: { message: string } | null
+}
+
+function notifSupabase(m: NotifMocks = {}) {
+  return {
+    from: vi.fn((_table: string) => ({
+      insert: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve(m.notifSingle ?? { data: null, error: null })),
+        })),
+      })),
+      select: vi.fn(() => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          limit: vi.fn(() => chain),
+          is: vi.fn(() => chain),
+          then: (r: (v: unknown) => unknown) =>
+            Promise.resolve(m.notifList ?? { data: [], error: null }).then(r),
+        }
+        return chain
+      }),
+      update: vi.fn(() => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          is: vi.fn(() => chain),
+          select: vi.fn(() => Promise.resolve(m.notifUpdate ?? { data: [], error: null })),
+          then: (r: (v: unknown) => unknown) =>
+            Promise.resolve({ error: m.notifUpdateAllError ?? null }).then(r),
+        }
+        return chain
+      }),
+    })),
+  }
+}
+
+describe('notifications helpers', () => {
+  it('createNotification: success / error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifSingle: { data: { id: 'n', user_id: 'u', kind: 'invite.received', payload: { x: 1 }, read_at: null, created_at: 't' }, error: null },
+    }) as never)
+    const n = await createNotification({ userId: 'u', kind: 'invite.received', payload: { x: 1 } })
+    expect(n.id).toBe('n')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifSingle: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(createNotification({ userId: 'u', kind: 'invite.received' })).rejects.toThrow('boom')
+  })
+
+  it('listNotificationsForUser: respects unreadOnly + default options + null fallback + error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifList: { data: [{ id: 'n1', user_id: 'u', kind: 'invite.received', payload: null, read_at: null, created_at: 't' }], error: null },
+    }) as never)
+    expect((await listNotificationsForUser('u', { unreadOnly: true, limit: 10 })).length).toBe(1)
+    expect((await listNotificationsForUser('u')).length).toBe(1)
+
+    // defensive `data || []` fallback
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifList: { data: null, error: null },
+    }) as never)
+    expect(await listNotificationsForUser('u')).toEqual([])
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifList: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(listNotificationsForUser('u')).rejects.toThrow('boom')
+  })
+
+  it('markNotificationRead: hit / miss / error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdate: { data: [{ id: 'n' }], error: null },
+    }) as never)
+    expect(await markNotificationRead('n', 'u')).toBe(true)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdate: { data: [], error: null },
+    }) as never)
+    expect(await markNotificationRead('n', 'u')).toBe(false)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdate: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(markNotificationRead('n', 'u')).rejects.toThrow('boom')
+  })
+
+  it('markAllNotificationsRead: success / error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({}) as never)
+    await markAllNotificationsRead('u')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdateAllError: { message: 'boom' },
+    }) as never)
+    await expect(markAllNotificationsRead('u')).rejects.toThrow('boom')
   })
 })
