@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./supabase.js', () => ({ getSupabase: vi.fn() }))
+vi.mock('./store.js', () => ({ isProjectMember: vi.fn() }))
 
 import { getSupabase } from './supabase.js'
-import { requireReviewer, requireUser } from './auth.js'
+import { isProjectMember } from './store.js'
+import { requireProjectMembership, requireReviewer, requireUser } from './auth.js'
 
 interface MockRes {
   statusCode: number
@@ -132,5 +134,33 @@ describe('requireUser', () => {
     const res = mockRes()
     const user = await requireUser(mockReq({ authorization: 'Bearer tok' }), res as never)
     expect(user).toEqual({ userId: 'u-1', email: 'a@example.com' })
+  })
+})
+
+describe('requireProjectMembership', () => {
+  const USER = { userId: 'u-1', email: 'a@b.c' }
+
+  it('returns true when the user is a member', async () => {
+    vi.mocked(isProjectMember).mockResolvedValue(true)
+    const res = mockRes()
+    const ok = await requireProjectMembership(mockReq(), res as never, USER, 'p')
+    expect(ok).toBe(true)
+    expect(res.statusCode).toBe(200)
+  })
+
+  it('writes 403 when the user is not a member', async () => {
+    vi.mocked(isProjectMember).mockResolvedValue(false)
+    const res = mockRes()
+    const ok = await requireProjectMembership(mockReq(), res as never, USER, 'p')
+    expect(ok).toBe(false)
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('writes 500 when the membership check throws', async () => {
+    vi.mocked(isProjectMember).mockRejectedValue(new Error('db down'))
+    const res = mockRes()
+    const ok = await requireProjectMembership(mockReq(), res as never, USER, 'p')
+    expect(ok).toBe(false)
+    expect(res.statusCode).toBe(500)
   })
 })

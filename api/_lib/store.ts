@@ -26,6 +26,12 @@ type ProjectRow = {
   updated_at: string
 }
 
+type ProjectMemberRow = {
+  project_key: string
+  user_id: string
+  role: 'admin' | 'member'
+}
+
 type RepoConfigRow = {
   project_key: string
   repo_url: string | null
@@ -154,81 +160,84 @@ function mapEvent(row: EventRow) {
   }
 }
 
-export async function listProjects() {
+export async function listProjectsForUser(userId: string) {
   const supabase = getSupabase()
+  const { data: memberRows, error: memberError } = await supabase
+    .from('project_members')
+    .select('project_key')
+    .eq('user_id', userId)
+
+  if (memberError) throw new Error(memberError.message)
+  const keys = (memberRows || []).map((row) => String((row as { project_key: string }).project_key))
+  if (keys.length === 0) return []
+
   const { data, error } = await supabase
     .from('projects')
     .select('public_key, slug, name, created_at, updated_at')
+    .in('public_key', keys)
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
   return (data || []).map((row) => mapProject(row as ProjectRow))
 }
 
-function slugify(name: string) {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60)
-}
-
-function randomSuffix() {
-  return Math.random().toString(36).slice(2, 8)
-}
-
-export async function createProject(input: { name: string }) {
-  const trimmed = input.name.trim()
-  if (!trimmed) throw new Error('Project name required')
-
+export async function getProjectMember(
+  userId: string,
+  projectKey: string,
+): Promise<{ role: 'admin' | 'member' } | null> {
   const supabase = getSupabase()
-  const baseSlug = slugify(trimmed) || `project-${randomSuffix()}`
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('project_key, user_id, role')
+    .eq('user_id', userId)
+    .eq('project_key', projectKey)
+    .maybeSingle()
 
-  let slug = baseSlug
-  let projectData: ProjectRow | null = null
-  let lastError: { code?: string; message: string } | null = null
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  return { role: (data as ProjectMemberRow).role }
+}
 
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data, error } = await supabase
-      .from('projects')
-      .insert([{
-        public_key: slug,
-        slug,
-        name: trimmed,
-        allowed_origins: [],
-      }] as never)
-      .select('public_key, slug, name, created_at, updated_at')
-      .single()
+export async function isProjectMember(userId: string, projectKey: string): Promise<boolean> {
+  return (await getProjectMember(userId, projectKey)) !== null
+}
 
-    if (!error) {
-      projectData = data as ProjectRow
-      break
-    }
+/**
+ * Atomically take ownership of an unclaimed project. Conditional UPDATE
+ * gates the race: only the first caller flips `claimable=false`, the rest
+ * see zero rows and get `already_claimed`. Membership INSERT after the flip
+ * is idempotent — a duplicate (23505) just means we already own it.
+ */
+export async function claimProject(
+  userId: string,
+  projectKey: string,
+): Promise<ReturnType<typeof mapProject>> {
+  const supabase = getSupabase()
 
-    // 23505 = unique_violation. Retry with new suffix; bail on anything else.
-    if (error.code !== '23505') throw new Error(error.message)
-    lastError = error
-    slug = `${baseSlug}-${randomSuffix()}`
+  const { data: updatedRows, error: updateError } = await supabase
+    .from('projects')
+    .update({ claimable: false, updated_at: new Date().toISOString() })
+    .eq('public_key', projectKey)
+    .eq('claimable', true)
+    .select('public_key, slug, name, created_at, updated_at')
+
+  if (updateError) throw new Error(updateError.message)
+
+  if (!updatedRows || updatedRows.length === 0) {
+    const existing = await getProject(projectKey)
+    if (!existing) throw new Error('not_found')
+    throw new Error('already_claimed')
   }
 
-  if (!projectData) {
-    throw new Error(lastError?.message || 'Could not allocate unique project slug')
+  const { error: memberError } = await supabase
+    .from('project_members')
+    .insert([{ project_key: projectKey, user_id: userId, role: 'admin' }] as never)
+
+  if (memberError && memberError.code !== '23505') {
+    throw new Error(memberError.message)
   }
 
-  const { error: repoError } = await supabase
-    .from('project_repo_configs')
-    .insert([{
-      project_key: slug,
-      default_branch: 'main',
-    }] as never)
-
-  if (repoError) {
-    await supabase.from('projects').delete().eq('public_key', slug)
-    throw new Error(repoError.message)
-  }
-
-  return mapProject(projectData)
+  return mapProject(updatedRows[0] as ProjectRow)
 }
 
 export async function getProject(projectKey: string) {

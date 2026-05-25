@@ -309,6 +309,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [agentSession, copyPrompt, selectedAgentMeta])
 
+  // TODO(ui-claim-flow): swap this create flow for a claim flow. Prompt the
+  // user for a projectKey (paste from widget install snippet) and call
+  // POST /v1/projects/claim. New projects now come into being via the widget
+  // hitting public endpoints (ensurePublicProject); the dashboard only claims.
   const handleAddProject = useCallback(async (name: string) => {
     setAddProjectError(null)
     setAddProjectBusy(true)
