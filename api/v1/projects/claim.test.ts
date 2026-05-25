@@ -41,12 +41,12 @@ describe('api/v1/projects/claim', () => {
     await call({ method: 'POST', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
-    // claimProject throws something that isn't an Error → falls back to "Unexpected error"
+    // claimProject throws something that isn't an Error → falls back to 500
     vi.mocked(claimProject).mockImplementationOnce(() => { throw 'string-not-error' })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'k' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
-    expect(res.body).toMatchObject({ error: 'Unexpected error' })
+    expect(res.body).toMatchObject({ error: 'Internal server error' })
   })
 
   it('rejects non-POST + unauthenticated', async () => {

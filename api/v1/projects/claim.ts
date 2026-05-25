@@ -18,9 +18,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json(project)
   } catch (error) {
-    const msg = error instanceof Error ? error.message : 'Unexpected error'
+    const msg = error instanceof Error ? error.message : undefined
     if (msg === 'not_found') return jsonError(req, res, 404, 'Project not found')
     if (msg === 'already_claimed') return jsonError(req, res, 409, 'Project already claimed')
-    return jsonError(req, res, 500, msg)
+    console.error(error)
+    return jsonError(req, res, 500, 'Internal server error')
   }
 }
