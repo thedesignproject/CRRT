@@ -92,11 +92,11 @@ describe('api/v1/invites/accept', () => {
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
 
-    // non-Error throw → "Unexpected error" fallback
+    // non-Error throw → 500
     vi.mocked(acceptInvite).mockImplementationOnce(() => { throw 'string-not-error' })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
-    expect(res.body).toMatchObject({ error: 'Unexpected error' })
+    expect(res.body).toMatchObject({ error: 'Internal server error' })
   })
 })

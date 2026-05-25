@@ -140,12 +140,12 @@ describe('api/v1/projects/[projectId]/invites', () => {
     await call({ method: 'POST', query: { projectId: 'p' }, body: { email: 'x@y.z' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
 
-    // non-Error throw → "Unexpected error" fallback
+    // non-Error throw → 500
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     vi.mocked(createInvite).mockImplementationOnce(() => { throw 'string-not-error' })
     res = mockRes()
     await call({ method: 'POST', query: { projectId: 'p' }, body: { email: 'x@y.z' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
-    expect(res.body).toMatchObject({ error: 'Unexpected error' })
+    expect(res.body).toMatchObject({ error: 'Internal server error' })
   })
 })

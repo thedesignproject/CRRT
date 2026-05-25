@@ -33,13 +33,13 @@ describe('api/v1/invites', () => {
     expect(res.statusCode).toBe(204)
   })
 
-  it('falls back to "Unexpected error" on non-Error throws', async () => {
+  it('returns 500 on non-Error throws', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(listInvitesForEmail).mockImplementationOnce(() => { throw 'string-not-error' })
     const res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
-    expect(res.body).toMatchObject({ error: 'Unexpected error' })
+    expect(res.body).toMatchObject({ error: 'Internal server error' })
   })
 
   it('non-GET 405; unauthed 401; happy path lists invites; 500 on throw', async () => {
