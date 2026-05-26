@@ -15,18 +15,3 @@ Supabase client (`@supabase/supabase-js`) stays the runtime query layer. Do **no
 ## Diff coverage
 
 After any code change, MUST invoke `diff-coverage` skill before handing work back. Both line and branch diff coverage vs `trunk` required at 100%.
-
-## Repo identity
-
-This local folder is `feedback-widget`, but `origin` points at `github.com/thedesignproject/CRRT`. **They are the same repo.** The `tomasTDP/branding-widget` remote (alias `branding`) is **deprecated** — never push or reference it.
-
-## Deploying to Vercel
-
-Only commits whose author is `alsoalter85` (Alessandro) trigger Vercel builds — direct contributor permission for other users costs extra. Alessandro maintains a standing "kick Vercel" PR (originally **#113**, branch prefix `attaccante/vercel-deployment-trigger-*`) and a systemd timer that adds an empty commit as him every 15 min whenever the latest commit on that branch is not his.
-
-**After merging a feature PR into `trunk`, to deploy:**
-1. Open the standing "Trigger Vercel" PR and rebase/update it onto `trunk`.
-2. Wait ≤15 min for Alessandro's automation to push a fresh empty commit.
-3. Approve and merge that PR — Vercel deploys.
-
-**Never close PR #113** (or its current successor). It is the standing PR the automation depends on.
