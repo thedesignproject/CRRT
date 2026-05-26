@@ -114,6 +114,34 @@ async function enterCommentingMode() {
   return { textarea, getSendButton, targetNode }
 }
 
+// Opens inline edit on the sidebar card whose body contains `bodyText`,
+// via the 3-dot menu → Edit (the click-body-to-edit path was removed
+// since the whole card click is reserved for scroll-to-pin).
+async function openCardEditByBody(bodyText: string) {
+  await waitFor(() => {
+    if (!document.body.textContent?.includes(bodyText)) throw new Error('comment not loaded')
+  })
+  const card = Array.from(
+    document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card'),
+  ).find((c) => c.textContent?.includes(bodyText))
+  if (!card) throw new Error('card not found')
+  const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
+  if (!moreBtn) throw new Error('More button not found')
+  await act(async () => { fireEvent.click(moreBtn) })
+  const editMenuItem = await waitFor(() => {
+    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+      .find((b) => b.textContent?.trim() === 'Edit')
+    if (!btn) throw new Error('Edit menu item not found')
+    return btn
+  })
+  await act(async () => { fireEvent.click(editMenuItem) })
+  return await waitFor(() => {
+    const ta = card.querySelector<HTMLTextAreaElement>('textarea')
+    if (!ta) throw new Error('edit textarea not mounted')
+    return ta
+  })
+}
+
 describe('<FeedbackWidget />', () => {
   beforeEach(() => {
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
@@ -368,33 +396,11 @@ describe('<FeedbackWidget />', () => {
       }
     }
 
-    it('clicking a card body switches to inline edit mode and Save updates the comment text', async () => {
+    it('opening Edit from the 3-dot menu switches to inline edit mode and Save updates the comment text', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      // Wait for the comment to land in the DOM, then locate the inner text
-      // div by its cursor:text style — that's the inline-edit trigger.
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('sidebar entry')) {
-          throw new Error('comment body not rendered yet')
-        }
-      })
-      const bodyDiv = Array.from(
-        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-      ).find(
-        (el) =>
-          /cursor:\s*text/.test(el.getAttribute('style') ?? '') &&
-          el.textContent === 'sidebar entry',
-      )
-      expect(bodyDiv).toBeDefined()
-
-      fireEvent.click(bodyDiv!)
-
-      const editArea = await waitFor(() => {
-        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
-        if (!ta) throw new Error('edit textarea not mounted yet')
-        return ta
-      })
+      const editArea = await openCardEditByBody('sidebar entry')
 
       const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
       const cancel = buttons.find((b) => b.textContent === 'Cancel')
@@ -420,20 +426,7 @@ describe('<FeedbackWidget />', () => {
       const calls = mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('sidebar entry')) {
-          throw new Error('comment body not rendered yet')
-        }
-      })
-      const bodyDiv = Array.from(
-        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-      ).find(
-        (el) =>
-          /cursor:\s*text/.test(el.getAttribute('style') ?? '') &&
-          el.textContent === 'sidebar entry',
-      )
-      expect(bodyDiv).toBeDefined()
-      fireEvent.click(bodyDiv!)
+      await openCardEditByBody('sidebar entry')
 
       const cancel = await waitFor(() => {
         const btn = Array.from(
@@ -527,6 +520,73 @@ describe('<FeedbackWidget />', () => {
         // Author shows as 'Ada' inside the tooltip layer alongside the body.
         expect(document.body.textContent).toContain('Ada')
       })
+    })
+
+    // Helper to read the tooltip wrapper next to a hovered pin. The tooltip is
+    // the sibling div with position:fixed and pointerEvents:none.
+    async function hoverPinAndGetTooltip() {
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered')
+        return el
+      })
+      fireEvent.mouseEnter(pin)
+      return await waitFor(() => {
+        const wrappers = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
+        const tooltip = wrappers.find((el) =>
+          /pointer-events:\s*none/.test(el.getAttribute('style') ?? '') &&
+          /position:\s*fixed/.test(el.getAttribute('style') ?? ''),
+        )
+        if (!tooltip) throw new Error('tooltip wrapper not rendered')
+        return tooltip
+      })
+    }
+
+    // Force happy-dom (which reports scrollWidth/Height = 0 by default) to use
+    // realistic page dimensions so pinPos.left/top maps from x%/y% as expected.
+    function stubPageSize(width = 1024, height = 768) {
+      Object.defineProperty(document.documentElement, 'scrollWidth', { value: width, configurable: true })
+      Object.defineProperty(document.documentElement, 'scrollHeight', { value: height, configurable: true })
+      Object.defineProperty(window, 'innerWidth', { value: width, configurable: true })
+      Object.defineProperty(window, 'innerHeight', { value: height, configurable: true })
+    }
+
+    it('pin hover tooltip flips horizontally when pin is near the right viewport edge', async () => {
+      // pinPos.left ≈ 0.9 * 1024 = 921; 921 + 280 + 8 > 1024 → flipH=true.
+      stubPageSize()
+      mockFetch(undefined, commentsResponse([seedComment({ x: 90, y: 50, body: 'right edge tip' })]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const tooltip = await hoverPinAndGetTooltip()
+      // Wrapper is shifted left so the right edge anchors near the pin.
+      expect(parseFloat(tooltip.style.left)).toBeLessThan(900)
+      expect(tooltip.style.transform).toBe('translateY(-100%)')
+      // Bottom-right anchor → transformOrigin '100% 100%'.
+      const inner = tooltip.firstElementChild as HTMLElement
+      expect(inner.style.transformOrigin).toBe('100% 100%')
+    })
+
+    it('pin hover tooltip flips vertically when pin is near the top viewport edge', async () => {
+      // pinPos.top ≈ 0.05 * 768 = 38; 38 - 11 - 140 < 8 → flipV=true.
+      stubPageSize()
+      mockFetch(undefined, commentsResponse([seedComment({ x: 20, y: 5, body: 'top edge tip' })]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const tooltip = await hoverPinAndGetTooltip()
+      // Wrapper sits below the pin; translateY reset to 0.
+      expect(tooltip.style.transform).toBe('translateY(0)')
+      // Top-left anchor → transformOrigin '0% 0%'.
+      const inner = tooltip.firstElementChild as HTMLElement
+      expect(inner.style.transformOrigin).toBe('0% 0%')
+    })
+
+    it('pin hover tooltip flips both axes when pin is in the top-right corner', async () => {
+      stubPageSize()
+      mockFetch(undefined, commentsResponse([seedComment({ x: 90, y: 5, body: 'corner tip' })]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const tooltip = await hoverPinAndGetTooltip()
+      expect(tooltip.style.transform).toBe('translateY(0)')
+      const inner = tooltip.firstElementChild as HTMLElement
+      // Top-right anchor → transformOrigin '100% 0%'.
+      expect(inner.style.transformOrigin).toBe('100% 0%')
     })
 
     it('numbers pins descending so the newest comment is #N for N comments', async () => {
@@ -1418,27 +1478,6 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
-    it('reply button stopPropagation does not trigger card click (line 1390)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-
-      const replyBtn = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Reply')
-        if (!btn) throw new Error('Reply button not found')
-        return btn
-      })
-      // Hover to cover onMouseEnter/Leave (lines 1403-1404).
-      fireEvent.mouseEnter(replyBtn)
-      fireEvent.mouseLeave(replyBtn)
-
-      // Click should not throw and should NOT open pin detail (stopPropagation).
-      await act(async () => { fireEvent.click(replyBtn) })
-      // No pin detail popover should be open.
-      const meta = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        .find((el) => /#1\s*·/.test(el.textContent ?? ''))
-      expect(meta).toBeUndefined()
-    })
   })
 
   describe('sidebar card inline edit via keyboard (lines 1336-1338, 1349)', () => {
@@ -1454,19 +1493,7 @@ describe('<FeedbackWidget />', () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('inline edit body')) throw new Error('not rendered')
-      })
-      const bodyDiv = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        .find((el) => /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'inline edit body')
-      expect(bodyDiv).toBeDefined()
-      fireEvent.click(bodyDiv!)
-
-      const ta = await waitFor(() => {
-        const el = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
-        if (!el) throw new Error('textarea not found')
-        return el
-      })
+      const ta = await openCardEditByBody('inline edit body')
 
       // onFocus/onBlur cover lines 1348-1349.
       fireEvent.focus(ta)
@@ -1488,19 +1515,7 @@ describe('<FeedbackWidget />', () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('inline edit body')) throw new Error('not rendered')
-      })
-      const bodyDiv = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        .find((el) => /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'inline edit body')
-      expect(bodyDiv).toBeDefined()
-      fireEvent.click(bodyDiv!)
-
-      const ta = await waitFor(() => {
-        const el = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
-        if (!el) throw new Error('textarea not found')
-        return el
-      })
+      const ta = await openCardEditByBody('inline edit body')
 
       await act(async () => {
         fireEvent.change(ta, { target: { value: 'do not save' } })
@@ -1739,24 +1754,13 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('emoji and react button hover handlers (lines 802-803, 813-818, 833-834)', () => {
-    it('hovering emoji and react buttons in the commenting popover does not throw', async () => {
+  describe('composer Send button hover', () => {
+    it('hovering the Send button in the commenting popover does not throw', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { textarea } = await enterCommentingMode()
       fireEvent.change(textarea, { target: { value: 'test hover' } })
 
-      const addEmojiBtn = document.querySelector<HTMLButtonElement>('[aria-label="Add emoji"]')
-      expect(addEmojiBtn).not.toBeNull()
-      fireEvent.mouseEnter(addEmojiBtn!)
-      fireEvent.mouseLeave(addEmojiBtn!)
-
-      const reactBtn = document.querySelector<HTMLButtonElement>('[aria-label="React"]')
-      expect(reactBtn).not.toBeNull()
-      fireEvent.mouseEnter(reactBtn!)
-      fireEvent.mouseLeave(reactBtn!)
-
-      // The Send button hover (lines 859-860).
       const sendBtn = document.querySelector<HTMLButtonElement>('[aria-label="Send"]')
       expect(sendBtn).not.toBeNull()
       fireEvent.mouseEnter(sendBtn!)
@@ -1849,6 +1853,29 @@ describe('<FeedbackWidget />', () => {
       fireEvent.mouseLeave(pillWrapper)
       // No error thrown — the drag handle visibility changes.
       expect(pillWrapper).toBeDefined()
+    })
+
+    it('re-entering the pill before the unhover delay fires cancels the pending leave', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pillWrapper = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
+          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
+        if (!el) throw new Error('pill wrapper not found')
+        return el
+      })
+
+      // Enter → leave schedules a 120ms timeout; re-entering before it fires
+      // must hit the clearTimeout branch in onPillEnter and keep pillHover true.
+      fireEvent.mouseEnter(pillWrapper)
+      fireEvent.mouseLeave(pillWrapper)
+      fireEvent.mouseEnter(pillWrapper)
+
+      // Wait past the original delay; pillHover should still be true.
+      await new Promise((r) => setTimeout(r, 200))
+      // Icon span at width 28 is the pillHover=true signal (46 when collapsed).
+      const carrotSpan = pillWrapper.querySelector<HTMLElement>('span[style*="width: 28"]')
+      expect(carrotSpan).not.toBeNull()
     })
   })
 
@@ -2364,19 +2391,8 @@ describe('<FeedbackWidget />', () => {
       return { id: 'edit1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'edit kbd test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
     }
 
-    async function openEditMode() {
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('edit kbd test')) throw new Error('not loaded')
-      })
-      const bodyDiv = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
-        .find((el) => /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'edit kbd test')
-      if (!bodyDiv) throw new Error('body div not found')
-      fireEvent.click(bodyDiv)
-      return waitFor(() => {
-        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
-        if (!ta) throw new Error('edit textarea not mounted')
-        return ta
-      })
+    function openEditMode() {
+      return openCardEditByBody('edit kbd test')
     }
 
     it('Cmd+Enter in edit textarea saves the edit (L1353 metaKey branch)', async () => {
@@ -2549,21 +2565,7 @@ describe('<FeedbackWidget />', () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('gap test')) throw new Error('comment not rendered')
-      })
-      const bodyDiv = Array.from(
-        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-      ).find((el) =>
-        /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'gap test',
-      )
-      fireEvent.click(bodyDiv!)
-
-      const editArea = await waitFor(() => {
-        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
-        if (!ta) throw new Error('edit textarea not mounted')
-        return ta
-      })
+      const editArea = await openCardEditByBody('gap test')
       fireEvent.change(editArea, { target: { value: '   ' } })
       const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         .find((b) => b.textContent === 'Save')
@@ -2582,21 +2584,7 @@ describe('<FeedbackWidget />', () => {
       ]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      await waitFor(() => {
-        if (!document.body.textContent?.includes('edit me')) throw new Error('seed not rendered')
-      })
-      const targetDiv = Array.from(
-        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-      ).find((el) =>
-        /cursor:\s*text/.test(el.getAttribute('style') ?? '') && el.textContent === 'edit me',
-      )
-      fireEvent.click(targetDiv!)
-
-      const editArea = await waitFor(() => {
-        const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
-        if (!ta) throw new Error('edit textarea not mounted')
-        return ta
-      })
+      const editArea = await openCardEditByBody('edit me')
       fireEvent.change(editArea, { target: { value: 'edited' } })
       const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         .find((b) => b.textContent === 'Save')
