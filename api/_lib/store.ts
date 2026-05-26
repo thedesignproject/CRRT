@@ -854,3 +854,130 @@ export async function markAllNotificationsRead(userId: string) {
   if (error) throw new Error(error.message)
 }
 
+type InviteRow = {
+  project_key: string
+  email: string
+  role: 'admin' | 'member'
+  invited_by: string
+  created_at: string
+}
+
+function mapInvite(row: InviteRow) {
+  return {
+    projectKey: row.project_key,
+    email: row.email,
+    role: row.role,
+    invitedBy: row.invited_by,
+    createdAt: row.created_at,
+  }
+}
+
+export async function createInvite(input: {
+  projectKey: string
+  email: string
+  role: 'admin' | 'member'
+  invitedBy: string
+}) {
+  const supabase = getSupabase()
+  const email = input.email.toLowerCase().trim()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .insert([{
+      project_key: input.projectKey,
+      email,
+      role: input.role,
+      invited_by: input.invitedBy,
+    }] as never)
+    .select('project_key, email, role, invited_by, created_at')
+    .single()
+  if (error) {
+    if (error.code === '23505') throw new Error('already_invited')
+    throw new Error(error.message)
+  }
+  return mapInvite(data as InviteRow)
+}
+
+export async function listInvitesForEmail(email: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .select('project_key, email, role, invited_by, created_at')
+    .eq('email', email.toLowerCase().trim())
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data || []).map((row) => mapInvite(row as InviteRow))
+}
+
+async function getInvite(email: string, projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .select('project_key, email, role, invited_by, created_at')
+    .eq('email', email.toLowerCase().trim())
+    .eq('project_key', projectKey)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapInvite(data as InviteRow) : null
+}
+
+async function deleteInvite(email: string, projectKey: string) {
+  const supabase = getSupabase()
+  const { error } = await supabase
+    .from('project_invites')
+    .delete()
+    .eq('email', email.toLowerCase().trim())
+    .eq('project_key', projectKey)
+  if (error) throw new Error(error.message)
+}
+
+/**
+ * Atomic invite acceptance: verify the invite exists for this email, insert
+ * the project_members row (idempotent via 23505), delete the invite. Returns
+ * the inviter's user_id so the caller can emit an `invite.accepted` notif.
+ */
+export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string> {
+  const invite = await getInvite(email, projectKey)
+  if (!invite) throw new Error('not_found')
+
+  const supabase = getSupabase()
+  const { error: insertError } = await supabase
+    .from('project_members')
+    .insert([{ project_key: projectKey, user_id: userId, role: invite.role }] as never)
+  if (insertError && insertError.code !== '23505') throw new Error(insertError.message)
+
+  await deleteInvite(email, projectKey)
+  return invite.invitedBy
+}
+
+export async function declineInvite(email: string, projectKey: string): Promise<string> {
+  const invite = await getInvite(email, projectKey)
+  if (!invite) throw new Error('not_found')
+  await deleteInvite(email, projectKey)
+  return invite.invitedBy
+}
+
+/**
+ * Look up the auth.users id for an email. Uses the service role admin API if
+ * a SUPABASE_SERVICE_ROLE_KEY is configured; otherwise returns null. The null
+ * fallback is intentional — the invite still gets created, just no realtime
+ * notif fires for the invitee (they'll see it on next login via GET /invites).
+ */
+export async function findUserIdByEmail(email: string): Promise<string | null> {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) return null
+  const url = process.env.SUPABASE_URL
+  if (!url) return null
+  try {
+    const res = await fetch(`${url}/auth/v1/admin/users?email=${encodeURIComponent(email)}`, {
+      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as { users?: Array<{ id?: string; email?: string }> }
+    const users = Array.isArray(body.users) ? body.users : []
+    const match = users.find((u) => u.email?.toLowerCase() === email.toLowerCase())
+    return match?.id ?? null
+  } catch {
+    return null
+  }
+}
+

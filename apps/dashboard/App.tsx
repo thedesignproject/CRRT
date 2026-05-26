@@ -77,6 +77,11 @@ export function App() {
 //     .subscribe()
 // Show unread count; POST /api/v1/notifications/:id/read on click; offer
 // "Mark all read" → POST /api/v1/notifications/read-all.
+// Invite acceptance UI: list GET /api/v1/invites in a panel with
+// Accept (POST /api/v1/invites/accept { projectKey }) and
+// Decline (POST /api/v1/invites/decline { projectKey }) buttons.
+// Admin-side invite send: POST /api/v1/projects/:projectKey/invites
+// { email, role } (admin role required).
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
   const { projects, loading: projectsLoading, error: projectsError, createProject } = useProjects(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
