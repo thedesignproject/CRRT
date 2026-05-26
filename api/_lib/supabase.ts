@@ -11,3 +11,21 @@ export function getSupabase(): SupabaseClient {
   return createClient(supabaseUrl, supabaseKey)
 }
 
+/**
+ * Service-role client. Bypasses RLS, so use it only for backend writes/reads
+ * on RLS-protected tables (currently: `notifications`). Frontend code must
+ * never call this. SUPABASE_SERVICE_ROLE_KEY is required.
+ */
+export function getServiceSupabase(): SupabaseClient {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!supabaseUrl || !serviceKey) {
+    throw new Error('Server misconfigured: missing Supabase credentials')
+  }
+
+  return createClient(supabaseUrl, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  })
+}
+
