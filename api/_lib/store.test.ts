@@ -1,14 +1,23 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getSupabase: vi.fn() }))
+vi.mock('./supabase.js', () => ({ getSupabase: vi.fn(), getServiceSupabase: vi.fn() }))
 
-import { getSupabase } from './supabase.js'
+import { getServiceSupabase, getSupabase } from './supabase.js'
 import {
+  acceptInvite,
   claimProject,
+  createInvite,
+  createNotification,
+  declineInvite,
   ensurePublicProject,
+  findUserIdByEmail,
   getProjectMember,
   isProjectMember,
+  listInvitesForEmail,
+  listNotificationsForUser,
   listProjectsForUser,
+  markAllNotificationsRead,
+  markNotificationRead,
 } from './store.js'
 
 type ProjectRow = {
@@ -69,6 +78,7 @@ const PROJECT_ROW: ProjectRow = {
 
 beforeEach(() => {
   vi.mocked(getSupabase).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
 })
 
 describe('ensurePublicProject', () => {
@@ -287,5 +297,293 @@ describe('membership helpers + claim', () => {
       projectsUpdate: { data: null, error: { message: 'db boom' } },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
+  })
+})
+
+type NotifMocks = {
+  notifSingle?: { data: unknown; error: { message: string } | null }
+  notifList?: { data: unknown[] | null; error: { message: string } | null }
+  notifUpdate?: { data: unknown[] | null; error: { message: string } | null }
+  notifUpdateAllError?: { message: string } | null
+}
+
+function notifSupabase(m: NotifMocks = {}) {
+  return {
+    from: vi.fn((_table: string) => ({
+      insert: vi.fn(() => ({
+        select: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve(m.notifSingle ?? { data: null, error: null })),
+        })),
+      })),
+      select: vi.fn(() => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          order: vi.fn(() => chain),
+          limit: vi.fn(() => chain),
+          is: vi.fn(() => chain),
+          then: (r: (v: unknown) => unknown) =>
+            Promise.resolve(m.notifList ?? { data: [], error: null }).then(r),
+        }
+        return chain
+      }),
+      update: vi.fn(() => {
+        const chain = {
+          eq: vi.fn(() => chain),
+          is: vi.fn(() => chain),
+          select: vi.fn(() => Promise.resolve(m.notifUpdate ?? { data: [], error: null })),
+          then: (r: (v: unknown) => unknown) =>
+            Promise.resolve({ error: m.notifUpdateAllError ?? null }).then(r),
+        }
+        return chain
+      }),
+    })),
+  }
+}
+
+describe('notifications helpers', () => {
+  it('createNotification: success / error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifSingle: { data: { id: 'n', user_id: 'u', kind: 'invite.received', payload: { x: 1 }, read_at: null, created_at: 't' }, error: null },
+    }) as never)
+    const n = await createNotification({ userId: 'u', kind: 'invite.received', payload: { x: 1 } })
+    expect(n.id).toBe('n')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifSingle: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(createNotification({ userId: 'u', kind: 'invite.received' })).rejects.toThrow('boom')
+  })
+
+  it('listNotificationsForUser: respects unreadOnly + default options + null fallback + error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifList: { data: [{ id: 'n1', user_id: 'u', kind: 'invite.received', payload: null, read_at: null, created_at: 't' }], error: null },
+    }) as never)
+    expect((await listNotificationsForUser('u', { unreadOnly: true, limit: 10 })).length).toBe(1)
+    expect((await listNotificationsForUser('u')).length).toBe(1)
+
+    // defensive `data || []` fallback
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifList: { data: null, error: null },
+    }) as never)
+    expect(await listNotificationsForUser('u')).toEqual([])
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifList: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(listNotificationsForUser('u')).rejects.toThrow('boom')
+  })
+
+  it('markNotificationRead: hit / miss / error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdate: { data: [{ id: 'n' }], error: null },
+    }) as never)
+    expect(await markNotificationRead('n', 'u')).toBe(true)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdate: { data: [], error: null },
+    }) as never)
+    expect(await markNotificationRead('n', 'u')).toBe(false)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdate: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(markNotificationRead('n', 'u')).rejects.toThrow('boom')
+  })
+
+  it('markAllNotificationsRead: success / error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({}) as never)
+    await markAllNotificationsRead('u')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
+      notifUpdateAllError: { message: 'boom' },
+    }) as never)
+    await expect(markAllNotificationsRead('u')).rejects.toThrow('boom')
+  })
+})
+
+type InviteRow = {
+  project_key: string
+  email: string
+  role: 'admin' | 'member'
+  invited_by: string
+  created_at: string
+}
+
+type InviteMocks = {
+  inviteSingle?: { data: InviteRow | null; error: { message: string } | null }
+  inviteList?: { data: InviteRow[] | null; error: { message: string } | null }
+  inviteInsertResult?: { data: InviteRow | null; error: { code?: string; message: string } | null }
+  inviteDeleteError?: { message: string } | null
+  memberInsertError?: { code?: string; message: string } | null
+}
+
+function inviteSupabase(m: InviteMocks = {}) {
+  return {
+    from: vi.fn((table: string) => {
+      if (table === 'project_invites') {
+        return {
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
+            })),
+          })),
+          select: vi.fn(() => {
+            const chain = {
+              eq: vi.fn(() => chain),
+              order: vi.fn(() => chain),
+              maybeSingle: vi.fn(() => Promise.resolve(m.inviteSingle ?? { data: null, error: null })),
+              then: (r: (v: unknown) => unknown) =>
+                Promise.resolve(m.inviteList ?? { data: [], error: null }).then(r),
+            }
+            return chain
+          }),
+          delete: vi.fn(() => {
+            const chain = {
+              eq: vi.fn(() => chain),
+              then: (r: (v: unknown) => unknown) =>
+                Promise.resolve({ error: m.inviteDeleteError ?? null }).then(r),
+            }
+            return chain
+          }),
+        }
+      }
+      if (table === 'project_members') {
+        return { insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })) }
+      }
+      throw new Error(`Unmocked table ${table}`)
+    }),
+  }
+}
+
+describe('invite helpers', () => {
+  const INVITE: InviteRow = { project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'inviter-1', created_at: 't' }
+
+  it('createInvite: success / already_invited / other error', async () => {
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteInsertResult: { data: INVITE, error: null },
+    }) as never)
+    expect((await createInvite({ projectKey: 'p', email: 'X@Y.Z', role: 'member', invitedBy: 'inviter-1' })).email).toBe('x@y.z')
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteInsertResult: { data: null, error: { code: '23505', message: 'dup' } },
+    }) as never)
+    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('already_invited')
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteInsertResult: { data: null, error: { code: '50000', message: 'boom' } },
+    }) as never)
+    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('boom')
+  })
+
+  it('listInvitesForEmail: success / null fallback / error', async () => {
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteList: { data: [INVITE], error: null },
+    }) as never)
+    expect((await listInvitesForEmail('X@Y.Z')).map((i) => i.projectKey)).toEqual(['p'])
+
+    // defensive `data || []` fallback
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteList: { data: null, error: null },
+    }) as never)
+    expect(await listInvitesForEmail('x@y.z')).toEqual([])
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteList: { data: null, error: { message: 'boom' } },
+    }) as never)
+    await expect(listInvitesForEmail('x@y.z')).rejects.toThrow('boom')
+  })
+
+  it('acceptInvite: not_found / happy / membership 23505 tolerated / other error', async () => {
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('not_found')
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
+    expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      memberInsertError: { code: '23505', message: 'dup' },
+    }) as never)
+    expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      memberInsertError: { code: '50000', message: 'boom' },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('boom')
+  })
+
+  it('declineInvite: not_found / happy', async () => {
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
+    await expect(declineInvite('x@y.z', 'p')).rejects.toThrow('not_found')
+
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
+    expect(await declineInvite('x@y.z', 'p')).toBe('inviter-1')
+  })
+
+  it('getInvite lookup error / deleteInvite error bubble through accept', async () => {
+    // getInvite error path
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: null, error: { message: 'lookup boom' } },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('lookup boom')
+
+    // deleteInvite error path (invite found, member insert ok, delete fails)
+    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      inviteDeleteError: { message: 'delete boom' },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('delete boom')
+  })
+})
+
+describe('findUserIdByEmail', () => {
+  const origFetch = globalThis.fetch
+  const origUrl = process.env.SUPABASE_URL
+  const origKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  beforeEach(() => {
+    process.env.SUPABASE_URL = 'https://supa.example'
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-key'
+  })
+
+  afterEach(() => {
+    globalThis.fetch = origFetch
+    process.env.SUPABASE_URL = origUrl
+    process.env.SUPABASE_SERVICE_ROLE_KEY = origKey
+  })
+
+  it('returns null when service role key is missing', async () => {
+    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+
+  it('returns null when SUPABASE_URL is missing', async () => {
+    delete process.env.SUPABASE_URL
+    expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+
+  it('returns null when admin endpoint returns non-OK', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('nope', { status: 500 })) as never
+    expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+
+  it('returns the matching user id when found', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      users: [{ id: 'u-1', email: 'X@Y.Z' }],
+    }), { status: 200, headers: { 'content-type': 'application/json' } })) as never
+    expect(await findUserIdByEmail('x@y.z')).toBe('u-1')
+  })
+
+  it('returns null when fetch throws', async () => {
+    globalThis.fetch = vi.fn(async () => { throw new Error('net') }) as never
+    expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+
+  it('returns null when response shape is unexpected', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('{}', {
+      status: 200, headers: { 'content-type': 'application/json' },
+    })) as never
+    expect(await findUserIdByEmail('x@y.z')).toBeNull()
   })
 })
