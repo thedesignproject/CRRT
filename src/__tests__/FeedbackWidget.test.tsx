@@ -1877,6 +1877,28 @@ describe('<FeedbackWidget />', () => {
       const carrotSpan = pillWrapper.querySelector<HTMLElement>('span[style*="width: 28"]')
       expect(carrotSpan).not.toBeNull()
     })
+
+    it('second mouseLeave while timer is pending clears the prior timer and resets', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const pillWrapper = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
+          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
+        if (!el) throw new Error('pill wrapper not found')
+        return el
+      })
+
+      // Enter so pillHover=true, then leave twice before the 120ms timer fires.
+      // The second leave must hit the clearTimeout branch in onPillLeave (L126).
+      fireEvent.mouseEnter(pillWrapper)
+      fireEvent.mouseLeave(pillWrapper)
+      fireEvent.mouseLeave(pillWrapper)
+
+      // After 200ms both leaves have had time to resolve; pillHover should be false.
+      await new Promise((r) => setTimeout(r, 200))
+      const carrotSpan = pillWrapper.querySelector<HTMLElement>('span[style*="width: 28"]')
+      expect(carrotSpan).toBeNull()
+    })
   })
 
   describe('onPillPointerDown (lines 466-469)', () => {
