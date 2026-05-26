@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../_lib/auth.js'
+import { requireProjectMembership, requireUser } from '../../_lib/auth.js'
 import { createFeedbackEvent, createShare, addShareItems, listAcceptedCommentsByIds, listAcceptedCommentsForPage } from '../../_lib/store.js'
 import { generateAccessToken, generateSlug, hashToken, encryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
@@ -7,14 +7,15 @@ import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['POST', 'OPTIONS'])) return
   if (req.method !== 'POST') return methodNotAllowed(req, res, ['POST', 'OPTIONS'])
-  // TODO(membership): require membership on body.projectId.
-  if (!(await requireUser(req, res))) return
+  const user = await requireUser(req, res)
+  if (!user) return
 
   try {
     const { projectId, scopeType, pageUrl, commentIds } = req.body ?? {}
     if (!projectId || (scopeType !== 'page' && scopeType !== 'selection')) {
       return jsonError(req, res, 400, 'scopeType must be page or selection')
     }
+    if (!(await requireProjectMembership(req, res, user, projectId))) return
 
     const comments = scopeType === 'page'
       ? await listAcceptedCommentsForPage(projectId, pageUrl)

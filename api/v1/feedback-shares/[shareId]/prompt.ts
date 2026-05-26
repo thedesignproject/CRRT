@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../_lib/auth.js'
+import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors, getStringQuery } from '../../../_lib/http.js'
 import { getProject, getRepoConfig, getShareById } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
@@ -8,8 +8,8 @@ import { decryptToken } from '../../../_lib/tokens.js'
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
   if (req.method !== 'GET') return methodNotAllowed(req, res, ['GET', 'OPTIONS'])
-  // TODO(membership): fetch share → require membership on share.projectId.
-  if (!(await requireUser(req, res))) return
+  const user = await requireUser(req, res)
+  if (!user) return
 
   try {
     const shareId = getStringQuery(req.query.shareId)
@@ -18,6 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const share = await getShareById(shareId)
     if (!share) return jsonError(req, res, 404, 'Share not found')
+    if (!(await requireProjectMembership(req, res, user, share.projectId))) return
 
     const project = await getProject(share.projectId)
     if (!project) return jsonError(req, res, 404, 'Project not found')

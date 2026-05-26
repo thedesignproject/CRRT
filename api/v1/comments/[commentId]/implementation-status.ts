@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../_lib/auth.js'
-import { createFeedbackEvent, findActiveSharesForComment, updateImplementationStatus } from '../../../_lib/store.js'
+import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { createFeedbackEvent, findActiveSharesForComment, getComment, updateImplementationStatus } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { IMPLEMENTATION_STATUSES, type ImplementationStatus } from '../../../_lib/status.js'
 
@@ -9,8 +9,8 @@ const VALID_STATUSES = new Set<ImplementationStatus>(IMPLEMENTATION_STATUSES)
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['PATCH', 'OPTIONS'])) return
   if (req.method !== 'PATCH') return methodNotAllowed(req, res, ['PATCH', 'OPTIONS'])
-  // TODO(membership): fetch comment → require membership on comment.projectId.
-  if (!(await requireUser(req, res))) return
+  const user = await requireUser(req, res)
+  if (!user) return
 
   try {
     const commentId = getStringQuery(req.query.commentId)
@@ -20,6 +20,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!implementationStatus || !VALID_STATUSES.has(implementationStatus)) {
       return jsonError(req, res, 400, `implementationStatus must be one of: ${IMPLEMENTATION_STATUSES.join(', ')}`)
     }
+
+    const existing = await getComment(commentId)
+    if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
+    if (!(await requireProjectMembership(req, res, user, existing.projectId))) return
 
     const [comment, activeShares] = await Promise.all([
       updateImplementationStatus(commentId, { implementationStatus }),

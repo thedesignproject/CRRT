@@ -188,6 +188,29 @@ export const agentPresence = pgTable(
   }),
 )
 
+// In-app notification feed. user_id references auth.users(id); the FK is
+// added by hand in the migration SQL (same pattern as projectMembers).
+// RLS + supabase_realtime publication also configured by hand in that
+// migration so the dashboard can subscribe with the anon key.
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid('user_id').notNull(),
+    kind: text('kind').notNull(),
+    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userCreatedIdx: index('notifications_user_created_idx').on(t.userId, t.createdAt.desc()),
+    kindCheck: check(
+      'notifications_kind_check',
+      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined')`,
+    ),
+  }),
+)
+
 export const feedbackOperationKeys = pgTable(
   'feedback_operation_keys',
   {

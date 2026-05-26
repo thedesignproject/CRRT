@@ -126,6 +126,13 @@ export function listProjects(apiBase: string, accessToken: string) {
   })
 }
 
+// TODO(ui-claim-flow): the POST /v1/projects endpoint has been removed.
+// Replace this with a claim flow that calls POST /v1/projects/claim with a
+// projectKey the user enters (or pastes from the widget install). New projects
+// now materialize via the widget's ensurePublicProject path on first comment;
+// the dashboard's role is to claim ownership of an unclaimed (claimable=true)
+// project. Until this is rewired, the dashboard's "Create new project" button
+// will 405.
 export function createProject(apiBase: string, accessToken: string, name: string) {
   return requestJson<Project>(`${apiBase}/v1/projects`, {
     method: 'POST',
