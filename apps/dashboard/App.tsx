@@ -83,7 +83,7 @@ export function App() {
 // Admin-side invite send: POST /api/v1/projects/:projectKey/invites
 // { email, role } (admin role required).
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
-  const { projects, loading: projectsLoading, error: projectsError, createProject } = useProjects(API_BASE, accessToken)
+  const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability } = useProjects(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
@@ -324,15 +324,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [agentSession, copyPrompt, selectedAgentMeta])
 
-  // TODO(ui-claim-flow): swap this create flow for a claim flow. Prompt the
-  // user for a projectKey (paste from widget install snippet) and call
-  // POST /v1/projects/claim. New projects now come into being via the widget
-  // hitting public endpoints (ensurePublicProject); the dashboard only claims.
-  const handleAddProject = useCallback(async (name: string) => {
+  const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
     setAddProjectBusy(true)
     try {
-      const project = await createProject(name)
+      const project = await claimProject(projectKey, name)
       setSelectedProject(project.publicKey)
       setStatusFilter('all')
       setSelectedCommentId('')
@@ -342,7 +338,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       setAddProjectBusy(false)
     }
-  }, [createProject])
+  }, [claimProject])
 
   // Onboarding gate: show the welcome screen when this account has no
   // projects and hasn't been onboarded before. Once they click the CTA we
@@ -365,6 +361,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           <AddProjectPopover
             onAdd={handleAddProject}
             onClose={() => setAddProjectOpen(false)}
+            checkAvailability={checkAvailability}
             busy={addProjectBusy}
             error={addProjectError}
           />
@@ -388,6 +385,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         addProjectOpen={addProjectOpen}
         setAddProjectOpen={setAddProjectOpen}
         onAddProject={handleAddProject}
+        onCheckAvailability={checkAvailability}
         addProjectBusy={addProjectBusy}
         addProjectError={addProjectError}
         onOpenCmd={() => setCmdOpen(true)}

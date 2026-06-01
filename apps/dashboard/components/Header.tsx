@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
-import type { Project } from '../api'
+import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
 import { MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
@@ -19,7 +19,8 @@ interface HeaderProps {
   setSelectedCommentId: (id: string) => void
   addProjectOpen: boolean
   setAddProjectOpen: (open: boolean | ((v: boolean) => boolean)) => void
-  onAddProject: (name: string) => void
+  onAddProject: (projectKey: string, name: string) => void
+  onCheckAvailability: (key: string) => Promise<ProjectKeyAvailability>
   addProjectBusy: boolean
   addProjectError: string | null
   onOpenCmd: () => void
@@ -42,6 +43,7 @@ export function Header({
   addProjectOpen,
   setAddProjectOpen,
   onAddProject,
+  onCheckAvailability,
   addProjectBusy,
   addProjectError,
   onOpenCmd,
@@ -130,6 +132,7 @@ export function Header({
           <AddProjectPopover
             onAdd={onAddProject}
             onClose={() => setAddProjectOpen(false)}
+            checkAvailability={onCheckAvailability}
             busy={addProjectBusy}
             error={addProjectError}
           />
