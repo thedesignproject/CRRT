@@ -217,6 +217,61 @@ export function cancelProjectInvite(apiBase: string, accessToken: string, projec
   )
 }
 
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined'
+
+export interface Notification {
+  id: string
+  userId: string
+  kind: NotificationKind
+  payload: Record<string, unknown>
+  readAt: string | null
+  createdAt: string
+}
+
+export function listNotifications(apiBase: string, accessToken: string, opts: { unreadOnly?: boolean } = {}) {
+  const suffix = opts.unreadOnly ? '?unreadOnly=true' : ''
+  return requestJson<Notification[]>(`${apiBase}/v1/notifications${suffix}`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function markNotificationRead(apiBase: string, accessToken: string, id: string) {
+  return requestJson<{ id: string }>(`${apiBase}/v1/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function markAllNotificationsRead(apiBase: string, accessToken: string) {
+  return requestJson<{ ok: true }>(`${apiBase}/v1/notifications/read-all`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+// Pending invites addressed to the current user (across all projects).
+export function listInvites(apiBase: string, accessToken: string) {
+  return requestJson<ProjectInvite[]>(`${apiBase}/v1/invites`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function acceptInvite(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<{ projectKey: string }>(`${apiBase}/v1/invites/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectKey }),
+  })
+}
+
+export function declineInvite(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<{ projectKey: string }>(`${apiBase}/v1/invites/decline`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectKey }),
+  })
+}
+
 export function listComments(apiBase: string, accessToken: string, projectId: string, pageUrl?: string) {
   const query = new URLSearchParams()
   if (pageUrl) query.set('pageUrl', pageUrl)

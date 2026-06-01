@@ -5,6 +5,7 @@ import type { StatusFilter } from '../lib/types'
 import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
+import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
 
 interface HeaderProps {
@@ -26,6 +27,9 @@ interface HeaderProps {
   onOpenCmd: () => void
   onOpenSettings: () => void
   settingsActive: boolean
+  apiBase: string
+  accessToken: string
+  onProjectsChanged: () => void
   theme: 'light' | 'dark'
   toggleTheme: () => void
   user: User
@@ -51,6 +55,9 @@ export function Header({
   onOpenCmd,
   onOpenSettings,
   settingsActive,
+  apiBase,
+  accessToken,
+  onProjectsChanged,
   theme,
   toggleTheme,
   user,
@@ -154,6 +161,12 @@ export function Header({
             <span className="text-[11px]">⌘</span>K
           </kbd>
         </button>
+        <NotificationBell
+          apiBase={apiBase}
+          accessToken={accessToken}
+          userId={user.id}
+          onProjectsChanged={onProjectsChanged}
+        />
         {selectedProject && (
           <button
             onClick={onOpenSettings}
