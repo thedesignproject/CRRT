@@ -158,6 +158,65 @@ export function claimProject(apiBase: string, accessToken: string, projectKey: s
   })
 }
 
+export interface ProjectMember {
+  userId: string
+  email: string | null
+  role: 'admin' | 'member'
+  createdAt: string
+}
+
+export interface ProjectInvite {
+  projectKey: string
+  email: string
+  role: 'admin' | 'member'
+  invitedBy: string
+  createdAt: string
+}
+
+export function listProjectMembers(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<ProjectMember[]>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/members`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function removeProjectMember(apiBase: string, accessToken: string, projectKey: string, userId: string) {
+  return requestJson<{ projectKey: string; userId: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/members/${encodeURIComponent(userId)}`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+// Rename a project (display name only — public key/slug are immutable).
+export function renameProject(apiBase: string, accessToken: string, projectKey: string, name: string) {
+  return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ name }),
+  })
+}
+
+export function listProjectInvites(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<ProjectInvite[]>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' = 'member') {
+  return requestJson<ProjectInvite>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ email, role }),
+  })
+}
+
+export function cancelProjectInvite(apiBase: string, accessToken: string, projectKey: string, email: string) {
+  const query = new URLSearchParams({ email })
+  return requestJson<{ projectKey: string; email: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites?${query.toString()}`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
 export function listComments(apiBase: string, accessToken: string, projectId: string, pageUrl?: string) {
   const query = new URLSearchParams()
   if (pageUrl) query.set('pageUrl', pageUrl)
