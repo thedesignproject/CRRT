@@ -9,12 +9,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const user = await requireUser(req, res)
   if (!user) return
 
-  const body = (req.body ?? {}) as { projectKey?: unknown }
+  const body = (req.body ?? {}) as { projectKey?: unknown; name?: unknown }
   const projectKey = typeof body.projectKey === 'string' ? body.projectKey.trim() : ''
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectKey')
+  const rawName = typeof body.name === 'string' ? body.name.trim() : ''
+  if (rawName.length > 80) return jsonError(req, res, 400, 'Project name too long')
+  const name = rawName || undefined
 
   try {
-    const project = await claimProject(user.userId, projectKey)
+    const project = await claimProject(user.userId, projectKey, name)
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json(project)
   } catch (error) {

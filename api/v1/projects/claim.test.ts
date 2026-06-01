@@ -74,7 +74,20 @@ describe('api/v1/projects/claim', () => {
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'k' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(claimProject).toHaveBeenCalledWith('u', 'k')
+    expect(claimProject).toHaveBeenCalledWith('u', 'k', undefined)
+
+    // name is trimmed and forwarded for the create-and-claim path
+    vi.mocked(claimProject).mockResolvedValueOnce({ publicKey: 'k' } as never)
+    res = mockRes()
+    await call({ method: 'POST', body: { projectKey: 'k', name: '  Acme  ' }, query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(claimProject).toHaveBeenLastCalledWith('u', 'k', 'Acme')
+
+    // over-long name → 400 before claimProject runs
+    res = mockRes()
+    await call({ method: 'POST', body: { projectKey: 'k', name: 'x'.repeat(81) }, query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'Project name too long' })
 
     vi.mocked(claimProject).mockRejectedValueOnce(new Error('not_found'))
     res = mockRes()

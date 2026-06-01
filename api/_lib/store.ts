@@ -203,14 +203,22 @@ export async function isProjectMember(userId: string, projectKey: string): Promi
 }
 
 /**
- * Atomically take ownership of an unclaimed project. Conditional UPDATE
- * gates the race: only the first caller flips `claimable=false`, the rest
- * see zero rows and get `already_claimed`. Membership INSERT after the flip
- * is idempotent — a duplicate (23505) just means we already own it.
+ * Take ownership of a project. Two ways in:
+ *  - Existing unclaimed project (widget-made): a conditional UPDATE flips
+ *    `claimable=false`. Only the first caller wins the race; the rest see zero
+ *    rows and either `already_claimed` (row exists) or fall through to create.
+ *  - Brand-new project (dashboard create flow): when no row exists and a `name`
+ *    is supplied, create the project (claimable=false) + seed its repo config,
+ *    then add the caller as admin. A 23505 on insert means we lost the race.
+ *
+ * Without a `name`, a missing project is `not_found` (the paste-existing-key
+ * path). The membership INSERT is idempotent — a duplicate (23505) just means
+ * we already own it.
  */
 export async function claimProject(
   userId: string,
   projectKey: string,
+  name?: string,
 ): Promise<ReturnType<typeof mapProject>> {
   const supabase = getSupabase()
 
@@ -223,10 +231,15 @@ export async function claimProject(
 
   if (updateError) throw new Error(updateError.message)
 
+  let claimed: ReturnType<typeof mapProject>
+
   if (!updatedRows || updatedRows.length === 0) {
     const existing = await getProject(projectKey)
-    if (!existing) throw new Error('not_found')
-    throw new Error('already_claimed')
+    if (existing) throw new Error('already_claimed')
+    if (!name) throw new Error('not_found')
+    claimed = await createClaimedProject(projectKey, name)
+  } else {
+    claimed = mapProject(updatedRows[0] as ProjectRow)
   }
 
   const { error: memberError } = await supabase
@@ -237,7 +250,71 @@ export async function claimProject(
     throw new Error(memberError.message)
   }
 
-  return mapProject(updatedRows[0] as ProjectRow)
+  return claimed
+}
+
+/**
+ * Insert a dashboard-created project (slug mirrors the public key, as in
+ * `ensurePublicProject`) plus its default repo config. A 23505 on the project
+ * insert means a concurrent claim won the key — surface as `already_claimed`.
+ */
+async function createClaimedProject(projectKey: string, name: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('projects')
+    .insert([{
+      public_key: projectKey,
+      slug: projectKey,
+      name,
+      allowed_origins: [],
+      claimable: false,
+    }] as never)
+    .select('public_key, slug, name, created_at, updated_at')
+    .single()
+
+  if (error) {
+    if (error.code === '23505') throw new Error('already_claimed')
+    throw new Error(error.message)
+  }
+
+  const { error: repoError } = await supabase
+    .from('project_repo_configs')
+    .insert([{ project_key: projectKey, default_branch: 'main' }] as never)
+
+  if (repoError && repoError.code !== '23505') {
+    throw new Error(repoError.message)
+  }
+
+  return mapProject(data as ProjectRow)
+}
+
+/** Slugify a display name into a candidate project key (matches the dashboard's rule). */
+export function slugifyProjectKey(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+/** A project key is 1–63 chars of lowercase alphanumerics and single internal hyphens. */
+export function isValidProjectKey(key: string): boolean {
+  return key.length >= 1 && key.length <= 63 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(key)
+}
+
+/** True when no project row already owns this key (free to create). */
+export async function isProjectKeyAvailable(projectKey: string): Promise<boolean> {
+  return (await getProject(projectKey)) === null
+}
+
+/**
+ * Return `base` if free, else `base-<suffix>` with a short random suffix,
+ * probing until one is available. Throws `no_available_key` if it can't find
+ * a free key within a bounded number of attempts.
+ */
+export async function suggestAvailableProjectKey(base: string): Promise<string> {
+  if (await isProjectKeyAvailable(base)) return base
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const candidate = `${base}-${Math.random().toString(36).slice(2, 6)}`
+    if (await isProjectKeyAvailable(candidate)) return candidate
+  }
+  throw new Error('no_available_key')
 }
 
 export async function getProject(projectKey: string) {

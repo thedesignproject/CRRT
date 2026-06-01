@@ -12,12 +12,16 @@ import {
   ensurePublicProject,
   findUserIdByEmail,
   getProjectMember,
+  isProjectKeyAvailable,
   isProjectMember,
+  isValidProjectKey,
   listInvitesForEmail,
   listNotificationsForUser,
   listProjectsForUser,
   markAllNotificationsRead,
   markNotificationRead,
+  slugifyProjectKey,
+  suggestAvailableProjectKey,
 } from './store.js'
 
 type ProjectRow = {
@@ -179,6 +183,8 @@ type MembershipMocks = {
   projectsIn?: { data: ProjectRow[] | null; error: { message: string } | null }
   projectsUpdate?: { data: ProjectRow[] | null; error: { message: string } | null }
   projectsSingle?: { data: ProjectRow | null; error: { message: string } | null }
+  projectInsert?: { data: ProjectRow | null; error: { code?: string; message: string } | null }
+  repoInsert?: { error: { code?: string; message: string } | null }
 }
 
 function membershipSupabase(m: MembershipMocks = {}) {
@@ -209,6 +215,11 @@ function membershipSupabase(m: MembershipMocks = {}) {
           eq: vi.fn(() => ({
             eq: vi.fn(() => ({ select: vi.fn(() => Promise.resolve(m.projectsUpdate ?? { data: [], error: null })) })),
           })),
+        })),
+        // projects insert → .select().single(); repo-config insert → awaited directly
+        insert: vi.fn(() => ({
+          select: vi.fn(() => ({ single: vi.fn(() => Promise.resolve(m.projectInsert ?? { data: null, error: null })) })),
+          then: (r: (v: unknown) => unknown) => Promise.resolve(m.repoInsert ?? { error: null }).then(r),
         })),
       }
     }),
@@ -297,6 +308,106 @@ describe('membership helpers + claim', () => {
       projectsUpdate: { data: null, error: { message: 'db boom' } },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
+  })
+
+  it('claimProject create-and-claim: creates a new project when none exists and a name is given', async () => {
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsUpdate: { data: [], error: null },
+      projectsSingle: { data: null, error: null },
+      projectInsert: { data: PROJECT_ROW, error: null },
+    }) as never)
+    expect((await claimProject('u', 'pk', 'Acme')).publicKey).toBe('pk')
+  })
+
+  it('claimProject create-and-claim: maps insert 23505 to already_claimed, propagates other errors', async () => {
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsUpdate: { data: [], error: null },
+      projectsSingle: { data: null, error: null },
+      projectInsert: { data: null, error: { code: '23505', message: 'dup' } },
+    }) as never)
+    await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('already_claimed')
+
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsUpdate: { data: [], error: null },
+      projectsSingle: { data: null, error: null },
+      projectInsert: { data: null, error: { code: '50000', message: 'boom' } },
+    }) as never)
+    await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('boom')
+  })
+
+  it('claimProject create-and-claim: surfaces repo-config errors but ignores 23505', async () => {
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsUpdate: { data: [], error: null },
+      projectsSingle: { data: null, error: null },
+      projectInsert: { data: PROJECT_ROW, error: null },
+      repoInsert: { error: { code: '50000', message: 'repo boom' } },
+    }) as never)
+    await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('repo boom')
+
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsUpdate: { data: [], error: null },
+      projectsSingle: { data: null, error: null },
+      projectInsert: { data: PROJECT_ROW, error: null },
+      repoInsert: { error: { code: '23505', message: 'dup' } },
+    }) as never)
+    expect((await claimProject('u', 'pk', 'Acme')).publicKey).toBe('pk')
+  })
+})
+
+describe('project key helpers', () => {
+  it('slugifyProjectKey lowercases, hyphenates, and trims edges', () => {
+    expect(slugifyProjectKey('Acme Marketing Site!')).toBe('acme-marketing-site')
+    expect(slugifyProjectKey('  --Hello-- ')).toBe('hello')
+  })
+
+  it('isValidProjectKey enforces charset, length, and hyphen rules', () => {
+    expect(isValidProjectKey('acme-site')).toBe(true)
+    expect(isValidProjectKey('a')).toBe(true)
+    expect(isValidProjectKey('')).toBe(false)
+    expect(isValidProjectKey('-acme')).toBe(false)
+    expect(isValidProjectKey('acme--site')).toBe(false)
+    expect(isValidProjectKey('Acme')).toBe(false)
+    expect(isValidProjectKey('a'.repeat(64))).toBe(false)
+  })
+
+  it('isProjectKeyAvailable reflects whether a row exists', async () => {
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsSingle: { data: null, error: null },
+    }) as never)
+    expect(await isProjectKeyAvailable('free')).toBe(true)
+
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsSingle: { data: PROJECT_ROW, error: null },
+    }) as never)
+    expect(await isProjectKeyAvailable('taken')).toBe(false)
+  })
+
+  it('suggestAvailableProjectKey returns the base when free', async () => {
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsSingle: { data: null, error: null },
+    }) as never)
+    expect(await suggestAvailableProjectKey('acme')).toBe('acme')
+  })
+
+  it('suggestAvailableProjectKey appends a suffix when the base is taken', async () => {
+    // base lookup hits a row → taken; first suffixed candidate lookup finds nothing → free
+    const single = vi.fn()
+      .mockResolvedValueOnce({ data: PROJECT_ROW, error: null })
+      .mockResolvedValue({ data: null, error: null })
+    vi.mocked(getSupabase).mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: single })) })),
+      })),
+    } as never)
+    const suggestion = await suggestAvailableProjectKey('acme')
+    expect(suggestion).toMatch(/^acme-[a-z0-9]{1,4}$/)
+  })
+
+  it('suggestAvailableProjectKey throws when no free key is found', async () => {
+    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+      projectsSingle: { data: PROJECT_ROW, error: null },
+    }) as never)
+    await expect(suggestAvailableProjectKey('acme')).rejects.toThrow('no_available_key')
   })
 })
 
