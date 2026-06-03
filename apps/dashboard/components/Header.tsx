@@ -2,7 +2,7 @@ import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
+import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
 import { UserMenu } from './UserMenu'
@@ -24,6 +24,8 @@ interface HeaderProps {
   addProjectBusy: boolean
   addProjectError: string | null
   onOpenCmd: () => void
+  onOpenSettings: () => void
+  settingsActive: boolean
   theme: 'light' | 'dark'
   toggleTheme: () => void
   user: User
@@ -47,6 +49,8 @@ export function Header({
   addProjectBusy,
   addProjectError,
   onOpenCmd,
+  onOpenSettings,
+  settingsActive,
   theme,
   toggleTheme,
   user,
@@ -150,6 +154,20 @@ export function Header({
             <span className="text-[11px]">⌘</span>K
           </kbd>
         </button>
+        {selectedProject && (
+          <button
+            onClick={onOpenSettings}
+            title="Project settings"
+            aria-label="Project settings"
+            aria-pressed={settingsActive}
+            className={cn(
+              'w-7 h-7 rounded-md flex items-center justify-center transition-colors',
+              settingsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+            )}
+          >
+            <SettingsIcon size={15} />
+          </button>
+        )}
         <button
           onClick={toggleTheme}
           title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
