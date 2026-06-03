@@ -202,6 +202,89 @@ export async function isProjectMember(userId: string, projectKey: string): Promi
   return (await getProjectMember(userId, projectKey)) !== null
 }
 
+type ProjectMemberDetailRow = {
+  user_id: string
+  role: 'admin' | 'member'
+  created_at: string
+}
+
+/**
+ * List a project's members with their emails resolved. The membership table
+ * only stores user ids; emails come from the auth admin API (see
+ * `getUserEmailsByIds`), and degrade to null when the service key is absent.
+ */
+export async function listProjectMembers(projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('user_id, role, created_at')
+    .eq('project_key', projectKey)
+    .order('created_at', { ascending: true })
+
+  if (error) throw new Error(error.message)
+  const rows = (data || []) as ProjectMemberDetailRow[]
+  const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
+  return rows.map((r) => ({
+    userId: r.user_id,
+    email: emails[r.user_id] ?? null,
+    role: r.role,
+    createdAt: r.created_at,
+  }))
+}
+
+/**
+ * Remove a member from a project. Refuses to remove the last remaining admin
+ * (`last_admin`) so a project can never be orphaned. Returns false when the
+ * member wasn't in the project so callers can map that to a 404.
+ *
+ * The count + delete run inside the `remove_project_member` DB function (see
+ * migration 0003) which locks the project's admin rows before counting — doing
+ * it here in two queries would race, letting concurrent admin removals both pass
+ * the guard and orphan the project.
+ */
+export async function removeProjectMember(projectKey: string, userId: string): Promise<boolean> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('remove_project_member', {
+    p_project_key: projectKey,
+    p_user_id: userId,
+  })
+
+  if (error) throw new Error(error.message)
+  if (data === 'last_admin') throw new Error('last_admin')
+  return data === 'removed'
+}
+
+/**
+ * Resolve auth.users ids to emails via the service-role admin API. Mirrors
+ * `findUserIdByEmail`'s graceful fallback: returns an empty map (all emails
+ * null at the call site) when the service key / URL is missing or a lookup
+ * fails, rather than throwing.
+ */
+export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, string | null>> {
+  const result: Record<string, string | null> = {}
+  const unique = Array.from(new Set(ids))
+  if (unique.length === 0) return result
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const url = process.env.SUPABASE_URL
+  if (!serviceKey || !url) return result
+
+  await Promise.all(
+    unique.map(async (id) => {
+      try {
+        const res = await fetch(`${url}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
+          headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+        })
+        if (!res.ok) return
+        const body = (await res.json()) as { email?: string }
+        if (body.email) result[id] = body.email
+      } catch {
+        /* leave unresolved; surfaces as null email */
+      }
+    }),
+  )
+  return result
+}
+
 /**
  * Take ownership of a project. Two ways in:
  *  - Existing unclaimed project (widget-made): a conditional UPDATE flips
@@ -327,6 +410,24 @@ export async function getProject(projectKey: string) {
 
   if (error) throw new Error(error.message)
   return data ? mapProject(data as ProjectRow) : null
+}
+
+/**
+ * Rename a project (display name only — public_key and slug are immutable).
+ * Returns the updated project, or null when no project matched the key so the
+ * caller can map that to a 404.
+ */
+export async function updateProjectName(projectKey: string, name: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ name, updated_at: new Date().toISOString() })
+    .eq('public_key', projectKey)
+    .select('public_key, slug, name, created_at, updated_at')
+
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) return null
+  return mapProject(data[0] as ProjectRow)
 }
 
 export async function ensurePublicProject(publicKey: string) {
@@ -983,6 +1084,33 @@ export async function listInvitesForEmail(email: string) {
     .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return (data || []).map((row) => mapInvite(row as InviteRow))
+}
+
+export async function listProjectInvites(projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .select('project_key, email, role, invited_by, created_at')
+    .eq('project_key', projectKey)
+    .order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data || []).map((row) => mapInvite(row as InviteRow))
+}
+
+/**
+ * Cancel a pending invite. Returns false when no invite matched so the caller
+ * can map that to a 404.
+ */
+export async function deleteProjectInvite(projectKey: string, email: string): Promise<boolean> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_invites')
+    .delete()
+    .eq('project_key', projectKey)
+    .eq('email', email.toLowerCase().trim())
+    .select('email')
+  if (error) throw new Error(error.message)
+  return Array.isArray(data) && data.length > 0
 }
 
 async function getInvite(email: string, projectKey: string) {
