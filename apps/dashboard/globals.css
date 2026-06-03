@@ -1,38 +1,10 @@
 @import "tailwindcss";
 
-@custom-variant dark (&:is(.dark *));
+/* Light-mode override — mirrors tokens.css [data-theme="light"] selector */
+@custom-variant light (&:is([data-theme="light"] *));
 
-/* Default theme (dark) — Zen Inspired */
+/* Status colors — not in tokens.css, dashboard-specific */
 :root {
-  --background: oklch(0.14 0.005 90);
-  --foreground: oklch(0.90 0.01 90);
-  --card: oklch(0.18 0.005 90);
-  --card-foreground: oklch(0.90 0.01 90);
-  --popover: oklch(0.18 0.005 90);
-  --popover-foreground: oklch(0.90 0.01 90);
-  --primary: oklch(0.85 0.02 85);
-  --primary-foreground: oklch(0.14 0.005 90);
-  --secondary: oklch(0.22 0.005 90);
-  --secondary-foreground: oklch(0.85 0.01 90);
-  --muted: oklch(0.22 0.005 90);
-  --muted-foreground: oklch(0.55 0.01 90);
-  --accent: oklch(0.22 0.008 85);
-  --accent-foreground: oklch(0.85 0.01 90);
-  --destructive: oklch(0.60 0.2 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.26 0.005 90);
-  --input: oklch(0.26 0.005 90);
-  --ring: oklch(0.85 0.02 85);
-
-  --sidebar: oklch(0.16 0.005 90);
-  --sidebar-foreground: oklch(0.90 0.01 90);
-  --sidebar-primary: oklch(0.85 0.02 85);
-  --sidebar-primary-foreground: oklch(0.14 0.005 90);
-  --sidebar-accent: oklch(0.22 0.008 85);
-  --sidebar-accent-foreground: oklch(0.85 0.01 90);
-  --sidebar-border: oklch(0.26 0.005 90);
-  --sidebar-ring: oklch(0.85 0.02 85);
-
   --status-open: oklch(0.60 0.01 90);
   --status-open-bg: oklch(0.24 0.005 90);
   --status-accepted: oklch(0.65 0.17 155);
@@ -51,39 +23,17 @@
 
   --scrollbar-thumb: oklch(0.30 0.005 90);
   --scrollbar-thumb-hover: oklch(0.40 0.005 90);
+
+  /* Dashboard override: --accent is for chrome hovers (filters, tabs, dropdown
+     rows, theme toggle, etc.). Brand phosphor amber (--crrt-phosphor) reads as
+     a status signal and is too loud for default hover surfaces. Map --accent
+     to a quiet elevated neutral instead; phosphor stays available where it
+     belongs via --crrt-phosphor and --color-status-* tokens. */
+  --accent: oklch(0.26 0.005 90);
+  --accent-foreground: var(--crrt-white);
 }
 
-/* Light mode overrides — applied when .light class is on document root */
-.light {
-  --background: oklch(0.99 0.005 90);
-  --foreground: oklch(0.18 0.01 90);
-  --card: oklch(1.0 0 0);
-  --card-foreground: oklch(0.18 0.01 90);
-  --popover: oklch(1.0 0 0);
-  --popover-foreground: oklch(0.18 0.01 90);
-  --primary: oklch(0.20 0.01 90);
-  --primary-foreground: oklch(0.98 0.005 90);
-  --secondary: oklch(0.94 0.005 90);
-  --secondary-foreground: oklch(0.20 0.01 90);
-  --muted: oklch(0.94 0.005 90);
-  --muted-foreground: oklch(0.50 0.01 90);
-  --accent: oklch(0.93 0.008 85);
-  --accent-foreground: oklch(0.20 0.01 90);
-  --destructive: oklch(0.55 0.20 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.90 0.005 90);
-  --input: oklch(0.90 0.005 90);
-  --ring: oklch(0.30 0.01 90);
-
-  --sidebar: oklch(0.96 0.005 90);
-  --sidebar-foreground: oklch(0.18 0.01 90);
-  --sidebar-primary: oklch(0.20 0.01 90);
-  --sidebar-primary-foreground: oklch(0.98 0.005 90);
-  --sidebar-accent: oklch(0.93 0.008 85);
-  --sidebar-accent-foreground: oklch(0.20 0.01 90);
-  --sidebar-border: oklch(0.88 0.005 90);
-  --sidebar-ring: oklch(0.30 0.01 90);
-
+[data-theme="light"] {
   --status-open: oklch(0.45 0.01 90);
   --status-open-bg: oklch(0.94 0.005 90);
   --status-accepted: oklch(0.50 0.17 155);
@@ -102,13 +52,16 @@
 
   --scrollbar-thumb: oklch(0.85 0.005 90);
   --scrollbar-thumb-hover: oklch(0.75 0.005 90);
+
+  --accent: oklch(0.94 0.005 90);
+  --accent-foreground: var(--crrt-ink);
 }
 
 @theme inline {
-  --radius: 0.5rem;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-serif: "Playfair Display", ui-serif, Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --radius: var(--crrt-radius-xl);
+  --font-sans: var(--crrt-font-sans);
+  --font-mono: var(--crrt-font-mono);
+  --font-crt: var(--crrt-font-crt);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -130,14 +83,14 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
 
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar: var(--card);
+  --color-sidebar-foreground: var(--card-foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+  --color-sidebar-accent: var(--accent);
+  --color-sidebar-accent-foreground: var(--accent-foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--ring);
 
   --color-status-open: var(--status-open);
   --color-status-open-bg: var(--status-open-bg);
@@ -166,6 +119,52 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+}
+
+/* Subtle CRT scanline overlay — mirrors apps/landing/globals.css so the
+   auth surface speaks the same visual language as the marketing site. */
+.scanlines {
+  position: relative;
+}
+.scanlines::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    180deg,
+    transparent 0px,
+    transparent 2px,
+    rgba(255, 255, 255, 0.012) 2px,
+    rgba(255, 255, 255, 0.012) 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* Neutral body font (sans-serif Geist) — used in places where Geist Mono
+   reads too technical for paragraph copy (auth page subtitles, helper text,
+   inputs). The mono and CRT fonts stay reserved for headings, labels,
+   buttons, and terminal-flavor moments. */
+:root {
+  --crrt-font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Section marker — same grammar as the landing's "/ 01 hero" labels. */
+.crrt-section-marker {
+  font-family: var(--crrt-font-mono);
+  font-size: 12px;
+  color: var(--muted-foreground);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+}
+
+/* Blinking terminal cursor for headings. */
+.crrt-cursor::after {
+  content: '_';
+  display: inline-block;
+  margin-left: 0.05em;
+  color: var(--crrt-phosphor);
+  animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
 }
 
 /* Scrollbar */

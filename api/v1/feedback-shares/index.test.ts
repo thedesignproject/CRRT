@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/auth.js', () => ({
-  requireReviewer: vi.fn(() => true),
+  requireUser: vi.fn(),
+  requireProjectMembership: vi.fn(),
 }))
 
 vi.mock('../../_lib/store.js', () => ({
@@ -20,6 +21,7 @@ vi.mock('../../_lib/tokens.js', () => ({
 }))
 
 import handler from './index.js'
+import { requireProjectMembership, requireUser } from '../../_lib/auth.js'
 import {
   addShareItems,
   createFeedbackEvent,
@@ -69,6 +71,10 @@ const call = (req: unknown, res: unknown) =>
 
 beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
+  vi.mocked(requireUser).mockReset()
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u-test', email: 'test@example.com' })
+  vi.mocked(requireProjectMembership).mockReset()
+  vi.mocked(requireProjectMembership).mockResolvedValue(true)
   vi.mocked(listAcceptedCommentsForPage).mockReset()
   vi.mocked(listAcceptedCommentsByIds).mockReset()
   vi.mocked(createShare).mockReset()
@@ -77,6 +83,30 @@ beforeEach(() => {
 })
 
 describe('api/v1/feedback-shares', () => {
+  it('returns 401 when requireUser rejects', async () => {
+    vi.mocked(requireUser).mockImplementation(async (_req, res) => {
+      res.status(401).json({ error: 'Unauthorized' })
+      return null
+    })
+
+    const res = mockRes()
+    await call(mockReq({ body: {} }), res)
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('returns 403 when user is not a project member', async () => {
+    vi.mocked(requireProjectMembership).mockImplementation(async (_req, res) => {
+      res.status(403).json({ error: 'Forbidden' })
+      return false
+    })
+
+    const res = mockRes()
+    await call(mockReq({
+      body: { projectId: 'demo-project', scopeType: 'page', pageUrl: 'https://x' },
+    }), res)
+    expect(res.statusCode).toBe(403)
+  })
+
   it('creates a page-scoped share from accepted comments', async () => {
     vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([
       { id: 'comment-1' },

@@ -57,10 +57,7 @@ import { FeedbackWidget } from '@thedesignproject/crrt'
 
 export default function App() {
   return (
-    <FeedbackWidget
-      apiBase="https://your-deployment.example.com/api"
-      projectId="demo-project"
-    />
+    <FeedbackWidget projectId="demo-project" />
   )
 }
 ```
@@ -69,8 +66,8 @@ Props:
 
 | Prop | Type | Required | Description |
 | --- | --- | --- | --- |
-| `apiBase` | `string` | yes | Base URL of the backend that serves the widget API. For this repo's Vercel functions, use `https://<your-deployment>/api`. |
 | `projectId` | `string` | yes | Project public key used for comment capture. |
+| `apiBase` | `string` | no | Base URL of the backend that serves the widget API. Defaults to `https://crrt.ai/api`. Override to point at a self-hosted deployment. |
 
 ## API surfaces
 
@@ -238,6 +235,82 @@ DELETE /api/comments
 ```
 
 That path is kept for backward compatibility and smoke validation. New product work should target `/api/v1/...`.
+
+## Self-host
+
+CRRT is OSS-first. [crrt.ai](https://crrt.ai) is the easiest path — a managed hosted instance with auth, storage, and the agent bridge all wired up. But the same code in this repo runs on your own infra in under twenty minutes if you'd rather own the stack.
+
+### What you'll need
+
+- **Postgres** for the data layer. Any provider works; we recommend [Supabase](https://supabase.com) so you get auth + storage out of the box — that's what the hosted instance runs on.
+- **A runtime** that can serve the Vercel-style serverless functions in `api/` plus the static builds in `apps/landing/` and `apps/dashboard/`. We deploy to Vercel; Fly, Render, Cloudflare Workers, or a Node container behind a reverse proxy all work as long as your function runtime is compatible with `@vercel/node`.
+- **Bun ≥ 1.1** for the build (`bun install`, `bun run build`).
+
+### 1. Clone and install
+
+```bash
+git clone https://github.com/thedesignproject/CRRT.git
+cd CRRT
+bun install
+```
+
+### 2. Configure environment
+
+Copy `.env.example` to `.env`:
+
+```bash
+cp .env.example .env
+```
+
+Fill in the required server variables (see [Environment variables](#environment-variables)):
+
+- `SUPABASE_URL`, `SUPABASE_KEY` — your Postgres + auth provider
+- `REVIEWER_API_TOKEN` — long random string; gates the reviewer API endpoints
+- `SHARE_TOKEN_SECRET` — long random string; signs per-share bearer tokens
+
+And the client-side equivalents for the widget + dashboard:
+
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — the dashboard reads these to talk to Supabase Auth.
+
+### 3. Apply the database schema
+
+```bash
+bun run db:migrate
+```
+
+`vercel-build` does this on every deploy, but the first time you'll want to run it locally so the schema is in place before you push.
+
+### 4. Deploy
+
+If you're targeting Vercel:
+
+```bash
+vercel deploy
+```
+
+The `vercel.json` at the repo root sets `buildCommand` to `bun run vercel-build`, which typechecks, builds the landing app to `apps/landing/dist`, and runs pending migrations. The dashboard is currently built separately — wire `bun run build:dashboard` into your pipeline and route `/dashboard/*` to its output if you want both surfaces under one deploy.
+
+If you're targeting another runtime, the relevant outputs are:
+
+- `apps/landing/dist/` — static landing page
+- `apps/dashboard/dist/` — static dashboard SPA (build with `bun run build:dashboard`)
+- `api/` — Vercel-style serverless handlers; adapt them to your platform if needed
+
+### 5. Smoke test
+
+```bash
+curl -s "$APP_URL/api/v1/public/comments?projectKey=demo-project"
+```
+
+You should get a JSON response (empty array on a fresh DB, or the seeded demo project's comments if you ran `bun db:seed`).
+
+### Updates
+
+We tag widget releases on npm but the OSS server-side moves on `trunk`. Pull periodically; `bun run db:migrate` is idempotent so re-running it after a fetch is safe.
+
+### Versioning between hosted and self-hosted
+
+`crrt.ai` runs whatever is on `trunk`. If you self-host, you can pin to a tag (`git checkout v0.x.y`) for stability. We aim to keep the public API surface backward-compatible across minor versions.
 
 ## License
 

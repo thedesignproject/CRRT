@@ -10,8 +10,8 @@ export default function App() {
     <>
       <YourApp />
       <FeedbackWidget
-        projectId="your-key"
-        apiBase="https://api.example.com/api"
+        projectId="proj_your_app_name"
+        apiBase="https://crrt.ai/api"
       />
     </>
   )
@@ -71,7 +71,14 @@ export function Closing() {
           <PillButton variant="carrot" size="lg" onClick={activateCRRT}>
             Drop a CRRT →
           </PillButton>
-          <PillButton variant="ghost" size="lg" withCarrot={false}>
+          <PillButton
+            variant="ghost"
+            size="lg"
+            withCarrot={false}
+            onClick={() => {
+              window.location.href = '/docs/install'
+            }}
+          >
             Read the docs
           </PillButton>
         </div>

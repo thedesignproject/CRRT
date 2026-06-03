@@ -3,6 +3,7 @@ import { updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiU
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
+import { useAuth } from './hooks/useAuth'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
@@ -11,16 +12,69 @@ import { CommentDetail } from './components/CommentDetail'
 import { AgentSidebar } from './components/AgentSidebar'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
+import { LoginPage } from './components/LoginPage'
+import { ResetPasswordPage } from './components/ResetPasswordPage'
+import { WelcomeScreen } from './components/WelcomeScreen'
+import { AddProjectPopover } from './components/AddProjectPopover'
+import { ProjectSettings } from './components/ProjectSettings'
+import { Spinner } from './components/primitives'
 
-const API_BASE = import.meta.env.VITE_API_BASE || '/api'
-const REVIEWER_TOKEN = import.meta.env.VITE_REVIEWER_TOKEN || ''
+const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
+const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
+
+function isOnboarded() {
+  try {
+    return window.localStorage.getItem(ONBOARDED_KEY) === '1'
+  } catch {
+    return true
+  }
+}
+
+function markOnboarded() {
+  try {
+    window.localStorage.setItem(ONBOARDED_KEY, '1')
+  } catch {
+    /* localStorage unavailable */
+  }
+}
 
 export function App() {
-  const { projects, loading: projectsLoading, error: projectsError, createProject } = useProjects(API_BASE, REVIEWER_TOKEN)
+  const { session, user, loading: authLoading, signOut } = useAuth()
+  const [pathname, setPathname] = useState(typeof window === 'undefined' ? '/' : window.location.pathname)
+
+  useEffect(() => {
+    function onPop() {
+      setPathname(window.location.pathname)
+    }
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  // /reset-password handles its own auth state via the recovery deep link;
+  // render it regardless of session so the user can complete the flow even
+  // if their previous session is stale.
+  if (pathname === '/reset-password') return <ResetPasswordPage />
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Spinner size={20} />
+      </div>
+    )
+  }
+
+  if (!session || !user) return <LoginPage />
+
+  return <AuthenticatedApp accessToken={session.access_token} user={user} onSignOut={signOut} />
+}
+
+function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
+  const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
+  const [view, setView] = useState<'feedback' | 'settings'>('feedback')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
-  const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, REVIEWER_TOKEN, selectedProject || null)
+  const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -76,6 +130,7 @@ export function App() {
   }, [projectComments, statusFilter])
 
   const selectedComment = comments.find((c) => c.id === selectedCommentId) ?? null
+  const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
 
   const counts = useMemo(() => projectComments.reduce(
     (acc, c) => {
@@ -90,7 +145,7 @@ export function App() {
   const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
     try {
-      await apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, status)
+      await apiUpdateReview(API_BASE, accessToken, id, status)
     } catch (err) {
       console.error('Failed to update review status:', err)
       refreshComments()
@@ -105,7 +160,7 @@ export function App() {
       ? { ...c, implementationStatus: nextStatus, updatedAt: new Date().toISOString() }
       : c))
     try {
-      await apiUpdateImpl(API_BASE, REVIEWER_TOKEN, id, nextStatus)
+      await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       refreshComments()
@@ -145,11 +200,11 @@ export function App() {
     exitBulkMode()
 
     const calls: Promise<unknown>[] = ids.flatMap((id) => {
-      if (action === 'ready') return [apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, 'accepted')]
-      if (action === 'reject') return [apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, 'rejected')]
+      if (action === 'ready') return [apiUpdateReview(API_BASE, accessToken, id, 'accepted')]
+      if (action === 'reject') return [apiUpdateReview(API_BASE, accessToken, id, 'rejected')]
       return [
-        apiUpdateReview(API_BASE, REVIEWER_TOKEN, id, 'accepted'),
-        apiUpdateImpl(API_BASE, REVIEWER_TOKEN, id, 'done'),
+        apiUpdateReview(API_BASE, accessToken, id, 'accepted'),
+        apiUpdateImpl(API_BASE, accessToken, id, 'done'),
       ]
     })
 
@@ -257,12 +312,20 @@ export function App() {
     }
   }, [agentSession, copyPrompt, selectedAgentMeta])
 
-  const handleAddProject = useCallback(async (name: string) => {
+  // Selecting a project always returns to the feedback view; settings is a
+  // per-project overlay that shouldn't persist across project switches.
+  const selectProject = useCallback((key: string) => {
+    setSelectedProject(key)
+    setView('feedback')
+  }, [])
+
+  const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
     setAddProjectBusy(true)
     try {
-      const project = await createProject(name)
+      const project = await claimProject(projectKey, name)
       setSelectedProject(project.publicKey)
+      setView('feedback')
       setStatusFilter('all')
       setSelectedCommentId('')
       setAddProjectOpen(false)
@@ -271,7 +334,37 @@ export function App() {
     } finally {
       setAddProjectBusy(false)
     }
-  }, [createProject])
+  }, [claimProject])
+
+  // Onboarding gate: show the welcome screen when this account has no
+  // projects and hasn't been onboarded before. Once they click the CTA we
+  // mark the flag so the welcome doesn't reappear if they cancel out of
+  // the create-project modal.
+  const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
+  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded
+
+  if (showWelcome) {
+    return (
+      <>
+        <WelcomeScreen
+          onCreateProject={() => {
+            markOnboarded()
+            setOnboarded(true)
+            setAddProjectOpen(true)
+          }}
+        />
+        {addProjectOpen && (
+          <AddProjectPopover
+            onAdd={handleAddProject}
+            onClose={() => setAddProjectOpen(false)}
+            checkAvailability={checkAvailability}
+            busy={addProjectBusy}
+            error={addProjectError}
+          />
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -282,19 +375,37 @@ export function App() {
         commentsLoading={commentsLoading}
         selectedProject={selectedProject}
         commentCount={comments.length}
-        setSelectedProject={setSelectedProject}
+        setSelectedProject={selectProject}
         setStatusFilter={setStatusFilter}
         setSelectedCommentId={setSelectedCommentId}
         addProjectOpen={addProjectOpen}
         setAddProjectOpen={setAddProjectOpen}
         onAddProject={handleAddProject}
+        onCheckAvailability={checkAvailability}
         addProjectBusy={addProjectBusy}
         addProjectError={addProjectError}
         onOpenCmd={() => setCmdOpen(true)}
+        onOpenSettings={() => setView((v) => (v === 'settings' ? 'feedback' : 'settings'))}
+        settingsActive={view === 'settings'}
+        apiBase={API_BASE}
+        accessToken={accessToken}
+        onProjectsChanged={refreshProjects}
         theme={theme}
         toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
+        user={user}
+        onSignOut={onSignOut}
       />
 
+      {view === 'settings' && activeProject ? (
+        <ProjectSettings
+          project={activeProject}
+          apiBase={API_BASE}
+          accessToken={accessToken}
+          currentUserId={user.id}
+          onBack={() => setView('feedback')}
+          onProjectsChanged={refreshProjects}
+        />
+      ) : (
       <div className="flex flex-1 overflow-hidden">
         <CommentList
           filteredComments={filteredComments}
@@ -331,10 +442,13 @@ export function App() {
 
         {sidebarOpen && (
           <AgentSidebar
-            apiBase={API_BASE}
             selectedProject={selectedProject}
+            projectComments={projectComments}
+            readyCount={counts.ready}
+            filtered={statusFilter === 'ready'}
+            selectedCommentId={selectedCommentId}
+            onSelectComment={setSelectedCommentId}
             agentSession={agentSession}
-            agentShareState={agentShareState}
             agentEvents={agentEvents}
             agentError={agentError}
             agentConnected={agentConnected}
@@ -349,6 +463,7 @@ export function App() {
           />
         )}
       </div>
+      )}
 
       <StatusBar sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
 

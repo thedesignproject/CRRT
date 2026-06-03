@@ -123,7 +123,7 @@
   --popover:              var(--crrt-bg-deep-soft);
   --popover-foreground:   var(--crrt-white);
   --primary:              var(--crrt-carrot);
-  --primary-foreground:   var(--crrt-white);
+  --primary-foreground:   var(--crrt-ink);
   --secondary:            var(--crrt-bg-deep);
   --secondary-foreground: var(--crrt-ink-faint);
   --muted:                var(--crrt-bg-deep);
@@ -149,7 +149,7 @@
   --popover:              var(--crrt-bg-card);
   --popover-foreground:   var(--crrt-ink);
   --primary:              var(--crrt-carrot);
-  --primary-foreground:   var(--crrt-white);
+  --primary-foreground:   var(--crrt-ink);
   --secondary:            var(--crrt-bg-warm);
   --secondary-foreground: var(--crrt-ink-soft);
   --muted:                var(--crrt-bg-warm);

@@ -94,10 +94,10 @@ export interface ShareEventsResponse {
   nextCursor: number
 }
 
-function authHeaders(reviewerToken?: string) {
+function authHeaders(accessToken?: string) {
   const headers: Record<string, string> = {}
-  if (reviewerToken) {
-    headers.Authorization = `Bearer ${reviewerToken}`
+  if (accessToken) {
+    headers.Authorization = `Bearer ${accessToken}`
   }
   return headers
 }
@@ -118,75 +118,210 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 }
 
-export function listProjects(apiBase: string, reviewerToken: string) {
+export function listProjects(apiBase: string, accessToken: string) {
   return requestJson<Project[]>(`${apiBase}/v1/projects`, {
     headers: {
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
   })
 }
 
-export function createProject(apiBase: string, reviewerToken: string, name: string) {
-  return requestJson<Project>(`${apiBase}/v1/projects`, {
+export interface ProjectKeyAvailability {
+  key: string
+  available: boolean
+  suggestion: string
+}
+
+// Check whether a candidate project key is free, and get a suggested
+// alternative (slug + short suffix) when it isn't.
+export function checkProjectKeyAvailability(apiBase: string, accessToken: string, key: string) {
+  return requestJson<ProjectKeyAvailability>(
+    `${apiBase}/v1/projects/availability?key=${encodeURIComponent(key)}`,
+    {
+      headers: {
+        ...authHeaders(accessToken),
+      },
+    },
+  )
+}
+
+// Claim a project key as the current user, creating the project with the given
+// name if it doesn't exist yet. Replaces the removed POST /v1/projects.
+export function claimProject(apiBase: string, accessToken: string, projectKey: string, name: string) {
+  return requestJson<Project>(`${apiBase}/v1/projects/claim`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
+    body: JSON.stringify({ projectKey, name }),
+  })
+}
+
+export interface ProjectMember {
+  userId: string
+  email: string | null
+  role: 'admin' | 'member'
+  createdAt: string
+}
+
+export interface ProjectInvite {
+  projectKey: string
+  email: string
+  role: 'admin' | 'member'
+  invitedBy: string
+  createdAt: string
+}
+
+export function listProjectMembers(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<ProjectMember[]>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/members`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function removeProjectMember(apiBase: string, accessToken: string, projectKey: string, userId: string) {
+  return requestJson<{ projectKey: string; userId: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/members/${encodeURIComponent(userId)}`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+// Rename a project (display name only — public key/slug are immutable).
+export function renameProject(apiBase: string, accessToken: string, projectKey: string, name: string) {
+  return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
     body: JSON.stringify({ name }),
   })
 }
 
-export function listComments(apiBase: string, reviewerToken: string, projectId: string, pageUrl?: string) {
+export function listProjectInvites(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<ProjectInvite[]>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' = 'member') {
+  return requestJson<ProjectInvite>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ email, role }),
+  })
+}
+
+export function cancelProjectInvite(apiBase: string, accessToken: string, projectKey: string, email: string) {
+  const query = new URLSearchParams({ email })
+  return requestJson<{ projectKey: string; email: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites?${query.toString()}`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined'
+
+export interface Notification {
+  id: string
+  userId: string
+  kind: NotificationKind
+  payload: Record<string, unknown>
+  readAt: string | null
+  createdAt: string
+}
+
+export function listNotifications(apiBase: string, accessToken: string, opts: { unreadOnly?: boolean } = {}) {
+  const suffix = opts.unreadOnly ? '?unreadOnly=true' : ''
+  return requestJson<Notification[]>(`${apiBase}/v1/notifications${suffix}`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function markNotificationRead(apiBase: string, accessToken: string, id: string) {
+  return requestJson<{ id: string }>(`${apiBase}/v1/notifications/${encodeURIComponent(id)}/read`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function markAllNotificationsRead(apiBase: string, accessToken: string) {
+  return requestJson<{ ok: true }>(`${apiBase}/v1/notifications/read-all`, {
+    method: 'POST',
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+// Pending invites addressed to the current user (across all projects).
+export function listInvites(apiBase: string, accessToken: string) {
+  return requestJson<ProjectInvite[]>(`${apiBase}/v1/invites`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function acceptInvite(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<{ projectKey: string }>(`${apiBase}/v1/invites/accept`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectKey }),
+  })
+}
+
+export function declineInvite(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<{ projectKey: string }>(`${apiBase}/v1/invites/decline`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectKey }),
+  })
+}
+
+export function listComments(apiBase: string, accessToken: string, projectId: string, pageUrl?: string) {
   const query = new URLSearchParams()
   if (pageUrl) query.set('pageUrl', pageUrl)
   const suffix = query.toString() ? `?${query.toString()}` : ''
   return requestJson<CommentRecord[]>(`${apiBase}/v1/projects/${encodeURIComponent(projectId)}/comments${suffix}`, {
     headers: {
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
   })
 }
 
-export function updateReviewStatus(apiBase: string, reviewerToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus']) {
+export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus']) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify({ reviewStatus }),
   })
 }
 
-export function updateImplementationStatus(apiBase: string, reviewerToken: string, commentId: string, implementationStatus: CommentRecord['implementationStatus']) {
+export function updateImplementationStatus(apiBase: string, accessToken: string, commentId: string, implementationStatus: CommentRecord['implementationStatus']) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/implementation-status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify({ implementationStatus }),
   })
 }
 
-export function createShare(apiBase: string, reviewerToken: string, body: Record<string, unknown>) {
+export function createShare(apiBase: string, accessToken: string, body: Record<string, unknown>) {
   return requestJson<ShareCreationResponse>(`${apiBase}/v1/feedback-shares`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...authHeaders(reviewerToken),
+      ...authHeaders(accessToken),
     },
     body: JSON.stringify(body),
   })
 }
 
-export function getPrompt(apiBase: string, reviewerToken: string, shareId: string, target: 'codex' | 'claude-code' | 'generic') {
+export function getPrompt(apiBase: string, accessToken: string, shareId: string, target: 'codex' | 'claude-code' | 'generic') {
   return requestJson<{ prompt: string, tokenUrl: string }>(
     `${apiBase}/v1/feedback-shares/${encodeURIComponent(shareId)}/prompt?target=${encodeURIComponent(target)}`,
     {
       headers: {
-        ...authHeaders(reviewerToken),
+        ...authHeaders(accessToken),
       },
     },
   )

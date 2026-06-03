@@ -88,7 +88,7 @@ export function CommentList({
       </div>
 
       {bulkMode && (
-        <div className="px-4 py-2.5 border-b border-border bg-accent/40 flex items-center gap-2 whitespace-nowrap">
+        <div className="px-4 py-2.5 border-b border-border border-l-2 border-l-primary/40 bg-card flex items-center gap-2 whitespace-nowrap">
           <button
             onClick={toggleSelectAllVisible}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
@@ -148,20 +148,20 @@ export function CommentList({
               const isActive = comment.id === selectedCommentId
               const isChecked = bulkSelectedIds.has(comment.id)
               const inactive = isInactive(comment)
-              const borderColor =
-                comment.implementationStatus === 'done' ? 'border-l-status-done' :
-                comment.reviewStatus === 'accepted' ? 'border-l-status-accepted' :
-                comment.reviewStatus === 'rejected' ? 'border-l-status-rejected' :
-                'border-l-transparent'
+              const statusBar =
+                comment.implementationStatus === 'done' ? 'bg-status-done' :
+                comment.reviewStatus === 'accepted' ? 'bg-status-accepted' :
+                comment.reviewStatus === 'rejected' ? 'bg-status-rejected' :
+                null
 
               return (
                 <button
                   key={comment.id}
                   onClick={() => bulkMode ? toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
                   className={cn(
-                    'w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
-                    borderColor,
-                    bulkMode && isChecked ? 'bg-primary/10' : isActive && !bulkMode ? 'bg-accent' : 'hover:bg-accent/40',
+                    'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
+                    isActive && !bulkMode ? 'border-l-primary bg-white/[0.04] ring-1 ring-inset ring-border' : 'border-l-transparent',
+                    bulkMode && isChecked ? 'bg-primary/10' : !isActive && 'hover:bg-white/[0.02]',
                     inactive && !isChecked && 'opacity-50'
                   )}
                 >
@@ -193,7 +193,11 @@ export function CommentList({
 
                   <p className={cn(
                     'text-[12px] leading-relaxed mb-2 line-clamp-2 pl-[26px]',
-                    inactive ? 'text-muted-foreground/50 line-through' : 'text-muted-foreground'
+                    inactive
+                      ? 'text-muted-foreground/50 line-through'
+                      : isActive && !bulkMode
+                        ? 'text-foreground/85'
+                        : 'text-muted-foreground'
                   )}>
                     {comment.body}
                   </p>
@@ -210,6 +214,13 @@ export function CommentList({
                       {comment.selector.split(' > ').pop()}
                     </span>
                   </div>
+
+                  {statusBar && (
+                    <span
+                      aria-hidden="true"
+                      className={cn('absolute top-2 bottom-2 right-0 w-[2px] rounded-l-sm', statusBar)}
+                    />
+                  )}
                 </button>
               )
             })}

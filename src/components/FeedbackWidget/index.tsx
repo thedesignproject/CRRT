@@ -31,7 +31,7 @@ function getElementFixedPos(
   }
 }
 
-function CarrotPixelIcon({ size = 20 }: { size?: number }) {
+function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
   return (
     <img
       src={CRRT_CARROT_LOGO_URL}
@@ -52,7 +52,7 @@ function CarrotPixelIcon({ size = 20 }: { size?: number }) {
   )
 }
 
-export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
+export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: FeedbackWidgetProps) {
   const [mode, setMode] = useState<Mode>('idle')
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
@@ -111,6 +111,27 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   const [draggedPos, setDraggedPos] = useState<{ x: number; y: number } | null>(null)
   const [pillHover, setPillHover] = useState(false)
   const dragging = useRef(false)
+  // Drag handle visually extends below the pill but sits outside its bounding
+  // box, so sliding the cursor onto it fires mouseleave on the wrapper and
+  // oscillates the expand/collapse animation. Small unhover delay absorbs it.
+  const pillLeaveTimer = useRef<number | null>(null)
+  const onPillEnter = useCallback(() => {
+    if (pillLeaveTimer.current) {
+      window.clearTimeout(pillLeaveTimer.current)
+      pillLeaveTimer.current = null
+    }
+    setPillHover(true)
+  }, [])
+  const onPillLeave = useCallback(() => {
+    if (pillLeaveTimer.current) window.clearTimeout(pillLeaveTimer.current)
+    pillLeaveTimer.current = window.setTimeout(() => {
+      pillLeaveTimer.current = null
+      setPillHover(false)
+    }, 120)
+  }, [])
+  useEffect(() => () => {
+    if (pillLeaveTimer.current) window.clearTimeout(pillLeaveTimer.current)
+  }, [])
 
   // Pins/popovers use position:fixed, so their viewport coords must be recomputed
   // on scroll (and on resize / body reflow, which shift the page-percent mapping).
@@ -141,7 +162,10 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
       })
     }
     window.addEventListener('resize', onResize)
-    window.addEventListener('scroll', bump, { passive: true })
+    // Capture phase + document target catches scroll on any nested scrollable
+    // container (dashboards with internal overflow:auto panels). Bubble-phase
+    // listeners on window miss those because scroll events don't bubble.
+    document.addEventListener('scroll', bump, { passive: true, capture: true })
 
     const ro = new ResizeObserver(bump)
     ro.observe(document.body)
@@ -149,7 +173,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
     return () => {
       cancelAnimationFrame(raf)
       window.removeEventListener('resize', onResize)
-      window.removeEventListener('scroll', bump)
+      document.removeEventListener('scroll', bump, { capture: true })
       ro.disconnect()
     }
   }, [])
@@ -614,8 +638,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
   }, [filteredComments])
   const commentCount = filteredComments.length
 
-  // Only sync on scroll when a viewport-anchored popover is open or commenting.
-  // Persisted pins/tooltip are absolute (page-anchored), so scroll moves them natively.
+  // Sync on scroll when anything position:fixed is visible — popovers, the
+  // commenting flow, or persisted pins. Gating keeps idle pages cheap.
   needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target || (pinsVisible && filteredComments.length > 0)
 
   const pathDisplay = (window.location.pathname || '/').slice(0, 28) || '/'
@@ -784,7 +808,7 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               </div>
             )}
 
-            {/* Footer toolbar: avatar + emoji + cancel + send */}
+            {/* Footer toolbar: avatar + cancel + send */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
@@ -812,29 +836,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                     {avatarInitial}
                   </button>
                 )}
-                <button
-                  aria-label="Add emoji"
-                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, color: '#6B6560' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-                    <line x1="9" y1="9" x2="9.01" y2="9" />
-                    <line x1="15" y1="9" x2="15.01" y2="9" />
-                  </svg>
-                </button>
-                <button
-                  aria-label="React"
-                  style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', cursor: 'pointer', borderRadius: 6, color: '#6B6560' }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                  </svg>
-                </button>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -958,30 +959,49 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               <PinMarker outline={isSelected} hovered={isHovered} number={pinNumber} resolved={isResolved} />
             </div>
 
-            {/* Hover tooltip — dark CRRT glass */}
-            {isHovered && (
+            {/* Hover tooltip — dark CRRT glass. Flips toward whichever side has
+                room so it never clips against the viewport edge. */}
+            {isHovered && (() => {
+              const TOOLTIP_W = 280
+              const TOOLTIP_H_EST = 140
+              const MARGIN = 8
+              const PIN_W = 28
+              const flipH = pinPos.left + TOOLTIP_W + MARGIN > window.innerWidth
+              const flipV = pinPos.top - 11 - TOOLTIP_H_EST < MARGIN
+              const wrapperLeft = flipH
+                ? Math.max(MARGIN, pinPos.left + PIN_W - TOOLTIP_W)
+                : pinPos.left
+              const wrapperTop = flipV ? pinPos.top + 25 : pinPos.top - 11
+              const wrapperTransform = flipV ? 'translateY(0)' : 'translateY(-100%)'
+              const tailRadius = flipV
+                ? (flipH ? '14px 0 14px 14px' : '0 14px 14px 14px')
+                : (flipH ? '14px 14px 0 14px' : '14px 14px 14px 0')
+              const tailOrigin = flipV
+                ? (flipH ? '100% 0%' : '0% 0%')
+                : (flipH ? '100% 100%' : '0% 100%')
+              return (
               <div
                 style={{
                   position: 'fixed',
-                  left: pinPos.left,
-                  top: pinPos.top - 11,
+                  left: wrapperLeft,
+                  top: wrapperTop,
                   zIndex: 2147483643,
                   pointerEvents: 'none',
-                  transform: 'translateY(-100%)',
+                  transform: wrapperTransform,
                 }}
               >
                 <div style={{
-                  width: 280,
+                  width: TOOLTIP_W,
                   background: 'rgba(18, 18, 18, 0.96)',
                   backdropFilter: 'blur(20px)',
                   WebkitBackdropFilter: 'blur(20px)',
-                  borderRadius: '14px 14px 14px 0',
+                  borderRadius: tailRadius,
                   padding: 14,
                   boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
                   animation: 'fw-tooltip-liquid 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
-                  transformOrigin: '0% 100%',
+                  transformOrigin: tailOrigin,
                   display: 'flex',
                   alignItems: 'flex-start',
                   gap: 10,
@@ -1006,7 +1026,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   </div>
                 </div>
               </div>
-            )}
+              )
+            })()}
 
             {/* Pin detail popover */}
             {isSelected && (() => {
@@ -1430,12 +1451,10 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                   ) : (
                     <>
                       <div
-                        onClick={(e) => { e.stopPropagation(); setEditingId(c.id); setEditText(c.body) }}
                         style={{
                           fontSize: 13.5,
                           lineHeight: 1.5,
                           color: isResolved ? '#6B6560' : '#E8E5DF',
-                          cursor: 'text',
                           marginLeft: 32,
                           wordBreak: 'break-word',
                         }}
@@ -1459,26 +1478,6 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
                           }}
                         />
                       )}
-                      {/* Reply link (visual only — affordance, no thread logic yet) */}
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        style={{
-                          marginTop: 8,
-                          marginLeft: 32,
-                          padding: 0,
-                          fontSize: 12,
-                          color: '#6B6560',
-                          background: 'transparent',
-                          border: 'none',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                          transition: 'color 150ms ease',
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
-                      >
-                        Reply
-                      </button>
                     </>
                   )}
 
@@ -1597,8 +1596,8 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
         ref={pillRef}
         {...{ [WIDGET_ATTR]: '' }}
         onPointerDown={onPillPointerDown}
-        onMouseEnter={() => setPillHover(true)}
-        onMouseLeave={() => setPillHover(false)}
+        onMouseEnter={onPillEnter}
+        onMouseLeave={onPillLeave}
         style={{
           position: 'fixed',
           // draggedPos stores right/bottom offsets (see onMove handler). This
@@ -1631,7 +1630,9 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               justifyContent: 'center',
               gap: pillHover ? 12 : 0,
               height: 64,
-              width: pillHover ? 'auto' : 64,
+              // minWidth (not width) so hover-expanded width interpolates with
+              // the children instead of snapping between 64 and `auto`.
+              minWidth: 64,
               padding: pillHover ? '0 22px 0 12px' : 0,
               borderRadius: 32,
               background: pillHover ? '#0A0A0A' : '#141414',
@@ -1650,7 +1651,21 @@ export function FeedbackWidget({ projectId, apiBase }: FeedbackWidgetProps) {
               overflow: 'hidden',
             }}
           >
-            <CarrotPixelIcon size={pillHover ? 28 : 46} />
+            {/* Size on wrapper (CSS transition), not icon prop — prop change
+             * would snap one frame and re-trigger hover under the cursor. */}
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: pillHover ? 28 : 46,
+                height: pillHover ? 28 : 46,
+                flexShrink: 0,
+                transition: 'width 360ms cubic-bezier(0.32, 0.72, 0, 1), height 360ms cubic-bezier(0.32, 0.72, 0, 1)',
+              }}
+            >
+              <CarrotPixelIcon size="100%" />
+            </span>
             <span
               style={{
                 maxWidth: pillHover ? 160 : 0,
