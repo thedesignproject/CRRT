@@ -16,6 +16,7 @@ import { LoginPage } from './components/LoginPage'
 import { ResetPasswordPage } from './components/ResetPasswordPage'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { AddProjectPopover } from './components/AddProjectPopover'
+import { ProjectSettings } from './components/ProjectSettings'
 import { Spinner } from './components/primitives'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
@@ -67,24 +68,10 @@ export function App() {
   return <AuthenticatedApp accessToken={session.access_token} user={user} onSignOut={signOut} />
 }
 
-// TODO(ui-notifications): add a bell icon to the topbar. On mount, GET
-// /api/v1/notifications and subscribe live:
-//   supabase.channel('notifications')
-//     .on('postgres_changes',
-//         { event: 'INSERT', schema: 'public', table: 'notifications',
-//           filter: `user_id=eq.${user.id}` },
-//         (p) => setNotifications(n => [p.new, ...n]))
-//     .subscribe()
-// Show unread count; POST /api/v1/notifications/:id/read on click; offer
-// "Mark all read" → POST /api/v1/notifications/read-all.
-// Invite acceptance UI: list GET /api/v1/invites in a panel with
-// Accept (POST /api/v1/invites/accept { projectKey }) and
-// Decline (POST /api/v1/invites/decline { projectKey }) buttons.
-// Admin-side invite send: POST /api/v1/projects/:projectKey/invites
-// { email, role } (admin role required).
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
-  const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability } = useProjects(API_BASE, accessToken)
+  const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
+  const [view, setView] = useState<'feedback' | 'settings'>('feedback')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
@@ -143,6 +130,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [projectComments, statusFilter])
 
   const selectedComment = comments.find((c) => c.id === selectedCommentId) ?? null
+  const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
 
   const counts = useMemo(() => projectComments.reduce(
     (acc, c) => {
@@ -324,12 +312,20 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [agentSession, copyPrompt, selectedAgentMeta])
 
+  // Selecting a project always returns to the feedback view; settings is a
+  // per-project overlay that shouldn't persist across project switches.
+  const selectProject = useCallback((key: string) => {
+    setSelectedProject(key)
+    setView('feedback')
+  }, [])
+
   const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
     setAddProjectBusy(true)
     try {
       const project = await claimProject(projectKey, name)
       setSelectedProject(project.publicKey)
+      setView('feedback')
       setStatusFilter('all')
       setSelectedCommentId('')
       setAddProjectOpen(false)
@@ -379,7 +375,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         commentsLoading={commentsLoading}
         selectedProject={selectedProject}
         commentCount={comments.length}
-        setSelectedProject={setSelectedProject}
+        setSelectedProject={selectProject}
         setStatusFilter={setStatusFilter}
         setSelectedCommentId={setSelectedCommentId}
         addProjectOpen={addProjectOpen}
@@ -389,12 +385,27 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         addProjectBusy={addProjectBusy}
         addProjectError={addProjectError}
         onOpenCmd={() => setCmdOpen(true)}
+        onOpenSettings={() => setView((v) => (v === 'settings' ? 'feedback' : 'settings'))}
+        settingsActive={view === 'settings'}
+        apiBase={API_BASE}
+        accessToken={accessToken}
+        onProjectsChanged={refreshProjects}
         theme={theme}
         toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
         user={user}
         onSignOut={onSignOut}
       />
 
+      {view === 'settings' && activeProject ? (
+        <ProjectSettings
+          project={activeProject}
+          apiBase={API_BASE}
+          accessToken={accessToken}
+          currentUserId={user.id}
+          onBack={() => setView('feedback')}
+          onProjectsChanged={refreshProjects}
+        />
+      ) : (
       <div className="flex flex-1 overflow-hidden">
         <CommentList
           filteredComments={filteredComments}
@@ -452,6 +463,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           />
         )}
       </div>
+      )}
 
       <StatusBar sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
 
