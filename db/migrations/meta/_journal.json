@@ -22,6 +22,13 @@
       "when": 1779692374320,
       "tag": "0002_wild_black_bird",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1780463824190,
+      "tag": "0003_remove_project_member_rpc",
+      "breakpoints": true
     }
   ]
 }
