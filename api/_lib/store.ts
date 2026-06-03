@@ -236,29 +236,22 @@ export async function listProjectMembers(projectKey: string) {
  * Remove a member from a project. Refuses to remove the last remaining admin
  * (`last_admin`) so a project can never be orphaned. Returns false when the
  * member wasn't in the project so callers can map that to a 404.
+ *
+ * The count + delete run inside the `remove_project_member` DB function (see
+ * migration 0003) which locks the project's admin rows before counting — doing
+ * it here in two queries would race, letting concurrent admin removals both pass
+ * the guard and orphan the project.
  */
 export async function removeProjectMember(projectKey: string, userId: string): Promise<boolean> {
   const supabase = getSupabase()
-  const { data: members, error } = await supabase
-    .from('project_members')
-    .select('user_id, role')
-    .eq('project_key', projectKey)
+  const { data, error } = await supabase.rpc('remove_project_member', {
+    p_project_key: projectKey,
+    p_user_id: userId,
+  })
 
   if (error) throw new Error(error.message)
-  const rows = (members || []) as Array<{ user_id: string; role: 'admin' | 'member' }>
-  const target = rows.find((r) => r.user_id === userId)
-  if (!target) return false
-  if (target.role === 'admin' && rows.filter((r) => r.role === 'admin').length <= 1) {
-    throw new Error('last_admin')
-  }
-
-  const { error: deleteError } = await supabase
-    .from('project_members')
-    .delete()
-    .eq('project_key', projectKey)
-    .eq('user_id', userId)
-  if (deleteError) throw new Error(deleteError.message)
-  return true
+  if (data === 'last_admin') throw new Error('last_admin')
+  return data === 'removed'
 }
 
 /**

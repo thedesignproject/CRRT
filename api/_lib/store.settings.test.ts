@@ -40,6 +40,13 @@ function supabaseWith(tableResults: Record<string, Result[]>) {
   }
 }
 
+// `removeProjectMember` delegates to the `remove_project_member` DB function,
+// so its stub mocks `.rpc` (resolving to the function's text result) rather than
+// the `from` query chain the other helpers use.
+function supabaseRpc(result: Result) {
+  return { rpc: vi.fn(() => Promise.resolve(result)) }
+}
+
 beforeEach(() => {
   vi.mocked(getSupabase).mockReset()
 })
@@ -102,61 +109,23 @@ describe('listProjectMembers', () => {
 
 describe('removeProjectMember', () => {
   it('returns false when the member is not in the project', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: [{ user_id: 'other', role: 'admin' }], error: null }],
-    }) as never)
-    expect(await removeProjectMember('p', 'gone')).toBe(false)
-  })
-
-  it('returns false when the table yields no rows', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: 'not_found', error: null }) as never)
     expect(await removeProjectMember('p', 'gone')).toBe(false)
   })
 
   it('refuses to remove the last admin', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: [{ user_id: 'a', role: 'admin' }, { user_id: 'b', role: 'member' }], error: null }],
-    }) as never)
+    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: 'last_admin', error: null }) as never)
     await expect(removeProjectMember('p', 'a')).rejects.toThrow('last_admin')
   })
 
-  it('removes a member when another admin remains', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [
-        { data: [{ user_id: 'a', role: 'admin' }, { user_id: 'b', role: 'admin' }], error: null },
-        { data: null, error: null },
-      ],
-    }) as never)
+  it('removes a member when the guard passes', async () => {
+    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: 'removed', error: null }) as never)
     expect(await removeProjectMember('p', 'a')).toBe(true)
   })
 
-  it('removes a non-admin member', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [
-        { data: [{ user_id: 'a', role: 'admin' }, { user_id: 'b', role: 'member' }], error: null },
-        { data: null, error: null },
-      ],
-    }) as never)
-    expect(await removeProjectMember('p', 'b')).toBe(true)
-  })
-
-  it('throws when the lookup query errors', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+  it('throws when the rpc errors', async () => {
+    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: null, error: { message: 'boom' } }) as never)
     await expect(removeProjectMember('p', 'a')).rejects.toThrow('boom')
-  })
-
-  it('throws when the delete query errors', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
-      project_members: [
-        { data: [{ user_id: 'a', role: 'admin' }, { user_id: 'b', role: 'admin' }], error: null },
-        { data: null, error: { message: 'del boom' } },
-      ],
-    }) as never)
-    await expect(removeProjectMember('p', 'a')).rejects.toThrow('del boom')
   })
 })
 
