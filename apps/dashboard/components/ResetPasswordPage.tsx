@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { route } from '../lib/routes'
+import { asset, route } from '../lib/routes'
 import { Spinner } from './primitives'
 
 /**
@@ -135,7 +135,7 @@ export function ResetPasswordPage() {
       {/* CRRT identity mark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(24px, 5vh, 36px)' }}>
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt=""
           width={40}
           height={40}
@@ -304,7 +304,7 @@ function SuccessScreen() {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 36 }}>
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt=""
           width={40}
           height={40}

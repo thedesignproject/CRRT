@@ -8,6 +8,11 @@ export function route(path: string): string {
   return path === '/' ? `${BASE}/` : `${BASE}${path}`
 }
 
+/** Resolve a public-dir asset under the base, e.g. asset('crrt-isologo.png') -> '/dashboard/crrt-isologo.png'. */
+export function asset(file: string): string {
+  return `${import.meta.env.BASE_URL}${file}`
+}
+
 /** Strip the base prefix off a real pathname so route matching stays base-agnostic. */
 export function relPath(pathname: string): string {
   if (!BASE) return pathname
