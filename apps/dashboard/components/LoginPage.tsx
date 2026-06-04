@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { relPath, route } from '../lib/routes'
 import { Spinner } from './primitives'
 
 type Mode = 'signin' | 'signup' | 'forgot'
@@ -14,7 +15,7 @@ type AuthPath = '/login' | '/signup' | '/forgot-password' | '/'
 
 export function LoginPage() {
   const [mode, setMode] = useState<Mode>(() =>
-    typeof window === 'undefined' ? 'signin' : modeFromPath(window.location.pathname),
+    typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname)),
   )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -26,7 +27,7 @@ export function LoginPage() {
   // Sync mode if the user uses browser back / forward.
   useEffect(() => {
     function onPop() {
-      setMode(modeFromPath(window.location.pathname))
+      setMode(modeFromPath(relPath(window.location.pathname)))
       setError(null)
       setSignupSent(false)
       setResetSent(false)
@@ -36,8 +37,8 @@ export function LoginPage() {
   }, [])
 
   function navigate(path: AuthPath) {
-    if (window.location.pathname === path) return
-    window.history.pushState({}, '', path)
+    if (relPath(window.location.pathname) === path) return
+    window.history.pushState({}, '', route(path))
     setMode(modeFromPath(path))
     setError(null)
     setSignupSent(false)
@@ -57,13 +58,13 @@ export function LoginPage() {
         const { error: signupError } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: `${window.location.origin}${route('/')}` },
         })
         if (signupError) throw signupError
         setSignupSent(true)
       } else {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/reset-password`,
+          redirectTo: `${window.location.origin}${route('/reset-password')}`,
         })
         if (resetError) throw resetError
         setResetSent(true)
@@ -227,7 +228,7 @@ export function LoginPage() {
               <FieldLabel htmlFor="auth-password">password</FieldLabel>
               {!isSignup && (
                 <a
-                  href="/forgot-password"
+                  href={route('/forgot-password')}
                   onClick={(e) => {
                     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                     e.preventDefault()
@@ -327,7 +328,7 @@ export function LoginPage() {
           <>
             have an account?{' '}
             <a
-              href="/login"
+              href={route('/login')}
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
@@ -342,7 +343,7 @@ export function LoginPage() {
           <>
             remembered it?{' '}
             <a
-              href="/login"
+              href={route('/login')}
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()
@@ -357,7 +358,7 @@ export function LoginPage() {
           <>
             new here?{' '}
             <a
-              href="/signup"
+              href={route('/signup')}
               onClick={(e) => {
                 if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
                 e.preventDefault()

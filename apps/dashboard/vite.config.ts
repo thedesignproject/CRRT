@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, envDir, ''), ...process.env }
   return {
     root: __dirname,
+    // Served as a sub-path of the landing site so both ship from one Vercel deploy.
+    base: '/dashboard/',
     envDir,
     plugins: [react(), tailwindcss()],
     resolve: {
@@ -22,7 +24,9 @@ export default defineConfig(({ mode }) => {
       __SUPABASE_ANON_KEY__: JSON.stringify(env.SUPABASE_KEY ?? ''),
     },
     build: {
-      outDir: 'dist',
+      // Emit into the landing build output so one Vercel project serves both.
+      // Only this sub-dir is cleared, leaving the landing build (run first) intact.
+      outDir: path.resolve(__dirname, '../landing/dist/dashboard'),
       emptyOutDir: true,
     },
   }
