@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createProject as apiCreateProject, listProjects, type Project } from '../api'
+import {
+  checkProjectKeyAvailability as apiCheckAvailability,
+  claimProject as apiClaimProject,
+  listProjects,
+  type Project,
+  type ProjectKeyAvailability,
+} from '../api'
 import { getMockProjects, mocksEnabled } from '../lib/mocks'
+import { slugify } from '../lib/utils'
 
 export interface UseProjectsResult {
   projects: Project[]
   loading: boolean
   error: string | null
   refresh: () => Promise<void>
-  createProject: (name: string) => Promise<Project>
+  claimProject: (projectKey: string, name: string) => Promise<Project>
+  checkAvailability: (key: string) => Promise<ProjectKeyAvailability>
 }
 
 export function useProjects(apiBase: string, accessToken: string): UseProjectsResult {
@@ -37,12 +45,18 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
     refresh()
   }, [refresh])
 
-  const createProject = useCallback(async (name: string) => {
+  const checkAvailability = useCallback(async (key: string): Promise<ProjectKeyAvailability> => {
     if (mocksEnabled) {
-      const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+      return { key, available: true, suggestion: key }
+    }
+    return apiCheckAvailability(apiBase, accessToken, key)
+  }, [apiBase, accessToken])
+
+  const claimProject = useCallback(async (projectKey: string, name: string) => {
+    if (mocksEnabled) {
       const project: Project = {
-        publicKey: `proj_${slug || 'untitled'}`,
-        slug: slug || 'untitled',
+        publicKey: projectKey,
+        slug: slugify(name) || projectKey,
         name,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -50,10 +64,10 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
       setProjects((prev) => [...prev, project])
       return project
     }
-    const project = await apiCreateProject(apiBase, accessToken, name)
+    const project = await apiClaimProject(apiBase, accessToken, projectKey, name)
     setProjects((prev) => [...prev, project])
     return project
   }, [apiBase, accessToken])
 
-  return { projects, loading, error, refresh, createProject }
+  return { projects, loading, error, refresh, claimProject, checkAvailability }
 }

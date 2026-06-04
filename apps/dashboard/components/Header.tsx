@@ -1,10 +1,11 @@
 import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
-import type { Project } from '../api'
+import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { MoonIcon, PlusIcon, SearchIcon, SunIcon } from './icons'
+import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
+import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
 
 interface HeaderProps {
@@ -19,10 +20,16 @@ interface HeaderProps {
   setSelectedCommentId: (id: string) => void
   addProjectOpen: boolean
   setAddProjectOpen: (open: boolean | ((v: boolean) => boolean)) => void
-  onAddProject: (name: string) => void
+  onAddProject: (projectKey: string, name: string) => void
+  onCheckAvailability: (key: string) => Promise<ProjectKeyAvailability>
   addProjectBusy: boolean
   addProjectError: string | null
   onOpenCmd: () => void
+  onOpenSettings: () => void
+  settingsActive: boolean
+  apiBase: string
+  accessToken: string
+  onProjectsChanged: () => void
   theme: 'light' | 'dark'
   toggleTheme: () => void
   user: User
@@ -42,9 +49,15 @@ export function Header({
   addProjectOpen,
   setAddProjectOpen,
   onAddProject,
+  onCheckAvailability,
   addProjectBusy,
   addProjectError,
   onOpenCmd,
+  onOpenSettings,
+  settingsActive,
+  apiBase,
+  accessToken,
+  onProjectsChanged,
   theme,
   toggleTheme,
   user,
@@ -130,6 +143,7 @@ export function Header({
           <AddProjectPopover
             onAdd={onAddProject}
             onClose={() => setAddProjectOpen(false)}
+            checkAvailability={onCheckAvailability}
             busy={addProjectBusy}
             error={addProjectError}
           />
@@ -147,6 +161,26 @@ export function Header({
             <span className="text-[11px]">⌘</span>K
           </kbd>
         </button>
+        <NotificationBell
+          apiBase={apiBase}
+          accessToken={accessToken}
+          userId={user.id}
+          onProjectsChanged={onProjectsChanged}
+        />
+        {selectedProject && (
+          <button
+            onClick={onOpenSettings}
+            title="Project settings"
+            aria-label="Project settings"
+            aria-pressed={settingsActive}
+            className={cn(
+              'w-7 h-7 rounded-md flex items-center justify-center transition-colors',
+              settingsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+            )}
+          >
+            <SettingsIcon size={15} />
+          </button>
+        )}
         <button
           onClick={toggleTheme}
           title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
