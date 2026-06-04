@@ -67,6 +67,7 @@ function buildBody(input: PromptInput) {
     '4. For deeper interaction, fetch:',
     `   Skill: ${skillUrl}`,
     `   Docs:  ${docsUrl}`,
+    '   Read the Skill before UI changes; it is the CRRT design and workflow contract for agents.',
     '',
     '5. If the API fails in a surprising way:',
     `   POST ${bugUrl}`,
