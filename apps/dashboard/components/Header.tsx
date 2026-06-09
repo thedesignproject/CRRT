@@ -1,5 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
+import { asset } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
 import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon } from './icons'
@@ -67,7 +68,7 @@ export function Header({
     <header className="flex items-center gap-3 px-5 h-[60px] shrink-0 border-b border-border bg-card">
       <div className="flex items-center gap-2 mr-2">
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt="CRRT"
           width={24}
           height={24}
