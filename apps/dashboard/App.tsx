@@ -5,6 +5,7 @@ import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
 import { useAuth } from './hooks/useAuth'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
+import { relPath } from './lib/routes'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
@@ -40,11 +41,11 @@ function markOnboarded() {
 
 export function App() {
   const { session, user, loading: authLoading, signOut } = useAuth()
-  const [pathname, setPathname] = useState(typeof window === 'undefined' ? '/' : window.location.pathname)
+  const [pathname, setPathname] = useState(typeof window === 'undefined' ? '/' : relPath(window.location.pathname))
 
   useEffect(() => {
     function onPop() {
-      setPathname(window.location.pathname)
+      setPathname(relPath(window.location.pathname))
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
