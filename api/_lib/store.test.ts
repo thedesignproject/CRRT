@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getSupabase: vi.fn(), getServiceSupabase: vi.fn() }))
+vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 
-import { getServiceSupabase, getSupabase } from './supabase.js'
+import { getServiceSupabase } from './supabase.js'
 import {
   acceptInvite,
   claimProject,
@@ -81,13 +81,13 @@ const PROJECT_ROW: ProjectRow = {
 }
 
 beforeEach(() => {
-  vi.mocked(getSupabase).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
   vi.mocked(getServiceSupabase).mockReset()
 })
 
 describe('ensurePublicProject', () => {
   it('returns the existing project without inserting', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({ maybeSingleResults: [{ data: PROJECT_ROW, error: null }] }) as never,
     )
 
@@ -96,7 +96,7 @@ describe('ensurePublicProject', () => {
   })
 
   it('inserts the project and seeds the repo config when missing', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({
         maybeSingleResults: [{ data: null, error: null }],
         insertSingleResult: { data: PROJECT_ROW, error: null },
@@ -111,7 +111,7 @@ describe('ensurePublicProject', () => {
   })
 
   it('refetches and returns the project when a concurrent insert wins (23505)', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({
         maybeSingleResults: [
           { data: null, error: null },
@@ -126,7 +126,7 @@ describe('ensurePublicProject', () => {
   })
 
   it('throws when a 23505 hits but the refetch still finds nothing', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({
         maybeSingleResults: [
           { data: null, error: null },
@@ -140,7 +140,7 @@ describe('ensurePublicProject', () => {
   })
 
   it('throws when the project insert fails with a non-conflict error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({
         maybeSingleResults: [{ data: null, error: null }],
         insertSingleResult: { data: null, error: { code: '50000', message: 'boom' } },
@@ -151,7 +151,7 @@ describe('ensurePublicProject', () => {
   })
 
   it('throws when seeding the repo config fails with a non-conflict error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({
         maybeSingleResults: [{ data: null, error: null }],
         insertSingleResult: { data: PROJECT_ROW, error: null },
@@ -163,7 +163,7 @@ describe('ensurePublicProject', () => {
   })
 
   it('ignores a 23505 on the repo config insert (already exists)', async () => {
-    vi.mocked(getSupabase).mockReturnValue(
+    vi.mocked(getServiceSupabase).mockReturnValue(
       buildSupabase({
         maybeSingleResults: [{ data: null, error: null }],
         insertSingleResult: { data: PROJECT_ROW, error: null },
@@ -228,44 +228,44 @@ function membershipSupabase(m: MembershipMocks = {}) {
 
 describe('membership helpers + claim', () => {
   it('getProjectMember + isProjectMember cover hit / miss / error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberSingle: { data: { role: 'admin' }, error: null },
     }) as never)
     expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin' })
     expect(await isProjectMember('u', 'p')).toBe(true)
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberSingle: { data: null, error: null },
     }) as never)
     expect(await getProjectMember('u', 'p')).toBeNull()
     expect(await isProjectMember('u', 'p')).toBe(false)
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberSingle: { data: null, error: { message: 'boom' } },
     }) as never)
     await expect(getProjectMember('u', 'p')).rejects.toThrow('boom')
   })
 
   it('listProjectsForUser returns empty / member-error / joined rows / projects-error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({ memberList: { data: [], error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({ memberList: { data: [], error: null } }) as never)
     expect(await listProjectsForUser('u')).toEqual([])
 
     // defensive `data || []` fallback when supabase returns data:null, error:null
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({ memberList: { data: null, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({ memberList: { data: null, error: null } }) as never)
     expect(await listProjectsForUser('u')).toEqual([])
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberList: { data: null, error: { message: 'boom' } },
     }) as never)
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberList: { data: [{ project_key: 'p1' }], error: null },
       projectsIn: { data: [PROJECT_ROW], error: null },
     }) as never)
     expect((await listProjectsForUser('u')).map((p) => p.publicKey)).toEqual(['pk'])
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberList: { data: [{ project_key: 'p1' }], error: null },
       projectsIn: { data: null, error: { message: 'boom' } },
     }) as never)
@@ -273,45 +273,45 @@ describe('membership helpers + claim', () => {
   })
 
   it('claimProject: success path', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [PROJECT_ROW], error: null },
     }) as never)
     expect((await claimProject('u', 'pk')).publicKey).toBe('pk')
   })
 
   it('claimProject: not_found / already_claimed / 23505 race / member-insert error / update error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: null, error: null },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('not_found')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: PROJECT_ROW, error: null },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('already_claimed')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [PROJECT_ROW], error: null },
       memberInsertError: { code: '23505', message: 'dup' },
     }) as never)
     expect((await claimProject('u', 'pk')).publicKey).toBe('pk')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [PROJECT_ROW], error: null },
       memberInsertError: { code: '50000', message: 'boom' },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('boom')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: null, error: { message: 'db boom' } },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
   })
 
   it('claimProject create-and-claim: creates a new project when none exists and a name is given', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: null, error: null },
       projectInsert: { data: PROJECT_ROW, error: null },
@@ -320,14 +320,14 @@ describe('membership helpers + claim', () => {
   })
 
   it('claimProject create-and-claim: maps insert 23505 to already_claimed, propagates other errors', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: null, error: null },
       projectInsert: { data: null, error: { code: '23505', message: 'dup' } },
     }) as never)
     await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('already_claimed')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: null, error: null },
       projectInsert: { data: null, error: { code: '50000', message: 'boom' } },
@@ -336,7 +336,7 @@ describe('membership helpers + claim', () => {
   })
 
   it('claimProject create-and-claim: surfaces repo-config errors but ignores 23505', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: null, error: null },
       projectInsert: { data: PROJECT_ROW, error: null },
@@ -344,7 +344,7 @@ describe('membership helpers + claim', () => {
     }) as never)
     await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('repo boom')
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsUpdate: { data: [], error: null },
       projectsSingle: { data: null, error: null },
       projectInsert: { data: PROJECT_ROW, error: null },
@@ -371,19 +371,19 @@ describe('project key helpers', () => {
   })
 
   it('isProjectKeyAvailable reflects whether a row exists', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsSingle: { data: null, error: null },
     }) as never)
     expect(await isProjectKeyAvailable('free')).toBe(true)
 
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsSingle: { data: PROJECT_ROW, error: null },
     }) as never)
     expect(await isProjectKeyAvailable('taken')).toBe(false)
   })
 
   it('suggestAvailableProjectKey returns the base when free', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsSingle: { data: null, error: null },
     }) as never)
     expect(await suggestAvailableProjectKey('acme')).toBe('acme')
@@ -394,7 +394,7 @@ describe('project key helpers', () => {
     const single = vi.fn()
       .mockResolvedValueOnce({ data: PROJECT_ROW, error: null })
       .mockResolvedValue({ data: null, error: null })
-    vi.mocked(getSupabase).mockReturnValue({
+    vi.mocked(getServiceSupabase).mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: single })) })),
       })),
@@ -404,7 +404,7 @@ describe('project key helpers', () => {
   })
 
   it('suggestAvailableProjectKey throws when no free key is found', async () => {
-    vi.mocked(getSupabase).mockReturnValue(membershipSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       projectsSingle: { data: PROJECT_ROW, error: null },
     }) as never)
     await expect(suggestAvailableProjectKey('acme')).rejects.toThrow('no_available_key')
@@ -570,54 +570,54 @@ describe('invite helpers', () => {
   const INVITE: InviteRow = { project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'inviter-1', created_at: 't' }
 
   it('createInvite: success / already_invited / other error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteInsertResult: { data: INVITE, error: null },
     }) as never)
     expect((await createInvite({ projectKey: 'p', email: 'X@Y.Z', role: 'member', invitedBy: 'inviter-1' })).email).toBe('x@y.z')
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteInsertResult: { data: null, error: { code: '23505', message: 'dup' } },
     }) as never)
     await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('already_invited')
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteInsertResult: { data: null, error: { code: '50000', message: 'boom' } },
     }) as never)
     await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('boom')
   })
 
   it('listInvitesForEmail: success / null fallback / error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteList: { data: [INVITE], error: null },
     }) as never)
     expect((await listInvitesForEmail('X@Y.Z')).map((i) => i.projectKey)).toEqual(['p'])
 
     // defensive `data || []` fallback
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteList: { data: null, error: null },
     }) as never)
     expect(await listInvitesForEmail('x@y.z')).toEqual([])
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteList: { data: null, error: { message: 'boom' } },
     }) as never)
     await expect(listInvitesForEmail('x@y.z')).rejects.toThrow('boom')
   })
 
   it('acceptInvite: not_found / happy / membership 23505 tolerated / other error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('not_found')
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
     expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
       memberInsertError: { code: '23505', message: 'dup' },
     }) as never)
     expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
       memberInsertError: { code: '50000', message: 'boom' },
     }) as never)
@@ -625,22 +625,22 @@ describe('invite helpers', () => {
   })
 
   it('declineInvite: not_found / happy', async () => {
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
     await expect(declineInvite('x@y.z', 'p')).rejects.toThrow('not_found')
 
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
     expect(await declineInvite('x@y.z', 'p')).toBe('inviter-1')
   })
 
   it('getInvite lookup error / deleteInvite error bubble through accept', async () => {
     // getInvite error path
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: null, error: { message: 'lookup boom' } },
     }) as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('lookup boom')
 
     // deleteInvite error path (invite found, member insert ok, delete fails)
-    vi.mocked(getSupabase).mockReturnValue(inviteSupabase({
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
       inviteDeleteError: { message: 'delete boom' },
     }) as never)

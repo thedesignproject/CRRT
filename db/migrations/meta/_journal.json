@@ -29,6 +29,13 @@
       "when": 1780463824190,
       "tag": "0003_remove_project_member_rpc",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781014285688,
+      "tag": "0004_enable_rls",
+      "breakpoints": true
     }
   ]
 }
