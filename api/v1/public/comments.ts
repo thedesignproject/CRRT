@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import type { ReviewStatus } from '../../_lib/status.js'
-import { getSupabase } from '../../_lib/supabase.js'
+import { getServiceSupabase } from '../../_lib/supabase.js'
 
 const METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 const VALID_STATUSES = new Set(['open', 'accepted', 'approved', 'rejected', 'pending'])
@@ -128,7 +128,7 @@ async function uploadImage(projectKey: string, mimeType: string, base64Data: str
   const ext = mimeType.split('/')[1] ?? 'png'
   const path = `${projectKey}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
-  const supabase = getSupabase()
+  const supabase = getServiceSupabase()
   const { error } = await supabase.storage
     .from('feedback-images')
     .upload(path, buffer, { contentType: mimeType, upsert: false })

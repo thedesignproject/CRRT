@@ -1,5 +1,14 @@
-import { getServiceSupabase, getSupabase } from './supabase.js'
+import { getServiceSupabase } from './supabase.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
+
+// Every table/storage operation in this module goes through the service-role
+// client. Every public table has RLS enabled with no permissive policy
+// (migration 0004), so the anon key — which ships in the dashboard bundle —
+// can't reach them directly. The service-role client bypasses RLS; each
+// function below enforces its own scoping (project membership, user_id, project
+// key) and callers gate access via `requireUser` / `requireProjectMembership`
+// in `api/`.
+const getSupabase = getServiceSupabase
 
 type CommentRow = {
   id: string
@@ -972,17 +981,16 @@ function mapNotification(row: NotificationRow) {
   }
 }
 
-// Notifications uses the service-role client because the table has RLS
-// (`auth.uid() = user_id`) enabled for safe per-user realtime subscriptions.
-// The backend has no user JWT in its supabase client, so anon-key queries
-// would always see zero rows / fail to insert. Service role bypasses RLS;
-// these helpers enforce the user_id scope themselves.
+// Notifications has a `notifications_select_own` policy (the dashboard
+// subscribes to its own rows over realtime with the authenticated key), so the
+// backend — which holds no user JWT — must use the service-role client to read
+// or write across users. These helpers enforce the user_id scope themselves.
 export async function createNotification(input: {
   userId: string
   kind: NotificationKind
   payload?: Record<string, unknown>
 }) {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
     .insert([{ user_id: input.userId, kind: input.kind, payload: input.payload ?? {} }] as never)
@@ -996,7 +1004,7 @@ export async function listNotificationsForUser(
   userId: string,
   opts: { unreadOnly?: boolean; limit?: number } = {},
 ) {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   let query = supabase
     .from('notifications')
     .select('id, user_id, kind, payload, read_at, created_at')
@@ -1010,7 +1018,7 @@ export async function listNotificationsForUser(
 }
 
 export async function markNotificationRead(notificationId: string, userId: string): Promise<boolean> {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
@@ -1023,7 +1031,7 @@ export async function markNotificationRead(notificationId: string, userId: strin
 }
 
 export async function markAllNotificationsRead(userId: string) {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })

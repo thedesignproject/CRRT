@@ -8,7 +8,10 @@ vi.mock('../../_lib/store.js', () => ({
   deleteCommentsForProject: vi.fn(),
 }))
 
+vi.mock('../../_lib/supabase.js', () => ({ getServiceSupabase: vi.fn() }))
+
 import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
 interface MockRes {
@@ -56,6 +59,7 @@ beforeEach(() => {
   vi.mocked(listComments).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
   vi.mocked(deleteCommentsForProject).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
   delete process.env.SMOKE_CLEANUP_TOKEN
   delete process.env.SMOKE_PROJECT_KEY
 })
@@ -124,6 +128,55 @@ describe('api/v1/public/comments', () => {
 
     expect(ensurePublicProject).toHaveBeenCalledWith('missing')
     expect(res.statusCode).toBe(201)
+  })
+
+  it('uploads an image via the service-role client and stores its public URL', async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null })
+    const getPublicUrl = vi.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example/img.png' } })
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      storage: { from: () => ({ upload, getPublicUrl }) },
+    } as never)
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hi',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: 'https://cdn.example/img.png',
+      authorName: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hi',
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    }), res)
+
+    expect(upload).toHaveBeenCalledOnce()
+    expect(res.statusCode).toBe(201)
+    expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].imageUrl).toBe('https://cdn.example/img.png')
   })
 
   it('creates a public comment', async () => {

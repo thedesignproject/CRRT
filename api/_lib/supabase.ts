@@ -12,9 +12,11 @@ export function getSupabase(): SupabaseClient {
 }
 
 /**
- * Service-role client. Bypasses RLS, so use it only for backend writes/reads
- * on RLS-protected tables (currently: `notifications`). Frontend code must
- * never call this. SUPABASE_SERVICE_ROLE_KEY is required.
+ * Service-role client. Bypasses RLS, so it's the client the backend uses for
+ * all table access and storage writes — every public table has RLS enabled
+ * with no permissive policy (migration 0004), and the API does its own
+ * authorization. Frontend code must never call this.
+ * SUPABASE_SERVICE_ROLE_KEY is required.
  */
 export function getServiceSupabase(): SupabaseClient {
   const supabaseUrl = process.env.SUPABASE_URL
