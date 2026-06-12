@@ -123,9 +123,22 @@ export function CommentDetail({
                   <p className="text-[15px] leading-relaxed text-foreground">
                     {selectedComment.body}
                   </p>
-                  <div className="mt-2 text-xs font-mono text-muted-foreground">
-                    {selectedComment.selector}
-                  </div>
+                  {selectedComment.targetType === 'text_range' && selectedComment.anchor ? (
+                    <div className="mt-3">
+                      <p className="text-[13px] leading-relaxed border-l-2 border-primary bg-muted/60 px-3 py-2 rounded-md">
+                        <span className="text-muted-foreground">{selectedComment.anchor.prefix}</span>
+                        <span className="text-foreground font-medium">{selectedComment.anchor.selectedText}</span>
+                        <span className="text-muted-foreground">{selectedComment.anchor.suffix}</span>
+                      </p>
+                      <div className="mt-2 text-xs font-mono text-muted-foreground">
+                        {selectedComment.anchor.containerSelector} · chars {selectedComment.anchor.startOffset}–{selectedComment.anchor.endOffset}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-xs font-mono text-muted-foreground">
+                      {selectedComment.selector}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

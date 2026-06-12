@@ -6,6 +6,23 @@ export interface Project {
   updatedAt: string
 }
 
+export type CommentTargetType = 'element_point' | 'text_range'
+
+// Mirrors the widget's TextRangeAnchor (the dashboard cannot import from src/)
+export interface TextRangeAnchorRecord {
+  kind: 'text_range'
+  selectedText: string
+  normalizedText: string
+  prefix: string
+  suffix: string
+  containerSelector: string
+  startOffset: number
+  endOffset: number
+  rangeClientRects?: Array<{ left: number; top: number; width: number; height: number }>
+  createdFromUrl: string
+  createdAtViewport?: { width: number; height: number; scrollX: number; scrollY: number }
+}
+
 export interface CommentRecord {
   id: string
   projectId: string
@@ -19,6 +36,8 @@ export interface CommentRecord {
   claimedByAgentId: string | null
   imageUrl: string | null
   authorName: string | null
+  targetType?: CommentTargetType
+  anchor?: TextRangeAnchorRecord | null
   createdAt: string
   updatedAt: string
 }

@@ -110,6 +110,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })
@@ -156,6 +158,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: 'https://cdn.example/img.png',
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })
@@ -200,6 +204,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })
@@ -227,6 +233,96 @@ describe('api/v1/public/comments', () => {
       body: 'Hello',
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point',
+      anchor: null,
+    })
+  })
+
+  describe('text_range targets', () => {
+    const validAnchor = {
+      kind: 'text_range',
+      selectedText: 'términos y condiciones',
+      normalizedText: 'términos y condiciones',
+      prefix: 'sujeto a los ',
+      suffix: ' vigentes',
+      containerSelector: 'section.plans > p.disclaimer',
+      startOffset: 13,
+      endOffset: 35,
+      createdFromUrl: 'https://example.com/pricing',
+    }
+
+    function postBody(overrides: Record<string, unknown> = {}) {
+      return {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'section.plans > p.disclaimer',
+        x: 10,
+        y: 20,
+        body: 'Soften this copy',
+        ...overrides,
+      }
+    }
+
+    it('creates a text_range comment with a sanitized anchor', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue({
+        publicKey: 'demo-project',
+        slug: 'demo-project',
+        name: 'Demo',
+        createdAt: '',
+        updatedAt: '',
+      })
+      vi.mocked(createPublicComment).mockResolvedValue({
+        id: 'comment-2',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'section.plans > p.disclaimer',
+        x: 10,
+        y: 20,
+        body: 'Soften this copy',
+        reviewStatus: 'open',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        authorName: null,
+        targetType: 'text_range' as const,
+        anchor: validAnchor,
+        createdAt: '',
+        updatedAt: '',
+      })
+
+      const res = mockRes()
+      await call(mockReq({
+        body: postBody({
+          targetType: 'text_range',
+          anchor: { ...validAnchor, junkKey: 'dropped' },
+        }),
+      }), res)
+
+      expect(res.statusCode).toBe(201)
+      const input = vi.mocked(createPublicComment).mock.calls[0]?.[0]
+      expect(input?.targetType).toBe('text_range')
+      expect(input?.anchor).toEqual(validAnchor)
+    })
+
+    it('rejects an unknown targetType', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ targetType: 'pixel_blob' }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('rejects text_range without an anchor', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ targetType: 'text_range' }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('rejects an anchor on element_point payloads', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ anchor: validAnchor }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
     })
   })
 
@@ -299,6 +395,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })

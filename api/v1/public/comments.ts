@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
+import { parseCommentTarget } from '../../_lib/anchor.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 
@@ -164,6 +165,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       resolvedAuthorName = trimmed || null
     }
 
+    const parsedTarget = parseCommentTarget(req.body?.targetType, req.body?.anchor)
+    if (!parsedTarget.ok) {
+      return jsonError(req, res, 400, parsedTarget.error)
+    }
+
     if (imageBase64 !== undefined) {
       if (typeof imageBase64 !== 'string' || typeof imageMimeType !== 'string') {
         return jsonError(req, res, 400, 'imageBase64 and imageMimeType must both be strings')
@@ -189,6 +195,8 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       body,
       imageUrl,
       authorName: resolvedAuthorName,
+      targetType: parsedTarget.targetType,
+      anchor: parsedTarget.anchor,
     })
 
     setCors(req, res, METHODS)

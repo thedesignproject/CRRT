@@ -363,7 +363,7 @@ describe('<FeedbackWidget />', () => {
       })
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
       // The Esc badge styling is the line we're guarding here — assert the
       // dedicated badge node, not just a substring of the whole document.
@@ -371,6 +371,281 @@ describe('<FeedbackWidget />', () => {
         document.querySelectorAll<HTMLSpanElement>('[data-fw] span'),
       ).find((el) => el.textContent === 'Esc')
       expect(badge).toBeDefined()
+    })
+  })
+
+  describe('text selection comments', () => {
+    function appendCopyTarget() {
+      document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      const p = document.createElement('p')
+      p.textContent = 'Some selectable page copy for feedback'
+      targetNode.appendChild(p)
+      document.body.appendChild(targetNode)
+      return { targetNode, p }
+    }
+
+    function selectText(node: Node, start: number, end: number) {
+      const range = document.createRange()
+      range.setStart(node, start)
+      range.setEnd(node, end)
+      const sel = window.getSelection()!
+      sel.removeAllRanges()
+      sel.addRange(range)
+    }
+
+    async function startSelecting() {
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) {
+          throw new Error('widget root not mounted yet')
+        }
+      })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
+    }
+
+    async function fillNameModal() {
+      const nameInput = await waitFor(() => {
+        const el = document.querySelector<HTMLInputElement>('input[placeholder^="e.g."]')
+        if (!el) throw new Error('name input not mounted yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: 'Test User' } })
+      })
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
+    }
+
+    async function getTextarea() {
+      return await waitFor(() => {
+        const el = document.querySelector<HTMLTextAreaElement>('textarea')
+        if (!el) throw new Error('textarea not mounted yet')
+        return el
+      })
+    }
+
+    it('drag-selecting text opens the popover and POSTs a text_range anchor', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      // 'selectable' spans [5, 15) of the paragraph text
+      selectText(p.firstChild!, 5, 15)
+      await act(async () => {
+        // A real drag ends mouseup → click on the same node; the click must be
+        // consumed or it would re-target the comment as an element pin.
+        fireEvent.mouseUp(p)
+        fireEvent.click(p)
+      })
+      await fillNameModal()
+
+      const textarea = await getTextarea()
+      fireEvent.change(textarea, { target: { value: 'tighten this copy' } })
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect(body.targetType).toBe('text_range')
+        expect(body.anchor.kind).toBe('text_range')
+        expect(body.anchor.selectedText).toBe('selectable')
+        expect(body.anchor.startOffset).toBe(5)
+        expect(body.anchor.endOffset).toBe(15)
+        expect(body.anchor.containerSelector).toBe(body.selector)
+        expect(body.anchor.createdFromUrl).toBe(window.location.href)
+        expect(body.anchor.createdAtViewport).toBeDefined()
+        // happy-dom reports scrollWidth/Height of 0, so the page-percent
+        // values are not meaningful here — just assert they're sent.
+        expect('x' in body).toBe(true)
+        expect('y' in body).toBe(true)
+      })
+
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('tighten this copy')
+      })
+    })
+
+    it('skips the name modal when the author name is already stored', async () => {
+      mockFetch()
+      localStorage.setItem('fw-crrt-author-name', 'Ada')
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      selectText(p.firstChild!, 5, 15)
+      await act(async () => {
+        fireEvent.mouseUp(p)
+        fireEvent.click(p)
+      })
+
+      // Straight to the comment popover, no name modal in between.
+      expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
+      await getTextarea()
+    })
+
+    it('a click with a collapsed selection still creates an element pin', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      selectText(p.firstChild!, 3, 3)
+      await act(async () => {
+        fireEvent.mouseUp(p)
+        fireEvent.click(p)
+      })
+      await fillNameModal()
+
+      const textarea = await getTextarea()
+      fireEvent.change(textarea, { target: { value: 'pin comment' } })
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect('targetType' in body).toBe(false)
+        expect('anchor' in body).toBe(false)
+      })
+    })
+
+    it('ignores selections that should not open the popover', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      // mouseup inside widget DOM with an active page selection
+      selectText(p.firstChild!, 5, 15)
+      await act(async () => {
+        fireEvent.mouseUp(document.querySelector('[data-fw]')!)
+      })
+      expect(document.querySelector('textarea')).toBeNull()
+
+      // whitespace-only selection falls through to the click path
+      selectText(p.firstChild!, 4, 5)
+      await act(async () => {
+        fireEvent.mouseUp(p)
+      })
+      expect(document.querySelector('textarea')).toBeNull()
+
+      // getSelection() itself can be null
+      const selSpy = vi.spyOn(window, 'getSelection').mockReturnValue(null)
+      await act(async () => {
+        fireEvent.mouseUp(p)
+      })
+      selSpy.mockRestore()
+      expect(document.querySelector('textarea')).toBeNull()
+
+      // mouseup whose target has no closest() (document) with no selection
+      window.getSelection()!.removeAllRanges()
+      await act(async () => {
+        fireEvent.mouseUp(document)
+      })
+      expect(document.querySelector('textarea')).toBeNull()
+    })
+
+    it('Escape from text commenting clears the native selection', async () => {
+      mockFetch()
+      localStorage.setItem('fw-crrt-author-name', 'Ada')
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      selectText(p.firstChild!, 5, 15)
+      await act(async () => {
+        fireEvent.mouseUp(p)
+      })
+      await getTextarea()
+      // The native highlight stays while the popover is open
+      expect(window.getSelection()!.rangeCount).toBeGreaterThan(0)
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'Escape' })
+      })
+      expect(window.getSelection()!.rangeCount).toBe(0)
+    })
+
+    it('clicking the popover backdrop cancels and clears the native selection', async () => {
+      mockFetch()
+      localStorage.setItem('fw-crrt-author-name', 'Ada')
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      selectText(p.firstChild!, 5, 15)
+      await act(async () => {
+        // Full gesture: mousedown resets the suppress flag before mouseup
+        fireEvent.mouseDown(p)
+        fireEvent.mouseUp(p)
+        fireEvent.click(p)
+      })
+      await getTextarea()
+
+      const backdrop = Array.from(
+        document.querySelectorAll<HTMLDivElement>('div[data-fw]'),
+      ).find((el) => el.style.zIndex === '2147483645')!
+      await act(async () => {
+        fireEvent.click(backdrop)
+      })
+
+      expect(window.getSelection()!.rangeCount).toBe(0)
+      expect(document.querySelector('textarea')).toBeNull()
+    })
+
+    it('selection cleanup tolerates a null getSelection', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      appendCopyTarget()
+      await startSelecting()
+
+      const selSpy = vi.spyOn(window, 'getSelection').mockReturnValue(null)
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'Escape' })
+      })
+      selSpy.mockRestore()
+
+      expect(document.body.textContent).not.toContain('Click an element or select text')
+    })
+
+    it('renders a fetched text_range comment as a pin via its container selector', async () => {
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([{
+        id: 'c-text',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'anchored to copy',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-06-01T00:00:00Z',
+        targetType: 'text_range',
+        anchor: {
+          kind: 'text_range',
+          selectedText: 'selectable',
+          normalizedText: 'selectable',
+          prefix: 'Some ',
+          suffix: ' page copy',
+          containerSelector: 'body',
+          startOffset: 5,
+          endOffset: 15,
+          createdFromUrl: pageUrl,
+        },
+      }]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      await waitFor(() => {
+        const pin = document.querySelector('[data-fw-pin]')
+        if (!pin) throw new Error('pin not rendered yet')
+      })
     })
   })
 
@@ -643,7 +918,7 @@ describe('<FeedbackWidget />', () => {
         fireEvent.keyDown(window, { key: 's' })
       })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
     })
 
@@ -659,14 +934,14 @@ describe('<FeedbackWidget />', () => {
         fireEvent.keyDown(window, { key: 'c' })
       })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
 
       await act(async () => {
         fireEvent.keyDown(window, { key: 'Escape' })
       })
       await waitFor(() => {
-        expect(document.body.textContent).not.toContain('Click any element to leave feedback')
+        expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
       })
     })
 
@@ -1083,7 +1358,7 @@ describe('<FeedbackWidget />', () => {
       })
       await act(async () => { fireEvent.keyDown(window, { key: 'S' }) })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
     })
   })
@@ -1554,7 +1829,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(leaveFeedbackBtn) })
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
     })
 
@@ -1567,7 +1842,7 @@ describe('<FeedbackWidget />', () => {
       // Enter selecting mode first.
       await act(async () => { fireEvent.keyDown(window, { key: 's' }) })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
       // Open sidebar.
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
@@ -1591,7 +1866,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(cancelBtn) })
 
       await waitFor(() => {
-        expect(document.body.textContent).not.toContain('Click any element to leave feedback')
+        expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
       })
     })
   })
@@ -1614,7 +1889,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(pill) })
 
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
         const sidebar = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
           .find((el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''))
         expect(sidebar?.getAttribute('style')).toMatch(/translateX\(100%\)/)
@@ -1631,7 +1906,7 @@ describe('<FeedbackWidget />', () => {
       // Enter selecting mode.
       await act(async () => { fireEvent.keyDown(window, { key: 's' }) })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
 
       const launcher = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
@@ -1684,7 +1959,7 @@ describe('<FeedbackWidget />', () => {
       // Enter selecting mode then open sidebar.
       await act(async () => { fireEvent.keyDown(window, { key: 's' }) })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
 
@@ -1696,7 +1971,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(closeBtn) })
 
       await waitFor(() => {
-        expect(document.body.textContent).not.toContain('Click any element to leave feedback')
+        expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
       })
     })
   })
@@ -2100,7 +2375,7 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
       await act(async () => { window.dispatchEvent(new CustomEvent('crrt:activate')) })
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click any element to leave feedback')
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
     })
 
@@ -2109,10 +2384,10 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
       await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
-      await waitFor(() => expect(document.body.textContent).toContain('Click any element'))
+      await waitFor(() => expect(document.body.textContent).toContain('Click an element'))
       await act(async () => { window.dispatchEvent(new CustomEvent('crrt:activate')) })
       // Still in selecting mode (not re-entered), no crash
-      expect(document.body.textContent).toContain('Click any element to leave feedback')
+      expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
     })
   })
 

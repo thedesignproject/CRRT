@@ -104,6 +104,10 @@ export const comments = pgTable(
     createdBy: text('created_by').default('public'),
     imageUrl: text('image_url'),
     authorName: text('author_name'),
+    // 'element_point' (click-to-pin) or 'text_range' (anchored to selected text)
+    targetType: text('target_type').default('element_point'),
+    // TextRangeAnchor JSON for text_range comments; null means no anchor
+    anchor: jsonb('anchor'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
