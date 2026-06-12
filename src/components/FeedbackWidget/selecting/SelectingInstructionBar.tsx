@@ -35,7 +35,7 @@ export function SelectingInstructionBar({ onCancel }: SelectingInstructionBarPro
         className="fw-rec-dot"
         style={{ width: 7, height: 7, borderRadius: '50%', background: '#E5502A', flexShrink: 0 }}
       />
-      <span style={{ fontWeight: 500, color: '#E8E5DF' }}>Click any element to leave feedback</span>
+      <span style={{ fontWeight: 500, color: '#E8E5DF' }}>Click an element or select text to leave feedback</span>
       <span style={{
         display: 'inline-flex',
         alignItems: 'center',

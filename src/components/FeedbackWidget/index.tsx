@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, SlidersHorizontal, Check } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
+import { buildTextRangeAnchor } from '../../lib/textAnchor'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
@@ -12,6 +13,10 @@ import { FeedbackWidgetStyles } from './styles'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
+
+function clearNativeSelection() {
+  window.getSelection()?.removeAllRanges()
+}
 
 function getElementFixedPos(
   selector: string,
@@ -287,11 +292,75 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     }
   }, [hovered])
 
-  // --- Handle element click in selecting mode ---
+  // --- Handle element click / text selection in selecting mode ---
   useEffect(() => {
     if (mode !== 'selecting') return
 
+    // A drag-selection ends with mouseup followed by a click on the common
+    // ancestor; once mouseup captures the selection, that trailing click must
+    // be consumed exactly once so it can't re-target as an element pin.
+    let suppressNextClick = false
+
+    function onMouseDown() {
+      suppressNextClick = false
+    }
+
+    function onMouseUp(e: MouseEvent) {
+      const el = e.target as HTMLElement
+      if (el.closest?.(`[${WIDGET_ATTR}]`)) return
+
+      const sel = window.getSelection()
+      if (!sel || sel.isCollapsed) return
+
+      const built = buildTextRangeAnchor(sel.getRangeAt(0), {
+        getSelector,
+        url: window.location.href,
+        viewport: {
+          width: window.innerWidth,
+          height: window.innerHeight,
+          scrollX: window.scrollX,
+          scrollY: window.scrollY,
+        },
+        isExcluded: (node) => node.closest(`[${WIDGET_ATTR}]`) !== null,
+      })
+      if (!built) return
+
+      suppressNextClick = true
+
+      setSelectedPin(null)
+      setSidebarOpen(false)
+      clearImage()
+      const pct = toPagePercent(
+        built.midpointClient.x + window.scrollX,
+        built.midpointClient.y + window.scrollY,
+      )
+      setTarget({
+        selector: built.anchor.containerSelector,
+        x: pct.x,
+        y: pct.y,
+        url: window.location.href,
+        targetType: 'text_range',
+        anchor: built.anchor,
+      })
+
+      captureImage(built.container)
+
+      if (!authorNameRef.current) {
+        setShowNameModal(true)
+        return
+      }
+
+      setMode('commenting')
+    }
+
     function onClick(e: MouseEvent) {
+      if (suppressNextClick) {
+        suppressNextClick = false
+        e.preventDefault()
+        e.stopPropagation()
+        return
+      }
+
       const el = e.target as HTMLElement
       if (el.closest?.(`[${WIDGET_ATTR}]`)) return
 
@@ -319,8 +388,14 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       setMode('commenting')
     }
 
+    window.addEventListener('mousedown', onMouseDown, true)
+    window.addEventListener('mouseup', onMouseUp, true)
     window.addEventListener('click', onClick, true)
-    return () => window.removeEventListener('click', onClick, true)
+    return () => {
+      window.removeEventListener('mousedown', onMouseDown, true)
+      window.removeEventListener('mouseup', onMouseUp, true)
+      window.removeEventListener('click', onClick, true)
+    }
   }, [mode])
 
   // --- Auto-focus textarea ---
@@ -361,6 +436,11 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         payload.authorName = authorNameRef.current
       }
 
+      if (targetData.anchor) {
+        payload.targetType = 'text_range'
+        payload.anchor = targetData.anchor
+      }
+
       const encoded = await encodeImage()
       if (encoded) {
         payload.imageBase64 = encoded.base64
@@ -382,6 +462,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         imageUrl: data.imageUrl ?? null,
         createdAt: data.createdAt ?? new Date().toISOString(),
         authorName: data.authorName ?? authorNameRef.current ?? undefined,
+        targetType: targetData.targetType,
+        anchor: targetData.anchor ?? null,
       }
 
       setComments((prev) => [newComment, ...prev])
@@ -392,6 +474,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       setSuccessToast(true)
       setTimeout(() => setSuccessToast(false), 2000)
 
+      clearNativeSelection()
       setTarget(null)
       setComment('')
       clearImage()
@@ -419,6 +502,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
+          clearNativeSelection()
           setTarget(null)
           setComment('')
           clearImage()
@@ -462,6 +546,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   }, [mode, handleSend, sidebarOpen, selectedPin, showNameModal])
 
   function exitFeedbackMode() {
+    clearNativeSelection()
     setMode('idle')
     setTarget(null)
     setComment('')
@@ -682,6 +767,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               background: 'rgba(0, 0, 0, 0.05)',
             }}
             onClick={() => {
+              clearNativeSelection()
               setTarget(null)
               setComment('')
               clearImage()
@@ -846,6 +932,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   onClick={() => {
+                    clearNativeSelection()
                     setTarget(null)
                     setComment('')
                     clearImage()

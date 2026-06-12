@@ -31,6 +31,8 @@ export function mapServerComment(record: CommentRecord): Comment {
     authorInitial: initial,
     authorColor: authorColorFor(author),
     screenshotUrl: record.imageUrl,
+    targetType: record.targetType ?? 'element_point',
+    anchor: record.anchor ?? null,
   }
 }
 

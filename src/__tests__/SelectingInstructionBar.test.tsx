@@ -5,7 +5,7 @@ import { SelectingInstructionBar } from '../components/FeedbackWidget/selecting/
 describe('SelectingInstructionBar', () => {
   it('renders instruction text and Esc badge', () => {
     const { getByText } = render(<SelectingInstructionBar onCancel={vi.fn()} />)
-    expect(getByText('Click any element to leave feedback')).not.toBeNull()
+    expect(getByText('Click an element or select text to leave feedback')).not.toBeNull()
     expect(getByText('Esc')).not.toBeNull()
     expect(getByText('exit')).not.toBeNull()
   })

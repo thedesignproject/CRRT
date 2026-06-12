@@ -79,6 +79,7 @@ function buildBody(input: PromptInput) {
     '- Report comment.start / comment.complete / comment.block as you work.',
     '- Keep presence fresh — POST /presence whenever your status changes (idle → working → blocked → idle). The reviewer UI shows your last message verbatim, so stale summaries look like you\'re stuck.',
     '- Never change reviewStatus — humans own it; you own implementationStatus only.',
+    '- Comments with targetType "text_range" anchor to selected text: anchor.selectedText is the exact quote being discussed, with anchor.prefix/suffix context and anchor.containerSelector locating it. Treat the quote, not the pin coordinates, as the target.',
     '- Refresh /state before starting the next item.',
     '',
     repoLines.join('\n'),
