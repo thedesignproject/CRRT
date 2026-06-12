@@ -8,9 +8,11 @@ import {
   claimProject,
   createInvite,
   createNotification,
+  createPublicComment,
   declineInvite,
   ensurePublicProject,
   findUserIdByEmail,
+  listComments,
   getProjectMember,
   isProjectKeyAvailable,
   isProjectMember,
@@ -696,5 +698,119 @@ describe('findUserIdByEmail', () => {
       status: 200, headers: { 'content-type': 'application/json' },
     })) as never
     expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+})
+
+describe('public comments — selectedText column', () => {
+  function buildCommentRow(imageUrl: string | null, selectedText: string | null = null) {
+    return {
+      id: 'c1',
+      project_id: 'proj',
+      url: 'https://ex.com',
+      x: 1,
+      y: 2,
+      element: 'body',
+      comment: 'hi',
+      status: 'pending',
+      implementation_status: null,
+      claimed_by_agent_id: null,
+      image_url: imageUrl,
+      selected_text: selectedText,
+      author_name: null,
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: null,
+    }
+  }
+
+  function buildInsertSupabase(returnedRow: ReturnType<typeof buildCommentRow>) {
+    const insert = vi.fn((rows: Array<Record<string, unknown>>) => {
+      void rows
+      return {
+        select: vi.fn(() => ({
+          single: vi.fn(() => Promise.resolve({ data: returnedRow, error: null })),
+        })),
+      }
+    })
+    return { supabase: { from: vi.fn(() => ({ insert })) }, insert }
+  }
+
+  it('stores selectedText in its own column and maps it back out', async () => {
+    const row = buildCommentRow(null, 'quoted words')
+    const { supabase, insert } = buildInsertSupabase(row)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
+
+    const comment = await createPublicComment({
+      projectKey: 'proj',
+      pageUrl: 'https://ex.com',
+      x: 1,
+      y: 2,
+      selector: 'body',
+      body: 'hi',
+      selectedText: 'quoted words',
+    })
+
+    expect(insert.mock.calls[0][0][0].selected_text).toBe('quoted words')
+    expect(insert.mock.calls[0][0][0].image_url).toBeNull()
+    expect(comment.selectedText).toBe('quoted words')
+    expect(comment.imageUrl).toBeNull()
+  })
+
+  it('stores an image URL with selected_text left null', async () => {
+    const row = buildCommentRow('https://cdn.example/img.png')
+    const { supabase, insert } = buildInsertSupabase(row)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
+
+    const comment = await createPublicComment({
+      projectKey: 'proj',
+      pageUrl: 'https://ex.com',
+      x: 1,
+      y: 2,
+      selector: 'body',
+      body: 'hi',
+      imageUrl: 'https://cdn.example/img.png',
+    })
+
+    expect(insert.mock.calls[0][0][0].image_url).toBe('https://cdn.example/img.png')
+    expect(insert.mock.calls[0][0][0].selected_text).toBeNull()
+    expect(comment.imageUrl).toBe('https://cdn.example/img.png')
+    expect(comment.selectedText).toBeNull()
+  })
+
+  it('stores nulls when there is neither selection nor image', async () => {
+    const row = buildCommentRow(null)
+    const { supabase, insert } = buildInsertSupabase(row)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
+
+    const comment = await createPublicComment({
+      projectKey: 'proj',
+      pageUrl: 'https://ex.com',
+      x: 1,
+      y: 2,
+      selector: 'body',
+      body: 'hi',
+    })
+
+    expect(insert.mock.calls[0][0][0].image_url).toBeNull()
+    expect(insert.mock.calls[0][0][0].selected_text).toBeNull()
+    expect(comment.imageUrl).toBeNull()
+    expect(comment.selectedText).toBeNull()
+  })
+
+  it('listComments maps selected_text rows and leaves others alone', async () => {
+    const rows = [buildCommentRow(null, 'snippet'), buildCommentRow(null)]
+    const query: { eq: ReturnType<typeof vi.fn>; order: ReturnType<typeof vi.fn> } = {
+      eq: vi.fn(() => query),
+      order: vi.fn(() => Promise.resolve({ data: rows, error: null })),
+    }
+    const supabase = {
+      from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => query) })) })),
+    }
+    vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
+
+    const comments = await listComments('proj')
+    expect(comments[0].selectedText).toBe('snippet')
+    expect(comments[0].imageUrl).toBeNull()
+    expect(comments[1].selectedText).toBeNull()
+    expect(comments[1].imageUrl).toBeNull()
   })
 })

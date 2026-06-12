@@ -22,6 +22,7 @@ type CommentRow = {
   implementation_status: ImplementationStatus | null
   claimed_by_agent_id: string | null
   image_url: string | null
+  selected_text: string | null
   author_name: string | null
   created_at: string
   updated_at: string | null
@@ -99,6 +100,7 @@ function mapComment(row: CommentRow) {
     implementationStatus: row.implementation_status || 'unassigned',
     claimedByAgentId: row.claimed_by_agent_id,
     imageUrl: row.image_url || null,
+    selectedText: row.selected_text || null,
     authorName: row.author_name || null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
@@ -498,6 +500,7 @@ export async function createPublicComment(input: {
   selector: string
   body: string
   imageUrl?: string | null
+  selectedText?: string | null
   authorName?: string | null
 }) {
   const supabase = getSupabase()
@@ -514,10 +517,11 @@ export async function createPublicComment(input: {
       implementation_status: 'unassigned',
       created_by: 'public',
       image_url: input.imageUrl ?? null,
+      selected_text: input.selectedText ?? null,
       author_name: input.authorName ?? null,
       updated_at: new Date().toISOString(),
     }] as never)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .single()
 
   if (error) throw new Error(error.message)
@@ -532,7 +536,7 @@ export async function listComments(projectKey: string, filters: {
   const supabase = getSupabase()
   let query = supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .eq('project_id', projectKey)
 
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
@@ -548,7 +552,7 @@ export async function listAcceptedCommentsForPage(projectKey: string, pageUrl: s
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .eq('project_id', projectKey)
     .eq('url', pageUrl)
     .eq('status', 'approved')
@@ -564,7 +568,7 @@ export async function listAcceptedCommentsByIds(projectKey: string, commentIds: 
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .eq('project_id', projectKey)
     .eq('status', 'approved')
     .in('id', commentIds)
@@ -608,7 +612,7 @@ export async function getComment(commentId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .eq('id', commentId)
     .maybeSingle()
 
@@ -625,7 +629,7 @@ export async function updateReviewStatus(commentId: string, reviewStatus: Review
       updated_at: new Date().toISOString(),
     })
     .eq('id', commentId)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .single()
 
   if (error) throw new Error(error.message)
@@ -648,7 +652,7 @@ export async function updateImplementationStatus(commentId: string, patch: {
     .from('comments')
     .update(updates)
     .eq('id', commentId)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .single()
 
   if (error) throw new Error(error.message)
@@ -774,7 +778,7 @@ export async function listCommentsForShare(share: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .in('id', commentIds)
     .order('created_at', { ascending: false })
 
@@ -786,7 +790,7 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, selected_text, author_name, created_at, updated_at')
     .eq('project_id', projectKey)
     .eq('status', 'approved')
     .order('created_at', { ascending: false })

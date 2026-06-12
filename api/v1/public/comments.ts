@@ -120,6 +120,7 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
+const MAX_SELECTED_TEXT_CHARS = 2000
 
 async function uploadImage(projectKey: string, mimeType: string, base64Data: string): Promise<string> {
   const buffer = Buffer.from(base64Data, 'base64')
@@ -141,7 +142,7 @@ async function uploadImage(projectKey: string, mimeType: string, base64Data: str
 
 async function handlePost(req: VercelRequest, res: VercelResponse) {
   try {
-    const { projectKey, projectId, pageUrl, selector, x, y, body, imageBase64, imageMimeType, authorName } = req.body ?? {}
+    const { projectKey, projectId, pageUrl, selector, x, y, body, imageBase64, imageMimeType, authorName, selectedText } = req.body ?? {}
     const resolvedProjectKey = typeof projectKey === 'string' ? projectKey : projectId
 
     if (!resolvedProjectKey || !pageUrl || !selector || !body) {
@@ -162,6 +163,18 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
         return jsonError(req, res, 400, 'authorName must be 80 characters or fewer')
       }
       resolvedAuthorName = trimmed || null
+    }
+
+    let resolvedSelectedText: string | null = null
+    if (selectedText !== undefined && selectedText !== null) {
+      if (typeof selectedText !== 'string') {
+        return jsonError(req, res, 400, 'selectedText must be a string')
+      }
+      const trimmed = selectedText.trim()
+      if (trimmed.length > MAX_SELECTED_TEXT_CHARS) {
+        return jsonError(req, res, 400, `selectedText must be ${MAX_SELECTED_TEXT_CHARS} characters or fewer`)
+      }
+      resolvedSelectedText = trimmed || null
     }
 
     if (imageBase64 !== undefined) {
@@ -188,6 +201,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       y,
       body,
       imageUrl,
+      selectedText: resolvedSelectedText,
       authorName: resolvedAuthorName,
     })
 

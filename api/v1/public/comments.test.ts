@@ -109,6 +109,7 @@ describe('api/v1/public/comments', () => {
       implementationStatus: 'unassigned',
       claimedByAgentId: null,
       imageUrl: null,
+      selectedText: null,
       authorName: null,
       createdAt: '',
       updatedAt: '',
@@ -155,6 +156,7 @@ describe('api/v1/public/comments', () => {
       implementationStatus: 'unassigned',
       claimedByAgentId: null,
       imageUrl: 'https://cdn.example/img.png',
+      selectedText: null,
       authorName: null,
       createdAt: '',
       updatedAt: '',
@@ -199,6 +201,7 @@ describe('api/v1/public/comments', () => {
       implementationStatus: 'unassigned',
       claimedByAgentId: null,
       imageUrl: null,
+      selectedText: null,
       authorName: null,
       createdAt: '',
       updatedAt: '',
@@ -226,7 +229,115 @@ describe('api/v1/public/comments', () => {
       y: 20,
       body: 'Hello',
       imageUrl: null,
+      selectedText: null,
       authorName: null,
+    })
+  })
+
+  it('returns 400 for a POST with no body at all', async () => {
+    const res = mockRes()
+    await call(mockReq({ body: undefined }), res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toMatchObject({ error: 'Missing required fields: projectKey, pageUrl, selector, body' })
+  })
+
+  describe('selectedText', () => {
+    function mockCreateOk() {
+      vi.mocked(ensurePublicProject).mockResolvedValue({
+        publicKey: 'demo-project',
+        slug: 'demo-project',
+        name: 'Demo',
+        createdAt: '',
+        updatedAt: '',
+      })
+      vi.mocked(createPublicComment).mockResolvedValue({
+        id: 'comment-1',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        reviewStatus: 'open',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        selectedText: 'quoted words',
+        authorName: null,
+        createdAt: '',
+        updatedAt: '',
+      })
+    }
+
+    const baseBody = {
+      projectKey: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+    }
+
+    it('passes a trimmed selectedText through to createPublicComment', async () => {
+      mockCreateOk()
+      const res = mockRes()
+      await call(mockReq({ body: { ...baseBody, selectedText: '  quoted words  ' } }), res)
+
+      expect(res.statusCode).toBe(201)
+      expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].selectedText).toBe('quoted words')
+    })
+
+    it('rejects non-string selectedText', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: { ...baseBody, selectedText: 42 } }), res)
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toMatchObject({ error: 'selectedText must be a string' })
+    })
+
+    it('rejects selectedText over 2000 characters', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: { ...baseBody, selectedText: 'a'.repeat(2001) } }), res)
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toMatchObject({ error: 'selectedText must be 2000 characters or fewer' })
+    })
+
+    it('treats whitespace-only and null selectedText as absent', async () => {
+      mockCreateOk()
+      const res = mockRes()
+      await call(mockReq({ body: { ...baseBody, selectedText: '   ' } }), res)
+      expect(res.statusCode).toBe(201)
+      expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].selectedText).toBeNull()
+
+      const res2 = mockRes()
+      await call(mockReq({ body: { ...baseBody, selectedText: null } }), res2)
+      expect(res2.statusCode).toBe(201)
+      expect(vi.mocked(createPublicComment).mock.calls[1]?.[0].selectedText).toBeNull()
+    })
+
+    it('stores selectedText and an uploaded image independently', async () => {
+      const upload = vi.fn().mockResolvedValue({ error: null })
+      const getPublicUrl = vi.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example/img.png' } })
+      vi.mocked(getServiceSupabase).mockReturnValue({
+        storage: { from: () => ({ upload, getPublicUrl }) },
+      } as never)
+      mockCreateOk()
+
+      const res = mockRes()
+      await call(mockReq({
+        body: {
+          ...baseBody,
+          selectedText: 'quoted words',
+          imageBase64: Buffer.from('png-bytes').toString('base64'),
+          imageMimeType: 'image/png',
+        },
+      }), res)
+
+      expect(res.statusCode).toBe(201)
+      expect(upload).toHaveBeenCalledOnce()
+      expect(vi.mocked(createPublicComment).mock.calls[0]?.[0]).toMatchObject({
+        imageUrl: 'https://cdn.example/img.png',
+        selectedText: 'quoted words',
+      })
     })
   })
 
@@ -298,6 +409,7 @@ describe('api/v1/public/comments', () => {
       implementationStatus: 'unassigned',
       claimedByAgentId: null,
       imageUrl: null,
+      selectedText: null,
       authorName: null,
       createdAt: '',
       updatedAt: '',

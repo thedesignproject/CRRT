@@ -103,6 +103,7 @@ export const comments = pgTable(
     claimedByAgentId: text('claimed_by_agent_id'),
     createdBy: text('created_by').default('public'),
     imageUrl: text('image_url'),
+    selectedText: text('selected_text'),
     authorName: text('author_name'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
