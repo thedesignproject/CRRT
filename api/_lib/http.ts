@@ -66,7 +66,7 @@ export function getReviewerToken(req: VercelRequest): string | undefined {
   return typeof reviewer === 'string' && reviewer.length > 0 ? reviewer : undefined
 }
 
-function firstHeaderValue(value: string | string[] | undefined) {
+export function firstHeaderValue(value: string | string[] | undefined) {
   const raw = Array.isArray(value) ? value[0] : value
   if (!raw) return undefined
   return raw.split(',')[0]?.trim() || undefined

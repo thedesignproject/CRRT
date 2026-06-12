@@ -94,6 +94,7 @@ describe('api/v1/public/comments', () => {
       publicKey: 'missing',
       slug: 'missing',
       name: 'missing',
+      allowedOrigins: [],
       createdAt: '',
       updatedAt: '',
     })
@@ -140,6 +141,7 @@ describe('api/v1/public/comments', () => {
       publicKey: 'demo-project',
       slug: 'demo-project',
       name: 'Demo',
+      allowedOrigins: [],
       createdAt: '',
       updatedAt: '',
     })
@@ -184,6 +186,7 @@ describe('api/v1/public/comments', () => {
       publicKey: 'demo-project',
       slug: 'demo-project',
       name: 'Demo',
+      allowedOrigins: [],
       createdAt: '',
       updatedAt: '',
     })
@@ -227,6 +230,71 @@ describe('api/v1/public/comments', () => {
       body: 'Hello',
       imageUrl: null,
       authorName: null,
+    })
+  })
+
+  describe('origin allowlist', () => {
+    const project = {
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: ['example.com'],
+      createdAt: '',
+      updatedAt: '',
+    }
+    const postBody = {
+      projectKey: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+    }
+
+    it('rejects POSTs from origins outside the allowlist', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue(project)
+
+      const res = mockRes()
+      await call(mockReq({ headers: { origin: 'https://evil.com' }, body: postBody }), res)
+
+      expect(res.statusCode).toBe(403)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('rejects POSTs without an Origin or Referer when the allowlist is set', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue(project)
+
+      const res = mockRes()
+      await call(mockReq({ headers: {}, body: postBody }), res)
+
+      expect(res.statusCode).toBe(403)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('accepts POSTs from an allowed subdomain', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue(project)
+      vi.mocked(createPublicComment).mockResolvedValue({
+        id: 'comment-1',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        reviewStatus: 'open',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        authorName: null,
+        createdAt: '',
+        updatedAt: '',
+      })
+
+      const res = mockRes()
+      await call(mockReq({ headers: { origin: 'https://app.example.com' }, body: postBody }), res)
+
+      expect(res.statusCode).toBe(201)
+      expect(createPublicComment).toHaveBeenCalledOnce()
     })
   })
 
