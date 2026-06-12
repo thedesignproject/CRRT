@@ -13,6 +13,8 @@ export interface ClickTarget {
   x: number
   y: number
   url: string
+  /** Present when the comment anchors to a text selection instead of an element screenshot. */
+  selectedText?: string
 }
 
 export interface Comment {
@@ -25,6 +27,7 @@ export interface Comment {
   body: string
   reviewStatus: ReviewStatus
   imageUrl?: string | null
+  selectedText?: string | null
   createdAt: string
   authorName?: string
 }

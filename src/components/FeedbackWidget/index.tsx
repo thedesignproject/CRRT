@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, SlidersHorizontal, Check } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
+import { clearSelection, getSelectionSnapshot, isTextAtPoint } from '../../lib/textSelection'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
@@ -29,6 +30,34 @@ function getElementFixedPos(
   } catch {
     return null
   }
+}
+
+// Google-Docs-style quote chip shown wherever a comment anchors to a text
+// selection instead of a screenshot.
+function SelectedTextQuote({ text, style }: { text: string; style?: React.CSSProperties }) {
+  return (
+    <div
+      data-fw-selected-text
+      style={{
+        borderLeft: '3px solid #E8853D',
+        background: 'rgba(232, 133, 61, 0.07)',
+        borderRadius: '0 6px 6px 0',
+        padding: '6px 10px',
+        fontSize: 12.5,
+        lineHeight: 1.5,
+        color: '#C9C4BC',
+        fontStyle: 'italic',
+        wordBreak: 'break-word',
+        display: '-webkit-box',
+        WebkitLineClamp: 3,
+        WebkitBoxOrient: 'vertical',
+        overflow: 'hidden',
+        ...style,
+      }}
+    >
+      “{text}”
+    </div>
+  )
 }
 
 function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
@@ -243,20 +272,22 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     if (!agentsRevealed) setAgentOpen(false)
   }, [agentsRevealed])
 
-  // --- Set crosshair cursor when selecting ---
+  // --- Set crosshair cursor when selecting (text cursor over selectable text) ---
+  const [textHover, setTextHover] = useState(false)
   useEffect(() => {
     if (mode !== 'selecting') return
     const prev = document.body.style.cursor
-    document.body.style.cursor = 'crosshair'
+    document.body.style.cursor = textHover ? 'text' : 'crosshair'
     return () => {
       document.body.style.cursor = prev
     }
-  }, [mode])
+  }, [mode, textHover])
 
   // --- Highlight hovered element ---
   useEffect(() => {
     if (mode !== 'selecting') {
       setHovered(null)
+      setTextHover(false)
       return
     }
 
@@ -264,8 +295,10 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       const el = e.target as HTMLElement
       if (el && !el.closest?.(`[${WIDGET_ATTR}]`)) {
         setHovered(el)
+        setTextHover(isTextAtPoint(e.clientX, e.clientY))
       } else {
         setHovered(null)
+        setTextHover(false)
       }
     }
 
@@ -302,14 +335,27 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       setSidebarOpen(false)
       clearImage()
       const pct = toPagePercent(e.pageX, e.pageY)
-      setTarget({
-        selector: getSelector(el),
-        x: pct.x,
-        y: pct.y,
-        url: window.location.href,
-      })
-
-      captureImage(el)
+      // A live text selection wins over element capture — anchor the comment
+      // to the quoted text (Google-Docs style) and skip the screenshot.
+      const snapshot = getSelectionSnapshot(WIDGET_ATTR)
+      if (snapshot) {
+        setTarget({
+          selector: getSelector(snapshot.element),
+          x: pct.x,
+          y: pct.y,
+          url: window.location.href,
+          selectedText: snapshot.text,
+        })
+        clearSelection()
+      } else {
+        setTarget({
+          selector: getSelector(el),
+          x: pct.x,
+          y: pct.y,
+          url: window.location.href,
+        })
+        captureImage(el)
+      }
 
       if (!authorNameRef.current) {
         setShowNameModal(true)
@@ -361,10 +407,14 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         payload.authorName = authorNameRef.current
       }
 
-      const encoded = await encodeImage()
-      if (encoded) {
-        payload.imageBase64 = encoded.base64
-        payload.imageMimeType = encoded.mimeType
+      if (targetData.selectedText) {
+        payload.selectedText = targetData.selectedText
+      } else {
+        const encoded = await encodeImage()
+        if (encoded) {
+          payload.imageBase64 = encoded.base64
+          payload.imageMimeType = encoded.mimeType
+        }
       }
 
       const data = await postComment(apiBase, payload)
@@ -380,6 +430,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         body: commentText,
         reviewStatus: 'open',
         imageUrl: data.imageUrl ?? null,
+        selectedText: targetData.selectedText ?? null,
         createdAt: data.createdAt ?? new Date().toISOString(),
         authorName: data.authorName ?? authorNameRef.current ?? undefined,
       }
@@ -781,6 +832,11 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               />
             </div>
 
+            {/* Quoted text selection */}
+            {target.selectedText && (
+              <SelectedTextQuote text={target.selectedText} style={{ margin: '0 14px 6px' }} />
+            )}
+
             {/* Screenshot thumbnail */}
             {imagePreviewUrl && (
               <div style={{
@@ -1025,6 +1081,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>{pinAuthor}</span>
                       <span style={{ fontSize: 12, color: '#6B6560' }}>{timeAgo(c.createdAt)}</span>
                     </div>
+                    {c.selectedText && (
+                      <SelectedTextQuote text={c.selectedText} style={{ marginBottom: 6 }} />
+                    )}
                     <div style={{ fontSize: 13, color: '#E8E5DF', lineHeight: 1.4, wordBreak: 'break-word' }}>
                       {c.body}
                     </div>
@@ -1085,6 +1144,10 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         onDelete={() => { deleteComment(c.id); setSelectedPin(null) }}
                       />
                     </div>
+
+                    {c.selectedText && (
+                      <SelectedTextQuote text={c.selectedText} style={{ marginBottom: 10 }} />
+                    )}
 
                     {editingId === c.id ? (
                       <div style={{ marginBottom: c.imageUrl ? 10 : 14 }}>
@@ -1466,6 +1529,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                       >
                         {c.body}
                       </div>
+                      {c.selectedText && (
+                        <SelectedTextQuote text={c.selectedText} style={{ marginTop: 8, marginLeft: 32 }} />
+                      )}
                       {c.imageUrl && (
                         <img
                           src={c.imageUrl}

@@ -3063,4 +3063,179 @@ describe('<FeedbackWidget />', () => {
       }
     })
   })
+
+  describe('text selection feedback', () => {
+    function stubCaretText(node: Node | null) {
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
+        () => (node ? { offsetNode: node } : null)
+    }
+
+    function stubRangeRects() {
+      vi.spyOn(document, 'createRange').mockReturnValue({
+        selectNodeContents: vi.fn(),
+        getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
+      } as never)
+    }
+
+    afterEach(() => {
+      delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
+      document.querySelectorAll('[data-test-target]').forEach((n) => n.remove())
+    })
+
+    async function mountSelecting() {
+      const target = document.createElement('p')
+      target.setAttribute('data-test-target', '')
+      target.textContent = 'Quoted snippet lives here'
+      document.body.appendChild(target)
+
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) {
+          throw new Error('widget root not mounted yet')
+        }
+      })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
+      return target
+    }
+
+    it('switches the cursor to text over glyphs and back to crosshair elsewhere', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+      const target = await mountSelecting()
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      stubCaretText(target.firstChild)
+      stubRangeRects()
+      await act(async () => {
+        fireEvent.mouseMove(target, { clientX: 40, clientY: 40 })
+      })
+      expect(document.body.style.cursor).toBe('text')
+
+      stubCaretText(null)
+      await act(async () => {
+        fireEvent.mouseMove(target, { clientX: 41, clientY: 41 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      // Moving over the widget's own UI resets the text-hover state too.
+      const widgetRoot = document.querySelector('[data-fw]')!
+      await act(async () => {
+        fireEvent.mouseMove(widgetRoot, { clientX: 42, clientY: 42 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+    })
+
+    it('captures the selected text instead of a screenshot and sends it', async () => {
+      const calls = mockFetch(() => new Response(
+        JSON.stringify({ id: 'c-9', selectedText: 'Quoted snippet' }),
+        { status: 200 },
+      ))
+      localStorage.setItem('fw-crrt-author-name', 'Sel Tester')
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const target = await mountSelecting()
+
+      const removeAllRanges = vi.fn()
+      vi.spyOn(window, 'getSelection').mockReturnValue({
+        rangeCount: 1,
+        isCollapsed: false,
+        toString: () => 'Quoted snippet',
+        getRangeAt: () => ({ commonAncestorContainer: target.firstChild }),
+        removeAllRanges,
+      } as never)
+
+      await act(async () => {
+        target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 60, clientY: 60 }))
+      })
+
+      expect(removeAllRanges).toHaveBeenCalled()
+
+      // The commenting popover quotes the selection and skips the screenshot row.
+      await waitFor(() => {
+        const quote = document.querySelector('[data-fw-selected-text]')
+        expect(quote?.textContent).toContain('Quoted snippet')
+      })
+      expect(document.body.textContent).not.toContain('Screenshot')
+
+      const textarea = document.querySelector<HTMLTextAreaElement>('textarea')!
+      fireEvent.change(textarea, { target: { value: 'fix this copy' } })
+      const send = document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
+      fireEvent.click(send)
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect(body.selectedText).toBe('Quoted snippet')
+        expect(body.imageBase64).toBeUndefined()
+      })
+
+      // After a successful send the sidebar card quotes the selection too.
+      await waitFor(() => {
+        const quotes = Array.from(document.querySelectorAll('[data-fw-selected-text]'))
+        expect(quotes.some((q) => q.textContent?.includes('Quoted snippet'))).toBe(true)
+        expect(document.body.textContent).toContain('fix this copy')
+      })
+    })
+
+    it('sends without imageBase64 when the screenshot was removed and nothing is selected', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const { textarea, getSendButton } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'no attachments' } })
+
+      const removeBtn = await waitFor(() => {
+        const btn = document.querySelector<HTMLButtonElement>('button[aria-label="Remove screenshot"]')
+        if (!btn) throw new Error('remove-screenshot button not mounted yet')
+        return btn
+      })
+      await act(async () => { fireEvent.click(removeBtn) })
+      fireEvent.click(getSendButton())
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect(body.imageBase64).toBeUndefined()
+        expect(body.selectedText).toBeUndefined()
+      })
+    })
+
+    it('quotes the selection on the pin tooltip and detail popover for fetched comments', async () => {
+      const pageUrl = window.location.href.split('#')[0]
+      mockFetch(undefined, () => new Response(JSON.stringify([
+        {
+          id: 'comment-q',
+          projectId: 'proj',
+          pageUrl,
+          x: 20,
+          y: 30,
+          selector: 'body',
+          body: 'about that wording',
+          reviewStatus: 'open',
+          selectedText: 'lorem ipsum',
+          createdAt: '2026-04-22T00:00:00Z',
+        },
+      ]), { status: 200 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not mounted yet')
+        return el
+      })
+
+      await act(async () => { fireEvent.mouseEnter(pin) })
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw-selected-text]')?.textContent).toContain('lorem ipsum')
+      })
+      await act(async () => { fireEvent.mouseLeave(pin) })
+
+      await act(async () => { fireEvent.click(pin) })
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw-selected-text]')?.textContent).toContain('lorem ipsum')
+      })
+    })
+  })
 })
