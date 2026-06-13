@@ -271,6 +271,7 @@ describe('api/v1/public/comments', () => {
         publicKey: 'demo-project',
         slug: 'demo-project',
         name: 'Demo',
+        allowedOrigins: [],
         createdAt: '',
         updatedAt: '',
       })
@@ -382,6 +383,8 @@ describe('api/v1/public/comments', () => {
         claimedByAgentId: null,
         imageUrl: null,
         authorName: null,
+        targetType: 'element_point' as const,
+        anchor: null,
         createdAt: '',
         updatedAt: '',
       })
