@@ -190,6 +190,24 @@ describe('<FeedbackWidget />', () => {
     expect(roots.length).toBeGreaterThan(0)
   })
 
+  it('renders nothing and fetches nothing when disabled', () => {
+    const calls = mockFetch()
+    render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" disabled />)
+    expect(document.querySelectorAll('[data-fw]').length).toBe(0)
+    expect(calls.length).toBe(0)
+  })
+
+  it('unmounts the widget when disabled flips to true at runtime', () => {
+    mockFetch()
+    const { rerender } = render(
+      <FeedbackWidget projectId="p" apiBase="https://x.example/api" disabled={false} />,
+    )
+    expect(document.querySelectorAll('[data-fw]').length).toBeGreaterThan(0)
+
+    rerender(<FeedbackWidget projectId="p" apiBase="https://x.example/api" disabled />)
+    expect(document.querySelectorAll('[data-fw]').length).toBe(0)
+  })
+
   it('does not crash when the GET endpoint is unavailable', async () => {
     vi.stubGlobal(
       'fetch',
