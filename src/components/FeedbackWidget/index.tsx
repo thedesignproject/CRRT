@@ -14,8 +14,39 @@ import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
 
+type CaretPositionDocument = Document & {
+  caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
+  caretRangeFromPoint?: (x: number, y: number) => Range | null
+}
+
 function clearNativeSelection() {
   window.getSelection()?.removeAllRanges()
+}
+
+function textNodeAtPoint(x: number, y: number): Node | null {
+  const doc = document as CaretPositionDocument
+  if (typeof doc.caretPositionFromPoint === 'function') {
+    return doc.caretPositionFromPoint(x, y)?.offsetNode ?? null
+  }
+  if (typeof doc.caretRangeFromPoint === 'function') {
+    return doc.caretRangeFromPoint(x, y)?.startContainer ?? null
+  }
+  return null
+}
+
+function isTextAtPoint(x: number, y: number): boolean {
+  const node = textNodeAtPoint(x, y)
+  if (!node || node.nodeType !== Node.TEXT_NODE) return false
+  if (!(node.textContent ?? '').trim()) return false
+
+  const range = document.createRange()
+  range.selectNodeContents(node)
+  for (const rect of Array.from(range.getClientRects())) {
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return true
+    }
+  }
+  return false
 }
 
 function getElementFixedPos(
@@ -248,20 +279,22 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     if (!agentsRevealed) setAgentOpen(false)
   }, [agentsRevealed])
 
-  // --- Set crosshair cursor when selecting ---
+  // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
+  const [textHover, setTextHover] = useState(false)
   useEffect(() => {
     if (mode !== 'selecting') return
     const prev = document.body.style.cursor
-    document.body.style.cursor = 'crosshair'
+    document.body.style.cursor = textHover ? 'text' : 'crosshair'
     return () => {
       document.body.style.cursor = prev
     }
-  }, [mode])
+  }, [mode, textHover])
 
   // --- Highlight hovered element ---
   useEffect(() => {
     if (mode !== 'selecting') {
       setHovered(null)
+      setTextHover(false)
       return
     }
 
@@ -269,8 +302,10 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       const el = e.target as HTMLElement
       if (el && !el.closest?.(`[${WIDGET_ATTR}]`)) {
         setHovered(el)
+        setTextHover(isTextAtPoint(e.clientX, e.clientY))
       } else {
         setHovered(null)
+        setTextHover(false)
       }
     }
 
@@ -296,71 +331,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   useEffect(() => {
     if (mode !== 'selecting') return
 
-    // A drag-selection ends with mouseup followed by a click on the common
-    // ancestor; once mouseup captures the selection, that trailing click must
-    // be consumed exactly once so it can't re-target as an element pin.
-    let suppressNextClick = false
-
-    function onMouseDown() {
-      suppressNextClick = false
-    }
-
-    function onMouseUp(e: MouseEvent) {
-      const el = e.target as HTMLElement
-      if (el.closest?.(`[${WIDGET_ATTR}]`)) return
-
-      const sel = window.getSelection()
-      if (!sel || sel.isCollapsed) return
-
-      const built = buildTextRangeAnchor(sel.getRangeAt(0), {
-        getSelector,
-        url: window.location.href,
-        viewport: {
-          width: window.innerWidth,
-          height: window.innerHeight,
-          scrollX: window.scrollX,
-          scrollY: window.scrollY,
-        },
-        isExcluded: (node) => node.closest(`[${WIDGET_ATTR}]`) !== null,
-      })
-      if (!built) return
-
-      suppressNextClick = true
-
-      setSelectedPin(null)
-      setSidebarOpen(false)
-      clearImage()
-      const pct = toPagePercent(
-        built.midpointClient.x + window.scrollX,
-        built.midpointClient.y + window.scrollY,
-      )
-      setTarget({
-        selector: built.anchor.containerSelector,
-        x: pct.x,
-        y: pct.y,
-        url: window.location.href,
-        targetType: 'text_range',
-        anchor: built.anchor,
-      })
-
-      captureImage(built.container)
-
-      if (!authorNameRef.current) {
-        setShowNameModal(true)
-        return
-      }
-
-      setMode('commenting')
-    }
-
     function onClick(e: MouseEvent) {
-      if (suppressNextClick) {
-        suppressNextClick = false
-        e.preventDefault()
-        e.stopPropagation()
-        return
-      }
-
       const el = e.target as HTMLElement
       if (el.closest?.(`[${WIDGET_ATTR}]`)) return
 
@@ -370,6 +341,44 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       setSelectedPin(null)
       setSidebarOpen(false)
       clearImage()
+
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const built = buildTextRangeAnchor(sel.getRangeAt(0), {
+          getSelector,
+          url: window.location.href,
+          viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scrollX: window.scrollX,
+            scrollY: window.scrollY,
+          },
+          isExcluded: (node) => node.closest(`[${WIDGET_ATTR}]`) !== null,
+        })
+        if (built) {
+          const pct = toPagePercent(
+            built.midpointClient.x + window.scrollX,
+            built.midpointClient.y + window.scrollY,
+          )
+          setTarget({
+            selector: built.anchor.containerSelector,
+            x: pct.x,
+            y: pct.y,
+            url: window.location.href,
+            targetType: 'text_range',
+            anchor: built.anchor,
+          })
+
+          if (!authorNameRef.current) {
+            setShowNameModal(true)
+            return
+          }
+
+          setMode('commenting')
+          return
+        }
+      }
+
       const pct = toPagePercent(e.pageX, e.pageY)
       setTarget({
         selector: getSelector(el),
@@ -388,12 +397,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       setMode('commenting')
     }
 
-    window.addEventListener('mousedown', onMouseDown, true)
-    window.addEventListener('mouseup', onMouseUp, true)
     window.addEventListener('click', onClick, true)
     return () => {
-      window.removeEventListener('mousedown', onMouseDown, true)
-      window.removeEventListener('mouseup', onMouseUp, true)
       window.removeEventListener('click', onClick, true)
     }
   }, [mode])
@@ -557,6 +562,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   }
 
   function enterFeedbackMode() {
+    clearNativeSelection()
     setSidebarOpen(false)
     setMode('selecting')
   }
@@ -866,6 +872,27 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                 }}
               />
             </div>
+
+            {target.anchor && (
+              <div style={{
+                margin: '0 14px 8px',
+                padding: '9px 11px',
+                borderLeft: '3px solid #E8853D',
+                borderRadius: '0 8px 8px 0',
+                background: 'rgba(232, 133, 61, 0.08)',
+                color: '#C9C4BC',
+                fontSize: 13,
+                lineHeight: 1.5,
+                fontStyle: 'italic',
+                wordBreak: 'break-word',
+                display: '-webkit-box',
+                WebkitLineClamp: 3,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+              }}>
+                “{target.anchor.selectedText}”
+              </div>
+            )}
 
             {/* Screenshot thumbnail */}
             {imagePreviewUrl && (

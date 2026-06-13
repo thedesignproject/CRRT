@@ -413,6 +413,18 @@ describe('<FeedbackWidget />', () => {
       sel.addRange(range)
     }
 
+    function stubStoredAuthor(name = 'Ada') {
+      const store: Record<string, string> = { 'fw-crrt-author-name': name }
+      vi.stubGlobal('localStorage', {
+        getItem: (k: string) => store[k] ?? null,
+        setItem: (k: string, v: string) => { store[k] = v },
+        removeItem: (k: string) => { delete store[k] },
+        clear: () => { for (const k of Object.keys(store)) delete store[k] },
+        key: () => null,
+        length: 0,
+      })
+    }
+
     async function startSelecting() {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) {
@@ -446,7 +458,7 @@ describe('<FeedbackWidget />', () => {
       })
     }
 
-    it('drag-selecting text opens the popover and POSTs a text_range anchor', async () => {
+    it('clicking with selected text opens the popover and POSTs a text_range anchor', async () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { p } = appendCopyTarget()
@@ -455,14 +467,14 @@ describe('<FeedbackWidget />', () => {
       // 'selectable' spans [5, 15) of the paragraph text
       selectText(p.firstChild!, 5, 15)
       await act(async () => {
-        // A real drag ends mouseup → click on the same node; the click must be
-        // consumed or it would re-target the comment as an element pin.
         fireEvent.mouseUp(p)
         fireEvent.click(p)
       })
       await fillNameModal()
 
       const textarea = await getTextarea()
+      expect(document.body.textContent).toContain('“selectable”')
+      expect(document.body.textContent).not.toContain('Screenshot')
       fireEvent.change(textarea, { target: { value: 'tighten this copy' } })
       fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
 
@@ -478,6 +490,8 @@ describe('<FeedbackWidget />', () => {
         expect(body.anchor.containerSelector).toBe(body.selector)
         expect(body.anchor.createdFromUrl).toBe(window.location.href)
         expect(body.anchor.createdAtViewport).toBeDefined()
+        expect(body.imageBase64).toBeUndefined()
+        expect(body.imageMimeType).toBeUndefined()
         // happy-dom reports scrollWidth/Height of 0, so the page-percent
         // values are not meaningful here — just assert they're sent.
         expect('x' in body).toBe(true)
@@ -491,7 +505,7 @@ describe('<FeedbackWidget />', () => {
 
     it('skips the name modal when the author name is already stored', async () => {
       mockFetch()
-      localStorage.setItem('fw-crrt-author-name', 'Ada')
+      stubStoredAuthor()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { p } = appendCopyTarget()
       await startSelecting()
@@ -571,7 +585,7 @@ describe('<FeedbackWidget />', () => {
 
     it('Escape from text commenting clears the native selection', async () => {
       mockFetch()
-      localStorage.setItem('fw-crrt-author-name', 'Ada')
+      stubStoredAuthor()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { p } = appendCopyTarget()
       await startSelecting()
@@ -579,6 +593,7 @@ describe('<FeedbackWidget />', () => {
       selectText(p.firstChild!, 5, 15)
       await act(async () => {
         fireEvent.mouseUp(p)
+        fireEvent.click(p)
       })
       await getTextarea()
       // The native highlight stays while the popover is open
@@ -590,9 +605,64 @@ describe('<FeedbackWidget />', () => {
       expect(window.getSelection()!.rangeCount).toBe(0)
     })
 
+    it('switches to a text cursor over glyphs while selecting', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
+        () => ({ offsetNode: p.firstChild })
+      vi.spyOn(document, 'createRange').mockReturnValue({
+        selectNodeContents: vi.fn(),
+        getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
+      } as never)
+
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 40, clientY: 40 })
+      })
+      expect(document.body.style.cursor).toBe('text')
+
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint = () => null
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 41, clientY: 41 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
+    })
+
+    it('clears any selection that existed before entering feedback mode', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+
+      selectText(p.firstChild!, 5, 15)
+      await startSelecting()
+      expect(window.getSelection()!.rangeCount).toBe(0)
+
+      await act(async () => {
+        fireEvent.click(p)
+      })
+      await fillNameModal()
+
+      const textarea = await getTextarea()
+      fireEvent.change(textarea, { target: { value: 'plain pin' } })
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect('targetType' in body).toBe(false)
+        expect('anchor' in body).toBe(false)
+      })
+    })
+
     it('clicking the popover backdrop cancels and clears the native selection', async () => {
       mockFetch()
-      localStorage.setItem('fw-crrt-author-name', 'Ada')
+      stubStoredAuthor()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { p } = appendCopyTarget()
       await startSelecting()
