@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
+import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 
@@ -173,7 +174,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    await ensurePublicProject(resolvedProjectKey)
+    const project = await ensurePublicProject(resolvedProjectKey)
+
+    if (!isHostnameAllowed(getRequestHostname(req), project.allowedOrigins)) {
+      return jsonError(req, res, 403, 'Origin is not in this project\'s domain allowlist')
+    }
 
     let imageUrl: string | null = null
     if (imageBase64 && imageMimeType) {

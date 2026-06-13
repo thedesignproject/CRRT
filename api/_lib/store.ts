@@ -31,9 +31,12 @@ type ProjectRow = {
   public_key: string
   slug: string
   name: string
+  allowed_origins: string[] | null
   created_at: string
   updated_at: string
 }
+
+const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, created_at, updated_at'
 
 type ProjectMemberRow = {
   project_key: string
@@ -110,6 +113,7 @@ function mapProject(row: ProjectRow) {
     publicKey: row.public_key,
     slug: row.slug,
     name: row.name,
+    allowedOrigins: row.allowed_origins ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -182,7 +186,7 @@ export async function listProjectsForUser(userId: string) {
 
   const { data, error } = await supabase
     .from('projects')
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .in('public_key', keys)
     .order('created_at', { ascending: true })
 
@@ -319,7 +323,7 @@ export async function claimProject(
     .update({ claimable: false, updated_at: new Date().toISOString() })
     .eq('public_key', projectKey)
     .eq('claimable', true)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
 
   if (updateError) throw new Error(updateError.message)
 
@@ -361,7 +365,7 @@ async function createClaimedProject(projectKey: string, name: string) {
       allowed_origins: [],
       claimable: false,
     }] as never)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .single()
 
   if (error) {
@@ -413,7 +417,7 @@ export async function getProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('projects')
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .eq('public_key', projectKey)
     .maybeSingle()
 
@@ -422,17 +426,21 @@ export async function getProject(projectKey: string) {
 }
 
 /**
- * Rename a project (display name only — public_key and slug are immutable).
- * Returns the updated project, or null when no project matched the key so the
- * caller can map that to a 404.
+ * Update a project's mutable settings (display name, origin allowlist —
+ * public_key and slug are immutable). Returns the updated project, or null
+ * when no project matched the key so the caller can map that to a 404.
  */
-export async function updateProjectName(projectKey: string, name: string) {
+export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[] }) {
   const supabase = getSupabase()
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (patch.name !== undefined) update.name = patch.name
+  if (patch.allowedOrigins !== undefined) update.allowed_origins = patch.allowedOrigins
+
   const { data, error } = await supabase
     .from('projects')
-    .update({ name, updated_at: new Date().toISOString() })
+    .update(update)
     .eq('public_key', projectKey)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
 
   if (error) throw new Error(error.message)
   if (!data || data.length === 0) return null
@@ -452,7 +460,7 @@ export async function ensurePublicProject(publicKey: string) {
       name: publicKey,
       allowed_origins: [],
     }] as never)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .single()
 
   if (error) {
