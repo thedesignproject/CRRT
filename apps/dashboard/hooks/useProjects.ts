@@ -58,6 +58,7 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
         publicKey: projectKey,
         slug: slugify(name) || projectKey,
         name,
+        allowedOrigins: [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       }

@@ -7,6 +7,13 @@ import { Spinner } from './primitives'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
+const inputField = 'flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50'
+
+const submitBtn = (enabled: boolean) => cn(
+  'px-3 py-2 rounded-md text-xs font-semibold transition-all btn-press shrink-0',
+  enabled ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed',
+)
+
 interface ProjectSettingsProps {
   project: Project
   apiBase: string
@@ -26,9 +33,13 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [inviteEmail, setInviteEmail] = useState('')
   const [inviteBusy, setInviteBusy] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
+  const [domains, setDomains] = useState<string[]>(project.allowedOrigins)
+  const [domainInput, setDomainInput] = useState('')
+  const [domainBusy, setDomainBusy] = useState(false)
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
+  useEffect(() => { setDomains(project.allowedOrigins) }, [project.publicKey, project.allowedOrigins])
 
   const adminCount = members.filter((m) => m.role === 'admin').length
   const nameChanged = name.trim() !== '' && name.trim() !== project.name
@@ -55,6 +66,28 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
       setActionError(err instanceof Error ? err.message : 'Failed to rename project')
     } finally {
       setNameBusy(false)
+    }
+  }
+
+  // The server normalizes entries ("https://App.Foo.com/x" → "app.foo.com")
+  // and rejects unparseable ones, so the client only checks for non-empty.
+  async function saveDomains(next: string[]) {
+    const updated = await settings.updateAllowedOrigins(next)
+    setDomains(updated.allowedOrigins)
+  }
+
+  const domainValid = domainInput.trim() !== ''
+  async function addDomain() {
+    if (!domainValid || domainBusy) return
+    setActionError(null)
+    setDomainBusy(true)
+    try {
+      await saveDomains([...domains, domainInput.trim()])
+      setDomainInput('')
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to update allowed domains')
+    } finally {
+      setDomainBusy(false)
     }
   }
 
@@ -138,6 +171,63 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           </div>
         </section>
 
+        {/* Allowed domains */}
+        <section className="mt-8">
+          <h2 className={sectionTitle}>Allowed domains{domains.length > 0 && ` (${domains.length})`}</h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Feedback is only accepted from pages on these domains (subdomains included). Leave the list empty to accept feedback from anywhere.
+          </p>
+          <div className={cn(card, 'mt-3 divide-y divide-border')}>
+            {domains.length === 0 ? (
+              <p className="px-4 py-6 text-center text-[12px] text-muted-foreground">
+                No restrictions — feedback is accepted from any domain.
+              </p>
+            ) : (
+              domains.map((domain) => (
+                <div key={domain} className="flex items-center gap-3 px-4 py-3">
+                  <span className="flex-1 min-w-0 font-mono text-[13px] text-foreground truncate">{domain}</span>
+                  {isAdmin && (
+                    <button
+                      onClick={() => run(() => saveDomains(domains.filter((d) => d !== domain)), domain)}
+                      disabled={pendingId === domain || domainBusy}
+                      aria-label={`Remove ${domain}`}
+                      className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
+                    >
+                      {pendingId === domain ? <Spinner size={13} /> : <TrashIcon size={14} />}
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+
+          {isAdmin && (
+            <form
+              onSubmit={(e) => { e.preventDefault(); addDomain() }}
+              className="mt-3 flex items-center gap-2"
+            >
+              <input
+                type="text"
+                value={domainInput}
+                onChange={(e) => setDomainInput(e.target.value)}
+                placeholder="example.com"
+                disabled={domainBusy}
+                aria-label="Add allowed domain"
+                className={inputField}
+                autoComplete="off"
+                spellCheck={false}
+              />
+              <button
+                type="submit"
+                disabled={!domainValid || domainBusy}
+                className={submitBtn(domainValid && !domainBusy)}
+              >
+                {domainBusy ? 'Saving…' : 'Add'}
+              </button>
+            </form>
+          )}
+        </section>
+
         {/* Team */}
         <section className="mt-8">
           <h2 className={sectionTitle}>Team{members.length > 0 && ` (${members.length})`}</h2>
@@ -195,17 +285,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                 placeholder="teammate@example.com"
                 disabled={inviteBusy}
                 aria-label="Invite by email"
-                className="flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50"
+                className={inputField}
                 autoComplete="off"
                 spellCheck={false}
               />
               <button
                 type="submit"
                 disabled={!inviteValid || inviteBusy}
-                className={cn(
-                  'px-3 py-2 rounded-md text-xs font-semibold transition-all btn-press shrink-0',
-                  inviteValid && !inviteBusy ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed',
-                )}
+                className={submitBtn(inviteValid && !inviteBusy)}
               >
                 {inviteBusy ? 'Sending…' : 'Invite'}
               </button>
