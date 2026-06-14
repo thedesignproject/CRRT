@@ -3,8 +3,6 @@ import { useState } from 'react'
 interface ProjectEmptyStateProps {
   /** Project public key shown inline in the mount snippet. */
   projectId: string
-  /** Backend URL shown inline in the mount snippet. */
-  apiBase: string
 }
 
 /**
@@ -13,7 +11,7 @@ interface ProjectEmptyStateProps {
  * through the two install snippets with copy buttons so they can drop the
  * widget into their app without leaving the dashboard.
  */
-export function ProjectEmptyState({ projectId, apiBase }: ProjectEmptyStateProps) {
+export function ProjectEmptyState({ projectId }: ProjectEmptyStateProps) {
   const installCode = `pnpm add @thedesignproject/crrt`
   const mountCode = `import { FeedbackWidget } from '@thedesignproject/crrt'
 
@@ -21,10 +19,7 @@ export default function App() {
   return (
     <>
       <YourApp />
-      <FeedbackWidget
-        projectId="${projectId}"
-        apiBase="${apiBase}"
-      />
+      <FeedbackWidget projectId="${projectId}" />
     </>
   )
 }`

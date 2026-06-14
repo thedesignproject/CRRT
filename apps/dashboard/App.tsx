@@ -429,7 +429,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <CommentDetail
           selectedComment={selectedComment}
           selectedProject={selectedProject}
-          apiBase={API_BASE}
           commentsLoading={commentsLoading}
           commentsError={commentsError}
           projectComments={projectComments}

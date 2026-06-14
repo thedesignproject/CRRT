@@ -3,6 +3,8 @@ import type { TextRangeAnchor } from '../../lib/textAnchor'
 export interface FeedbackWidgetProps {
   projectId: string
   apiBase?: string
+  /** When true, the widget renders nothing and registers no listeners. */
+  disabled?: boolean
 }
 
 export type Mode = 'idle' | 'selecting' | 'commenting'

@@ -2,6 +2,7 @@ export interface Project {
   publicKey: string
   slug: string
   name: string
+  allowedOrigins: string[]
   createdAt: string
   updatedAt: string
 }
@@ -211,6 +212,16 @@ export function renameProject(apiBase: string, accessToken: string, projectKey: 
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
     body: JSON.stringify({ name }),
+  })
+}
+
+// Replace the project's domain allowlist. An empty array disables the
+// restriction (comments accepted from any origin).
+export function updateProjectAllowedOrigins(apiBase: string, accessToken: string, projectKey: string, allowedOrigins: string[]) {
+  return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ allowedOrigins }),
   })
 }
 

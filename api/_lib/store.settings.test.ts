@@ -9,7 +9,7 @@ import {
   listProjectInvites,
   listProjectMembers,
   removeProjectMember,
-  updateProjectName,
+  updateProject,
 } from './store.js'
 
 type Result = { data: unknown; error: { code?: string; message: string } | null }
@@ -51,27 +51,35 @@ beforeEach(() => {
   vi.mocked(getServiceSupabase).mockReset()
 })
 
-describe('updateProjectName', () => {
-  it('returns the renamed project', async () => {
+describe('updateProject', () => {
+  it('returns the renamed project, defaulting a missing allowlist to []', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       projects: [{ data: [{ public_key: 'p', slug: 'p', name: 'New', created_at: 't', updated_at: 't' }], error: null }],
     }) as never)
-    const out = await updateProjectName('p', 'New')
-    expect(out).toMatchObject({ publicKey: 'p', name: 'New' })
+    const out = await updateProject('p', { name: 'New' })
+    expect(out).toMatchObject({ publicKey: 'p', name: 'New', allowedOrigins: [] })
+  })
+
+  it('returns the project with its updated allowlist', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      projects: [{ data: [{ public_key: 'p', slug: 'p', name: 'P', allowed_origins: ['example.com'], created_at: 't', updated_at: 't' }], error: null }],
+    }) as never)
+    const out = await updateProject('p', { allowedOrigins: ['example.com'] })
+    expect(out).toMatchObject({ publicKey: 'p', allowedOrigins: ['example.com'] })
   })
 
   it('returns null when no row matched', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       projects: [{ data: [], error: null }],
     }) as never)
-    expect(await updateProjectName('missing', 'New')).toBeNull()
+    expect(await updateProject('missing', { name: 'New' })).toBeNull()
   })
 
   it('throws on db error', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       projects: [{ data: null, error: { message: 'boom' } }],
     }) as never)
-    await expect(updateProjectName('p', 'New')).rejects.toThrow('boom')
+    await expect(updateProject('p', { name: 'New' })).rejects.toThrow('boom')
   })
 })
 

@@ -19,7 +19,6 @@ import { ProjectEmptyState } from './ProjectEmptyState'
 interface CommentDetailProps {
   selectedComment: Comment | null
   selectedProject: string
-  apiBase: string
   commentsLoading: boolean
   commentsError: string | null
   projectComments: Comment[]
@@ -34,7 +33,6 @@ interface CommentDetailProps {
 export function CommentDetail({
   selectedComment,
   selectedProject,
-  apiBase,
   commentsLoading,
   commentsError,
   projectComments,
@@ -200,7 +198,7 @@ export function CommentDetail({
           </div>
         </>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
-        <ProjectEmptyState projectId={selectedProject} apiBase={apiBase} />
+        <ProjectEmptyState projectId={selectedProject} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">

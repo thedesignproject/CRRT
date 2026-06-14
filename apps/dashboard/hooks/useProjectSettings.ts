@@ -6,6 +6,7 @@ import {
   listProjectMembers,
   removeProjectMember as apiRemoveMember,
   renameProject as apiRename,
+  updateProjectAllowedOrigins as apiUpdateAllowedOrigins,
   type Project,
   type ProjectInvite,
   type ProjectMember,
@@ -20,6 +21,7 @@ export interface UseProjectSettingsResult {
   isAdmin: boolean
   refresh: () => Promise<void>
   rename: (name: string) => Promise<Project>
+  updateAllowedOrigins: (domains: string[]) => Promise<Project>
   invite: (email: string, role?: 'admin' | 'member') => Promise<void>
   removeMember: (userId: string) => Promise<void>
   cancelInvite: (email: string) => Promise<void>
@@ -28,15 +30,15 @@ export interface UseProjectSettingsResult {
 /**
  * Loads a project's members + pending invites and exposes admin-gated
  * mutations. Each mutation refetches on success so the panel reflects server
- * state. Rename also bubbles up via `onRenamed` so the project tab bar (driven
- * by useProjects) refreshes.
+ * state. Project mutations (rename, allowlist) also bubble up via
+ * `onProjectUpdated` so the project list (driven by useProjects) refreshes.
  */
 export function useProjectSettings(
   apiBase: string,
   accessToken: string,
   projectKey: string,
   currentUserId: string,
-  onRenamed?: () => void,
+  onProjectUpdated?: () => void,
 ): UseProjectSettingsResult {
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [invites, setInvites] = useState<ProjectInvite[]>([])
@@ -73,9 +75,15 @@ export function useProjectSettings(
 
   const rename = useCallback(async (name: string) => {
     const project = await apiRename(apiBase, accessToken, projectKey, name)
-    onRenamed?.()
+    onProjectUpdated?.()
     return project
-  }, [apiBase, accessToken, projectKey, onRenamed])
+  }, [apiBase, accessToken, projectKey, onProjectUpdated])
+
+  const updateAllowedOrigins = useCallback(async (domains: string[]) => {
+    const project = await apiUpdateAllowedOrigins(apiBase, accessToken, projectKey, domains)
+    onProjectUpdated?.()
+    return project
+  }, [apiBase, accessToken, projectKey, onProjectUpdated])
 
   const invite = useCallback(async (email: string, role: 'admin' | 'member' = 'member') => {
     await apiInvite(apiBase, accessToken, projectKey, email, role)
@@ -92,5 +100,5 @@ export function useProjectSettings(
     await refresh()
   }, [apiBase, accessToken, projectKey, refresh])
 
-  return { members, invites, loading, error, isAdmin, refresh, rename, invite, removeMember, cancelInvite }
+  return { members, invites, loading, error, isAdmin, refresh, rename, updateAllowedOrigins, invite, removeMember, cancelInvite }
 }

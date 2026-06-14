@@ -57,7 +57,12 @@ function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
   )
 }
 
-export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: FeedbackWidgetProps) {
+export function FeedbackWidget({ disabled = false, ...props }: FeedbackWidgetProps) {
+  if (disabled) return null
+  return <FeedbackWidgetInner {...props} />
+}
+
+function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omit<FeedbackWidgetProps, 'disabled'>) {
   const [mode, setMode] = useState<Mode>('idle')
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
