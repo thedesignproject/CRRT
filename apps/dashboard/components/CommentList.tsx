@@ -210,9 +210,15 @@ export function CommentList({
                         {comment.claimedByAgentId}
                       </span>
                     )}
-                    <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto truncate max-w-[140px]">
-                      {comment.selector.split(' > ').pop()}
-                    </span>
+                    {comment.targetType === 'text_range' && comment.anchor ? (
+                      <span className="text-[10px] text-muted-foreground/60 italic ml-auto truncate max-w-[140px]">
+                        &ldquo;{comment.anchor.selectedText}&rdquo;
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto truncate max-w-[140px]">
+                        {comment.selector.split(' > ').pop()}
+                      </span>
+                    )}
                   </div>
 
                   {statusBar && (

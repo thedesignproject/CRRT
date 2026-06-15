@@ -8,10 +8,19 @@ import {
   claimProject,
   createInvite,
   createNotification,
+  createPublicComment,
   declineInvite,
   ensurePublicProject,
   findUserIdByEmail,
+  getComment,
   getProjectMember,
+  listAcceptedCommentsByIds,
+  listAcceptedCommentsForPage,
+  listAcceptedCommentsForProject,
+  listComments,
+  listCommentsForShare,
+  updateImplementationStatus,
+  updateReviewStatus,
   isProjectKeyAvailable,
   isProjectMember,
   isValidProjectKey,
@@ -696,5 +705,193 @@ describe('findUserIdByEmail', () => {
       status: 200, headers: { 'content-type': 'application/json' },
     })) as never
     expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+})
+
+describe('comment functions', () => {
+  type QueryResult = { data: unknown; error: { message: string } | null }
+
+  const TEXT_RANGE_ROW = {
+    id: 'comment-1',
+    project_id: 'pk',
+    url: 'https://example.com/pricing',
+    x: 10,
+    y: 20,
+    element: 'section.plans > p.disclaimer',
+    comment: 'Soften this copy',
+    status: 'pending',
+    implementation_status: 'unassigned' as const,
+    claimed_by_agent_id: null,
+    image_url: null,
+    author_name: null,
+    target_type: 'text_range',
+    anchor: { kind: 'text_range', selectedText: 'términos y condiciones' },
+    created_at: '2026-06-01T00:00:00Z',
+    updated_at: '2026-06-01T00:00:00Z',
+  }
+
+  const LEGACY_ROW = {
+    ...TEXT_RANGE_ROW,
+    id: 'comment-2',
+    target_type: null,
+    anchor: null,
+  }
+
+  function buildCommentsSupabase(opts: {
+    result?: QueryResult
+    shareItems?: Array<{ comment_id: string }>
+  } = {}) {
+    const result = opts.result ?? { data: null, error: null }
+    const selects: string[] = []
+    const inserts: unknown[] = []
+
+    const chain = {
+      insert: vi.fn((rows: unknown[]) => {
+        inserts.push(rows[0])
+        return chain
+      }),
+      update: vi.fn(() => chain),
+      select: vi.fn((columns: string) => {
+        selects.push(columns)
+        return chain
+      }),
+      eq: vi.fn(() => chain),
+      in: vi.fn(() => chain),
+      order: vi.fn(() => Promise.resolve(result)),
+      single: vi.fn(() => Promise.resolve(result)),
+      maybeSingle: vi.fn(() => Promise.resolve(result)),
+    }
+
+    const supabase = {
+      from: vi.fn((table: string) => {
+        if (table === 'feedback_share_items') {
+          return {
+            select: vi.fn(() => ({
+              eq: vi.fn(() => Promise.resolve({ data: opts.shareItems ?? [], error: null })),
+            })),
+          }
+        }
+        return chain
+      }),
+    }
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
+    return { selects, inserts }
+  }
+
+  it('createPublicComment inserts target metadata and selects it back', async () => {
+    const { selects, inserts } = buildCommentsSupabase({
+      result: { data: TEXT_RANGE_ROW, error: null },
+    })
+
+    const created = await createPublicComment({
+      projectKey: 'pk',
+      pageUrl: 'https://example.com/pricing',
+      x: 10,
+      y: 20,
+      selector: 'section.plans > p.disclaimer',
+      body: 'Soften this copy',
+      targetType: 'text_range',
+      anchor: { kind: 'text_range', selectedText: 'términos y condiciones' },
+    })
+
+    expect((inserts[0] as Record<string, unknown>).target_type).toBe('text_range')
+    expect((inserts[0] as Record<string, unknown>).anchor).toEqual({
+      kind: 'text_range',
+      selectedText: 'términos y condiciones',
+    })
+    expect(selects[0]).toContain('target_type, anchor')
+    expect(created.targetType).toBe('text_range')
+    expect(created.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
+  })
+
+  it('createPublicComment defaults to element_point with no anchor', async () => {
+    const { inserts } = buildCommentsSupabase({ result: { data: LEGACY_ROW, error: null } })
+
+    const created = await createPublicComment({
+      projectKey: 'pk',
+      pageUrl: 'https://example.com/pricing',
+      x: 10,
+      y: 20,
+      selector: 'body',
+      body: 'Hi',
+    })
+
+    expect((inserts[0] as Record<string, unknown>).target_type).toBe('element_point')
+    expect((inserts[0] as Record<string, unknown>).anchor).toBeNull()
+    expect(created.targetType).toBe('element_point')
+    expect(created.anchor).toBeNull()
+  })
+
+  it('listComments maps legacy rows to element_point and selects target metadata', async () => {
+    const { selects } = buildCommentsSupabase({ result: { data: [LEGACY_ROW], error: null } })
+
+    const comments = await listComments('pk')
+
+    expect(selects[0]).toContain('target_type, anchor')
+    expect(comments[0].targetType).toBe('element_point')
+    expect(comments[0].anchor).toBeNull()
+  })
+
+  it('getComment selects target metadata and maps text_range rows', async () => {
+    const { selects } = buildCommentsSupabase({ result: { data: TEXT_RANGE_ROW, error: null } })
+
+    const comment = await getComment('comment-1')
+
+    expect(selects[0]).toContain('target_type, anchor')
+    expect(comment?.targetType).toBe('text_range')
+  })
+
+  it('getComment returns null for missing comments', async () => {
+    buildCommentsSupabase({ result: { data: null, error: null } })
+    expect(await getComment('missing')).toBeNull()
+  })
+
+  it('updateReviewStatus keeps target metadata in its response', async () => {
+    const { selects } = buildCommentsSupabase({ result: { data: TEXT_RANGE_ROW, error: null } })
+
+    const comment = await updateReviewStatus('comment-1', 'accepted')
+
+    expect(selects[0]).toContain('target_type, anchor')
+    expect(comment.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
+  })
+
+  it('updateImplementationStatus keeps target metadata in its response', async () => {
+    const { selects } = buildCommentsSupabase({ result: { data: TEXT_RANGE_ROW, error: null } })
+
+    const comment = await updateImplementationStatus('comment-1', { implementationStatus: 'claimed' })
+
+    expect(selects[0]).toContain('target_type, anchor')
+    expect(comment.targetType).toBe('text_range')
+  })
+
+  it('accepted-comment queries select target metadata', async () => {
+    for (const run of [
+      () => listAcceptedCommentsForPage('pk', 'https://example.com/pricing'),
+      () => listAcceptedCommentsByIds('pk', ['comment-1']),
+      () => listAcceptedCommentsForProject('pk'),
+    ]) {
+      const { selects } = buildCommentsSupabase({ result: { data: [TEXT_RANGE_ROW], error: null } })
+      const comments = await run()
+      expect(selects[0]).toContain('target_type, anchor')
+      expect(comments[0].targetType).toBe('text_range')
+    }
+  })
+
+  it('listCommentsForShare selects target metadata for selection shares', async () => {
+    const { selects } = buildCommentsSupabase({
+      result: { data: [TEXT_RANGE_ROW], error: null },
+      shareItems: [{ comment_id: 'comment-1' }],
+    })
+
+    const comments = await listCommentsForShare({
+      id: 'share-1',
+      projectId: 'pk',
+      scopeType: 'selection',
+      scopePageUrl: null,
+    })
+
+    expect(selects[0]).toContain('target_type, anchor')
+    expect(comments[0].anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
   })
 })

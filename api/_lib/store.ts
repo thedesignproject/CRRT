@@ -23,9 +23,16 @@ type CommentRow = {
   claimed_by_agent_id: string | null
   image_url: string | null
   author_name: string | null
+  target_type: string | null
+  anchor: Record<string, unknown> | null
   created_at: string
   updated_at: string | null
 }
+
+// Single source of truth for comment selects — an omission here (or a
+// hand-rolled select list elsewhere) silently drops fields from responses.
+const COMMENT_COLUMNS =
+  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, target_type, anchor, created_at, updated_at'
 
 type ProjectRow = {
   public_key: string
@@ -103,6 +110,8 @@ function mapComment(row: CommentRow) {
     claimedByAgentId: row.claimed_by_agent_id,
     imageUrl: row.image_url || null,
     authorName: row.author_name || null,
+    targetType: row.target_type === 'text_range' ? ('text_range' as const) : ('element_point' as const),
+    anchor: row.anchor ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   }
@@ -507,6 +516,8 @@ export async function createPublicComment(input: {
   body: string
   imageUrl?: string | null
   authorName?: string | null
+  targetType?: 'element_point' | 'text_range'
+  anchor?: Record<string, unknown> | null
 }) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -523,9 +534,11 @@ export async function createPublicComment(input: {
       created_by: 'public',
       image_url: input.imageUrl ?? null,
       author_name: input.authorName ?? null,
+      target_type: input.targetType ?? 'element_point',
+      anchor: input.anchor ?? null,
       updated_at: new Date().toISOString(),
     }] as never)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -540,7 +553,7 @@ export async function listComments(projectKey: string, filters: {
   const supabase = getSupabase()
   let query = supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
 
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
@@ -556,7 +569,7 @@ export async function listAcceptedCommentsForPage(projectKey: string, pageUrl: s
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
     .eq('url', pageUrl)
     .eq('status', 'approved')
@@ -572,7 +585,7 @@ export async function listAcceptedCommentsByIds(projectKey: string, commentIds: 
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
     .eq('status', 'approved')
     .in('id', commentIds)
@@ -616,7 +629,7 @@ export async function getComment(commentId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('id', commentId)
     .maybeSingle()
 
@@ -633,7 +646,7 @@ export async function updateReviewStatus(commentId: string, reviewStatus: Review
       updated_at: new Date().toISOString(),
     })
     .eq('id', commentId)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -656,7 +669,7 @@ export async function updateImplementationStatus(commentId: string, patch: {
     .from('comments')
     .update(updates)
     .eq('id', commentId)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -782,7 +795,7 @@ export async function listCommentsForShare(share: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .in('id', commentIds)
     .order('created_at', { ascending: false })
 
@@ -794,7 +807,7 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
     .eq('status', 'approved')
     .order('created_at', { ascending: false })
