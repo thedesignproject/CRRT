@@ -8,7 +8,10 @@ vi.mock('../../_lib/store.js', () => ({
   deleteCommentsForProject: vi.fn(),
 }))
 
+vi.mock('../../_lib/supabase.js', () => ({ getServiceSupabase: vi.fn() }))
+
 import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
 interface MockRes {
@@ -56,6 +59,7 @@ beforeEach(() => {
   vi.mocked(listComments).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
   vi.mocked(deleteCommentsForProject).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
   delete process.env.SMOKE_CLEANUP_TOKEN
   delete process.env.SMOKE_PROJECT_KEY
 })
@@ -90,6 +94,7 @@ describe('api/v1/public/comments', () => {
       publicKey: 'missing',
       slug: 'missing',
       name: 'missing',
+      allowedOrigins: [],
       createdAt: '',
       updatedAt: '',
     })
@@ -106,6 +111,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })
@@ -126,11 +133,64 @@ describe('api/v1/public/comments', () => {
     expect(res.statusCode).toBe(201)
   })
 
+  it('uploads an image via the service-role client and stores its public URL', async () => {
+    const upload = vi.fn().mockResolvedValue({ error: null })
+    const getPublicUrl = vi.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example/img.png' } })
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      storage: { from: () => ({ upload, getPublicUrl }) },
+    } as never)
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hi',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: 'https://cdn.example/img.png',
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hi',
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    }), res)
+
+    expect(upload).toHaveBeenCalledOnce()
+    expect(res.statusCode).toBe(201)
+    expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].imageUrl).toBe('https://cdn.example/img.png')
+  })
+
   it('creates a public comment', async () => {
     vi.mocked(ensurePublicProject).mockResolvedValue({
       publicKey: 'demo-project',
       slug: 'demo-project',
       name: 'Demo',
+      allowedOrigins: [],
       createdAt: '',
       updatedAt: '',
     })
@@ -147,6 +207,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })
@@ -174,6 +236,164 @@ describe('api/v1/public/comments', () => {
       body: 'Hello',
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point',
+      anchor: null,
+    })
+  })
+
+  describe('text_range targets', () => {
+    const validAnchor = {
+      kind: 'text_range',
+      selectedText: 'términos y condiciones',
+      normalizedText: 'términos y condiciones',
+      prefix: 'sujeto a los ',
+      suffix: ' vigentes',
+      containerSelector: 'section.plans > p.disclaimer',
+      startOffset: 13,
+      endOffset: 35,
+      createdFromUrl: 'https://example.com/pricing',
+    }
+
+    function postBody(overrides: Record<string, unknown> = {}) {
+      return {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'section.plans > p.disclaimer',
+        x: 10,
+        y: 20,
+        body: 'Soften this copy',
+        ...overrides,
+      }
+    }
+
+    it('creates a text_range comment with a sanitized anchor', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue({
+        publicKey: 'demo-project',
+        slug: 'demo-project',
+        name: 'Demo',
+        allowedOrigins: [],
+        createdAt: '',
+        updatedAt: '',
+      })
+      vi.mocked(createPublicComment).mockResolvedValue({
+        id: 'comment-2',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'section.plans > p.disclaimer',
+        x: 10,
+        y: 20,
+        body: 'Soften this copy',
+        reviewStatus: 'open',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        authorName: null,
+        targetType: 'text_range' as const,
+        anchor: validAnchor,
+        createdAt: '',
+        updatedAt: '',
+      })
+
+      const res = mockRes()
+      await call(mockReq({
+        body: postBody({
+          targetType: 'text_range',
+          anchor: { ...validAnchor, junkKey: 'dropped' },
+        }),
+      }), res)
+
+      expect(res.statusCode).toBe(201)
+      const input = vi.mocked(createPublicComment).mock.calls[0]?.[0]
+      expect(input?.targetType).toBe('text_range')
+      expect(input?.anchor).toEqual(validAnchor)
+    })
+
+    it('rejects an unknown targetType', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ targetType: 'pixel_blob' }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('rejects text_range without an anchor', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ targetType: 'text_range' }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('rejects an anchor on element_point payloads', async () => {
+      const res = mockRes()
+      await call(mockReq({ body: postBody({ anchor: validAnchor }) }), res)
+      expect(res.statusCode).toBe(400)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('origin allowlist', () => {
+    const project = {
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: ['example.com'],
+      createdAt: '',
+      updatedAt: '',
+    }
+    const postBody = {
+      projectKey: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+    }
+
+    it('rejects POSTs from origins outside the allowlist', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue(project)
+
+      const res = mockRes()
+      await call(mockReq({ headers: { origin: 'https://evil.com' }, body: postBody }), res)
+
+      expect(res.statusCode).toBe(403)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('rejects POSTs without an Origin or Referer when the allowlist is set', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue(project)
+
+      const res = mockRes()
+      await call(mockReq({ headers: {}, body: postBody }), res)
+
+      expect(res.statusCode).toBe(403)
+      expect(createPublicComment).not.toHaveBeenCalled()
+    })
+
+    it('accepts POSTs from an allowed subdomain', async () => {
+      vi.mocked(ensurePublicProject).mockResolvedValue(project)
+      vi.mocked(createPublicComment).mockResolvedValue({
+        id: 'comment-1',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        reviewStatus: 'open',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        authorName: null,
+        targetType: 'element_point' as const,
+        anchor: null,
+        createdAt: '',
+        updatedAt: '',
+      })
+
+      const res = mockRes()
+      await call(mockReq({ headers: { origin: 'https://app.example.com' }, body: postBody }), res)
+
+      expect(res.statusCode).toBe(201)
+      expect(createPublicComment).toHaveBeenCalledOnce()
     })
   })
 
@@ -246,6 +466,8 @@ describe('api/v1/public/comments', () => {
       claimedByAgentId: null,
       imageUrl: null,
       authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
       createdAt: '',
       updatedAt: '',
     })

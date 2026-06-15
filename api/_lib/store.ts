@@ -1,5 +1,14 @@
-import { getServiceSupabase, getSupabase } from './supabase.js'
+import { getServiceSupabase } from './supabase.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
+
+// Every table/storage operation in this module goes through the service-role
+// client. Every public table has RLS enabled with no permissive policy
+// (migration 0004), so the anon key — which ships in the dashboard bundle —
+// can't reach them directly. The service-role client bypasses RLS; each
+// function below enforces its own scoping (project membership, user_id, project
+// key) and callers gate access via `requireUser` / `requireProjectMembership`
+// in `api/`.
+const getSupabase = getServiceSupabase
 
 type CommentRow = {
   id: string
@@ -14,17 +23,27 @@ type CommentRow = {
   claimed_by_agent_id: string | null
   image_url: string | null
   author_name: string | null
+  target_type: string | null
+  anchor: Record<string, unknown> | null
   created_at: string
   updated_at: string | null
 }
+
+// Single source of truth for comment selects — an omission here (or a
+// hand-rolled select list elsewhere) silently drops fields from responses.
+const COMMENT_COLUMNS =
+  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, target_type, anchor, created_at, updated_at'
 
 type ProjectRow = {
   public_key: string
   slug: string
   name: string
+  allowed_origins: string[] | null
   created_at: string
   updated_at: string
 }
+
+const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, created_at, updated_at'
 
 type ProjectMemberRow = {
   project_key: string
@@ -91,6 +110,8 @@ function mapComment(row: CommentRow) {
     claimedByAgentId: row.claimed_by_agent_id,
     imageUrl: row.image_url || null,
     authorName: row.author_name || null,
+    targetType: row.target_type === 'text_range' ? ('text_range' as const) : ('element_point' as const),
+    anchor: row.anchor ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
   }
@@ -101,6 +122,7 @@ function mapProject(row: ProjectRow) {
     publicKey: row.public_key,
     slug: row.slug,
     name: row.name,
+    allowedOrigins: row.allowed_origins ?? [],
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -173,7 +195,7 @@ export async function listProjectsForUser(userId: string) {
 
   const { data, error } = await supabase
     .from('projects')
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .in('public_key', keys)
     .order('created_at', { ascending: true })
 
@@ -310,7 +332,7 @@ export async function claimProject(
     .update({ claimable: false, updated_at: new Date().toISOString() })
     .eq('public_key', projectKey)
     .eq('claimable', true)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
 
   if (updateError) throw new Error(updateError.message)
 
@@ -352,7 +374,7 @@ async function createClaimedProject(projectKey: string, name: string) {
       allowed_origins: [],
       claimable: false,
     }] as never)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .single()
 
   if (error) {
@@ -404,7 +426,7 @@ export async function getProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('projects')
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .eq('public_key', projectKey)
     .maybeSingle()
 
@@ -413,17 +435,21 @@ export async function getProject(projectKey: string) {
 }
 
 /**
- * Rename a project (display name only — public_key and slug are immutable).
- * Returns the updated project, or null when no project matched the key so the
- * caller can map that to a 404.
+ * Update a project's mutable settings (display name, origin allowlist —
+ * public_key and slug are immutable). Returns the updated project, or null
+ * when no project matched the key so the caller can map that to a 404.
  */
-export async function updateProjectName(projectKey: string, name: string) {
+export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[] }) {
   const supabase = getSupabase()
+  const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (patch.name !== undefined) update.name = patch.name
+  if (patch.allowedOrigins !== undefined) update.allowed_origins = patch.allowedOrigins
+
   const { data, error } = await supabase
     .from('projects')
-    .update({ name, updated_at: new Date().toISOString() })
+    .update(update)
     .eq('public_key', projectKey)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
 
   if (error) throw new Error(error.message)
   if (!data || data.length === 0) return null
@@ -443,7 +469,7 @@ export async function ensurePublicProject(publicKey: string) {
       name: publicKey,
       allowed_origins: [],
     }] as never)
-    .select('public_key, slug, name, created_at, updated_at')
+    .select(PROJECT_COLUMNS)
     .single()
 
   if (error) {
@@ -490,6 +516,8 @@ export async function createPublicComment(input: {
   body: string
   imageUrl?: string | null
   authorName?: string | null
+  targetType?: 'element_point' | 'text_range'
+  anchor?: Record<string, unknown> | null
 }) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -506,9 +534,11 @@ export async function createPublicComment(input: {
       created_by: 'public',
       image_url: input.imageUrl ?? null,
       author_name: input.authorName ?? null,
+      target_type: input.targetType ?? 'element_point',
+      anchor: input.anchor ?? null,
       updated_at: new Date().toISOString(),
     }] as never)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -523,7 +553,7 @@ export async function listComments(projectKey: string, filters: {
   const supabase = getSupabase()
   let query = supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
 
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
@@ -539,7 +569,7 @@ export async function listAcceptedCommentsForPage(projectKey: string, pageUrl: s
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
     .eq('url', pageUrl)
     .eq('status', 'approved')
@@ -555,7 +585,7 @@ export async function listAcceptedCommentsByIds(projectKey: string, commentIds: 
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
     .eq('status', 'approved')
     .in('id', commentIds)
@@ -599,7 +629,7 @@ export async function getComment(commentId: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('id', commentId)
     .maybeSingle()
 
@@ -616,7 +646,7 @@ export async function updateReviewStatus(commentId: string, reviewStatus: Review
       updated_at: new Date().toISOString(),
     })
     .eq('id', commentId)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -639,7 +669,7 @@ export async function updateImplementationStatus(commentId: string, patch: {
     .from('comments')
     .update(updates)
     .eq('id', commentId)
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .single()
 
   if (error) throw new Error(error.message)
@@ -765,7 +795,7 @@ export async function listCommentsForShare(share: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .in('id', commentIds)
     .order('created_at', { ascending: false })
 
@@ -777,7 +807,7 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .select('id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, created_at, updated_at')
+    .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
     .eq('status', 'approved')
     .order('created_at', { ascending: false })
@@ -972,17 +1002,16 @@ function mapNotification(row: NotificationRow) {
   }
 }
 
-// Notifications uses the service-role client because the table has RLS
-// (`auth.uid() = user_id`) enabled for safe per-user realtime subscriptions.
-// The backend has no user JWT in its supabase client, so anon-key queries
-// would always see zero rows / fail to insert. Service role bypasses RLS;
-// these helpers enforce the user_id scope themselves.
+// Notifications has a `notifications_select_own` policy (the dashboard
+// subscribes to its own rows over realtime with the authenticated key), so the
+// backend — which holds no user JWT — must use the service-role client to read
+// or write across users. These helpers enforce the user_id scope themselves.
 export async function createNotification(input: {
   userId: string
   kind: NotificationKind
   payload?: Record<string, unknown>
 }) {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
     .insert([{ user_id: input.userId, kind: input.kind, payload: input.payload ?? {} }] as never)
@@ -996,7 +1025,7 @@ export async function listNotificationsForUser(
   userId: string,
   opts: { unreadOnly?: boolean; limit?: number } = {},
 ) {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   let query = supabase
     .from('notifications')
     .select('id, user_id, kind, payload, read_at, created_at')
@@ -1010,7 +1039,7 @@ export async function listNotificationsForUser(
 }
 
 export async function markNotificationRead(notificationId: string, userId: string): Promise<boolean> {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   const { data, error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })
@@ -1023,7 +1052,7 @@ export async function markNotificationRead(notificationId: string, userId: strin
 }
 
 export async function markAllNotificationsRead(userId: string) {
-  const supabase = getServiceSupabase()
+  const supabase = getSupabase()
   const { error } = await supabase
     .from('notifications')
     .update({ read_at: new Date().toISOString() })

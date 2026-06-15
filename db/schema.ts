@@ -14,6 +14,16 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+// Row Level Security: every table below has RLS enabled with NO permissive
+// policy (migration 0004_enable_rls), i.e. deny-all for the `anon` /
+// `authenticated` roles. This is required because the publishable (anon) key
+// ships in the dashboard bundle — without RLS anyone could query these tables
+// directly via the Supabase REST API. The API reaches them through the
+// service-role client (`getServiceSupabase`), which bypasses RLS and does its
+// own authorization. `notifications` is the exception: it has a
+// `notifications_select_own` policy (migration 0002) so the dashboard can
+// subscribe to its own rows over realtime with the authenticated key.
+
 export const projects = pgTable('projects', {
   publicKey: text('public_key').primaryKey(),
   slug: text('slug').notNull().unique(),
@@ -94,6 +104,10 @@ export const comments = pgTable(
     createdBy: text('created_by').default('public'),
     imageUrl: text('image_url'),
     authorName: text('author_name'),
+    // 'element_point' (click-to-pin) or 'text_range' (anchored to selected text)
+    targetType: text('target_type').default('element_point'),
+    // TextRangeAnchor JSON for text_range comments; null means no anchor
+    anchor: jsonb('anchor'),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },

@@ -1,16 +1,23 @@
+import type { TextRangeAnchor } from '../../lib/textAnchor'
+
 export interface FeedbackWidgetProps {
   projectId: string
   apiBase?: string
+  /** When true, the widget renders nothing and registers no listeners. */
+  disabled?: boolean
 }
 
 export type Mode = 'idle' | 'selecting' | 'commenting'
 export type ReviewStatus = 'open' | 'accepted' | 'rejected'
+export type CommentTargetType = 'element_point' | 'text_range'
 
 export interface ClickTarget {
   selector: string
   x: number
   y: number
   url: string
+  targetType?: CommentTargetType
+  anchor?: TextRangeAnchor
 }
 
 export interface Comment {
@@ -25,4 +32,6 @@ export interface Comment {
   imageUrl?: string | null
   createdAt: string
   authorName?: string
+  targetType?: CommentTargetType
+  anchor?: TextRangeAnchor | null
 }

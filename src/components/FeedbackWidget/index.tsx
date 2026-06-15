@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { X, SlidersHorizontal, Check } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
+import { buildTextRangeAnchor } from '../../lib/textAnchor'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
@@ -12,6 +13,42 @@ import { FeedbackWidgetStyles } from './styles'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
+import { TextRangeQuote } from './quote'
+
+type CaretPositionDocument = Document & {
+  caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
+  caretRangeFromPoint?: (x: number, y: number) => Range | null
+}
+
+function clearNativeSelection() {
+  window.getSelection()?.removeAllRanges()
+}
+
+function textNodeAtPoint(x: number, y: number): Node | null {
+  const doc = document as CaretPositionDocument
+  if (typeof doc.caretPositionFromPoint === 'function') {
+    return doc.caretPositionFromPoint(x, y)?.offsetNode ?? null
+  }
+  if (typeof doc.caretRangeFromPoint === 'function') {
+    return doc.caretRangeFromPoint(x, y)?.startContainer ?? null
+  }
+  return null
+}
+
+function isTextAtPoint(x: number, y: number): boolean {
+  const node = textNodeAtPoint(x, y)
+  if (!node || node.nodeType !== Node.TEXT_NODE) return false
+  if (!(node.textContent ?? '').trim()) return false
+
+  const range = document.createRange()
+  range.selectNodeContents(node)
+  for (const rect of Array.from(range.getClientRects())) {
+    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+      return true
+    }
+  }
+  return false
+}
 
 function getElementFixedPos(
   selector: string,
@@ -52,7 +89,12 @@ function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
   )
 }
 
-export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: FeedbackWidgetProps) {
+export function FeedbackWidget({ disabled = false, ...props }: FeedbackWidgetProps) {
+  if (disabled) return null
+  return <FeedbackWidgetInner {...props} />
+}
+
+function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omit<FeedbackWidgetProps, 'disabled'>) {
   const [mode, setMode] = useState<Mode>('idle')
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
@@ -238,20 +280,22 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
     if (!agentsRevealed) setAgentOpen(false)
   }, [agentsRevealed])
 
-  // --- Set crosshair cursor when selecting ---
+  // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
+  const [textHover, setTextHover] = useState(false)
   useEffect(() => {
     if (mode !== 'selecting') return
     const prev = document.body.style.cursor
-    document.body.style.cursor = 'crosshair'
+    document.body.style.cursor = textHover ? 'text' : 'crosshair'
     return () => {
       document.body.style.cursor = prev
     }
-  }, [mode])
+  }, [mode, textHover])
 
   // --- Highlight hovered element ---
   useEffect(() => {
     if (mode !== 'selecting') {
       setHovered(null)
+      setTextHover(false)
       return
     }
 
@@ -259,8 +303,10 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
       const el = e.target as HTMLElement
       if (el && !el.closest?.(`[${WIDGET_ATTR}]`)) {
         setHovered(el)
+        setTextHover(isTextAtPoint(e.clientX, e.clientY))
       } else {
         setHovered(null)
+        setTextHover(false)
       }
     }
 
@@ -282,7 +328,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
     }
   }, [hovered])
 
-  // --- Handle element click in selecting mode ---
+  // --- Handle element click / text selection in selecting mode ---
   useEffect(() => {
     if (mode !== 'selecting') return
 
@@ -296,6 +342,44 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
       setSelectedPin(null)
       setSidebarOpen(false)
       clearImage()
+
+      const sel = window.getSelection()
+      if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+        const built = buildTextRangeAnchor(sel.getRangeAt(0), {
+          getSelector,
+          url: window.location.href,
+          viewport: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            scrollX: window.scrollX,
+            scrollY: window.scrollY,
+          },
+          isExcluded: (node) => node.closest(`[${WIDGET_ATTR}]`) !== null,
+        })
+        if (built) {
+          const pct = toPagePercent(
+            built.midpointClient.x + window.scrollX,
+            built.midpointClient.y + window.scrollY,
+          )
+          setTarget({
+            selector: built.anchor.containerSelector,
+            x: pct.x,
+            y: pct.y,
+            url: window.location.href,
+            targetType: 'text_range',
+            anchor: built.anchor,
+          })
+
+          if (!authorNameRef.current) {
+            setShowNameModal(true)
+            return
+          }
+
+          setMode('commenting')
+          return
+        }
+      }
+
       const pct = toPagePercent(e.pageX, e.pageY)
       setTarget({
         selector: getSelector(el),
@@ -315,7 +399,9 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
     }
 
     window.addEventListener('click', onClick, true)
-    return () => window.removeEventListener('click', onClick, true)
+    return () => {
+      window.removeEventListener('click', onClick, true)
+    }
   }, [mode])
 
   // --- Auto-focus textarea ---
@@ -356,6 +442,11 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
         payload.authorName = authorNameRef.current
       }
 
+      if (targetData.anchor) {
+        payload.targetType = 'text_range'
+        payload.anchor = targetData.anchor
+      }
+
       const encoded = await encodeImage()
       if (encoded) {
         payload.imageBase64 = encoded.base64
@@ -377,6 +468,8 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
         imageUrl: data.imageUrl ?? null,
         createdAt: data.createdAt ?? new Date().toISOString(),
         authorName: data.authorName ?? authorNameRef.current ?? undefined,
+        targetType: targetData.targetType,
+        anchor: targetData.anchor ?? null,
       }
 
       setComments((prev) => [newComment, ...prev])
@@ -387,6 +480,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
       setSuccessToast(true)
       setTimeout(() => setSuccessToast(false), 2000)
 
+      clearNativeSelection()
       setTarget(null)
       setComment('')
       clearImage()
@@ -414,6 +508,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
+          clearNativeSelection()
           setTarget(null)
           setComment('')
           clearImage()
@@ -457,6 +552,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
   }, [mode, handleSend, sidebarOpen, selectedPin, showNameModal])
 
   function exitFeedbackMode() {
+    clearNativeSelection()
     setMode('idle')
     setTarget(null)
     setComment('')
@@ -467,6 +563,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
   }
 
   function enterFeedbackMode() {
+    clearNativeSelection()
     setSidebarOpen(false)
     setMode('selecting')
   }
@@ -677,6 +774,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
               background: 'rgba(0, 0, 0, 0.05)',
             }}
             onClick={() => {
+              clearNativeSelection()
               setTarget(null)
               setComment('')
               clearImage()
@@ -776,6 +874,13 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
               />
             </div>
 
+            {target.anchor && (
+              <TextRangeQuote
+                text={target.anchor.selectedText}
+                style={{ margin: '0 14px 8px' }}
+              />
+            )}
+
             {/* Screenshot thumbnail */}
             {imagePreviewUrl && (
               <div style={{
@@ -841,6 +946,7 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
                   onClick={() => {
+                    clearNativeSelection()
                     setTarget(null)
                     setComment('')
                     clearImage()
@@ -1020,6 +1126,12 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>{pinAuthor}</span>
                       <span style={{ fontSize: 12, color: '#6B6560' }}>{timeAgo(c.createdAt)}</span>
                     </div>
+                    {c.anchor && (
+                      <TextRangeQuote
+                        text={c.anchor.selectedText}
+                        style={{ fontSize: 12, marginBottom: 4, WebkitLineClamp: 2 }}
+                      />
+                    )}
                     <div style={{ fontSize: 13, color: '#E8E5DF', lineHeight: 1.4, wordBreak: 'break-word' }}>
                       {c.body}
                     </div>
@@ -1114,9 +1226,17 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: 14, lineHeight: 1.6, color: '#E8E5DF', marginBottom: bodyMarginBottom }}>
-                        {c.body}
-                      </div>
+                      <>
+                        {c.anchor && (
+                          <TextRangeQuote
+                            text={c.anchor.selectedText}
+                            style={{ marginBottom: 10 }}
+                          />
+                        )}
+                        <div style={{ fontSize: 14, lineHeight: 1.6, color: '#E8E5DF', marginBottom: bodyMarginBottom }}>
+                          {c.body}
+                        </div>
+                      </>
                     )}
 
                     {c.imageUrl && (
@@ -1450,6 +1570,12 @@ export function FeedbackWidget({ projectId, apiBase = 'https://crrt.ai/api' }: F
                     </div>
                   ) : (
                     <>
+                      {c.anchor && (
+                        <TextRangeQuote
+                          text={c.anchor.selectedText}
+                          style={{ marginLeft: 32, marginBottom: 6 }}
+                        />
+                      )}
                       <div
                         style={{
                           fontSize: 13.5,

@@ -1,4 +1,5 @@
 import type { PromptTarget } from '../hooks/useAgentSession'
+import type { CommentTargetType, TextRangeAnchorRecord } from '../api'
 
 export type ReviewStatus = 'open' | 'accepted' | 'rejected'
 export type ImplStatus = 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
@@ -22,6 +23,8 @@ export interface Comment {
   authorInitial: string
   authorColor: string
   screenshotUrl: string | null
+  targetType: CommentTargetType
+  anchor: TextRangeAnchorRecord | null
 }
 
 export interface AgentMeta {

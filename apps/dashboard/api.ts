@@ -2,8 +2,26 @@ export interface Project {
   publicKey: string
   slug: string
   name: string
+  allowedOrigins: string[]
   createdAt: string
   updatedAt: string
+}
+
+export type CommentTargetType = 'element_point' | 'text_range'
+
+// Mirrors the widget's TextRangeAnchor (the dashboard cannot import from src/)
+export interface TextRangeAnchorRecord {
+  kind: 'text_range'
+  selectedText: string
+  normalizedText: string
+  prefix: string
+  suffix: string
+  containerSelector: string
+  startOffset: number
+  endOffset: number
+  rangeClientRects?: Array<{ left: number; top: number; width: number; height: number }>
+  createdFromUrl: string
+  createdAtViewport?: { width: number; height: number; scrollX: number; scrollY: number }
 }
 
 export interface CommentRecord {
@@ -19,6 +37,8 @@ export interface CommentRecord {
   claimedByAgentId: string | null
   imageUrl: string | null
   authorName: string | null
+  targetType?: CommentTargetType
+  anchor?: TextRangeAnchorRecord | null
   createdAt: string
   updatedAt: string
 }
@@ -192,6 +212,16 @@ export function renameProject(apiBase: string, accessToken: string, projectKey: 
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
     body: JSON.stringify({ name }),
+  })
+}
+
+// Replace the project's domain allowlist. An empty array disables the
+// restriction (comments accepted from any origin).
+export function updateProjectAllowedOrigins(apiBase: string, accessToken: string, projectKey: string, allowedOrigins: string[]) {
+  return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ allowedOrigins }),
   })
 }
 

@@ -6,13 +6,11 @@
 --
 -- Bucket itself must already exist (create via Supabase dashboard → Storage).
 
--- Allow anyone to upload into feedback-images (widget runs as anon)
+-- Uploads go through the API (`api/v1/public/comments.ts`), which writes with
+-- the service-role client — that bypasses storage RLS, so no anon insert policy
+-- is needed. We explicitly drop the old one so existing environments stop
+-- accepting direct anon uploads with the publishable key.
 drop policy if exists "anon upload feedback images" on storage.objects;
-create policy "anon upload feedback images"
-  on storage.objects
-  for insert
-  to anon
-  with check (bucket_id = 'feedback-images');
 
 -- Allow public read of feedback images
 drop policy if exists "public read feedback images" on storage.objects;

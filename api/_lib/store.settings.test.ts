@@ -1,15 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getSupabase: vi.fn(), getServiceSupabase: vi.fn() }))
+vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 
-import { getSupabase } from './supabase.js'
+import { getServiceSupabase } from './supabase.js'
 import {
   deleteProjectInvite,
   getUserEmailsByIds,
   listProjectInvites,
   listProjectMembers,
   removeProjectMember,
-  updateProjectName,
+  updateProject,
 } from './store.js'
 
 type Result = { data: unknown; error: { code?: string; message: string } | null }
@@ -48,30 +48,38 @@ function supabaseRpc(result: Result) {
 }
 
 beforeEach(() => {
-  vi.mocked(getSupabase).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
 })
 
-describe('updateProjectName', () => {
-  it('returns the renamed project', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+describe('updateProject', () => {
+  it('returns the renamed project, defaulting a missing allowlist to []', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       projects: [{ data: [{ public_key: 'p', slug: 'p', name: 'New', created_at: 't', updated_at: 't' }], error: null }],
     }) as never)
-    const out = await updateProjectName('p', 'New')
-    expect(out).toMatchObject({ publicKey: 'p', name: 'New' })
+    const out = await updateProject('p', { name: 'New' })
+    expect(out).toMatchObject({ publicKey: 'p', name: 'New', allowedOrigins: [] })
+  })
+
+  it('returns the project with its updated allowlist', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      projects: [{ data: [{ public_key: 'p', slug: 'p', name: 'P', allowed_origins: ['example.com'], created_at: 't', updated_at: 't' }], error: null }],
+    }) as never)
+    const out = await updateProject('p', { allowedOrigins: ['example.com'] })
+    expect(out).toMatchObject({ publicKey: 'p', allowedOrigins: ['example.com'] })
   })
 
   it('returns null when no row matched', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       projects: [{ data: [], error: null }],
     }) as never)
-    expect(await updateProjectName('missing', 'New')).toBeNull()
+    expect(await updateProject('missing', { name: 'New' })).toBeNull()
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       projects: [{ data: null, error: { message: 'boom' } }],
     }) as never)
-    await expect(updateProjectName('p', 'New')).rejects.toThrow('boom')
+    await expect(updateProject('p', { name: 'New' })).rejects.toThrow('boom')
   })
 })
 
@@ -85,7 +93,7 @@ describe('listProjectMembers', () => {
 
   it('maps rows with null emails when no service key is configured', async () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_members: [{ data: [{ user_id: 'u1', role: 'admin', created_at: 't' }], error: null }],
     }) as never)
     const out = await listProjectMembers('p')
@@ -93,14 +101,14 @@ describe('listProjectMembers', () => {
   })
 
   it('returns an empty roster when the table yields no rows', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_members: [{ data: null, error: null }],
     }) as never)
     expect(await listProjectMembers('p')).toEqual([])
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_members: [{ data: null, error: { message: 'boom' } }],
     }) as never)
     await expect(listProjectMembers('p')).rejects.toThrow('boom')
@@ -109,22 +117,22 @@ describe('listProjectMembers', () => {
 
 describe('removeProjectMember', () => {
   it('returns false when the member is not in the project', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: 'not_found', error: null }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'not_found', error: null }) as never)
     expect(await removeProjectMember('p', 'gone')).toBe(false)
   })
 
   it('refuses to remove the last admin', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: 'last_admin', error: null }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'last_admin', error: null }) as never)
     await expect(removeProjectMember('p', 'a')).rejects.toThrow('last_admin')
   })
 
   it('removes a member when the guard passes', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: 'removed', error: null }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'removed', error: null }) as never)
     expect(await removeProjectMember('p', 'a')).toBe(true)
   })
 
   it('throws when the rpc errors', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseRpc({ data: null, error: { message: 'boom' } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: { message: 'boom' } }) as never)
     await expect(removeProjectMember('p', 'a')).rejects.toThrow('boom')
   })
 })
@@ -174,7 +182,7 @@ describe('getUserEmailsByIds', () => {
 
 describe('listProjectInvites', () => {
   it('returns mapped invites', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_invites: [{ data: [{ project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'u', created_at: 't' }], error: null }],
     }) as never)
     const out = await listProjectInvites('p')
@@ -182,14 +190,14 @@ describe('listProjectInvites', () => {
   })
 
   it('returns an empty list when the table yields no rows', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_invites: [{ data: null, error: null }],
     }) as never)
     expect(await listProjectInvites('p')).toEqual([])
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_invites: [{ data: null, error: { message: 'boom' } }],
     }) as never)
     await expect(listProjectInvites('p')).rejects.toThrow('boom')
@@ -198,21 +206,21 @@ describe('listProjectInvites', () => {
 
 describe('deleteProjectInvite', () => {
   it('returns true when a row was deleted', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_invites: [{ data: [{ email: 'x@y.z' }], error: null }],
     }) as never)
     expect(await deleteProjectInvite('p', 'X@Y.Z')).toBe(true)
   })
 
   it('returns false when nothing matched', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_invites: [{ data: [], error: null }],
     }) as never)
     expect(await deleteProjectInvite('p', 'x@y.z')).toBe(false)
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getSupabase).mockReturnValue(supabaseWith({
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_invites: [{ data: null, error: { message: 'boom' } }],
     }) as never)
     await expect(deleteProjectInvite('p', 'x@y.z')).rejects.toThrow('boom')

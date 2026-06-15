@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { asset, route } from '../lib/routes'
 import { Spinner } from './primitives'
 
 /**
@@ -65,7 +66,7 @@ export function ResetPasswordPage() {
       // password active.
       await supabase.auth.signOut()
       window.setTimeout(() => {
-        window.location.href = '/login'
+        window.location.href = route('/login')
       }, 1400)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update password')
@@ -134,7 +135,7 @@ export function ResetPasswordPage() {
       {/* CRRT identity mark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(24px, 5vh, 36px)' }}>
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt=""
           width={40}
           height={40}
@@ -277,7 +278,7 @@ export function ResetPasswordPage() {
 
       <p style={{ marginTop: 28, fontFamily: 'var(--crrt-font-body)', fontSize: 14, color: 'var(--muted-foreground)' }}>
         remembered it?{' '}
-        <a href="/login" style={{ color: 'var(--crrt-carrot)', textDecoration: 'none' }}>
+        <a href={route('/login')} style={{ color: 'var(--crrt-carrot)', textDecoration: 'none' }}>
           back to sign in →
         </a>
       </p>
@@ -303,7 +304,7 @@ function SuccessScreen() {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 36 }}>
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt=""
           width={40}
           height={40}

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '../lib/utils'
+import { asset } from '../lib/routes'
 import type { ShareEventsResponse } from '../api'
 import { describeEvent } from '../lib/format'
 import { AGENTS, type AgentMeta, type Comment } from '../lib/types'
@@ -223,7 +224,7 @@ function HandoffHero({ count, filtered }: { count: number; filtered: boolean }) 
         )}
       >
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt=""
           width={logoSize}
           height={logoSize}

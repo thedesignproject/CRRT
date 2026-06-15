@@ -1,3 +1,5 @@
+import { asset } from '../lib/routes'
+
 interface WelcomeScreenProps {
   /** Called when the user clicks the "create your first project" CTA. */
   onCreateProject: () => void
@@ -68,7 +70,7 @@ export function WelcomeScreen({ onCreateProject }: WelcomeScreenProps) {
       {/* CRRT identity mark */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 'clamp(24px, 5vh, 36px)' }}>
         <img
-          src="/crrt-isologo.png"
+          src={asset('crrt-isologo.png')}
           alt=""
           width={40}
           height={40}

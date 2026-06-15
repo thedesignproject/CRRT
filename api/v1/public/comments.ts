@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
+import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
+import { parseCommentTarget } from '../../_lib/anchor.js'
 import type { ReviewStatus } from '../../_lib/status.js'
-import { getSupabase } from '../../_lib/supabase.js'
+import { getServiceSupabase } from '../../_lib/supabase.js'
 
 const METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 const VALID_STATUSES = new Set(['open', 'accepted', 'approved', 'rejected', 'pending'])
@@ -128,7 +130,7 @@ async function uploadImage(projectKey: string, mimeType: string, base64Data: str
   const ext = mimeType.split('/')[1] ?? 'png'
   const path = `${projectKey}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
 
-  const supabase = getSupabase()
+  const supabase = getServiceSupabase()
   const { error } = await supabase.storage
     .from('feedback-images')
     .upload(path, buffer, { contentType: mimeType, upsert: false })
@@ -164,6 +166,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       resolvedAuthorName = trimmed || null
     }
 
+    const parsedTarget = parseCommentTarget(req.body?.targetType, req.body?.anchor)
+    if (!parsedTarget.ok) {
+      return jsonError(req, res, 400, parsedTarget.error)
+    }
+
     if (imageBase64 !== undefined) {
       if (typeof imageBase64 !== 'string' || typeof imageMimeType !== 'string') {
         return jsonError(req, res, 400, 'imageBase64 and imageMimeType must both be strings')
@@ -173,7 +180,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    await ensurePublicProject(resolvedProjectKey)
+    const project = await ensurePublicProject(resolvedProjectKey)
+
+    if (!isHostnameAllowed(getRequestHostname(req), project.allowedOrigins)) {
+      return jsonError(req, res, 403, 'Origin is not in this project\'s domain allowlist')
+    }
 
     let imageUrl: string | null = null
     if (imageBase64 && imageMimeType) {
@@ -189,6 +200,8 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       body,
       imageUrl,
       authorName: resolvedAuthorName,
+      targetType: parsedTarget.targetType,
+      anchor: parsedTarget.anchor,
     })
 
     setCors(req, res, METHODS)

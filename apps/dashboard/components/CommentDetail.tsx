@@ -19,7 +19,6 @@ import { ProjectEmptyState } from './ProjectEmptyState'
 interface CommentDetailProps {
   selectedComment: Comment | null
   selectedProject: string
-  apiBase: string
   commentsLoading: boolean
   commentsError: string | null
   projectComments: Comment[]
@@ -34,7 +33,6 @@ interface CommentDetailProps {
 export function CommentDetail({
   selectedComment,
   selectedProject,
-  apiBase,
   commentsLoading,
   commentsError,
   projectComments,
@@ -123,9 +121,22 @@ export function CommentDetail({
                   <p className="text-[15px] leading-relaxed text-foreground">
                     {selectedComment.body}
                   </p>
-                  <div className="mt-2 text-xs font-mono text-muted-foreground">
-                    {selectedComment.selector}
-                  </div>
+                  {selectedComment.targetType === 'text_range' && selectedComment.anchor ? (
+                    <div className="mt-3">
+                      <p className="text-[13px] leading-relaxed border-l-2 border-primary bg-muted/60 px-3 py-2 rounded-md">
+                        <span className="text-muted-foreground">{selectedComment.anchor.prefix}</span>
+                        <span className="text-foreground font-medium">{selectedComment.anchor.selectedText}</span>
+                        <span className="text-muted-foreground">{selectedComment.anchor.suffix}</span>
+                      </p>
+                      <div className="mt-2 text-xs font-mono text-muted-foreground">
+                        {selectedComment.anchor.containerSelector} · chars {selectedComment.anchor.startOffset}–{selectedComment.anchor.endOffset}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-xs font-mono text-muted-foreground">
+                      {selectedComment.selector}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -187,7 +198,7 @@ export function CommentDetail({
           </div>
         </>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
-        <ProjectEmptyState projectId={selectedProject} apiBase={apiBase} />
+        <ProjectEmptyState projectId={selectedProject} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
