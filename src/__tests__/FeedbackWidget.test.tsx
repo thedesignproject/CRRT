@@ -633,6 +633,127 @@ describe('<FeedbackWidget />', () => {
       delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
     })
 
+    it('falls back to caretRangeFromPoint when caretPositionFromPoint is absent', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
+      ;(document as unknown as Record<string, unknown>).caretRangeFromPoint =
+        () => ({ startContainer: p.firstChild })
+      vi.spyOn(document, 'createRange').mockReturnValue({
+        selectNodeContents: vi.fn(),
+        getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
+      } as never)
+
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 40, clientY: 40 })
+      })
+      expect(document.body.style.cursor).toBe('text')
+
+      // caretRangeFromPoint returning null → no caret node → crosshair again
+      ;(document as unknown as Record<string, unknown>).caretRangeFromPoint = () => null
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 41, clientY: 41 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      // a caret hit whose range has no startContainer also yields no node
+      ;(document as unknown as Record<string, unknown>).caretRangeFromPoint = () => ({})
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 42, clientY: 42 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      delete (document as unknown as Record<string, unknown>).caretRangeFromPoint
+    })
+
+    it('treats a caret over a blank text node as non-text', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      // A text node whose textContent is null/blank must not flip to a text cursor.
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
+        () => ({ offsetNode: { nodeType: Node.TEXT_NODE, textContent: null } })
+
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 40, clientY: 40 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
+    })
+
+    it('treats a caret whose rects miss the pointer as non-text', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { p } = appendCopyTarget()
+      await startSelecting()
+
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
+        () => ({ offsetNode: p.firstChild })
+      vi.spyOn(document, 'createRange').mockReturnValue({
+        selectNodeContents: vi.fn(),
+        getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
+      } as never)
+
+      // Pointer to the right of every rect → loop finds no hit → crosshair.
+      await act(async () => {
+        fireEvent.mouseMove(p, { clientX: 900, clientY: 40 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+
+      delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
+    })
+
+    it('clears hover state when the pointer is over the widget chrome', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      appendCopyTarget()
+      await startSelecting()
+
+      const widgetEl = document.querySelector<HTMLElement>('[data-fw]')!
+      await act(async () => {
+        fireEvent.mouseMove(widgetEl, { clientX: 5, clientY: 5 })
+      })
+      expect(document.body.style.cursor).toBe('crosshair')
+    })
+
+    it('falls back to a plain pin when the selection is whitespace only', async () => {
+      const calls = mockFetch()
+      stubStoredAuthor()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const targetNode = document.createElement('article')
+      targetNode.setAttribute('data-test-target', '')
+      const p = document.createElement('p')
+      p.textContent = '   spaced copy'
+      targetNode.appendChild(p)
+      document.body.appendChild(targetNode)
+      await startSelecting()
+
+      // Select only the leading whitespace → buildTextRangeAnchor returns null.
+      selectText(p.firstChild!, 0, 3)
+      await act(async () => {
+        fireEvent.mouseUp(p)
+        fireEvent.click(p)
+      })
+
+      const textarea = await getTextarea()
+      fireEvent.change(textarea, { target: { value: 'plain pin' } })
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!)
+
+      await waitFor(() => {
+        const post = calls.find((c) => c.init?.method === 'POST')
+        expect(post).toBeDefined()
+        const body = JSON.parse(String(post?.init?.body))
+        expect('targetType' in body).toBe(false)
+        expect('anchor' in body).toBe(false)
+      })
+    })
+
     it('clears any selection that existed before entering feedback mode', async () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
