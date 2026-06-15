@@ -948,6 +948,76 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
+    const textRangeAnchor = (selectedText: string) => ({
+      kind: 'text_range',
+      selectedText,
+      normalizedText: selectedText,
+      prefix: '',
+      suffix: '',
+      containerSelector: 'body',
+      startOffset: 0,
+      endOffset: selectedText.length,
+      createdFromUrl: window.location.href.split('#')[0],
+    })
+
+    it('shows the anchored selection quote in the sidebar card', async () => {
+      mockFetch(undefined, commentsResponse([
+        seedComment({ body: 'tighten this copy', targetType: 'text_range', anchor: textRangeAnchor('quoted snippet') }),
+      ]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const card = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw] .fw-sidebar-card')
+        if (!el) throw new Error('sidebar card not mounted yet')
+        return el
+      })
+      expect(card.textContent).toContain('“quoted snippet”')
+      expect(card.textContent).toContain('tighten this copy')
+    })
+
+    it('shows the anchored selection quote in the pin detail popover', async () => {
+      mockFetch(undefined, commentsResponse([
+        seedComment({ body: 'tighten this copy', targetType: 'text_range', anchor: textRangeAnchor('quoted snippet') }),
+      ]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const card = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw] .fw-sidebar-card')
+        if (!el) throw new Error('sidebar card not mounted yet')
+        return el
+      })
+      fireEvent.click(card)
+
+      await waitFor(() => {
+        const quote = Array.from(
+          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+        ).find((el) => el.textContent === '“quoted snippet”')
+        if (!quote) throw new Error('pin detail quote not rendered yet')
+      })
+    })
+
+    it('shows the anchored selection quote in the pin hover tooltip', async () => {
+      mockFetch(undefined, commentsResponse([
+        seedComment({ body: 'tighten this copy', targetType: 'text_range', anchor: textRangeAnchor('quoted snippet') }),
+      ]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const pin = await waitFor(() => {
+        const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
+        if (!el) throw new Error('pin not rendered yet')
+        return el
+      })
+      await act(async () => {
+        fireEvent.mouseEnter(pin)
+      })
+      await waitFor(() => {
+        const quote = Array.from(
+          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
+        ).find((el) => el.textContent === '“quoted snippet”')
+        if (!quote) throw new Error('hover tooltip quote not rendered yet')
+      })
+    })
+
     it('renders empty-state copy when no comments are loaded', async () => {
       mockFetch(undefined, commentsResponse([]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)

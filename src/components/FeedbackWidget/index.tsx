@@ -13,6 +13,7 @@ import { FeedbackWidgetStyles } from './styles'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
+import { TextRangeQuote } from './quote'
 
 type CaretPositionDocument = Document & {
   caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
@@ -874,24 +875,10 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
             </div>
 
             {target.anchor && (
-              <div style={{
-                margin: '0 14px 8px',
-                padding: '9px 11px',
-                borderLeft: '3px solid #E8853D',
-                borderRadius: '0 8px 8px 0',
-                background: 'rgba(232, 133, 61, 0.08)',
-                color: '#C9C4BC',
-                fontSize: 13,
-                lineHeight: 1.5,
-                fontStyle: 'italic',
-                wordBreak: 'break-word',
-                display: '-webkit-box',
-                WebkitLineClamp: 3,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-              }}>
-                “{target.anchor.selectedText}”
-              </div>
+              <TextRangeQuote
+                text={target.anchor.selectedText}
+                style={{ margin: '0 14px 8px' }}
+              />
             )}
 
             {/* Screenshot thumbnail */}
@@ -1139,6 +1126,12 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                       <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>{pinAuthor}</span>
                       <span style={{ fontSize: 12, color: '#6B6560' }}>{timeAgo(c.createdAt)}</span>
                     </div>
+                    {c.anchor && (
+                      <TextRangeQuote
+                        text={c.anchor.selectedText}
+                        style={{ fontSize: 12, marginBottom: 4, WebkitLineClamp: 2 }}
+                      />
+                    )}
                     <div style={{ fontSize: 13, color: '#E8E5DF', lineHeight: 1.4, wordBreak: 'break-word' }}>
                       {c.body}
                     </div>
@@ -1233,9 +1226,17 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontSize: 14, lineHeight: 1.6, color: '#E8E5DF', marginBottom: bodyMarginBottom }}>
-                        {c.body}
-                      </div>
+                      <>
+                        {c.anchor && (
+                          <TextRangeQuote
+                            text={c.anchor.selectedText}
+                            style={{ marginBottom: 10 }}
+                          />
+                        )}
+                        <div style={{ fontSize: 14, lineHeight: 1.6, color: '#E8E5DF', marginBottom: bodyMarginBottom }}>
+                          {c.body}
+                        </div>
+                      </>
                     )}
 
                     {c.imageUrl && (
@@ -1569,6 +1570,12 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     </div>
                   ) : (
                     <>
+                      {c.anchor && (
+                        <TextRangeQuote
+                          text={c.anchor.selectedText}
+                          style={{ marginLeft: 32, marginBottom: 6 }}
+                        />
+                      )}
                       <div
                         style={{
                           fontSize: 13.5,
