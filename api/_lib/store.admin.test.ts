@@ -94,6 +94,12 @@ describe('listAllUsers', () => {
     buildClient({ listUsers, tables: { project_members: { data: null, error: { message: 'db down' } } } })
     await expect(listAllUsers()).rejects.toThrow('db down')
   })
+
+  it('tolerates null data from both queries', async () => {
+    const listUsers = vi.fn().mockResolvedValue({ data: null, error: null })
+    buildClient({ listUsers, tables: { project_members: { data: null, error: null } } })
+    expect(await listAllUsers()).toEqual([])
+  })
 })
 
 describe('listProjectsWithComments', () => {
@@ -165,6 +171,22 @@ describe('listProjectsWithComments', () => {
 
   it('returns [] when no project has comments', async () => {
     buildClient({ tables: { comments: { data: [{ project_id: null, created_at: '2026-01-01T00:00:00Z' }], error: null } } })
+    expect(await listProjectsWithComments()).toEqual([])
+  })
+
+  it('returns [] when the comments query yields null data', async () => {
+    buildClient({ tables: { comments: { data: null, error: null } } })
+    expect(await listProjectsWithComments()).toEqual([])
+  })
+
+  it('tolerates null data from the project and member queries', async () => {
+    buildClient({
+      tables: {
+        comments: { data: [{ project_id: 'p1', created_at: '2026-01-01T00:00:00Z' }], error: null },
+        projects: { data: null, error: null },
+        project_members: { data: null, error: null },
+      },
+    })
     expect(await listProjectsWithComments()).toEqual([])
   })
 

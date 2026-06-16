@@ -138,6 +138,43 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   }
 }
 
+export interface AdminUser {
+  id: string
+  email: string | null
+  createdAt: string
+  projectCount: number
+}
+
+export interface AdminProject {
+  publicKey: string
+  name: string
+  createdAt: string
+  commentCount: number
+  latestCommentAt: string
+  claimed: boolean
+  owners: string[]
+}
+
+// Whether the current user may see the Super Admin section. The server makes
+// the real decision on every /v1/admin/* call; this only drives UI visibility.
+export function getSuperAdminStatus(apiBase: string, accessToken: string) {
+  return requestJson<{ isSuperAdmin: boolean }>(`${apiBase}/v1/admin/me`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function listAdminUsers(apiBase: string, accessToken: string) {
+  return requestJson<AdminUser[]>(`${apiBase}/v1/admin/users`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function listAdminProjects(apiBase: string, accessToken: string) {
+  return requestJson<AdminProject[]>(`${apiBase}/v1/admin/projects`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
 export function listProjects(apiBase: string, accessToken: string) {
   return requestJson<Project[]>(`${apiBase}/v1/projects`, {
     headers: {
