@@ -307,6 +307,138 @@ export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, 
   return result
 }
 
+export type AdminUser = {
+  id: string
+  email: string | null
+  createdAt: string
+  projectCount: number
+}
+
+/**
+ * Super-admin view: every auth user, newest first, with how many projects each
+ * belongs to. Users come from the auth admin API (paged); project counts are
+ * tallied in-process from `project_members`.
+ */
+export async function listAllUsers(): Promise<AdminUser[]> {
+  const supabase = getSupabase()
+
+  const users: { id: string; email: string | null; created_at: string }[] = []
+  const perPage = 200
+  let page = 1
+  for (;;) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
+    if (error) throw new Error(error.message)
+    const batch = data?.users ?? []
+    for (const u of batch) {
+      users.push({ id: u.id, email: u.email ?? null, created_at: u.created_at })
+    }
+    if (batch.length < perPage) break
+    page += 1
+  }
+
+  const { data: memberRows, error: memberError } = await supabase
+    .from('project_members')
+    .select('user_id')
+  if (memberError) throw new Error(memberError.message)
+
+  const counts = new Map<string, number>()
+  for (const row of (memberRows || []) as { user_id: string }[]) {
+    counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1)
+  }
+
+  return users
+    .map((u) => ({
+      id: u.id,
+      email: u.email,
+      createdAt: u.created_at,
+      projectCount: counts.get(u.id) ?? 0,
+    }))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+export type AdminProject = {
+  publicKey: string
+  name: string
+  createdAt: string
+  commentCount: number
+  latestCommentAt: string
+  claimed: boolean
+  owners: string[]
+}
+
+/**
+ * Super-admin view: every project that has received at least one comment,
+ * ordered by most-recent comment. Per project: comment count, latest comment
+ * time, whether it's been claimed (`claimable === false`), and the resolved
+ * emails of its admin members (the owners). Comment stats are aggregated
+ * in-process so a single scan of `comments` drives the project set.
+ */
+export async function listProjectsWithComments(): Promise<AdminProject[]> {
+  const supabase = getSupabase()
+
+  const { data: commentRows, error: commentError } = await supabase
+    .from('comments')
+    .select('project_id, created_at')
+  if (commentError) throw new Error(commentError.message)
+
+  const stats = new Map<string, { count: number; latest: string }>()
+  for (const row of (commentRows || []) as { project_id: string | null; created_at: string }[]) {
+    if (!row.project_id) continue
+    const cur = stats.get(row.project_id)
+    if (!cur) {
+      stats.set(row.project_id, { count: 1, latest: row.created_at })
+    } else {
+      cur.count += 1
+      if (row.created_at > cur.latest) cur.latest = row.created_at
+    }
+  }
+
+  const keys = Array.from(stats.keys())
+  if (keys.length === 0) return []
+
+  const { data: projectRows, error: projectError } = await supabase
+    .from('projects')
+    .select('public_key, name, claimable, created_at')
+    .in('public_key', keys)
+  if (projectError) throw new Error(projectError.message)
+
+  const { data: memberRows, error: memberError } = await supabase
+    .from('project_members')
+    .select('project_key, user_id, role')
+    .in('project_key', keys)
+    .eq('role', 'admin')
+  if (memberError) throw new Error(memberError.message)
+
+  const ownersByProject = new Map<string, string[]>()
+  const userIds: string[] = []
+  for (const row of (memberRows || []) as { project_key: string; user_id: string }[]) {
+    userIds.push(row.user_id)
+    const list = ownersByProject.get(row.project_key) ?? []
+    list.push(row.user_id)
+    ownersByProject.set(row.project_key, list)
+  }
+  const emails = await getUserEmailsByIds(userIds)
+
+  type AdminProjectRow = { public_key: string; name: string; claimable: boolean; created_at: string }
+  return ((projectRows || []) as AdminProjectRow[])
+    .map((row) => {
+      const stat = stats.get(row.public_key) as { count: number; latest: string }
+      const owners = (ownersByProject.get(row.public_key) ?? [])
+        .map((id) => emails[id])
+        .filter((email): email is string => Boolean(email))
+      return {
+        publicKey: row.public_key,
+        name: row.name,
+        createdAt: row.created_at,
+        commentCount: stat.count,
+        latestCommentAt: stat.latest,
+        claimed: row.claimable === false,
+        owners,
+      }
+    })
+    .sort((a, b) => b.latestCommentAt.localeCompare(a.latestCommentAt))
+}
+
 /**
  * Take ownership of a project. Two ways in:
  *  - Existing unclaimed project (widget-made): a conditional UPDATE flips
