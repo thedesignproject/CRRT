@@ -43,13 +43,12 @@ function ColumnState({ loading, error, empty, emptyLabel }: { loading: boolean; 
 export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) {
   const { users, projects, loading, error } = useAdminData(apiBase, accessToken)
 
-  // Click a user to scope the projects column to the ones they own (their
-  // email appears in a project's owners). Click again, or hit the clear chip,
-  // to drop the filter.
+  // Click a user to scope the projects column to the ones they belong to (as
+  // admin or member). Click again, or hit the clear chip, to drop the filter.
   const [filterEmail, setFilterEmail] = useState<string | null>(null)
 
   const filteredProjects = useMemo(
-    () => (filterEmail ? projects.filter((p) => p.owners.includes(filterEmail)) : projects),
+    () => (filterEmail ? projects.filter((p) => p.members.some((m) => m.email === filterEmail)) : projects),
     [projects, filterEmail],
   )
 
@@ -116,7 +115,7 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
               )}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {filterEmail ? `${filteredProjects.length} owned by this user` : 'Latest comment first'}
+              {filterEmail ? `${filteredProjects.length} with this user` : 'Latest comment first'}
             </p>
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -124,33 +123,50 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
               loading={loading}
               error={error}
               empty={filteredProjects.length === 0}
-              emptyLabel={filterEmail ? 'This user owns no projects with comments.' : 'No projects have received comments yet.'}
+              emptyLabel={filterEmail ? 'This user is not in any projects with comments.' : 'No projects have received comments yet.'}
             />
-            {!loading && !error && filteredProjects.map((p) => (
-              <div key={p.publicKey} className="px-4 py-3 border-b border-border/50">
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-[13px] font-bold text-foreground truncate">{p.name}</span>
-                  <span
-                    className={cn(
-                      'text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0',
-                      p.claimed ? 'bg-status-accepted-bg text-status-accepted' : 'bg-muted text-muted-foreground',
-                    )}
-                  >
-                    {p.claimed ? 'Claimed' : 'Unclaimed'}
-                  </span>
+            {!loading && !error && filteredProjects.map((p) => {
+              const owners = p.members.filter((m) => m.role === 'admin').map((m) => m.email)
+              // While filtering by a user, surface that user's role in this project.
+              const filterRole = filterEmail ? p.members.find((m) => m.email === filterEmail)?.role : undefined
+              return (
+                <div key={p.publicKey} className="px-4 py-3 border-b border-border/50">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-[13px] font-bold text-foreground truncate">{p.name}</span>
+                      {filterRole && (
+                        <span
+                          className={cn(
+                            'text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 uppercase tracking-wide',
+                            filterRole === 'admin' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {filterRole}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0',
+                        p.claimed ? 'bg-status-accepted-bg text-status-accepted' : 'bg-muted text-muted-foreground',
+                      )}
+                    >
+                      {p.claimed ? 'Claimed' : 'Unclaimed'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                    <span className="font-mono">{p.publicKey}</span>
+                    <span>{p.commentCount} {p.commentCount === 1 ? 'comment' : 'comments'}</span>
+                    <span>latest {timeAgo(p.latestCommentAt)}</span>
+                  </div>
+                  {owners.length > 0 && (
+                    <p className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">
+                      owners: {owners.join(', ')}
+                    </p>
+                  )}
                 </div>
-                <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-                  <span className="font-mono">{p.publicKey}</span>
-                  <span>{p.commentCount} {p.commentCount === 1 ? 'comment' : 'comments'}</span>
-                  <span>latest {timeAgo(p.latestCommentAt)}</span>
-                </div>
-                {p.owners.length > 0 && (
-                  <p className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">
-                    owners: {p.owners.join(', ')}
-                  </p>
-                )}
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       </div>

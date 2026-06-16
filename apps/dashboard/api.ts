@@ -145,6 +145,11 @@ export interface AdminUser {
   projectCount: number
 }
 
+export interface AdminProjectMember {
+  email: string
+  role: 'admin' | 'member'
+}
+
 export interface AdminProject {
   publicKey: string
   name: string
@@ -152,7 +157,7 @@ export interface AdminProject {
   commentCount: number
   latestCommentAt: string
   claimed: boolean
-  owners: string[]
+  members: AdminProjectMember[]
 }
 
 // Whether the current user may see the Super Admin section. The server makes
