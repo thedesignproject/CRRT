@@ -94,6 +94,12 @@ describe('listAllUsers', () => {
     buildClient({ listUsers, tables: { project_members: { data: null, error: { message: 'db down' } } } })
     await expect(listAllUsers()).rejects.toThrow('db down')
   })
+
+  it('tolerates null data from both queries', async () => {
+    const listUsers = vi.fn().mockResolvedValue({ data: null, error: null })
+    buildClient({ listUsers, tables: { project_members: { data: null, error: null } } })
+    expect(await listAllUsers()).toEqual([])
+  })
 })
 
 describe('listProjectsWithComments', () => {
@@ -109,7 +115,7 @@ describe('listProjectsWithComments', () => {
     )
   }
 
-  it('aggregates comments per project, resolves owners, sorts by latest comment', async () => {
+  it('aggregates comments per project, resolves members with roles, sorts by latest comment', async () => {
     buildClient({
       tables: {
         comments: {
@@ -132,13 +138,14 @@ describe('listProjectsWithComments', () => {
         project_members: {
           data: [
             { project_key: 'p1', user_id: 'owner1', role: 'admin' },
-            { project_key: 'p1', user_id: 'ghost', role: 'admin' }, // email won't resolve
+            { project_key: 'p1', user_id: 'mem1', role: 'member' },
+            { project_key: 'p1', user_id: 'ghost', role: 'admin' }, // email won't resolve → dropped
           ],
           error: null,
         },
       },
     })
-    stubEmails({ owner1: 'owner1@x.com' })
+    stubEmails({ owner1: 'owner1@x.com', mem1: 'mem1@x.com' })
 
     const projects = await listProjectsWithComments()
     expect(projects).toEqual([
@@ -149,7 +156,7 @@ describe('listProjectsWithComments', () => {
         commentCount: 1,
         latestCommentAt: '2026-05-01T00:00:00Z',
         claimed: false,
-        owners: [],
+        members: [],
       },
       {
         publicKey: 'p1',
@@ -158,7 +165,10 @@ describe('listProjectsWithComments', () => {
         commentCount: 3,
         latestCommentAt: '2026-01-03T00:00:00Z',
         claimed: true,
-        owners: ['owner1@x.com'],
+        members: [
+          { email: 'owner1@x.com', role: 'admin' },
+          { email: 'mem1@x.com', role: 'member' },
+        ],
       },
     ])
   })
@@ -192,5 +202,21 @@ describe('listProjectsWithComments', () => {
       },
     })
     await expect(listProjectsWithComments()).rejects.toThrow('m down')
+  })
+
+  it('returns [] when the comments query yields null data', async () => {
+    buildClient({ tables: { comments: { data: null, error: null } } })
+    expect(await listProjectsWithComments()).toEqual([])
+  })
+
+  it('tolerates null data from the project and member queries', async () => {
+    buildClient({
+      tables: {
+        comments: { data: [{ project_id: 'p1', created_at: '2026-01-01T00:00:00Z' }], error: null },
+        projects: { data: null, error: null },
+        project_members: { data: null, error: null },
+      },
+    })
+    expect(await listProjectsWithComments()).toEqual([])
   })
 })

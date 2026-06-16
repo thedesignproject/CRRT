@@ -53,7 +53,7 @@ describe('api/v1/admin/projects', () => {
   it('returns the project list, 500 on store throw', async () => {
     vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
 
-    const row = { publicKey: 'p1', name: 'One', createdAt: 't', commentCount: 3, latestCommentAt: 't2', claimed: true, owners: ['o@x.com'] }
+    const row = { publicKey: 'p1', name: 'One', createdAt: 't', commentCount: 3, latestCommentAt: 't2', claimed: true, members: [{ email: 'o@x.com', role: 'admin' as const }] }
     vi.mocked(listProjectsWithComments).mockResolvedValueOnce([row])
     let res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
