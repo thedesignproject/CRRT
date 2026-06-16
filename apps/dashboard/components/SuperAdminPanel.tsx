@@ -1,7 +1,8 @@
+import { useMemo, useState } from 'react'
 import { cn } from '../lib/utils'
 import { timeAgo } from '../lib/format'
 import { useAdminData } from '../hooks/useAdminData'
-import { ShieldIcon } from './icons'
+import { ShieldIcon, XIcon } from './icons'
 import { Spinner } from './primitives'
 
 interface SuperAdminPanelProps {
@@ -42,6 +43,16 @@ function ColumnState({ loading, error, empty, emptyLabel }: { loading: boolean; 
 export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) {
   const { users, projects, loading, error } = useAdminData(apiBase, accessToken)
 
+  // Click a user to scope the projects column to the ones they own (their
+  // email appears in a project's owners). Click again, or hit the clear chip,
+  // to drop the filter.
+  const [filterEmail, setFilterEmail] = useState<string | null>(null)
+
+  const filteredProjects = useMemo(
+    () => (filterEmail ? projects.filter((p) => p.owners.includes(filterEmail)) : projects),
+    [projects, filterEmail],
+  )
+
   return (
     <div className="flex flex-col flex-1 overflow-hidden">
       <div className="flex items-center gap-2 px-5 h-11 shrink-0 border-b border-border bg-card">
@@ -61,29 +72,61 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
           </div>
           <div className="flex-1 overflow-y-auto">
             <ColumnState loading={loading} error={error} empty={users.length === 0} emptyLabel="No users yet." />
-            {!loading && !error && users.map((u) => (
-              <div key={u.id} className="px-4 py-3 border-b border-border/50">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[13px] font-bold text-foreground truncate">{u.email ?? u.id}</span>
-                  <span className="text-[10px] text-muted-foreground/60 shrink-0">{timeAgo(u.createdAt)}</span>
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {u.projectCount} {u.projectCount === 1 ? 'project' : 'projects'}
-                </p>
-              </div>
-            ))}
+            {!loading && !error && users.map((u) => {
+              const active = u.email !== null && u.email === filterEmail
+              return (
+                <button
+                  key={u.id}
+                  type="button"
+                  disabled={u.email === null}
+                  onClick={() => setFilterEmail((cur) => (cur === u.email ? null : u.email))}
+                  className={cn(
+                    'w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] transition-colors',
+                    active ? 'border-l-primary bg-white/[0.04]' : 'border-l-transparent',
+                    u.email === null ? 'cursor-default' : 'hover:bg-white/[0.02]',
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[13px] font-bold text-foreground truncate">{u.email ?? u.id}</span>
+                    <span className="text-[10px] text-muted-foreground/60 shrink-0">{timeAgo(u.createdAt)}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {u.projectCount} {u.projectCount === 1 ? 'project' : 'projects'}
+                  </p>
+                </button>
+              )
+            })}
           </div>
         </div>
 
         {/* Projects with comments — latest comment first */}
         <div className="flex-1 flex flex-col bg-background overflow-hidden">
           <div className={SECTION_HEADER}>
-            <h2 className="text-base font-bold text-foreground tracking-tight">Projects with comments</h2>
-            <p className="text-[11px] text-muted-foreground">Latest comment first</p>
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-base font-bold text-foreground tracking-tight">Projects with comments</h2>
+              {filterEmail && (
+                <button
+                  type="button"
+                  onClick={() => setFilterEmail(null)}
+                  className="flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-primary/15 text-primary hover:bg-primary/25 transition-colors max-w-[220px]"
+                >
+                  <span className="truncate">{filterEmail}</span>
+                  <XIcon size={11} />
+                </button>
+              )}
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              {filterEmail ? `${filteredProjects.length} owned by this user` : 'Latest comment first'}
+            </p>
           </div>
           <div className="flex-1 overflow-y-auto">
-            <ColumnState loading={loading} error={error} empty={projects.length === 0} emptyLabel="No projects have received comments yet." />
-            {!loading && !error && projects.map((p) => (
+            <ColumnState
+              loading={loading}
+              error={error}
+              empty={filteredProjects.length === 0}
+              emptyLabel={filterEmail ? 'This user owns no projects with comments.' : 'No projects have received comments yet.'}
+            />
+            {!loading && !error && filteredProjects.map((p) => (
               <div key={p.publicKey} className="px-4 py-3 border-b border-border/50">
                 <div className="flex items-center justify-between gap-2 mb-1">
                   <span className="text-[13px] font-bold text-foreground truncate">{p.name}</span>
