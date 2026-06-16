@@ -356,6 +356,11 @@ export async function listAllUsers(): Promise<AdminUser[]> {
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
+export type AdminProjectMember = {
+  email: string
+  role: 'admin' | 'member'
+}
+
 export type AdminProject = {
   publicKey: string
   name: string
@@ -363,14 +368,15 @@ export type AdminProject = {
   commentCount: number
   latestCommentAt: string
   claimed: boolean
-  owners: string[]
+  members: AdminProjectMember[]
 }
 
 /**
  * Super-admin view: every project that has received at least one comment,
  * ordered by most-recent comment. Per project: comment count, latest comment
- * time, whether it's been claimed (`claimable === false`), and the resolved
- * emails of its admin members (the owners). Comment stats are aggregated
+ * time, whether it's been claimed (`claimable === false`), and every member
+ * with their role + resolved email (admins are the owners; this also lets the
+ * dashboard scope projects to any member). Comment stats are aggregated
  * in-process so a single scan of `comments` drives the project set.
  */
 export async function listProjectsWithComments(): Promise<AdminProject[]> {
@@ -406,26 +412,25 @@ export async function listProjectsWithComments(): Promise<AdminProject[]> {
     .from('project_members')
     .select('project_key, user_id, role')
     .in('project_key', keys)
-    .eq('role', 'admin')
   if (memberError) throw new Error(memberError.message)
 
-  const ownersByProject = new Map<string, string[]>()
-  const userIds: string[] = []
-  for (const row of (memberRows || []) as { project_key: string; user_id: string }[]) {
-    userIds.push(row.user_id)
-    const list = ownersByProject.get(row.project_key) ?? []
-    list.push(row.user_id)
-    ownersByProject.set(row.project_key, list)
+  type MemberRow = { project_key: string; user_id: string; role: 'admin' | 'member' }
+  const rows = (memberRows || []) as MemberRow[]
+  const membersByProject = new Map<string, MemberRow[]>()
+  for (const row of rows) {
+    const list = membersByProject.get(row.project_key) ?? []
+    list.push(row)
+    membersByProject.set(row.project_key, list)
   }
-  const emails = await getUserEmailsByIds(userIds)
+  const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
 
   type AdminProjectRow = { public_key: string; name: string; claimable: boolean; created_at: string }
   return ((projectRows || []) as AdminProjectRow[])
     .map((row) => {
       const stat = stats.get(row.public_key) as { count: number; latest: string }
-      const owners = (ownersByProject.get(row.public_key) ?? [])
-        .map((id) => emails[id])
-        .filter((email): email is string => Boolean(email))
+      const members = (membersByProject.get(row.public_key) ?? [])
+        .map((m) => ({ email: emails[m.user_id], role: m.role }))
+        .filter((m): m is AdminProjectMember => Boolean(m.email))
       return {
         publicKey: row.public_key,
         name: row.name,
@@ -433,7 +438,7 @@ export async function listProjectsWithComments(): Promise<AdminProject[]> {
         commentCount: stat.count,
         latestCommentAt: stat.latest,
         claimed: row.claimable === false,
-        owners,
+        members,
       }
     })
     .sort((a, b) => b.latestCommentAt.localeCompare(a.latestCommentAt))
