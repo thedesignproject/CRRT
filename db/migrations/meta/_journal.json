@@ -43,6 +43,13 @@
       "when": 1781287117627,
       "tag": "0005_remarkable_snowbird",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781594640274,
+      "tag": "0006_calm_the_professor",
+      "breakpoints": true
     }
   ]
 }
