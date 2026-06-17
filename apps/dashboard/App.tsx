@@ -4,6 +4,7 @@ import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
 import { useAuth } from './hooks/useAuth'
+import { useSuperAdmin } from './hooks/useSuperAdmin'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { relPath } from './lib/routes'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
@@ -18,6 +19,7 @@ import { ResetPasswordPage } from './components/ResetPasswordPage'
 import { WelcomeScreen } from './components/WelcomeScreen'
 import { AddProjectPopover } from './components/AddProjectPopover'
 import { ProjectSettings } from './components/ProjectSettings'
+import { SuperAdminPanel } from './components/SuperAdminPanel'
 import { Spinner } from './components/primitives'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
@@ -71,8 +73,9 @@ export function App() {
 
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
   const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
+  const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings'>('feedback')
+  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin'>('feedback')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
@@ -395,9 +398,14 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
         user={user}
         onSignOut={onSignOut}
+        superadmin={superadmin}
+        superAdminActive={view === 'super-admin'}
+        onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
       />
 
-      {view === 'settings' && activeProject ? (
+      {view === 'super-admin' && superadmin ? (
+        <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
+      ) : view === 'settings' && activeProject ? (
         <ProjectSettings
           project={activeProject}
           apiBase={API_BASE}

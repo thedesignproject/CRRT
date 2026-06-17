@@ -3,7 +3,7 @@ import { cn } from '../lib/utils'
 import { asset } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, SunIcon } from './icons'
+import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
 import { NotificationBell } from './NotificationBell'
@@ -35,6 +35,9 @@ interface HeaderProps {
   toggleTheme: () => void
   user: User
   onSignOut: () => void
+  superadmin: boolean
+  superAdminActive: boolean
+  onOpenSuperAdmin: () => void
 }
 
 export function Header({
@@ -63,6 +66,9 @@ export function Header({
   toggleTheme,
   user,
   onSignOut,
+  superadmin,
+  superAdminActive,
+  onOpenSuperAdmin,
 }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 px-5 h-[60px] shrink-0 border-b border-border bg-card">
@@ -168,6 +174,20 @@ export function Header({
           userId={user.id}
           onProjectsChanged={onProjectsChanged}
         />
+        {superadmin && (
+          <button
+            onClick={onOpenSuperAdmin}
+            title="Super admin"
+            aria-label="Super admin"
+            aria-pressed={superAdminActive}
+            className={cn(
+              'w-7 h-7 rounded-md flex items-center justify-center transition-colors',
+              superAdminActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+            )}
+          >
+            <ShieldIcon size={15} />
+          </button>
+        )}
         {selectedProject && (
           <button
             onClick={onOpenSettings}
