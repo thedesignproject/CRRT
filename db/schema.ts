@@ -53,6 +53,15 @@ export const projectMembers = pgTable(
   }),
 )
 
+// Global super-admin allowlist. Membership grants cross-tenant read access
+// through the `/api/v1/admin/*` endpoints. `user_id` references auth.users(id);
+// as with project_members, Drizzle can't model the auth schema so that FK is
+// added by hand in the migration SQL. Grant by inserting a row.
+export const superAdmins = pgTable('super_admins', {
+  userId: uuid('user_id').primaryKey(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const projectInvites = pgTable(
   'project_invites',
   {

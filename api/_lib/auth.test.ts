@@ -1,11 +1,27 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getSupabase: vi.fn() }))
+vi.mock('./supabase.js', () => ({ getSupabase: vi.fn(), getServiceSupabase: vi.fn() }))
 vi.mock('./store.js', () => ({ isProjectMember: vi.fn() }))
 
-import { getSupabase } from './supabase.js'
+import { getServiceSupabase, getSupabase } from './supabase.js'
 import { isProjectMember } from './store.js'
-import { requireProjectMembership, requireReviewer, requireUser } from './auth.js'
+import { isSuperAdmin, requireProjectMembership, requireReviewer, requireSuperAdmin, requireUser } from './auth.js'
+
+// Stub getServiceSupabase().from('super_admins').select(...).eq(...).maybeSingle()
+function mockSuperAdminLookup(result: { data: unknown; error: unknown }) {
+  const maybeSingle = vi.fn().mockResolvedValue(result)
+  const eq = vi.fn().mockReturnValue({ maybeSingle })
+  const select = vi.fn().mockReturnValue({ eq })
+  const from = vi.fn().mockReturnValue({ select })
+  vi.mocked(getServiceSupabase).mockReturnValue({ from } as never)
+  return { from, select, eq, maybeSingle }
+}
+
+function mockValidUser(id = 'u-1', email = 'a@example.com') {
+  vi.mocked(getSupabase).mockReturnValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id, email } }, error: null }) },
+  } as never)
+}
 
 interface MockRes {
   statusCode: number
@@ -45,6 +61,7 @@ function mockRes(): MockRes {
 
 beforeEach(() => {
   vi.mocked(getSupabase).mockReset()
+  vi.mocked(getServiceSupabase).mockReset()
   delete process.env.REVIEWER_API_TOKEN
 })
 
@@ -134,6 +151,58 @@ describe('requireUser', () => {
     const res = mockRes()
     const user = await requireUser(mockReq({ authorization: 'Bearer tok' }), res as never)
     expect(user).toEqual({ userId: 'u-1', email: 'a@example.com' })
+  })
+})
+
+describe('isSuperAdmin', () => {
+  it('returns true when a row exists', async () => {
+    mockSuperAdminLookup({ data: { user_id: 'u-1' }, error: null })
+    expect(await isSuperAdmin('u-1')).toBe(true)
+  })
+
+  it('returns false when no row exists', async () => {
+    mockSuperAdminLookup({ data: null, error: null })
+    expect(await isSuperAdmin('u-1')).toBe(false)
+  })
+
+  it('throws when the lookup errors', async () => {
+    mockSuperAdminLookup({ data: null, error: { message: 'db down' } })
+    await expect(isSuperAdmin('u-1')).rejects.toThrow('db down')
+  })
+})
+
+describe('requireSuperAdmin', () => {
+  it('returns 401 when the caller is unauthenticated', async () => {
+    const res = mockRes()
+    const user = await requireSuperAdmin(mockReq(), res as never)
+    expect(user).toBeNull()
+    expect(res.statusCode).toBe(401)
+  })
+
+  it('returns the user when they are a super admin', async () => {
+    mockValidUser()
+    mockSuperAdminLookup({ data: { user_id: 'u-1' }, error: null })
+    const res = mockRes()
+    const user = await requireSuperAdmin(mockReq({ authorization: 'Bearer tok' }), res as never)
+    expect(user).toEqual({ userId: 'u-1', email: 'a@example.com' })
+  })
+
+  it('writes 403 when the caller is not a super admin', async () => {
+    mockValidUser()
+    mockSuperAdminLookup({ data: null, error: null })
+    const res = mockRes()
+    const user = await requireSuperAdmin(mockReq({ authorization: 'Bearer tok' }), res as never)
+    expect(user).toBeNull()
+    expect(res.statusCode).toBe(403)
+  })
+
+  it('writes 500 when the super-admin check throws', async () => {
+    mockValidUser()
+    mockSuperAdminLookup({ data: null, error: { message: 'db down' } })
+    const res = mockRes()
+    const user = await requireSuperAdmin(mockReq({ authorization: 'Bearer tok' }), res as never)
+    expect(user).toBeNull()
+    expect(res.statusCode).toBe(500)
   })
 })
 

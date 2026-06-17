@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getBearerToken, getReviewerToken, jsonError } from './http.js'
 import { isProjectMember } from './store.js'
-import { getSupabase } from './supabase.js'
+import { getServiceSupabase, getSupabase } from './supabase.js'
 
 export type AuthenticatedUser = { userId: string; email: string }
 
@@ -41,6 +41,44 @@ export function requireReviewer(req: VercelRequest, res: VercelResponse) {
   }
 
   return true
+}
+
+/**
+ * True when the user is in the global `super_admins` allowlist. Reads through
+ * the service-role client since `super_admins` is RLS deny-all like every other
+ * table. A query error throws so callers fail closed rather than silently
+ * granting/denying.
+ */
+export async function isSuperAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await getServiceSupabase()
+    .from('super_admins')
+    .select('user_id')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data !== null
+}
+
+/**
+ * Gate for the `/api/v1/admin/*` endpoints. Authenticates the caller, then
+ * requires super-admin membership. Writes 403 on miss so callers can
+ * `const user = await requireSuperAdmin(...); if (!user) return`.
+ */
+export async function requireSuperAdmin(
+  req: VercelRequest,
+  res: VercelResponse,
+): Promise<AuthenticatedUser | null> {
+  const user = await requireUser(req, res)
+  if (!user) return null
+
+  try {
+    if (await isSuperAdmin(user.userId)) return user
+  } catch {
+    jsonError(req, res, 500, 'Super admin check failed')
+    return null
+  }
+  jsonError(req, res, 403, 'Forbidden')
+  return null
 }
 
 export async function requireUser(
