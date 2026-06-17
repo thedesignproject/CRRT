@@ -316,8 +316,10 @@ export type AdminUser = {
 
 /**
  * Super-admin view: every auth user, newest first, with how many projects each
- * belongs to. Users come from the auth admin API (paged); project counts are
- * tallied in-process from `project_members`.
+ * belongs to. Users come from the auth admin API (paged); project counts come
+ * from the `admin_user_project_counts` RPC (migration 0007), which aggregates
+ * `project_members` in the DB so a large membership table can't be truncated by
+ * PostgREST's row cap and miscount.
  */
 export async function listAllUsers(): Promise<AdminUser[]> {
   const supabase = getSupabase()
@@ -336,14 +338,12 @@ export async function listAllUsers(): Promise<AdminUser[]> {
     page += 1
   }
 
-  const { data: memberRows, error: memberError } = await supabase
-    .from('project_members')
-    .select('user_id')
-  if (memberError) throw new Error(memberError.message)
+  const { data: countRows, error: countError } = await supabase.rpc('admin_user_project_counts')
+  if (countError) throw new Error(countError.message)
 
   const counts = new Map<string, number>()
-  for (const row of (memberRows || []) as { user_id: string }[]) {
-    counts.set(row.user_id, (counts.get(row.user_id) ?? 0) + 1)
+  for (const row of (countRows || []) as { user_id: string; project_count: number }[]) {
+    counts.set(row.user_id, Number(row.project_count))
   }
 
   return users
@@ -371,42 +371,43 @@ export type AdminProject = {
   members: AdminProjectMember[]
 }
 
+// Upper bound on projects returned by the super-admin overview. Keeps the
+// result set bounded (and the RPC's underlying scan capped) as comments grow.
+const ADMIN_PROJECT_LIMIT = 100
+
 /**
  * Super-admin view: every project that has received at least one comment,
- * ordered by most-recent comment. Per project: comment count, latest comment
- * time, whether it's been claimed (`claimable === false`), and every member
- * with their role + resolved email (admins are the owners; this also lets the
- * dashboard scope projects to any member). Comment stats are aggregated
- * in-process so a single scan of `comments` drives the project set.
+ * ordered by most-recent comment, capped at `ADMIN_PROJECT_LIMIT`. Per project:
+ * comment count, latest comment time, whether it's been claimed
+ * (`claimable === false`), and every member with their role + resolved email
+ * (admins are the owners; this also lets the dashboard scope projects to any
+ * member).
+ *
+ * Comment count + latest-per-project are aggregated by the
+ * `admin_projects_with_comments` RPC (migration 0007) rather than scanning the
+ * whole `comments` table in Node, so a large table can't be truncated by
+ * PostgREST's row cap and yield wrong counts / a partial project set.
  */
 export async function listProjectsWithComments(): Promise<AdminProject[]> {
   const supabase = getSupabase()
 
-  const { data: commentRows, error: commentError } = await supabase
-    .from('comments')
-    .select('project_id, created_at')
-  if (commentError) throw new Error(commentError.message)
-
-  const stats = new Map<string, { count: number; latest: string }>()
-  for (const row of (commentRows || []) as { project_id: string | null; created_at: string }[]) {
-    if (!row.project_id) continue
-    const cur = stats.get(row.project_id)
-    if (!cur) {
-      stats.set(row.project_id, { count: 1, latest: row.created_at })
-    } else {
-      cur.count += 1
-      if (row.created_at > cur.latest) cur.latest = row.created_at
-    }
+  type AdminProjectRow = {
+    public_key: string
+    name: string
+    claimable: boolean
+    created_at: string
+    comment_count: number
+    latest_comment_at: string
   }
-
-  const keys = Array.from(stats.keys())
-  if (keys.length === 0) return []
-
-  const { data: projectRows, error: projectError } = await supabase
-    .from('projects')
-    .select('public_key, name, claimable, created_at')
-    .in('public_key', keys)
+  const { data: projectRows, error: projectError } = await supabase.rpc(
+    'admin_projects_with_comments',
+    { p_limit: ADMIN_PROJECT_LIMIT },
+  )
   if (projectError) throw new Error(projectError.message)
+
+  const projects = (projectRows || []) as AdminProjectRow[]
+  if (projects.length === 0) return []
+  const keys = projects.map((p) => p.public_key)
 
   const { data: memberRows, error: memberError } = await supabase
     .from('project_members')
@@ -424,24 +425,20 @@ export async function listProjectsWithComments(): Promise<AdminProject[]> {
   }
   const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
 
-  type AdminProjectRow = { public_key: string; name: string; claimable: boolean; created_at: string }
-  return ((projectRows || []) as AdminProjectRow[])
-    .map((row) => {
-      const stat = stats.get(row.public_key) as { count: number; latest: string }
-      const members = (membersByProject.get(row.public_key) ?? [])
-        .map((m) => ({ email: emails[m.user_id], role: m.role }))
-        .filter((m): m is AdminProjectMember => Boolean(m.email))
-      return {
-        publicKey: row.public_key,
-        name: row.name,
-        createdAt: row.created_at,
-        commentCount: stat.count,
-        latestCommentAt: stat.latest,
-        claimed: row.claimable === false,
-        members,
-      }
-    })
-    .sort((a, b) => b.latestCommentAt.localeCompare(a.latestCommentAt))
+  return projects.map((row) => {
+    const members = (membersByProject.get(row.public_key) ?? [])
+      .map((m) => ({ email: emails[m.user_id], role: m.role }))
+      .filter((m): m is AdminProjectMember => Boolean(m.email))
+    return {
+      publicKey: row.public_key,
+      name: row.name,
+      createdAt: row.created_at,
+      commentCount: Number(row.comment_count),
+      latestCommentAt: row.latest_comment_at,
+      claimed: row.claimable === false,
+      members,
+    }
+  })
 }
 
 /**
