@@ -15,20 +15,31 @@ function qb(result: { data: unknown; error: unknown }) {
 }
 
 type Tables = {
-  comments?: { data: unknown; error: unknown }
-  projects?: { data: unknown; error: unknown }
   project_members?: { data: unknown; error: unknown }
 }
 
-function buildClient(opts: { listUsers?: unknown; tables?: Tables }) {
-  vi.mocked(getServiceSupabase).mockReturnValue({
+type Rpcs = {
+  admin_user_project_counts?: { data: unknown; error: unknown }
+  admin_projects_with_comments?: { data: unknown; error: unknown }
+}
+
+function buildClient(opts: { listUsers?: unknown; tables?: Tables; rpcs?: Rpcs }) {
+  const rpc = vi.fn(async (name: string) => {
+    const r = opts.rpcs?.[name as keyof Rpcs]
+    if (!r) throw new Error(`Unmocked rpc ${name}`)
+    return r
+  })
+  const client = {
     auth: { admin: { listUsers: opts.listUsers ?? vi.fn() } },
     from: vi.fn((table: string) => {
       const t = opts.tables?.[table as keyof Tables]
       if (!t) throw new Error(`Unmocked table ${table}`)
       return qb(t)
     }),
-  } as never)
+    rpc,
+  }
+  vi.mocked(getServiceSupabase).mockReturnValue(client as never)
+  return { rpc }
 }
 
 beforeEach(() => {
@@ -52,9 +63,9 @@ describe('listAllUsers', () => {
       },
       error: null,
     })
-    buildClient({
+    const { rpc } = buildClient({
       listUsers,
-      tables: { project_members: { data: [{ user_id: 'a' }, { user_id: 'a' }], error: null } },
+      rpcs: { admin_user_project_counts: { data: [{ user_id: 'a', project_count: 2 }], error: null } },
     })
 
     const users = await listAllUsers()
@@ -63,6 +74,7 @@ describe('listAllUsers', () => {
       { id: 'a', email: 'a@x.com', createdAt: '2026-01-01T00:00:00Z', projectCount: 2 },
     ])
     expect(listUsers).toHaveBeenCalledWith({ page: 1, perPage: 200 })
+    expect(rpc).toHaveBeenCalledWith('admin_user_project_counts')
   })
 
   it('pages through the admin API until a short batch', async () => {
@@ -75,7 +87,7 @@ describe('listAllUsers', () => {
       .fn()
       .mockResolvedValueOnce({ data: { users: fullPage }, error: null })
       .mockResolvedValueOnce({ data: { users: [{ id: 'last', email: 'l@x.com', created_at: '2026-02-01T00:00:00Z' }] }, error: null })
-    buildClient({ listUsers, tables: { project_members: { data: [], error: null } } })
+    buildClient({ listUsers, rpcs: { admin_user_project_counts: { data: [], error: null } } })
 
     const users = await listAllUsers()
     expect(users).toHaveLength(201)
@@ -89,15 +101,15 @@ describe('listAllUsers', () => {
     await expect(listAllUsers()).rejects.toThrow('auth down')
   })
 
-  it('throws when the membership query errors', async () => {
+  it('throws when the project-count RPC errors', async () => {
     const listUsers = vi.fn().mockResolvedValue({ data: { users: [] }, error: null })
-    buildClient({ listUsers, tables: { project_members: { data: null, error: { message: 'db down' } } } })
+    buildClient({ listUsers, rpcs: { admin_user_project_counts: { data: null, error: { message: 'db down' } } } })
     await expect(listAllUsers()).rejects.toThrow('db down')
   })
 
-  it('tolerates null data from both queries', async () => {
+  it('tolerates null data from both sources', async () => {
     const listUsers = vi.fn().mockResolvedValue({ data: null, error: null })
-    buildClient({ listUsers, tables: { project_members: { data: null, error: null } } })
+    buildClient({ listUsers, rpcs: { admin_user_project_counts: { data: null, error: null } } })
     expect(await listAllUsers()).toEqual([])
   })
 })
@@ -115,26 +127,31 @@ describe('listProjectsWithComments', () => {
     )
   }
 
-  it('aggregates comments per project, resolves members with roles, sorts by latest comment', async () => {
-    buildClient({
+  // The RPC returns rows already aggregated (count + latest) and ordered by
+  // latest-comment desc; the store maps them and resolves member emails.
+  const PROJECT_ROWS = [
+    {
+      public_key: 'p2',
+      name: 'Two',
+      claimable: true,
+      created_at: '2025-12-02T00:00:00Z',
+      comment_count: 1,
+      latest_comment_at: '2026-05-01T00:00:00Z',
+    },
+    {
+      public_key: 'p1',
+      name: 'One',
+      claimable: false,
+      created_at: '2025-12-01T00:00:00Z',
+      comment_count: 3,
+      latest_comment_at: '2026-01-03T00:00:00Z',
+    },
+  ]
+
+  it('maps aggregated rows and resolves members with roles, bounded by p_limit', async () => {
+    const { rpc } = buildClient({
+      rpcs: { admin_projects_with_comments: { data: PROJECT_ROWS, error: null } },
       tables: {
-        comments: {
-          data: [
-            { project_id: null, created_at: '2026-01-01T00:00:00Z' }, // orphan, skipped
-            { project_id: 'p1', created_at: '2026-01-01T00:00:00Z' },
-            { project_id: 'p1', created_at: '2026-01-03T00:00:00Z' }, // newer → updates latest
-            { project_id: 'p1', created_at: '2026-01-02T00:00:00Z' }, // older → no update
-            { project_id: 'p2', created_at: '2026-05-01T00:00:00Z' },
-          ],
-          error: null,
-        },
-        projects: {
-          data: [
-            { public_key: 'p1', name: 'One', claimable: false, created_at: '2025-12-01T00:00:00Z' },
-            { public_key: 'p2', name: 'Two', claimable: true, created_at: '2025-12-02T00:00:00Z' },
-          ],
-          error: null,
-        },
         project_members: {
           data: [
             { project_key: 'p1', user_id: 'owner1', role: 'admin' },
@@ -171,68 +188,38 @@ describe('listProjectsWithComments', () => {
         ],
       },
     ])
+    expect(rpc).toHaveBeenCalledWith('admin_projects_with_comments', { p_limit: 100 })
   })
 
   it('returns [] when no project has comments', async () => {
-    buildClient({ tables: { comments: { data: [{ project_id: null, created_at: '2026-01-01T00:00:00Z' }], error: null } } })
+    buildClient({ rpcs: { admin_projects_with_comments: { data: [], error: null } } })
     expect(await listProjectsWithComments()).toEqual([])
   })
 
-  it('returns [] when the comments query yields null data', async () => {
-    buildClient({ tables: { comments: { data: null, error: null } } })
-    expect(await listProjectsWithComments()).toEqual([])
-  })
-
-  it('tolerates null data from the project and member queries', async () => {
-    buildClient({
-      tables: {
-        comments: { data: [{ project_id: 'p1', created_at: '2026-01-01T00:00:00Z' }], error: null },
-        projects: { data: null, error: null },
-        project_members: { data: null, error: null },
-      },
-    })
-    expect(await listProjectsWithComments()).toEqual([])
-  })
-
-  it('throws when the comments query errors', async () => {
-    buildClient({ tables: { comments: { data: null, error: { message: 'c down' } } } })
-    await expect(listProjectsWithComments()).rejects.toThrow('c down')
-  })
-
-  it('throws when the projects query errors', async () => {
-    buildClient({
-      tables: {
-        comments: { data: [{ project_id: 'p1', created_at: '2026-01-01T00:00:00Z' }], error: null },
-        projects: { data: null, error: { message: 'p down' } },
-      },
-    })
+  it('throws when the projects RPC errors', async () => {
+    buildClient({ rpcs: { admin_projects_with_comments: { data: null, error: { message: 'p down' } } } })
     await expect(listProjectsWithComments()).rejects.toThrow('p down')
   })
 
   it('throws when the members query errors', async () => {
     buildClient({
-      tables: {
-        comments: { data: [{ project_id: 'p1', created_at: '2026-01-01T00:00:00Z' }], error: null },
-        projects: { data: [{ public_key: 'p1', name: 'One', claimable: false, created_at: '2025-12-01T00:00:00Z' }], error: null },
-        project_members: { data: null, error: { message: 'm down' } },
-      },
+      rpcs: { admin_projects_with_comments: { data: PROJECT_ROWS, error: null } },
+      tables: { project_members: { data: null, error: { message: 'm down' } } },
     })
     await expect(listProjectsWithComments()).rejects.toThrow('m down')
   })
 
-  it('returns [] when the comments query yields null data', async () => {
-    buildClient({ tables: { comments: { data: null, error: null } } })
+  it('returns [] when the projects RPC yields null data', async () => {
+    buildClient({ rpcs: { admin_projects_with_comments: { data: null, error: null } } })
     expect(await listProjectsWithComments()).toEqual([])
   })
 
-  it('tolerates null data from the project and member queries', async () => {
+  it('tolerates null member data', async () => {
     buildClient({
-      tables: {
-        comments: { data: [{ project_id: 'p1', created_at: '2026-01-01T00:00:00Z' }], error: null },
-        projects: { data: null, error: null },
-        project_members: { data: null, error: null },
-      },
+      rpcs: { admin_projects_with_comments: { data: PROJECT_ROWS, error: null } },
+      tables: { project_members: { data: null, error: null } },
     })
-    expect(await listProjectsWithComments()).toEqual([])
+    const projects = await listProjectsWithComments()
+    expect(projects.map((p) => p.members)).toEqual([[], []])
   })
 })

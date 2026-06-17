@@ -50,6 +50,13 @@
       "when": 1781594640274,
       "tag": "0006_calm_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781690028223,
+      "tag": "0007_admin_aggregate_rpcs",
+      "breakpoints": true
     }
   ]
 }
