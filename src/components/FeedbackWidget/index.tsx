@@ -743,7 +743,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
 
   const pathDisplay = typeof window === 'undefined'
     ? '/'
-    : (window.location.pathname || '/').slice(0, 28) || '/'
+    : window.location.pathname.slice(0, 28) || '/'
   const avatarInitial = authorName ? (getInitials(authorName) ?? authorName[0]?.toUpperCase() ?? 'U') : 'U'
   const badgeAnimation = badgeAnim ? 'fw-badge-pop 0.4s ease' : 'crrt-pulse 2.4s ease-in-out infinite'
 
