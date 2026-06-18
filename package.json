@@ -1,6 +1,6 @@
 {
   "name": "@thedesignproject/crrt",
-  "version": "0.3.13",
+  "version": "0.3.14",
   "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
