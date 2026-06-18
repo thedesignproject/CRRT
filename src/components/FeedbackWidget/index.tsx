@@ -235,7 +235,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   // Track current URL for SPA navigation (pins scoped to page).
   // Poll location.href because some routers (e.g. Next.js App Router) cache
   // history.pushState at module load and bypass any wrapper we install.
-  const [currentUrl, setCurrentUrl] = useState(() => window.location.href.split('#')[0])
+  const [currentUrl, setCurrentUrl] = useState(() => (
+    typeof window === 'undefined' ? '' : window.location.href.split('#')[0]
+  ))
   useEffect(() => {
     const id = window.setInterval(() => {
       const next = window.location.href.split('#')[0]
@@ -739,7 +741,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   // commenting flow, or persisted pins. Gating keeps idle pages cheap.
   needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target || (pinsVisible && filteredComments.length > 0)
 
-  const pathDisplay = (window.location.pathname || '/').slice(0, 28) || '/'
+  const pathDisplay = typeof window === 'undefined'
+    ? '/'
+    : window.location.pathname.slice(0, 28) || '/'
   const avatarInitial = authorName ? (getInitials(authorName) ?? authorName[0]?.toUpperCase() ?? 'U') : 'U'
   const badgeAnimation = badgeAnim ? 'fw-badge-pop 0.4s ease' : 'crrt-pulse 2.4s ease-in-out infinite'
 
