@@ -1,4 +1,10 @@
 import { getServiceSupabase } from './supabase.js'
+import {
+  AdminQueryError,
+  decodeAdminCursor,
+  encodeAdminCursor,
+  type AdminPage,
+} from './admin-pagination.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
 
 // Every table/storage operation in this module goes through the service-role
@@ -311,7 +317,11 @@ export type AdminUser = {
   id: string
   email: string | null
   createdAt: string
-  projectCount: number
+  lastSignInAt: string | null
+  emailConfirmedAt: string | null
+  projectsAsAdminCount: number
+  projectsAsMemberCount: number
+  superAdmin: boolean
 }
 
 /**
@@ -321,39 +331,73 @@ export type AdminUser = {
  * `project_members` in the DB so a large membership table can't be truncated by
  * PostgREST's row cap and miscount.
  */
-export async function listAllUsers(): Promise<AdminUser[]> {
+type AdminUserCursor = { kind: 'users'; page: number; limit: number; lastId: string }
+
+function parseAdminUserCursor(cursor: string | undefined, limit: number): AdminUserCursor {
+  if (!cursor) return { kind: 'users', page: 1, limit, lastId: '' }
+  const value = decodeAdminCursor(cursor) as Partial<AdminUserCursor> | null
+  if (
+    !value || value.kind !== 'users' || !Number.isInteger(value.page) || Number(value.page) < 2
+    || value.limit !== limit || typeof value.lastId !== 'string' || !value.lastId
+  ) throw new AdminQueryError('Invalid cursor')
+  return value as AdminUserCursor
+}
+
+export async function listAllUsers(options: {
+  limit: number
+  cursor?: string
+}): Promise<AdminPage<AdminUser>> {
   const supabase = getSupabase()
-
-  const users: { id: string; email: string | null; created_at: string }[] = []
-  const perPage = 200
-  let page = 1
-  for (;;) {
-    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage })
-    if (error) throw new Error(error.message)
-    const batch = data?.users ?? []
-    for (const u of batch) {
-      users.push({ id: u.id, email: u.email ?? null, created_at: u.created_at })
-    }
-    if (batch.length < perPage) break
-    page += 1
+  const position = parseAdminUserCursor(options.cursor, options.limit)
+  const { data, error } = await supabase.auth.admin.listUsers({
+    page: position.page,
+    perPage: options.limit,
+  })
+  if (error) throw new Error(error.message)
+  const users = data?.users ?? []
+  const ids = users.map((user) => user.id)
+  let metricRows: unknown[] = []
+  if (ids.length > 0) {
+    const { data: metrics, error: metricsError } = await supabase
+      .from('admin_user_metrics')
+      .select('user_id, admin_project_count, member_project_count, super_admin')
+      .in('user_id', ids)
+    if (metricsError) throw new Error(metricsError.message)
+    metricRows = metrics ?? []
   }
-
-  const { data: countRows, error: countError } = await supabase.rpc('admin_user_project_counts')
-  if (countError) throw new Error(countError.message)
-
-  const counts = new Map<string, number>()
-  for (const row of (countRows || []) as { user_id: string; project_count: number }[]) {
-    counts.set(row.user_id, Number(row.project_count))
+  type MetricRow = {
+    user_id: string
+    admin_project_count: number
+    member_project_count: number
+    super_admin: boolean
   }
-
-  return users
-    .map((u) => ({
+  const metricsByUser = new Map(
+    (metricRows as MetricRow[]).map((row) => [row.user_id, row]),
+  )
+  const items = users.map((u) => {
+    const metrics = metricsByUser.get(u.id)
+    return {
       id: u.id,
-      email: u.email,
+      email: u.email ?? null,
       createdAt: u.created_at,
-      projectCount: counts.get(u.id) ?? 0,
-    }))
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      lastSignInAt: u.last_sign_in_at ?? null,
+      emailConfirmedAt: u.email_confirmed_at ?? null,
+      projectsAsAdminCount: Number(metrics?.admin_project_count ?? 0),
+      projectsAsMemberCount: Number(metrics?.member_project_count ?? 0),
+      superAdmin: metrics?.super_admin ?? false,
+    }
+  })
+  const nextPage = typeof data?.nextPage === 'number' ? data.nextPage : null
+  const hasMore = nextPage !== null && items.length > 0
+  return {
+    items,
+    hasMore,
+    nextCursor: hasMore
+      ? encodeAdminCursor({
+          kind: 'users', page: nextPage, limit: options.limit, lastId: items[items.length - 1].id,
+        })
+      : null,
+  }
 }
 
 export type AdminProjectMember = {
@@ -1348,4 +1392,3 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
     return null
   }
 }
-

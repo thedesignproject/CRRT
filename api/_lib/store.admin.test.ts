@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 
 import { getServiceSupabase } from './supabase.js'
+import { encodeAdminCursor } from './admin-pagination.js'
 import { listAllUsers, listProjectsWithComments } from './store.js'
 
 // A chainable, awaitable query stub: select/in/eq/order all return `this`, and
@@ -16,10 +17,10 @@ function qb(result: { data: unknown; error: unknown }) {
 
 type Tables = {
   project_members?: { data: unknown; error: unknown }
+  admin_user_metrics?: { data: unknown; error: unknown }
 }
 
 type Rpcs = {
-  admin_user_project_counts?: { data: unknown; error: unknown }
   admin_projects_with_comments?: { data: unknown; error: unknown }
 }
 
@@ -53,64 +54,84 @@ afterEach(() => {
 })
 
 describe('listAllUsers', () => {
-  it('returns users newest-first with project counts', async () => {
+  it('returns an enriched first page and a cursor', async () => {
     const listUsers = vi.fn().mockResolvedValue({
       data: {
         users: [
-          { id: 'a', email: 'a@x.com', created_at: '2026-01-01T00:00:00Z' },
-          { id: 'b', email: null, created_at: '2026-03-01T00:00:00Z' },
+          {
+            id: 'a', email: 'a@x.com', created_at: '2026-01-01T00:00:00Z',
+            last_sign_in_at: '2026-02-01T00:00:00Z', email_confirmed_at: '2026-01-02T00:00:00Z',
+          },
+          { id: 'b', email: null, created_at: '2025-01-01T00:00:00Z' },
         ],
+        nextPage: 2,
       },
       error: null,
     })
-    const { rpc } = buildClient({
+    const client = buildClient({
       listUsers,
-      rpcs: { admin_user_project_counts: { data: [{ user_id: 'a', project_count: 2 }], error: null } },
+      tables: {
+        admin_user_metrics: {
+          data: [{ user_id: 'a', admin_project_count: 2, member_project_count: 3, super_admin: true }],
+          error: null,
+        },
+      },
     })
 
-    const users = await listAllUsers()
-    expect(users).toEqual([
-      { id: 'b', email: null, createdAt: '2026-03-01T00:00:00Z', projectCount: 0 },
-      { id: 'a', email: 'a@x.com', createdAt: '2026-01-01T00:00:00Z', projectCount: 2 },
+    const result = await listAllUsers({ limit: 2 })
+    expect(result.items).toEqual([
+      {
+        id: 'a', email: 'a@x.com', createdAt: '2026-01-01T00:00:00Z',
+        lastSignInAt: '2026-02-01T00:00:00Z', emailConfirmedAt: '2026-01-02T00:00:00Z',
+        projectsAsAdminCount: 2, projectsAsMemberCount: 3, superAdmin: true,
+      },
+      {
+        id: 'b', email: null, createdAt: '2025-01-01T00:00:00Z',
+        lastSignInAt: null, emailConfirmedAt: null,
+        projectsAsAdminCount: 0, projectsAsMemberCount: 0, superAdmin: false,
+      },
     ])
-    expect(listUsers).toHaveBeenCalledWith({ page: 1, perPage: 200 })
-    expect(rpc).toHaveBeenCalledWith('admin_user_project_counts')
+    expect(result.hasMore).toBe(true)
+    expect(result.nextCursor).toBeTruthy()
+    expect(listUsers).toHaveBeenCalledWith({ page: 1, perPage: 2 })
+    expect(client.rpc).not.toHaveBeenCalled()
   })
 
-  it('pages through the admin API until a short batch', async () => {
-    const fullPage = Array.from({ length: 200 }, (_, i) => ({
-      id: `p1-${i}`,
-      email: `p1-${i}@x.com`,
-      created_at: '2026-01-01T00:00:00Z',
-    }))
-    const listUsers = vi
-      .fn()
-      .mockResolvedValueOnce({ data: { users: fullPage }, error: null })
-      .mockResolvedValueOnce({ data: { users: [{ id: 'last', email: 'l@x.com', created_at: '2026-02-01T00:00:00Z' }] }, error: null })
-    buildClient({ listUsers, rpcs: { admin_user_project_counts: { data: [], error: null } } })
-
-    const users = await listAllUsers()
-    expect(users).toHaveLength(201)
-    expect(listUsers).toHaveBeenCalledTimes(2)
-    expect(listUsers).toHaveBeenLastCalledWith({ page: 2, perPage: 200 })
-    expect(users[0].id).toBe('last') // newest first
+  it('uses a valid cursor and ends on an empty page without querying metrics', async () => {
+    const listUsers = vi.fn().mockResolvedValue({ data: { users: [], nextPage: null }, error: null })
+    const client = buildClient({ listUsers })
+    const cursor = encodeAdminCursor({ kind: 'users', page: 2, limit: 10, lastId: 'last' })
+    await expect(listAllUsers({ limit: 10, cursor })).resolves.toEqual({
+      items: [], nextCursor: null, hasMore: false,
+    })
+    expect(listUsers).toHaveBeenCalledWith({ page: 2, perPage: 10 })
+    expect(client.rpc).not.toHaveBeenCalled()
   })
 
   it('throws when the admin API errors', async () => {
     buildClient({ listUsers: vi.fn().mockResolvedValue({ data: null, error: { message: 'auth down' } }) })
-    await expect(listAllUsers()).rejects.toThrow('auth down')
+    await expect(listAllUsers({ limit: 50 })).rejects.toThrow('auth down')
   })
 
-  it('throws when the project-count RPC errors', async () => {
-    const listUsers = vi.fn().mockResolvedValue({ data: { users: [] }, error: null })
-    buildClient({ listUsers, rpcs: { admin_user_project_counts: { data: null, error: { message: 'db down' } } } })
-    await expect(listAllUsers()).rejects.toThrow('db down')
+  it('throws on invalid cursors and metric errors', async () => {
+    buildClient({ listUsers: vi.fn() })
+    await expect(listAllUsers({ limit: 10, cursor: 'bad' })).rejects.toThrow('Invalid cursor')
+    const cursor = encodeAdminCursor({ kind: 'users', page: 1, limit: 20, lastId: '' })
+    await expect(listAllUsers({ limit: 10, cursor })).rejects.toThrow('Invalid cursor')
+
+    buildClient({
+      listUsers: vi.fn().mockResolvedValue({
+        data: { users: [{ id: 'a', created_at: 't' }], nextPage: null }, error: null,
+      }),
+      tables: { admin_user_metrics: { data: null, error: { message: 'db down' } } },
+    })
+    await expect(listAllUsers({ limit: 10 })).rejects.toThrow('db down')
   })
 
-  it('tolerates null data from both sources', async () => {
+  it('tolerates null auth data', async () => {
     const listUsers = vi.fn().mockResolvedValue({ data: null, error: null })
-    buildClient({ listUsers, rpcs: { admin_user_project_counts: { data: null, error: null } } })
-    expect(await listAllUsers()).toEqual([])
+    buildClient({ listUsers })
+    expect(await listAllUsers({ limit: 50 })).toEqual({ items: [], nextCursor: null, hasMore: false })
   })
 })
 
