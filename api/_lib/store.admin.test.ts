@@ -290,6 +290,12 @@ describe('listProjectsWithComments', () => {
     await expect(listProjectsWithComments({
       limit: 10, cursor, sort: 'feedbackShareCount', direction: 'asc',
     })).resolves.toEqual({ items: [], nextCursor: null, hasMore: false })
+    const descending = encodeAdminCursor({
+      kind: 'projects', sort: 'commentCount', direction: 'desc', value: 2, id: 'p1',
+    })
+    await expect(listProjectsWithComments({
+      limit: 10, cursor: descending, sort: 'commentCount', direction: 'desc',
+    })).resolves.toEqual({ items: [], nextCursor: null, hasMore: false })
     await expect(listProjectsWithComments({
       limit: 10, cursor, sort: 'commentedUrlCount', direction: 'asc',
     })).rejects.toThrow('Invalid cursor')
