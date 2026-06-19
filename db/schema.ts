@@ -6,6 +6,7 @@ import {
   doublePrecision,
   index,
   jsonb,
+  pgView,
   pgTable,
   primaryKey,
   text,
@@ -252,3 +253,82 @@ export const feedbackOperationKeys = pgTable(
     pk: primaryKey({ columns: [t.shareId, t.agentId, t.idempotencyKey] }),
   }),
 )
+
+// Service-role-only projections used by the super-admin API. securityInvoker
+// preserves the underlying tables' deny-all RLS for browser-visible roles.
+export const adminUserMetrics = pgView('admin_user_metrics', {
+  userId: uuid('user_id'),
+  adminProjectCount: bigint('admin_project_count', { mode: 'number' }),
+  memberProjectCount: bigint('member_project_count', { mode: 'number' }),
+  superAdmin: boolean('super_admin'),
+})
+  .with({ securityInvoker: true })
+  .as(sql`
+    with user_ids as (
+      select user_id from ${projectMembers}
+      union
+      select user_id from ${superAdmins}
+    )
+    select u.user_id,
+      count(pm.project_key) filter (where pm.role = 'admin')::bigint as admin_project_count,
+      count(pm.project_key) filter (where pm.role = 'member')::bigint as member_project_count,
+      (sa.user_id is not null) as super_admin
+    from user_ids u
+    left join ${projectMembers} pm on pm.user_id = u.user_id
+    left join ${superAdmins} sa on sa.user_id = u.user_id
+    group by u.user_id, sa.user_id
+  `)
+
+export const adminProjectMetrics = pgView('admin_project_metrics', {
+  publicKey: text('public_key'),
+  name: text('name'),
+  claimable: boolean('claimable'),
+  createdAt: timestamp('created_at', { withTimezone: true }),
+  commentCount: bigint('comment_count', { mode: 'number' }),
+  pendingCommentCount: bigint('pending_comment_count', { mode: 'number' }),
+  acceptedCommentCount: bigint('accepted_comment_count', { mode: 'number' }),
+  rejectedCommentCount: bigint('rejected_comment_count', { mode: 'number' }),
+  unassignedCommentCount: bigint('unassigned_comment_count', { mode: 'number' }),
+  claimedCommentCount: bigint('claimed_comment_count', { mode: 'number' }),
+  inProgressCommentCount: bigint('in_progress_comment_count', { mode: 'number' }),
+  blockedCommentCount: bigint('blocked_comment_count', { mode: 'number' }),
+  doneCommentCount: bigint('done_comment_count', { mode: 'number' }),
+  feedbackShareCount: bigint('feedback_share_count', { mode: 'number' }),
+  commentedUrlCount: bigint('commented_url_count', { mode: 'number' }),
+  firstCommentAt: timestamp('first_comment_at', { withTimezone: true }),
+  lastCommentAt: timestamp('last_comment_at', { withTimezone: true }),
+})
+  .with({ securityInvoker: true })
+  .as(sql`
+    with comment_metrics as (
+      select project_id,
+        count(*)::bigint as comment_count,
+        count(*) filter (where status is null or status not in ('approved', 'accepted', 'rejected'))::bigint as pending_comment_count,
+        count(*) filter (where status in ('approved', 'accepted'))::bigint as accepted_comment_count,
+        count(*) filter (where status = 'rejected')::bigint as rejected_comment_count,
+        count(*) filter (where implementation_status is null or implementation_status = 'unassigned')::bigint as unassigned_comment_count,
+        count(*) filter (where implementation_status = 'claimed')::bigint as claimed_comment_count,
+        count(*) filter (where implementation_status = 'in_progress')::bigint as in_progress_comment_count,
+        count(*) filter (where implementation_status = 'blocked')::bigint as blocked_comment_count,
+        count(*) filter (where implementation_status = 'done')::bigint as done_comment_count,
+        count(distinct url)::bigint as commented_url_count,
+        min(created_at) as first_comment_at,
+        max(created_at) as last_comment_at
+      from ${comments}
+      group by project_id
+    ), share_metrics as (
+      select project_id, count(*)::bigint as feedback_share_count
+      from ${feedbackShares}
+      group by project_id
+    )
+    select p.public_key, p.name, p.claimable, p.created_at,
+      cm.comment_count, cm.pending_comment_count, cm.accepted_comment_count,
+      cm.rejected_comment_count, cm.unassigned_comment_count,
+      cm.claimed_comment_count, cm.in_progress_comment_count,
+      cm.blocked_comment_count, cm.done_comment_count,
+      coalesce(sm.feedback_share_count, 0)::bigint as feedback_share_count,
+      cm.commented_url_count, cm.first_comment_at, cm.last_comment_at
+    from ${projects} p
+    join comment_metrics cm on cm.project_id = p.public_key
+    left join share_metrics sm on sm.project_id = p.public_key
+  `)
