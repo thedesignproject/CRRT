@@ -133,6 +133,17 @@ describe('listAllUsers', () => {
     buildClient({ listUsers })
     expect(await listAllUsers({ limit: 50 })).toEqual({ items: [], nextCursor: null, hasMore: false })
   })
+
+  it('tolerates null user metrics', async () => {
+    buildClient({
+      listUsers: vi.fn().mockResolvedValue({
+        data: { users: [{ id: 'a', created_at: 't' }], nextPage: null }, error: null,
+      }),
+      tables: { admin_user_metrics: { data: null, error: null } },
+    })
+    const result = await listAllUsers({ limit: 50 })
+    expect(result.items[0].projectsAsAdminCount).toBe(0)
+  })
 })
 
 describe('listProjectsWithComments', () => {
