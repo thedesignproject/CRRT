@@ -94,6 +94,15 @@ describe('getAdminStats', () => {
     expect(result.signups.last30Days).toBe(0)
   })
 
+  it('tolerates a null Auth response body', async () => {
+    setup({
+      listUsers: vi.fn().mockResolvedValue({ data: null, error: null }),
+    })
+    const result = await getAdminStats(new Date('2026-06-19T00:00:00.000Z'))
+    expect(result.accounts).toBe(0)
+    expect(result.signups.last30Days).toBe(0)
+  })
+
   it('throws auth, table, and presence errors', async () => {
     setup({
       listUsers: vi.fn().mockResolvedValue({ data: null, error: { message: 'auth down' } }),
