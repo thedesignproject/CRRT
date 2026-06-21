@@ -53,15 +53,30 @@ describe('api/v1/admin/users', () => {
   it('returns the user list, 500 on store throw', async () => {
     vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
 
-    vi.mocked(listAllUsers).mockResolvedValueOnce([{ id: 'u', email: 'a@b.c', createdAt: 't', projectCount: 1 }])
+    const page = { items: [], nextCursor: null, hasMore: false }
+    vi.mocked(listAllUsers).mockResolvedValueOnce(page)
     let res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual([{ id: 'u', email: 'a@b.c', createdAt: 't', projectCount: 1 }])
+    expect(res.body).toEqual(page)
+    expect(listAllUsers).toHaveBeenCalledWith({ limit: 50, cursor: undefined })
 
     vi.mocked(listAllUsers).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
+  })
+
+  it('validates limit and cursor query parameters', async () => {
+    vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    for (const query of [{ limit: '0' }, { limit: '101' }, { limit: 'x' }, { cursor: ['x'] }]) {
+      const res = mockRes()
+      await call({ method: 'GET', query, headers: {} }, res)
+      expect(res.statusCode).toBe(400)
+    }
+    vi.mocked(listAllUsers).mockRejectedValueOnce(new (await import('../../_lib/admin-pagination.js')).AdminQueryError('Invalid cursor'))
+    const res = mockRes()
+    await call({ method: 'GET', query: { limit: '10', cursor: 'bad' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
   })
 })
