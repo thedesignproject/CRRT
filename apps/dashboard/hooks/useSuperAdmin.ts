@@ -13,7 +13,7 @@ export interface UseSuperAdminResult {
  * so a forged `true` here grants nothing. Fails closed (false) on any error.
  */
 export function useSuperAdmin(apiBase: string, accessToken: string): UseSuperAdminResult {
-  const [superadmin, setSuperadmin] = useState(false)
+  const [superadmin, setSuperadmin] = useState(mocksEnabled)
   const [loading, setLoading] = useState(!mocksEnabled)
 
   useEffect(() => {
