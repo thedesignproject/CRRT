@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/auth.js', () => ({ requireSuperAdmin: vi.fn() }))
-vi.mock('../../_lib/store.js', () => ({ listProjectsWithComments: vi.fn() }))
+vi.mock('../../_lib/store.js', () => ({
+  ADMIN_PROJECT_SORTS: [
+    'lastCommentAt', 'createdAt', 'commentCount', 'feedbackShareCount', 'commentedUrlCount',
+  ],
+  listProjectsWithComments: vi.fn(),
+}))
 
 import handler from './projects.js'
 import { requireSuperAdmin } from '../../_lib/auth.js'
@@ -53,16 +58,31 @@ describe('api/v1/admin/projects', () => {
   it('returns the project list, 500 on store throw', async () => {
     vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
 
-    const row = { publicKey: 'p1', name: 'One', createdAt: 't', commentCount: 3, latestCommentAt: 't2', claimed: true, members: [{ email: 'o@x.com', role: 'admin' as const }] }
-    vi.mocked(listProjectsWithComments).mockResolvedValueOnce([row])
+    const page = { items: [], nextCursor: null, hasMore: false }
+    vi.mocked(listProjectsWithComments).mockResolvedValueOnce(page)
     let res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual([row])
+    expect(res.body).toEqual(page)
+    expect(listProjectsWithComments).toHaveBeenCalledWith({
+      limit: 50, cursor: undefined, sort: 'lastCommentAt', direction: 'desc',
+    })
 
     vi.mocked(listProjectsWithComments).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
+  })
+
+  it('validates pagination and sorting parameters', async () => {
+    vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    for (const query of [
+      { limit: '101' }, { cursor: ['x'] }, { sort: 'nope' }, { sort: ['createdAt'] },
+      { direction: 'sideways' },
+    ]) {
+      const res = mockRes()
+      await call({ method: 'GET', query, headers: {} }, res)
+      expect(res.statusCode).toBe(400)
+    }
   })
 })

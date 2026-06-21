@@ -10,7 +10,7 @@ import { listAllUsers, listProjectsWithComments } from './store.js'
 // awaiting the object resolves to the configured { data, error } result.
 function qb(result: { data: unknown; error: unknown }) {
   const obj: Record<string, unknown> = {}
-  for (const m of ['select', 'in', 'eq', 'order']) obj[m] = vi.fn(() => obj)
+  for (const m of ['select', 'in', 'eq', 'or', 'order', 'limit']) obj[m] = vi.fn(() => obj)
   obj.then = (resolve: (v: unknown) => unknown) => resolve(result)
   return obj
 }
@@ -18,6 +18,7 @@ function qb(result: { data: unknown; error: unknown }) {
 type Tables = {
   project_members?: { data: unknown; error: unknown }
   admin_user_metrics?: { data: unknown; error: unknown }
+  admin_project_metrics?: { data: unknown; error: unknown }
 }
 
 type Rpcs = {
@@ -40,7 +41,7 @@ function buildClient(opts: { listUsers?: unknown; tables?: Tables; rpcs?: Rpcs }
     rpc,
   }
   vi.mocked(getServiceSupabase).mockReturnValue(client as never)
-  return { rpc }
+  return { rpc, from: client.from }
 }
 
 beforeEach(() => {
@@ -159,31 +160,44 @@ describe('listProjectsWithComments', () => {
     )
   }
 
-  // The RPC returns rows already aggregated (count + latest) and ordered by
-  // latest-comment desc; the store maps them and resolves member emails.
+  const METRICS = {
+    pending_comment_count: 1,
+    accepted_comment_count: 1,
+    rejected_comment_count: 1,
+    unassigned_comment_count: 1,
+    claimed_comment_count: 1,
+    in_progress_comment_count: 1,
+    blocked_comment_count: 0,
+    done_comment_count: 0,
+    feedback_share_count: 2,
+    commented_url_count: 2,
+    first_comment_at: '2026-01-01T00:00:00Z',
+  }
   const PROJECT_ROWS = [
     {
+      ...METRICS,
       public_key: 'p2',
       name: 'Two',
       claimable: true,
       created_at: '2025-12-02T00:00:00Z',
       comment_count: 1,
-      latest_comment_at: '2026-05-01T00:00:00Z',
+      last_comment_at: '2026-05-01T00:00:00Z',
     },
     {
+      ...METRICS,
       public_key: 'p1',
       name: 'One',
       claimable: false,
       created_at: '2025-12-01T00:00:00Z',
       comment_count: 3,
-      latest_comment_at: '2026-01-03T00:00:00Z',
+      last_comment_at: '2026-01-03T00:00:00Z',
     },
   ]
 
-  it('maps aggregated rows and resolves members with roles, bounded by p_limit', async () => {
+  it('maps one metrics page, resolves members, and returns a cursor', async () => {
     const { rpc } = buildClient({
-      rpcs: { admin_projects_with_comments: { data: PROJECT_ROWS, error: null } },
       tables: {
+        admin_project_metrics: { data: PROJECT_ROWS, error: null },
         project_members: {
           data: [
             { project_key: 'p1', user_id: 'owner1', role: 'admin' },
@@ -196,62 +210,94 @@ describe('listProjectsWithComments', () => {
     })
     stubEmails({ owner1: 'owner1@x.com', mem1: 'mem1@x.com' })
 
-    const projects = await listProjectsWithComments()
-    expect(projects).toEqual([
+    const projects = await listProjectsWithComments({
+      limit: 1, sort: 'lastCommentAt', direction: 'desc',
+    })
+    expect(projects.items).toEqual([
       {
         publicKey: 'p2',
         name: 'Two',
         createdAt: '2025-12-02T00:00:00Z',
         commentCount: 1,
-        latestCommentAt: '2026-05-01T00:00:00Z',
+        commentStatusCounts: { pending: 1, accepted: 1, rejected: 1 },
+        implementationStatusCounts: {
+          unassigned: 1, claimed: 1, inProgress: 1, blocked: 0, done: 0,
+        },
+        feedbackShareCount: 2,
+        commentedUrlCount: 2,
+        firstCommentAt: '2026-01-01T00:00:00Z',
+        lastCommentAt: '2026-05-01T00:00:00Z',
         claimed: false,
         members: [],
       },
-      {
-        publicKey: 'p1',
-        name: 'One',
-        createdAt: '2025-12-01T00:00:00Z',
-        commentCount: 3,
-        latestCommentAt: '2026-01-03T00:00:00Z',
-        claimed: true,
-        members: [
-          { email: 'owner1@x.com', role: 'admin' },
-          { email: 'mem1@x.com', role: 'member' },
-        ],
-      },
     ])
-    expect(rpc).toHaveBeenCalledWith('admin_projects_with_comments', { p_limit: 100 })
+    expect(projects.hasMore).toBe(true)
+    expect(projects.nextCursor).toBeTruthy()
+    expect(rpc).not.toHaveBeenCalled()
   })
 
   it('returns [] when no project has comments', async () => {
-    buildClient({ rpcs: { admin_projects_with_comments: { data: [], error: null } } })
-    expect(await listProjectsWithComments()).toEqual([])
+    buildClient({ tables: { admin_project_metrics: { data: [], error: null } } })
+    await expect(listProjectsWithComments({
+      limit: 50, sort: 'lastCommentAt', direction: 'desc',
+    })).resolves.toEqual({ items: [], nextCursor: null, hasMore: false })
   })
 
   it('throws when the projects RPC errors', async () => {
-    buildClient({ rpcs: { admin_projects_with_comments: { data: null, error: { message: 'p down' } } } })
-    await expect(listProjectsWithComments()).rejects.toThrow('p down')
+    buildClient({ tables: { admin_project_metrics: { data: null, error: { message: 'p down' } } } })
+    await expect(listProjectsWithComments({
+      limit: 50, sort: 'lastCommentAt', direction: 'desc',
+    })).rejects.toThrow('p down')
   })
 
   it('throws when the members query errors', async () => {
     buildClient({
-      rpcs: { admin_projects_with_comments: { data: PROJECT_ROWS, error: null } },
-      tables: { project_members: { data: null, error: { message: 'm down' } } },
+      tables: {
+        admin_project_metrics: { data: PROJECT_ROWS, error: null },
+        project_members: { data: null, error: { message: 'm down' } },
+      },
     })
-    await expect(listProjectsWithComments()).rejects.toThrow('m down')
+    await expect(listProjectsWithComments({
+      limit: 50, sort: 'lastCommentAt', direction: 'desc',
+    })).rejects.toThrow('m down')
   })
 
   it('returns [] when the projects RPC yields null data', async () => {
-    buildClient({ rpcs: { admin_projects_with_comments: { data: null, error: null } } })
-    expect(await listProjectsWithComments()).toEqual([])
+    buildClient({ tables: { admin_project_metrics: { data: null, error: null } } })
+    await expect(listProjectsWithComments({
+      limit: 50, sort: 'createdAt', direction: 'asc',
+    })).resolves.toEqual({ items: [], nextCursor: null, hasMore: false })
   })
 
   it('tolerates null member data', async () => {
     buildClient({
-      rpcs: { admin_projects_with_comments: { data: PROJECT_ROWS, error: null } },
-      tables: { project_members: { data: null, error: null } },
+      tables: {
+        admin_project_metrics: { data: PROJECT_ROWS, error: null },
+        project_members: { data: null, error: null },
+      },
     })
-    const projects = await listProjectsWithComments()
-    expect(projects.map((p) => p.members)).toEqual([[], []])
+    const projects = await listProjectsWithComments({
+      limit: 50, sort: 'commentCount', direction: 'desc',
+    })
+    expect(projects.items.map((p) => p.members)).toEqual([[], []])
+  })
+
+  it('accepts a matching seek cursor and rejects mismatches', async () => {
+    const cursor = encodeAdminCursor({
+      kind: 'projects', sort: 'feedbackShareCount', direction: 'asc', value: 2, id: 'p1',
+    })
+    buildClient({ tables: { admin_project_metrics: { data: [], error: null } } })
+    await expect(listProjectsWithComments({
+      limit: 10, cursor, sort: 'feedbackShareCount', direction: 'asc',
+    })).resolves.toEqual({ items: [], nextCursor: null, hasMore: false })
+    const descending = encodeAdminCursor({
+      kind: 'projects', sort: 'commentCount', direction: 'desc', value: 2, id: 'p1',
+    })
+    await expect(listProjectsWithComments({
+      limit: 10, cursor: descending, sort: 'commentCount', direction: 'desc',
+    })).resolves.toEqual({ items: [], nextCursor: null, hasMore: false })
+    await expect(listProjectsWithComments({
+      limit: 10, cursor, sort: 'commentedUrlCount', direction: 'asc',
+    })).rejects.toThrow('Invalid cursor')
   })
 })

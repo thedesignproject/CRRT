@@ -410,14 +410,39 @@ export type AdminProject = {
   name: string
   createdAt: string
   commentCount: number
-  latestCommentAt: string
+  commentStatusCounts: { pending: number; accepted: number; rejected: number }
+  implementationStatusCounts: {
+    unassigned: number; claimed: number; inProgress: number; blocked: number; done: number
+  }
+  feedbackShareCount: number
+  commentedUrlCount: number
+  firstCommentAt: string
+  lastCommentAt: string
   claimed: boolean
   members: AdminProjectMember[]
 }
 
-// Upper bound on projects returned by the super-admin overview. Keeps the
-// result set bounded (and the RPC's underlying scan capped) as comments grow.
-const ADMIN_PROJECT_LIMIT = 100
+export const ADMIN_PROJECT_SORTS = [
+  'lastCommentAt', 'createdAt', 'commentCount', 'feedbackShareCount', 'commentedUrlCount',
+] as const
+export type AdminProjectSort = typeof ADMIN_PROJECT_SORTS[number]
+export type AdminSortDirection = 'asc' | 'desc'
+
+type AdminProjectCursor = {
+  kind: 'projects'
+  sort: AdminProjectSort
+  direction: AdminSortDirection
+  value: string | number
+  id: string
+}
+
+const PROJECT_SORT_COLUMNS: Record<AdminProjectSort, string> = {
+  lastCommentAt: 'last_comment_at',
+  createdAt: 'created_at',
+  commentCount: 'comment_count',
+  feedbackShareCount: 'feedback_share_count',
+  commentedUrlCount: 'commented_url_count',
+}
 
 /**
  * Super-admin view: every project that has received at least one comment,
@@ -432,7 +457,12 @@ const ADMIN_PROJECT_LIMIT = 100
  * whole `comments` table in Node, so a large table can't be truncated by
  * PostgREST's row cap and yield wrong counts / a partial project set.
  */
-export async function listProjectsWithComments(): Promise<AdminProject[]> {
+export async function listProjectsWithComments(options: {
+  limit: number
+  cursor?: string
+  sort: AdminProjectSort
+  direction: AdminSortDirection
+}): Promise<AdminPage<AdminProject>> {
   const supabase = getSupabase()
 
   type AdminProjectRow = {
@@ -441,16 +471,48 @@ export async function listProjectsWithComments(): Promise<AdminProject[]> {
     claimable: boolean
     created_at: string
     comment_count: number
-    latest_comment_at: string
+    pending_comment_count: number
+    accepted_comment_count: number
+    rejected_comment_count: number
+    unassigned_comment_count: number
+    claimed_comment_count: number
+    in_progress_comment_count: number
+    blocked_comment_count: number
+    done_comment_count: number
+    feedback_share_count: number
+    commented_url_count: number
+    first_comment_at: string
+    last_comment_at: string
   }
-  const { data: projectRows, error: projectError } = await supabase.rpc(
-    'admin_projects_with_comments',
-    { p_limit: ADMIN_PROJECT_LIMIT },
-  )
+  const column = PROJECT_SORT_COLUMNS[options.sort]
+  let cursor: AdminProjectCursor | undefined
+  if (options.cursor) {
+    const value = decodeAdminCursor(options.cursor) as Partial<AdminProjectCursor> | null
+    if (
+      !value || value.kind !== 'projects' || value.sort !== options.sort
+      || value.direction !== options.direction || !['string', 'number'].includes(typeof value.value)
+      || typeof value.id !== 'string' || !value.id
+    ) throw new AdminQueryError('Invalid cursor')
+    cursor = value as AdminProjectCursor
+  }
+  let query = supabase
+    .from('admin_project_metrics')
+    .select('public_key, name, claimable, created_at, comment_count, pending_comment_count, accepted_comment_count, rejected_comment_count, unassigned_comment_count, claimed_comment_count, in_progress_comment_count, blocked_comment_count, done_comment_count, feedback_share_count, commented_url_count, first_comment_at, last_comment_at')
+  if (cursor) {
+    const operator = options.direction === 'asc' ? 'gt' : 'lt'
+    query = query.or(
+      `${column}.${operator}.${cursor.value},and(${column}.eq.${cursor.value},public_key.${operator}.${cursor.id})`,
+    )
+  }
+  const { data: projectRows, error: projectError } = await query
+    .order(column, { ascending: options.direction === 'asc' })
+    .order('public_key', { ascending: options.direction === 'asc' })
+    .limit(options.limit + 1)
   if (projectError) throw new Error(projectError.message)
 
-  const projects = (projectRows || []) as AdminProjectRow[]
-  if (projects.length === 0) return []
+  const projects = ((projectRows || []) as AdminProjectRow[]).slice(0, options.limit)
+  const hasMore = (projectRows?.length ?? 0) > options.limit
+  if (projects.length === 0) return { items: [], nextCursor: null, hasMore: false }
   const keys = projects.map((p) => p.public_key)
 
   const { data: memberRows, error: memberError } = await supabase
@@ -469,7 +531,7 @@ export async function listProjectsWithComments(): Promise<AdminProject[]> {
   }
   const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
 
-  return projects.map((row) => {
+  const items = projects.map((row) => {
     const members = (membersByProject.get(row.public_key) ?? [])
       .map((m) => ({ email: emails[m.user_id], role: m.role }))
       .filter((m): m is AdminProjectMember => Boolean(m.email))
@@ -478,11 +540,35 @@ export async function listProjectsWithComments(): Promise<AdminProject[]> {
       name: row.name,
       createdAt: row.created_at,
       commentCount: Number(row.comment_count),
-      latestCommentAt: row.latest_comment_at,
+      commentStatusCounts: {
+        pending: Number(row.pending_comment_count),
+        accepted: Number(row.accepted_comment_count),
+        rejected: Number(row.rejected_comment_count),
+      },
+      implementationStatusCounts: {
+        unassigned: Number(row.unassigned_comment_count),
+        claimed: Number(row.claimed_comment_count),
+        inProgress: Number(row.in_progress_comment_count),
+        blocked: Number(row.blocked_comment_count),
+        done: Number(row.done_comment_count),
+      },
+      feedbackShareCount: Number(row.feedback_share_count),
+      commentedUrlCount: Number(row.commented_url_count),
+      firstCommentAt: row.first_comment_at,
+      lastCommentAt: row.last_comment_at,
       claimed: row.claimable === false,
       members,
     }
   })
+  const last = items[items.length - 1]
+  return {
+    items,
+    hasMore,
+    nextCursor: hasMore ? encodeAdminCursor({
+      kind: 'projects', sort: options.sort, direction: options.direction,
+      value: last[options.sort], id: last.publicKey,
+    }) : null,
+  }
 }
 
 /**
