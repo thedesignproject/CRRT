@@ -571,6 +571,69 @@ export async function listProjectsWithComments(options: {
   }
 }
 
+export type AdminStats = {
+  accounts: number
+  projects: number
+  comments: number
+  shares: number
+  activeAgentPresence: number
+  signups: { last24Hours: number; last7Days: number; last30Days: number }
+}
+
+export async function getAdminStats(now = new Date()): Promise<AdminStats> {
+  const supabase = getSupabase()
+  const countTable = async (table: string) => {
+    const { count, error } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+    if (error) throw new Error(error.message)
+    return count ?? 0
+  }
+  const loadAuthStats = async () => {
+    const createdTimes: number[] = []
+    let page = 1
+    let total: number | null = null
+    for (;;) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+      if (error) throw new Error(error.message)
+      const users = data?.users ?? []
+      if (typeof data?.total === 'number') total = data.total
+      createdTimes.push(...users.map((user) => Date.parse(user.created_at)))
+      if (typeof data?.nextPage !== 'number') break
+      page = data.nextPage
+    }
+    const since = (days: number) => now.getTime() - days * 24 * 60 * 60 * 1000
+    return {
+      accounts: total ?? createdTimes.length,
+      last24Hours: createdTimes.filter((created) => created >= since(1)).length,
+      last7Days: createdTimes.filter((created) => created >= since(7)).length,
+      last30Days: createdTimes.filter((created) => created >= since(30)).length,
+    }
+  }
+  const presenceCutoff = new Date(now.getTime() - 60_000).toISOString()
+  const presencePromise = supabase
+    .from('agent_presence')
+    .select('*', { count: 'exact', head: true })
+    .gte('last_seen_at', presenceCutoff)
+  const [auth, projects, comments, shares, presenceResult] = await Promise.all([
+    loadAuthStats(), countTable('projects'), countTable('comments'), countTable('feedback_shares'),
+    presencePromise,
+  ])
+  if (presenceResult.error) throw new Error(presenceResult.error.message)
+  return {
+    accounts: auth.accounts,
+    projects,
+    comments,
+    shares,
+    activeAgentPresence: presenceResult.count ?? 0,
+    signups: {
+      last24Hours: auth.last24Hours,
+      last7Days: auth.last7Days,
+      last30Days: auth.last30Days,
+    },
+  }
+}
+
 /**
  * Take ownership of a project. Two ways in:
  *  - Existing unclaimed project (widget-made): a conditional UPDATE flips
