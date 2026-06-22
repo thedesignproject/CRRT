@@ -1691,6 +1691,19 @@ describe('<FeedbackWidget />', () => {
         expect(pathSpan).toBeDefined()
       })
     })
+
+    it('falls back to the root path when the browser pathname is empty', async () => {
+      vi.spyOn(window.location, 'pathname', 'get').mockReturnValue('')
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'path fallback test' } })
+
+      await waitFor(() => {
+        const spans = Array.from(document.querySelectorAll<HTMLSpanElement>('[data-fw] span'))
+        expect(spans.some((span) => span.textContent === '/')).toBe(true)
+      })
+    })
   })
 
   describe('screenshot remove button (lines 766-767)', () => {

@@ -1,0 +1,7 @@
+interface:
+  display_name: "Diff Coverage"
+  short_description: "Verify changed-line and branch coverage"
+  default_prompt: "Use $diff-coverage to verify 100% diff line and branch coverage before handing work back."
+
+policy:
+  allow_implicit_invocation: true

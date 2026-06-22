@@ -1,4 +1,10 @@
 import { getServiceSupabase } from './supabase.js'
+import {
+  AdminQueryError,
+  decodeAdminCursor,
+  encodeAdminCursor,
+  type AdminPage,
+} from './admin-pagination.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
 
 // Every table/storage operation in this module goes through the service-role
@@ -305,6 +311,327 @@ export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, 
     }),
   )
   return result
+}
+
+export type AdminUser = {
+  id: string
+  email: string | null
+  createdAt: string
+  lastSignInAt: string | null
+  emailConfirmedAt: string | null
+  projectsAsAdminCount: number
+  projectsAsMemberCount: number
+  superAdmin: boolean
+}
+
+/**
+ * Super-admin view: every auth user, newest first, with how many projects each
+ * belongs to. Users come from the auth admin API (paged); project counts come
+ * from the `admin_user_project_counts` RPC (migration 0007), which aggregates
+ * `project_members` in the DB so a large membership table can't be truncated by
+ * PostgREST's row cap and miscount.
+ */
+type AdminUserCursor = { kind: 'users'; page: number; limit: number; lastId: string }
+
+function parseAdminUserCursor(cursor: string | undefined, limit: number): AdminUserCursor {
+  if (!cursor) return { kind: 'users', page: 1, limit, lastId: '' }
+  const value = decodeAdminCursor(cursor) as Partial<AdminUserCursor> | null
+  if (
+    !value || value.kind !== 'users' || !Number.isInteger(value.page) || Number(value.page) < 2
+    || value.limit !== limit || typeof value.lastId !== 'string' || !value.lastId
+  ) throw new AdminQueryError('Invalid cursor')
+  return value as AdminUserCursor
+}
+
+export async function listAllUsers(options: {
+  limit: number
+  cursor?: string
+}): Promise<AdminPage<AdminUser>> {
+  const supabase = getSupabase()
+  const position = parseAdminUserCursor(options.cursor, options.limit)
+  const { data, error } = await supabase.auth.admin.listUsers({
+    page: position.page,
+    perPage: options.limit,
+  })
+  if (error) throw new Error(error.message)
+  const users = data?.users ?? []
+  const ids = users.map((user) => user.id)
+  let metricRows: unknown[] = []
+  if (ids.length > 0) {
+    const { data: metrics, error: metricsError } = await supabase
+      .from('admin_user_metrics')
+      .select('user_id, admin_project_count, member_project_count, super_admin')
+      .in('user_id', ids)
+    if (metricsError) throw new Error(metricsError.message)
+    metricRows = metrics ?? []
+  }
+  type MetricRow = {
+    user_id: string
+    admin_project_count: number
+    member_project_count: number
+    super_admin: boolean
+  }
+  const metricsByUser = new Map(
+    (metricRows as MetricRow[]).map((row) => [row.user_id, row]),
+  )
+  const items = users.map((u) => {
+    const metrics = metricsByUser.get(u.id)
+    return {
+      id: u.id,
+      email: u.email ?? null,
+      createdAt: u.created_at,
+      lastSignInAt: u.last_sign_in_at ?? null,
+      emailConfirmedAt: u.email_confirmed_at ?? null,
+      projectsAsAdminCount: Number(metrics?.admin_project_count ?? 0),
+      projectsAsMemberCount: Number(metrics?.member_project_count ?? 0),
+      superAdmin: metrics?.super_admin ?? false,
+    }
+  })
+  const nextPage = typeof data?.nextPage === 'number' ? data.nextPage : null
+  const hasMore = nextPage !== null && items.length > 0
+  return {
+    items,
+    hasMore,
+    nextCursor: hasMore
+      ? encodeAdminCursor({
+          kind: 'users', page: nextPage, limit: options.limit, lastId: items[items.length - 1].id,
+        })
+      : null,
+  }
+}
+
+export type AdminProjectMember = {
+  email: string
+  role: 'admin' | 'member'
+}
+
+export type AdminProject = {
+  publicKey: string
+  name: string
+  createdAt: string
+  commentCount: number
+  commentStatusCounts: { pending: number; accepted: number; rejected: number }
+  implementationStatusCounts: {
+    unassigned: number; claimed: number; inProgress: number; blocked: number; done: number
+  }
+  feedbackShareCount: number
+  commentedUrlCount: number
+  firstCommentAt: string
+  lastCommentAt: string
+  claimed: boolean
+  members: AdminProjectMember[]
+}
+
+export const ADMIN_PROJECT_SORTS = [
+  'lastCommentAt', 'createdAt', 'commentCount', 'feedbackShareCount', 'commentedUrlCount',
+] as const
+export type AdminProjectSort = typeof ADMIN_PROJECT_SORTS[number]
+export type AdminSortDirection = 'asc' | 'desc'
+
+type AdminProjectCursor = {
+  kind: 'projects'
+  sort: AdminProjectSort
+  direction: AdminSortDirection
+  value: string | number
+  id: string
+}
+
+const PROJECT_SORT_COLUMNS: Record<AdminProjectSort, string> = {
+  lastCommentAt: 'last_comment_at',
+  createdAt: 'created_at',
+  commentCount: 'comment_count',
+  feedbackShareCount: 'feedback_share_count',
+  commentedUrlCount: 'commented_url_count',
+}
+
+/**
+ * Super-admin view: every project that has received at least one comment,
+ * ordered by most-recent comment, capped at `ADMIN_PROJECT_LIMIT`. Per project:
+ * comment count, latest comment time, whether it's been claimed
+ * (`claimable === false`), and every member with their role + resolved email
+ * (admins are the owners; this also lets the dashboard scope projects to any
+ * member).
+ *
+ * Comment count + latest-per-project are aggregated by the
+ * `admin_projects_with_comments` RPC (migration 0007) rather than scanning the
+ * whole `comments` table in Node, so a large table can't be truncated by
+ * PostgREST's row cap and yield wrong counts / a partial project set.
+ */
+export async function listProjectsWithComments(options: {
+  limit: number
+  cursor?: string
+  sort: AdminProjectSort
+  direction: AdminSortDirection
+}): Promise<AdminPage<AdminProject>> {
+  const supabase = getSupabase()
+
+  type AdminProjectRow = {
+    public_key: string
+    name: string
+    claimable: boolean
+    created_at: string
+    comment_count: number
+    pending_comment_count: number
+    accepted_comment_count: number
+    rejected_comment_count: number
+    unassigned_comment_count: number
+    claimed_comment_count: number
+    in_progress_comment_count: number
+    blocked_comment_count: number
+    done_comment_count: number
+    feedback_share_count: number
+    commented_url_count: number
+    first_comment_at: string
+    last_comment_at: string
+  }
+  const column = PROJECT_SORT_COLUMNS[options.sort]
+  let cursor: AdminProjectCursor | undefined
+  if (options.cursor) {
+    const value = decodeAdminCursor(options.cursor) as Partial<AdminProjectCursor> | null
+    if (
+      !value || value.kind !== 'projects' || value.sort !== options.sort
+      || value.direction !== options.direction || !['string', 'number'].includes(typeof value.value)
+      || typeof value.id !== 'string' || !value.id
+    ) throw new AdminQueryError('Invalid cursor')
+    cursor = value as AdminProjectCursor
+  }
+  let query = supabase
+    .from('admin_project_metrics')
+    .select('public_key, name, claimable, created_at, comment_count, pending_comment_count, accepted_comment_count, rejected_comment_count, unassigned_comment_count, claimed_comment_count, in_progress_comment_count, blocked_comment_count, done_comment_count, feedback_share_count, commented_url_count, first_comment_at, last_comment_at')
+  if (cursor) {
+    const operator = options.direction === 'asc' ? 'gt' : 'lt'
+    query = query.or(
+      `${column}.${operator}.${cursor.value},and(${column}.eq.${cursor.value},public_key.${operator}.${cursor.id})`,
+    )
+  }
+  const { data: projectRows, error: projectError } = await query
+    .order(column, { ascending: options.direction === 'asc' })
+    .order('public_key', { ascending: options.direction === 'asc' })
+    .limit(options.limit + 1)
+  if (projectError) throw new Error(projectError.message)
+
+  const projects = ((projectRows || []) as AdminProjectRow[]).slice(0, options.limit)
+  const hasMore = (projectRows?.length ?? 0) > options.limit
+  if (projects.length === 0) return { items: [], nextCursor: null, hasMore: false }
+  const keys = projects.map((p) => p.public_key)
+
+  const { data: memberRows, error: memberError } = await supabase
+    .from('project_members')
+    .select('project_key, user_id, role')
+    .in('project_key', keys)
+  if (memberError) throw new Error(memberError.message)
+
+  type MemberRow = { project_key: string; user_id: string; role: 'admin' | 'member' }
+  const rows = (memberRows || []) as MemberRow[]
+  const membersByProject = new Map<string, MemberRow[]>()
+  for (const row of rows) {
+    const list = membersByProject.get(row.project_key) ?? []
+    list.push(row)
+    membersByProject.set(row.project_key, list)
+  }
+  const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
+
+  const items = projects.map((row) => {
+    const members = (membersByProject.get(row.public_key) ?? [])
+      .map((m) => ({ email: emails[m.user_id], role: m.role }))
+      .filter((m): m is AdminProjectMember => Boolean(m.email))
+    return {
+      publicKey: row.public_key,
+      name: row.name,
+      createdAt: row.created_at,
+      commentCount: Number(row.comment_count),
+      commentStatusCounts: {
+        pending: Number(row.pending_comment_count),
+        accepted: Number(row.accepted_comment_count),
+        rejected: Number(row.rejected_comment_count),
+      },
+      implementationStatusCounts: {
+        unassigned: Number(row.unassigned_comment_count),
+        claimed: Number(row.claimed_comment_count),
+        inProgress: Number(row.in_progress_comment_count),
+        blocked: Number(row.blocked_comment_count),
+        done: Number(row.done_comment_count),
+      },
+      feedbackShareCount: Number(row.feedback_share_count),
+      commentedUrlCount: Number(row.commented_url_count),
+      firstCommentAt: row.first_comment_at,
+      lastCommentAt: row.last_comment_at,
+      claimed: row.claimable === false,
+      members,
+    }
+  })
+  const last = items[items.length - 1]
+  return {
+    items,
+    hasMore,
+    nextCursor: hasMore ? encodeAdminCursor({
+      kind: 'projects', sort: options.sort, direction: options.direction,
+      value: last[options.sort], id: last.publicKey,
+    }) : null,
+  }
+}
+
+export type AdminStats = {
+  accounts: number
+  projects: number
+  comments: number
+  shares: number
+  activeAgentPresence: number
+  signups: { last24Hours: number; last7Days: number; last30Days: number }
+}
+
+export async function getAdminStats(now = new Date()): Promise<AdminStats> {
+  const supabase = getSupabase()
+  const countTable = async (table: string) => {
+    const { count, error } = await supabase
+      .from(table)
+      .select('*', { count: 'exact', head: true })
+    if (error) throw new Error(error.message)
+    return count ?? 0
+  }
+  const loadAuthStats = async () => {
+    const createdTimes: number[] = []
+    let page = 1
+    let total: number | null = null
+    for (;;) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 1000 })
+      if (error) throw new Error(error.message)
+      const users = data?.users ?? []
+      if (typeof data?.total === 'number') total = data.total
+      createdTimes.push(...users.map((user) => Date.parse(user.created_at)))
+      if (typeof data?.nextPage !== 'number') break
+      page = data.nextPage
+    }
+    const since = (days: number) => now.getTime() - days * 24 * 60 * 60 * 1000
+    return {
+      accounts: total ?? createdTimes.length,
+      last24Hours: createdTimes.filter((created) => created >= since(1)).length,
+      last7Days: createdTimes.filter((created) => created >= since(7)).length,
+      last30Days: createdTimes.filter((created) => created >= since(30)).length,
+    }
+  }
+  const presenceCutoff = new Date(now.getTime() - 60_000).toISOString()
+  const presencePromise = supabase
+    .from('agent_presence')
+    .select('*', { count: 'exact', head: true })
+    .gte('last_seen_at', presenceCutoff)
+  const [auth, projects, comments, shares, presenceResult] = await Promise.all([
+    loadAuthStats(), countTable('projects'), countTable('comments'), countTable('feedback_shares'),
+    presencePromise,
+  ])
+  if (presenceResult.error) throw new Error(presenceResult.error.message)
+  return {
+    accounts: auth.accounts,
+    projects,
+    comments,
+    shares,
+    activeAgentPresence: presenceResult.count ?? 0,
+    signups: {
+      last24Hours: auth.last24Hours,
+      last7Days: auth.last7Days,
+      last30Days: auth.last30Days,
+    },
+  }
 }
 
 /**
@@ -1214,4 +1541,3 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
     return null
   }
 }
-
