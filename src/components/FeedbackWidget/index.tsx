@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { X, SlidersHorizontal, Check } from 'lucide-react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Bot, MessageCircle, PanelRightOpen, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { buildTextRangeAnchor } from '../../lib/textAnchor'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
@@ -8,7 +8,7 @@ import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } fr
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
 import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
-import { deleteComment as apiDeleteComment, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import { deleteComment as apiDeleteComment, fetchAgentEligibility, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
@@ -50,6 +50,15 @@ function isTextAtPoint(x: number, y: number): boolean {
   return false
 }
 
+function dashboardAuthUrl(apiBase: string, path: '/dashboard/login' | '/dashboard/signup') {
+  try {
+    const origin = new URL(apiBase, window.location.origin).origin
+    return new URL(path, origin).toString()
+  } catch {
+    return path
+  }
+}
+
 function getElementFixedPos(
   selector: string,
   xPct: number,
@@ -86,6 +95,259 @@ function CarrotPixelIcon({ size = 20 }: { size?: number | string }) {
         flexShrink: 0,
       }}
     />
+  )
+}
+
+function LauncherAction({
+  icon,
+  title,
+  subtitle,
+  shortcut,
+  onClick,
+}: {
+  icon: ReactNode
+  title: string
+  subtitle: string
+  shortcut: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      style={{
+        width: '100%',
+        display: 'grid',
+        gridTemplateColumns: '36px minmax(0, 1fr) auto',
+        alignItems: 'center',
+        gap: 10,
+        padding: 8,
+        border: 0,
+        borderRadius: 10,
+        background: 'transparent',
+        color: '#FFFFFF',
+        textAlign: 'left',
+        cursor: 'pointer',
+        fontFamily: 'inherit',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+    >
+      <span
+        style={{
+          width: 36,
+          height: 36,
+          borderRadius: 9999,
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(255, 255, 255, 0.05)',
+          border: '1px solid rgba(255, 255, 255, 0.09)',
+          color: '#E8853D',
+        }}
+      >
+        {icon}
+      </span>
+      <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
+        <span
+          style={{
+            fontFamily: "'PP NeueBit', 'PPNeueBit-Bold', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+            fontSize: 20,
+            fontWeight: 700,
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {title}
+        </span>
+        <span style={{ fontSize: 12, color: '#A8A29A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {subtitle}
+        </span>
+      </span>
+      <kbd
+        style={{
+          minWidth: 26,
+          padding: '4px 7px',
+          borderRadius: 6,
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          background: 'rgba(10, 10, 10, 0.62)',
+          color: '#E8E5DF',
+          fontSize: 11,
+          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+          textAlign: 'center',
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {shortcut}
+      </kbd>
+    </button>
+  )
+}
+
+function AgentAuthGate({
+  readyCount,
+  signUpUrl,
+  loginUrl,
+  onClose,
+}: {
+  readyCount: number
+  signUpUrl: string
+  loginUrl: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      onClose()
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [onClose])
+
+  return (
+    <div {...{ [WIDGET_ATTR]: '' }}>
+      <div
+        aria-hidden
+        onClick={onClose}
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 2147483646,
+          background: 'rgba(0, 0, 0, 0.48)',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+        }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sign in to use agent"
+        style={{
+          position: 'fixed',
+          left: '50%',
+          top: '50%',
+          zIndex: 2147483647,
+          width: 'min(360px, calc(100vw - 32px))',
+          transform: 'translate(-50%, -50%)',
+          borderRadius: 18,
+          border: '1px solid rgba(232, 133, 61, 0.22)',
+          background: '#0D0D0D',
+          boxShadow: '0 24px 80px rgba(0, 0, 0, 0.58)',
+          color: '#FFFFFF',
+          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+          overflow: 'hidden',
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 30,
+            height: 30,
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 9999,
+            background: 'rgba(255, 255, 255, 0.03)',
+            color: '#A8A29A',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <X size={15} />
+        </button>
+
+        <div style={{ padding: '26px 24px 22px' }}>
+          <div
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 12,
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: 18,
+              background: '#E8853D',
+              color: '#080808',
+            }}
+          >
+            <Bot size={22} />
+          </div>
+          <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.1, letterSpacing: 0, fontWeight: 750 }}>
+            Log in to copy prompt
+          </h2>
+          <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.5, color: '#A8A29A' }}>
+            Preview the agent prompt first. Copying it requires an account so CRRT can track the handoff.
+          </p>
+          <div
+            style={{
+              marginTop: 16,
+              padding: '10px 12px',
+              borderRadius: 10,
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid rgba(255, 255, 255, 0.06)',
+              color: '#E8E5DF',
+              fontSize: 13,
+            }}
+          >
+            {readyCount > 0
+              ? `${readyCount} approved comment${readyCount === 1 ? '' : 's'} ready`
+              : 'Approve comments first, then send them to agent'}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+            <a
+              href={signUpUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                flex: 1,
+                height: 42,
+                borderRadius: 9999,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: '#E8853D',
+                color: '#080808',
+                textDecoration: 'none',
+                fontSize: 14,
+                fontWeight: 700,
+              }}
+            >
+              Sign up
+            </a>
+            <a
+              href={loginUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                flex: 1,
+                height: 42,
+                borderRadius: 9999,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                border: '1px solid rgba(255, 255, 255, 0.10)',
+                color: '#FFFFFF',
+                textDecoration: 'none',
+                fontSize: 14,
+                fontWeight: 650,
+              }}
+            >
+              Log in
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -149,13 +411,11 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     setNameInput('')
   }
 
-  // Draggable pill state — null means CSS default (bottom: 24, right: 24)
-  const [draggedPos, setDraggedPos] = useState<{ x: number; y: number } | null>(null)
+  // Launcher hover/menu state.
   const [pillHover, setPillHover] = useState(false)
-  const dragging = useRef(false)
-  // Drag handle visually extends below the pill but sits outside its bounding
-  // box, so sliding the cursor onto it fires mouseleave on the wrapper and
-  // oscillates the expand/collapse animation. Small unhover delay absorbs it.
+  const [launcherOpen, setLauncherOpen] = useState(false)
+  const [selectingHintShown, setSelectingHintShown] = useState(false)
+  const [showSelectingHint, setShowSelectingHint] = useState(false)
   const pillLeaveTimer = useRef<number | null>(null)
   const onPillEnter = useCallback(() => {
     if (pillLeaveTimer.current) {
@@ -190,18 +450,6 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
 
     function onResize() {
       bump()
-      // CSS bottom/right handles viewport resize automatically when not dragged.
-      // For dragged state, draggedPos stores right/bottom offsets — clamp them
-      // so the pill stays inside the viewport after a resize.
-      setDraggedPos(prev => {
-        if (!prev) return null
-        const pillW = pillRef.current?.offsetWidth ?? 64
-        const pillH = pillRef.current?.offsetHeight ?? 64
-        return {
-          x: Math.max(0, Math.min(window.innerWidth - pillW, prev.x)),
-          y: Math.max(0, Math.min(window.innerHeight - pillH, prev.y)),
-        }
-      })
     }
     window.addEventListener('resize', onResize)
     // Capture phase + document target catches scroll on any nested scrollable
@@ -219,10 +467,6 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       ro.disconnect()
     }
   }, [])
-  const dragOffset = useRef({ x: 0, y: 0 })
-  const didDrag = useRef(false)
-  const pillRef = useRef<HTMLDivElement>(null)
-
   // Pin state
   const [selectedPin, setSelectedPin] = useState<string | null>(null)
   const [hoveredPin, setHoveredPin] = useState<string | null>(null)
@@ -251,18 +495,19 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [badgeAnim, setBadgeAnim] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
+  const [agentGateOpen, setAgentGateOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
-  const [sidebarTab, setSidebarTab] = useState<'comments' | 'ready'>('comments')
   const [pinsVisible, setPinsVisible] = useState(true)
-  const [agentsRevealed, setAgentsRevealed] = useState(false)
-  const [headerPopover, setHeaderPopover] = useState<'filter' | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   // Synchronous guard — state updates are async, so double-firing handleSend
   // in the same tick (e.g. Cmd+Enter held down) would otherwise slip past `sending`.
   const sendingRef = useRef(false)
 
-  const [successToast, setSuccessToast] = useState(false)
+  const [postSendHint, setPostSendHint] = useState(false)
+  const [launcherBump, setLauncherBump] = useState(false)
+  const signUpUrl = useMemo(() => dashboardAuthUrl(apiBase, '/dashboard/signup'), [apiBase])
+  const loginUrl = useMemo(() => dashboardAuthUrl(apiBase, '/dashboard/login'), [apiBase])
 
   const { image, previewUrl: imagePreviewUrl, capture: captureImage, clear: clearImage, toBase64: encodeImage } = useScreenshotCapture()
 
@@ -276,11 +521,6 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       cancelled = true
     }
   }, [projectId, apiBase])
-
-  // Close agent modal if agents get hidden while it's open
-  useEffect(() => {
-    if (!agentsRevealed) setAgentOpen(false)
-  }, [agentsRevealed])
 
   // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
   const [textHover, setTextHover] = useState(false)
@@ -340,6 +580,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
 
       e.preventDefault()
       e.stopPropagation()
+      setShowSelectingHint(false)
 
       setSelectedPin(null)
       setSidebarOpen(false)
@@ -477,10 +718,12 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       setComments((prev) => [newComment, ...prev])
 
       setBadgeAnim(true)
-      setTimeout(() => setBadgeAnim(false), 400)
+      setTimeout(() => setBadgeAnim(false), 720)
 
-      setSuccessToast(true)
-      setTimeout(() => setSuccessToast(false), 2000)
+      setPostSendHint(true)
+      setLauncherBump(true)
+      setTimeout(() => setLauncherBump(false), 650)
+      setTimeout(() => setPostSendHint(false), 2200)
 
       clearNativeSelection()
       setTarget(null)
@@ -488,7 +731,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       clearImage()
       setHovered(null)
       setMode('selecting')
-      setSidebarOpen(true)
+      setSidebarOpen(false)
     } catch (err) {
       console.warn('[FeedbackWidget] API error:', err)
     } finally {
@@ -520,6 +763,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
           exitFeedbackMode()
         } else if (sidebarOpen) {
           setSidebarOpen(false)
+        } else if (launcherOpen) {
+          setLauncherOpen(false)
         }
       }
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && mode === 'commenting') {
@@ -528,16 +773,23 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
 
       // Single-key shortcuts — skip when typing in an input
       if (isTyping) return
+      if (e.repeat) return
 
       // Shift+A — open Agent bridge modal directly (no reveal step now that aux chips are gone)
       if (e.shiftKey && e.key.toLowerCase() === 'a') {
-        setAgentsRevealed(true)
-        setAgentOpen(true)
+        openAgentBridge()
         return
       }
 
       if (e.key === 'c' || e.key === 'C') {
-        if (mode !== 'idle') { exitFeedbackMode() } else { enterFeedbackMode() }
+        if (mode === 'idle') {
+          enterFeedbackMode()
+          return
+        }
+        if (mode === 'selecting') {
+          exitFeedbackMode()
+          return
+        }
       }
       if (e.key === 's' || e.key === 'S') {
         enterFeedbackMode()
@@ -551,11 +803,12 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [mode, handleSend, sidebarOpen, selectedPin, showNameModal])
+  }, [mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal])
 
   function exitFeedbackMode() {
     clearNativeSelection()
     setMode('idle')
+    setShowSelectingHint(false)
     setTarget(null)
     setComment('')
     clearImage()
@@ -567,49 +820,44 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   function enterFeedbackMode() {
     clearNativeSelection()
     setSidebarOpen(false)
+    setLauncherOpen(false)
+    if (!selectingHintShown) {
+      setSelectingHintShown(true)
+      setShowSelectingHint(true)
+    }
     setMode('selecting')
   }
 
-  // --- Drag handlers for pill ---
-  function onPillPointerDown(e: React.PointerEvent) {
-    dragging.current = true
-    didDrag.current = false
-    const rect = pillRef.current?.getBoundingClientRect()
-    /* v8 ignore next 2 */
-    dragOffset.current = {
-      x: e.clientX - (rect?.left ?? e.clientX),
-      y: e.clientY - (rect?.top ?? e.clientY),
-    }
-    ;(e.target as HTMLElement).setPointerCapture(e.pointerId)
+  function openReviewFromHint() {
+    exitFeedbackMode()
+    setPostSendHint(false)
+    setSidebarOpen(true)
   }
 
+  function openAgentBridge() {
+    setLauncherOpen(false)
+    setAgentGateOpen(false)
+    setSidebarOpen(false)
+    setAgentOpen(true)
+  }
+
+  async function ensureAgentAccess() {
+    const eligibility = await fetchAgentEligibility(apiBase, projectId)
+    if (eligibility?.canRequest && !eligibility.mustSignUp) return true
+    setAgentGateOpen(true)
+    return false
+  }
+
+  // Close the launcher menu on outside click.
   useEffect(() => {
-    function onMove(e: PointerEvent) {
-      if (!dragging.current) return
-      didDrag.current = true
-      // Store the drag position as right/bottom offsets (distance from those
-      // edges) so the wrapper stays anchored to the right/bottom. That keeps
-      // the hover-expansion of the pill growing LEFTWARDS into the viewport
-      // instead of off the right edge.
-      const pillW = pillRef.current?.offsetWidth ?? 64
-      const pillH = pillRef.current?.offsetHeight ?? 64
-      const desiredLeft = Math.max(0, Math.min(window.innerWidth - pillW, e.clientX - dragOffset.current.x))
-      const desiredTop = Math.max(0, Math.min(window.innerHeight - pillH, e.clientY - dragOffset.current.y))
-      setDraggedPos({
-        x: window.innerWidth - desiredLeft - pillW,
-        y: window.innerHeight - desiredTop - pillH,
-      })
+    if (!launcherOpen) return
+    function onPointerDown(e: PointerEvent) {
+      const targetEl = e.target as HTMLElement
+      if (!targetEl.closest?.('[data-fw-launcher-root]')) setLauncherOpen(false)
     }
-    function onUp() {
-      dragging.current = false
-    }
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-    return () => {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-  }, [])
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [launcherOpen])
 
   // External trigger — landing page "Drop a carrot" buttons dispatch this event.
   useEffect(() => {
@@ -695,18 +943,29 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   }), [comments, currentUrl])
   const filteredComments = useMemo(() => visibleComments.filter((c) => {
     const status = c.reviewStatus ?? 'open'
-    // Tab gate first: "Ready for agent" only shows approved comments (ready to ship).
-    if (sidebarTab === 'ready' && status !== 'accepted') return false
     if (filterStatus === 'open') return status === 'open'
     if (filterStatus === 'approved') return status === 'accepted'
     return true
-  }), [visibleComments, filterStatus, sidebarTab])
+  }), [visibleComments, filterStatus])
   const sortedComments = useMemo(() => [...filteredComments].sort((a, b) => {
     const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
     const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
   }), [filteredComments])
+  const readyForAgentCount = useMemo(
+    () => visibleComments.filter((c) => (c.reviewStatus ?? 'open') === 'accepted').length,
+    [visibleComments],
+  )
+  const openCommentCount = useMemo(
+    () => visibleComments.filter((c) => (c.reviewStatus ?? 'open') === 'open').length,
+    [visibleComments],
+  )
+  const sidebarTitle = filterStatus === 'approved'
+    ? 'Ready for agent'
+    : filterStatus === 'open'
+      ? 'Open comments'
+      : 'All comments'
   // Pin only renders if its selector still resolves on the current DOM.
   // Driven by a MutationObserver so we only recompute on real DOM changes,
   // and only re-render when the live set actually differs.
@@ -745,7 +1004,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     ? '/'
     : window.location.pathname.slice(0, 28) || '/'
   const avatarInitial = authorName ? (getInitials(authorName) ?? authorName[0]?.toUpperCase() ?? 'U') : 'U'
-  const badgeAnimation = badgeAnim ? 'fw-badge-pop 0.4s ease' : 'crrt-pulse 2.4s ease-in-out infinite'
+  const badgeAnimation = badgeAnim ? 'fw-badge-pop 720ms cubic-bezier(0.16, 1, 0.3, 1)' : 'crrt-pulse 2.4s ease-in-out infinite'
+  const launcherActive = launcherOpen || mode !== 'idle'
 
   return (
     <div {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '' }}>
@@ -764,7 +1024,18 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
       )}
 
       {/* Instruction tooltip */}
-      {mode === 'selecting' && <SelectingInstructionBar onCancel={exitFeedbackMode} />}
+      {mode === 'selecting' && showSelectingHint && (
+        <SelectingInstructionBar onCancel={exitFeedbackMode} />
+      )}
+      {mode === 'selecting' && !showSelectingHint && postSendHint && (
+        <SelectingInstructionBar
+          message="Saved. Drop another or review comments."
+          keyLabel="F"
+          actionLabel="review"
+          tone="success"
+          onCancel={openReviewFromHint}
+        />
+      )}
 
       {/* Popover */}
       {mode === 'commenting' && target && (
@@ -1288,60 +1559,41 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
           borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
         }}
       >
-        {/* Tabs row */}
+        {/* Header */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          padding: '10px 12px',
-          gap: 4,
+          padding: '16px 16px 12px',
+          gap: 12,
           borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
         }}>
-          <div style={{
-            display: 'inline-flex',
-            background: 'rgba(255, 255, 255, 0.04)',
-            borderRadius: 9999,
-            padding: 3,
-            gap: 2,
-            flex: 1,
-          }}>
-            {([
-              { id: 'comments', label: 'Comments' },
-              { id: 'ready', label: 'Ready for agent' },
-            ] as const).map((t) => {
-              const active = sidebarTab === t.id
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setSidebarTab(t.id)}
-                  style={{
-                    flex: 1,
-                    padding: '6px 10px',
-                    borderRadius: 9999,
-                    border: 'none',
-                    background: active ? 'rgba(232, 133, 61, 0.18)' : 'transparent',
-                    color: active ? '#E8853D' : '#A8A29A',
-                    fontSize: 12,
-                    fontWeight: 500,
-                    fontFamily: 'inherit',
-                    cursor: 'pointer',
-                    transition: 'background 150ms ease, color 150ms ease',
-                  }}
-                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = '#FFFFFF' }}
-                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = '#A8A29A' }}
-                >
-                  {t.label}
-                </button>
-              )
-            })}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: '#FFFFFF' }}>
+              Feedback
+            </div>
+            <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: '#6B6560' }}>
+              {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'} · {readyForAgentCount} ready
+            </div>
           </div>
-
-          {/* Close button — closes sidebar AND exits selecting if active */}
           <button
             onClick={() => { if (mode !== 'idle') exitFeedbackMode(); setSidebarOpen(false) }}
             aria-label="Close"
-            style={{ background: 'none', border: 'none', color: '#A8A29A', cursor: 'pointer', padding: 8, borderRadius: 6, display: 'flex', transition: 'color 0.15s, background 0.15s' }}
+            style={{
+              width: 34,
+              height: 34,
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.06)',
+              color: '#A8A29A',
+              cursor: 'pointer',
+              padding: 0,
+              borderRadius: 9999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'color 0.15s, background 0.15s',
+            }}
             onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29A'; e.currentTarget.style.background = 'transparent' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29A'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -1350,91 +1602,116 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
           </button>
         </div>
 
-        {/* Title + filter row */}
-        <div style={{ display: 'flex', alignItems: 'center', padding: '12px 16px 10px', position: 'relative' }}>
-          <span style={{ fontSize: 13, color: '#FFFFFF', flex: 1, fontWeight: 500 }}>
-            {sidebarTab === 'ready' ? 'Ready for agent' : 'All comments'}
-            <span style={{ marginLeft: 8, color: '#6B6560', fontSize: 12, fontWeight: 400 }}>{commentCount}</span>
-          </span>
-
-          {/* Filter button */}
+        {/* Agent CTA — visible path into agent flow, not only Shift+A. */}
+        <div
+          style={{
+            padding: '14px 16px 12px',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+          }}
+        >
           <button
-            onClick={(e) => { e.stopPropagation(); setHeaderPopover((v) => v === 'filter' ? null : 'filter') }}
-            title="Filter"
+            type="button"
+            onClick={openAgentBridge}
             style={{
-              background: headerPopover === 'filter' ? 'rgba(255,255,255,0.06)' : 'transparent',
-              border: 'none',
-              color: filterStatus !== 'all' ? '#E8853D' : '#6B6560',
-              cursor: 'pointer',
-              padding: 6,
-              borderRadius: 6,
+              width: '100%',
               display: 'flex',
-              transition: 'color 0.15s, background 0.15s',
+              alignItems: 'center',
+              gap: 10,
+              padding: '11px 12px',
+              borderRadius: 10,
+              border: '1px solid rgba(232, 133, 61, 0.28)',
+              background: 'rgba(232, 133, 61, 0.08)',
+              color: '#FFFFFF',
+              cursor: 'pointer',
+              fontFamily: 'inherit',
+              textAlign: 'left',
+              transition: 'background 160ms ease, border-color 160ms ease',
             }}
-            onMouseEnter={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#FFFFFF' }}
-            onMouseLeave={(e) => { if (headerPopover !== 'filter' && filterStatus === 'all') e.currentTarget.style.color = '#6B6560' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'rgba(232, 133, 61, 0.13)'
+              e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.42)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'rgba(232, 133, 61, 0.08)'
+              e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.28)'
+            }}
           >
-            <SlidersHorizontal style={{ width: 14, height: 14 }} />
+            <span
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                background: '#E8853D',
+                color: '#080808',
+              }}
+            >
+              <Bot size={17} />
+            </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 650, lineHeight: 1.25 }}>
+                  Open agent
+                </span>
+                <span style={{ display: 'block', marginTop: 2, fontSize: 12, color: '#A8A29A', lineHeight: 1.35 }}>
+                  {readyForAgentCount > 0
+                    ? `${readyForAgentCount} ready comment${readyForAgentCount === 1 ? '' : 's'}`
+                    : 'Approve comments to queue work'}
+                </span>
+              </span>
+            <span
+              style={{
+                flexShrink: 0,
+                padding: '3px 7px',
+                borderRadius: 9999,
+                border: '1px solid rgba(255, 255, 255, 0.10)',
+                color: '#A8A29A',
+                fontSize: 11,
+                lineHeight: 1,
+              }}
+            >
+              Shift + A
+            </span>
           </button>
+        </div>
 
-          {/* Filter popover */}
-          {headerPopover === 'filter' && (
-            <>
-              <div
-                onClick={() => setHeaderPopover(null)}
-                style={{ position: 'fixed', inset: 0, zIndex: 100000 }}
-              />
-              <div
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  right: 38,
-                  marginTop: 4,
-                  zIndex: 100001,
-                  background: '#222',
-                  border: '1px solid #333',
-                  borderRadius: 8,
-                  padding: 4,
-                  minWidth: 180,
-                  boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
-                  animation: 'fw-slide-in 0.15s ease both',
-                }}
-              >
-                {(['all', 'open', 'approved'] as const).map((f) => {
-                  const active = filterStatus === f
-                  const label = f === 'all' ? 'All' : f === 'open' ? 'Open' : 'Approved'
-                  return (
-                    <button
-                      key={f}
-                      onClick={() => { setFilterStatus(f); setHeaderPopover(null) }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 8,
-                        width: '100%',
-                        padding: '8px 10px',
-                        fontSize: 13,
-                        fontWeight: 500,
-                        borderRadius: 6,
-                        border: 'none',
-                        background: 'transparent',
-                        color: '#ddd',
-                        cursor: 'pointer',
-                        fontFamily: 'inherit',
-                        textAlign: 'left',
-                      }}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = '#2e2e2e')}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-                    >
-                      <span style={{ width: 14, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        {active && <Check style={{ width: 14, height: 14, color: '#E8853D' }} />}
-                      </span>
-                      {label}
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
+        {/* Filter row */}
+        <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+          <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ fontSize: 13, color: '#FFFFFF', fontWeight: 600 }}>{sidebarTitle}</span>
+            <span style={{ fontSize: 12, color: '#6B6560' }}>{filteredComments.length}</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+            {([
+              { id: 'all', label: 'All', count: visibleComments.length },
+              { id: 'open', label: 'Open', count: openCommentCount },
+              { id: 'approved', label: 'Ready', count: readyForAgentCount },
+            ] as const).map((item) => {
+              const active = filterStatus === item.id
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setFilterStatus(item.id)}
+                  style={{
+                    height: 32,
+                    borderRadius: 9999,
+                    border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid rgba(255, 255, 255, 0.06)',
+                    background: active ? 'rgba(232, 133, 61, 0.13)' : 'rgba(255, 255, 255, 0.03)',
+                    color: active ? '#E8853D' : '#A8A29A',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 12,
+                    fontWeight: 650,
+                  }}
+                >
+                  {item.label} <span style={{ color: active ? '#E8A06B' : '#6B6560', fontWeight: 500 }}>{item.count}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Comment list */}
@@ -1443,7 +1720,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
             <div style={{ color: '#555', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
               {visibleComments.length === 0
                 ? 'No comments yet'
-                : sidebarTab === 'ready'
+                : filterStatus === 'approved'
                   ? 'Approve comments to queue them here'
                   : 'No comments match this filter'}
             </div>
@@ -1663,248 +1940,158 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               )
             })}
         </div>
-
-        {/* Footer — toggles "+ Leave feedback" / "Cancel" based on mode. Sidebar stays open. */}
-        <div style={{ padding: '14px 16px', borderTop: '1px solid #2a2a2a', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-          {mode === 'idle' ? (
-            <button
-              onClick={() => enterFeedbackMode()}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 10,
-                height: 40,
-                padding: '0 18px 0 6px',
-                borderRadius: 9999,
-                background: '#E8853D',
-                border: '1px solid #B85F1F',
-                color: '#FFFFFF',
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                boxShadow: '0 4px 10px rgba(232, 133, 61, 0.32)',
-                transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1)',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = '#B85F1F')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = '#E8853D')}
-            >
-              <CarrotPixelIcon size={20} />
-              <span>Leave feedback</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => { exitFeedbackMode(); setSidebarOpen(false) }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                height: 40,
-                padding: '0 18px',
-                borderRadius: 9999,
-                background: 'transparent',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                color: '#A8A29A',
-                fontSize: 13,
-                fontWeight: 500,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                transition: 'background 220ms cubic-bezier(0.16, 1, 0.3, 1), color 220ms ease',
-              }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#FFFFFF' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' }}
-            >
-              <X style={{ width: 14, height: 14 }} />
-              <span>Cancel</span>
-            </button>
-          )}
-        </div>
       </div>
 
-      {/* CRRT trigger — single pill. Hidden while sidebar is open (sidebar owns the chrome). */}
+      {/* CRRT trigger — Paper B option. Stays visible while feedback mode is active. */}
       <div
-        ref={pillRef}
-        {...{ [WIDGET_ATTR]: '' }}
-        onPointerDown={onPillPointerDown}
+        {...{ [WIDGET_ATTR]: '', 'data-fw-launcher-root': '' }}
         onMouseEnter={onPillEnter}
         onMouseLeave={onPillLeave}
         style={{
           position: 'fixed',
-          // draggedPos stores right/bottom offsets (see onMove handler). This
-          // keeps the wrapper anchored to the right/bottom so hover-expansion
-          // grows leftwards, never overflowing the viewport.
-          ...(draggedPos ? { right: draggedPos.x, bottom: draggedPos.y } : { bottom: 24, right: 24 }),
+          right: 24,
+          top: '50%',
           zIndex: 2147483647,
-          cursor: dragging.current ? 'grabbing' : 'grab',
+          width: 44,
+          height: 44,
           userSelect: 'none',
-          touchAction: 'none',
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-          opacity: (sidebarOpen || mode !== 'idle') ? 0 : 1,
-          transform: (sidebarOpen || mode !== 'idle') ? 'translateY(8px)' : 'translateY(0)',
-          pointerEvents: (sidebarOpen || mode !== 'idle') ? 'none' : 'auto',
+          opacity: sidebarOpen ? 0 : 1,
+          transform: sidebarOpen ? 'translateY(calc(-50% + 8px))' : 'translateY(-50%)',
+          pointerEvents: sidebarOpen ? 'none' : 'auto',
           transition: 'opacity 200ms cubic-bezier(0.16, 1, 0.3, 1), transform 200ms cubic-bezier(0.16, 1, 0.3, 1)',
         }}
       >
-        <div style={{ position: 'relative', display: 'inline-block' }}>
-          {/* Primary pill — circle by default, expands to full pill on hover */}
+        <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
+          <div
+            data-fw-launcher-menu
+            role="menu"
+            aria-label="CRRT actions"
+            style={{
+              position: 'absolute',
+              right: 54,
+              top: '50%',
+              width: 282,
+              padding: 8,
+              borderRadius: 16,
+              lineHeight: 1.2,
+              background: 'rgba(13, 13, 13, 0.96)',
+              border: '1px solid rgba(255, 255, 255, 0.10)',
+              boxShadow: '0 18px 54px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04)',
+              backdropFilter: 'blur(18px)',
+              WebkitBackdropFilter: 'blur(18px)',
+              opacity: launcherOpen ? 1 : 0,
+              transform: launcherOpen ? 'translateY(-50%) translateX(0) scale(1)' : 'translateY(-50%) translateX(8px) scale(0.98)',
+              transformOrigin: 'right center',
+              pointerEvents: launcherOpen ? 'auto' : 'none',
+              transition: 'opacity 160ms ease, transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
+          >
+            <LauncherAction
+              icon={<MessageCircle size={17} />}
+              title="Drop comment"
+              subtitle="Pin feedback on the page"
+              shortcut="C"
+              onClick={() => {
+                setLauncherOpen(false)
+                enterFeedbackMode()
+              }}
+            />
+            <LauncherAction
+              icon={<PanelRightOpen size={17} />}
+              title="Open sidebar"
+              subtitle="Review active comments"
+              shortcut="F"
+              onClick={() => {
+                setLauncherOpen(false)
+                setSidebarOpen(true)
+              }}
+            />
+            <LauncherAction
+              icon={<Bot size={17} />}
+              title="Open agent"
+              subtitle="Send context to agent"
+              shortcut="Shift + A"
+              onClick={() => {
+                setLauncherOpen(false)
+                openAgentBridge()
+              }}
+            />
+          </div>
+
+          {/* Primary launcher — click toggles menu; active state uses Paper orange border. */}
           <button
             type="button"
+            aria-expanded={launcherOpen}
+            aria-label={launcherOpen ? 'Close CRRT menu' : 'Open CRRT menu'}
             onClick={(e) => {
-              if (didDrag.current) { e.preventDefault(); return }
-              enterFeedbackMode()
+              if (mode !== 'idle') return
+              setLauncherOpen((value) => !value)
             }}
             style={{
               position: 'relative',
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              gap: pillHover ? 12 : 0,
-              height: 64,
-              // minWidth (not width) so hover-expanded width interpolates with
-              // the children instead of snapping between 64 and `auto`.
-              minWidth: 64,
-              padding: pillHover ? '0 22px 0 12px' : 0,
-              borderRadius: 32,
-              background: pillHover ? '#0A0A0A' : '#141414',
-              border: '1px solid ' + (pillHover ? '#2F2F2F' : 'rgba(255, 255, 255, 0.09)'),
+              width: 44,
+              height: 44,
+              boxSizing: 'border-box',
+              padding: 0,
+              borderRadius: 9999,
+              background: '#030303',
+              border: '1px solid ' + (launcherActive ? 'rgba(228, 110, 57, 0.72)' : 'rgba(255, 255, 255, 0.10)'),
               color: '#FFFFFF',
-              fontSize: 13,
-              fontWeight: 500,
-              lineHeight: 1,
-              whiteSpace: 'nowrap',
-              cursor: dragging.current ? 'grabbing' : 'pointer',
+              lineHeight: 0,
+              cursor: 'pointer',
               fontFamily: 'inherit',
-              boxShadow: pillHover
-                ? '0 10px 18px rgba(10, 10, 10, 0.22), 0 2px 4px rgba(10, 10, 10, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.04)'
-                : '0 14px 36px rgba(10, 10, 10, 0.42), 0 4px 10px rgba(10, 10, 10, 0.24), 0 0 0 1px rgba(255, 255, 255, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.06)',
-              transition: 'gap 360ms cubic-bezier(0.32, 0.72, 0, 1), height 360ms cubic-bezier(0.32, 0.72, 0, 1), width 360ms cubic-bezier(0.32, 0.72, 0, 1), padding 360ms cubic-bezier(0.32, 0.72, 0, 1), border-radius 360ms cubic-bezier(0.32, 0.72, 0, 1), background-color 240ms ease, border-color 240ms ease, box-shadow 320ms cubic-bezier(0.32, 0.72, 0, 1)',
+              boxShadow: launcherActive
+                ? '0 0 0 3px rgba(232, 133, 61, 0.08), 0 10px 24px rgba(232, 133, 61, 0.10)'
+                : 'none',
+              transition: 'border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease',
+              transform: pillHover && !launcherOpen ? 'translateY(-1px) scale(1.02)' : 'translateY(0) scale(1)',
+              animation: launcherBump ? 'fw-widget-receive 650ms cubic-bezier(0.16, 1, 0.3, 1)' : 'none',
               overflow: 'hidden',
             }}
           >
-            {/* Size on wrapper (CSS transition), not icon prop — prop change
-             * would snap one frame and re-trigger hover under the cursor. */}
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: pillHover ? 28 : 46,
-                height: pillHover ? 28 : 46,
-                flexShrink: 0,
-                transition: 'width 360ms cubic-bezier(0.32, 0.72, 0, 1), height 360ms cubic-bezier(0.32, 0.72, 0, 1)',
-              }}
-            >
-              <CarrotPixelIcon size="100%" />
-            </span>
-            <span
-              style={{
-                maxWidth: pillHover ? 160 : 0,
-                opacity: pillHover ? 1 : 0,
-                overflow: 'hidden',
-                transition: pillHover
-                  ? 'max-width 360ms cubic-bezier(0.32, 0.72, 0, 1), opacity 240ms ease 120ms'
-                  : 'max-width 280ms cubic-bezier(0.32, 0.72, 0, 1), opacity 140ms ease',
-              }}
-            >
-              Drop a CRRT
-            </span>
-            {mode === 'idle' && commentCount > 0 && (
-              <span
-                style={{
-                  position: 'absolute',
-                  top: pillHover ? -2 : 6,
-                  right: pillHover ? -2 : 6,
-                  width: 8,
-                  height: 8,
-                  borderRadius: 9999,
-                  border: '1.5px solid rgba(10, 10, 10, 0.9)',
-                  background: '#E8853D',
-                  animation: badgeAnimation,
-                  transition: 'top 240ms cubic-bezier(0.16, 1, 0.3, 1), right 240ms cubic-bezier(0.16, 1, 0.3, 1)',
-                }}
-              />
-            )}
+            <CarrotPixelIcon size={36} />
           </button>
-
-          {/* Drag handle — Granola-style. Appears below the pill on hover. Visual only; drag works on the whole wrapper. */}
-          {mode === 'idle' && (
-            <div
+          {commentCount > 0 && (
+            <span
               aria-hidden
               style={{
                 position: 'absolute',
-                left: '50%',
-                bottom: -12,
-                transform: `translate(-50%, ${pillHover && !dragging.current ? '0' : '-8px'})`,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 3,
-                height: 14,
-                padding: '0 8px',
-                borderRadius: '0 0 9999px 9999px',
-                background: 'rgba(10, 10, 10, 0.72)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
-                borderRight: '1px solid rgba(255, 255, 255, 0.06)',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                opacity: pillHover && !dragging.current ? 1 : 0,
+                top: -2,
+                right: -2,
+                width: 10,
+                height: 10,
+                borderRadius: 9999,
+                border: '1.5px solid rgba(10, 10, 10, 0.95)',
+                background: '#E8853D',
+                animation: badgeAnimation,
                 pointerEvents: 'none',
-                transition: 'opacity 180ms cubic-bezier(0.16, 1, 0.3, 1), transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
               }}
-            >
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <span
-                  key={i}
-                  style={{
-                    width: 2,
-                    height: 2,
-                    borderRadius: '50%',
-                    background: 'rgba(255, 255, 255, 0.5)',
-                    display: 'block',
-                  }}
-                />
-              ))}
-            </div>
+            />
           )}
         </div>
       </div>
 
-      {/* Success toast */}
-      {successToast && (
-        <div
-          {...{ [WIDGET_ATTR]: '' }}
-          style={{
-            position: 'fixed',
-            bottom: 80,
-            left: '50%',
-            zIndex: 2147483647,
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 14px',
-            borderRadius: 9999,
-            background: 'rgba(31, 58, 47, 0.96)',
-            border: '1px solid rgba(232, 133, 61, 0.2)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
-            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-            fontSize: 13,
-            fontWeight: 500,
-            color: '#E8853D',
-            whiteSpace: 'nowrap',
-            animation: 'fw-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both',
-            pointerEvents: 'none',
-          }}
-        >
-          <CarrotPixelIcon size={14} />
-          <span>Carrot dropped</span>
-        </div>
-      )}
-
       {/* Agent bridge modal */}
-      {agentOpen && <AgentBridgeModal apiBase={apiBase} projectId={projectId} onClose={() => setAgentOpen(false)} />}
+      {agentOpen && !agentGateOpen && (
+        <AgentBridgeModal
+          apiBase={apiBase}
+          projectId={projectId}
+          onClose={() => setAgentOpen(false)}
+          onBeforeCopy={ensureAgentAccess}
+        />
+      )}
+      {agentGateOpen && (
+        <AgentAuthGate
+          readyCount={readyForAgentCount}
+          signUpUrl={signUpUrl}
+          loginUrl={loginUrl}
+          onClose={() => setAgentGateOpen(false)}
+        />
+      )}
 
       <FeedbackWidgetStyles />
 

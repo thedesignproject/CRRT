@@ -33,7 +33,7 @@ interface FetchCall {
 
 function mockFetch(
   postResponder?: (init?: RequestInit) => Response | Promise<Response>,
-  getResponder?: () => Response | Promise<Response>,
+  getResponder?: (url?: string, init?: RequestInit) => Response | Promise<Response>,
 ) {
   const calls: FetchCall[] = []
   const impl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
@@ -49,10 +49,16 @@ function mockFetch(
     if (init?.method === 'DELETE') {
       return new Response(JSON.stringify({ success: true }), { status: 200 })
     }
-    return getResponder ? getResponder() : new Response('[]', { status: 200 })
+    return getResponder ? getResponder(String(url), init) : new Response('[]', { status: 200 })
   })
   vi.stubGlobal('fetch', impl)
   return calls
+}
+
+function findWidgetSidebar() {
+  return Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+    (el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''),
+  )
 }
 
 async function enterCommentingMode() {
@@ -271,11 +277,11 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('submit flow', () => {
-    it('POSTs the comment with projectId + url + selector and shows it in the sidebar', async () => {
+    it('POSTs the comment and stays ready to drop another pin without opening the sidebar', async () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
-      const { textarea, getSendButton } = await enterCommentingMode()
+      const { textarea, getSendButton, targetNode } = await enterCommentingMode()
       fireEvent.change(textarea, { target: { value: 'bug here' } })
       fireEvent.click(getSendButton())
 
@@ -293,6 +299,28 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain('bug here')
       })
+      expect(findWidgetSidebar()?.getAttribute('style')).toMatch(/translateX\(100%\)/)
+      expect(document.body.textContent).not.toContain('Activo')
+      expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
+      expect(document.body.textContent).toContain('Drop another or review comments')
+      const launcher = document.querySelector<HTMLButtonElement>('button[aria-label="Open CRRT menu"]')
+      const badge = launcher?.parentElement?.querySelector<HTMLSpanElement>('span[style*="position: absolute"]')
+      expect(badge).not.toBeNull()
+      expect(badge!.style.animation).toContain('fw-badge-pop')
+
+      await act(async () => {
+        targetNode.dispatchEvent(new MouseEvent('click', {
+          bubbles: true,
+          cancelable: true,
+          clientX: 130,
+          clientY: 210,
+        }))
+      })
+
+      await waitFor(() => {
+        if (!document.querySelector('textarea')) throw new Error('textarea not mounted for next pin')
+      })
+      expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
     })
 
     it('duplicate Send clicks in the same tick produce exactly one POST', async () => {
@@ -389,6 +417,9 @@ describe('<FeedbackWidget />', () => {
         document.querySelectorAll<HTMLSpanElement>('[data-fw] span'),
       ).find((el) => el.textContent === 'Esc')
       expect(badge).toBeDefined()
+      const instruction = badge?.closest('[data-fw]') as HTMLDivElement | null
+      expect(instruction?.getAttribute('style')).toMatch(/bottom:\s*24px/)
+      expect(instruction?.getAttribute('style')).not.toMatch(/top:\s*16px/)
     })
   })
 
@@ -1037,17 +1068,12 @@ describe('<FeedbackWidget />', () => {
         }
       })
 
-      // Open the filter menu via the title="Filter" button.
-      const filterBtn = document.querySelector<HTMLButtonElement>('[data-fw] button[title="Filter"]')
-      expect(filterBtn).not.toBeNull()
-      fireEvent.click(filterBtn!)
-
-      // Click the "Open" option — only accepted exists, so the list goes empty.
+      // Click the "Open" filter — only accepted exists, so the list goes empty.
       const openOption = await waitFor(() => {
         const btn = Array.from(
           document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
-        ).find((b) => b.textContent?.trim() === 'Open')
-        if (!btn) throw new Error('Open filter option not mounted yet')
+        ).find((b) => b.textContent?.trim() === 'Open 0')
+        if (!btn) throw new Error('Open filter not mounted yet')
         return btn
       })
       fireEvent.click(openOption)
@@ -1606,8 +1632,8 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('Shift+A opens agent modal (lines 425-426)', () => {
-    it('pressing Shift+A opens the AgentBridgeModal', async () => {
+  describe('agent access gate', () => {
+    it('pressing Shift+A opens the AgentBridgeModal without showing the sign-in gate', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -1618,13 +1644,146 @@ describe('<FeedbackWidget />', () => {
         fireEvent.keyDown(window, { key: 'A', shiftKey: true })
       })
 
-      // AgentBridgeModal should now be open — it renders some content.
       await waitFor(() => {
-        const modal = document.querySelector('[data-fw] [role="dialog"], [data-fw] .agent-modal, [data-fw] form')
-        // Alternatively check that agentsRevealed caused some new DOM node.
-        // The AgentBridgeModal renders at least one element inside [data-fw].
-        expect(document.querySelectorAll('[data-fw]').length).toBeGreaterThan(1)
+        const modal = document.querySelector('[data-fw] [aria-label="Connect agent"]')
+        if (!modal) throw new Error('agent modal not open')
       })
+      expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).toBeNull()
+    })
+
+    it('sidebar shows a visible agent CTA that opens the AgentBridgeModal', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'f' }) })
+      const sidebar = await waitFor(() => {
+        const el = findWidgetSidebar()
+        if (!el || !/translateX\(0/.test(el.getAttribute('style') ?? '')) throw new Error('sidebar not open')
+        return el
+      })
+      const agentCta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.includes('Open agent') && b.textContent?.includes('Shift + A'))
+      expect(agentCta).toBeDefined()
+
+      await act(async () => { fireEvent.click(agentCta!) })
+
+      await waitFor(() => {
+        const modal = document.querySelector('[data-fw] [aria-label="Connect agent"]')
+        if (!modal) throw new Error('agent modal not open')
+      })
+    })
+
+    it('clicking a prompt opens the sign-in gate when agent eligibility is missing', async () => {
+      mockFetch(undefined, (url) => {
+        if (url?.includes('/v1/public/project')) {
+          return new Response(JSON.stringify({
+            projectKey: 'proj',
+            projectName: 'Project',
+            doc: { slug: 'share-1', token: 'token-1', docUrl: 'https://x.example/doc', promptUrl: 'https://x.example/prompt' },
+          }), { status: 200 })
+        }
+        if (url?.includes('/v1/shares/share-1/prompt')) {
+          return new Response(JSON.stringify({
+            slug: 'share-1',
+            target: 'claude-code',
+            prompt: 'Use this CRRT context',
+            docUrl: 'https://x.example/doc',
+          }), { status: 200 })
+        }
+        if (url?.includes('/v1/agent/shares/share-1/state')) {
+          return new Response(JSON.stringify({
+            share: { slug: 'share-1', scopeType: 'project', revision: 1 },
+            project: { publicKey: 'proj', name: 'Project', repoUrl: null },
+            comments: [],
+            presence: [],
+          }), { status: 200 })
+        }
+        return new Response('[]', { status: 200 })
+      })
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      })
+
+      const claude = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Copy Claude Code'))
+        if (!btn) throw new Error('Claude prompt not ready')
+        return btn
+      })
+      await act(async () => { fireEvent.click(claude) })
+
+      await waitFor(() => {
+        const gate = document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')
+        if (!gate) throw new Error('agent auth gate not open')
+      })
+      expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).toBeNull()
+      expect(document.body.textContent).toContain('Sign up')
+      expect(document.body.textContent).toContain('Log in')
+    })
+
+    it('Escape closes the sign-in gate without closing the agent modal', async () => {
+      mockFetch(undefined, (url) => {
+        if (url?.includes('/v1/public/project')) {
+          return new Response(JSON.stringify({
+            projectKey: 'proj',
+            projectName: 'Project',
+            doc: { slug: 'share-1', token: 'token-1', docUrl: 'https://x.example/doc', promptUrl: 'https://x.example/prompt' },
+          }), { status: 200 })
+        }
+        if (url?.includes('/v1/shares/share-1/prompt')) {
+          return new Response(JSON.stringify({
+            slug: 'share-1',
+            target: 'claude-code',
+            prompt: 'Use this CRRT context',
+            docUrl: 'https://x.example/doc',
+          }), { status: 200 })
+        }
+        if (url?.includes('/v1/agent/shares/share-1/state')) {
+          return new Response(JSON.stringify({
+            share: { slug: 'share-1', scopeType: 'project', revision: 1 },
+            project: { publicKey: 'proj', name: 'Project', repoUrl: null },
+            comments: [],
+            presence: [],
+          }), { status: 200 })
+        }
+        return new Response('[]', { status: 200 })
+      })
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      })
+      const claude = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Copy Claude Code'))
+        if (!btn) throw new Error('Claude prompt not ready')
+        return btn
+      })
+      await act(async () => { fireEvent.click(claude) })
+      await waitFor(() => {
+        const gate = document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')
+        if (!gate) throw new Error('agent auth gate not open')
+      })
+
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'Escape' })
+      })
+
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).toBeNull()
+      })
+      expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).not.toBeNull()
     })
   })
 
@@ -1758,33 +1917,24 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('filter tab interactions (lines 859-860)', () => {
-    it('hovering a tab button changes its color style', async () => {
+  describe('sidebar filters', () => {
+    it('shows compact All/Open/Ready filters in the sidebar', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      // Open sidebar with 'm' key.
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
 
-      // The "Comments" tab is the first tab button in the sidebar tab row.
-      const tabBtn = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Comments')
-        if (!btn) throw new Error('Comments tab not found')
-        return btn
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Feedback')
+        expect(document.body.textContent).toContain('All 0')
+        expect(document.body.textContent).toContain('Open 0')
+        expect(document.body.textContent).toContain('Ready 0')
       })
-
-      // Hover — should call the onMouseEnter handler on the inactive tab
-      // (line 1150 sets color to #FFFFFF). We verify it doesn't throw.
-      fireEvent.mouseEnter(tabBtn)
-      fireEvent.mouseLeave(tabBtn)
-      // The control flow reached lines 1150-1151 without throwing.
-      expect(tabBtn).toBeDefined()
     })
 
-    it('switching to "Ready for agent" tab shows the correct empty-state message', async () => {
+    it('switching to Ready filter shows the ready label', async () => {
       mockFetch(undefined, () => new Response(JSON.stringify([]), { status: 200 }))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -1792,13 +1942,13 @@ describe('<FeedbackWidget />', () => {
       })
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
 
-      const readyTab = await waitFor(() => {
+      const readyFilter = await waitFor(() => {
         const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ready for agent')
-        if (!btn) throw new Error('Ready for agent tab not found')
+          .find((b) => b.textContent?.trim() === 'Ready 0')
+        if (!btn) throw new Error('Ready filter not found')
         return btn
       })
-      await act(async () => { fireEvent.click(readyTab) })
+      await act(async () => { fireEvent.click(readyFilter) })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Ready for agent')
@@ -2097,74 +2247,26 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('sidebar footer leave feedback / cancel buttons (lines 1517, 1535-1536, 1543, 1560-1561)', () => {
-    it('"Leave feedback" button in sidebar footer enters selecting mode', async () => {
+  describe('sidebar footer cleanup', () => {
+    it('does not render a large Leave feedback footer CTA', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      // Open sidebar.
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
 
-      const leaveFeedbackBtn = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Leave feedback'))
-        if (!btn) throw new Error('Leave feedback button not found')
-        return btn
-      })
-
-      // Cover onMouseEnter/Leave (lines 1535-1536).
-      fireEvent.mouseEnter(leaveFeedbackBtn)
-      fireEvent.mouseLeave(leaveFeedbackBtn)
-
-      await act(async () => { fireEvent.click(leaveFeedbackBtn) })
-
       await waitFor(() => {
-        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
+        const sidebar = findWidgetSidebar()
+        if (!sidebar || !/translateX\(0/.test(sidebar.getAttribute('style') ?? '')) throw new Error('sidebar not open')
       })
-    })
-
-    it('"Cancel" button in sidebar footer exits feedback mode and closes sidebar', async () => {
-      mockFetch()
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => {
-        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
-      })
-      // Enter selecting mode first.
-      await act(async () => { fireEvent.keyDown(window, { key: 's' }) })
-      await waitFor(() => {
-        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
-      })
-      // Open sidebar.
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
-
-      const cancelBtn = await waitFor(() => {
-        // The footer cancel button contains an X icon and "Cancel" text. It's
-        // only present when mode !== 'idle'.
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => {
-            const txt = b.textContent?.trim() ?? ''
-            return txt === 'Cancel' && b.closest('[style*="340px"]')
-          })
-        if (!btn) throw new Error('sidebar Cancel button not found')
-        return btn
-      })
-
-      // Cover onMouseEnter/Leave (lines 1560-1561).
-      fireEvent.mouseEnter(cancelBtn)
-      fireEvent.mouseLeave(cancelBtn)
-
-      await act(async () => { fireEvent.click(cancelBtn) })
-
-      await waitFor(() => {
-        expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
-      })
+      expect(document.body.textContent).not.toContain('Leave feedback')
+      expect(document.body.textContent).not.toContain('Cancel')
     })
   })
 
   describe('pill button behavior (lines 1595-1601)', () => {
-    it('clicking the pill in idle mode enters selecting mode without opening the sidebar', async () => {
+    it('clicking the pill opens the launcher menu; Drop comment enters selecting mode without opening the sidebar', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -2173,12 +2275,19 @@ describe('<FeedbackWidget />', () => {
 
       const pill = await waitFor(() => {
         const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Drop a CRRT'))
+          .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
         if (!btn) throw new Error('pill button not found')
         return btn
       })
 
       await act(async () => { fireEvent.click(pill) })
+      const drop = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Drop comment'))
+        if (!btn) throw new Error('drop action not found')
+        return btn
+      })
+      await act(async () => { fireEvent.click(drop) })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
@@ -2188,7 +2297,7 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
-    it('hides the launcher pill while selecting mode is active', async () => {
+    it('keeps the launcher visible while selecting mode is active', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -2201,10 +2310,77 @@ describe('<FeedbackWidget />', () => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
 
-      const launcher = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        .find((el) => /pointer-events:\s*none/.test(el.getAttribute('style') ?? '')
-          && /opacity:\s*0/.test(el.getAttribute('style') ?? ''))
-      expect(launcher?.getAttribute('style')).toMatch(/translateY\(8px\)/)
+      const launcher = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
+        .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
+          && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
+      expect(launcher?.getAttribute('style')).toMatch(/opacity:\s*1/)
+      expect(launcher?.getAttribute('style')).toMatch(/pointer-events:\s*auto/)
+      expect(document.body.textContent).not.toContain('Activo')
+      const button = launcher?.querySelector<HTMLButtonElement>('button[aria-label="Open CRRT menu"]')
+      expect(button?.getAttribute('style')).toMatch(/rgba\(228,\s*110,\s*57,\s*0\.72\)/)
+      expect(button?.getAttribute('style')).toMatch(/fw-carrot-active|box-shadow/)
+    })
+
+    it('toggles selecting mode with C while ignoring repeat C and active carrot clicks', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => {
+        expect(document.body.style.cursor).toBe('crosshair')
+      })
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c', repeat: true }) })
+      expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => {
+        expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
+      })
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => {
+        expect(document.body.style.cursor).toBe('crosshair')
+      })
+
+      const pill = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
+      expect(pill).toBeDefined()
+      await act(async () => { fireEvent.click(pill!) })
+
+      expect(document.body.style.cursor).toBe('crosshair')
+      expect(pill?.getAttribute('style')).toMatch(/rgba\(228,\s*110,\s*57,\s*0\.72\)/)
+      expect(pill?.getAttribute('style')).toMatch(/box-shadow/)
+    })
+
+    it('closes the launcher menu when clicking outside it', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+
+      const pill = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
+        if (!btn) throw new Error('pill button not found')
+        return btn
+      })
+
+      await act(async () => { fireEvent.click(pill) })
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Drop comment')
+      })
+
+      await act(async () => { fireEvent.pointerDown(document.body) })
+      await waitFor(() => {
+        const menu = document.querySelector<HTMLDivElement>('[data-fw-launcher-menu]')
+        expect(menu?.getAttribute('style')).toMatch(/opacity:\s*0/)
+        expect(menu?.getAttribute('style')).toMatch(/pointer-events:\s*none/)
+      })
     })
   })
 
@@ -2268,8 +2444,8 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('filter button hover (lines 1195-1196)', () => {
-    it('hovering filter button when no filter is active changes color style', async () => {
+  describe('compact filter chips', () => {
+    it('clicking Ready switches the sidebar to the ready queue', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -2277,21 +2453,22 @@ describe('<FeedbackWidget />', () => {
       })
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
 
-      const filterBtn = await waitFor(() => {
-        const btn = document.querySelector<HTMLButtonElement>('[data-fw] button[title="Filter"]')
-        if (!btn) throw new Error('Filter button not found')
+      const ready = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.trim() === 'Ready 0')
+        if (!btn) throw new Error('Ready filter not found')
         return btn
       })
 
-      fireEvent.mouseEnter(filterBtn)
-      fireEvent.mouseLeave(filterBtn)
-      // Just asserting no throw — the handlers at 1195-1196 are hit.
-      expect(filterBtn).toBeDefined()
+      await act(async () => { fireEvent.click(ready) })
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Ready for agent')
+      })
     })
   })
 
-  describe('"Ready for agent" tab empty-state (line 1267-1269)', () => {
-    it('shows "Approve comments to queue them here" in ready tab when visible comments exist but none approved', async () => {
+  describe('Ready filter empty-state', () => {
+    it('shows "Approve comments to queue them here" when open comments exist but none are ready', async () => {
       const pageUrl = window.location.href.split('#')[0]
       mockFetch(undefined, () => new Response(JSON.stringify([{
         id: 'c1', projectId: 'proj', pageUrl,
@@ -2307,13 +2484,13 @@ describe('<FeedbackWidget />', () => {
 
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
 
-      const readyTab = await waitFor(() => {
+      const readyFilter = await waitFor(() => {
         const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ready for agent')
-        if (!btn) throw new Error('tab not found')
+          .find((b) => b.textContent?.trim() === 'Ready 0')
+        if (!btn) throw new Error('Ready filter not found')
         return btn
       })
-      await act(async () => { fireEvent.click(readyTab) })
+      await act(async () => { fireEvent.click(readyFilter) })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Approve comments to queue them here')
@@ -2407,10 +2584,11 @@ describe('<FeedbackWidget />', () => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
 
-      // The pill wrapper is the [data-fw] div that has a grab cursor.
+      // The launcher wrapper is the fixed right-center [data-fw] div.
       const pillWrapper = await waitFor(() => {
         const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
+          .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
+            && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
         if (!el) throw new Error('pill wrapper not found')
         return el
       })
@@ -2418,7 +2596,7 @@ describe('<FeedbackWidget />', () => {
       // Cover onMouseEnter (line 1575) and onMouseLeave (line 1576).
       fireEvent.mouseEnter(pillWrapper)
       fireEvent.mouseLeave(pillWrapper)
-      // No error thrown — the drag handle visibility changes.
+      // No error thrown.
       expect(pillWrapper).toBeDefined()
     })
 
@@ -2427,7 +2605,8 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pillWrapper = await waitFor(() => {
         const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
+          .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
+            && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
         if (!el) throw new Error('pill wrapper not found')
         return el
       })
@@ -2440,9 +2619,10 @@ describe('<FeedbackWidget />', () => {
 
       // Wait past the original delay; pillHover should still be true.
       await new Promise((r) => setTimeout(r, 200))
-      // Icon span at width 28 is the pillHover=true signal (46 when collapsed).
-      const carrotSpan = pillWrapper.querySelector<HTMLElement>('span[style*="width: 28"]')
+      // Hover moves the launcher up one pixel unless the menu is open.
+      const carrotSpan = pillWrapper.querySelector<HTMLButtonElement>('button[aria-label="Open CRRT menu"]')
       expect(carrotSpan).not.toBeNull()
+      expect(carrotSpan!.style.transform).toBe('translateY(-1px) scale(1.02)')
     })
 
     it('second mouseLeave while timer is pending clears the prior timer and resets', async () => {
@@ -2450,7 +2630,8 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pillWrapper = await waitFor(() => {
         const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
+          .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
+            && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
         if (!el) throw new Error('pill wrapper not found')
         return el
       })
@@ -2463,132 +2644,8 @@ describe('<FeedbackWidget />', () => {
 
       // After 200ms both leaves have had time to resolve; pillHover should be false.
       await new Promise((r) => setTimeout(r, 200))
-      const carrotSpan = pillWrapper.querySelector<HTMLElement>('span[style*="width: 28"]')
-      expect(carrotSpan).toBeNull()
-    })
-  })
-
-  describe('onPillPointerDown (lines 466-469)', () => {
-    it('pointerdown on pill wrapper sets dragging state without throwing', async () => {
-      mockFetch()
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => {
-        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
-      })
-
-      const pillWrapper = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
-        if (!el) throw new Error('pill wrapper not found')
-        return el
-      })
-
-      // Mock setPointerCapture so the handler doesn't throw in happy-dom.
-      if (!HTMLElement.prototype.setPointerCapture) {
-        Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
-          value: () => {},
-          configurable: true,
-          writable: true,
-        })
-      }
-      const captureSpy = vi.spyOn(HTMLElement.prototype as unknown as { setPointerCapture: () => void }, 'setPointerCapture').mockImplementation(() => {})
-
-      // fireEvent.pointerDown triggers onPillPointerDown (lines 463-472).
-      await act(async () => {
-        fireEvent.pointerDown(pillWrapper, { clientX: 100, clientY: 200, pointerId: 1 })
-      })
-
-      captureSpy.mockRestore()
-      // No throw = success (lines 466-469 executed).
-      expect(pillWrapper).toBeDefined()
-    })
-
-    it('pointermove after pointerdown updates draggedPos (line 480)', async () => {
-      mockFetch()
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => {
-        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
-      })
-
-      const pillWrapper = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
-        if (!el) throw new Error('pill wrapper not found')
-        return el
-      })
-
-      if (!HTMLElement.prototype.setPointerCapture) {
-        Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
-          value: () => {},
-          configurable: true,
-          writable: true,
-        })
-      }
-      const captureSpy = vi.spyOn(HTMLElement.prototype as unknown as { setPointerCapture: () => void }, 'setPointerCapture').mockImplementation(() => {})
-
-      // Start drag.
-      await act(async () => {
-        fireEvent.pointerDown(pillWrapper, { clientX: 100, clientY: 200, pointerId: 1 })
-      })
-
-      // Move pointer — triggers the onMove handler which calls setDraggedPos (line 480).
-      await act(async () => {
-        fireEvent.pointerMove(window, { clientX: 150, clientY: 250, pointerId: 1 })
-      })
-
-      captureSpy.mockRestore()
-
-      // After dragging, the wrapper is anchored from `right`/`bottom` with
-      // pixel offsets stored in draggedPos. This keeps the hover expansion
-      // growing leftwards (not off the right edge of the viewport).
-      const updatedPill = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-        .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
-      const style = updatedPill?.getAttribute('style') ?? ''
-      expect(style).toMatch(/right:\s*\d/)
-      expect(style).toMatch(/bottom:\s*\d/)
-    })
-
-    it('window resize while draggedPos is set clamps the position (line 150)', async () => {
-      mockFetch()
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => {
-        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
-      })
-
-      const pillWrapper = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /cursor:\s*grab/.test(el.getAttribute('style') ?? ''))
-        if (!el) throw new Error('pill wrapper not found')
-        return el
-      })
-
-      if (!HTMLElement.prototype.setPointerCapture) {
-        Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', {
-          value: () => {},
-          configurable: true,
-          writable: true,
-        })
-      }
-      const captureSpy = vi.spyOn(HTMLElement.prototype as unknown as { setPointerCapture: () => void }, 'setPointerCapture').mockImplementation(() => {})
-
-      // Drag to set draggedPos.
-      await act(async () => {
-        fireEvent.pointerDown(pillWrapper, { clientX: 100, clientY: 200, pointerId: 1 })
-      })
-      await act(async () => {
-        fireEvent.pointerMove(window, { clientX: 150, clientY: 250, pointerId: 1 })
-      })
-
-      captureSpy.mockRestore()
-
-      // Now fire resize — this triggers the onResize handler which hits line 150
-      // (the setDraggedPos clamp branch) since draggedPos is non-null.
-      await act(async () => {
-        fireEvent(window, new Event('resize'))
-      })
-
-      // Widget still alive after resize.
-      expect(document.querySelectorAll('[data-fw]').length).toBeGreaterThan(0)
+      const carrotButton = pillWrapper.querySelector<HTMLButtonElement>('button[aria-label="Open CRRT menu"]')
+      expect(carrotButton?.style.transform).toBe('translateY(0) scale(1)')
     })
   })
 
@@ -2871,57 +2928,20 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('resize with dragged pill position (L142 branch)', () => {
-    it('resize event clamps draggedPos when it is non-null', async () => {
-      mockFetch()
-      const { container } = render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
-      // Simulate a drag to set draggedPos
-      const pillRef = container.querySelector<HTMLElement>('[data-fw] button')
-      if (pillRef) {
-        fireEvent.pointerDown(pillRef, { clientX: 100, clientY: 100 })
-        fireEvent.pointerMove(window, { clientX: 200, clientY: 300 })
-      }
-      // Now fire resize — should hit the `prev ? {...} : null` true branch
-      await act(async () => { window.dispatchEvent(new Event('resize')) })
-      expect(document.querySelectorAll('[data-fw]').length).toBeGreaterThan(0)
-    })
-  })
-
-  describe('sidebar tab hover on inactive tab (L1166-1167)', () => {
-    it('mouseEnter on inactive tab changes color; mouseLeave restores it', async () => {
-      mockFetch()
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
-      // Open sidebar via keyboard shortcut 'm'
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
-      // Find the 'Ready for agent' tab (inactive by default)
-      const inactiveTab = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Ready for agent'))
-        if (!btn) throw new Error('inactive tab not found')
-        return btn
-      })
-      fireEvent.mouseEnter(inactiveTab)
-      expect(inactiveTab.style.color).toBe('#FFFFFF')
-      fireEvent.mouseLeave(inactiveTab)
-      expect(inactiveTab.style.color).toBe('#A8A29A')
-    })
-
-    it('mouseEnter on active tab does nothing', async () => {
+  describe('sidebar filter chip state', () => {
+    it('Ready filter becomes active when clicked', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
       await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
-      const activeTab = await waitFor(() => {
+      const ready = await waitFor(() => {
         const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Comments'))
-        if (!btn) throw new Error('active tab not found')
+          .find((b) => b.textContent?.trim() === 'Ready 0')
+        if (!btn) throw new Error('Ready filter not found')
         return btn
       })
-      const colorBefore = activeTab.style.color
-      fireEvent.mouseEnter(activeTab)
-      expect(activeTab.style.color).toBe(colorBefore)
+      await act(async () => { fireEvent.click(ready) })
+      expect(ready.style.color).toBe('#E8853D')
     })
   })
 
@@ -3123,33 +3143,6 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
-    it('pill pointer drag pointerup ends the drag (L464-465)', async () => {
-      mockFetch()
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-
-      const pill = await waitFor(() => {
-        const el = document.querySelector<HTMLElement>('[data-fw] [data-fw-pill]')
-          ?? Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
-            .find((d) => d.textContent?.includes('Drop a carrot') || /cursor:\s*grab/.test(d.getAttribute('style') ?? ''))
-        if (!el) throw new Error('pill not mounted')
-        return el
-      })
-      await act(async () => {
-        fireEvent.pointerDown(pill, { clientX: 100, clientY: 100, pointerId: 1 })
-      })
-      await act(async () => {
-        window.dispatchEvent(new PointerEvent('pointermove', { clientX: 200, clientY: 200 }))
-      })
-      await act(async () => {
-        window.dispatchEvent(new PointerEvent('pointerup'))
-      })
-      // No crash + further pointermove should not re-trigger drag math.
-      await act(async () => {
-        window.dispatchEvent(new PointerEvent('pointermove', { clientX: 300, clientY: 300 }))
-      })
-      expect(document.querySelector('[data-fw]')).not.toBeNull()
-    })
-
     it('saveEdit with only whitespace returns early without mutating (L493)', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
@@ -3297,26 +3290,26 @@ describe('<FeedbackWidget />', () => {
       expect(container.getAttribute('style') ?? '').toContain('margin-bottom: 10px')
     })
 
-    it('filter button closes the popover when clicked twice (L1198 toggle false arm)', async () => {
+    it('compact filters can move from Open back to All', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      const filterBtn = await waitFor(() => {
-        const el = document.querySelector<HTMLButtonElement>('[data-fw] button[title="Filter"]')
-        if (!el) throw new Error('filter button not mounted')
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      const open = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.trim() === 'Open 1')
+        if (!el) throw new Error('Open filter not mounted')
         return el
       })
-      fireEvent.click(filterBtn)
-      // Open
+      fireEvent.click(open)
       await waitFor(() => {
-        const opts = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        if (!opts.some((b) => b.textContent?.includes('Open'))) throw new Error('filter not open')
+        expect(document.body.textContent).toContain('Open comments')
       })
-      // Close (toggle)
-      fireEvent.click(filterBtn)
+      const all = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        .find((b) => b.textContent?.includes('All'))
+      expect(all).toBeDefined()
+      fireEvent.click(all!)
       await waitFor(() => {
-        const opts = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        expect(opts.some((b) => b.textContent?.includes('Open') && b.textContent !== 'Open comments'))
-          .toBe(false)
+        expect(document.body.textContent).toContain('All comments')
       })
     })
 
@@ -3513,7 +3506,7 @@ describe('<FeedbackWidget />', () => {
       expect(sidebar?.getAttribute('style')).not.toMatch(/translateX\(100%\)/)
     })
 
-    it('hovering the launcher pill expands it and moves the notification dot (pillHover, L1650-1651)', async () => {
+    it('hovering the launcher pill lifts it and keeps notification dot visible', async () => {
       mockFetch(undefined, commentsResponse([seedComment({ body: 'unread comment' })]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -3521,36 +3514,39 @@ describe('<FeedbackWidget />', () => {
       })
       const pill = await waitFor(() => {
         const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Drop a CRRT'))
+          .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
         if (!btn) throw new Error('pill not mounted')
         return btn
       })
-      // Notification dot is the only absolute-positioned <span> inside the pill.
-      const dot = pill.querySelector<HTMLSpanElement>('span[style*="position: absolute"]')
+      // Notification dot is positioned by the launcher wrapper so the button
+      // can keep overflow hidden for a clean circular edge.
+      const dot = pill.parentElement!.querySelector<HTMLSpanElement>('span[style*="position: absolute"]')
       expect(dot).not.toBeNull()
-      // Icon box width = the pillHover signal (46 collapsed → 28 hovered).
-      // The icon container is the first <span> child of the pill button.
-      const iconBox = pill.firstElementChild as HTMLSpanElement
-      expect(pill.style.minWidth).toBe('64px')
-      expect(iconBox.style.width).toBe('46px')
-      expect(dot!.style.top).toBe('6px')
-      expect(dot!.style.right).toBe('6px')
+      const icon = pill.firstElementChild as HTMLImageElement
+      expect(pill.style.width).toBe('44px')
+      expect(pill.style.height).toBe('44px')
+      expect(icon.style.width).toBe('36px')
+      expect(icon.style.height).toBe('36px')
+      expect(dot!.style.top).toBe('-2px')
+      expect(dot!.style.right).toBe('-2px')
+      expect(dot!.style.width).toBe('10px')
+      expect(dot!.style.height).toBe('10px')
 
       const wrapper = pill.parentElement!.parentElement!
       await act(async () => { fireEvent.mouseEnter(wrapper) })
       await waitFor(() => {
-        expect(iconBox.style.width).toBe('28px')
+        expect(pill.style.transform).toBe('translateY(-1px) scale(1.02)')
       })
-      // Hover: dot snaps to top:-2 / right:-2.
       expect(dot!.style.top).toBe('-2px')
       expect(dot!.style.right).toBe('-2px')
 
       await act(async () => { fireEvent.mouseLeave(wrapper) })
       await waitFor(() => {
-        expect(iconBox.style.width).toBe('46px')
+        expect(pill.style.transform).toBe('translateY(0) scale(1)')
       })
-      expect(dot!.style.top).toBe('6px')
-      expect(dot!.style.right).toBe('6px')
+      expect(icon.style.width).toBe('36px')
+      expect(dot!.style.top).toBe('-2px')
+      expect(dot!.style.right).toBe('-2px')
     })
 
     it('sending without an author opens the name modal, then auto-sends after submit (L98-99, L302-305)', async () => {
