@@ -321,7 +321,21 @@ function QuietMetric({ label, value, detail, tone }: { label: string; value: num
   )
 }
 
-function ProjectListView({ title, subtitle, projects }: { title: string; subtitle: string; projects: AdminProject[] }) {
+function ProjectListView({
+  title,
+  subtitle,
+  projects,
+  hasMore,
+  loadingMore,
+  onLoadMore,
+}: {
+  title: string
+  subtitle: string
+  projects: AdminProject[]
+  hasMore: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
+}) {
   return (
     <div className="border-b border-border px-5 py-5">
       <div className="mb-3">
@@ -346,6 +360,7 @@ function ProjectListView({ title, subtitle, projects }: { title: string; subtitl
           </div>
         ))}
       </div>
+      <LoadMore visible={hasMore} busy={loadingMore} onClick={onLoadMore} label="Load more projects" />
     </div>
   )
 }
@@ -618,6 +633,9 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
             title="Projects"
             subtitle="ranked by product signal"
             projects={topProjects}
+            hasMore={projectsHasMore}
+            loadingMore={projectsLoadingMore}
+            onLoadMore={loadMoreProjects}
           />
         )}
         {!loading && !error && activeView === 'comments' && (
@@ -625,6 +643,9 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
             title="Comment Load"
             subtitle="highest pending or rejected volume"
             projects={attentionProjects}
+            hasMore={projectsHasMore}
+            loadingMore={projectsLoadingMore}
+            onLoadMore={loadMoreProjects}
           />
         )}
         {!loading && !error && activeView === 'shares' && (
@@ -632,6 +653,9 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
             title="Share Loops"
             subtitle="projects with strongest feedback sharing"
             projects={shareProjects}
+            hasMore={projectsHasMore}
+            loadingMore={projectsLoadingMore}
+            onLoadMore={loadMoreProjects}
           />
         )}
       </div>
