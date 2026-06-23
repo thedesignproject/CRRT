@@ -100,6 +100,10 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    res = mockRes()
     await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: 42 }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 

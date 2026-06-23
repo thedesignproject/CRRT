@@ -104,6 +104,7 @@ describe('normalizeGitHubRepoUrl', () => {
     expect(normalizeGitHubRepoUrl('https://gitlab.com/acme/widgets')).toBeNull()
     expect(normalizeGitHubRepoUrl('https://github.com/acme')).toBeNull()
     expect(normalizeGitHubRepoUrl('acme/widgets/extra')).toBeNull()
+    expect(normalizeGitHubRepoUrl('https://github.com/bad_owner/widgets')).toBeNull()
   })
 })
 
