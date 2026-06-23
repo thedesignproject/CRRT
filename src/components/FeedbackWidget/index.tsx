@@ -10,6 +10,7 @@ import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
 import { deleteComment as apiDeleteComment, fetchAgentEligibility, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
+import { ensureWidgetFonts } from './fonts'
 import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
@@ -152,9 +153,10 @@ function LauncherAction({
       <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
         <span
           style={{
-            fontFamily: "'PP NeueBit', 'PPNeueBit-Bold', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-            fontSize: 20,
-            fontWeight: 700,
+            fontFamily: "'VT323', 'JetBrains Mono', ui-monospace, monospace",
+            fontSize: 24,
+            fontWeight: 400,
+            letterSpacing: '0.02em',
             lineHeight: 1,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
@@ -357,6 +359,10 @@ export function FeedbackWidget({ disabled = false, ...props }: FeedbackWidgetPro
 }
 
 function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omit<FeedbackWidgetProps, 'disabled'>) {
+  useEffect(() => {
+    ensureWidgetFonts()
+  }, [])
+
   const [mode, setMode] = useState<Mode>('idle')
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
