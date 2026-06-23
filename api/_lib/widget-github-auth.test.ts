@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
@@ -15,6 +16,10 @@ import {
 
 const env = { ...process.env }
 const originalFetch = globalThis.fetch
+
+function signedBody(body: string) {
+  return `${body}.${createHmac('sha256', 'secret').update(body).digest('base64url')}`
+}
 
 beforeEach(() => {
   process.env = { ...env, WIDGET_AUTH_SECRET: 'secret', GITHUB_APP_CLIENT_ID: 'client', GITHUB_APP_CLIENT_SECRET: 'client-secret' }
@@ -51,7 +56,26 @@ describe('widget github auth tokens', () => {
     expect(verifyWidgetAuthToken(token, 1299)).toMatchObject({ projectKey: 'p', githubLogin: 'octo' })
     expect(verifyWidgetAuthToken(token, 1301)).toBeNull()
     expect(verifyWidgetAuthToken(`${token}x`, 1000)).toBeNull()
+    expect(verifyWidgetAuthToken(`${token.split('.')[0]}.${'x'.repeat(43)}`, 1000)).toBeNull()
     expect(verifyWidgetAuthToken('not-json.nope', 1000)).toBeNull()
+    const invalidJson = Buffer.from('{').toString('base64url')
+    expect(verifyWidgetAuthToken(signedBody(invalidJson), 1000)).toBeNull()
+  })
+
+  it('rejects signed tokens and states with malformed payload shapes', () => {
+    const token = createWidgetAuthToken(input, 1000)
+    const [body] = token.split('.')
+    const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
+    parsed.githubRepo = 42
+    const badBody = Buffer.from(JSON.stringify(parsed)).toString('base64url')
+    expect(verifyWidgetAuthToken(signedBody(badBody), 1000)).toBeNull()
+
+    const state = createWidgetGithubState({ projectKey: 'p', origin: 'https://app.example' }, 1000)
+    const [stateBody] = state.split('.')
+    const badState = JSON.parse(Buffer.from(stateBody, 'base64url').toString('utf8'))
+    badState.nonce = null
+    const badStateBody = Buffer.from(JSON.stringify(badState)).toString('base64url')
+    expect(verifyWidgetGithubState(signedBody(badStateBody), 1000)).toBeNull()
   })
 
   it('signs and verifies expiring popup state', () => {
@@ -76,6 +100,8 @@ describe('github api helpers', () => {
     expect(url.origin + url.pathname).toBe('https://github.com/login/oauth/authorize')
     expect(url.searchParams.get('client_id')).toBe('client')
     expect(url.searchParams.get('state')).toBe('state-1')
+    delete process.env.GITHUB_APP_CLIENT_ID
+    expect(() => buildGitHubAuthorizeUrl('state-1')).toThrow('missing_github_app_client_id')
   })
 
   it('exchanges a code and rejects bad exchange responses', async () => {
@@ -110,6 +136,9 @@ describe('github api helpers', () => {
 
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 404 })) as never
     await expect(assertGitHubRepoAccess('tok', 'acme', 'widgets')).rejects.toThrow('github_repo_inaccessible')
+
+    globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
+    await expect(assertGitHubRepoAccess('tok', 'acme', 'widgets')).rejects.toThrow('github_repo_lookup_failed')
 
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({}), {
       status: 200,
