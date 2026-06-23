@@ -3608,4 +3608,257 @@ describe('<FeedbackWidget />', () => {
       }
     })
   })
+
+  describe('launcher menu + sidebar agent flow', () => {
+    function seedAccepted(id: string) {
+      return {
+        id,
+        projectId: 'proj',
+        pageUrl: window.location.href.split('#')[0],
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: `accepted ${id}`,
+        authorName: 'Ada',
+        reviewStatus: 'accepted',
+        createdAt: '2026-05-01T00:00:00Z',
+      }
+    }
+
+    function agentGet(opts: { comments?: unknown[]; eligibility?: Record<string, unknown> } = {}) {
+      const comments = opts.comments ?? []
+      return (url?: string) => {
+        if (url?.includes('/v1/public/comments')) {
+          return new Response(JSON.stringify(comments), { status: 200 })
+        }
+        if (url?.includes('/v1/public/project')) {
+          return new Response(JSON.stringify({
+            projectKey: 'proj', projectName: 'Project',
+            doc: { slug: 'share-1', token: 'token-1', docUrl: 'https://x.example/doc', promptUrl: 'https://x.example/prompt' },
+          }), { status: 200 })
+        }
+        if (url?.includes('/v1/agent/eligibility')) {
+          return new Response(JSON.stringify(opts.eligibility ?? {}), { status: 200 })
+        }
+        if (url?.includes('/v1/shares/share-1/prompt')) {
+          return new Response(JSON.stringify({
+            slug: 'share-1', target: 'claude-code', prompt: 'Use this CRRT context', docUrl: 'https://x.example/doc',
+          }), { status: 200 })
+        }
+        if (url?.includes('/v1/agent/shares/share-1/state')) {
+          return new Response(JSON.stringify({
+            share: { slug: 'share-1', scopeType: 'project', revision: 1 },
+            project: { publicKey: 'proj', name: 'Project', repoUrl: null },
+            comments: [], presence: [],
+          }), { status: 200 })
+        }
+        return new Response('[]', { status: 200 })
+      }
+    }
+
+    const pillButton = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+      .find((b) => b.getAttribute('aria-label')?.endsWith('CRRT menu'))!
+    const menuAction = (title: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button[role="menuitem"]'))
+      .find((b) => b.textContent?.includes(title))!
+
+    async function mountWidget(getResponder = agentGet()) {
+      mockFetch(undefined, getResponder)
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await waitFor(() => {
+        if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
+      })
+    }
+
+    it('opens the launcher, keeps it open on inside pointerdown, closes on outside pointerdown', async () => {
+      await mountWidget()
+
+      await act(async () => { fireEvent.click(pillButton()) })
+      expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
+
+      // Hover a menu action (its mouse handlers).
+      const drop = menuAction('Drop comment')
+      await act(async () => { fireEvent.mouseEnter(drop) })
+      await act(async () => { fireEvent.mouseLeave(drop) })
+
+      // Pointerdown inside the launcher root keeps the menu open.
+      await act(async () => { fireEvent.pointerDown(drop) })
+      expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
+
+      // Pointerdown outside closes it.
+      await act(async () => { fireEvent.pointerDown(document.body) })
+      await waitFor(() => {
+        expect(pillButton().getAttribute('aria-label')).toBe('Open CRRT menu')
+      })
+    })
+
+    it('Escape closes the launcher menu', async () => {
+      await mountWidget()
+      await act(async () => { fireEvent.click(pillButton()) })
+      expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await waitFor(() => {
+        expect(pillButton().getAttribute('aria-label')).toBe('Open CRRT menu')
+      })
+    })
+
+    it('Escape closes an open sidebar', async () => {
+      await mountWidget()
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await waitFor(() => {
+        const sidebar = findWidgetSidebar()
+        if (!sidebar || !/translateX\(0/.test(sidebar.getAttribute('style') ?? '')) throw new Error('sidebar not open')
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await waitFor(() => {
+        expect(findWidgetSidebar()?.getAttribute('style')).toMatch(/translateX\(100%\)/)
+      })
+    })
+
+    it('pressing "c" while selecting exits feedback mode', async () => {
+      await mountWidget()
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
+      })
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => {
+        expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
+      })
+    })
+
+    it('launcher "Open sidebar" action opens the sidebar', async () => {
+      await mountWidget()
+      await act(async () => { fireEvent.click(pillButton()) })
+      await act(async () => { fireEvent.click(menuAction('Open sidebar')) })
+      await waitFor(() => {
+        const sidebar = findWidgetSidebar()
+        if (!sidebar || !/translateX\(0/.test(sidebar.getAttribute('style') ?? '')) throw new Error('sidebar not open')
+      })
+    })
+
+    it('launcher "Open agent" action opens the agent modal', async () => {
+      await mountWidget()
+      await act(async () => { fireEvent.click(pillButton()) })
+      await act(async () => { fireEvent.click(menuAction('Open agent')) })
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw] [aria-label="Connect agent"]')) throw new Error('agent modal not open')
+      })
+
+      // Closing the modal via its own Close button runs onClose.
+      const close = document.querySelector<HTMLButtonElement>('[data-fw] [aria-label="Connect agent"] button[aria-label="Close"]')!
+      await act(async () => { fireEvent.click(close) })
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).toBeNull()
+      })
+    })
+
+    it('sidebar agent CTA shows the ready count and reacts to hover', async () => {
+      await mountWidget(agentGet({ comments: [seedAccepted('c1'), seedAccepted('c2')] }))
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      const sidebar = await waitFor(() => {
+        const el = findWidgetSidebar()
+        if (!el || !/translateX\(0/.test(el.getAttribute('style') ?? '')) throw new Error('sidebar not open')
+        return el
+      })
+      const cta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.includes('Open agent'))!
+      expect(cta.textContent).toContain('2 ready comments')
+      await act(async () => { fireEvent.mouseEnter(cta) })
+      await act(async () => { fireEvent.mouseLeave(cta) })
+    })
+
+    it('sidebar agent CTA shows a singular ready count for one approved comment', async () => {
+      await mountWidget(agentGet({ comments: [seedAccepted('c1')] }))
+      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      const sidebar = await waitFor(() => {
+        const el = findWidgetSidebar()
+        if (!el || !/translateX\(0/.test(el.getAttribute('style') ?? '')) throw new Error('sidebar not open')
+        return el
+      })
+      const cta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button'))
+        .find((b) => b.textContent?.includes('Open agent'))!
+      expect(cta.textContent).toContain('1 ready comment')
+      expect(cta.textContent).not.toContain('1 ready comments')
+    })
+
+    it('an eligible user copies the prompt without seeing the sign-in gate', async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+      await mountWidget(agentGet({ eligibility: { can_request: true, must_sign_up: false } }))
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      const claude = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Copy Claude Code'))
+        if (!btn) throw new Error('Claude prompt not ready')
+        return btn
+      })
+      await act(async () => { fireEvent.click(claude) })
+
+      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+      expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).toBeNull()
+      expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).not.toBeNull()
+    })
+
+    async function openGateWith(comments: unknown[]) {
+      await mountWidget(agentGet({ comments, eligibility: { can_request: false } }))
+      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      const claude = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((b) => b.textContent?.includes('Copy Claude Code'))
+        if (!btn) throw new Error('Claude prompt not ready')
+        return btn
+      })
+      await act(async () => { fireEvent.click(claude) })
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')) throw new Error('gate not open')
+      })
+    }
+
+    it('sign-in gate reports a singular ready count and ignores non-Escape keys', async () => {
+      await openGateWith([seedAccepted('c1')])
+      expect(document.body.textContent).toContain('1 approved comment ready')
+
+      // A non-Escape key must not close the gate.
+      await act(async () => { fireEvent.keyDown(window, { key: 'a' }) })
+      expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).not.toBeNull()
+    })
+
+    it('sign-in gate reports a plural ready count', async () => {
+      await openGateWith([seedAccepted('c1'), seedAccepted('c2')])
+      expect(document.body.textContent).toContain('2 approved comments ready')
+    })
+
+    it('the post-send hint "review" action opens the sidebar', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea, getSendButton } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'bug here' } })
+      await act(async () => { fireEvent.click(getSendButton()) })
+
+      await waitFor(() => {
+        expect(document.body.textContent).toContain('Drop another or review comments')
+      })
+      const review = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        .find((b) => b.textContent === 'review')!
+      await act(async () => { fireEvent.click(review) })
+
+      await waitFor(() => {
+        const sidebar = findWidgetSidebar()
+        if (!sidebar || !/translateX\(0/.test(sidebar.getAttribute('style') ?? '')) throw new Error('sidebar not open')
+      })
+    })
+
+    it('pressing "c" while commenting is a no-op', async () => {
+      mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await enterCommentingMode()
+      expect(document.querySelector('textarea')).not.toBeNull()
+
+      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      // Still in commenting mode — the composer stays mounted.
+      expect(document.querySelector('textarea')).not.toBeNull()
+    })
+  })
 })

@@ -853,7 +853,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     if (!launcherOpen) return
     function onPointerDown(e: PointerEvent) {
       const targetEl = e.target as HTMLElement
-      if (!targetEl.closest?.('[data-fw-launcher-root]')) setLauncherOpen(false)
+      if (!targetEl.closest('[data-fw-launcher-root]')) setLauncherOpen(false)
     }
     document.addEventListener('pointerdown', onPointerDown, true)
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
@@ -954,11 +954,11 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
     return 0
   }), [filteredComments])
   const readyForAgentCount = useMemo(
-    () => visibleComments.filter((c) => (c.reviewStatus ?? 'open') === 'accepted').length,
+    () => visibleComments.filter((c) => c.reviewStatus === 'accepted').length,
     [visibleComments],
   )
   const openCommentCount = useMemo(
-    () => visibleComments.filter((c) => (c.reviewStatus ?? 'open') === 'open').length,
+    () => visibleComments.filter((c) => c.reviewStatus === 'open').length,
     [visibleComments],
   )
   const sidebarTitle = filterStatus === 'approved'
