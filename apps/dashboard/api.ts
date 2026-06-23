@@ -142,7 +142,11 @@ export interface AdminUser {
   id: string
   email: string | null
   createdAt: string
-  projectCount: number
+  lastSignInAt: string | null
+  emailConfirmedAt: string | null
+  projectsAsAdminCount: number
+  projectsAsMemberCount: number
+  superAdmin: boolean
 }
 
 export interface AdminProjectMember {
@@ -155,9 +159,44 @@ export interface AdminProject {
   name: string
   createdAt: string
   commentCount: number
-  latestCommentAt: string
+  commentStatusCounts: { pending: number; accepted: number; rejected: number }
+  implementationStatusCounts: {
+    unassigned: number
+    claimed: number
+    inProgress: number
+    blocked: number
+    done: number
+  }
+  feedbackShareCount: number
+  commentedUrlCount: number
+  firstCommentAt: string
+  lastCommentAt: string
   claimed: boolean
   members: AdminProjectMember[]
+}
+
+export interface AdminPage<T> {
+  items: T[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+
+export type AdminProjectSort =
+  | 'lastCommentAt'
+  | 'createdAt'
+  | 'commentCount'
+  | 'feedbackShareCount'
+  | 'commentedUrlCount'
+
+export type AdminSortDirection = 'asc' | 'desc'
+
+export interface AdminStats {
+  accounts: number
+  projects: number
+  comments: number
+  shares: number
+  activeAgentPresence: number
+  signups: { last24Hours: number; last7Days: number; last30Days: number }
 }
 
 // Whether the current user may see the Super Admin section. The server makes
@@ -168,14 +207,35 @@ export function getSuperAdminStatus(apiBase: string, accessToken: string) {
   })
 }
 
-export function listAdminUsers(apiBase: string, accessToken: string) {
-  return requestJson<AdminUser[]>(`${apiBase}/v1/admin/users`, {
+export function listAdminUsers(apiBase: string, accessToken: string, opts: { cursor?: string | null; limit?: number } = {}) {
+  const query = new URLSearchParams()
+  if (opts.limit) query.set('limit', String(opts.limit))
+  if (opts.cursor) query.set('cursor', opts.cursor)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return requestJson<AdminPage<AdminUser>>(`${apiBase}/v1/admin/users${suffix}`, {
     headers: { ...authHeaders(accessToken) },
   })
 }
 
-export function listAdminProjects(apiBase: string, accessToken: string) {
-  return requestJson<AdminProject[]>(`${apiBase}/v1/admin/projects`, {
+export function listAdminProjects(apiBase: string, accessToken: string, opts: {
+  cursor?: string | null
+  limit?: number
+  sort?: AdminProjectSort
+  direction?: AdminSortDirection
+} = {}) {
+  const query = new URLSearchParams()
+  if (opts.limit) query.set('limit', String(opts.limit))
+  if (opts.cursor) query.set('cursor', opts.cursor)
+  if (opts.sort) query.set('sort', opts.sort)
+  if (opts.direction) query.set('direction', opts.direction)
+  const suffix = query.toString() ? `?${query.toString()}` : ''
+  return requestJson<AdminPage<AdminProject>>(`${apiBase}/v1/admin/projects${suffix}`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function getAdminStats(apiBase: string, accessToken: string) {
+  return requestJson<AdminStats>(`${apiBase}/v1/admin/stats`, {
     headers: { ...authHeaders(accessToken) },
   })
 }

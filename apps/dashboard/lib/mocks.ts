@@ -1,4 +1,4 @@
-import type { CommentRecord, Project } from '../api'
+import type { AdminPage, AdminProject, AdminProjectSort, AdminStats, AdminUser, CommentRecord, Project } from '../api'
 
 // VITE_USE_MOCKS:
 //   '1'     → populated fixtures (default mock mode)
@@ -184,4 +184,101 @@ export function getMockProjects(): Project[] {
 export function getMockComments(projectId: string): CommentRecord[] {
   if (mocksEmpty) return []
   return PROJECT_COMMENTS[projectId] ?? []
+}
+
+const ADMIN_NAMES = ['Tomas', 'Pranav', 'Dianne', 'Lara', 'Agustin', 'Cris', 'Alessandro', 'María']
+const ADMIN_DOMAINS = ['tdp.studio', 'client.dev', 'agency.local']
+
+export const MOCK_ADMIN_STATS: AdminStats = {
+  accounts: 86,
+  projects: 34,
+  comments: 418,
+  shares: 47,
+  activeAgentPresence: 3,
+  signups: { last24Hours: 4, last7Days: 19, last30Days: 62 },
+}
+
+export const MOCK_ADMIN_USERS: AdminUser[] = Array.from({ length: 86 }, (_, i) => {
+  const name = ADMIN_NAMES[i % ADMIN_NAMES.length]
+  const email = `${name.toLowerCase()}${i + 1}@${ADMIN_DOMAINS[i % ADMIN_DOMAINS.length]}`
+  return {
+    id: `user_${String(i + 1).padStart(3, '0')}`,
+    email,
+    createdAt: ago(60 * 24 * (i + 1)),
+    lastSignInAt: i % 5 === 0 ? null : ago(45 + i * 18),
+    emailConfirmedAt: i % 7 === 0 ? null : ago(60 * 24 * i),
+    projectsAsAdminCount: i % 4,
+    projectsAsMemberCount: (i + 2) % 6,
+    superAdmin: i < 3,
+  }
+})
+
+export const MOCK_ADMIN_PROJECTS: AdminProject[] = Array.from({ length: 34 }, (_, i) => {
+  const comments = 4 + ((i * 11) % 64)
+  const accepted = Math.floor(comments * 0.38)
+  const rejected = Math.floor(comments * 0.12)
+  const pending = comments - accepted - rejected
+  const done = Math.floor(accepted * 0.42)
+  const inProgress = Math.floor(accepted * 0.18)
+  const claimed = Math.floor(accepted * 0.12)
+  const blocked = i % 9 === 0 ? 1 : 0
+  const unassigned = Math.max(0, comments - done - inProgress - claimed - blocked)
+  const owner = MOCK_ADMIN_USERS[i % MOCK_ADMIN_USERS.length]
+  const member = MOCK_ADMIN_USERS[(i + 7) % MOCK_ADMIN_USERS.length]
+  return {
+    publicKey: `proj_${String(i + 1).padStart(2, '0')}_crrt`,
+    name: `CRRT Client ${i + 1}`,
+    createdAt: ago(60 * 24 * (i + 3)),
+    commentCount: comments,
+    commentStatusCounts: { pending, accepted, rejected },
+    implementationStatusCounts: { unassigned, claimed, inProgress, blocked, done },
+    feedbackShareCount: 1 + (i % 9),
+    commentedUrlCount: 1 + (i % 12),
+    firstCommentAt: ago(60 * 24 * (i + 12)),
+    lastCommentAt: ago(25 + i * 21),
+    claimed: i % 3 !== 0,
+    members: [
+      { email: owner.email ?? owner.id, role: 'admin' },
+      { email: member.email ?? member.id, role: 'member' },
+    ],
+  }
+})
+
+function page<T>(items: T[], cursor?: string | null, limit = 50): AdminPage<T> {
+  const start = cursor ? Number(cursor) : 0
+  const end = start + limit
+  return {
+    items: items.slice(start, end),
+    nextCursor: end < items.length ? String(end) : null,
+    hasMore: end < items.length,
+  }
+}
+
+export function getMockAdminStats(): AdminStats {
+  return mocksEmpty
+    ? { accounts: 0, projects: 0, comments: 0, shares: 0, activeAgentPresence: 0, signups: { last24Hours: 0, last7Days: 0, last30Days: 0 } }
+    : MOCK_ADMIN_STATS
+}
+
+export function getMockAdminUsersPage(opts: { cursor?: string | null; limit?: number } = {}) {
+  return page(mocksEmpty ? [] : MOCK_ADMIN_USERS, opts.cursor, opts.limit)
+}
+
+export function getMockAdminProjectsPage(opts: {
+  cursor?: string | null
+  limit?: number
+  sort?: AdminProjectSort
+  direction?: 'asc' | 'desc'
+} = {}) {
+  const sort = opts.sort ?? 'lastCommentAt'
+  const direction = opts.direction ?? 'desc'
+  const sorted = [...(mocksEmpty ? [] : MOCK_ADMIN_PROJECTS)].sort((a, b) => {
+    const av = a[sort]
+    const bv = b[sort]
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av).localeCompare(String(bv))
+    return direction === 'asc' ? cmp : -cmp
+  })
+  return page(sorted, opts.cursor, opts.limit)
 }
