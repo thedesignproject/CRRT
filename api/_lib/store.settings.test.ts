@@ -8,7 +8,9 @@ import {
   getUserEmailsByIds,
   listProjectInvites,
   listProjectMembers,
+  normalizeGitHubRepoUrl,
   removeProjectMember,
+  updateRepoConfig,
   updateProject,
 } from './store.js'
 
@@ -19,7 +21,7 @@ type Result = { data: unknown; error: { code?: string; message: string } | null 
 function chain(result: Result) {
   const p: Record<string, unknown> = {}
   const self = () => p
-  for (const m of ['select', 'update', 'delete', 'insert', 'eq', 'order', 'is', 'in']) p[m] = self
+  for (const m of ['select', 'update', 'delete', 'insert', 'upsert', 'eq', 'order', 'is', 'in']) p[m] = self
   p.maybeSingle = () => Promise.resolve(result)
   p.single = () => Promise.resolve(result)
   p.then = (resolve: (v: Result) => unknown, reject: (e: unknown) => unknown) =>
@@ -80,6 +82,108 @@ describe('updateProject', () => {
       projects: [{ data: null, error: { message: 'boom' } }],
     }) as never)
     await expect(updateProject('p', { name: 'New' })).rejects.toThrow('boom')
+  })
+})
+
+describe('normalizeGitHubRepoUrl', () => {
+  it('normalizes GitHub URLs, shorthand, and .git suffixes', () => {
+    expect(normalizeGitHubRepoUrl('https://github.com/Acme/widgets')).toEqual({
+      repoUrl: 'https://github.com/Acme/widgets',
+      githubOwner: 'Acme',
+      githubRepo: 'widgets',
+    })
+    expect(normalizeGitHubRepoUrl('Acme/widgets.git')).toEqual({
+      repoUrl: 'https://github.com/Acme/widgets',
+      githubOwner: 'Acme',
+      githubRepo: 'widgets',
+    })
+  })
+
+  it('rejects empty, non-GitHub, and malformed inputs', () => {
+    expect(normalizeGitHubRepoUrl('')).toBeNull()
+    expect(normalizeGitHubRepoUrl('https://gitlab.com/acme/widgets')).toBeNull()
+    expect(normalizeGitHubRepoUrl('https://github.com/acme')).toBeNull()
+    expect(normalizeGitHubRepoUrl('acme/widgets/extra')).toBeNull()
+  })
+})
+
+describe('updateRepoConfig', () => {
+  it('upserts a normalized GitHub repo config', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{
+        data: {
+          project_key: 'p',
+          repo_url: 'https://github.com/acme/widgets',
+          github_owner: 'acme',
+          github_repo: 'widgets',
+          local_path: null,
+          default_branch: 'main',
+          install_command: null,
+          dev_command: null,
+          test_command: null,
+          build_command: null,
+          agent_instructions: null,
+        },
+        error: null,
+      }],
+    }) as never)
+    const out = await updateRepoConfig('p', { repoUrl: 'github.com/nope' }).catch((error) => error)
+    expect(out).toBeInstanceOf(Error)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{
+        data: {
+          project_key: 'p',
+          repo_url: 'https://github.com/acme/widgets',
+          github_owner: 'acme',
+          github_repo: 'widgets',
+          local_path: null,
+          default_branch: 'main',
+          install_command: null,
+          dev_command: null,
+          test_command: null,
+          build_command: null,
+          agent_instructions: null,
+        },
+        error: null,
+      }],
+    }) as never)
+    expect(await updateRepoConfig('p', { repoUrl: 'https://github.com/acme/widgets.git' })).toMatchObject({
+      repoUrl: 'https://github.com/acme/widgets',
+      githubOwner: 'acme',
+      githubRepo: 'widgets',
+    })
+  })
+
+  it('clears repo metadata and throws on database errors', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{
+        data: {
+          project_key: 'p',
+          repo_url: null,
+          github_owner: null,
+          github_repo: null,
+          local_path: null,
+          default_branch: 'main',
+          install_command: null,
+          dev_command: null,
+          test_command: null,
+          build_command: null,
+          agent_instructions: null,
+        },
+        error: null,
+      }],
+    }) as never)
+    expect(await updateRepoConfig('p', { repoUrl: null })).toMatchObject({
+      repoUrl: null,
+      githubOwner: null,
+      githubRepo: null,
+    })
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+    }) as never)
+    await expect(updateRepoConfig('p', { repoUrl: 'acme/widgets' })).rejects.toThrow('boom')
   })
 })
 
