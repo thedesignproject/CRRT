@@ -2,9 +2,22 @@ export function FeedbackWidgetStyles() {
   return (
     <style>{`
         @keyframes fw-badge-pop {
-          0% { transform: scale(1); }
-          30% { transform: scale(1.3); }
-          100% { transform: scale(1); }
+          0% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(232, 133, 61, 0.45);
+          }
+          42% {
+            transform: scale(1.75);
+            box-shadow: 0 0 0 10px rgba(232, 133, 61, 0);
+          }
+          68% {
+            transform: scale(0.92);
+            box-shadow: 0 0 0 0 rgba(232, 133, 61, 0);
+          }
+          100% {
+            transform: scale(1);
+            box-shadow: 0 0 0 0 rgba(232, 133, 61, 0);
+          }
         }
         @keyframes fw-slide-in {
           0% { opacity: 0; transform: translateY(8px); }
@@ -27,7 +40,7 @@ export function FeedbackWidgetStyles() {
           box-shadow: 0 0 0 2px #E8853D;
         }
         @keyframes fw-instruction-in {
-          0% { opacity: 0; transform: translateX(-50%) translateY(-10px); }
+          0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
           100% { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
         .fw-rec-dot {
@@ -60,6 +73,11 @@ export function FeedbackWidgetStyles() {
               drop-shadow(0 2px 4px rgba(0, 0, 0, 0.18));
           }
         }
+        @keyframes fw-widget-receive {
+          0%, 100% { transform: translateY(0) scale(1); filter: none; }
+          38% { transform: translateY(0) scale(1.1); filter: drop-shadow(0 0 14px rgba(232, 133, 61, 0.42)); }
+          68% { transform: translateY(0) scale(0.98); filter: none; }
+        }
         @keyframes fw-tooltip-liquid {
           0% { opacity: 0; transform: scale(0.08); filter: blur(10px); }
           35% { opacity: 1; }
@@ -90,14 +108,6 @@ export function FeedbackWidgetStyles() {
         @keyframes fw-modal-card-in {
           0% { opacity: 0; transform: scale(0.94) translateY(8px); }
           100% { opacity: 1; transform: scale(1) translateY(0); }
-        }
-        @keyframes fw-toast-in {
-          0% { opacity: 0; transform: translateX(-50%) translateY(8px); }
-          100% { opacity: 1; transform: translateX(-50%) translateY(0); }
-        }
-        @keyframes fw-toast-out {
-          0% { opacity: 1; transform: translateX(-50%) translateY(0); }
-          100% { opacity: 0; transform: translateX(-50%) translateY(6px); }
         }
         @keyframes crrt-pulse {
           0%, 100% { opacity: 1;   transform: scale(1); }

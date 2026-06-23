@@ -25,4 +25,22 @@ describe('SelectingInstructionBar', () => {
     fireEvent.mouseLeave(exit)
     expect(exit.style.color).toBe('#6B6560')
   })
+
+  it('renders the success tone with custom message and labels', () => {
+    const { getByText, container } = render(
+      <SelectingInstructionBar
+        onCancel={vi.fn()}
+        message="Saved. Drop another or review comments."
+        keyLabel="F"
+        actionLabel="review"
+        tone="success"
+      />,
+    )
+    expect(getByText('Saved. Drop another or review comments.')).not.toBeNull()
+    expect(getByText('F')).not.toBeNull()
+    expect(getByText('review')).not.toBeNull()
+    // Success tone paints the status dot with the accent colour.
+    const dot = container.querySelector<HTMLSpanElement>('.fw-rec-dot')!
+    expect(dot.style.background).toBe('#E8853D')
+  })
 })

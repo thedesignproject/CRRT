@@ -1,6 +1,13 @@
 import { normalizeReviewStatus } from './format'
 import type { Comment } from './types'
 
+export interface AgentEligibility {
+  canRequest: boolean
+  mustSignUp: boolean
+  isProjectMember: boolean
+  currentTier?: string | null
+}
+
 export async function fetchProjectComments(apiBase: string, projectId: string): Promise<Comment[]> {
   try {
     const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
@@ -18,6 +25,31 @@ export async function fetchProjectComments(apiBase: string, projectId: string): 
     })
   } catch {
     return []
+  }
+}
+
+export async function fetchAgentEligibility(apiBase: string, projectId: string): Promise<AgentEligibility | null> {
+  try {
+    const url = new URL(`${apiBase}/v1/agent/eligibility`, window.location.origin)
+    url.searchParams.set('project_id', projectId)
+
+    const res = await fetch(url.toString())
+    if (!res.ok) return null
+
+    const data = await res.json() as Partial<AgentEligibility> & {
+      can_request?: boolean
+      must_sign_up?: boolean
+      is_project_member?: boolean
+      current_tier?: string | null
+    }
+    return {
+      canRequest: data.canRequest === true || data.can_request === true,
+      mustSignUp: data.mustSignUp === true || data.must_sign_up === true,
+      isProjectMember: data.isProjectMember === true || data.is_project_member === true,
+      currentTier: data.currentTier ?? data.current_tier ?? null,
+    }
+  } catch {
+    return null
   }
 }
 

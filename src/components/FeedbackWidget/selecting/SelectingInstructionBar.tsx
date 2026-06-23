@@ -2,15 +2,27 @@ import { WIDGET_ATTR } from '../constants'
 
 export interface SelectingInstructionBarProps {
   onCancel: () => void
+  message?: string
+  keyLabel?: string
+  actionLabel?: string
+  tone?: 'default' | 'success'
 }
 
-export function SelectingInstructionBar({ onCancel }: SelectingInstructionBarProps) {
+export function SelectingInstructionBar({
+  onCancel,
+  message = 'Click an element or select text to leave feedback',
+  keyLabel = 'Esc',
+  actionLabel = 'exit',
+  tone = 'default',
+}: SelectingInstructionBarProps) {
+  const dotColor = tone === 'success' ? '#E8853D' : '#E5502A'
+
   return (
     <div
       {...{ [WIDGET_ATTR]: '' }}
       style={{
         position: 'fixed',
-        top: 16,
+        bottom: 24,
         left: '50%',
         transform: 'translateX(-50%)',
         zIndex: 2147483647,
@@ -18,6 +30,7 @@ export function SelectingInstructionBar({ onCancel }: SelectingInstructionBarPro
         alignItems: 'center',
         gap: 10,
         padding: '8px 14px',
+        maxWidth: 'calc(100vw - 32px)',
         borderRadius: 9999,
         background: 'rgba(10, 10, 10, 0.88)',
         backdropFilter: 'blur(16px)',
@@ -28,14 +41,15 @@ export function SelectingInstructionBar({ onCancel }: SelectingInstructionBarPro
         fontSize: 13,
         color: '#FFFFFF',
         whiteSpace: 'nowrap',
+        overflow: 'hidden',
         animation: 'fw-instruction-in 0.3s ease both',
       }}
     >
       <span
         className="fw-rec-dot"
-        style={{ width: 7, height: 7, borderRadius: '50%', background: '#E5502A', flexShrink: 0 }}
+        style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }}
       />
-      <span style={{ fontWeight: 500, color: '#E8E5DF' }}>Click an element or select text to leave feedback</span>
+      <span style={{ fontWeight: 500, color: '#E8E5DF', overflow: 'hidden', textOverflow: 'ellipsis' }}>{message}</span>
       <span style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -48,7 +62,7 @@ export function SelectingInstructionBar({ onCancel }: SelectingInstructionBarPro
         color: '#6B6560',
         lineHeight: 1.4,
         fontFamily: "'JetBrains Mono', monospace",
-      }}>Esc</span>
+      }}>{keyLabel}</span>
       <button
         type="button"
         onClick={onCancel}
@@ -66,7 +80,7 @@ export function SelectingInstructionBar({ onCancel }: SelectingInstructionBarPro
         }}
         onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
         onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
-      >exit</button>
+      >{actionLabel}</button>
     </div>
   )
 }
