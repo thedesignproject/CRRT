@@ -83,6 +83,12 @@ describe('api/v1/widget/github/callback', () => {
     await call({ method: 'GET', query: { code: 'c', state: 's' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(String(res.body)).toContain('github_repo_inaccessible')
+
+    vi.mocked(getRepoConfig).mockResolvedValueOnce({ githubOwner: 'acme', githubRepo: 'widgets' } as never)
+    vi.mocked(exchangeGitHubCode).mockRejectedValueOnce(new Error('surprise'))
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 's' }, headers: {} }, res)
+    expect(String(res.body)).toContain('github_auth_failed')
   })
 
   it('maps unexpected GitHub failures to a generic popup error', async () => {

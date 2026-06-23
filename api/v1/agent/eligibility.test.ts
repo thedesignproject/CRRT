@@ -66,6 +66,14 @@ describe('api/v1/agent/eligibility', () => {
     expect((res.body as { loginUrl: string }).loginUrl).toContain('/api/v1/widget/github/login')
     expect((res.body as { loginUrl: string }).loginUrl).toContain('projectKey=p')
 
+    res = mockRes()
+    await call({
+      method: 'GET',
+      query: { project_id: 'p' },
+      headers: { origin: ['https://first.example', 'https://second.example'] },
+    }, res)
+    expect((res.body as { loginUrl: string }).loginUrl).toContain('origin=https%3A%2F%2Ffirst.example')
+
     vi.mocked(verifyWidgetAuthToken).mockReturnValueOnce(null)
     res = mockRes()
     await call({
