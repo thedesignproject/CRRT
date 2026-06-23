@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { fetchProjectComments, patchReviewStatus, postComment } from '../components/FeedbackWidget/api'
+import { fetchAgentEligibility, fetchProjectComments, patchReviewStatus, postComment } from '../components/FeedbackWidget/api'
 
 const API = 'https://api.example.com'
 
@@ -54,6 +54,73 @@ describe('fetchProjectComments', () => {
   it('returns [] when fetch throws', async () => {
     mockFetch(() => { throw new Error('offline') })
     expect(await fetchProjectComments(API, 'p')).toEqual([])
+  })
+})
+
+describe('fetchAgentEligibility', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('hits /v1/agent/eligibility with the project_id query param', async () => {
+    const spy = mockFetch(() => jsonResponse({}))
+    await fetchAgentEligibility(API, 'acme/internal')
+    const calledUrl = spy.mock.calls[0]![0] as string
+    expect(calledUrl).toContain('/v1/agent/eligibility')
+    expect(calledUrl).toContain('project_id=acme%2Finternal')
+  })
+
+  it('maps the camelCase response shape', async () => {
+    mockFetch(() => jsonResponse({
+      canRequest: true,
+      mustSignUp: true,
+      isProjectMember: true,
+      currentTier: 'pro',
+    }))
+    expect(await fetchAgentEligibility(API, 'p')).toEqual({
+      canRequest: true,
+      mustSignUp: true,
+      isProjectMember: true,
+      currentTier: 'pro',
+    })
+  })
+
+  it('maps the snake_case response shape', async () => {
+    mockFetch(() => jsonResponse({
+      can_request: true,
+      must_sign_up: true,
+      is_project_member: true,
+      current_tier: 'free',
+    }))
+    expect(await fetchAgentEligibility(API, 'p')).toEqual({
+      canRequest: true,
+      mustSignUp: true,
+      isProjectMember: true,
+      currentTier: 'free',
+    })
+  })
+
+  it('defaults missing fields to false / null', async () => {
+    mockFetch(() => jsonResponse({}))
+    expect(await fetchAgentEligibility(API, 'p')).toEqual({
+      canRequest: false,
+      mustSignUp: false,
+      isProjectMember: false,
+      currentTier: null,
+    })
+  })
+
+  it('returns null for non-OK responses', async () => {
+    mockFetch(() => new Response('nope', { status: 404 }))
+    expect(await fetchAgentEligibility(API, 'p')).toBeNull()
+  })
+
+  it('returns null when fetch throws', async () => {
+    mockFetch(() => { throw new Error('offline') })
+    expect(await fetchAgentEligibility(API, 'p')).toBeNull()
   })
 })
 
