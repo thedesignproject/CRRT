@@ -87,6 +87,8 @@ export const projectRepoConfigs = pgTable('project_repo_configs', {
     .primaryKey()
     .references(() => projects.publicKey, { onDelete: 'cascade' }),
   repoUrl: text('repo_url'),
+  githubOwner: text('github_owner'),
+  githubRepo: text('github_repo'),
   localPath: text('local_path'),
   defaultBranch: text('default_branch').notNull().default('main'),
   installCommand: text('install_command'),
