@@ -60,6 +60,8 @@ type ProjectMemberRow = {
 type RepoConfigRow = {
   project_key: string
   repo_url: string | null
+  github_owner: string | null
+  github_repo: string | null
   local_path: string | null
   default_branch: string | null
   install_command: string | null
@@ -139,6 +141,8 @@ function mapRepoConfig(row: RepoConfigRow | null) {
   return {
     projectKey: row.project_key,
     repoUrl: row.repo_url,
+    githubOwner: row.github_owner,
+    githubRepo: row.github_repo,
     localPath: row.local_path,
     defaultBranch: row.default_branch,
     installCommand: row.install_command,
@@ -826,12 +830,76 @@ export async function getRepoConfig(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_repo_configs')
-    .select('project_key, repo_url, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
+    .select('project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
     .eq('project_key', projectKey)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   return mapRepoConfig(data as RepoConfigRow | null)
+}
+
+export function normalizeGitHubRepoUrl(value: string): {
+  repoUrl: string
+  githubOwner: string
+  githubRepo: string
+} | null {
+  const raw = value.trim()
+  if (!raw) return null
+
+  let owner = ''
+  let repo = ''
+  const shorthand = raw.match(/^([A-Za-z0-9-]+)\/([A-Za-z0-9_.-]+)$/)
+  if (shorthand) {
+    owner = shorthand[1]
+    repo = shorthand[2]
+  } else {
+    try {
+      const parsed = new URL(raw)
+      if (parsed.hostname.toLowerCase() !== 'github.com') return null
+      const parts = parsed.pathname.split('/').filter(Boolean)
+      if (parts.length < 2) return null
+      owner = parts[0]
+      repo = parts[1]
+    } catch {
+      return null
+    }
+  }
+
+  const normalizedRepo = repo.replace(/\.git$/i, '')
+  if (!/^[A-Za-z0-9-]+$/.test(owner) || !/^[A-Za-z0-9_.-]+$/.test(normalizedRepo)) {
+    return null
+  }
+
+  return {
+    repoUrl: `https://github.com/${owner}/${normalizedRepo}`,
+    githubOwner: owner,
+    githubRepo: normalizedRepo,
+  }
+}
+
+export async function updateRepoConfig(projectKey: string, patch: {
+  repoUrl: string | null
+}) {
+  const supabase = getSupabase()
+  const normalized = patch.repoUrl === null ? null : normalizeGitHubRepoUrl(patch.repoUrl)
+  if (patch.repoUrl !== null && !normalized) throw new Error('invalid_github_repo')
+
+  const update = {
+    project_key: projectKey,
+    repo_url: normalized?.repoUrl ?? null,
+    github_owner: normalized?.githubOwner ?? null,
+    github_repo: normalized?.githubRepo ?? null,
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data, error } = await supabase
+    .from('project_repo_configs')
+    .upsert(update as never, { onConflict: 'project_key' })
+    .select('project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapRepoConfig(data as RepoConfigRow)
 }
 
 export async function createPublicComment(input: {
