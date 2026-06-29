@@ -167,12 +167,13 @@ function initState(initialSession: Session | null): State {
 
 // ─── Styles (module-scope so JSX stays readable + references are stable) ────
 
-const containerStyle: CSSProperties = { fontFamily: FONT, color: '#111' }
+const containerStyle: CSSProperties = { fontFamily: FONT, color: '#FFFFFF' }
 
 const overlayStyle: CSSProperties = {
   position: 'fixed', inset: 0, zIndex: Z_OVERLAY,
-  background: 'rgba(15, 23, 42, 0.5)',
-  backdropFilter: 'blur(4px)',
+  background: 'rgba(0, 0, 0, 0.56)',
+  backdropFilter: 'blur(10px)',
+  WebkitBackdropFilter: 'blur(10px)',
   pointerEvents: 'none',
   animation: 'fw-agent-fade 0.15s ease both',
 }
@@ -182,34 +183,36 @@ const modalStyle: CSSProperties = {
   top: '50%', left: '50%',
   transform: 'translate(-50%, -50%)',
   zIndex: Z_MODAL,
-  width: 'min(560px, calc(100vw - 32px))',
+  width: 'min(600px, calc(100vw - 32px))',
   maxHeight: 'calc(100vh - 48px)',
   display: 'flex', flexDirection: 'column',
-  background: '#fff',
-  borderRadius: 16,
-  boxShadow: '0 24px 60px rgba(15, 23, 42, 0.25), 0 2px 8px rgba(15, 23, 42, 0.08)',
+  background: '#0A0A0A',
+  border: '1px solid rgba(232, 133, 61, 0.20)',
+  borderRadius: 18,
+  boxShadow: '0 28px 90px rgba(0, 0, 0, 0.62), inset 0 1px 0 rgba(255, 255, 255, 0.04)',
   animation: `fw-agent-pop 0.18s ${EASE_OUT_EXPO} both`,
+  overflow: 'hidden',
 }
 
 const closeButtonStyle: CSSProperties = {
-  marginLeft: 'auto', width: 32, height: 32, borderRadius: 8,
-  border: 'none', background: 'transparent', cursor: 'pointer',
-  color: '#888', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  marginLeft: 'auto', width: 34, height: 34, borderRadius: 9999,
+  border: '1px solid rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.03)', cursor: 'pointer',
+  color: '#A8A29A', display: 'flex', alignItems: 'center', justifyContent: 'center',
   flexShrink: 0,
 }
 
 const targetButtonBase: CSSProperties = {
   textAlign: 'left',
-  padding: '12px 14px',
-  borderRadius: 10,
+  padding: '14px 14px',
+  borderRadius: 12,
   transition: 'background 0.15s, border-color 0.15s, color 0.15s',
   fontFamily: FONT,
 }
 
 const presenceCardStyle: CSSProperties = {
   padding: '6px 10px',
-  background: '#f8fafc',
-  border: '1px solid #e5e7eb',
+  background: 'rgba(255, 255, 255, 0.04)',
+  border: '1px solid rgba(255, 255, 255, 0.07)',
   borderRadius: 8,
   fontSize: 12,
   display: 'flex',
@@ -229,9 +232,10 @@ interface AgentBridgeModalProps {
   apiBase: string
   projectId: string
   onClose: () => void
+  onBeforeCopy?: () => Promise<boolean>
 }
 
-export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeModalProps) {
+export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: AgentBridgeModalProps) {
   const initialSession = useMemo(readShareFromUrl, [])
   const [state, dispatch] = useReducer(reducer, initialSession, initState)
   const modalRef = useRef<HTMLDivElement | null>(null)
@@ -356,6 +360,10 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
   const handleCopy = useCallback(async (target: Target) => {
     const text = buildPrompt(target)
     if (!text) return
+    if (onBeforeCopy) {
+      const canCopy = await onBeforeCopy()
+      if (!canCopy) return
+    }
     try {
       await navigator.clipboard.writeText(text)
       dispatch({ type: 'copied', target })
@@ -363,7 +371,7 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
     } catch {
       dispatch({ type: 'error', message: 'Copy failed — select the prompt manually and copy.' })
     }
-  }, [buildPrompt])
+  }, [buildPrompt, onBeforeCopy])
   const openCount = shareState?.comments.filter((c) => c.reviewStatus === 'open').length ?? 0
   const promptsReady = TARGETS.every(({ id }) => Boolean(prompts[id]))
 
@@ -377,12 +385,12 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
         aria-label="Connect agent"
         style={modalStyle}
       >
-        <div style={{ display: 'flex', alignItems: 'center', padding: '18px 20px', borderBottom: '1px solid #eee' }}>
+        <div style={{ display: 'flex', alignItems: 'center', padding: '18px 20px', borderBottom: '1px solid rgba(255, 255, 255, 0.06)' }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700, letterSpacing: '-0.01em' }}>
+            <div style={{ fontSize: 18, fontWeight: 750, letterSpacing: 0, color: '#FFFFFF' }}>
               {shareState?.project.name ?? 'Connect an agent'}
             </div>
-            <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+            <div style={{ fontSize: 13, color: '#A8A29A', marginTop: 5, lineHeight: 1.4, maxWidth: 440 }}>
               Paste one of these prompts into your agent — it joins this session and starts on the feedback ready below.
             </div>
           </div>
@@ -391,8 +399,8 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
             onClick={onClose}
             aria-label="Close"
             style={closeButtonStyle}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#f5f5f5'; e.currentTarget.style.color = '#111' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#888' }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.06)'; e.currentTarget.style.color = '#FFFFFF' }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.03)'; e.currentTarget.style.color = '#A8A29A' }}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -418,13 +426,13 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
           </div>
 
           {error && (
-            <div style={{ marginBottom: 16, padding: 10, borderRadius: 8, background: '#fef2f2', color: '#b91c1c', fontSize: 12 }}>
+            <div style={{ marginBottom: 16, padding: 10, borderRadius: 8, background: 'rgba(239, 68, 68, 0.10)', border: '1px solid rgba(239, 68, 68, 0.24)', color: '#F87171', fontSize: 12 }}>
               {error}
             </div>
           )}
 
           {!error && !promptsReady && (
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: '#A8A29A', marginBottom: 16 }}>
               Starting a session…
             </div>
           )}
@@ -434,10 +442,10 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {shareState.presence.map((p) => (
                   <div key={p.agentId} style={presenceCardStyle}>
-                    <span style={{ fontWeight: 700 }}>{p.agentId}</span>
-                    <span style={{ color: '#888' }}>{p.status}</span>
-                    {p.summary && <span style={{ color: '#555' }}>· {p.summary}</span>}
-                    <span style={{ color: '#aaa', marginLeft: 'auto', fontSize: 12 }}>{timeAgo(p.lastSeenAt)}</span>
+                    <span style={{ fontWeight: 700, color: '#FFFFFF' }}>{p.agentId}</span>
+                    <span style={{ color: '#A8A29A' }}>{p.status}</span>
+                    {p.summary && <span style={{ color: '#6B6560' }}>· {p.summary}</span>}
+                    <span style={{ color: '#6B6560', marginLeft: 'auto', fontSize: 12 }}>{timeAgo(p.lastSeenAt)}</span>
                   </div>
                 ))}
               </div>
@@ -449,7 +457,7 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
               ? `Ready for agent (${acceptedComments.length})`
               : `Ready for agent (${selectedIds.size}/${acceptedComments.length} selected)`}>
               {acceptedComments.length === 0 ? (
-                <div style={{ background: '#fafafa', border: '1px dashed #ddd', borderRadius: 10, padding: 16, textAlign: 'center', color: '#888', fontSize: 13 }}>
+                <div style={{ background: 'rgba(255, 255, 255, 0.03)', border: '1px dashed rgba(255, 255, 255, 0.10)', borderRadius: 10, padding: 16, textAlign: 'center', color: '#A8A29A', fontSize: 13 }}>
                   No accepted comments yet. They'll show up here the moment a reviewer accepts one.
                 </div>
               ) : (
@@ -464,8 +472,8 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
                         onClick={() => toggleSelected(comment.id)}
                         style={{
                           display: 'block', textAlign: 'left', width: '100%',
-                          background: isSelected ? '#fff' : '#fafafa',
-                          border: `1px solid ${isSelected ? '#0f172a' : '#eee'}`,
+                          background: isSelected ? 'rgba(232, 133, 61, 0.08)' : 'rgba(255, 255, 255, 0.03)',
+                          border: `1px solid ${isSelected ? 'rgba(232, 133, 61, 0.28)' : 'rgba(255, 255, 255, 0.07)'}`,
                           borderRadius: 10, padding: 12, cursor: 'pointer',
                           fontFamily: 'inherit',
                           opacity: isSelected ? 1 : 0.55,
@@ -475,10 +483,10 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
                         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
                           <div style={{
                             width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-                            border: `1.5px solid ${isSelected ? '#0f172a' : '#d4d4d4'}`,
-                            background: isSelected ? '#0f172a' : 'transparent',
+                            border: `1.5px solid ${isSelected ? '#E8853D' : 'rgba(255, 255, 255, 0.18)'}`,
+                            background: isSelected ? '#E8853D' : 'transparent',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#fff', marginTop: 1,
+                            color: '#080808', marginTop: 1,
                             transition: 'all 0.15s',
                           }}>
                             {isSelected && (
@@ -486,9 +494,9 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
                             )}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: '#111', lineHeight: 1.5, marginBottom: 6 }}>{comment.body}</div>
-                            <div style={{ fontSize: 12, color: '#999', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {author && <span style={{ fontWeight: 600, color: '#666' }}>{author}</span>}
+                            <div style={{ fontSize: 13, color: '#E8E5DF', lineHeight: 1.5, marginBottom: 6 }}>{comment.body}</div>
+                            <div style={{ fontSize: 12, color: '#6B6560', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              {author && <span style={{ fontWeight: 600, color: '#A8A29A' }}>{author}</span>}
                               {author && <span aria-hidden="true">·</span>}
                               <span>{timeAgo(comment.createdAt)}</span>
                               <span aria-hidden="true">·</span>
@@ -508,7 +516,7 @@ export function AgentBridgeModal({ apiBase, projectId, onClose }: AgentBridgeMod
           )}
 
           {shareState && openCount > 0 && (
-            <div style={{ marginTop: 12, fontSize: 12, color: '#aaa' }}>
+            <div style={{ marginTop: 12, fontSize: 12, color: '#6B6560' }}>
               {openCount} more comment{openCount === 1 ? '' : 's'} waiting on review.
             </div>
           )}
@@ -543,9 +551,15 @@ function TargetButton({ target, label, hint, ready, copied, selected, onCopy }: 
   const style: CSSProperties = {
     ...targetButtonBase,
     position: 'relative',
-    background: isCopied ? '#0f172a' : isSelected ? '#fafafa' : hovered && ready ? '#fafafa' : '#fff',
-    color: isCopied ? '#f8fafc' : '#111',
-    border: `1px solid ${isCopied ? '#0f172a' : isSelected ? '#0f172a' : hovered && ready ? '#cbd5e1' : '#e5e5e5'}`,
+    background: isCopied
+      ? 'rgba(232, 133, 61, 0.18)'
+      : isSelected
+        ? 'rgba(232, 133, 61, 0.10)'
+        : hovered && ready
+          ? 'rgba(255, 255, 255, 0.055)'
+          : 'rgba(255, 255, 255, 0.03)',
+    color: '#FFFFFF',
+    border: `1px solid ${isCopied || isSelected ? 'rgba(232, 133, 61, 0.42)' : hovered && ready ? 'rgba(255, 255, 255, 0.14)' : 'rgba(255, 255, 255, 0.08)'}`,
     cursor: ready ? 'pointer' : 'default',
     opacity: ready ? 1 : 0.55,
     transition: 'background 0.15s, border-color 0.15s',
@@ -563,17 +577,17 @@ function TargetButton({ target, label, hint, ready, copied, selected, onCopy }: 
         <div style={{
           position: 'absolute', top: 8, right: 8,
           width: 16, height: 16, borderRadius: '50%',
-          background: '#0f172a', color: '#fff',
+          background: '#E8853D', color: '#080808',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 12, fontWeight: 700,
         }}>
           ✓
         </div>
       )}
-      <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 3 }}>
+      <div style={{ fontSize: 13, fontWeight: 750, marginBottom: 4, color: isCopied ? '#E8853D' : '#FFFFFF' }}>
         {isCopied ? 'Copied ✓' : ready ? `Copy ${label}` : label}
       </div>
-      <div style={{ fontSize: 12, color: isCopied ? '#94a3b8' : '#888' }}>
+      <div style={{ fontSize: 12, color: isCopied ? '#E8A06B' : '#A8A29A', lineHeight: 1.3 }}>
         {ready ? hint : 'Loading…'}
       </div>
     </button>
@@ -583,7 +597,7 @@ function TargetButton({ target, label, hint, ready, copied, selected, onCopy }: 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: '#8F8881', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
         {label}
       </div>
       {children}
@@ -592,11 +606,11 @@ function Section({ label, children }: { label: string; children: React.ReactNode
 }
 
 const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
-  unassigned: { bg: '#f3f4f6', fg: '#6b7280', label: 'Open' },
-  claimed: { bg: '#fef3c7', fg: '#92400e', label: 'Claimed' },
-  in_progress: { bg: '#dbeafe', fg: '#1e40af', label: 'In progress' },
-  blocked: { bg: '#fee2e2', fg: '#b91c1c', label: 'Blocked' },
-  done: { bg: '#dcfce7', fg: '#166534', label: 'Done' },
+  unassigned: { bg: 'rgba(255, 255, 255, 0.06)', fg: '#A8A29A', label: 'Open' },
+  claimed: { bg: 'rgba(232, 133, 61, 0.14)', fg: '#E8853D', label: 'Claimed' },
+  in_progress: { bg: 'rgba(96, 165, 250, 0.14)', fg: '#93C5FD', label: 'In progress' },
+  blocked: { bg: 'rgba(239, 68, 68, 0.14)', fg: '#F87171', label: 'Blocked' },
+  done: { bg: 'rgba(34, 197, 94, 0.14)', fg: '#4ADE80', label: 'Done' },
 }
 
 function StatusPill({ status }: { status: string }) {

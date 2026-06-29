@@ -1,6 +1,6 @@
 {
   "name": "@thedesignproject/crrt",
-  "version": "0.3.14",
+  "version": "0.3.16",
   "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
@@ -23,7 +23,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "dev": "vite --config apps/landing/vite.config.ts",
@@ -62,7 +63,7 @@
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
-    "@types/node": "^25.6.0",
+    "@types/node": "^26.0.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
     "@vercel/node": "^5.7.12",
