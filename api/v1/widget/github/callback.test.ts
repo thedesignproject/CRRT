@@ -85,6 +85,28 @@ describe('api/v1/widget/github/callback', () => {
     expect(String(res.body)).toContain('github_repo_inaccessible')
   })
 
+  it('maps unexpected GitHub failures to a generic popup error', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(getRepoConfig).mockResolvedValue({ githubOwner: 'acme', githubRepo: 'widgets' } as never)
+
+    vi.mocked(exchangeGitHubCode).mockRejectedValueOnce(new Error('surprising'))
+    let res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 's' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(String(res.body)).toContain('github_auth_failed')
+    expect(consoleError).toHaveBeenCalled()
+
+    consoleError.mockClear()
+    vi.mocked(exchangeGitHubCode).mockRejectedValueOnce('surprising')
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 's' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(String(res.body)).toContain('github_auth_failed')
+    expect(consoleError).toHaveBeenCalled()
+
+    consoleError.mockRestore()
+  })
+
   it('exchanges the code, checks repo access, and returns a widget token', async () => {
     vi.mocked(getRepoConfig).mockResolvedValueOnce({ githubOwner: 'acme', githubRepo: 'widgets' } as never)
     const res = mockRes()

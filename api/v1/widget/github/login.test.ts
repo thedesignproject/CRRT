@@ -45,6 +45,10 @@ describe('api/v1/widget/github/login', () => {
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
+    await call({ method: 'GET', query: { projectKey: 'p' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    res = mockRes()
     await call({ method: 'GET', query: { projectKey: 'p', origin: '%' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
   })
