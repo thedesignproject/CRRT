@@ -1,6 +1,6 @@
 {
   "name": "@thedesignproject/crrt",
-  "version": "0.3.15",
+  "version": "0.3.16",
   "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
@@ -23,7 +23,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
     "dev": "vite --config apps/landing/vite.config.ts",
