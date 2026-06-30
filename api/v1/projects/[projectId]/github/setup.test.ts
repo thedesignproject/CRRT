@@ -2,11 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../../_lib/github-app.js', () => ({
-  listInstallationRepositories: vi.fn(),
-  verifyGitHubAppInstallationToken: vi.fn(() => ({
+  createGitHubAppInstallationToken: vi.fn(() => 'installation-token'),
+  verifyGitHubAppInstallState: vi.fn(() => ({
     projectKey: 'p',
     userId: 'u',
-    installationId: '99',
     nonce: 'n',
     iat: 1,
     exp: 2,
@@ -14,9 +13,12 @@ vi.mock('../../../../_lib/github-app.js', () => ({
 }))
 vi.mock('../../../../_lib/store.js', () => ({ getProjectMember: vi.fn() }))
 
-import handler from './repositories.js'
+import handler from './setup.js'
 import { requireUser } from '../../../../_lib/auth.js'
-import { listInstallationRepositories, verifyGitHubAppInstallationToken } from '../../../../_lib/github-app.js'
+import {
+  createGitHubAppInstallationToken,
+  verifyGitHubAppInstallState,
+} from '../../../../_lib/github-app.js'
 import { getProjectMember } from '../../../../_lib/store.js'
 
 function mockRes() {
@@ -35,11 +37,10 @@ const call = (req: unknown, res: unknown) =>
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
-  vi.mocked(listInstallationRepositories).mockReset()
-  vi.mocked(verifyGitHubAppInstallationToken).mockReset().mockReturnValue({
+  vi.mocked(createGitHubAppInstallationToken).mockClear()
+  vi.mocked(verifyGitHubAppInstallState).mockReset().mockReturnValue({
     projectKey: 'p',
     userId: 'u',
-    installationId: '99',
     nonce: 'n',
     iat: 1,
     exp: 2,
@@ -47,8 +48,8 @@ beforeEach(() => {
   vi.mocked(getProjectMember).mockReset()
 })
 
-describe('api/v1/projects/[projectId]/github/repositories', () => {
-  it('validates method, auth, query, and admin role', async () => {
+describe('api/v1/projects/[projectId]/github/setup', () => {
+  it('validates method, auth, query, admin role, and install state', async () => {
     let res = mockRes()
     await call({ method: 'OPTIONS', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(204)
@@ -62,70 +63,75 @@ describe('api/v1/projects/[projectId]/github/repositories', () => {
       return null
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(401)
 
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     res = mockRes()
-    await call({ method: 'GET', query: { installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
-    vi.mocked(getProjectMember).mockResolvedValueOnce(null)
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'member' })
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
-    vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce({
+    vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce({
       projectKey: 'other',
       userId: 'u',
-      installationId: '99',
       nonce: 'n',
       iat: 1,
       exp: 2,
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
-    vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce({
+    vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce({
       projectKey: 'p',
       userId: 'other',
-      installationId: '99',
       nonce: 'n',
       iat: 1,
       exp: 2,
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
-    vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce(null)
+    vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce(null)
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
   })
 
-  it('returns repositories and maps unexpected errors', async () => {
+  it('returns an installation token and maps unexpected errors', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
-    vi.mocked(listInstallationRepositories).mockResolvedValueOnce([{ fullName: 'acme/widgets' }] as never)
     let res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ repositories: [{ fullName: 'acme/widgets' }] })
-    expect(verifyGitHubAppInstallationToken).toHaveBeenCalledWith('token')
-    expect(listInstallationRepositories).toHaveBeenCalledWith('99')
+    expect(verifyGitHubAppInstallState).toHaveBeenCalledWith('state')
+    expect(createGitHubAppInstallationToken).toHaveBeenCalledWith({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+    })
+    expect(res.body).toEqual({ installationToken: 'installation-token' })
 
-    vi.mocked(listInstallationRepositories).mockRejectedValueOnce(new Error('github down'))
+    vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationToken: 'token' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
   })
 })

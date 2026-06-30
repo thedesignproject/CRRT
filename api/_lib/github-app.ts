@@ -10,6 +10,10 @@ export type GitHubAppInstallState = {
   exp: number
 }
 
+export type GitHubAppInstallationToken = GitHubAppInstallState & {
+  installationId: string
+}
+
 export type InstalledGitHubRepo = {
   owner: string
   name: string
@@ -54,11 +58,11 @@ export function createGitHubAppInstallState(
   return `${body}.${signInstallState(body)}`
 }
 
-export function verifyGitHubAppInstallState(
-  state: string,
+function decodeSignedInstallPayload<T extends GitHubAppInstallState>(
+  token: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const [body, signature, extra] = state.split('.')
+  const [body, signature, extra] = token.split('.')
   if (!body || !signature || extra !== undefined) return null
 
   const expected = signInstallState(body)
@@ -68,7 +72,7 @@ export function verifyGitHubAppInstallState(
   if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null
 
   try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as GitHubAppInstallState
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as T
     if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
     if (
       typeof payload.projectKey !== 'string'
@@ -79,6 +83,36 @@ export function verifyGitHubAppInstallState(
   } catch {
     return null
   }
+}
+
+export function verifyGitHubAppInstallState(
+  state: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  return decodeSignedInstallPayload<GitHubAppInstallState>(state, nowSeconds)
+}
+
+export function createGitHubAppInstallationToken(
+  input: Pick<GitHubAppInstallationToken, 'projectKey' | 'userId' | 'installationId'>,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload: GitHubAppInstallationToken = {
+    ...input,
+    nonce: randomBytes(16).toString('base64url'),
+    iat: nowSeconds,
+    exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  return `${body}.${signInstallState(body)}`
+}
+
+export function verifyGitHubAppInstallationToken(
+  token: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload = decodeSignedInstallPayload<GitHubAppInstallationToken>(token, nowSeconds)
+  if (!payload || typeof payload.installationId !== 'string') return null
+  return payload
 }
 
 export function buildGitHubAppInstallUrl(state?: string) {

@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildGitHubAppInstallUrl,
+  createGitHubAppInstallationToken,
   createGitHubAppInstallState,
   createGitHubAppJwt,
   createInstallationAccessToken,
   listInstallationRepositories,
+  verifyGitHubAppInstallationToken,
   verifyGitHubAppInstallState,
 } from './github-app.js'
 
@@ -63,6 +65,28 @@ describe('github app install helpers', () => {
 
     const malformedJson = Buffer.from('{').toString('base64url')
     expect(verifyGitHubAppInstallState(signedInstallStateBody(malformedJson), 1000)).toBeNull()
+  })
+
+  it('signs and verifies installation tokens bound to an installation id', () => {
+    const token = createGitHubAppInstallationToken({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+    }, 1000)
+    expect(verifyGitHubAppInstallationToken(token, 1000)).toMatchObject({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+    })
+    expect(verifyGitHubAppInstallationToken(token, 1601)).toBeNull()
+
+    const missingInstallationId = Buffer.from(JSON.stringify({
+      projectKey: 'p',
+      userId: 'u',
+      nonce: 'n',
+      exp: 1600,
+    })).toString('base64url')
+    expect(verifyGitHubAppInstallationToken(signedInstallStateBody(missingInstallationId), 1000)).toBeNull()
   })
 
   it('creates installation access tokens and maps failures', async () => {

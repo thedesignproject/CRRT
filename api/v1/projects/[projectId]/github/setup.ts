@@ -1,6 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../../_lib/auth.js'
-import { listInstallationRepositories, verifyGitHubAppInstallationToken } from '../../../../_lib/github-app.js'
+import {
+  createGitHubAppInstallationToken,
+  verifyGitHubAppInstallState,
+} from '../../../../_lib/github-app.js'
 import { getProjectMember } from '../../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 
@@ -12,22 +15,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return
 
   const projectKey = getStringQuery(req.query.projectId)
-  const installationToken = getStringQuery(req.query.installationToken)
+  const installationId = getStringQuery(req.query.installationId)
+  const installState = getStringQuery(req.query.installState)
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
-  if (!installationToken) return jsonError(req, res, 400, 'Missing installationToken')
+  if (!installationId) return jsonError(req, res, 400, 'Missing installationId')
+  if (!installState) return jsonError(req, res, 400, 'Missing installState')
 
   try {
     const membership = await getProjectMember(user.userId, projectKey)
     if (membership?.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
 
-    const verifiedToken = verifyGitHubAppInstallationToken(installationToken)
-    if (!verifiedToken || verifiedToken.projectKey !== projectKey || verifiedToken.userId !== user.userId) {
-      return jsonError(req, res, 403, 'Invalid installation token')
+    const verifiedState = verifyGitHubAppInstallState(installState)
+    if (!verifiedState || verifiedState.projectKey !== projectKey || verifiedState.userId !== user.userId) {
+      return jsonError(req, res, 403, 'Invalid install state')
     }
 
-    const repositories = await listInstallationRepositories(verifiedToken.installationId)
+    const installationToken = createGitHubAppInstallationToken({
+      projectKey,
+      userId: user.userId,
+      installationId,
+    })
     setCors(req, res, ['GET', 'OPTIONS'])
-    return res.status(200).json({ repositories })
+    return res.status(200).json({ installationToken })
   } catch (error) {
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')
