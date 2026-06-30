@@ -1,4 +1,14 @@
-import { createSign } from 'node:crypto'
+import { createHmac, createSign, randomBytes, timingSafeEqual } from 'node:crypto'
+
+const INSTALL_STATE_TTL_SECONDS = 600
+
+export type GitHubAppInstallState = {
+  projectKey: string
+  userId: string
+  nonce: string
+  iat: number
+  exp: number
+}
 
 export type InstalledGitHubRepo = {
   owner: string
@@ -22,8 +32,59 @@ function privateKey() {
   return requiredEnv('GITHUB_APP_PRIVATE_KEY').replace(/\\n/g, '\n')
 }
 
-export function buildGitHubAppInstallUrl() {
-  return `https://github.com/apps/${encodeURIComponent(requiredEnv('GITHUB_APP_SLUG'))}/installations/new`
+function stateSecret() {
+  return requiredEnv('WIDGET_AUTH_SECRET')
+}
+
+function signInstallState(body: string) {
+  return createHmac('sha256', stateSecret()).update(body).digest('base64url')
+}
+
+export function createGitHubAppInstallState(
+  input: Pick<GitHubAppInstallState, 'projectKey' | 'userId'>,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload: GitHubAppInstallState = {
+    ...input,
+    nonce: randomBytes(16).toString('base64url'),
+    iat: nowSeconds,
+    exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  return `${body}.${signInstallState(body)}`
+}
+
+export function verifyGitHubAppInstallState(
+  state: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const [body, signature, extra] = state.split('.')
+  if (!body || !signature || extra !== undefined) return null
+
+  const expected = signInstallState(body)
+  const actualBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expected)
+  if (actualBuffer.length !== expectedBuffer.length) return null
+  if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null
+
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as GitHubAppInstallState
+    if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
+    if (
+      typeof payload.projectKey !== 'string'
+      || typeof payload.userId !== 'string'
+      || typeof payload.nonce !== 'string'
+    ) return null
+    return payload
+  } catch {
+    return null
+  }
+}
+
+export function buildGitHubAppInstallUrl(state?: string) {
+  const url = new URL(`https://github.com/apps/${encodeURIComponent(requiredEnv('GITHUB_APP_SLUG'))}/installations/new`)
+  if (state) url.searchParams.set('state', state)
+  return url.toString()
 }
 
 export function createGitHubAppJwt(nowSeconds = Math.floor(Date.now() / 1000)) {

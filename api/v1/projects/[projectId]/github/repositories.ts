@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../../_lib/auth.js'
-import { listInstallationRepositories } from '../../../../_lib/github-app.js'
+import { listInstallationRepositories, verifyGitHubAppInstallState } from '../../../../_lib/github-app.js'
 import { getProjectMember } from '../../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 
@@ -13,12 +13,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const projectKey = getStringQuery(req.query.projectId)
   const installationId = getStringQuery(req.query.installationId)
+  const installState = getStringQuery(req.query.installState)
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
   if (!installationId) return jsonError(req, res, 400, 'Missing installationId')
+  if (!installState) return jsonError(req, res, 400, 'Missing installState')
 
   try {
     const membership = await getProjectMember(user.userId, projectKey)
     if (membership?.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
+
+    const verifiedState = verifyGitHubAppInstallState(installState)
+    if (!verifiedState || verifiedState.projectKey !== projectKey || verifiedState.userId !== user.userId) {
+      return jsonError(req, res, 403, 'Invalid install state')
+    }
 
     const repositories = await listInstallationRepositories(installationId)
     setCors(req, res, ['GET', 'OPTIONS'])

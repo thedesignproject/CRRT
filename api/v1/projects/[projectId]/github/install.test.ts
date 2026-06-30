@@ -1,11 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
-vi.mock('../../../../_lib/github-app.js', () => ({ buildGitHubAppInstallUrl: vi.fn(() => 'https://github.com/apps/crrt/installations/new') }))
+vi.mock('../../../../_lib/github-app.js', () => ({
+  buildGitHubAppInstallUrl: vi.fn((state: string) => `https://github.com/apps/crrt/installations/new?state=${state}`),
+  createGitHubAppInstallState: vi.fn(() => 'install-state'),
+}))
 vi.mock('../../../../_lib/store.js', () => ({ getProjectMember: vi.fn() }))
 
 import handler from './install.js'
 import { requireUser } from '../../../../_lib/auth.js'
+import { buildGitHubAppInstallUrl, createGitHubAppInstallState } from '../../../../_lib/github-app.js'
 import { getProjectMember } from '../../../../_lib/store.js'
 
 function mockRes() {
@@ -24,6 +28,8 @@ const call = (req: unknown, res: unknown) =>
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
+  vi.mocked(buildGitHubAppInstallUrl).mockClear()
+  vi.mocked(createGitHubAppInstallState).mockClear()
   vi.mocked(getProjectMember).mockReset()
 })
 
@@ -62,7 +68,12 @@ describe('api/v1/projects/[projectId]/github/install', () => {
     let res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ installUrl: 'https://github.com/apps/crrt/installations/new' })
+    expect(createGitHubAppInstallState).toHaveBeenCalledWith({ projectKey: 'p', userId: 'u' })
+    expect(buildGitHubAppInstallUrl).toHaveBeenCalledWith('install-state')
+    expect(res.body).toEqual({
+      installUrl: 'https://github.com/apps/crrt/installations/new?state=install-state',
+      installState: 'install-state',
+    })
 
     vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))
     res = mockRes()

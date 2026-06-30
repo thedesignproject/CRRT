@@ -1,11 +1,13 @@
-import { generateKeyPairSync } from 'node:crypto'
+import { createHmac, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   buildGitHubAppInstallUrl,
+  createGitHubAppInstallState,
   createGitHubAppJwt,
   createInstallationAccessToken,
   listInstallationRepositories,
+  verifyGitHubAppInstallState,
 } from './github-app.js'
 
 const env = { ...process.env }
@@ -13,12 +15,18 @@ const originalFetch = globalThis.fetch
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()
 
+function signedInstallStateBody(body: string) {
+  const signature = createHmac('sha256', 'state-secret').update(body).digest('base64url')
+  return `${body}.${signature}`
+}
+
 beforeEach(() => {
   process.env = {
     ...env,
     GITHUB_APP_ID: '123',
     GITHUB_APP_SLUG: 'crrt-test',
     GITHUB_APP_PRIVATE_KEY: pem.replace(/\n/g, '\\n'),
+    WIDGET_AUTH_SECRET: 'state-secret',
   }
 })
 
@@ -30,11 +38,31 @@ afterEach(() => {
 describe('github app install helpers', () => {
   it('builds install URLs and app JWTs from env', () => {
     expect(buildGitHubAppInstallUrl()).toBe('https://github.com/apps/crrt-test/installations/new')
+    expect(buildGitHubAppInstallUrl('install-state')).toBe(
+      'https://github.com/apps/crrt-test/installations/new?state=install-state',
+    )
     const jwt = createGitHubAppJwt(1000)
     expect(jwt.split('.')).toHaveLength(3)
 
     delete process.env.GITHUB_APP_SLUG
     expect(() => buildGitHubAppInstallUrl()).toThrow('missing_github_app_slug')
+  })
+
+  it('signs and verifies expiring install state', () => {
+    const state = createGitHubAppInstallState({ projectKey: 'p', userId: 'u' }, 1000)
+    expect(verifyGitHubAppInstallState(state, 1000)).toMatchObject({ projectKey: 'p', userId: 'u' })
+    expect(verifyGitHubAppInstallState(state, 1601)).toBeNull()
+    const [body, signature] = state.split('.')
+    expect(verifyGitHubAppInstallState(`${state}x`, 1000)).toBeNull()
+    const replacement = signature[signature.length - 1] === 'a' ? 'b' : 'a'
+    expect(verifyGitHubAppInstallState(`${body}.${signature.slice(0, -1)}${replacement}`, 1000)).toBeNull()
+    expect(verifyGitHubAppInstallState('bad', 1000)).toBeNull()
+
+    const missingNonce = Buffer.from(JSON.stringify({ projectKey: 'p', userId: 'u', exp: 1600 })).toString('base64url')
+    expect(verifyGitHubAppInstallState(signedInstallStateBody(missingNonce), 1000)).toBeNull()
+
+    const malformedJson = Buffer.from('{').toString('base64url')
+    expect(verifyGitHubAppInstallState(signedInstallStateBody(malformedJson), 1000)).toBeNull()
   })
 
   it('creates installation access tokens and maps failures', async () => {
