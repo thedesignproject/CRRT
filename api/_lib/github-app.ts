@@ -151,6 +151,27 @@ export async function createInstallationAccessToken(installationId: string) {
   return body.token
 }
 
+export async function assertGitHubUserInstallationAccess(accessToken: string, installationId: string) {
+  let page = 1
+
+  for (;;) {
+    const url = new URL('https://api.github.com/user/installations')
+    url.searchParams.set('per_page', '100')
+    url.searchParams.set('page', String(page))
+    const response = await fetch(url.toString(), {
+      headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
+    })
+    const body = await response.json() as { installations?: Array<Record<string, unknown>> }
+    if (!response.ok || !Array.isArray(body.installations)) {
+      throw new Error('github_user_installations_failed')
+    }
+
+    if (body.installations.some((installation) => String(installation.id) === installationId)) return
+    if (body.installations.length < 100) throw new Error('github_installation_inaccessible')
+    page += 1
+  }
+}
+
 export async function listInstallationRepositories(installationId: string): Promise<InstalledGitHubRepo[]> {
   const token = await createInstallationAccessToken(installationId)
   const repos: InstalledGitHubRepo[] = []

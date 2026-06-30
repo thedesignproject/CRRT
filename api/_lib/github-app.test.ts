@@ -2,6 +2,7 @@ import { createHmac, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  assertGitHubUserInstallationAccess,
   buildGitHubAppInstallUrl,
   createGitHubAppInstallationToken,
   createGitHubAppInstallState,
@@ -98,6 +99,29 @@ describe('github app install helpers', () => {
 
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
     await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
+  })
+
+  it('checks user access to installations across pages', async () => {
+    globalThis.fetch = vi.fn(async (url: string) => {
+      const page = new URL(url).searchParams.get('page')
+      const installations = page === '1'
+        ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
+        : [{ id: 101 }]
+      return new Response(JSON.stringify({ installations }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '101')).resolves.toBeUndefined()
+
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ installations: [{ id: 1 }] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_installation_inaccessible')
+
+    globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
   })
 
   it('lists installation repositories across pages', async () => {

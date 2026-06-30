@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-const DEFAULT_HEADERS = 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token'
+const DEFAULT_HEADERS = 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token, X-GitHub-User-Token'
 
 function safeSetHeader(res: VercelResponse, key: string, value: string) {
   if (typeof res.setHeader === 'function') {

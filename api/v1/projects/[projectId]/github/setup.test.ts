@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../../_lib/github-app.js', () => ({
+  assertGitHubUserInstallationAccess: vi.fn(),
   createGitHubAppInstallationToken: vi.fn(() => 'installation-token'),
   verifyGitHubAppInstallState: vi.fn(() => ({
     projectKey: 'p',
@@ -16,6 +17,7 @@ vi.mock('../../../../_lib/store.js', () => ({ getProjectMember: vi.fn() }))
 import handler from './setup.js'
 import { requireUser } from '../../../../_lib/auth.js'
 import {
+  assertGitHubUserInstallationAccess,
   createGitHubAppInstallationToken,
   verifyGitHubAppInstallState,
 } from '../../../../_lib/github-app.js'
@@ -37,6 +39,7 @@ const call = (req: unknown, res: unknown) =>
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
+  vi.mocked(assertGitHubUserInstallationAccess).mockReset()
   vi.mocked(createGitHubAppInstallationToken).mockClear()
   vi.mocked(verifyGitHubAppInstallState).mockReset().mockReturnValue({
     projectKey: 'p',
@@ -63,25 +66,29 @@ describe('api/v1/projects/[projectId]/github/setup', () => {
       return null
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(401)
 
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     res = mockRes()
-    await call({ method: 'GET', query: { installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { installation_id: '99', state: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', state: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'member' })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
@@ -93,7 +100,7 @@ describe('api/v1/projects/[projectId]/github/setup', () => {
       exp: 2,
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
@@ -105,23 +112,25 @@ describe('api/v1/projects/[projectId]/github/setup', () => {
       exp: 2,
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce(null)
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(403)
   })
 
-  it('returns an installation token and maps unexpected errors', async () => {
+  it('returns an installation token from GitHub callback params and rejects client-shaped params', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+
     let res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(200)
     expect(verifyGitHubAppInstallState).toHaveBeenCalledWith('state')
+    expect(assertGitHubUserInstallationAccess).toHaveBeenCalledWith('ghu_1', '99')
     expect(createGitHubAppInstallationToken).toHaveBeenCalledWith({
       projectKey: 'p',
       userId: 'u',
@@ -129,9 +138,18 @@ describe('api/v1/projects/[projectId]/github/setup', () => {
     })
     expect(res.body).toEqual({ installationToken: 'installation-token' })
 
-    vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))
     res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    vi.mocked(assertGitHubUserInstallationAccess).mockRejectedValueOnce(new Error('github_installation_inaccessible'))
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: 'other', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
+    expect(res.statusCode).toBe(403)
+
+    vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: { 'x-github-user-token': 'ghu_1' } }, res)
     expect(res.statusCode).toBe(500)
   })
 })
