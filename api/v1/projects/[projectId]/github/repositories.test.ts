@@ -4,6 +4,7 @@ vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../../_lib/github-app.js', () => ({
   listInstallationRepositories: vi.fn(),
   verifyGitHubAppInstallationToken: vi.fn(() => ({
+    type: 'github_app_installation_token',
     projectKey: 'p',
     userId: 'u',
     installationId: '99',
@@ -37,6 +38,7 @@ beforeEach(() => {
   vi.mocked(requireUser).mockReset()
   vi.mocked(listInstallationRepositories).mockReset()
   vi.mocked(verifyGitHubAppInstallationToken).mockReset().mockReturnValue({
+    type: 'github_app_installation_token',
     projectKey: 'p',
     userId: 'u',
     installationId: '99',
@@ -81,6 +83,7 @@ describe('api/v1/projects/[projectId]/github/repositories', () => {
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce({
+      type: 'github_app_installation_token',
       projectKey: 'other',
       userId: 'u',
       installationId: '99',
@@ -94,6 +97,7 @@ describe('api/v1/projects/[projectId]/github/repositories', () => {
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce({
+      type: 'github_app_installation_token',
       projectKey: 'p',
       userId: 'other',
       installationId: '99',

@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../../_lib/github-app.js', () => ({
+vi.mock('../../_lib/github-app.js', () => ({
   createGitHubAppSetupAuthState: vi.fn(() => 'setup-auth-state'),
   verifyGitHubAppInstallState: vi.fn(() => ({
+    type: 'github_app_install_state',
     projectKey: 'p',
     userId: 'u',
     origin: 'https://app.example',
@@ -11,7 +12,7 @@ vi.mock('../../../../_lib/github-app.js', () => ({
     exp: 2,
   })),
 }))
-vi.mock('../../../../_lib/widget-github-auth.js', () => ({
+vi.mock('../../_lib/widget-github-auth.js', () => ({
   buildGitHubAuthorizeUrl: vi.fn(() => 'https://github.com/login/oauth/authorize?state=setup-auth-state'),
 }))
 
@@ -19,8 +20,8 @@ import handler from './setup.js'
 import {
   createGitHubAppSetupAuthState,
   verifyGitHubAppInstallState,
-} from '../../../../_lib/github-app.js'
-import { buildGitHubAuthorizeUrl } from '../../../../_lib/widget-github-auth.js'
+} from '../../_lib/github-app.js'
+import { buildGitHubAuthorizeUrl } from '../../_lib/widget-github-auth.js'
 
 function mockRes() {
   return {
@@ -39,6 +40,7 @@ const call = (req: unknown, res: unknown) =>
 beforeEach(() => {
   vi.mocked(createGitHubAppSetupAuthState).mockClear()
   vi.mocked(verifyGitHubAppInstallState).mockReset().mockReturnValue({
+    type: 'github_app_install_state',
     projectKey: 'p',
     userId: 'u',
     origin: 'https://app.example',
@@ -49,7 +51,7 @@ beforeEach(() => {
   vi.mocked(buildGitHubAuthorizeUrl).mockClear()
 })
 
-describe('api/v1/projects/[projectId]/github/setup', () => {
+describe('api/v1/github/setup', () => {
   it('validates method, query, and install state', async () => {
     let res = mockRes()
     await call({ method: 'OPTIONS', query: {}, headers: {} }, res)
@@ -60,38 +62,26 @@ describe('api/v1/projects/[projectId]/github/setup', () => {
     expect(res.statusCode).toBe(405)
 
     res = mockRes()
-    await call({ method: 'GET', query: { installation_id: '99', state: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { state: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', state: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { installation_id: '99' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
-
-    res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99' }, headers: {} }, res)
-    expect(res.statusCode).toBe(400)
-
-    vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce({
-      projectKey: 'other',
-      userId: 'u',
-      origin: 'https://app.example',
-      nonce: 'n',
-      iat: 1,
-      exp: 2,
-    })
-    res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: {} }, res)
-    expect(res.statusCode).toBe(403)
 
     vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce(null)
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { installation_id: '99', state: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
   })
 
-  it('redirects to GitHub OAuth verification from GitHub callback params and rejects client-shaped params', async () => {
+  it('redirects to GitHub OAuth verification using only the signed install state project', async () => {
     let res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: {} }, res)
+    await call({
+      method: 'GET',
+      query: { projectId: 'attacker-project', installation_id: '99', state: 'state' },
+      headers: {},
+    }, res)
     expect(res.statusCode).toBe(302)
     expect(verifyGitHubAppInstallState).toHaveBeenCalledWith('state')
     expect(createGitHubAppSetupAuthState).toHaveBeenCalledWith({
@@ -104,14 +94,14 @@ describe('api/v1/projects/[projectId]/github/setup', () => {
     expect(res.headers.Location).toBe('https://github.com/login/oauth/authorize?state=setup-auth-state')
 
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installationId: '99', installState: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { installationId: '99', installState: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     vi.mocked(createGitHubAppSetupAuthState).mockImplementationOnce(() => {
       throw new Error('secret missing')
     })
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', installation_id: '99', state: 'state' }, headers: {} }, res)
+    await call({ method: 'GET', query: { installation_id: '99', state: 'state' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
   })
 })

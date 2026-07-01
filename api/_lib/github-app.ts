@@ -1,8 +1,12 @@
 import { createHmac, createSign, randomBytes, timingSafeEqual } from 'node:crypto'
 
 const INSTALL_STATE_TTL_SECONDS = 600
+const INSTALL_STATE_TYPE = 'github_app_install_state'
+const INSTALLATION_TOKEN_TYPE = 'github_app_installation_token'
+const SETUP_AUTH_STATE_TYPE = 'github_app_setup_auth_state'
 
 type GitHubAppSignedPayload = {
+  type: string
   projectKey: string
   userId: string
   nonce: string
@@ -59,6 +63,7 @@ export function createGitHubAppInstallState(
 ) {
   const payload: GitHubAppInstallState = {
     ...input,
+    type: INSTALL_STATE_TYPE,
     nonce: randomBytes(16).toString('base64url'),
     iat: nowSeconds,
     exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
@@ -69,6 +74,7 @@ export function createGitHubAppInstallState(
 
 function decodeSignedInstallPayload<T extends GitHubAppSignedPayload>(
   token: string,
+  expectedType: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const [body, signature, extra] = token.split('.')
@@ -84,7 +90,8 @@ function decodeSignedInstallPayload<T extends GitHubAppSignedPayload>(
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as T
     if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
     if (
-      typeof payload.projectKey !== 'string'
+      payload.type !== expectedType
+      || typeof payload.projectKey !== 'string'
       || typeof payload.userId !== 'string'
       || typeof payload.nonce !== 'string'
     ) return null
@@ -98,7 +105,7 @@ export function verifyGitHubAppInstallState(
   state: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const payload = decodeSignedInstallPayload<GitHubAppInstallState>(state, nowSeconds)
+  const payload = decodeSignedInstallPayload<GitHubAppInstallState>(state, INSTALL_STATE_TYPE, nowSeconds)
   if (!payload || typeof payload.origin !== 'string') return null
   return payload
 }
@@ -109,6 +116,7 @@ export function createGitHubAppInstallationToken(
 ) {
   const payload: GitHubAppInstallationToken = {
     ...input,
+    type: INSTALLATION_TOKEN_TYPE,
     nonce: randomBytes(16).toString('base64url'),
     iat: nowSeconds,
     exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
@@ -123,6 +131,7 @@ export function createGitHubAppSetupAuthState(
 ) {
   const payload: GitHubAppSetupAuthState = {
     ...input,
+    type: SETUP_AUTH_STATE_TYPE,
     nonce: randomBytes(16).toString('base64url'),
     iat: nowSeconds,
     exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
@@ -135,7 +144,7 @@ export function verifyGitHubAppInstallationToken(
   token: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const payload = decodeSignedInstallPayload<GitHubAppInstallationToken>(token, nowSeconds)
+  const payload = decodeSignedInstallPayload<GitHubAppInstallationToken>(token, INSTALLATION_TOKEN_TYPE, nowSeconds)
   if (!payload || typeof payload.installationId !== 'string') return null
   return payload
 }
@@ -144,7 +153,7 @@ export function verifyGitHubAppSetupAuthState(
   state: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const payload = decodeSignedInstallPayload<GitHubAppSetupAuthState>(state, nowSeconds)
+  const payload = decodeSignedInstallPayload<GitHubAppSetupAuthState>(state, SETUP_AUTH_STATE_TYPE, nowSeconds)
   if (!payload || typeof payload.installationId !== 'string' || typeof payload.origin !== 'string') return null
   return payload
 }

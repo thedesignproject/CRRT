@@ -19,6 +19,9 @@ const env = { ...process.env }
 const originalFetch = globalThis.fetch
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 })
 const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()
+const installStateType = 'github_app_install_state'
+const installationTokenType = 'github_app_installation_token'
+const setupAuthStateType = 'github_app_setup_auth_state'
 
 function signedInstallStateBody(body: string) {
   const signature = createHmac('sha256', 'state-secret').update(body).digest('base64url')
@@ -67,10 +70,16 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppInstallState(`${body}.${signature.slice(0, -1)}${replacement}`, 1000)).toBeNull()
     expect(verifyGitHubAppInstallState('bad', 1000)).toBeNull()
 
-    const missingNonce = Buffer.from(JSON.stringify({ projectKey: 'p', userId: 'u', exp: 1600 })).toString('base64url')
+    const missingNonce = Buffer.from(JSON.stringify({
+      type: installStateType,
+      projectKey: 'p',
+      userId: 'u',
+      exp: 1600,
+    })).toString('base64url')
     expect(verifyGitHubAppInstallState(signedInstallStateBody(missingNonce), 1000)).toBeNull()
 
     const missingOrigin = Buffer.from(JSON.stringify({
+      type: installStateType,
       projectKey: 'p',
       userId: 'u',
       nonce: 'n',
@@ -80,6 +89,43 @@ describe('github app install helpers', () => {
 
     const malformedJson = Buffer.from('{').toString('base64url')
     expect(verifyGitHubAppInstallState(signedInstallStateBody(malformedJson), 1000)).toBeNull()
+  })
+
+  it('rejects signed GitHub App payloads with the wrong token purpose', () => {
+    const installState = createGitHubAppInstallState({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+    }, 1000)
+    const installationToken = createGitHubAppInstallationToken({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+    }, 1000)
+    const setupAuthState = createGitHubAppSetupAuthState({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+      installationId: '99',
+    }, 1000)
+
+    expect(verifyGitHubAppInstallationToken(setupAuthState, 1000)).toBeNull()
+    expect(verifyGitHubAppInstallationToken(installState, 1000)).toBeNull()
+    expect(verifyGitHubAppSetupAuthState(installationToken, 1000)).toBeNull()
+    expect(verifyGitHubAppInstallState(installationToken, 1000)).toBeNull()
+
+    const legacyPayload = Buffer.from(JSON.stringify({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+      origin: 'https://app.example',
+      nonce: 'n',
+      exp: 1600,
+    })).toString('base64url')
+    const legacyToken = signedInstallStateBody(legacyPayload)
+    expect(verifyGitHubAppInstallationToken(legacyToken, 1000)).toBeNull()
+    expect(verifyGitHubAppSetupAuthState(legacyToken, 1000)).toBeNull()
+    expect(verifyGitHubAppInstallState(legacyToken, 1000)).toBeNull()
   })
 
   it('signs and verifies installation tokens bound to an installation id', () => {
@@ -96,6 +142,7 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppInstallationToken(token, 1601)).toBeNull()
 
     const missingInstallationId = Buffer.from(JSON.stringify({
+      type: installationTokenType,
       projectKey: 'p',
       userId: 'u',
       nonce: 'n',
@@ -120,6 +167,7 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppSetupAuthState(state, 1601)).toBeNull()
 
     const missingOrigin = Buffer.from(JSON.stringify({
+      type: setupAuthStateType,
       projectKey: 'p',
       userId: 'u',
       installationId: '99',

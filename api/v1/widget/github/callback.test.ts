@@ -147,6 +147,7 @@ describe('api/v1/widget/github/callback', () => {
 
   it('verifies GitHub App installation access before returning an installation token', async () => {
     vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValue({
+      type: 'github_app_setup_auth_state',
       projectKey: 'p',
       userId: 'u',
       origin: 'https://app.example',
