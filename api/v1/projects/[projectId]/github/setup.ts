@@ -1,56 +1,39 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../../_lib/auth.js'
 import {
-  assertGitHubUserInstallationAccess,
-  createGitHubAppInstallationToken,
+  createGitHubAppSetupAuthState,
   verifyGitHubAppInstallState,
 } from '../../../../_lib/github-app.js'
-import { getProjectMember } from '../../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
-
-function getGitHubUserToken(req: VercelRequest) {
-  const token = req.headers['x-github-user-token']
-  return typeof token === 'string' && token.length > 0 ? token : undefined
-}
+import { buildGitHubAuthorizeUrl } from '../../../../_lib/widget-github-auth.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
   if (req.method !== 'GET') return methodNotAllowed(req, res, ['GET', 'OPTIONS'])
 
-  const user = await requireUser(req, res)
-  if (!user) return
-
   const projectKey = getStringQuery(req.query.projectId)
   const installationId = getStringQuery(req.query.installation_id)
   const installState = getStringQuery(req.query.state)
-  const githubUserToken = getGitHubUserToken(req)
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
   if (!installationId) return jsonError(req, res, 400, 'Missing installationId')
   if (!installState) return jsonError(req, res, 400, 'Missing installState')
-  if (!githubUserToken) return jsonError(req, res, 400, 'Missing GitHub user token')
 
   try {
-    const membership = await getProjectMember(user.userId, projectKey)
-    if (membership?.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
-
     const verifiedState = verifyGitHubAppInstallState(installState)
-    if (!verifiedState || verifiedState.projectKey !== projectKey || verifiedState.userId !== user.userId) {
+    if (!verifiedState || verifiedState.projectKey !== projectKey) {
       return jsonError(req, res, 403, 'Invalid install state')
     }
 
-    await assertGitHubUserInstallationAccess(githubUserToken, installationId)
-
-    const installationToken = createGitHubAppInstallationToken({
+    const setupAuthState = createGitHubAppSetupAuthState({
       projectKey,
-      userId: user.userId,
+      userId: verifiedState.userId,
+      origin: verifiedState.origin,
       installationId,
     })
+    const authorizeUrl = buildGitHubAuthorizeUrl(setupAuthState)
     setCors(req, res, ['GET', 'OPTIONS'])
-    return res.status(200).json({ installationToken })
+    res.setHeader('Location', authorizeUrl)
+    return res.status(302).end()
   } catch (error) {
-    if (error instanceof Error && error.message === 'github_installation_inaccessible') {
-      return jsonError(req, res, 403, 'GitHub installation inaccessible')
-    }
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')
   }

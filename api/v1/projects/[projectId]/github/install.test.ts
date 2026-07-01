@@ -66,13 +66,37 @@ describe('api/v1/projects/[projectId]/github/install', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     let res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p' }, headers: { origin: 'https://app.example/path' } }, res)
     expect(res.statusCode).toBe(200)
-    expect(createGitHubAppInstallState).toHaveBeenCalledWith({ projectKey: 'p', userId: 'u' })
+    expect(createGitHubAppInstallState).toHaveBeenCalledWith({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+    })
     expect(buildGitHubAppInstallUrl).toHaveBeenCalledWith('install-state')
     expect(res.body).toEqual({
       installUrl: 'https://github.com/apps/crrt/installations/new?state=install-state',
       installState: 'install-state',
+    })
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p' }, headers: { origin: '%' } }, res)
+    expect(res.statusCode).toBe(200)
+    expect(createGitHubAppInstallState).toHaveBeenLastCalledWith({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'http://localhost:3000',
+    })
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(createGitHubAppInstallState).toHaveBeenLastCalledWith({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'http://localhost:3000',
     })
 
     vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))

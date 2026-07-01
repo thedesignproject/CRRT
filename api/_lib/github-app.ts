@@ -2,7 +2,7 @@ import { createHmac, createSign, randomBytes, timingSafeEqual } from 'node:crypt
 
 const INSTALL_STATE_TTL_SECONDS = 600
 
-export type GitHubAppInstallState = {
+type GitHubAppSignedPayload = {
   projectKey: string
   userId: string
   nonce: string
@@ -10,8 +10,17 @@ export type GitHubAppInstallState = {
   exp: number
 }
 
-export type GitHubAppInstallationToken = GitHubAppInstallState & {
+export type GitHubAppInstallState = GitHubAppSignedPayload & {
+  origin: string
+}
+
+export type GitHubAppInstallationToken = GitHubAppSignedPayload & {
   installationId: string
+}
+
+export type GitHubAppSetupAuthState = GitHubAppSignedPayload & {
+  installationId: string
+  origin: string
 }
 
 export type InstalledGitHubRepo = {
@@ -45,7 +54,7 @@ function signInstallState(body: string) {
 }
 
 export function createGitHubAppInstallState(
-  input: Pick<GitHubAppInstallState, 'projectKey' | 'userId'>,
+  input: Pick<GitHubAppInstallState, 'projectKey' | 'userId' | 'origin'>,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload: GitHubAppInstallState = {
@@ -58,7 +67,7 @@ export function createGitHubAppInstallState(
   return `${body}.${signInstallState(body)}`
 }
 
-function decodeSignedInstallPayload<T extends GitHubAppInstallState>(
+function decodeSignedInstallPayload<T extends GitHubAppSignedPayload>(
   token: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
@@ -89,7 +98,9 @@ export function verifyGitHubAppInstallState(
   state: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  return decodeSignedInstallPayload<GitHubAppInstallState>(state, nowSeconds)
+  const payload = decodeSignedInstallPayload<GitHubAppInstallState>(state, nowSeconds)
+  if (!payload || typeof payload.origin !== 'string') return null
+  return payload
 }
 
 export function createGitHubAppInstallationToken(
@@ -106,12 +117,35 @@ export function createGitHubAppInstallationToken(
   return `${body}.${signInstallState(body)}`
 }
 
+export function createGitHubAppSetupAuthState(
+  input: Pick<GitHubAppSetupAuthState, 'projectKey' | 'userId' | 'origin' | 'installationId'>,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload: GitHubAppSetupAuthState = {
+    ...input,
+    nonce: randomBytes(16).toString('base64url'),
+    iat: nowSeconds,
+    exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  return `${body}.${signInstallState(body)}`
+}
+
 export function verifyGitHubAppInstallationToken(
   token: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload = decodeSignedInstallPayload<GitHubAppInstallationToken>(token, nowSeconds)
   if (!payload || typeof payload.installationId !== 'string') return null
+  return payload
+}
+
+export function verifyGitHubAppSetupAuthState(
+  state: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload = decodeSignedInstallPayload<GitHubAppSetupAuthState>(state, nowSeconds)
+  if (!payload || typeof payload.installationId !== 'string' || typeof payload.origin !== 'string') return null
   return payload
 }
 
