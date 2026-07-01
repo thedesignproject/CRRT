@@ -9,7 +9,7 @@ import {
   createGitHubAppSetupAuthState,
   createGitHubAppJwt,
   createInstallationAccessToken,
-  listInstallationRepositories,
+  listUserInstallationRepositories,
   verifyGitHubAppInstallationToken,
   verifyGitHubAppInstallState,
   verifyGitHubAppSetupAuthState,
@@ -211,14 +211,8 @@ describe('github app install helpers', () => {
     await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
   })
 
-  it('lists installation repositories across pages', async () => {
+  it('lists user-accessible installation repositories across pages', async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
-      if (url.includes('/access_tokens')) {
-        return new Response(JSON.stringify({ token: 'inst-token' }), {
-          status: 201,
-          headers: { 'content-type': 'application/json' },
-        })
-      }
       const page = new URL(url).searchParams.get('page')
       const repositories = page === '1'
         ? Array.from({ length: 100 }, (_, i) => ({
@@ -233,36 +227,28 @@ describe('github app install helpers', () => {
         headers: { 'content-type': 'application/json' },
       })
     }) as never
-    const repos = await listInstallationRepositories('99')
+    const repos = await listUserInstallationRepositories('user-token', '99')
     expect(repos).toHaveLength(101)
     expect(repos[0]).toMatchObject({ owner: 'acme', repoUrl: 'https://github.com/acme/repo-0' })
     expect(repos[100]).toMatchObject({ fullName: 'acme/last', private: false })
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      'https://api.github.com/user/installations/99/repositories?per_page=100&page=1',
+      { headers: { Accept: 'application/vnd.github+json', Authorization: 'Bearer user-token' } },
+    )
   })
 
-  it('rejects malformed repository responses', async () => {
-    globalThis.fetch = vi.fn(async (url: string) => {
-      if (url.includes('/access_tokens')) {
-        return new Response(JSON.stringify({ token: 'inst-token' }), {
-          status: 201,
-          headers: { 'content-type': 'application/json' },
-        })
-      }
+  it('rejects malformed user repository responses', async () => {
+    globalThis.fetch = vi.fn(async () => {
       return new Response(JSON.stringify({ repositories: [{ owner: {}, name: 'x' }] }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     }) as never
-    await expect(listInstallationRepositories('99')).rejects.toThrow('github_installation_repos_failed')
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
 
-    globalThis.fetch = vi.fn(async (url: string) => {
-      if (url.includes('/access_tokens')) {
-        return new Response(JSON.stringify({ token: 'inst-token' }), {
-          status: 201,
-          headers: { 'content-type': 'application/json' },
-        })
-      }
+    globalThis.fetch = vi.fn(async () => {
       return new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } })
     }) as never
-    await expect(listInstallationRepositories('99')).rejects.toThrow('github_installation_repos_failed')
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
   })
 })

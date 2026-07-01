@@ -215,38 +215,42 @@ export async function assertGitHubUserInstallationAccess(accessToken: string, in
   }
 }
 
-export async function listInstallationRepositories(installationId: string): Promise<InstalledGitHubRepo[]> {
-  const token = await createInstallationAccessToken(installationId)
+function parseInstalledRepository(repo: Record<string, unknown>) {
+  const owner = (repo.owner as { login?: unknown } | undefined)?.login
+  const name = repo.name
+  const fullName = repo.full_name
+  if (typeof owner !== 'string' || typeof name !== 'string' || typeof fullName !== 'string') {
+    throw new Error('github_installation_repos_failed')
+  }
+  return {
+    owner,
+    name,
+    fullName,
+    private: repo.private === true,
+    repoUrl: `https://github.com/${fullName}`,
+  }
+}
+
+export async function listUserInstallationRepositories(
+  accessToken: string,
+  installationId: string,
+): Promise<InstalledGitHubRepo[]> {
   const repos: InstalledGitHubRepo[] = []
   let page = 1
 
   for (;;) {
-    const url = new URL('https://api.github.com/installation/repositories')
+    const url = new URL(`https://api.github.com/user/installations/${encodeURIComponent(installationId)}/repositories`)
     url.searchParams.set('per_page', '100')
     url.searchParams.set('page', String(page))
     const response = await fetch(url.toString(), {
-      headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}` },
+      headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
     })
     const body = await response.json() as { repositories?: Array<Record<string, unknown>> }
     if (!response.ok || !Array.isArray(body.repositories)) {
       throw new Error('github_installation_repos_failed')
     }
 
-    repos.push(...body.repositories.map((repo) => {
-      const owner = (repo.owner as { login?: unknown } | undefined)?.login
-      const name = repo.name
-      const fullName = repo.full_name
-      if (typeof owner !== 'string' || typeof name !== 'string' || typeof fullName !== 'string') {
-        throw new Error('github_installation_repos_failed')
-      }
-      return {
-        owner,
-        name,
-        fullName,
-        private: repo.private === true,
-        repoUrl: `https://github.com/${fullName}`,
-      }
-    }))
+    repos.push(...body.repositories.map(parseInstalledRepository))
 
     if (body.repositories.length < 100) return repos
     page += 1

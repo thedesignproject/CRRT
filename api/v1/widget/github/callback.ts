@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   assertGitHubUserInstallationAccess,
   createGitHubAppInstallationToken,
+  listUserInstallationRepositories,
   verifyGitHubAppSetupAuthState,
 } from '../../../_lib/github-app.js'
 import { getRepoConfig } from '../../../_lib/store.js'
@@ -27,6 +28,7 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
   try {
     const accessToken = await exchangeGitHubCode(code)
     await assertGitHubUserInstallationAccess(accessToken, verifiedState.installationId)
+    const repositories = await listUserInstallationRepositories(accessToken, verifiedState.installationId)
     const installationToken = createGitHubAppInstallationToken({
       projectKey: verifiedState.projectKey,
       userId: verifiedState.userId,
@@ -38,6 +40,7 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
       ok: true,
       projectKey: verifiedState.projectKey,
       installationToken,
+      repositories,
     }))
     return true
   } catch (error) {
@@ -45,6 +48,7 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
       'github_code_exchange_failed',
       'github_user_installations_failed',
       'github_installation_inaccessible',
+      'github_installation_repos_failed',
     ].includes(error.message)
     if (!known) console.error(error)
     html(res, widgetCallbackHtml(verifiedState.origin, {
