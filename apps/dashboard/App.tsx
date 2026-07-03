@@ -78,7 +78,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [view, setView] = useState<'feedback' | 'settings' | 'super-admin'>('feedback')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
-  const { comments: serverComments, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
+  const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
+  const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -120,8 +121,26 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   useEffect(() => {
     const next = serverComments.map(mapServerComment)
     setComments(next)
-    setSelectedCommentId((current) => (current && next.some((c) => c.id === current) ? current : ''))
-  }, [serverComments])
+    setSelectedCommentId((current) => {
+      if (
+        pendingCommentSelection &&
+        pendingCommentSelection.projectKey === selectedProject &&
+        commentsProjectId === selectedProject
+      ) {
+        return next.some((c) => c.id === pendingCommentSelection.commentId)
+          ? pendingCommentSelection.commentId
+          : ''
+      }
+      return current && next.some((c) => c.id === current) ? current : ''
+    })
+    if (
+      pendingCommentSelection &&
+      pendingCommentSelection.projectKey === selectedProject &&
+      commentsProjectId === selectedProject
+    ) {
+      setPendingCommentSelection(null)
+    }
+  }, [serverComments, commentsProjectId, pendingCommentSelection, selectedProject])
 
   const projectComments = comments
 
@@ -340,6 +359,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [claimProject])
 
+  const handleOpenCommentActivity = useCallback((payload: { projectKey: string; latestCommentId?: string }) => {
+    setSelectedProject(payload.projectKey)
+    setView('feedback')
+    setStatusFilter('all')
+    if (payload.latestCommentId) {
+      setPendingCommentSelection({ projectKey: payload.projectKey, commentId: payload.latestCommentId })
+    } else {
+      setSelectedCommentId('')
+    }
+  }, [])
+
   // Onboarding gate: show the welcome screen when this account has no
   // projects and hasn't been onboarded before. Once they click the CTA we
   // mark the flag so the welcome doesn't reappear if they cancel out of
@@ -394,6 +424,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         apiBase={API_BASE}
         accessToken={accessToken}
         onProjectsChanged={refreshProjects}
+        onOpenCommentActivity={handleOpenCommentActivity}
         theme={theme}
         toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
         user={user}

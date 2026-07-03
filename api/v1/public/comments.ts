@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
-import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import { parseCommentTarget } from '../../_lib/anchor.js'
@@ -250,6 +250,18 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       targetType: parsedTarget.targetType,
       anchor: parsedTarget.anchor,
     })
+
+    try {
+      await notifyProjectMembersOfCommentActivity({
+        projectKey: resolvedProjectKey,
+        projectName: project.name,
+        commentId: comment.id,
+        authorName: comment.authorName,
+        pageUrl,
+      })
+    } catch (error) {
+      console.warn('Comment activity notification failed', error)
+    }
 
     waitUntil(sendCommentActivityEmailInBackground({
       projectKey: resolvedProjectKey,

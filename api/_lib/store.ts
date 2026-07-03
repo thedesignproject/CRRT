@@ -264,6 +264,17 @@ export async function listProjectMembers(projectKey: string) {
   }))
 }
 
+export async function listProjectMemberIds(projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_key', projectKey)
+
+  if (error) throw new Error(error.message)
+  return ((data || []) as Array<{ user_id: string }>).map((row) => row.user_id)
+}
+
 /**
  * Remove a member from a project. Refuses to remove the last remaining admin
  * (`last_admin`) so a project can never be orphaned. Returns false when the
@@ -1413,7 +1424,7 @@ export async function saveOperationKey(shareId: string, agentId: string, idempot
   if (error) throw new Error(error.message)
 }
 
-export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined'
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity'
 
 type NotificationRow = {
   id: string
@@ -1452,6 +1463,50 @@ export async function createNotification(input: {
     .single()
   if (error) throw new Error(error.message)
   return mapNotification(data as NotificationRow)
+}
+
+export async function createOrIncrementCommentActivityNotification(input: {
+  userId: string
+  projectKey: string
+  projectName: string
+  commentId: string
+  authorName?: string | null
+  pageUrl: string
+}) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .rpc('create_or_increment_comment_activity_notification', {
+      p_user_id: input.userId,
+      p_project_key: input.projectKey,
+      p_project_name: input.projectName,
+      p_comment_id: input.commentId,
+      p_author_name: input.authorName ?? null,
+      p_page_url: input.pageUrl,
+    })
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapNotification(data as NotificationRow)
+}
+
+export async function notifyProjectMembersOfCommentActivity(input: {
+  projectKey: string
+  projectName: string
+  commentId: string
+  authorName?: string | null
+  pageUrl: string
+}) {
+  const memberIds = await listProjectMemberIds(input.projectKey)
+  await Promise.all(memberIds.map((userId) =>
+    createOrIncrementCommentActivityNotification({
+      userId,
+      projectKey: input.projectKey,
+      projectName: input.projectName,
+      commentId: input.commentId,
+      authorName: input.authorName ?? null,
+      pageUrl: input.pageUrl,
+    }),
+  ))
 }
 
 export async function listNotificationsForUser(
