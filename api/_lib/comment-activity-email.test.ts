@@ -113,6 +113,23 @@ describe('comment activity email helpers', () => {
       bcc: ['a@example.com', 'b@example.com'],
       subject: 'New CRRT on Demo',
     })
+
+    vi.mocked(fetch).mockClear()
+    process.env.COMMENT_ACTIVITY_EMAIL_FROM = 'activity@mail.crrt.ai'
+    await expect(sendCommentActivityEmail({
+      recipients: ['a@example.com'],
+      projectName: 'Demo',
+      pageUrl: 'https://example.com',
+      authorName: null,
+      activityCount: 1,
+      dashboardUrl: 'https://crrt.ai/dashboard',
+    })).resolves.toEqual({ skipped: false })
+
+    const [, bareInit] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
+    expect(JSON.parse(String(bareInit.body))).toMatchObject({
+      from: 'activity@mail.crrt.ai',
+      to: 'activity@mail.crrt.ai',
+    })
   })
 
   it('throws when Resend rejects the request', async () => {
