@@ -262,6 +262,7 @@ describe('api/v1/public/comments', () => {
         body: 'Hello',
       },
     }), res)
+    await flushMicrotasks()
 
     expect(res.statusCode).toBe(201)
     expect(createPublicComment).toHaveBeenCalledWith({
@@ -286,6 +287,58 @@ describe('api/v1/public/comments', () => {
     })
     expect(reserveCommentActivityEmail).not.toHaveBeenCalled()
     expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('returns 201 without waiting for hung activity notification writes', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(notifyProjectMembersOfCommentActivity).mockReturnValue(new Promise(() => {}) as never)
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise))
+    expect(notifyProjectMembersOfCommentActivity).toHaveBeenCalledWith({
+      projectKey: 'demo-project',
+      projectName: 'Demo',
+      commentId: 'comment-1',
+      authorName: null,
+      pageUrl: 'https://example.com',
+    })
   })
 
   it('sends an activity email to project members by BCC when cooldown opens', async () => {
@@ -336,6 +389,7 @@ describe('api/v1/public/comments', () => {
         body: 'Hello',
       },
     }), res)
+    await flushMicrotasks()
 
     expect(res.statusCode).toBe(201)
     expect(reserveCommentActivityEmail).toHaveBeenCalledWith('demo-project', 18_000)

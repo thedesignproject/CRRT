@@ -56,6 +56,20 @@ async function sendCommentActivityEmailInBackground(input: {
   }
 }
 
+async function notifyProjectMembersOfCommentActivityInBackground(input: {
+  projectKey: string
+  projectName: string
+  commentId: string
+  authorName: string | null
+  pageUrl: string
+}) {
+  try {
+    await notifyProjectMembersOfCommentActivity(input)
+  } catch (error) {
+    console.warn('Comment activity notification failed', error)
+  }
+}
+
 function normalizePatchStatus(value: unknown): ReviewStatus | null {
   if (value === 'accepted' || value === 'approved') return 'accepted'
   if (value === 'rejected') return 'rejected'
@@ -251,17 +265,13 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       anchor: parsedTarget.anchor,
     })
 
-    try {
-      await notifyProjectMembersOfCommentActivity({
-        projectKey: resolvedProjectKey,
-        projectName: project.name,
-        commentId: comment.id,
-        authorName: comment.authorName,
-        pageUrl,
-      })
-    } catch (error) {
-      console.warn('Comment activity notification failed', error)
-    }
+    waitUntil(notifyProjectMembersOfCommentActivityInBackground({
+      projectKey: resolvedProjectKey,
+      projectName: project.name,
+      commentId: comment.id,
+      authorName: comment.authorName,
+      pageUrl,
+    }))
 
     waitUntil(sendCommentActivityEmailInBackground({
       projectKey: resolvedProjectKey,

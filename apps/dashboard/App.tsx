@@ -129,14 +129,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) {
         return next.some((c) => c.id === pendingCommentSelection.commentId)
           ? pendingCommentSelection.commentId
-          : ''
+          : current && next.some((c) => c.id === current) ? current : ''
       }
       return current && next.some((c) => c.id === current) ? current : ''
     })
     if (
       pendingCommentSelection &&
       pendingCommentSelection.projectKey === selectedProject &&
-      commentsProjectId === selectedProject
+      commentsProjectId === selectedProject &&
+      next.some((c) => c.id === pendingCommentSelection.commentId)
     ) {
       setPendingCommentSelection(null)
     }
@@ -365,10 +366,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setStatusFilter('all')
     if (payload.latestCommentId) {
       setPendingCommentSelection({ projectKey: payload.projectKey, commentId: payload.latestCommentId })
+      void refreshComments()
     } else {
       setSelectedCommentId('')
     }
-  }, [])
+  }, [refreshComments])
 
   // Onboarding gate: show the welcome screen when this account has no
   // projects and hasn't been onboarded before. Once they click the CTA we
