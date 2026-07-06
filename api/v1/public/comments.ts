@@ -27,16 +27,16 @@ async function sendCommentActivityEmailInBackground(input: {
     )
     if (!reservation.shouldSend) return
 
-    const members = await listProjectMembers(input.projectKey)
-    const recipients = members.map((member) => member.email).filter((email): email is string => Boolean(email))
-    if (!canSendCommentActivityEmail(recipients)) {
-      if (cooldownSeconds > 0) {
-        await releaseCommentActivityEmailReservation(input.projectKey, reservation.activityCount)
-      }
-      return
-    }
-
     try {
+      const members = await listProjectMembers(input.projectKey)
+      const recipients = members.map((member) => member.email).filter((email): email is string => Boolean(email))
+      if (!canSendCommentActivityEmail(recipients)) {
+        if (cooldownSeconds > 0) {
+          await releaseCommentActivityEmailReservation(input.projectKey, reservation.activityCount)
+        }
+        return
+      }
+
       await sendCommentActivityEmail({
         recipients,
         projectName: input.projectName,

@@ -598,6 +598,58 @@ describe('api/v1/public/comments', () => {
     expect(sendCommentActivityEmail).not.toHaveBeenCalled()
   })
 
+  it('releases an opened cooldown reservation when member lookup fails', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 3 })
+    vi.mocked(listProjectMembers).mockRejectedValue(new Error('members down'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+    await flushMicrotasks()
+
+    expect(res.statusCode).toBe(201)
+    expect(releaseCommentActivityEmailReservation).toHaveBeenCalledWith('demo-project', 3)
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('Comment activity email failed', expect.any(Error))
+    warn.mockRestore()
+  })
+
   it('does not fail comment creation when activity email delivery fails', async () => {
     vi.mocked(ensurePublicProject).mockResolvedValue({
       publicKey: 'demo-project',
