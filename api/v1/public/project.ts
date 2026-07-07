@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createShare, getProject, getProjectShare } from '../../_lib/store.js'
+import { createShare, getProject, getProjectShare, rotateShareToken } from '../../_lib/store.js'
 import { encryptToken, generateAccessToken, generateSlug, hashToken } from '../../_lib/tokens.js'
 import { decryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
@@ -19,7 +19,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let token: string
 
     if (share) {
-      token = decryptToken(share.accessTokenCiphertext)
+      try {
+        token = decryptToken(share.accessTokenCiphertext)
+      } catch {
+        // Legacy row encrypted under an old SHARE_TOKEN_SECRET. Self-heal:
+        // reissue the token under the current secret instead of failing the
+        // project session forever.
+        token = generateAccessToken()
+        await rotateShareToken(share.id, {
+          accessTokenHash: hashToken(token),
+          accessTokenCiphertext: encryptToken(token),
+        })
+        console.warn('[public/project] rotated undecryptable share token', {
+          shareId: share.id,
+          projectKey,
+        })
+      }
     } else {
       token = generateAccessToken()
       const slug = generateSlug()

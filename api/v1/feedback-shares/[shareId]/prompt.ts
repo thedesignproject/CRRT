@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors, getStringQuery } from '../../../_lib/http.js'
-import { getProject, getRepoConfig, getShareById } from '../../../_lib/store.js'
+import { getProject, getRepoConfig, getShareById, rotateShareToken } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
-import { decryptToken } from '../../../_lib/tokens.js'
+import { decryptToken, encryptToken, generateAccessToken, hashToken } from '../../../_lib/tokens.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
@@ -24,7 +24,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!project) return jsonError(req, res, 404, 'Project not found')
 
     const repoConfig = await getRepoConfig(share.projectId)
-    const token = decryptToken(share.accessTokenCiphertext)
+
+    let token: string
+    try {
+      token = decryptToken(share.accessTokenCiphertext)
+    } catch {
+      // Legacy row encrypted under an old SHARE_TOKEN_SECRET. Self-heal by
+      // reissuing the token under the current secret; if the rotation itself
+      // fails, the share is unrecoverable — tell the client to recreate it.
+      try {
+        token = generateAccessToken()
+        await rotateShareToken(share.id, {
+          accessTokenHash: hashToken(token),
+          accessTokenCiphertext: encryptToken(token),
+        })
+        console.warn('[feedback-shares/prompt] rotated undecryptable share token', {
+          shareId: share.id,
+          projectKey: share.projectId,
+        })
+      } catch (rotationError) {
+        console.error('[feedback-shares/prompt] share token rotation failed', {
+          shareId: share.id,
+          projectKey: share.projectId,
+          error: rotationError,
+        })
+        return jsonError(req, res, 410, 'This share link could not be refreshed — please create a new share.')
+      }
+    }
+
     const base = getAppUrl(req)
     const prompt = buildPrompt(target, {
       appUrl: base,

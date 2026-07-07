@@ -1260,6 +1260,30 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
   return (data || []).map((row) => mapComment(row as CommentRow))
 }
 
+/**
+ * Replace a share's access token credentials in place. Used to self-heal
+ * legacy rows whose ciphertext no longer authenticates under the current
+ * SHARE_TOKEN_SECRET — the row survives, the token is reissued.
+ */
+export async function rotateShareToken(shareId: string, input: {
+  accessTokenHash: string
+  accessTokenCiphertext: string
+}) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('feedback_shares')
+    .update({
+      access_token_hash: input.accessTokenHash,
+      access_token_ciphertext: input.accessTokenCiphertext,
+    } as never)
+    .eq('id', shareId)
+    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapShare(data as ShareRow)
+}
+
 export async function getProjectShare(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
