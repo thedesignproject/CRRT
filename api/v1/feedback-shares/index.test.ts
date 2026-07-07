@@ -183,4 +183,20 @@ describe('api/v1/feedback-shares', () => {
     expect(errorSpy).toHaveBeenCalledWith('[feedback-shares] share creation failed', expect.objectContaining({ projectKey: 'demo-project' }))
     errorSpy.mockRestore()
   })
+
+  it('logs projectKey as undefined when the failing request has a non-string projectId', async () => {
+    vi.mocked(listAcceptedCommentsForPage).mockResolvedValueOnce([{ id: 'c1' }] as never)
+    vi.mocked(createShare).mockRejectedValueOnce(new Error('boom'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call(mockReq({
+      body: { projectId: 123, scopeType: 'page', pageUrl: 'https://example.com/pricing' },
+    }), res)
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'Share could not be created — please retry.' })
+    expect(errorSpy).toHaveBeenCalledWith('[feedback-shares] share creation failed', expect.objectContaining({ projectKey: undefined }))
+    errorSpy.mockRestore()
+  })
 })
