@@ -126,10 +126,15 @@ describe('api/v1/public/project', () => {
     }))
   })
 
-  it('returns 500 when the store throws', async () => {
-    vi.mocked(getProject).mockRejectedValueOnce(new Error('boom'))
+  it('returns a friendly 500 without leaking the internal error', async () => {
+    vi.mocked(getProject).mockRejectedValueOnce(new Error('Unsupported state or unable to authenticate data'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
     const res = mockRes()
     await call({ method: 'GET', query: { projectKey: 'proj' }, headers: {} }, res)
+
     expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'Session could not be started — please retry.' })
+    expect(errorSpy).toHaveBeenCalledWith('[public/project] session start failed', expect.objectContaining({ projectKey: 'proj' }))
   })
 })

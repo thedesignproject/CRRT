@@ -66,6 +66,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch (error) {
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
+    console.error('[public/project] session start failed', {
+      projectKey: getStringQuery(req.query.projectKey),
+      error,
+    })
+    return jsonError(req, res, 500, 'Session could not be started — please retry.')
   }
 }

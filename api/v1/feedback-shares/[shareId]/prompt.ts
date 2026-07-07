@@ -71,6 +71,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokenUrl: `${base}/api/v1/agent/shares/${share.slug}/state?token=${encodeURIComponent(token)}`,
     })
   } catch (error) {
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
+    console.error('[feedback-shares/prompt] prompt generation failed', {
+      shareId: getStringQuery(req.query.shareId),
+      error,
+    })
+    return jsonError(req, res, 500, 'Prompt could not be generated — please retry.')
   }
 }

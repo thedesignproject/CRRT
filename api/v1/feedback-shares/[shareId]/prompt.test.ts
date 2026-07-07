@@ -102,9 +102,13 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     expect(res.body).toMatchObject({ prompt: 'PROMPT_TEXT' })
 
     vi.mocked(getShareById).mockRejectedValueOnce(new Error('boom'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     res = mockRes()
     await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'Prompt could not be generated — please retry.' })
+    expect(errorSpy).toHaveBeenCalledWith('[feedback-shares/prompt] prompt generation failed', expect.objectContaining({ shareId: 's' }))
+    errorSpy.mockRestore()
   })
 
   it('self-heals a legacy share on decrypt failure: rotates and builds the prompt with the fresh token', async () => {
