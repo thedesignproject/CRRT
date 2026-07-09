@@ -8,6 +8,7 @@ coverage/
 .vercel
 *.tgz
 pr/
+AUDIT.md
 
 # Claude Code skill artifacts (local-only, per-developer)
 .superpowers/
