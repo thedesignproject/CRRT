@@ -5,6 +5,7 @@ import {
   check,
   doublePrecision,
   index,
+  integer,
   jsonb,
   pgView,
   pgTable,
@@ -96,6 +97,16 @@ export const projectRepoConfigs = pgTable('project_repo_configs', {
   testCommand: text('test_command'),
   buildCommand: text('build_command'),
   agentInstructions: text('agent_instructions'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const projectCommentEmailCooldowns = pgTable('project_comment_email_cooldowns', {
+  projectKey: text('project_key')
+    .primaryKey()
+    .references(() => projects.publicKey, { onDelete: 'cascade' }),
+  pendingCount: integer('pending_count').notNull().default(0),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })

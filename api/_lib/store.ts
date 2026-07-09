@@ -940,6 +940,44 @@ export async function createPublicComment(input: {
   return mapComment(data as CommentRow)
 }
 
+export async function reserveCommentActivityEmail(projectKey: string, cooldownSeconds: number) {
+  const supabase = getSupabase()
+  const safeCooldownSeconds = Number.isFinite(cooldownSeconds)
+    ? Math.max(0, Math.floor(cooldownSeconds))
+    : 0
+  if (safeCooldownSeconds <= 0) {
+    return { shouldSend: true, activityCount: 1 }
+  }
+
+  const { data, error } = await supabase
+    .rpc('reserve_comment_activity_email', {
+      p_project_key: projectKey,
+      p_cooldown_seconds: safeCooldownSeconds,
+    })
+    .single()
+
+  if (error) throw new Error(error.message)
+  const row = data as { should_send: boolean; activity_count: number } | null
+  if (!row) throw new Error('reserve_comment_activity_email returned no row')
+  return {
+    shouldSend: row.should_send,
+    activityCount: Number(row.activity_count),
+  }
+}
+
+export async function releaseCommentActivityEmailReservation(projectKey: string, activityCount: number) {
+  const safeActivityCount = Number.isFinite(activityCount)
+    ? Math.max(1, Math.floor(activityCount))
+    : 1
+  const { error } = await getSupabase()
+    .rpc('release_comment_activity_email_reservation', {
+      p_project_key: projectKey,
+      p_activity_count: safeActivityCount,
+    })
+
+  if (error) throw new Error(error.message)
+}
+
 export async function listComments(projectKey: string, filters: {
   pageUrl?: string
   reviewStatus?: ReviewStatus
