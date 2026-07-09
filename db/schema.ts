@@ -241,9 +241,12 @@ export const notifications = pgTable(
   },
   (t) => ({
     userCreatedIdx: index('notifications_user_created_idx').on(t.userId, t.createdAt.desc()),
+    unreadCommentActivityProjectIdx: uniqueIndex('notifications_unread_comment_activity_project_idx')
+      .on(t.userId, sql`((payload->>'projectKey'))`)
+      .where(sql`${t.kind} = 'comment.activity' and ${t.readAt} is null`),
     kindCheck: check(
       'notifications_kind_check',
-      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined')`,
+      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined', 'comment.activity') and (${t.kind} <> 'comment.activity' or nullif(btrim(${t.payload}->>'projectKey'), '') is not null)`,
     ),
   }),
 )
