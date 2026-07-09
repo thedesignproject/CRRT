@@ -1,3 +1,12 @@
+## Read order for agents
+
+These instructions apply to any coding agent working in this repo, including Claude Code, Codex, and Cursor.
+
+- Any change -> read `rules/engineering.md`.
+- UI or design changes -> read `rules/ux.md` and `branding/CRRT-DESIGN-SYSTEM.md`.
+- Data, schema, or API changes -> read `rules/security.md` and `db/DRIZZLE-GUIDE.md`.
+- Product or copy decisions -> read `rules/business.md`.
+
 # Repo notes for AI agents
 
 ## Database changes
