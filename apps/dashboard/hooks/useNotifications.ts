@@ -33,6 +33,21 @@ type NotificationRow = {
   created_at: string
 }
 
+function mapNotificationRow(row: NotificationRow): Notification {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    kind: row.kind,
+    payload: row.payload ?? {},
+    readAt: row.read_at,
+    createdAt: row.created_at,
+  }
+}
+
+function sortNotifications(items: Notification[]) {
+  return [...items].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+}
+
 /**
  * Loads the current user's notifications + pending invites, and live-appends
  * new notifications via a Supabase realtime subscription scoped to this user.
@@ -83,18 +98,20 @@ export function useNotifications(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
-          const row = payload.new as NotificationRow
-          const next: Notification = {
-            id: row.id,
-            userId: row.user_id,
-            kind: row.kind,
-            payload: row.payload ?? {},
-            readAt: row.read_at,
-            createdAt: row.created_at,
-          }
-          setNotifications((prev) => (prev.some((p) => p.id === next.id) ? prev : [next, ...prev]))
+          const next = mapNotificationRow(payload.new as NotificationRow)
+          setNotifications((prev) => (
+            prev.some((p) => p.id === next.id) ? prev : sortNotifications([next, ...prev])
+          ))
           // An incoming invite notification may mean a new pending invite.
           if (next.kind === 'invite.received') refresh()
+        },
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const next = mapNotificationRow(payload.new as NotificationRow)
+          setNotifications((prev) => sortNotifications([next, ...prev.filter((p) => p.id !== next.id)]))
         },
       )
       .subscribe()

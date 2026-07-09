@@ -5,6 +5,7 @@ vi.mock('../../_lib/store.js', () => ({
   createPublicComment: vi.fn(),
   listComments: vi.fn(),
   listProjectMembers: vi.fn(),
+  notifyProjectMembersOfCommentActivity: vi.fn(),
   releaseCommentActivityEmailReservation: vi.fn(),
   reserveCommentActivityEmail: vi.fn(),
   updateReviewStatus: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
 import { waitUntil } from '@vercel/functions'
 import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from '../../_lib/comment-activity-email.js'
-import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
@@ -75,6 +76,7 @@ beforeEach(() => {
   vi.mocked(createPublicComment).mockReset()
   vi.mocked(listComments).mockReset()
   vi.mocked(listProjectMembers).mockReset()
+  vi.mocked(notifyProjectMembersOfCommentActivity).mockReset()
   vi.mocked(releaseCommentActivityEmailReservation).mockReset()
   vi.mocked(reserveCommentActivityEmail).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
@@ -92,6 +94,7 @@ beforeEach(() => {
   vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(false)
   vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: false, activityCount: 0 })
   vi.mocked(listProjectMembers).mockResolvedValue([])
+  vi.mocked(notifyProjectMembersOfCommentActivity).mockResolvedValue(undefined)
   vi.mocked(releaseCommentActivityEmailReservation).mockResolvedValue(undefined)
   vi.mocked(sendCommentActivityEmail).mockResolvedValue({ skipped: true })
   delete process.env.SMOKE_CLEANUP_TOKEN
@@ -259,6 +262,7 @@ describe('api/v1/public/comments', () => {
         body: 'Hello',
       },
     }), res)
+    await flushMicrotasks()
 
     expect(res.statusCode).toBe(201)
     expect(createPublicComment).toHaveBeenCalledWith({
@@ -274,7 +278,67 @@ describe('api/v1/public/comments', () => {
       anchor: null,
     })
     expect(reserveCommentActivityEmail).not.toHaveBeenCalled()
+    expect(notifyProjectMembersOfCommentActivity).toHaveBeenCalledWith({
+      projectKey: 'demo-project',
+      projectName: 'Demo',
+      commentId: 'comment-1',
+      authorName: null,
+      pageUrl: 'https://example.com',
+    })
+    expect(reserveCommentActivityEmail).not.toHaveBeenCalled()
     expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('returns 201 without waiting for hung activity notification writes', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(notifyProjectMembersOfCommentActivity).mockReturnValue(new Promise(() => {}) as never)
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise))
+    expect(notifyProjectMembersOfCommentActivity).toHaveBeenCalledWith({
+      projectKey: 'demo-project',
+      projectName: 'Demo',
+      commentId: 'comment-1',
+      authorName: null,
+      pageUrl: 'https://example.com',
+    })
   })
 
   it('sends an activity email to project members by BCC when cooldown opens', async () => {
@@ -325,6 +389,7 @@ describe('api/v1/public/comments', () => {
         body: 'Hello',
       },
     }), res)
+    await flushMicrotasks()
 
     expect(res.statusCode).toBe(201)
     expect(reserveCommentActivityEmail).toHaveBeenCalledWith('demo-project', 18_000)
@@ -805,6 +870,53 @@ describe('api/v1/public/comments', () => {
     expect(longNameRes.body).toEqual({ error: 'authorName must be 80 characters or fewer' })
 
     expect(createPublicComment).not.toHaveBeenCalled()
+  })
+
+  it('does not fail comment creation when activity notification update fails', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(notifyProjectMembersOfCommentActivity).mockRejectedValue(new Error('notif down'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(warn).toHaveBeenCalledWith('Comment activity notification failed', expect.any(Error))
+    warn.mockRestore()
   })
 
   it('normalizes blank author names to null', async () => {

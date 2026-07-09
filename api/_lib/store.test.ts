@@ -7,6 +7,7 @@ import {
   acceptInvite,
   claimProject,
   createInvite,
+  createOrIncrementCommentActivityNotification,
   createNotification,
   createPublicComment,
   declineInvite,
@@ -19,6 +20,7 @@ import {
   listAcceptedCommentsForProject,
   listComments,
   listCommentsForShare,
+  listProjectMemberIds,
   updateImplementationStatus,
   updateReviewStatus,
   isProjectKeyAvailable,
@@ -29,6 +31,7 @@ import {
   listProjectsForUser,
   markAllNotificationsRead,
   markNotificationRead,
+  notifyProjectMembersOfCommentActivity,
   releaseCommentActivityEmailReservation,
   reserveCommentActivityEmail,
   slugifyProjectKey,
@@ -548,6 +551,134 @@ function notifSupabase(m: NotifMocks = {}) {
 }
 
 describe('notifications helpers', () => {
+  it('createOrIncrementCommentActivityNotification delegates to the atomic RPC', async () => {
+    const single = vi.fn().mockResolvedValue({
+      data: {
+        id: 'n',
+        user_id: 'u',
+        kind: 'comment.activity',
+        payload: { projectKey: 'p', count: 2 },
+        read_at: null,
+        created_at: 't',
+      },
+      error: null,
+    })
+    const rpc = vi.fn(() => ({ single }))
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+
+    const notification = await createOrIncrementCommentActivityNotification({
+      userId: 'u',
+      projectKey: 'p',
+      projectName: 'Project',
+      commentId: 'c',
+      authorName: null,
+      pageUrl: 'https://example.com',
+    })
+
+    expect(notification.kind).toBe('comment.activity')
+    expect(rpc).toHaveBeenCalledWith('create_or_increment_comment_activity_notification', {
+      p_user_id: 'u',
+      p_project_key: 'p',
+      p_project_name: 'Project',
+      p_comment_id: 'c',
+      p_author_name: null,
+      p_page_url: 'https://example.com',
+    })
+
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      rpc: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } }) })),
+    } as never)
+    await expect(createOrIncrementCommentActivityNotification({
+      userId: 'u',
+      projectKey: 'p',
+      projectName: 'Project',
+      commentId: 'c',
+      pageUrl: 'https://example.com',
+    })).rejects.toThrow('boom')
+  })
+
+  it('notifyProjectMembersOfCommentActivity increments every project member notification', async () => {
+    const rpcSingle = vi.fn().mockResolvedValue({
+      data: {
+        id: 'n',
+        user_id: 'u1',
+        kind: 'comment.activity',
+        payload: { projectKey: 'p', count: 1 },
+        read_at: null,
+        created_at: 't',
+      },
+      error: null,
+    })
+    const rpc = vi.fn(() => ({ single: rpcSingle }))
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      rpc,
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => Promise.resolve({
+            data: [
+              { user_id: 'u1' },
+              { user_id: 'u2' },
+            ],
+            error: null,
+          })),
+        })),
+      })),
+    } as never)
+
+    await notifyProjectMembersOfCommentActivity({
+      projectKey: 'p',
+      projectName: 'Project',
+      commentId: 'c',
+      pageUrl: 'https://example.com',
+    })
+
+    expect(rpc).toHaveBeenCalledTimes(2)
+    expect(rpc).toHaveBeenCalledWith('create_or_increment_comment_activity_notification', expect.objectContaining({
+      p_author_name: null,
+    }))
+  })
+
+  it('listProjectMemberIds returns member ids without resolving auth emails', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => Promise.resolve({
+            data: [{ user_id: 'u1' }, { user_id: 'u2' }],
+            error: null,
+          })),
+        })),
+      })),
+    } as never)
+
+    await expect(listProjectMemberIds('p')).resolves.toEqual(['u1', 'u2'])
+    expect(fetchMock).not.toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
+
+  it('listProjectMemberIds handles empty results and errors', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => Promise.resolve({ data: null, error: null })),
+        })),
+      })),
+    } as never)
+
+    await expect(listProjectMemberIds('p')).resolves.toEqual([])
+
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => Promise.resolve({ data: null, error: { message: 'members boom' } })),
+        })),
+      })),
+    } as never)
+
+    await expect(listProjectMemberIds('p')).rejects.toThrow('members boom')
+  })
+
   it('createNotification: success / error', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
       notifSingle: { data: { id: 'n', user_id: 'u', kind: 'invite.received', payload: { x: 1 }, read_at: null, created_at: 't' }, error: null },
@@ -908,6 +1039,19 @@ describe('comment functions', () => {
     expect((inserts[0] as Record<string, unknown>).anchor).toBeNull()
     expect(created.targetType).toBe('element_point')
     expect(created.anchor).toBeNull()
+  })
+
+  it('createPublicComment propagates insert errors', async () => {
+    buildCommentsSupabase({ result: { data: null, error: { message: 'comment boom' } } })
+
+    await expect(createPublicComment({
+      projectKey: 'pk',
+      pageUrl: 'https://example.com/pricing',
+      x: 10,
+      y: 20,
+      selector: 'body',
+      body: 'Hi',
+    })).rejects.toThrow('comment boom')
   })
 
   it('listComments maps legacy rows to element_point and selects target metadata', async () => {
