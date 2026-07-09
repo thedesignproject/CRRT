@@ -167,7 +167,13 @@ Required server variables:
 
 Optional server variables:
 
-- `APP_URL` - fallback for generated links when no request host is available
+- `APP_URL` - canonical app URL for generated links and notification emails
+- `RESEND_API_KEY` - enables comment activity emails through Resend
+- `COMMENT_ACTIVITY_EMAIL_FROM` - sender for comment activity emails, defaults to `CRRT <activity@mail.crrt.ai>`
+- `COMMENT_ACTIVITY_EMAIL_COOLDOWN_HOURS` - per-project email cooldown window, defaults to `5`
+- `COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS` - Resend request timeout, defaults to `5000`
+
+Comment activity emails also require `SUPABASE_SERVICE_ROLE_KEY` so the API can resolve project member emails from Supabase Auth. Without it, the email path stays disabled because there are no resolved recipients.
 
 Useful client variables:
 

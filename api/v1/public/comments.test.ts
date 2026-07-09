@@ -4,13 +4,26 @@ vi.mock('../../_lib/store.js', () => ({
   ensurePublicProject: vi.fn(),
   createPublicComment: vi.fn(),
   listComments: vi.fn(),
+  listProjectMembers: vi.fn(),
+  releaseCommentActivityEmailReservation: vi.fn(),
+  reserveCommentActivityEmail: vi.fn(),
   updateReviewStatus: vi.fn(),
   deleteCommentsForProject: vi.fn(),
 }))
 
 vi.mock('../../_lib/supabase.js', () => ({ getServiceSupabase: vi.fn() }))
+vi.mock('../../_lib/comment-activity-email.js', () => ({
+  canSendCommentActivityEmail: vi.fn(),
+  getCommentActivityCooldownSeconds: vi.fn(),
+  getCommentActivityDashboardUrl: vi.fn(),
+  hasCommentActivityEmailConfig: vi.fn(),
+  sendCommentActivityEmail: vi.fn(),
+}))
+vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
-import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { waitUntil } from '@vercel/functions'
+import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from '../../_lib/comment-activity-email.js'
+import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
@@ -26,6 +39,10 @@ interface MockRes {
 
 function mockReq(overrides: Record<string, unknown> = {}) {
   return { method: 'POST', query: {}, body: {}, headers: {}, ...overrides }
+}
+
+async function flushMicrotasks(times = 5) {
+  for (let i = 0; i < times; i++) await Promise.resolve()
 }
 
 function mockRes(): MockRes {
@@ -57,9 +74,26 @@ beforeEach(() => {
   vi.mocked(ensurePublicProject).mockReset()
   vi.mocked(createPublicComment).mockReset()
   vi.mocked(listComments).mockReset()
+  vi.mocked(listProjectMembers).mockReset()
+  vi.mocked(releaseCommentActivityEmailReservation).mockReset()
+  vi.mocked(reserveCommentActivityEmail).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
   vi.mocked(deleteCommentsForProject).mockReset()
   vi.mocked(getServiceSupabase).mockReset()
+  vi.mocked(canSendCommentActivityEmail).mockReset()
+  vi.mocked(getCommentActivityCooldownSeconds).mockReset()
+  vi.mocked(getCommentActivityDashboardUrl).mockReset()
+  vi.mocked(hasCommentActivityEmailConfig).mockReset()
+  vi.mocked(sendCommentActivityEmail).mockReset()
+  vi.mocked(waitUntil).mockReset()
+  vi.mocked(canSendCommentActivityEmail).mockReturnValue(false)
+  vi.mocked(getCommentActivityCooldownSeconds).mockReturnValue(18_000)
+  vi.mocked(getCommentActivityDashboardUrl).mockReturnValue('https://crrt.ai/dashboard')
+  vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(false)
+  vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: false, activityCount: 0 })
+  vi.mocked(listProjectMembers).mockResolvedValue([])
+  vi.mocked(releaseCommentActivityEmailReservation).mockResolvedValue(undefined)
+  vi.mocked(sendCommentActivityEmail).mockResolvedValue({ skipped: true })
   delete process.env.SMOKE_CLEANUP_TOKEN
   delete process.env.SMOKE_PROJECT_KEY
 })
@@ -239,6 +273,672 @@ describe('api/v1/public/comments', () => {
       targetType: 'element_point',
       anchor: null,
     })
+    expect(reserveCommentActivityEmail).not.toHaveBeenCalled()
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('sends an activity email to project members by BCC when cooldown opens', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: 'Mira',
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 2 })
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(true)
+    vi.mocked(listProjectMembers).mockResolvedValue([
+      { userId: 'u1', email: 'a@example.com', role: 'admin', createdAt: '' },
+      { userId: 'u2', email: null, role: 'member', createdAt: '' },
+      { userId: 'u3', email: 'b@example.com', role: 'member', createdAt: '' },
+    ])
+
+    const res = mockRes()
+    await call(mockReq({
+      headers: { host: 'crrt.ai', 'x-forwarded-proto': 'https' },
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(reserveCommentActivityEmail).toHaveBeenCalledWith('demo-project', 18_000)
+    expect(listProjectMembers).toHaveBeenCalledWith('demo-project')
+    expect(vi.mocked(reserveCommentActivityEmail).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(listProjectMembers).mock.invocationCallOrder[0],
+    )
+    expect(canSendCommentActivityEmail).toHaveBeenCalledWith(['a@example.com', 'b@example.com'])
+    expect(sendCommentActivityEmail).toHaveBeenCalledWith({
+      recipients: ['a@example.com', 'b@example.com'],
+      projectName: 'Demo',
+      pageUrl: 'https://example.com',
+      authorName: 'Mira',
+      activityCount: 2,
+      dashboardUrl: 'https://crrt.ai/dashboard',
+    })
+  })
+
+  it('returns 201 without waiting for a hung activity email send', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: 'Mira',
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 1 })
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(true)
+    vi.mocked(listProjectMembers).mockResolvedValue([
+      { userId: 'u1', email: 'a@example.com', role: 'admin', createdAt: '' },
+    ])
+    vi.mocked(sendCommentActivityEmail).mockReturnValue(new Promise(() => {}) as never)
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+    await flushMicrotasks()
+
+    expect(res.statusCode).toBe(201)
+    expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise))
+    expect(sendCommentActivityEmail).toHaveBeenCalled()
+  })
+
+  it('skips member resolution when activity email config is disabled', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(false)
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(listProjectMembers).not.toHaveBeenCalled()
+    expect(reserveCommentActivityEmail).not.toHaveBeenCalled()
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not send an activity email while the project is cooling down', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(true)
+    vi.mocked(listProjectMembers).mockResolvedValue([
+      { userId: 'u1', email: 'a@example.com', role: 'admin', createdAt: '' },
+    ])
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(reserveCommentActivityEmail).toHaveBeenCalledWith('demo-project', 18_000)
+    expect(listProjectMembers).not.toHaveBeenCalled()
+    expect(canSendCommentActivityEmail).not.toHaveBeenCalled()
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('releases an opened cooldown reservation when no email recipients resolve', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 3 })
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(false)
+    vi.mocked(listProjectMembers).mockResolvedValue([
+      { userId: 'u1', email: null, role: 'admin', createdAt: '' },
+    ])
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(releaseCommentActivityEmailReservation).toHaveBeenCalledWith('demo-project', 3)
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('does not release missing-recipient reservations when zero cooldown is configured', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(getCommentActivityCooldownSeconds).mockReturnValue(0)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 1 })
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(false)
+    vi.mocked(listProjectMembers).mockResolvedValue([
+      { userId: 'u1', email: null, role: 'admin', createdAt: '' },
+    ])
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(releaseCommentActivityEmailReservation).not.toHaveBeenCalled()
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('releases an opened cooldown reservation when member lookup fails', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 3 })
+    vi.mocked(listProjectMembers).mockRejectedValue(new Error('members down'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+    await flushMicrotasks()
+
+    expect(res.statusCode).toBe(201)
+    expect(releaseCommentActivityEmailReservation).toHaveBeenCalledWith('demo-project', 3)
+    expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('Comment activity email failed', expect.any(Error))
+    warn.mockRestore()
+  })
+
+  it('does not fail comment creation when activity email delivery fails', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 1 })
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(true)
+    vi.mocked(sendCommentActivityEmail).mockRejectedValue(new Error('resend down'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+    await flushMicrotasks()
+
+    expect(res.statusCode).toBe(201)
+    expect(releaseCommentActivityEmailReservation).toHaveBeenCalledWith('demo-project', 1)
+    expect(warn).toHaveBeenCalledWith('Comment activity email failed', expect.any(Error))
+    warn.mockRestore()
+  })
+
+  it('does not release a cooldown reservation when zero cooldown send fails', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
+    vi.mocked(getCommentActivityCooldownSeconds).mockReturnValue(0)
+    vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 1 })
+    vi.mocked(canSendCommentActivityEmail).mockReturnValue(true)
+    vi.mocked(sendCommentActivityEmail).mockRejectedValue(new Error('resend down'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+    await flushMicrotasks()
+
+    expect(res.statusCode).toBe(201)
+    expect(releaseCommentActivityEmailReservation).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith('Comment activity email failed', expect.any(Error))
+    warn.mockRestore()
+  })
+
+  it('rejects non-finite coordinates before creating a comment', async () => {
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: Number.NaN,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error: 'x and y must be finite numbers' })
+    expect(createPublicComment).not.toHaveBeenCalled()
+  })
+
+  it('validates optional author names', async () => {
+    const nonStringRes = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        authorName: 42,
+      },
+    }), nonStringRes)
+    expect(nonStringRes.statusCode).toBe(400)
+    expect(nonStringRes.body).toEqual({ error: 'authorName must be a string' })
+
+    const longNameRes = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        authorName: 'a'.repeat(81),
+      },
+    }), longNameRes)
+    expect(longNameRes.statusCode).toBe(400)
+    expect(longNameRes.body).toEqual({ error: 'authorName must be 80 characters or fewer' })
+
+    expect(createPublicComment).not.toHaveBeenCalled()
+  })
+
+  it('normalizes blank author names to null', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1',
+      projectId: 'demo-project',
+      pageUrl: 'https://example.com',
+      selector: 'body',
+      x: 10,
+      y: 20,
+      body: 'Hello',
+      reviewStatus: 'open',
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+      imageUrl: null,
+      authorName: null,
+      targetType: 'element_point' as const,
+      anchor: null,
+      createdAt: '',
+      updatedAt: '',
+    })
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        authorName: '   ',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(201)
+    expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].authorName).toBeNull()
+  })
+
+  it('validates optional image payload metadata', async () => {
+    const missingMimeRes = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        imageBase64: 'abc123',
+      },
+    }), missingMimeRes)
+    expect(missingMimeRes.statusCode).toBe(400)
+    expect(missingMimeRes.body).toEqual({ error: 'imageBase64 and imageMimeType must both be strings' })
+
+    const badMimeRes = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        imageBase64: 'abc123',
+        imageMimeType: 'image/bmp',
+      },
+    }), badMimeRes)
+    expect(badMimeRes.statusCode).toBe(400)
+    expect(badMimeRes.body).toEqual({ error: 'imageMimeType must be image/png, image/jpeg, image/webp, or image/gif' })
+
+    expect(createPublicComment).not.toHaveBeenCalled()
+  })
+
+  it('returns 500 when comment creation fails unexpectedly', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockRejectedValue(new Error('insert exploded'))
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'insert exploded' })
+  })
+
+  it('returns a generic 500 for non-error comment creation failures', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project',
+      slug: 'demo-project',
+      name: 'Demo',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockRejectedValue('boom')
+
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'Unexpected error' })
   })
 
   describe('text_range targets', () => {
@@ -483,5 +1183,74 @@ describe('api/v1/public/comments', () => {
     expect(res.statusCode).toBe(200)
     expect((res.body as Record<string, unknown>).reviewStatus).toBe('accepted')
     expect(res.headers['Access-Control-Allow-Origin']).toBe('*')
+  })
+
+  it('normalizes widget review status aliases on PATCH', async () => {
+    vi.mocked(updateReviewStatus)
+      .mockResolvedValueOnce({
+        id: 'comment-1',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        reviewStatus: 'rejected',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        authorName: null,
+        targetType: 'element_point' as const,
+        anchor: null,
+        createdAt: '',
+        updatedAt: '',
+      })
+      .mockResolvedValueOnce({
+        id: 'comment-1',
+        projectId: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        reviewStatus: 'open',
+        implementationStatus: 'unassigned',
+        claimedByAgentId: null,
+        imageUrl: null,
+        authorName: null,
+        targetType: 'element_point' as const,
+        anchor: null,
+        createdAt: '',
+        updatedAt: '',
+      })
+
+    const rejectedRes = mockRes()
+    await call(mockReq({
+      method: 'PATCH',
+      body: { id: 'comment-1', reviewStatus: 'rejected' },
+    }), rejectedRes)
+
+    const pendingRes = mockRes()
+    await call(mockReq({
+      method: 'PATCH',
+      body: { id: 'comment-1', reviewStatus: 'pending' },
+    }), pendingRes)
+
+    expect(updateReviewStatus).toHaveBeenNthCalledWith(1, 'comment-1', 'rejected')
+    expect(updateReviewStatus).toHaveBeenNthCalledWith(2, 'comment-1', 'open')
+    expect(rejectedRes.statusCode).toBe(200)
+    expect(pendingRes.statusCode).toBe(200)
+  })
+
+  it('rejects invalid widget review status values on PATCH', async () => {
+    const res = mockRes()
+    await call(mockReq({
+      method: 'PATCH',
+      body: { id: 'comment-1', reviewStatus: 'done' },
+    }), res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error: 'reviewStatus must be open, accepted, or rejected' })
+    expect(updateReviewStatus).not.toHaveBeenCalled()
   })
 })
