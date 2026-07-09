@@ -1,5 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../../../_lib/github-app.js', () => ({
+  assertGitHubUserInstallationAccess: vi.fn(),
+  createGitHubAppInstallationToken: vi.fn(() => 'installation-token'),
+  listUserInstallationRepositories: vi.fn(() => [{ fullName: 'acme/widgets' }]),
+  verifyGitHubAppSetupAuthState: vi.fn(() => null),
+}))
 vi.mock('../../../_lib/store.js', () => ({ getRepoConfig: vi.fn() }))
 vi.mock('../../../_lib/widget-github-auth.js', () => ({
   assertGitHubRepoAccess: vi.fn(),
@@ -11,6 +17,12 @@ vi.mock('../../../_lib/widget-github-auth.js', () => ({
 }))
 
 import handler from './callback.js'
+import {
+  assertGitHubUserInstallationAccess,
+  createGitHubAppInstallationToken,
+  listUserInstallationRepositories,
+  verifyGitHubAppSetupAuthState,
+} from '../../../_lib/github-app.js'
 import { getRepoConfig } from '../../../_lib/store.js'
 import {
   assertGitHubRepoAccess,
@@ -36,6 +48,10 @@ const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
+  vi.mocked(assertGitHubUserInstallationAccess).mockReset()
+  vi.mocked(createGitHubAppInstallationToken).mockClear()
+  vi.mocked(listUserInstallationRepositories).mockReset().mockResolvedValue([{ fullName: 'acme/widgets' }] as never)
+  vi.mocked(verifyGitHubAppSetupAuthState).mockReset().mockReturnValue(null)
   vi.mocked(getRepoConfig).mockReset()
   vi.mocked(assertGitHubRepoAccess).mockReset()
   vi.mocked(createWidgetAuthToken).mockClear()
@@ -130,5 +146,58 @@ describe('api/v1/widget/github/callback', () => {
       githubRepo: 'widgets',
     })
     expect(String(res.body)).toContain('widget-token')
+  })
+
+  it('verifies GitHub App installation access before returning an installation token', async () => {
+    vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValue({
+      type: 'github_app_setup_auth_state',
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+      installationId: '99',
+      nonce: 'n',
+      iat: 1,
+      exp: 2,
+    })
+
+    let res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(exchangeGitHubCode).toHaveBeenCalledWith('c')
+    expect(assertGitHubUserInstallationAccess).toHaveBeenCalledWith('gh-token', '99')
+    expect(listUserInstallationRepositories).toHaveBeenCalledWith('gh-token', '99')
+    expect(createGitHubAppInstallationToken).toHaveBeenCalledWith({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+    })
+    expect(getRepoConfig).not.toHaveBeenCalled()
+    expect(String(res.body)).toContain('crrt:github-app-install')
+    expect(String(res.body)).toContain('installation-token')
+    expect(String(res.body)).toContain('acme/widgets')
+
+    vi.mocked(assertGitHubUserInstallationAccess).mockRejectedValueOnce(new Error('github_installation_inaccessible'))
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(createGitHubAppInstallationToken).toHaveBeenCalledTimes(1)
+    expect(String(res.body)).toContain('github_installation_inaccessible')
+
+    vi.mocked(listUserInstallationRepositories).mockRejectedValueOnce(new Error('github_installation_repos_failed'))
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(createGitHubAppInstallationToken).toHaveBeenCalledTimes(1)
+    expect(String(res.body)).toContain('github_installation_repos_failed')
+
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(exchangeGitHubCode).mockRejectedValueOnce(new Error('surprise'))
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(createGitHubAppInstallationToken).toHaveBeenCalledTimes(1)
+    expect(String(res.body)).toContain('github_app_install_failed')
+    expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
   })
 })
