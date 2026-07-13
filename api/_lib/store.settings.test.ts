@@ -5,6 +5,7 @@ vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from './supabase.js'
 import {
   deleteProjectInvite,
+  getGithubConnectionVersion,
   getUserEmailsByIds,
   listProjectInvites,
   listProjectMembers,
@@ -105,6 +106,32 @@ describe('normalizeGitHubRepoUrl', () => {
     expect(normalizeGitHubRepoUrl('https://github.com/acme')).toBeNull()
     expect(normalizeGitHubRepoUrl('acme/widgets/extra')).toBeNull()
     expect(normalizeGitHubRepoUrl('https://github.com/bad_owner/widgets')).toBeNull()
+  })
+})
+
+describe('getGithubConnectionVersion', () => {
+  it('returns the stored safe version and defaults missing or invalid values to zero', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: { github_connection_version: 4 }, error: null }],
+    }) as never)
+    expect(await getGithubConnectionVersion('p')).toBe(4)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: null }],
+    }) as never)
+    expect(await getGithubConnectionVersion('missing')).toBe(0)
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: { github_connection_version: -1 }, error: null }],
+    }) as never)
+    expect(await getGithubConnectionVersion('invalid')).toBe(0)
+  })
+
+  it('throws on database errors', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+    }) as never)
+    await expect(getGithubConnectionVersion('p')).rejects.toThrow('boom')
   })
 })
 

@@ -29,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const authorizeUrl = buildGitHubAuthorizeUrl(setupAuthState)
     setCors(req, res, ['GET', 'OPTIONS'])
+    res.setHeader('Cache-Control', 'no-store')
     res.setHeader('Location', authorizeUrl)
     return res.status(302).end()
   } catch (error) {

@@ -6,12 +6,14 @@ import {
   buildGitHubAppInstallUrl,
   createGitHubAppInstallationToken,
   createGitHubAppInstallState,
+  createGitHubAppReuseAuthState,
   createGitHubAppSetupAuthState,
   createGitHubAppJwt,
   createInstallationAccessToken,
   listUserInstallationRepositories,
   verifyGitHubAppInstallationToken,
   verifyGitHubAppInstallState,
+  verifyGitHubAppReuseAuthState,
   verifyGitHubAppSetupAuthState,
 } from './github-app.js'
 
@@ -22,6 +24,7 @@ const pem = privateKey.export({ type: 'pkcs1', format: 'pem' }).toString()
 const installStateType = 'github_app_install_state'
 const installationTokenType = 'github_app_installation_token'
 const setupAuthStateType = 'github_app_setup_auth_state'
+const reuseAuthStateType = 'github_app_reuse_auth_state'
 
 function signedInstallStateBody(body: string) {
   const signature = createHmac('sha256', 'state-secret').update(body).digest('base64url')
@@ -101,6 +104,7 @@ describe('github app install helpers', () => {
       projectKey: 'p',
       userId: 'u',
       installationId: '99',
+      expectedConnectionVersion: 0,
     }, 1000)
     const setupAuthState = createGitHubAppSetupAuthState({
       projectKey: 'p',
@@ -108,11 +112,19 @@ describe('github app install helpers', () => {
       origin: 'https://app.example',
       installationId: '99',
     }, 1000)
+    const reuseAuthState = createGitHubAppReuseAuthState({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+      installationRef: 'opaque-ref',
+    }, 1000)
 
     expect(verifyGitHubAppInstallationToken(setupAuthState, 1000)).toBeNull()
     expect(verifyGitHubAppInstallationToken(installState, 1000)).toBeNull()
     expect(verifyGitHubAppSetupAuthState(installationToken, 1000)).toBeNull()
     expect(verifyGitHubAppInstallState(installationToken, 1000)).toBeNull()
+    expect(verifyGitHubAppReuseAuthState(setupAuthState, 1000)).toBeNull()
+    expect(verifyGitHubAppSetupAuthState(reuseAuthState, 1000)).toBeNull()
 
     const legacyPayload = Buffer.from(JSON.stringify({
       projectKey: 'p',
@@ -126,6 +138,7 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppInstallationToken(legacyToken, 1000)).toBeNull()
     expect(verifyGitHubAppSetupAuthState(legacyToken, 1000)).toBeNull()
     expect(verifyGitHubAppInstallState(legacyToken, 1000)).toBeNull()
+    expect(verifyGitHubAppReuseAuthState(legacyToken, 1000)).toBeNull()
   })
 
   it('signs and verifies installation tokens bound to an installation id', () => {
@@ -133,22 +146,44 @@ describe('github app install helpers', () => {
       projectKey: 'p',
       userId: 'u',
       installationId: '99',
+      expectedConnectionVersion: 3,
     }, 1000)
     expect(verifyGitHubAppInstallationToken(token, 1000)).toMatchObject({
       projectKey: 'p',
       userId: 'u',
       installationId: '99',
+      expectedConnectionVersion: 3,
     })
+    const encryptedBody = Buffer.from(token.split('.')[0], 'base64url').toString('utf8')
+    expect(encryptedBody).not.toContain('99')
+    expect(encryptedBody).not.toContain('installationId')
     expect(verifyGitHubAppInstallationToken(token, 1601)).toBeNull()
+    expect(verifyGitHubAppInstallationToken('bad', 1000)).toBeNull()
 
-    const missingInstallationId = Buffer.from(JSON.stringify({
-      type: installationTokenType,
+    const missingInstallationId = createGitHubAppInstallationToken({
       projectKey: 'p',
       userId: 'u',
-      nonce: 'n',
-      exp: 1600,
-    })).toString('base64url')
-    expect(verifyGitHubAppInstallationToken(signedInstallStateBody(missingInstallationId), 1000)).toBeNull()
+      installationId: undefined,
+      expectedConnectionVersion: 0,
+    } as never, 1000)
+    expect(verifyGitHubAppInstallationToken(missingInstallationId, 1000)).toBeNull()
+
+    const invalidVersion = createGitHubAppInstallationToken({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+      expectedConnectionVersion: -1,
+    }, 1000)
+    expect(verifyGitHubAppInstallationToken(invalidVersion, 1000)).toBeNull()
+
+    const unsafeVersion = createGitHubAppInstallationToken({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+      expectedConnectionVersion: Number.MAX_SAFE_INTEGER + 1,
+    }, 1000)
+    expect(verifyGitHubAppInstallationToken(unsafeVersion, 1000)).toBeNull()
+    expect(verifyGitHubAppInstallationToken(signedInstallStateBody('eA'), 1000)).toBeNull()
   })
 
   it('signs and verifies setup auth state for GitHub user verification', () => {
@@ -175,6 +210,33 @@ describe('github app install helpers', () => {
       exp: 1600,
     })).toString('base64url')
     expect(verifyGitHubAppSetupAuthState(signedInstallStateBody(missingOrigin), 1000)).toBeNull()
+  })
+
+  it('signs reuse state with only an opaque user-installation reference', () => {
+    const state = createGitHubAppReuseAuthState({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+      installationRef: 'opaque-ref',
+    }, 1000)
+    expect(verifyGitHubAppReuseAuthState(state, 1000)).toMatchObject({
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+      installationRef: 'opaque-ref',
+    })
+    expect(state).not.toContain('installationId')
+    expect(verifyGitHubAppReuseAuthState(state, 1601)).toBeNull()
+
+    const missingRef = Buffer.from(JSON.stringify({
+      type: reuseAuthStateType,
+      projectKey: 'p',
+      userId: 'u',
+      origin: 'https://app.example',
+      nonce: 'n',
+      exp: 1600,
+    })).toString('base64url')
+    expect(verifyGitHubAppReuseAuthState(signedInstallStateBody(missingRef), 1000)).toBeNull()
   })
 
   it('creates installation access tokens and maps failures', async () => {

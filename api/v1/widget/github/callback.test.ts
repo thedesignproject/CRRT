@@ -6,7 +6,11 @@ vi.mock('../../../_lib/github-app.js', () => ({
   listUserInstallationRepositories: vi.fn(() => [{ fullName: 'acme/widgets' }]),
   verifyGitHubAppSetupAuthState: vi.fn(() => null),
 }))
-vi.mock('../../../_lib/store.js', () => ({ getRepoConfig: vi.fn() }))
+vi.mock('../../../_lib/store.js', () => ({
+  getGithubConnectionVersion: vi.fn(() => 0),
+  getProjectMember: vi.fn(() => ({ role: 'admin' })),
+  getRepoConfig: vi.fn(),
+}))
 vi.mock('../../../_lib/widget-github-auth.js', () => ({
   assertGitHubRepoAccess: vi.fn(),
   createWidgetAuthToken: vi.fn(() => 'widget-token'),
@@ -23,7 +27,7 @@ import {
   listUserInstallationRepositories,
   verifyGitHubAppSetupAuthState,
 } from '../../../_lib/github-app.js'
-import { getRepoConfig } from '../../../_lib/store.js'
+import { getGithubConnectionVersion, getProjectMember, getRepoConfig } from '../../../_lib/store.js'
 import {
   assertGitHubRepoAccess,
   createWidgetAuthToken,
@@ -52,6 +56,8 @@ beforeEach(() => {
   vi.mocked(createGitHubAppInstallationToken).mockClear()
   vi.mocked(listUserInstallationRepositories).mockReset().mockResolvedValue([{ fullName: 'acme/widgets' }] as never)
   vi.mocked(verifyGitHubAppSetupAuthState).mockReset().mockReturnValue(null)
+  vi.mocked(getGithubConnectionVersion).mockReset().mockResolvedValue(0)
+  vi.mocked(getProjectMember).mockReset().mockResolvedValue({ role: 'admin' } as never)
   vi.mocked(getRepoConfig).mockReset()
   vi.mocked(assertGitHubRepoAccess).mockReset()
   vi.mocked(createWidgetAuthToken).mockClear()
@@ -135,6 +141,11 @@ describe('api/v1/widget/github/callback', () => {
     await call({ method: 'GET', query: { code: 'c', state: 's' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(res.headers['Content-Type']).toBe('text/html; charset=utf-8')
+    expect(res.headers['Cache-Control']).toBe('no-store')
+    expect(res.headers['Content-Security-Policy']).toContain("frame-ancestors 'none'")
+    expect(res.headers['Referrer-Policy']).toBe('no-referrer')
+    expect(res.headers['X-Content-Type-Options']).toBe('nosniff')
+    expect(res.headers['X-Frame-Options']).toBe('DENY')
     expect(exchangeGitHubCode).toHaveBeenCalledWith('c')
     expect(assertGitHubRepoAccess).toHaveBeenCalledWith('gh-token', 'acme', 'widgets')
     expect(getGitHubUser).toHaveBeenCalledWith('gh-token')
@@ -159,6 +170,7 @@ describe('api/v1/widget/github/callback', () => {
       iat: 1,
       exp: 2,
     })
+    vi.mocked(getGithubConnectionVersion).mockResolvedValue(7)
 
     let res = mockRes()
     await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
@@ -170,7 +182,10 @@ describe('api/v1/widget/github/callback', () => {
       projectKey: 'p',
       userId: 'u',
       installationId: '99',
+      expectedConnectionVersion: 7,
     })
+    expect(getProjectMember).toHaveBeenCalledWith('u', 'p')
+    expect(getGithubConnectionVersion).toHaveBeenCalledWith('p')
     expect(getRepoConfig).not.toHaveBeenCalled()
     expect(String(res.body)).toContain('crrt:github-app-install')
     expect(String(res.body)).toContain('installation-token')
@@ -181,14 +196,14 @@ describe('api/v1/widget/github/callback', () => {
     await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(createGitHubAppInstallationToken).toHaveBeenCalledTimes(1)
-    expect(String(res.body)).toContain('github_installation_inaccessible')
+    expect(String(res.body)).toContain('github_app_install_failed')
 
     vi.mocked(listUserInstallationRepositories).mockRejectedValueOnce(new Error('github_installation_repos_failed'))
     res = mockRes()
     await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(createGitHubAppInstallationToken).toHaveBeenCalledTimes(1)
-    expect(String(res.body)).toContain('github_installation_repos_failed')
+    expect(String(res.body)).toContain('github_app_install_failed')
 
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.mocked(exchangeGitHubCode).mockRejectedValueOnce(new Error('surprise'))
@@ -199,5 +214,27 @@ describe('api/v1/widget/github/callback', () => {
     expect(String(res.body)).toContain('github_app_install_failed')
     expect(consoleError).toHaveBeenCalled()
     consoleError.mockRestore()
+  })
+
+  it('rejects an installation callback after the initiating admin loses access', async () => {
+    vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValue({
+      type: 'github_app_setup_auth_state',
+      projectKey: 'p',
+      userId: 'removed-user',
+      origin: 'https://app.example',
+      installationId: '99',
+      nonce: 'n',
+      iat: 1,
+      exp: 2,
+    })
+    vi.mocked(getProjectMember).mockResolvedValue(null)
+
+    const res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'app-state' }, headers: {} }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(String(res.body)).toContain('github_app_install_failed')
+    expect(exchangeGitHubCode).not.toHaveBeenCalled()
+    expect(createGitHubAppInstallationToken).not.toHaveBeenCalled()
   })
 })

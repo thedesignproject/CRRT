@@ -1,9 +1,18 @@
-import { createHmac, createSign, randomBytes, timingSafeEqual } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  createSign,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto'
 
 const INSTALL_STATE_TTL_SECONDS = 600
 const INSTALL_STATE_TYPE = 'github_app_install_state'
 const INSTALLATION_TOKEN_TYPE = 'github_app_installation_token'
 const SETUP_AUTH_STATE_TYPE = 'github_app_setup_auth_state'
+const REUSE_AUTH_STATE_TYPE = 'github_app_reuse_auth_state'
 
 type GitHubAppSignedPayload = {
   type: string
@@ -20,10 +29,16 @@ export type GitHubAppInstallState = GitHubAppSignedPayload & {
 
 export type GitHubAppInstallationToken = GitHubAppSignedPayload & {
   installationId: string
+  expectedConnectionVersion: number
 }
 
 export type GitHubAppSetupAuthState = GitHubAppSignedPayload & {
   installationId: string
+  origin: string
+}
+
+export type GitHubAppReuseAuthState = GitHubAppSignedPayload & {
+  installationRef: string
   origin: string
 }
 
@@ -57,6 +72,41 @@ function signInstallState(body: string) {
   return createHmac('sha256', stateSecret()).update(body).digest('base64url')
 }
 
+function installationTokenKey() {
+  return createHash('sha256')
+    .update(INSTALLATION_TOKEN_TYPE)
+    .update('\0')
+    .update(stateSecret())
+    .digest()
+}
+
+function verifiedSignedBody(token: string) {
+  const [body, signature, extra] = token.split('.')
+  if (!body || !signature || extra !== undefined) return null
+
+  const expected = signInstallState(body)
+  const actualBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expected)
+  if (actualBuffer.length !== expectedBuffer.length) return null
+  if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null
+  return body
+}
+
+function validateSignedPayload<T extends GitHubAppSignedPayload>(
+  payload: T,
+  expectedType: string,
+  nowSeconds: number,
+) {
+  if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
+  if (
+    payload.type !== expectedType
+    || typeof payload.projectKey !== 'string'
+    || typeof payload.userId !== 'string'
+    || typeof payload.nonce !== 'string'
+  ) return null
+  return payload
+}
+
 export function createGitHubAppInstallState(
   input: Pick<GitHubAppInstallState, 'projectKey' | 'userId' | 'origin'>,
   nowSeconds = Math.floor(Date.now() / 1000),
@@ -77,25 +127,30 @@ function decodeSignedInstallPayload<T extends GitHubAppSignedPayload>(
   expectedType: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const [body, signature, extra] = token.split('.')
-  if (!body || !signature || extra !== undefined) return null
-
-  const expected = signInstallState(body)
-  const actualBuffer = Buffer.from(signature)
-  const expectedBuffer = Buffer.from(expected)
-  if (actualBuffer.length !== expectedBuffer.length) return null
-  if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null
+  const body = verifiedSignedBody(token)
+  if (!body) return null
 
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as T
-    if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
-    if (
-      payload.type !== expectedType
-      || typeof payload.projectKey !== 'string'
-      || typeof payload.userId !== 'string'
-      || typeof payload.nonce !== 'string'
-    ) return null
-    return payload
+    return validateSignedPayload(payload, expectedType, nowSeconds)
+  } catch {
+    return null
+  }
+}
+
+function decodeInstallationToken(token: string, nowSeconds: number) {
+  const body = verifiedSignedBody(token)
+  if (!body) return null
+
+  try {
+    const encrypted = Buffer.from(body, 'base64url')
+    if (encrypted.length <= 28) return null
+    const decipher = createDecipheriv('aes-256-gcm', installationTokenKey(), encrypted.subarray(0, 12))
+    decipher.setAAD(Buffer.from(INSTALLATION_TOKEN_TYPE))
+    decipher.setAuthTag(encrypted.subarray(12, 28))
+    const plaintext = Buffer.concat([decipher.update(encrypted.subarray(28)), decipher.final()])
+    const payload = JSON.parse(plaintext.toString('utf8')) as GitHubAppInstallationToken
+    return validateSignedPayload(payload, INSTALLATION_TOKEN_TYPE, nowSeconds)
   } catch {
     return null
   }
@@ -111,7 +166,7 @@ export function verifyGitHubAppInstallState(
 }
 
 export function createGitHubAppInstallationToken(
-  input: Pick<GitHubAppInstallationToken, 'projectKey' | 'userId' | 'installationId'>,
+  input: Pick<GitHubAppInstallationToken, 'projectKey' | 'userId' | 'installationId' | 'expectedConnectionVersion'>,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload: GitHubAppInstallationToken = {
@@ -121,7 +176,11 @@ export function createGitHubAppInstallationToken(
     iat: nowSeconds,
     exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
   }
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', installationTokenKey(), iv)
+  cipher.setAAD(Buffer.from(INSTALLATION_TOKEN_TYPE))
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()])
+  const body = Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url')
   return `${body}.${signInstallState(body)}`
 }
 
@@ -140,12 +199,32 @@ export function createGitHubAppSetupAuthState(
   return `${body}.${signInstallState(body)}`
 }
 
+export function createGitHubAppReuseAuthState(
+  input: Pick<GitHubAppReuseAuthState, 'projectKey' | 'userId' | 'origin' | 'installationRef'>,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload: GitHubAppReuseAuthState = {
+    ...input,
+    type: REUSE_AUTH_STATE_TYPE,
+    nonce: randomBytes(16).toString('base64url'),
+    iat: nowSeconds,
+    exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  return `${body}.${signInstallState(body)}`
+}
+
 export function verifyGitHubAppInstallationToken(
   token: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const payload = decodeSignedInstallPayload<GitHubAppInstallationToken>(token, INSTALLATION_TOKEN_TYPE, nowSeconds)
-  if (!payload || typeof payload.installationId !== 'string') return null
+  const payload = decodeInstallationToken(token, nowSeconds)
+  if (
+    !payload
+    || typeof payload.installationId !== 'string'
+    || !Number.isSafeInteger(payload.expectedConnectionVersion)
+    || payload.expectedConnectionVersion < 0
+  ) return null
   return payload
 }
 
@@ -155,6 +234,15 @@ export function verifyGitHubAppSetupAuthState(
 ) {
   const payload = decodeSignedInstallPayload<GitHubAppSetupAuthState>(state, SETUP_AUTH_STATE_TYPE, nowSeconds)
   if (!payload || typeof payload.installationId !== 'string' || typeof payload.origin !== 'string') return null
+  return payload
+}
+
+export function verifyGitHubAppReuseAuthState(
+  state: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload = decodeSignedInstallPayload<GitHubAppReuseAuthState>(state, REUSE_AUTH_STATE_TYPE, nowSeconds)
+  if (!payload || typeof payload.installationRef !== 'string' || typeof payload.origin !== 'string') return null
   return payload
 }
 

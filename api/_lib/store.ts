@@ -849,6 +849,19 @@ export async function getRepoConfig(projectKey: string) {
   return mapRepoConfig(data as RepoConfigRow | null)
 }
 
+export async function getGithubConnectionVersion(projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_repo_configs')
+    .select('github_connection_version')
+    .eq('project_key', projectKey)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  const version = (data as { github_connection_version?: unknown } | null)?.github_connection_version
+  return typeof version === 'number' && Number.isSafeInteger(version) && version >= 0 ? version : 0
+}
+
 export function normalizeGitHubRepoUrl(value: string): {
   repoUrl: string
   githubOwner: string

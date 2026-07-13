@@ -5,7 +5,7 @@ import {
   listUserInstallationRepositories,
   verifyGitHubAppSetupAuthState,
 } from '../../../_lib/github-app.js'
-import { getRepoConfig } from '../../../_lib/store.js'
+import { getGithubConnectionVersion, getProjectMember, getRepoConfig } from '../../../_lib/store.js'
 import {
   assertGitHubRepoAccess,
   createWidgetAuthToken,
@@ -18,6 +18,11 @@ import { getStringQuery, handleOptions, jsonError, methodNotAllowed } from '../.
 
 function html(res: VercelResponse, body: string) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
   return res.status(200).send(body)
 }
 
@@ -26,13 +31,18 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
   if (!verifiedState) return false
 
   try {
+    const membership = await getProjectMember(verifiedState.userId, verifiedState.projectKey)
+    if (membership?.role !== 'admin') throw new Error('github_app_install_forbidden')
+
     const accessToken = await exchangeGitHubCode(code)
     await assertGitHubUserInstallationAccess(accessToken, verifiedState.installationId)
     const repositories = await listUserInstallationRepositories(accessToken, verifiedState.installationId)
+    const expectedConnectionVersion = await getGithubConnectionVersion(verifiedState.projectKey)
     const installationToken = createGitHubAppInstallationToken({
       projectKey: verifiedState.projectKey,
       userId: verifiedState.userId,
       installationId: verifiedState.installationId,
+      expectedConnectionVersion,
     })
 
     html(res, widgetCallbackHtml(verifiedState.origin, {
@@ -49,12 +59,13 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
       'github_user_installations_failed',
       'github_installation_inaccessible',
       'github_installation_repos_failed',
+      'github_app_install_forbidden',
     ].includes(error.message)
     if (!known) console.error(error)
     html(res, widgetCallbackHtml(verifiedState.origin, {
       type: 'crrt:github-app-install',
       ok: false,
-      error: known && error instanceof Error ? error.message : 'github_app_install_failed',
+      error: 'github_app_install_failed',
     }))
     return true
   }

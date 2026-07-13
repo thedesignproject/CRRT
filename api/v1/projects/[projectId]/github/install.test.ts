@@ -76,8 +76,8 @@ describe('api/v1/projects/[projectId]/github/install', () => {
     expect(buildGitHubAppInstallUrl).toHaveBeenCalledWith('install-state')
     expect(res.body).toEqual({
       installUrl: 'https://github.com/apps/crrt/installations/new?state=install-state',
-      installState: 'install-state',
     })
+    expect(res.headers['Cache-Control']).toBe('no-store')
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     res = mockRes()
