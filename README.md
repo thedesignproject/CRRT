@@ -206,6 +206,38 @@ Run the reviewer dashboard:
 bun run dev:dashboard
 ```
 
+### Fully local development with Docker
+
+Docker Desktop and the Supabase CLI can run Postgres, Auth, Storage, Realtime,
+Studio, and local email without using a shared cloud project.
+
+```bash
+bun install
+bun run local:up
+bun run local:dev
+```
+
+`local:up` starts the containers, writes the local service credentials to the
+ignored `.env.docker.local`, applies every Drizzle migration, seeds `demo-project`,
+creates the public `feedback-images` bucket, and runs service smoke checks.
+
+- Dashboard: `http://127.0.0.1:5173/dashboard/`
+- API: `http://127.0.0.1:3001`
+- Supabase Studio: `http://127.0.0.1:54323`
+- Local email inbox: `http://127.0.0.1:54324`
+
+Useful lifecycle commands:
+
+```bash
+bun run local:status
+bun run local:down       # keeps local data
+bun run local:reset      # deletes local data, then migrates and seeds again
+```
+
+The local Supabase credentials are development defaults and must never be used
+in production. Docker may publish the development ports beyond localhost, so
+run this stack only on a trusted network.
+
 Build the widget package:
 
 ```bash

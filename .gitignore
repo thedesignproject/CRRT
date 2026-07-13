@@ -3,6 +3,7 @@ dist/
 coverage/
 .env
 .env.local
+.env.docker.local
 .DS_Store
 *.log
 .vercel
