@@ -50,6 +50,12 @@ export type InstalledGitHubRepo = {
   repoUrl: string
 }
 
+export type InstalledGitHubAccount = {
+  id: string
+  login: string
+  type: 'User' | 'Organization'
+}
+
 function requiredEnv(name: string) {
   const value = process.env[name]
   if (!value) throw new Error(`missing_${name.toLowerCase()}`)
@@ -62,6 +68,22 @@ function b64url(input: string | Buffer) {
 
 function privateKey() {
   return requiredEnv('GITHUB_APP_PRIVATE_KEY').replace(/\\n/g, '\n')
+}
+
+async function fetchGitHub(input: string, init: RequestInit, errorCode: string) {
+  try {
+    return await fetch(input, init)
+  } catch {
+    throw new Error(errorCode)
+  }
+}
+
+async function githubJson(response: Response, errorCode: string) {
+  try {
+    return await response.json() as Record<string, unknown>
+  } catch {
+    throw new Error(errorCode)
+  }
 }
 
 function stateSecret() {
@@ -265,7 +287,7 @@ export function createGitHubAppJwt(nowSeconds = Math.floor(Date.now() / 1000)) {
 }
 
 export async function createInstallationAccessToken(installationId: string) {
-  const response = await fetch(
+  const response = await fetchGitHub(
     `https://api.github.com/app/installations/${encodeURIComponent(installationId)}/access_tokens`,
     {
       method: 'POST',
@@ -274,12 +296,36 @@ export async function createInstallationAccessToken(installationId: string) {
         Authorization: `Bearer ${createGitHubAppJwt()}`,
       },
     },
+    'github_installation_token_failed',
   )
-  const body = await response.json() as { token?: unknown }
+  const body = await githubJson(response, 'github_installation_token_failed')
   if (!response.ok || typeof body.token !== 'string') {
     throw new Error('github_installation_token_failed')
   }
   return body.token
+}
+
+export async function assertGitHubInstallationRepoAccess(
+  installationId: string,
+  owner: string,
+  repo: string,
+) {
+  const accessToken = await createInstallationAccessToken(installationId)
+  const path = `${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const response = await fetchGitHub(`https://api.github.com/repos/${path}`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+  }, 'github_installation_repo_lookup_failed')
+
+  if (!response.ok) {
+    throw new Error(
+      response.status === 404
+        ? 'github_installation_repo_inaccessible'
+        : 'github_installation_repo_lookup_failed',
+    )
+  }
 }
 
 export async function assertGitHubUserInstallationAccess(accessToken: string, installationId: string) {
@@ -289,15 +335,31 @@ export async function assertGitHubUserInstallationAccess(accessToken: string, in
     const url = new URL('https://api.github.com/user/installations')
     url.searchParams.set('per_page', '100')
     url.searchParams.set('page', String(page))
-    const response = await fetch(url.toString(), {
+    const response = await fetchGitHub(url.toString(), {
       headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
-    })
-    const body = await response.json() as { installations?: Array<Record<string, unknown>> }
+    }, 'github_user_installations_failed')
+    const body = await githubJson(response, 'github_user_installations_failed') as {
+      installations?: Array<Record<string, unknown>>
+    }
     if (!response.ok || !Array.isArray(body.installations)) {
       throw new Error('github_user_installations_failed')
     }
 
-    if (body.installations.some((installation) => String(installation.id) === installationId)) return
+    const installation = body.installations.find((candidate) => String(candidate.id) === installationId)
+    if (installation) {
+      const account = installation.account as Record<string, unknown> | undefined
+      if (
+        !account
+        || (account.type !== 'User' && account.type !== 'Organization')
+        || (typeof account.id !== 'string' && typeof account.id !== 'number')
+        || typeof account.login !== 'string'
+      ) throw new Error('github_user_installations_failed')
+      return {
+        id: String(account.id),
+        login: account.login,
+        type: account.type,
+      } satisfies InstalledGitHubAccount
+    }
     if (body.installations.length < 100) throw new Error('github_installation_inaccessible')
     page += 1
   }
@@ -330,10 +392,12 @@ export async function listUserInstallationRepositories(
     const url = new URL(`https://api.github.com/user/installations/${encodeURIComponent(installationId)}/repositories`)
     url.searchParams.set('per_page', '100')
     url.searchParams.set('page', String(page))
-    const response = await fetch(url.toString(), {
+    const response = await fetchGitHub(url.toString(), {
       headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
-    })
-    const body = await response.json() as { repositories?: Array<Record<string, unknown>> }
+    }, 'github_installation_repos_failed')
+    const body = await githubJson(response, 'github_installation_repos_failed') as {
+      repositories?: Array<Record<string, unknown>>
+    }
     if (!response.ok || !Array.isArray(body.repositories)) {
       throw new Error('github_installation_repos_failed')
     }
