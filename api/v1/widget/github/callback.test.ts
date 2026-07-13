@@ -4,12 +4,16 @@ vi.mock('../../../_lib/github-app.js', () => ({
   assertGitHubUserInstallationAccess: vi.fn(),
   createGitHubAppInstallationToken: vi.fn(() => 'installation-token'),
   listUserInstallationRepositories: vi.fn(() => [{ fullName: 'acme/widgets' }]),
+  verifyGitHubAppReuseAuthState: vi.fn(() => null),
   verifyGitHubAppSetupAuthState: vi.fn(() => null),
 }))
 vi.mock('../../../_lib/store.js', () => ({
+  deleteGitHubUserInstallation: vi.fn(),
   getGithubConnectionVersion: vi.fn(() => 0),
+  getGitHubUserInstallation: vi.fn(),
   getProjectMember: vi.fn(() => ({ role: 'admin' })),
   getRepoConfig: vi.fn(),
+  upsertGitHubUserInstallation: vi.fn(),
 }))
 vi.mock('../../../_lib/widget-github-auth.js', () => ({
   assertGitHubRepoAccess: vi.fn(),
@@ -25,9 +29,17 @@ import {
   assertGitHubUserInstallationAccess,
   createGitHubAppInstallationToken,
   listUserInstallationRepositories,
+  verifyGitHubAppReuseAuthState,
   verifyGitHubAppSetupAuthState,
 } from '../../../_lib/github-app.js'
-import { getGithubConnectionVersion, getProjectMember, getRepoConfig } from '../../../_lib/store.js'
+import {
+  deleteGitHubUserInstallation,
+  getGithubConnectionVersion,
+  getGitHubUserInstallation,
+  getProjectMember,
+  getRepoConfig,
+  upsertGitHubUserInstallation,
+} from '../../../_lib/store.js'
 import {
   assertGitHubRepoAccess,
   createWidgetAuthToken,
@@ -52,13 +64,19 @@ const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
-  vi.mocked(assertGitHubUserInstallationAccess).mockReset()
+  vi.mocked(assertGitHubUserInstallationAccess).mockReset().mockResolvedValue({
+    id: '7', login: 'acme', type: 'Organization',
+  })
   vi.mocked(createGitHubAppInstallationToken).mockClear()
   vi.mocked(listUserInstallationRepositories).mockReset().mockResolvedValue([{ fullName: 'acme/widgets' }] as never)
+  vi.mocked(verifyGitHubAppReuseAuthState).mockReset().mockReturnValue(null)
   vi.mocked(verifyGitHubAppSetupAuthState).mockReset().mockReturnValue(null)
+  vi.mocked(deleteGitHubUserInstallation).mockReset()
   vi.mocked(getGithubConnectionVersion).mockReset().mockResolvedValue(0)
+  vi.mocked(getGitHubUserInstallation).mockReset()
   vi.mocked(getProjectMember).mockReset().mockResolvedValue({ role: 'admin' } as never)
   vi.mocked(getRepoConfig).mockReset()
+  vi.mocked(upsertGitHubUserInstallation).mockReset().mockResolvedValue({ id: 'opaque-ref' } as never)
   vi.mocked(assertGitHubRepoAccess).mockReset()
   vi.mocked(createWidgetAuthToken).mockClear()
   vi.mocked(exchangeGitHubCode).mockReset().mockResolvedValue('gh-token')
@@ -178,6 +196,13 @@ describe('api/v1/widget/github/callback', () => {
     expect(exchangeGitHubCode).toHaveBeenCalledWith('c')
     expect(assertGitHubUserInstallationAccess).toHaveBeenCalledWith('gh-token', '99')
     expect(listUserInstallationRepositories).toHaveBeenCalledWith('gh-token', '99')
+    expect(upsertGitHubUserInstallation).toHaveBeenCalledWith({
+      userId: 'u',
+      installationId: '99',
+      githubAccountId: '7',
+      githubAccountLogin: 'acme',
+      githubAccountType: 'Organization',
+    })
     expect(createGitHubAppInstallationToken).toHaveBeenCalledWith({
       projectKey: 'p',
       userId: 'u',
@@ -213,6 +238,72 @@ describe('api/v1/widget/github/callback', () => {
     expect(createGitHubAppInstallationToken).toHaveBeenCalledTimes(1)
     expect(String(res.body)).toContain('github_app_install_failed')
     expect(consoleError).toHaveBeenCalled()
+    consoleError.mockRestore()
+  })
+
+  it('re-verifies and reuses only the initiating user\'s opaque installation mapping', async () => {
+    vi.mocked(verifyGitHubAppReuseAuthState).mockReturnValue({
+      type: 'github_app_reuse_auth_state',
+      projectKey: 'second-project',
+      userId: 'user-a',
+      origin: 'https://app.example',
+      installationRef: 'opaque-ref',
+      nonce: 'n',
+      iat: 1,
+      exp: 2,
+    })
+    vi.mocked(getGitHubUserInstallation).mockResolvedValue({
+      id: 'opaque-ref', installationId: '99',
+    } as never)
+    vi.mocked(getGithubConnectionVersion).mockResolvedValue(3)
+
+    const res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'reuse-state' }, headers: {} }, res)
+
+    expect(getProjectMember).toHaveBeenCalledWith('user-a', 'second-project')
+    expect(getGitHubUserInstallation).toHaveBeenCalledWith('user-a', 'opaque-ref')
+    expect(assertGitHubUserInstallationAccess).toHaveBeenCalledWith('gh-token', '99')
+    expect(createGitHubAppInstallationToken).toHaveBeenCalledWith({
+      projectKey: 'second-project',
+      userId: 'user-a',
+      installationId: '99',
+      expectedConnectionVersion: 3,
+    })
+    expect(String(res.body)).toContain('installation-token')
+    expect(String(res.body)).not.toContain('installationId')
+  })
+
+  it('invalidates only the user-scoped mapping when GitHub revokes reuse access', async () => {
+    vi.mocked(verifyGitHubAppReuseAuthState).mockReturnValue({
+      type: 'github_app_reuse_auth_state',
+      projectKey: 'p',
+      userId: 'user-a',
+      origin: 'https://app.example',
+      installationRef: 'opaque-ref',
+      nonce: 'n',
+      iat: 1,
+      exp: 2,
+    })
+    vi.mocked(getGitHubUserInstallation).mockResolvedValueOnce(null)
+
+    let res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'reuse-state' }, headers: {} }, res)
+    expect(exchangeGitHubCode).not.toHaveBeenCalled()
+    expect(deleteGitHubUserInstallation).toHaveBeenCalledWith('user-a', 'opaque-ref')
+
+    vi.mocked(getGitHubUserInstallation).mockResolvedValue({ installationId: '99' } as never)
+    vi.mocked(assertGitHubUserInstallationAccess).mockRejectedValue(new Error('github_installation_inaccessible'))
+
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'reuse-state' }, headers: {} }, res)
+    expect(deleteGitHubUserInstallation).toHaveBeenCalledWith('user-a', 'opaque-ref')
+    expect(String(res.body)).toContain('github_app_install_failed')
+
+    vi.mocked(deleteGitHubUserInstallation).mockRejectedValueOnce(new Error('db down'))
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    res = mockRes()
+    await call({ method: 'GET', query: { code: 'c', state: 'reuse-state' }, headers: {} }, res)
+    expect(consoleError).toHaveBeenCalledWith('GitHub installation cleanup failed')
     consoleError.mockRestore()
   })
 

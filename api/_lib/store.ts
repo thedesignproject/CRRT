@@ -1004,19 +1004,6 @@ export function normalizeGitHubRepoUrl(value: string): {
   }
 }
 
-type NormalizedGitHubRepo = NonNullable<ReturnType<typeof normalizeGitHubRepoUrl>>
-
-function githubRepoUpdate(normalized: NormalizedGitHubRepo | null, installationId: string | null, version: number) {
-  return {
-    repo_url: normalized?.repoUrl ?? null,
-    github_owner: normalized?.githubOwner ?? null,
-    github_repo: normalized?.githubRepo ?? null,
-    github_installation_id: installationId,
-    github_connection_version: version + 1,
-    updated_at: new Date().toISOString(),
-  }
-}
-
 export async function connectGithubRepo(
   projectKey: string,
   userId: string,
@@ -1074,35 +1061,6 @@ async function disconnectGithubRepoWithRetry(projectKey: string, userId: string)
 
 export async function disconnectGithubRepo(projectKey: string, userId: string) {
   return disconnectGithubRepoWithRetry(projectKey, userId)
-}
-
-async function replaceGithubRepoWithRetry(projectKey: string, normalized: NormalizedGitHubRepo | null) {
-  const supabase = getSupabase()
-
-  for (let attempt = 0; attempt < MAX_CONNECTION_WRITE_ATTEMPTS; attempt += 1) {
-    const version = await getGithubConnectionVersion(projectKey)
-    const { data, error } = await supabase
-      .from('project_repo_configs')
-      .update(githubRepoUpdate(normalized, null, version) as never)
-      .eq('project_key', projectKey)
-      .eq('github_connection_version', version)
-      .select(REPO_CONFIG_COLUMNS)
-      .maybeSingle()
-
-    if (error) throw new Error(error.message)
-    if (data) return mapRepoConfig(data as RepoConfigRow)
-  }
-
-  throw new Error('stale_connection_attempt')
-}
-
-export async function updateRepoConfig(projectKey: string, patch: {
-  repoUrl: string | null
-}) {
-  const normalized = patch.repoUrl === null ? null : normalizeGitHubRepoUrl(patch.repoUrl)
-  if (patch.repoUrl !== null && !normalized) throw new Error('invalid_github_repo')
-
-  return replaceGithubRepoWithRetry(projectKey, normalized)
 }
 
 export async function createPublicComment(input: {
