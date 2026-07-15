@@ -17,6 +17,7 @@ import {
   listGitHubUserInstallations,
   normalizeGitHubRepoUrl,
   removeProjectMember,
+  updateRepoConfig,
   updateProject,
   upsertGitHubUserInstallation,
 } from './store.js'
@@ -369,6 +370,32 @@ describe('race-safe GitHub connection persistence', () => {
     }) as never)
 
     await expect(disconnectGithubRepo('p', 'u')).rejects.toThrow('boom')
+  })
+
+  it('keeps legacy repository updates covered until the verified API replaces them', async () => {
+    for (const [repoUrl, row, status] of [
+      ['acme/widgets', { ...connectedRow, github_installation_id: null }, 'reconnect_required'],
+      [null, {
+        ...connectedRow,
+        repo_url: null,
+        github_owner: null,
+        github_repo: null,
+        github_installation_id: null,
+      }, 'disconnected'],
+    ] as const) {
+      vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+        project_repo_configs: [{ data: row, error: null }],
+      }) as never)
+      await expect(updateRepoConfig('p', { repoUrl })).resolves.toMatchObject({
+        githubConnectionStatus: status,
+      })
+    }
+
+    await expect(updateRepoConfig('p', { repoUrl: 'not-a-repo' })).rejects.toThrow('invalid_github_repo')
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+    }) as never)
+    await expect(updateRepoConfig('p', { repoUrl: 'acme/widgets' })).rejects.toThrow('boom')
   })
 })
 
