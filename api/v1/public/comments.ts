@@ -1,13 +1,74 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, updateReviewStatus } from '../../_lib/store.js'
+import { waitUntil } from '@vercel/functions'
+import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import { parseCommentTarget } from '../../_lib/anchor.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
+import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from '../../_lib/comment-activity-email.js'
 
 const METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 const VALID_STATUSES = new Set(['open', 'accepted', 'approved', 'rejected', 'pending'])
+
+async function sendCommentActivityEmailInBackground(input: {
+  projectKey: string
+  projectName: string
+  pageUrl: string
+  authorName: string | null
+}) {
+  try {
+    if (!hasCommentActivityEmailConfig()) return
+
+    const cooldownSeconds = getCommentActivityCooldownSeconds()
+    const reservation = await reserveCommentActivityEmail(
+      input.projectKey,
+      cooldownSeconds,
+    )
+    if (!reservation.shouldSend) return
+
+    try {
+      const members = await listProjectMembers(input.projectKey)
+      const recipients = members.map((member) => member.email).filter((email): email is string => Boolean(email))
+      if (!canSendCommentActivityEmail(recipients)) {
+        if (cooldownSeconds > 0) {
+          await releaseCommentActivityEmailReservation(input.projectKey, reservation.activityCount)
+        }
+        return
+      }
+
+      await sendCommentActivityEmail({
+        recipients,
+        projectName: input.projectName,
+        pageUrl: input.pageUrl,
+        authorName: input.authorName,
+        activityCount: reservation.activityCount,
+        dashboardUrl: getCommentActivityDashboardUrl(),
+      })
+    } catch (error) {
+      if (cooldownSeconds > 0) {
+        await releaseCommentActivityEmailReservation(input.projectKey, reservation.activityCount)
+      }
+      throw error
+    }
+  } catch (error) {
+    console.warn('Comment activity email failed', error)
+  }
+}
+
+async function notifyProjectMembersOfCommentActivityInBackground(input: {
+  projectKey: string
+  projectName: string
+  commentId: string
+  authorName: string | null
+  pageUrl: string
+}) {
+  try {
+    await notifyProjectMembersOfCommentActivity(input)
+  } catch (error) {
+    console.warn('Comment activity notification failed', error)
+  }
+}
 
 function normalizePatchStatus(value: unknown): ReviewStatus | null {
   if (value === 'accepted' || value === 'approved') return 'accepted'
@@ -203,6 +264,21 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       targetType: parsedTarget.targetType,
       anchor: parsedTarget.anchor,
     })
+
+    waitUntil(notifyProjectMembersOfCommentActivityInBackground({
+      projectKey: resolvedProjectKey,
+      projectName: project.name,
+      commentId: comment.id,
+      authorName: comment.authorName,
+      pageUrl,
+    }))
+
+    waitUntil(sendCommentActivityEmailInBackground({
+      projectKey: resolvedProjectKey,
+      projectName: project.name,
+      pageUrl,
+      authorName: comment.authorName,
+    }))
 
     setCors(req, res, METHODS)
     return res.status(201).json(comment)

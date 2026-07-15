@@ -5,6 +5,7 @@ import {
   check,
   doublePrecision,
   index,
+  integer,
   jsonb,
   pgView,
   pgTable,
@@ -96,6 +97,16 @@ export const projectRepoConfigs = pgTable('project_repo_configs', {
   testCommand: text('test_command'),
   buildCommand: text('build_command'),
   agentInstructions: text('agent_instructions'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
+export const projectCommentEmailCooldowns = pgTable('project_comment_email_cooldowns', {
+  projectKey: text('project_key')
+    .primaryKey()
+    .references(() => projects.publicKey, { onDelete: 'cascade' }),
+  pendingCount: integer('pending_count').notNull().default(0),
+  cooldownUntil: timestamp('cooldown_until', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
@@ -230,9 +241,12 @@ export const notifications = pgTable(
   },
   (t) => ({
     userCreatedIdx: index('notifications_user_created_idx').on(t.userId, t.createdAt.desc()),
+    unreadCommentActivityProjectIdx: uniqueIndex('notifications_unread_comment_activity_project_idx')
+      .on(t.userId, sql`((payload->>'projectKey'))`)
+      .where(sql`${t.kind} = 'comment.activity' and ${t.readAt} is null`),
     kindCheck: check(
       'notifications_kind_check',
-      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined')`,
+      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined', 'comment.activity') and (${t.kind} <> 'comment.activity' or nullif(btrim(${t.payload}->>'projectKey'), '') is not null)`,
     ),
   }),
 )

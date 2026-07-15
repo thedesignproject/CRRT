@@ -264,6 +264,17 @@ export async function listProjectMembers(projectKey: string) {
   }))
 }
 
+export async function listProjectMemberIds(projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_key', projectKey)
+
+  if (error) throw new Error(error.message)
+  return ((data || []) as Array<{ user_id: string }>).map((row) => row.user_id)
+}
+
 /**
  * Remove a member from a project. Refuses to remove the last remaining admin
  * (`last_admin`) so a project can never be orphaned. Returns false when the
@@ -877,20 +888,35 @@ export function normalizeGitHubRepoUrl(value: string): {
   }
 }
 
-export async function updateRepoConfig(projectKey: string, patch: {
-  repoUrl: string | null
-}) {
-  const supabase = getSupabase()
-  const normalized = patch.repoUrl === null ? null : normalizeGitHubRepoUrl(patch.repoUrl)
-  if (patch.repoUrl !== null && !normalized) throw new Error('invalid_github_repo')
+export type RepoConfigPatch = {
+  repoUrl?: string | null
+  localPath?: string | null
+  devCommand?: string | null
+  testCommand?: string | null
+  agentInstructions?: string | null
+}
 
-  const update = {
+export async function updateRepoConfig(projectKey: string, patch: RepoConfigPatch) {
+  const supabase = getSupabase()
+  // Only touch the columns the caller provided: `undefined` leaves a field
+  // as-is, `null` clears it. The upsert's ON CONFLICT UPDATE only sets the
+  // supplied columns, so unrelated fields survive partial patches.
+  const update: Record<string, unknown> = {
     project_key: projectKey,
-    repo_url: normalized?.repoUrl ?? null,
-    github_owner: normalized?.githubOwner ?? null,
-    github_repo: normalized?.githubRepo ?? null,
     updated_at: new Date().toISOString(),
   }
+
+  if (patch.repoUrl !== undefined) {
+    const normalized = patch.repoUrl === null ? null : normalizeGitHubRepoUrl(patch.repoUrl)
+    if (patch.repoUrl !== null && !normalized) throw new Error('invalid_github_repo')
+    update.repo_url = normalized?.repoUrl ?? null
+    update.github_owner = normalized?.githubOwner ?? null
+    update.github_repo = normalized?.githubRepo ?? null
+  }
+  if (patch.localPath !== undefined) update.local_path = patch.localPath
+  if (patch.devCommand !== undefined) update.dev_command = patch.devCommand
+  if (patch.testCommand !== undefined) update.test_command = patch.testCommand
+  if (patch.agentInstructions !== undefined) update.agent_instructions = patch.agentInstructions
 
   const { data, error } = await supabase
     .from('project_repo_configs')
@@ -938,6 +964,44 @@ export async function createPublicComment(input: {
 
   if (error) throw new Error(error.message)
   return mapComment(data as CommentRow)
+}
+
+export async function reserveCommentActivityEmail(projectKey: string, cooldownSeconds: number) {
+  const supabase = getSupabase()
+  const safeCooldownSeconds = Number.isFinite(cooldownSeconds)
+    ? Math.max(0, Math.floor(cooldownSeconds))
+    : 0
+  if (safeCooldownSeconds <= 0) {
+    return { shouldSend: true, activityCount: 1 }
+  }
+
+  const { data, error } = await supabase
+    .rpc('reserve_comment_activity_email', {
+      p_project_key: projectKey,
+      p_cooldown_seconds: safeCooldownSeconds,
+    })
+    .single()
+
+  if (error) throw new Error(error.message)
+  const row = data as { should_send: boolean; activity_count: number } | null
+  if (!row) throw new Error('reserve_comment_activity_email returned no row')
+  return {
+    shouldSend: row.should_send,
+    activityCount: Number(row.activity_count),
+  }
+}
+
+export async function releaseCommentActivityEmailReservation(projectKey: string, activityCount: number) {
+  const safeActivityCount = Number.isFinite(activityCount)
+    ? Math.max(1, Math.floor(activityCount))
+    : 1
+  const { error } = await getSupabase()
+    .rpc('release_comment_activity_email_reservation', {
+      p_project_key: projectKey,
+      p_activity_count: safeActivityCount,
+    })
+
+  if (error) throw new Error(error.message)
 }
 
 export async function listComments(projectKey: string, filters: {
@@ -1211,6 +1275,35 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
   return (data || []).map((row) => mapComment(row as CommentRow))
 }
 
+/**
+ * Replace a share's access token credentials in place. Used to self-heal
+ * legacy rows whose ciphertext no longer authenticates under the current
+ * SHARE_TOKEN_SECRET — the row survives, the token is reissued.
+ */
+export async function rotateShareToken(shareId: string, expected: {
+  accessTokenHash: string
+  accessTokenCiphertext: string
+}, input: {
+  accessTokenHash: string
+  accessTokenCiphertext: string
+}) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('feedback_shares')
+    .update({
+      access_token_hash: input.accessTokenHash,
+      access_token_ciphertext: input.accessTokenCiphertext,
+    } as never)
+    .eq('id', shareId)
+    .eq('access_token_hash', expected.accessTokenHash)
+    .eq('access_token_ciphertext', expected.accessTokenCiphertext)
+    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapShare(data as ShareRow) : null
+}
+
 export async function getProjectShare(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -1375,7 +1468,7 @@ export async function saveOperationKey(shareId: string, agentId: string, idempot
   if (error) throw new Error(error.message)
 }
 
-export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined'
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity'
 
 type NotificationRow = {
   id: string
@@ -1414,6 +1507,50 @@ export async function createNotification(input: {
     .single()
   if (error) throw new Error(error.message)
   return mapNotification(data as NotificationRow)
+}
+
+export async function createOrIncrementCommentActivityNotification(input: {
+  userId: string
+  projectKey: string
+  projectName: string
+  commentId: string
+  authorName?: string | null
+  pageUrl: string
+}) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .rpc('create_or_increment_comment_activity_notification', {
+      p_user_id: input.userId,
+      p_project_key: input.projectKey,
+      p_project_name: input.projectName,
+      p_comment_id: input.commentId,
+      p_author_name: input.authorName ?? null,
+      p_page_url: input.pageUrl,
+    })
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapNotification(data as NotificationRow)
+}
+
+export async function notifyProjectMembersOfCommentActivity(input: {
+  projectKey: string
+  projectName: string
+  commentId: string
+  authorName?: string | null
+  pageUrl: string
+}) {
+  const memberIds = await listProjectMemberIds(input.projectKey)
+  await Promise.all(memberIds.map((userId) =>
+    createOrIncrementCommentActivityNotification({
+      userId,
+      projectKey: input.projectKey,
+      projectName: input.projectName,
+      commentId: input.commentId,
+      authorName: input.authorName ?? null,
+      pageUrl: input.pageUrl,
+    }),
+  ))
 }
 
 export async function listNotificationsForUser(

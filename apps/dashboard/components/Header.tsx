@@ -31,6 +31,7 @@ interface HeaderProps {
   apiBase: string
   accessToken: string
   onProjectsChanged: () => void
+  onOpenCommentActivity: (payload: { projectKey: string; latestCommentId?: string }) => void
   theme: 'light' | 'dark'
   toggleTheme: () => void
   user: User
@@ -62,6 +63,7 @@ export function Header({
   apiBase,
   accessToken,
   onProjectsChanged,
+  onOpenCommentActivity,
   theme,
   toggleTheme,
   user,
@@ -173,6 +175,7 @@ export function Header({
           accessToken={accessToken}
           userId={user.id}
           onProjectsChanged={onProjectsChanged}
+          onOpenCommentActivity={onOpenCommentActivity}
         />
         {superadmin && (
           <button

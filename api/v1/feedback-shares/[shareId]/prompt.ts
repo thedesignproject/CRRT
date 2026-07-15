@@ -1,9 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors, getStringQuery } from '../../../_lib/http.js'
-import { getProject, getRepoConfig, getShareById } from '../../../_lib/store.js'
+import { getProject, getRepoConfig, getShareById, rotateShareToken } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
-import { decryptToken } from '../../../_lib/tokens.js'
+import { decryptToken, encryptToken, generateAccessToken, hashToken } from '../../../_lib/tokens.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
@@ -24,7 +24,50 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!project) return jsonError(req, res, 404, 'Project not found')
 
     const repoConfig = await getRepoConfig(share.projectId)
-    const token = decryptToken(share.accessTokenCiphertext)
+
+    let token: string
+    try {
+      token = decryptToken(share.accessTokenCiphertext)
+    } catch {
+      // Legacy row encrypted under an old SHARE_TOKEN_SECRET. Self-heal by
+      // reissuing the token under the current secret; if the rotation itself
+      // fails, the share is unrecoverable — tell the client to recreate it.
+      try {
+        const freshToken = generateAccessToken()
+        const rotatedShare = await rotateShareToken(
+          share.id,
+          {
+            accessTokenHash: share.accessTokenHash,
+            accessTokenCiphertext: share.accessTokenCiphertext,
+          },
+          {
+            accessTokenHash: hashToken(freshToken),
+            accessTokenCiphertext: encryptToken(freshToken),
+          },
+        )
+        if (rotatedShare) {
+          token = freshToken
+          console.warn('[feedback-shares/prompt] rotated undecryptable share token', {
+            shareId: share.id,
+            projectKey: share.projectId,
+          })
+        } else {
+          // Another request won the rotation race. Use the winning token so
+          // the generated prompt remains valid.
+          const currentShare = await getShareById(share.id)
+          if (!currentShare) throw new Error('Share disappeared during token rotation')
+          token = decryptToken(currentShare.accessTokenCiphertext)
+        }
+      } catch (rotationError) {
+        console.error('[feedback-shares/prompt] share token rotation failed', {
+          shareId: share.id,
+          projectKey: share.projectId,
+          error: rotationError,
+        })
+        return jsonError(req, res, 410, 'This share link could not be refreshed — please create a new share.')
+      }
+    }
+
     const base = getAppUrl(req)
     const prompt = buildPrompt(target, {
       appUrl: base,
@@ -44,6 +87,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokenUrl: `${base}/api/v1/agent/shares/${share.slug}/state?token=${encodeURIComponent(token)}`,
     })
   } catch (error) {
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
+    console.error('[feedback-shares/prompt] prompt generation failed', {
+      shareId: getStringQuery(req.query.shareId),
+      error,
+    })
+    return jsonError(req, res, 500, 'Prompt could not be generated — please retry.')
   }
 }

@@ -10,20 +10,26 @@ interface NotificationBellProps {
   accessToken: string
   userId: string
   onProjectsChanged: () => void
+  onOpenCommentActivity: (payload: { projectKey: string; latestCommentId?: string }) => void
 }
 
 function describe(n: Notification): string {
-  const p = n.payload as { projectKey?: string; email?: string }
+  const p = n.payload as { projectKey?: string; projectName?: string; email?: string; count?: number }
   const project = p.projectKey ?? 'a project'
   switch (n.kind) {
     case 'invite.received': return `You were invited to ${project}`
     case 'invite.accepted': return `${p.email ?? 'Someone'} joined ${project}`
     case 'invite.declined': return `${p.email ?? 'Someone'} declined your invite to ${project}`
+    case 'comment.activity': {
+      const name = p.projectName ?? project
+      const count = typeof p.count === 'number' && p.count > 0 ? p.count : 1
+      return count === 1 ? `1 new CRRT on ${name}` : `${count} new CRRTs on ${name}`
+    }
     default: return 'Notification'
   }
 }
 
-export function NotificationBell({ apiBase, accessToken, userId, onProjectsChanged }: NotificationBellProps) {
+export function NotificationBell({ apiBase, accessToken, userId, onProjectsChanged, onOpenCommentActivity }: NotificationBellProps) {
   const { notifications, invites, unreadCount, loading, markRead, markAllRead, accept, decline } =
     useNotifications(apiBase, accessToken, userId, onProjectsChanged)
   const [open, setOpen] = useState(false)
@@ -42,6 +48,20 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
   async function runInvite(action: () => Promise<void>, key: string) {
     setPendingKey(key)
     try { await action() } finally { setPendingKey(null) }
+  }
+
+  async function openNotification(n: Notification) {
+    if (!n.readAt) await markRead(n.id)
+    if (n.kind === 'comment.activity') {
+      const payload = n.payload as { projectKey?: string; latestCommentId?: string }
+      if (payload.projectKey) {
+        onOpenCommentActivity({
+          projectKey: payload.projectKey,
+          latestCommentId: payload.latestCommentId,
+        })
+        setOpen(false)
+      }
+    }
   }
 
   return (
@@ -112,7 +132,7 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
               notifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => { if (!n.readAt) markRead(n.id) }}
+                  onClick={() => { void openNotification(n) }}
                   className="w-full text-left flex items-start gap-2 px-3 py-2.5 hover:bg-accent transition-colors border-b border-border/50 last:border-0"
                 >
                   <span className={cn('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', n.readAt ? 'bg-transparent' : 'bg-primary')} />

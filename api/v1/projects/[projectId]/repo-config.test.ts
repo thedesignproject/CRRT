@@ -117,4 +117,90 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: null }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
   })
+
+  it('accepts agentInstructions: trims edges, keeps inner markdown verbatim', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(updateRepoConfig).mockResolvedValueOnce({ agentInstructions: 'set' } as never)
+
+    const markdown = '  ## Read order\n\n- Read AGENTS.md **first**\n- Then `/rules`  '
+    const res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: markdown }, headers: {} }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(updateRepoConfig).toHaveBeenCalledWith('p', {
+      agentInstructions: '## Read order\n\n- Read AGENTS.md **first**\n- Then `/rules`',
+    })
+  })
+
+  it('clears agentInstructions on empty/whitespace string and on null', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(updateRepoConfig).mockResolvedValue({ agentInstructions: null } as never)
+
+    let res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: '   ' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(updateRepoConfig).toHaveBeenLastCalledWith('p', { agentInstructions: null })
+
+    res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: null }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(updateRepoConfig).toHaveBeenLastCalledWith('p', { agentInstructions: null })
+  })
+
+  it('rejects over-cap and non-string agentInstructions without touching the store', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+
+    let res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: 'x'.repeat(4001) }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error: 'agentInstructions must be 4000 characters or fewer' })
+
+    res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: 42 }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error: 'agentInstructions must be a string or null' })
+
+    expect(updateRepoConfig).not.toHaveBeenCalled()
+  })
+
+  it('accepts the co-located fields and forwards a combined patch', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(updateRepoConfig).mockResolvedValueOnce({} as never)
+
+    const res = mockRes()
+    await call({
+      method: 'PATCH',
+      query: { projectId: 'p' },
+      body: { repoUrl: 'acme/widgets', localPath: ' /srv/widgets ', devCommand: 'bun dev', testCommand: '' },
+      headers: {},
+    }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(updateRepoConfig).toHaveBeenCalledWith('p', {
+      repoUrl: 'acme/widgets',
+      localPath: '/srv/widgets',
+      devCommand: 'bun dev',
+      testCommand: null,
+    })
+  })
+
+  it('rejects a patch with no supported fields, and PATCH stays admin-gated', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
+    let res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { unrelated: true }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error: 'No supported fields to update' })
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'member' })
+    res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: 'x' }, headers: {} }, res)
+    expect(res.statusCode).toBe(403)
+    expect(updateRepoConfig).not.toHaveBeenCalled()
+  })
 })
