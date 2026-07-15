@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { Project } from '../api'
+import { AGENT_INSTRUCTIONS_MAX, type Project } from '../api'
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
@@ -36,10 +36,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [domains, setDomains] = useState<string[]>(project.allowedOrigins)
   const [domainInput, setDomainInput] = useState('')
   const [domainBusy, setDomainBusy] = useState(false)
+  const [instructions, setInstructions] = useState('')
+  const [instructionsBusy, setInstructionsBusy] = useState(false)
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
   useEffect(() => { setDomains(project.allowedOrigins) }, [project.publicKey, project.allowedOrigins])
+  // Repo config loads async (and re-loads per project): sync when it lands.
+  useEffect(() => { setInstructions(settings.repoConfig?.agentInstructions ?? '') }, [project.publicKey, settings.repoConfig])
 
   const adminCount = members.filter((m) => m.role === 'admin').length
   const nameChanged = name.trim() !== '' && name.trim() !== project.name
@@ -88,6 +92,21 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
       setActionError(err instanceof Error ? err.message : 'Failed to update allowed domains')
     } finally {
       setDomainBusy(false)
+    }
+  }
+
+  const instructionsChanged = instructions.trim() !== (settings.repoConfig?.agentInstructions ?? '')
+  const instructionsUnavailable = loading || settings.repoConfigError !== null
+  async function saveInstructions() {
+    if (!instructionsChanged || instructionsBusy || instructionsUnavailable) return
+    setActionError(null)
+    setInstructionsBusy(true)
+    try {
+      await settings.saveAgentInstructions(instructions.trim())
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Failed to save agent instructions')
+    } finally {
+      setInstructionsBusy(false)
     }
   }
 
@@ -227,6 +246,46 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
             </form>
           )}
         </section>
+
+        {/* Agent instructions */}
+        {isAdmin && (
+          <section className="mt-8">
+            <h2 className={sectionTitle}>Agent instructions</h2>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Injected into every agent handoff prompt for this project — e.g. &ldquo;Read AGENTS.md first and follow its read order.&rdquo;
+            </p>
+            {settings.repoConfigError && (
+              <p className="mt-2 text-[11px] text-status-rejected" role="alert">
+                Agent instructions couldn&rsquo;t be loaded. Refresh to try again.
+              </p>
+            )}
+            <div className={cn(card, 'mt-3 p-4')}>
+              <textarea
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                disabled={instructionsBusy || instructionsUnavailable}
+                maxLength={AGENT_INSTRUCTIONS_MAX}
+                rows={5}
+                placeholder="Read AGENTS.md first and follow its read order before any change."
+                aria-label="Agent instructions"
+                className="w-full px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-60 resize-y min-h-[96px]"
+                spellCheck={false}
+              />
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                  {instructions.length}/{AGENT_INSTRUCTIONS_MAX}
+                </span>
+                <button
+                  onClick={saveInstructions}
+                  disabled={!instructionsChanged || instructionsBusy || instructionsUnavailable}
+                  className={submitBtn(instructionsChanged && !instructionsBusy && !instructionsUnavailable)}
+                >
+                  {instructionsBusy ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Team */}
         <section className="mt-8">
