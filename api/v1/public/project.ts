@@ -25,15 +25,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Legacy row encrypted under an old SHARE_TOKEN_SECRET. Self-heal:
         // reissue the token under the current secret instead of failing the
         // project session forever.
-        token = generateAccessToken()
-        await rotateShareToken(share.id, {
-          accessTokenHash: hashToken(token),
-          accessTokenCiphertext: encryptToken(token),
-        })
-        console.warn('[public/project] rotated undecryptable share token', {
-          shareId: share.id,
-          projectKey,
-        })
+        const freshToken = generateAccessToken()
+        const rotatedShare = await rotateShareToken(
+          share.id,
+          {
+            accessTokenHash: share.accessTokenHash,
+            accessTokenCiphertext: share.accessTokenCiphertext,
+          },
+          {
+            accessTokenHash: hashToken(freshToken),
+            accessTokenCiphertext: encryptToken(freshToken),
+          },
+        )
+        if (rotatedShare) {
+          token = freshToken
+          console.warn('[public/project] rotated undecryptable share token', {
+            shareId: share.id,
+            projectKey,
+          })
+        } else {
+          // Another request won the rotation race. Re-read its credentials so
+          // this response returns the token that is still valid in the store.
+          share = await getProjectShare(projectKey)
+          if (!share) throw new Error('Share disappeared during token rotation')
+          token = decryptToken(share.accessTokenCiphertext)
+        }
       }
     } else {
       token = generateAccessToken()

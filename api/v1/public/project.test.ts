@@ -37,6 +37,7 @@ const SHARE = {
   projectId: 'proj',
   slug: 'sl',
   scopePageUrl: null,
+  accessTokenHash: 'legacy-hash',
   accessTokenCiphertext: 'legacy-ciphertext',
 }
 const PROJECT = { publicKey: 'proj', name: 'Proj' }
@@ -97,14 +98,35 @@ describe('api/v1/public/project', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ doc: { token: 'fresh-token', slug: 'sl' } })
-    expect(rotateShareToken).toHaveBeenCalledWith('share-1', {
-      accessTokenHash: 'hashed',
-      accessTokenCiphertext: 'ciphertext',
-    })
+    expect(rotateShareToken).toHaveBeenCalledWith(
+      'share-1',
+      { accessTokenHash: 'legacy-hash', accessTokenCiphertext: 'legacy-ciphertext' },
+      { accessTokenHash: 'hashed', accessTokenCiphertext: 'ciphertext' },
+    )
     expect(warnSpy).toHaveBeenCalledWith(
       '[public/project] rotated undecryptable share token',
       { shareId: 'share-1', projectKey: 'proj' },
     )
+  })
+
+  it('uses the winning token when another request rotates first', async () => {
+    const winningShare = { ...SHARE, accessTokenHash: 'winning-hash', accessTokenCiphertext: 'winning-ciphertext' }
+    vi.mocked(getProject).mockResolvedValueOnce(PROJECT as never)
+    vi.mocked(getProjectShare)
+      .mockResolvedValueOnce(SHARE as never)
+      .mockResolvedValueOnce(winningShare as never)
+    vi.mocked(decryptToken)
+      .mockImplementationOnce(() => { throw new Error('legacy ciphertext') })
+      .mockReturnValueOnce('winning-token')
+    vi.mocked(rotateShareToken).mockResolvedValueOnce(null)
+
+    const res = mockRes()
+    await call({ method: 'GET', query: { projectKey: 'proj' }, headers: {} }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toMatchObject({ doc: { token: 'winning-token', slug: 'sl' } })
+    expect(decryptToken).toHaveBeenLastCalledWith('winning-ciphertext')
+    expect(warnSpy).not.toHaveBeenCalled()
   })
 
   it('creates a fresh system share when none exists', async () => {

@@ -37,7 +37,7 @@ function mockRes() {
 }
 const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
-const SHARE = { id: 's', projectId: 'p', slug: 'sl', scopePageUrl: null, accessTokenCiphertext: 'c' }
+const SHARE = { id: 's', projectId: 'p', slug: 'sl', scopePageUrl: null, accessTokenHash: 'h', accessTokenCiphertext: 'c' }
 
 beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
@@ -128,16 +128,42 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ prompt: 'PROMPT_TEXT' })
-    expect(rotateShareToken).toHaveBeenCalledWith('s', {
-      accessTokenHash: 'hashed',
-      accessTokenCiphertext: 'ciphertext',
-    })
+    expect(rotateShareToken).toHaveBeenCalledWith(
+      's',
+      { accessTokenHash: 'h', accessTokenCiphertext: 'c' },
+      { accessTokenHash: 'hashed', accessTokenCiphertext: 'ciphertext' },
+    )
     expect(vi.mocked(buildPrompt)).toHaveBeenCalledWith('generic', expect.objectContaining({ token: 'fresh-token' }))
     expect(warnSpy).toHaveBeenCalledWith(
       '[feedback-shares/prompt] rotated undecryptable share token',
       { shareId: 's', projectKey: 'p' },
     )
     warnSpy.mockRestore()
+  })
+
+  it('builds the prompt with the winning token when another request rotates first', async () => {
+    const winningShare = { ...SHARE, accessTokenHash: 'winning-hash', accessTokenCiphertext: 'winning-ciphertext' }
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getShareById)
+      .mockResolvedValueOnce(SHARE as never)
+      .mockResolvedValueOnce(winningShare as never)
+    vi.mocked(requireProjectMembership).mockResolvedValueOnce(true)
+    vi.mocked(getProject).mockResolvedValueOnce({ publicKey: 'p', name: 'P' } as never)
+    vi.mocked(getRepoConfig).mockResolvedValueOnce(null)
+    vi.mocked(decryptToken)
+      .mockImplementationOnce(() => { throw new Error('legacy ciphertext') })
+      .mockReturnValueOnce('winning-token')
+    vi.mocked(rotateShareToken).mockResolvedValueOnce(null)
+
+    const res = mockRes()
+    await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(vi.mocked(buildPrompt)).toHaveBeenCalledWith(
+      'generic',
+      expect.objectContaining({ token: 'winning-token' }),
+    )
+    expect(decryptToken).toHaveBeenLastCalledWith('winning-ciphertext')
   })
 
   it('returns a clean 410 when rotation itself fails', async () => {

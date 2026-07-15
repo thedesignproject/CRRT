@@ -33,15 +33,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // reissuing the token under the current secret; if the rotation itself
       // fails, the share is unrecoverable — tell the client to recreate it.
       try {
-        token = generateAccessToken()
-        await rotateShareToken(share.id, {
-          accessTokenHash: hashToken(token),
-          accessTokenCiphertext: encryptToken(token),
-        })
-        console.warn('[feedback-shares/prompt] rotated undecryptable share token', {
-          shareId: share.id,
-          projectKey: share.projectId,
-        })
+        const freshToken = generateAccessToken()
+        const rotatedShare = await rotateShareToken(
+          share.id,
+          {
+            accessTokenHash: share.accessTokenHash,
+            accessTokenCiphertext: share.accessTokenCiphertext,
+          },
+          {
+            accessTokenHash: hashToken(freshToken),
+            accessTokenCiphertext: encryptToken(freshToken),
+          },
+        )
+        if (rotatedShare) {
+          token = freshToken
+          console.warn('[feedback-shares/prompt] rotated undecryptable share token', {
+            shareId: share.id,
+            projectKey: share.projectId,
+          })
+        } else {
+          // Another request won the rotation race. Use the winning token so
+          // the generated prompt remains valid.
+          const currentShare = await getShareById(share.id)
+          if (!currentShare) throw new Error('Share disappeared during token rotation')
+          token = decryptToken(currentShare.accessTokenCiphertext)
+        }
       } catch (rotationError) {
         console.error('[feedback-shares/prompt] share token rotation failed', {
           shareId: share.id,

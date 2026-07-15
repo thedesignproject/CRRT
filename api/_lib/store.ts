@@ -1265,7 +1265,10 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
  * legacy rows whose ciphertext no longer authenticates under the current
  * SHARE_TOKEN_SECRET — the row survives, the token is reissued.
  */
-export async function rotateShareToken(shareId: string, input: {
+export async function rotateShareToken(shareId: string, expected: {
+  accessTokenHash: string
+  accessTokenCiphertext: string
+}, input: {
   accessTokenHash: string
   accessTokenCiphertext: string
 }) {
@@ -1277,11 +1280,13 @@ export async function rotateShareToken(shareId: string, input: {
       access_token_ciphertext: input.accessTokenCiphertext,
     } as never)
     .eq('id', shareId)
+    .eq('access_token_hash', expected.accessTokenHash)
+    .eq('access_token_ciphertext', expected.accessTokenCiphertext)
     .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
-    .single()
+    .maybeSingle()
 
   if (error) throw new Error(error.message)
-  return mapShare(data as ShareRow)
+  return data ? mapShare(data as ShareRow) : null
 }
 
 export async function getProjectShare(projectKey: string) {
