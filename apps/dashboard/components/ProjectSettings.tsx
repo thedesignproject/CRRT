@@ -96,8 +96,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   }
 
   const instructionsChanged = instructions.trim() !== (settings.repoConfig?.agentInstructions ?? '')
+  const instructionsUnavailable = loading || settings.repoConfigError !== null
   async function saveInstructions() {
-    if (!instructionsChanged || instructionsBusy) return
+    if (!instructionsChanged || instructionsBusy || instructionsUnavailable) return
     setActionError(null)
     setInstructionsBusy(true)
     try {
@@ -253,11 +254,16 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
             <p className="mt-1 text-[11px] text-muted-foreground">
               Injected into every agent handoff prompt for this project — e.g. &ldquo;Read AGENTS.md first and follow its read order.&rdquo;
             </p>
+            {settings.repoConfigError && (
+              <p className="mt-2 text-[11px] text-status-rejected" role="alert">
+                Agent instructions couldn&rsquo;t be loaded. Refresh to try again.
+              </p>
+            )}
             <div className={cn(card, 'mt-3 p-4')}>
               <textarea
                 value={instructions}
                 onChange={(e) => setInstructions(e.target.value)}
-                disabled={instructionsBusy}
+                disabled={instructionsBusy || instructionsUnavailable}
                 maxLength={AGENT_INSTRUCTIONS_MAX}
                 rows={5}
                 placeholder="Read AGENTS.md first and follow its read order before any change."
@@ -271,8 +277,8 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                 </span>
                 <button
                   onClick={saveInstructions}
-                  disabled={!instructionsChanged || instructionsBusy}
-                  className={submitBtn(instructionsChanged && !instructionsBusy)}
+                  disabled={!instructionsChanged || instructionsBusy || instructionsUnavailable}
+                  className={submitBtn(instructionsChanged && !instructionsBusy && !instructionsUnavailable)}
                 >
                   {instructionsBusy ? 'Saving…' : 'Save'}
                 </button>

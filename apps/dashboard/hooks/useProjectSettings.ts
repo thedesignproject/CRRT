@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   cancelProjectInvite as apiCancelInvite,
   getProjectRepoConfig,
@@ -20,6 +20,7 @@ export interface UseProjectSettingsResult {
   members: ProjectMember[]
   invites: ProjectInvite[]
   repoConfig: RepoConfig | null
+  repoConfigError: string | null
   loading: boolean
   error: string | null
   isAdmin: boolean
@@ -48,41 +49,68 @@ export function useProjectSettings(
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [invites, setInvites] = useState<ProjectInvite[]>([])
   const [repoConfig, setRepoConfig] = useState<RepoConfig | null>(null)
+  const [repoConfigError, setRepoConfigError] = useState<string | null>(null)
+  const [loadedProjectKey, setLoadedProjectKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const currentProjectKey = useRef(projectKey)
+  const refreshSequence = useRef(0)
+  currentProjectKey.current = projectKey
 
   const refresh = useCallback(async () => {
     if (!projectKey) return
+    const sequence = ++refreshSequence.current
+    const isCurrent = () => currentProjectKey.current === projectKey && refreshSequence.current === sequence
     setLoading(true)
     setError(null)
+    setRepoConfigError(null)
     if (mocksEnabled) {
+      if (!isCurrent()) return
       setMembers([{ userId: currentUserId, email: 'you@example.com', role: 'admin', createdAt: new Date().toISOString() }])
       setInvites([])
       setRepoConfig(null)
+      setLoadedProjectKey(projectKey)
       setLoading(false)
       return
     }
     try {
-      // Repo config is admin-gated (403 for members): degrade to null rather
-      // than failing the whole settings panel, same as invites.
-      const [m, i, rc] = await Promise.all([
+      const [m, i] = await Promise.all([
         listProjectMembers(apiBase, accessToken, projectKey),
         listProjectInvites(apiBase, accessToken, projectKey).catch(() => [] as ProjectInvite[]),
-        getProjectRepoConfig(apiBase, accessToken, projectKey).catch(() => null),
       ])
+      if (!isCurrent()) return
+
+      let rc: RepoConfig | null = null
+      let rcError: string | null = null
+      const isProjectAdmin = m.some((member) => member.userId === currentUserId && member.role === 'admin')
+      if (isProjectAdmin) {
+        try {
+          rc = await getProjectRepoConfig(apiBase, accessToken, projectKey)
+        } catch (err) {
+          rcError = err instanceof Error ? err.message : 'Failed to load repository configuration'
+        }
+      }
+      if (!isCurrent()) return
+
       setMembers(m)
       setInvites(i)
       setRepoConfig(rc)
+      setRepoConfigError(rcError)
+      setLoadedProjectKey(projectKey)
     } catch (err) {
+      if (!isCurrent()) return
+      setMembers([])
+      setInvites([])
+      setRepoConfig(null)
+      setRepoConfigError(null)
+      setLoadedProjectKey(projectKey)
       setError(err instanceof Error ? err.message : 'Failed to load project settings')
     } finally {
-      setLoading(false)
+      if (isCurrent()) setLoading(false)
     }
   }, [apiBase, accessToken, projectKey, currentUserId])
 
   useEffect(() => { refresh() }, [refresh])
-
-  const isAdmin = members.some((m) => m.userId === currentUserId && m.role === 'admin')
 
   const rename = useCallback(async (name: string) => {
     const project = await apiRename(apiBase, accessToken, projectKey, name)
@@ -99,7 +127,11 @@ export function useProjectSettings(
   const saveAgentInstructions = useCallback(async (value: string) => {
     // '' clears the field server-side; the response is the fresh config.
     const config = await updateProjectRepoConfig(apiBase, accessToken, projectKey, { agentInstructions: value })
-    setRepoConfig(config)
+    if (currentProjectKey.current === projectKey) {
+      setRepoConfig(config)
+      setRepoConfigError(null)
+      setLoadedProjectKey(projectKey)
+    }
     return config
   }, [apiBase, accessToken, projectKey])
 
@@ -118,5 +150,28 @@ export function useProjectSettings(
     await refresh()
   }, [apiBase, accessToken, projectKey, refresh])
 
-  return { members, invites, repoConfig, loading, error, isAdmin, refresh, rename, updateAllowedOrigins, saveAgentInstructions, invite, removeMember, cancelInvite }
+  const hasCurrentProject = loadedProjectKey === projectKey
+  const currentMembers = hasCurrentProject ? members : []
+  const currentInvites = hasCurrentProject ? invites : []
+  const currentRepoConfig = hasCurrentProject ? repoConfig : null
+  const currentRepoConfigError = hasCurrentProject ? repoConfigError : null
+  const currentError = hasCurrentProject ? error : null
+  const currentIsAdmin = currentMembers.some((m) => m.userId === currentUserId && m.role === 'admin')
+
+  return {
+    members: currentMembers,
+    invites: currentInvites,
+    repoConfig: currentRepoConfig,
+    repoConfigError: currentRepoConfigError,
+    loading: hasCurrentProject ? loading : true,
+    error: currentError,
+    isAdmin: currentIsAdmin,
+    refresh,
+    rename,
+    updateAllowedOrigins,
+    saveAgentInstructions,
+    invite,
+    removeMember,
+    cancelInvite,
+  }
 }
