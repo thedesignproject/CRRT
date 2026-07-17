@@ -3476,7 +3476,7 @@ describe('<FeedbackWidget />', () => {
       }
     })
 
-    it('"Ver lista" in pin popover closes the popover and opens the sidebar (L1040)', async () => {
+    it('"View list" in pin popover closes the popover and opens the sidebar (L1040)', async () => {
       mockFetch(undefined, commentsResponse([seedComment({ body: 'list jump' })]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pin = await waitFor(() => {
@@ -3491,13 +3491,13 @@ describe('<FeedbackWidget />', () => {
         return el
       })
       await act(async () => { fireEvent.click(moreBtn) })
-      const verLista = await waitFor(() => {
+      const viewList = await waitFor(() => {
         const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ver lista')
-        if (!el) throw new Error('Ver lista not mounted')
+          .find((b) => b.textContent?.trim() === 'View list')
+        if (!el) throw new Error('View list not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(verLista) })
+      await act(async () => { fireEvent.click(viewList) })
       // Pin popover backdrop should be gone (selectedPin cleared).
       expect(document.querySelector('[data-fw-pin-backdrop]')).toBeNull()
       // Sidebar should be visible (translateX(0) not 100%).
@@ -3672,8 +3672,15 @@ describe('<FeedbackWidget />', () => {
     it('opens the launcher, keeps it open on inside pointerdown, closes on outside pointerdown', async () => {
       await mountWidget()
 
+      const menu = document.querySelector<HTMLDivElement>('[data-fw-launcher-menu]')!
+      expect(pillButton().getAttribute('aria-haspopup')).toBe('menu')
+      expect(pillButton().getAttribute('aria-controls')).toBe('crrt-launcher-menu')
+      expect(menu.id).toBe('crrt-launcher-menu')
+      expect(menu.getAttribute('aria-hidden')).toBe('true')
+
       await act(async () => { fireEvent.click(pillButton()) })
       expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
+      expect(menu.getAttribute('aria-hidden')).toBe('false')
 
       // Hover a menu action (its mouse handlers).
       const drop = menuAction('Drop comment')
@@ -3688,6 +3695,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.pointerDown(document.body) })
       await waitFor(() => {
         expect(pillButton().getAttribute('aria-label')).toBe('Open CRRT menu')
+        expect(menu.getAttribute('aria-hidden')).toBe('true')
       })
     })
 
