@@ -3,6 +3,7 @@ import type { Project } from '../api'
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
+import { GitHubRepositorySettings } from './GitHubRepositorySettings'
 import { Spinner } from './primitives'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
@@ -122,7 +123,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
         <h1 className="text-lg font-bold text-foreground tracking-tight">Project settings</h1>
         <p className="mt-1 text-[12px] text-muted-foreground">
-          {isAdmin ? 'Manage details, team, and invites.' : 'You have read-only access to this project.'}
+          {isAdmin ? 'Manage details, repository, team, and invites.' : 'You have read-only access to this project.'}
         </p>
 
         {error && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{error}</p>}
@@ -227,6 +228,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
             </form>
           )}
         </section>
+
+        {isAdmin && (
+          <GitHubRepositorySettings
+            apiBase={apiBase}
+            accessToken={accessToken}
+            projectKey={project.publicKey}
+          />
+        )}
 
         {/* Team */}
         <section className="mt-8">

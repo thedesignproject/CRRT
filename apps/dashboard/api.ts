@@ -308,6 +308,71 @@ export function removeProjectMember(apiBase: string, accessToken: string, projec
   )
 }
 
+export type GitHubConnectionStatus = 'disconnected' | 'reconnect_required' | 'connected'
+
+export interface GitHubRepoConfig {
+  projectKey: string
+  repoUrl: string | null
+  githubOwner: string | null
+  githubRepo: string | null
+  githubConnectionStatus: GitHubConnectionStatus
+}
+
+export interface GitHubInstallationOption {
+  id: string
+  githubAccountLogin: string
+  githubAccountType: 'User' | 'Organization'
+  lastVerifiedAt: string
+  authorizeUrl: string
+}
+
+export interface GitHubInstallOptions {
+  installUrl: string
+  installations: GitHubInstallationOption[]
+}
+
+export function getProjectRepoConfig(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubRepoConfig | null>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    { headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function getGitHubInstallOptions(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubInstallOptions>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/github/install`,
+    { headers: { ...authHeaders(accessToken) }, cache: 'no-store' },
+  )
+}
+
+export function connectProjectGitHubRepo(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  repoUrl: string,
+  installationToken: string,
+) {
+  return requestJson<GitHubRepoConfig>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ repoUrl, installationToken }),
+    },
+  )
+}
+
+export function disconnectProjectGitHubRepo(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubRepoConfig>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ repoUrl: null }),
+    },
+  )
+}
+
 // Rename a project (display name only — public key/slug are immutable).
 export function renameProject(apiBase: string, accessToken: string, projectKey: string, name: string) {
   return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
