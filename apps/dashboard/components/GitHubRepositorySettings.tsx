@@ -226,6 +226,18 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
               </div>
             )}
 
+            {status === 'disconnected' && !options && !installationToken && (
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground">No repository connected</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">Connect GitHub to choose the repository that will receive feedback issues.</p>
+                </div>
+                <button type="button" disabled={busy} onClick={chooseConnection} className={cn(button, 'w-full bg-primary text-primary-foreground hover:opacity-90 sm:w-auto')}>
+                  {busy ? 'Loading…' : 'Connect GitHub'}
+                </button>
+              </div>
+            )}
+
             {options && !installationToken && (
               <div className="space-y-2">
                 {options.installations.map((installation) => (
@@ -255,12 +267,12 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
               </div>
             )}
 
-            {!options && !installationToken && !confirmDisconnect && (
+            {status !== 'disconnected' && !options && !installationToken && !confirmDisconnect && (
               <div className="flex justify-end">
                 {status === 'connected' ? (
                   <button type="button" disabled={busy} onClick={() => setConfirmDisconnect(true)} className={cn(button, 'border border-border text-muted-foreground hover:text-status-rejected')}>Disconnect</button>
                 ) : (
-                  <button type="button" disabled={busy} onClick={chooseConnection} className={cn(button, 'bg-primary text-primary-foreground hover:opacity-90')}>{busy ? 'Loading…' : status === 'reconnect_required' ? 'Reconnect GitHub' : 'Connect GitHub'}</button>
+                  <button type="button" disabled={busy} onClick={chooseConnection} className={cn(button, 'bg-primary text-primary-foreground hover:opacity-90')}>{busy ? 'Loading…' : 'Reconnect GitHub'}</button>
                 )}
               </div>
             )}

@@ -60,6 +60,8 @@ describe('<GitHubRepositorySettings />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }))
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect repository' }))
     await screen.findByRole('button', { name: 'Connect GitHub' })
+    expect(screen.getByText('No repository connected')).toBeInTheDocument()
+    expect(screen.getByText(/repository that will receive feedback issues/)).toBeInTheDocument()
 
     const [, request] = fetchMock.mock.calls[1] as [string, RequestInit]
     expect(request.method).toBe('PATCH')
