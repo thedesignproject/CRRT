@@ -36,9 +36,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       origin: callbackOrigin(req),
     })
     setCors(req, res, ['GET', 'OPTIONS'])
+    res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({
       installUrl: buildGitHubAppInstallUrl(installState),
-      installState,
     })
   } catch (error) {
     console.error(error)
