@@ -67,6 +67,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       commentCount: comments.length,
     })
   } catch (error) {
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
+    console.error('[feedback-shares] share creation failed', {
+      projectKey: typeof req.body?.projectId === 'string' ? req.body.projectId : undefined,
+      error,
+    })
+    return jsonError(req, res, 500, 'Share could not be created — please retry.')
   }
 }
