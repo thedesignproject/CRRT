@@ -2,6 +2,7 @@ import { createHmac, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  assertGitHubInstallationRepoAccess,
   assertGitHubUserInstallationAccess,
   buildGitHubAppInstallUrl,
   createGitHubAppInstallationToken,
@@ -248,6 +249,60 @@ describe('github app install helpers', () => {
 
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
     await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
+
+    globalThis.fetch = vi.fn(async () => new Response('not-json', { status: 201 })) as never
+    await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
+
+    globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
+    await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
+  })
+
+  it('verifies repository access with a short-lived installation token', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'inst-token' }), {
+        status: 201,
+        headers: { 'content-type': 'application/json' },
+      }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 })) as never
+
+    await expect(assertGitHubInstallationRepoAccess('99', 'acme org', 'widgets/ui')).resolves.toBeUndefined()
+    expect(globalThis.fetch).toHaveBeenLastCalledWith(
+      'https://api.github.com/repos/acme%20org/widgets%2Fui',
+      {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: 'Bearer inst-token',
+        },
+      },
+    )
+  })
+
+  it('maps installation repository access failures without exposing credentials', async () => {
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'secret-token' }), { status: 201 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 404 })) as never
+    await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'private')).rejects.toThrow(
+      'github_installation_repo_inaccessible',
+    )
+
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'secret-token' }), { status: 201 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 500 })) as never
+    await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'widgets')).rejects.toThrow(
+      'github_installation_repo_lookup_failed',
+    )
+
+    globalThis.fetch = vi.fn(async () => new Response('{}', { status: 403 })) as never
+    await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'widgets')).rejects.toThrow(
+      'github_installation_token_failed',
+    )
+
+    globalThis.fetch = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'secret-token' }), { status: 201 }))
+      .mockRejectedValueOnce(new Error('secret transport detail')) as never
+    await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'widgets')).rejects.toThrow(
+      'github_installation_repo_lookup_failed',
+    )
   })
 
   it('checks user access to installations across pages', async () => {
@@ -255,13 +310,17 @@ describe('github app install helpers', () => {
       const page = new URL(url).searchParams.get('page')
       const installations = page === '1'
         ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
-        : [{ id: 101 }]
+        : [{ id: 101, account: { id: 7, login: 'acme', type: 'Organization' } }]
       return new Response(JSON.stringify({ installations }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       })
     }) as never
-    await expect(assertGitHubUserInstallationAccess('user-token', '101')).resolves.toBeUndefined()
+    await expect(assertGitHubUserInstallationAccess('user-token', '101')).resolves.toEqual({
+      id: '7',
+      login: 'acme',
+      type: 'Organization',
+    })
 
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ installations: [{ id: 1 }] }), {
       status: 200,
@@ -270,6 +329,17 @@ describe('github app install helpers', () => {
     await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_installation_inaccessible')
 
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+
+    globalThis.fetch = vi.fn(async () => new Response('not-json', { status: 200 })) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+
+    globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      installations: [{ id: 99, account: { id: 7, login: 'acme', type: 'Bot' } }],
+    }), { status: 200 })) as never
     await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
   })
 
@@ -311,6 +381,12 @@ describe('github app install helpers', () => {
     globalThis.fetch = vi.fn(async () => {
       return new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } })
     }) as never
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
+
+    globalThis.fetch = vi.fn(async () => new Response('not-json', { status: 200 })) as never
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
+
+    globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
     await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
   })
 })
