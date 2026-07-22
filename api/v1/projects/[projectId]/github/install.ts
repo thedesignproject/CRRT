@@ -1,7 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../../_lib/auth.js'
-import { buildGitHubAppInstallUrl, createGitHubAppInstallState } from '../../../../_lib/github-app.js'
-import { getProjectMember } from '../../../../_lib/store.js'
+import {
+  buildGitHubAppInstallUrl,
+  createGitHubAppInstallState,
+  createGitHubAppReuseAuthState,
+} from '../../../../_lib/github-app.js'
+import { getProjectMember, listGitHubUserInstallations } from '../../../../_lib/store.js'
+import { buildGitHubAuthorizeUrl } from '../../../../_lib/widget-github-auth.js'
 import { firstHeaderValue, getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 
 function callbackOrigin(req: VercelRequest) {
@@ -30,18 +35,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const membership = await getProjectMember(user.userId, projectKey)
     if (membership?.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
 
+    const origin = callbackOrigin(req)
     const installState = createGitHubAppInstallState({
       projectKey,
       userId: user.userId,
-      origin: callbackOrigin(req),
+      origin,
     })
+    const installations = (await listGitHubUserInstallations(user.userId)).map((installation) => ({
+      ...installation,
+      authorizeUrl: buildGitHubAuthorizeUrl(createGitHubAppReuseAuthState({
+        projectKey,
+        userId: user.userId,
+        origin,
+        installationRef: installation.id,
+      })),
+    }))
     setCors(req, res, ['GET', 'OPTIONS'])
+    res.setHeader('Cache-Control', 'no-store')
     return res.status(200).json({
       installUrl: buildGitHubAppInstallUrl(installState),
-      installState,
+      installations,
     })
   } catch (error) {
-    console.error(error)
+    console.error('GitHub installation options failed')
     return jsonError(req, res, 500, 'Internal server error')
   }
 }

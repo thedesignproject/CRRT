@@ -308,11 +308,14 @@ export function removeProjectMember(apiBase: string, accessToken: string, projec
   )
 }
 
+export type GitHubConnectionStatus = 'disconnected' | 'reconnect_required' | 'connected'
+
 export interface RepoConfig {
   projectKey: string
   repoUrl: string | null
   githubOwner: string | null
   githubRepo: string | null
+  githubConnectionStatus: GitHubConnectionStatus
   localPath: string | null
   defaultBranch: string | null
   installCommand: string | null
@@ -320,6 +323,21 @@ export interface RepoConfig {
   testCommand: string | null
   buildCommand: string | null
   agentInstructions: string | null
+}
+
+export type GitHubRepoConfig = RepoConfig
+
+export interface GitHubInstallationOption {
+  id: string
+  githubAccountLogin: string
+  githubAccountType: 'User' | 'Organization'
+  lastVerifiedAt: string
+  authorizeUrl: string
+}
+
+export interface GitHubInstallOptions {
+  installUrl: string
+  installations: GitHubInstallationOption[]
 }
 
 // Server-side cap for agentInstructions (mirrored from
@@ -334,12 +352,47 @@ export function getProjectRepoConfig(apiBase: string, accessToken: string, proje
   })
 }
 
+export function getGitHubInstallOptions(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubInstallOptions>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/github/install`,
+    { headers: { ...authHeaders(accessToken) }, cache: 'no-store' },
+  )
+}
+
+export function connectProjectGitHubRepo(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  repoUrl: string,
+  installationToken: string,
+) {
+  return requestJson<GitHubRepoConfig>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ repoUrl, installationToken }),
+    },
+  )
+}
+
+export function disconnectProjectGitHubRepo(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubRepoConfig>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ repoUrl: null }),
+    },
+  )
+}
+
 // Partial patch: absent keys stay untouched, null (or '') clears a field.
 export function updateProjectRepoConfig(
   apiBase: string,
   accessToken: string,
   projectKey: string,
-  patch: Partial<Pick<RepoConfig, 'repoUrl' | 'localPath' | 'devCommand' | 'testCommand' | 'agentInstructions'>>,
+  patch: Partial<Pick<RepoConfig, 'localPath' | 'devCommand' | 'testCommand' | 'agentInstructions'>>,
 ) {
   return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
     method: 'PATCH',

@@ -43,8 +43,9 @@ function repoConfig(projectKey: string, agentInstructions: string): RepoConfig {
   return {
     projectKey,
     repoUrl: null,
-    githubOwner: null,
-    githubRepo: null,
+  githubOwner: null,
+  githubRepo: null,
+  githubConnectionStatus: 'disconnected',
     localPath: null,
     defaultBranch: 'main',
     installCommand: null,
