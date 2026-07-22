@@ -38,12 +38,17 @@ function buildBody(input: PromptInput) {
     if (input.repoConfig?.devCommand) repoLines.push(`- Dev: ${input.repoConfig.devCommand}`)
     if (input.repoConfig?.testCommand) repoLines.push(`- Test: ${input.repoConfig.testCommand}`)
     if (input.repoConfig?.buildCommand) repoLines.push(`- Build: ${input.repoConfig.buildCommand}`)
-    if (input.repoConfig?.agentInstructions) repoLines.push(`- Extra: ${input.repoConfig.agentInstructions}`)
     if (input.pageUrl) repoLines.push(`- Scoped page: ${input.pageUrl}`)
   } else {
     repoLines.push(`Project: ${input.projectName} (${input.projectKey})`)
     if (input.pageUrl) repoLines.push(`Scoped page: ${input.pageUrl}`)
   }
+
+  // Team-authored, rendered verbatim (markdown intact) as its own labeled
+  // section so agents weight it as project policy, not repo metadata.
+  const instructionLines = input.repoConfig?.agentInstructions
+    ? ['', '## Project instructions (from the team)', '', input.repoConfig.agentInstructions]
+    : []
 
   return [
     'CRRT 🥕 is a visual feedback system: humans drop comments pinned to real pixels on live pages, and you implement the accepted ones.',
@@ -83,6 +88,7 @@ function buildBody(input: PromptInput) {
     '- Refresh /state before starting the next item.',
     '',
     repoLines.join('\n'),
+    ...instructionLines,
   ].join('\n')
 }
 

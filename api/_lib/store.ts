@@ -1063,6 +1063,46 @@ export async function disconnectGithubRepo(projectKey: string, userId: string) {
   return disconnectGithubRepoWithRetry(projectKey, userId)
 }
 
+export type RepoConfigPatch = {
+  repoUrl?: string | null
+  localPath?: string | null
+  devCommand?: string | null
+  testCommand?: string | null
+  agentInstructions?: string | null
+}
+
+export async function updateRepoConfig(projectKey: string, patch: RepoConfigPatch) {
+  const supabase = getSupabase()
+  // Only touch the columns the caller provided: `undefined` leaves a field
+  // as-is, `null` clears it. The upsert's ON CONFLICT UPDATE only sets the
+  // supplied columns, so unrelated fields survive partial patches.
+  const update: Record<string, unknown> = {
+    project_key: projectKey,
+    updated_at: new Date().toISOString(),
+  }
+
+  if (patch.repoUrl !== undefined) {
+    const normalized = patch.repoUrl === null ? null : normalizeGitHubRepoUrl(patch.repoUrl)
+    if (patch.repoUrl !== null && !normalized) throw new Error('invalid_github_repo')
+    update.repo_url = normalized?.repoUrl ?? null
+    update.github_owner = normalized?.githubOwner ?? null
+    update.github_repo = normalized?.githubRepo ?? null
+  }
+  if (patch.localPath !== undefined) update.local_path = patch.localPath
+  if (patch.devCommand !== undefined) update.dev_command = patch.devCommand
+  if (patch.testCommand !== undefined) update.test_command = patch.testCommand
+  if (patch.agentInstructions !== undefined) update.agent_instructions = patch.agentInstructions
+
+  const { data, error } = await supabase
+    .from('project_repo_configs')
+    .upsert(update as never, { onConflict: 'project_key' })
+    .select('project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapRepoConfig(data as RepoConfigRow)
+}
+
 export async function createPublicComment(input: {
   projectKey: string
   pageUrl: string
@@ -1408,6 +1448,35 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
 
   if (error) throw new Error(error.message)
   return (data || []).map((row) => mapComment(row as CommentRow))
+}
+
+/**
+ * Replace a share's access token credentials in place. Used to self-heal
+ * legacy rows whose ciphertext no longer authenticates under the current
+ * SHARE_TOKEN_SECRET — the row survives, the token is reissued.
+ */
+export async function rotateShareToken(shareId: string, expected: {
+  accessTokenHash: string
+  accessTokenCiphertext: string
+}, input: {
+  accessTokenHash: string
+  accessTokenCiphertext: string
+}) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('feedback_shares')
+    .update({
+      access_token_hash: input.accessTokenHash,
+      access_token_ciphertext: input.accessTokenCiphertext,
+    } as never)
+    .eq('id', shareId)
+    .eq('access_token_hash', expected.accessTokenHash)
+    .eq('access_token_ciphertext', expected.accessTokenCiphertext)
+    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapShare(data as ShareRow) : null
 }
 
 export async function getProjectShare(projectKey: string) {

@@ -310,13 +310,22 @@ export function removeProjectMember(apiBase: string, accessToken: string, projec
 
 export type GitHubConnectionStatus = 'disconnected' | 'reconnect_required' | 'connected'
 
-export interface GitHubRepoConfig {
+export interface RepoConfig {
   projectKey: string
   repoUrl: string | null
   githubOwner: string | null
   githubRepo: string | null
   githubConnectionStatus: GitHubConnectionStatus
+  localPath: string | null
+  defaultBranch: string | null
+  installCommand: string | null
+  devCommand: string | null
+  testCommand: string | null
+  buildCommand: string | null
+  agentInstructions: string | null
 }
+
+export type GitHubRepoConfig = RepoConfig
 
 export interface GitHubInstallationOption {
   id: string
@@ -331,11 +340,16 @@ export interface GitHubInstallOptions {
   installations: GitHubInstallationOption[]
 }
 
+// Server-side cap for agentInstructions (mirrored from
+// api/v1/projects/[projectId]/repo-config.ts AGENT_INSTRUCTIONS_MAX).
+export const AGENT_INSTRUCTIONS_MAX = 4000
+
+// Repo config is admin-gated server-side; GET returns null when the project
+// has no config row yet.
 export function getProjectRepoConfig(apiBase: string, accessToken: string, projectKey: string) {
-  return requestJson<GitHubRepoConfig | null>(
-    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
-    { headers: { ...authHeaders(accessToken) } },
-  )
+  return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
+    headers: { ...authHeaders(accessToken) },
+  })
 }
 
 export function getGitHubInstallOptions(apiBase: string, accessToken: string, projectKey: string) {
@@ -371,6 +385,20 @@ export function disconnectProjectGitHubRepo(apiBase: string, accessToken: string
       body: JSON.stringify({ repoUrl: null }),
     },
   )
+}
+
+// Partial patch: absent keys stay untouched, null (or '') clears a field.
+export function updateProjectRepoConfig(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  patch: Partial<Pick<RepoConfig, 'localPath' | 'devCommand' | 'testCommand' | 'agentInstructions'>>,
+) {
+  return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(patch),
+  })
 }
 
 // Rename a project (display name only — public key/slug are immutable).
