@@ -186,6 +186,57 @@ describe('updateRepoConfig', () => {
     }) as never)
     await expect(updateRepoConfig('p', { repoUrl: 'acme/widgets' })).rejects.toThrow('boom')
   })
+
+  it('writes only the provided fields — absent keys never reach the upsert', async () => {
+    // Chain variant that records upsert payloads so partial-patch semantics
+    // are assertable (the shared `chain` stub discards arguments).
+    const row = {
+      project_key: 'p',
+      repo_url: 'https://github.com/acme/widgets',
+      github_owner: 'acme',
+      github_repo: 'widgets',
+      local_path: '/srv/widgets',
+      default_branch: 'main',
+      install_command: null,
+      dev_command: 'bun dev',
+      test_command: 'bun test',
+      build_command: null,
+      agent_instructions: 'Read AGENTS.md first and follow its read order.',
+    }
+    const upserts: unknown[] = []
+    const p: Record<string, unknown> = {}
+    const self = () => p
+    for (const m of ['select', 'eq']) p[m] = self
+    p.upsert = (payload: unknown) => { upserts.push(payload); return p }
+    p.single = () => Promise.resolve({ data: row, error: null })
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => p) } as never)
+
+    const out = await updateRepoConfig('p', {
+      agentInstructions: 'Read AGENTS.md first and follow its read order.',
+      localPath: '/srv/widgets',
+      devCommand: 'bun dev',
+      testCommand: 'bun test',
+    })
+    const payload = upserts[0] as Record<string, unknown>
+    expect(payload).toMatchObject({
+      project_key: 'p',
+      agent_instructions: 'Read AGENTS.md first and follow its read order.',
+      local_path: '/srv/widgets',
+      dev_command: 'bun dev',
+      test_command: 'bun test',
+    })
+    // repoUrl was not in the patch: its columns must not be touched.
+    expect('repo_url' in payload).toBe(false)
+    expect('github_owner' in payload).toBe(false)
+    expect(out).toMatchObject({ agentInstructions: 'Read AGENTS.md first and follow its read order.' })
+
+    // null clears: the column is written as null, others stay absent.
+    const out2 = await updateRepoConfig('p', { agentInstructions: null })
+    const payload2 = upserts[1] as Record<string, unknown>
+    expect(payload2.agent_instructions).toBeNull()
+    expect('local_path' in payload2).toBe(false)
+    expect(out2).not.toBeNull()
+  })
 })
 
 describe('listProjectMembers', () => {

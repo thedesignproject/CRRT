@@ -440,6 +440,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (
         <ProjectSettings
+          key={activeProject.publicKey}
           project={activeProject}
           apiBase={API_BASE}
           accessToken={accessToken}
