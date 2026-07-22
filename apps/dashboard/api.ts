@@ -308,6 +308,46 @@ export function removeProjectMember(apiBase: string, accessToken: string, projec
   )
 }
 
+export interface RepoConfig {
+  projectKey: string
+  repoUrl: string | null
+  githubOwner: string | null
+  githubRepo: string | null
+  localPath: string | null
+  defaultBranch: string | null
+  installCommand: string | null
+  devCommand: string | null
+  testCommand: string | null
+  buildCommand: string | null
+  agentInstructions: string | null
+}
+
+// Server-side cap for agentInstructions (mirrored from
+// api/v1/projects/[projectId]/repo-config.ts AGENT_INSTRUCTIONS_MAX).
+export const AGENT_INSTRUCTIONS_MAX = 4000
+
+// Repo config is admin-gated server-side; GET returns null when the project
+// has no config row yet.
+export function getProjectRepoConfig(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+// Partial patch: absent keys stay untouched, null (or '') clears a field.
+export function updateProjectRepoConfig(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  patch: Partial<Pick<RepoConfig, 'repoUrl' | 'localPath' | 'devCommand' | 'testCommand' | 'agentInstructions'>>,
+) {
+  return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(patch),
+  })
+}
+
 // Rename a project (display name only — public key/slug are immutable).
 export function renameProject(apiBase: string, accessToken: string, projectKey: string, name: string) {
   return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
