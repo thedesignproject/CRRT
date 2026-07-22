@@ -62,6 +62,7 @@ type RepoConfigRow = {
   repo_url: string | null
   github_owner: string | null
   github_repo: string | null
+  github_installation_id: string | null
   local_path: string | null
   default_branch: string | null
   install_command: string | null
@@ -69,6 +70,43 @@ type RepoConfigRow = {
   test_command: string | null
   build_command: string | null
   agent_instructions: string | null
+}
+
+type GitHubUserInstallationRow = {
+  id: string
+  user_id: string
+  installation_id: string
+  github_account_id: string
+  github_account_login: string
+  github_account_type: 'User' | 'Organization'
+  last_verified_at: string
+}
+
+const REPO_CONFIG_COLUMNS =
+  'project_key, repo_url, github_owner, github_repo, github_installation_id, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions'
+
+const GITHUB_USER_INSTALLATION_COLUMNS =
+  'id, user_id, installation_id, github_account_id, github_account_login, github_account_type, last_verified_at'
+
+function mapGitHubUserInstallation(row: GitHubUserInstallationRow) {
+  return {
+    id: row.id,
+    installationId: row.installation_id,
+    githubAccountId: row.github_account_id,
+    githubAccountLogin: row.github_account_login,
+    githubAccountType: row.github_account_type,
+    lastVerifiedAt: row.last_verified_at,
+  }
+}
+
+function publicGitHubUserInstallation(row: GitHubUserInstallationRow) {
+  const mapped = mapGitHubUserInstallation(row)
+  return {
+    id: mapped.id,
+    githubAccountLogin: mapped.githubAccountLogin,
+    githubAccountType: mapped.githubAccountType,
+    lastVerifiedAt: mapped.lastVerifiedAt,
+  }
 }
 
 type ShareRow = {
@@ -138,11 +176,17 @@ function mapProject(row: ProjectRow) {
 
 function mapRepoConfig(row: RepoConfigRow | null) {
   if (!row) return null
+  const githubConnectionStatus = !row.repo_url
+    ? 'disconnected'
+    : row.github_installation_id
+      ? 'connected'
+      : 'reconnect_required'
   return {
     projectKey: row.project_key,
     repoUrl: row.repo_url,
     githubOwner: row.github_owner,
     githubRepo: row.github_repo,
+    githubConnectionStatus,
     localPath: row.local_path,
     defaultBranch: row.default_branch,
     installCommand: row.install_command,
@@ -841,7 +885,7 @@ export async function getRepoConfig(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_repo_configs')
-    .select('project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
+    .select(REPO_CONFIG_COLUMNS)
     .eq('project_key', projectKey)
     .maybeSingle()
 
@@ -860,6 +904,65 @@ export async function getGithubConnectionVersion(projectKey: string) {
   if (error) throw new Error(error.message)
   const version = (data as { github_connection_version?: unknown } | null)?.github_connection_version
   return typeof version === 'number' && Number.isSafeInteger(version) && version >= 0 ? version : 0
+}
+
+export async function listGitHubUserInstallations(userId: string) {
+  const { data, error } = await getSupabase()
+    .from('github_user_installations')
+    .select(GITHUB_USER_INSTALLATION_COLUMNS)
+    .eq('user_id', userId)
+    .order('github_account_login')
+
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as GitHubUserInstallationRow[]).map(publicGitHubUserInstallation)
+}
+
+export async function getGitHubUserInstallation(userId: string, installationRef: string) {
+  const { data, error } = await getSupabase()
+    .from('github_user_installations')
+    .select(GITHUB_USER_INSTALLATION_COLUMNS)
+    .eq('user_id', userId)
+    .eq('id', installationRef)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapGitHubUserInstallation(data as GitHubUserInstallationRow) : null
+}
+
+export async function upsertGitHubUserInstallation(input: {
+  userId: string
+  installationId: string
+  githubAccountId: string
+  githubAccountLogin: string
+  githubAccountType: 'User' | 'Organization'
+}) {
+  const now = new Date().toISOString()
+  const { data, error } = await getSupabase()
+    .from('github_user_installations')
+    .upsert([{
+      user_id: input.userId,
+      installation_id: input.installationId,
+      github_account_id: input.githubAccountId,
+      github_account_login: input.githubAccountLogin,
+      github_account_type: input.githubAccountType,
+      last_verified_at: now,
+      updated_at: now,
+    }] as never, { onConflict: 'user_id,installation_id' })
+    .select(GITHUB_USER_INSTALLATION_COLUMNS)
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapGitHubUserInstallation(data as GitHubUserInstallationRow)
+}
+
+export async function deleteGitHubUserInstallation(userId: string, installationRef: string) {
+  const { error } = await getSupabase()
+    .from('github_user_installations')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', installationRef)
+
+  if (error) throw new Error(error.message)
 }
 
 export function normalizeGitHubRepoUrl(value: string): {
@@ -899,6 +1002,65 @@ export function normalizeGitHubRepoUrl(value: string): {
     githubOwner: owner,
     githubRepo: normalizedRepo,
   }
+}
+
+export async function connectGithubRepo(
+  projectKey: string,
+  userId: string,
+  repoUrl: string,
+  installationId: string,
+  expectedVersion: number,
+) {
+  const normalized = normalizeGitHubRepoUrl(repoUrl)
+  if (!normalized) throw new Error('invalid_github_repo')
+
+  const { data, error } = await getSupabase()
+    .rpc('write_github_repo_connection_if_admin', {
+      p_project_key: projectKey,
+      p_user_id: userId,
+      p_expected_version: expectedVersion,
+      p_repo_url: normalized.repoUrl,
+      p_github_owner: normalized.githubOwner,
+      p_github_repo: normalized.githubRepo,
+      p_github_installation_id: installationId,
+    } as never)
+    .select(REPO_CONFIG_COLUMNS)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('stale_connection_attempt')
+  return mapRepoConfig(data as RepoConfigRow)
+}
+
+const MAX_CONNECTION_WRITE_ATTEMPTS = 3
+
+async function disconnectGithubRepoWithRetry(projectKey: string, userId: string) {
+  const supabase = getSupabase()
+
+  for (let attempt = 0; attempt < MAX_CONNECTION_WRITE_ATTEMPTS; attempt += 1) {
+    const version = await getGithubConnectionVersion(projectKey)
+    const { data, error } = await supabase
+      .rpc('write_github_repo_connection_if_admin', {
+        p_project_key: projectKey,
+        p_user_id: userId,
+        p_expected_version: version,
+        p_repo_url: null,
+        p_github_owner: null,
+        p_github_repo: null,
+        p_github_installation_id: null,
+      } as never)
+      .select(REPO_CONFIG_COLUMNS)
+      .maybeSingle()
+
+    if (error) throw new Error(error.message)
+    if (data) return mapRepoConfig(data as RepoConfigRow)
+  }
+
+  throw new Error('stale_connection_attempt')
+}
+
+export async function disconnectGithubRepo(projectKey: string, userId: string) {
+  return disconnectGithubRepoWithRetry(projectKey, userId)
 }
 
 export type RepoConfigPatch = {

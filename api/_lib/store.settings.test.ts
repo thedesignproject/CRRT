@@ -4,15 +4,22 @@ vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 
 import { getServiceSupabase } from './supabase.js'
 import {
+  connectGithubRepo,
+  deleteGitHubUserInstallation,
   deleteProjectInvite,
+  disconnectGithubRepo,
+  getGitHubUserInstallation,
   getGithubConnectionVersion,
+  getRepoConfig,
   getUserEmailsByIds,
   listProjectInvites,
   listProjectMembers,
+  listGitHubUserInstallations,
   normalizeGitHubRepoUrl,
   removeProjectMember,
   updateRepoConfig,
   updateProject,
+  upsertGitHubUserInstallation,
 } from './store.js'
 
 type Result = { data: unknown; error: { code?: string; message: string } | null }
@@ -22,7 +29,7 @@ type Result = { data: unknown; error: { code?: string; message: string } | null 
 function chain(result: Result) {
   const p: Record<string, unknown> = {}
   const self = () => p
-  for (const m of ['select', 'update', 'delete', 'insert', 'upsert', 'eq', 'order', 'is', 'in']) p[m] = self
+  for (const m of ['select', 'update', 'delete', 'insert', 'upsert', 'eq', 'order', 'is', 'in']) p[m] = vi.fn(self)
   p.maybeSingle = () => Promise.resolve(result)
   p.single = () => Promise.resolve(result)
   p.then = (resolve: (v: Result) => unknown, reject: (e: unknown) => unknown) =>
@@ -38,6 +45,10 @@ function supabaseWith(tableResults: Record<string, Result[]>) {
   return {
     from: vi.fn((table: string) => {
       const q = queues[table]
+      return chain(q && q.length ? (q.shift() as Result) : { data: null, error: null })
+    }),
+    rpc: vi.fn(() => {
+      const q = queues.__rpc
       return chain(q && q.length ? (q.shift() as Result) : { data: null, error: null })
     }),
   }
@@ -263,6 +274,259 @@ describe('updateRepoConfig', () => {
     expect(payload2.agent_instructions).toBeNull()
     expect('local_path' in payload2).toBe(false)
     expect(out2).not.toBeNull()
+  })
+})
+
+describe('GitHub user installation persistence', () => {
+  const installationRow = {
+    id: 'opaque-ref',
+    user_id: 'user-a',
+    installation_id: '99',
+    github_account_id: '7',
+    github_account_login: 'acme',
+    github_account_type: 'Organization',
+    last_verified_at: '2026-01-01T00:00:00.000Z',
+  }
+
+  it('lists only safe installation choices for the authenticated user', async () => {
+    const db = supabaseWith({ github_user_installations: [{ data: [installationRow], error: null }] })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+
+    const choices = await listGitHubUserInstallations('user-a')
+    expect(choices).toEqual([{
+      id: 'opaque-ref',
+      githubAccountLogin: 'acme',
+      githubAccountType: 'Organization',
+      lastVerifiedAt: '2026-01-01T00:00:00.000Z',
+    }])
+    expect(JSON.stringify(choices)).not.toContain('99')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      github_user_installations: [{ data: null, error: null }],
+    }) as never)
+    await expect(listGitHubUserInstallations('user-a')).resolves.toEqual([])
+  })
+
+  it('resolves an installation only through both user id and opaque id', async () => {
+    const db = supabaseWith({ github_user_installations: [{ data: installationRow, error: null }] })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+    await expect(getGitHubUserInstallation('user-a', 'opaque-ref')).resolves.toMatchObject({
+      id: 'opaque-ref',
+      installationId: '99',
+    })
+
+    const builder = db.from.mock.results[0].value as { eq: ReturnType<typeof vi.fn> }
+    expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-a')
+    expect(builder.eq).toHaveBeenCalledWith('id', 'opaque-ref')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      github_user_installations: [{ data: null, error: null }],
+    }) as never)
+    await expect(getGitHubUserInstallation('user-b', 'opaque-ref')).resolves.toBeNull()
+  })
+
+  it('atomically upserts verified metadata on the user-installation key', async () => {
+    const db = supabaseWith({ github_user_installations: [{ data: installationRow, error: null }] })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+    await expect(upsertGitHubUserInstallation({
+      userId: 'user-a',
+      installationId: '99',
+      githubAccountId: '7',
+      githubAccountLogin: 'acme',
+      githubAccountType: 'Organization',
+    })).resolves.toMatchObject({ id: 'opaque-ref', installationId: '99' })
+
+    const builder = db.from.mock.results[0].value as { upsert: ReturnType<typeof vi.fn> }
+    expect(builder.upsert.mock.calls[0][1]).toEqual({ onConflict: 'user_id,installation_id' })
+  })
+
+  it('deletes mappings with user scope and surfaces database failures', async () => {
+    const db = supabaseWith({ github_user_installations: [{ data: null, error: null }] })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+    await expect(deleteGitHubUserInstallation('user-a', 'opaque-ref')).resolves.toBeUndefined()
+    const builder = db.from.mock.results[0].value as { eq: ReturnType<typeof vi.fn> }
+    expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-a')
+    expect(builder.eq).toHaveBeenCalledWith('id', 'opaque-ref')
+
+    for (const operation of [
+      () => listGitHubUserInstallations('user-a'),
+      () => getGitHubUserInstallation('user-a', 'opaque-ref'),
+      () => upsertGitHubUserInstallation({
+        userId: 'user-a',
+        installationId: '99',
+        githubAccountId: '7',
+        githubAccountLogin: 'acme',
+        githubAccountType: 'Organization' as const,
+      }),
+      () => deleteGitHubUserInstallation('user-a', 'opaque-ref'),
+    ]) {
+      vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+        github_user_installations: [{ data: null, error: { message: 'boom' } }],
+      }) as never)
+      await expect(operation()).rejects.toThrow('boom')
+    }
+  })
+})
+
+describe('getRepoConfig', () => {
+  it('marks a legacy repository without an installation as requiring reconnection', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: {
+        project_key: 'p',
+        repo_url: 'https://github.com/acme/widgets',
+        github_owner: 'acme',
+        github_repo: 'widgets',
+        github_installation_id: null,
+        local_path: null,
+        default_branch: 'main',
+        install_command: null,
+        dev_command: null,
+        test_command: null,
+        build_command: null,
+        agent_instructions: null,
+      }, error: null }],
+    }) as never)
+    await expect(getRepoConfig('p')).resolves.toMatchObject({
+      githubConnectionStatus: 'reconnect_required',
+    })
+  })
+
+  it('returns null when the project has no repository config', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: null }],
+    }) as never)
+    await expect(getRepoConfig('missing')).resolves.toBeNull()
+  })
+
+  it('surfaces repository config query errors', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+    }) as never)
+    await expect(getRepoConfig('p')).rejects.toThrow('boom')
+  })
+})
+
+describe('race-safe GitHub connection persistence', () => {
+  const connectedRow = {
+    project_key: 'p',
+    repo_url: 'https://github.com/acme/widgets',
+    github_owner: 'acme',
+    github_repo: 'widgets',
+    github_installation_id: '99',
+    local_path: null,
+    default_branch: 'main',
+    install_command: null,
+    dev_command: null,
+    test_command: null,
+    build_command: null,
+    agent_instructions: null,
+  }
+
+  it('connects only when the expected version matches', async () => {
+    const db = supabaseWith({ __rpc: [{ data: connectedRow, error: null }] })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+    await expect(connectGithubRepo('p', 'u', 'acme/widgets', '99', 4)).resolves.toMatchObject({
+      githubConnectionStatus: 'connected',
+      githubOwner: 'acme',
+      githubRepo: 'widgets',
+    })
+    expect(db.rpc).toHaveBeenCalledWith('write_github_repo_connection_if_admin', {
+      p_project_key: 'p',
+      p_user_id: 'u',
+      p_expected_version: 4,
+      p_repo_url: 'https://github.com/acme/widgets',
+      p_github_owner: 'acme',
+      p_github_repo: 'widgets',
+      p_github_installation_id: '99',
+    })
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      __rpc: [{ data: null, error: null }],
+    }) as never)
+    await expect(connectGithubRepo('p', 'u', 'acme/widgets', '99', 4)).rejects.toThrow('stale_connection_attempt')
+  })
+
+  it('validates connect input and surfaces database errors', async () => {
+    await expect(connectGithubRepo('p', 'u', 'not-a-repo', '99', 0)).rejects.toThrow('invalid_github_repo')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      __rpc: [{ data: null, error: { message: 'boom' } }],
+    }) as never)
+    await expect(connectGithubRepo('p', 'u', 'acme/widgets', '99', 0)).rejects.toThrow('boom')
+  })
+
+  it('retries disconnect conflicts and returns the winning disconnected state', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [
+        { data: { github_connection_version: 4 }, error: null },
+        { data: { github_connection_version: 5 }, error: null },
+      ],
+      __rpc: [
+        { data: null, error: null },
+        { data: { ...connectedRow, repo_url: null, github_owner: null, github_repo: null, github_installation_id: null }, error: null },
+      ],
+    }) as never)
+
+    await expect(disconnectGithubRepo('p', 'u')).resolves.toMatchObject({
+      repoUrl: null,
+      githubConnectionStatus: 'disconnected',
+    })
+  })
+
+  it('fails closed after repeated disconnect contention', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [
+        { data: { github_connection_version: 1 }, error: null },
+        { data: { github_connection_version: 2 }, error: null },
+        { data: { github_connection_version: 3 }, error: null },
+      ],
+      __rpc: [
+        { data: null, error: null },
+        { data: null, error: null },
+        { data: null, error: null },
+      ],
+    }) as never)
+
+    await expect(disconnectGithubRepo('p', 'u')).rejects.toThrow('stale_connection_attempt')
+  })
+
+  it('does not retry a failed disconnect database write', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [
+        { data: { github_connection_version: 1 }, error: null },
+      ],
+      __rpc: [
+        { data: null, error: { message: 'boom' } },
+      ],
+    }) as never)
+
+    await expect(disconnectGithubRepo('p', 'u')).rejects.toThrow('boom')
+  })
+
+  it('keeps legacy repository updates covered until the verified API replaces them', async () => {
+    for (const [repoUrl, row, status] of [
+      ['acme/widgets', { ...connectedRow, github_installation_id: null }, 'reconnect_required'],
+      [null, {
+        ...connectedRow,
+        repo_url: null,
+        github_owner: null,
+        github_repo: null,
+        github_installation_id: null,
+      }, 'disconnected'],
+    ] as const) {
+      vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+        project_repo_configs: [{ data: row, error: null }],
+      }) as never)
+      await expect(updateRepoConfig('p', { repoUrl })).resolves.toMatchObject({
+        githubConnectionStatus: status,
+      })
+    }
+
+    await expect(updateRepoConfig('p', { repoUrl: 'not-a-repo' })).rejects.toThrow('invalid_github_repo')
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
+      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+    }) as never)
+    await expect(updateRepoConfig('p', { repoUrl: 'acme/widgets' })).rejects.toThrow('boom')
   })
 })
 
