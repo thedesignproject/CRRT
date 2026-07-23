@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectMembership(req, res, user, existing.projectId))) return
 
-    const comment = await updateReviewStatus(commentId, reviewStatus)
+    const comment = await updateReviewStatus(existing.projectId, commentId, reviewStatus)
     const activeShares = await findActiveSharesForComment(commentId)
     await Promise.all(activeShares.map((share) => createFeedbackEvent({
       shareId: share.id,
@@ -42,4 +42,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }
-

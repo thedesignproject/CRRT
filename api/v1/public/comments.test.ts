@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../_lib/store.js', () => ({
   ensurePublicProject: vi.fn(),
   createPublicComment: vi.fn(),
+  getComment: vi.fn(),
   listComments: vi.fn(),
   listProjectMembers: vi.fn(),
   notifyProjectMembersOfCommentActivity: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
 import { waitUntil } from '@vercel/functions'
 import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from '../../_lib/comment-activity-email.js'
-import { createPublicComment, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
@@ -74,6 +75,7 @@ const call = (req: unknown, res: unknown) =>
 beforeEach(() => {
   vi.mocked(ensurePublicProject).mockReset()
   vi.mocked(createPublicComment).mockReset()
+  vi.mocked(getComment).mockReset()
   vi.mocked(listComments).mockReset()
   vi.mocked(listProjectMembers).mockReset()
   vi.mocked(notifyProjectMembersOfCommentActivity).mockReset()
@@ -1265,6 +1267,7 @@ describe('api/v1/public/comments', () => {
   })
 
   it('updates a comment review status for widget compatibility', async () => {
+    vi.mocked(getComment).mockResolvedValue({ id: 'comment-1', projectId: 'demo-project' } as never)
     vi.mocked(updateReviewStatus).mockResolvedValue({
       id: 'comment-1',
       projectId: 'demo-project',
@@ -1291,13 +1294,14 @@ describe('api/v1/public/comments', () => {
       body: { id: 'comment-1', reviewStatus: 'accepted' },
     }), res)
 
-    expect(updateReviewStatus).toHaveBeenCalledWith('comment-1', 'accepted')
+    expect(updateReviewStatus).toHaveBeenCalledWith('demo-project', 'comment-1', 'accepted')
     expect(res.statusCode).toBe(200)
     expect((res.body as Record<string, unknown>).reviewStatus).toBe('accepted')
     expect(res.headers['Access-Control-Allow-Origin']).toBe('*')
   })
 
   it('normalizes widget review status aliases on PATCH', async () => {
+    vi.mocked(getComment).mockResolvedValue({ id: 'comment-1', projectId: 'demo-project' } as never)
     vi.mocked(updateReviewStatus)
       .mockResolvedValueOnce({
         id: 'comment-1',
@@ -1348,8 +1352,8 @@ describe('api/v1/public/comments', () => {
       body: { id: 'comment-1', reviewStatus: 'pending' },
     }), pendingRes)
 
-    expect(updateReviewStatus).toHaveBeenNthCalledWith(1, 'comment-1', 'rejected')
-    expect(updateReviewStatus).toHaveBeenNthCalledWith(2, 'comment-1', 'open')
+    expect(updateReviewStatus).toHaveBeenNthCalledWith(1, 'demo-project', 'comment-1', 'rejected')
+    expect(updateReviewStatus).toHaveBeenNthCalledWith(2, 'demo-project', 'comment-1', 'open')
     expect(rejectedRes.statusCode).toBe(200)
     expect(pendingRes.statusCode).toBe(200)
   })
@@ -1363,6 +1367,18 @@ describe('api/v1/public/comments', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body).toEqual({ error: 'reviewStatus must be open, accepted, or rejected' })
+    expect(updateReviewStatus).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 when a PATCH comment no longer exists', async () => {
+    vi.mocked(getComment).mockResolvedValue(null)
+    const res = mockRes()
+    await call(mockReq({
+      method: 'PATCH',
+      body: { id: 'missing', reviewStatus: 'accepted' },
+    }), res)
+
+    expect(res.statusCode).toBe(404)
     expect(updateReviewStatus).not.toHaveBeenCalled()
   })
 })
