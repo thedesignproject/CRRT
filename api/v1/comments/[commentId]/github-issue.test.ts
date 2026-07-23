@@ -304,6 +304,9 @@ describe('POST comment GitHub issue', () => {
     vi.mocked(createGithubIssue).mockRejectedValueOnce(new Error('boom'))
     vi.mocked(releaseCommentGithubIssue).mockRejectedValueOnce(new Error('database secret'))
     expect((await call()).body).toEqual({ error: 'Issue creation failed' })
+
+    vi.mocked(createGithubIssue).mockRejectedValueOnce('non-error failure')
+    expect((await call()).statusCode).toBe(500)
   })
 
   it('does not post unless the database marks the attempt uncertain', async () => {

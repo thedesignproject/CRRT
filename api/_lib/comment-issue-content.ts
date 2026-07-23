@@ -1,7 +1,10 @@
-import type { GithubIssueComment, GithubIssueContent } from './github-issues.js'
+import {
+  MAX_GITHUB_ISSUE_TITLE_LENGTH,
+  type GithubIssueComment,
+  type GithubIssueContent,
+} from './github-issues.js'
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
-const MAX_TITLE = 120
 const MAX_SUMMARY = 1_000
 const MAX_CONTEXT = 2_000
 const MAX_AI_FEEDBACK = 8_000
@@ -14,7 +17,7 @@ const CONTENT_SCHEMA = {
   additionalProperties: false,
   required: ['title', 'summary', 'implementationContext'],
   properties: {
-    title: { type: 'string', maxLength: MAX_TITLE },
+    title: { type: 'string', maxLength: MAX_GITHUB_ISSUE_TITLE_LENGTH },
     summary: { type: 'string', maxLength: MAX_SUMMARY },
     implementationContext: { type: 'string', maxLength: MAX_CONTEXT },
   },
@@ -25,6 +28,7 @@ const SYSTEM_PROMPT = [
   'Return exactly one JSON object matching this schema:',
   JSON.stringify(CONTENT_SCHEMA),
   'Every value must be a JSON string. Do not return markdown, nested objects, arrays, or extra keys.',
+  `The title must be a single concise sentence of at most ${MAX_GITHUB_ISSUE_TITLE_LENGTH} characters.`,
   'Do not invent missing context.',
 ].join('\n')
 
@@ -36,7 +40,9 @@ function fallbackContent(comment: GithubIssueComment): GithubIssueContent {
   const normalized = comment.body.trim().replace(/\s+/g, ' ')
   const short = normalized.slice(0, 72)
   return {
-    title: short ? `Feedback: ${short}`.slice(0, MAX_TITLE) : 'Address visual feedback',
+    title: short
+      ? `Feedback: ${short}`.slice(0, MAX_GITHUB_ISSUE_TITLE_LENGTH)
+      : 'Address visual feedback',
     summary: normalized.slice(0, MAX_SUMMARY)
       || 'Address the accepted visual feedback captured by CRRT.',
     implementationContext: [
@@ -46,7 +52,8 @@ function fallbackContent(comment: GithubIssueComment): GithubIssueContent {
   }
 }
 
-function safePageUrl(value: string) {
+function safePageUrl(value: string | null) {
+  if (!value) return null
   try {
     const url = new URL(value)
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return null
@@ -106,7 +113,7 @@ function parseContent(value: unknown): GithubIssueContent | null {
       Object.keys(parsed).sort().join(',')
       !== 'implementationContext,summary,title'
     ) return null
-    const title = cleanText(parsed.title, MAX_TITLE)
+    const title = cleanText(parsed.title, MAX_GITHUB_ISSUE_TITLE_LENGTH)
     const summary = cleanText(parsed.summary, MAX_SUMMARY)
     const implementationContext = cleanText(parsed.implementationContext, MAX_CONTEXT)
     return title && summary && implementationContext

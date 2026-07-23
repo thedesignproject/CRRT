@@ -64,11 +64,11 @@ describe('GitHub issue formatting', () => {
     const body = formatGithubIssueBody({
       ...comment,
       authorName: null,
-      pageUrl: '',
+      pageUrl: null,
       imageUrl: 'file:///secret.png',
-      selector: '',
-      x: Number.NaN,
-      y: Number.NaN,
+      selector: null,
+      x: null,
+      y: null,
       targetType: '' as never,
       anchor: null,
     }, content, '<!-- marker -->')
@@ -146,9 +146,9 @@ describe('GitHub issue requests', () => {
       created_at: '2026-07-23T12:00:00Z',
     }), { status: 201 }))
     await expect(createGithubIssue({
-      accessToken: 'token', owner: 'acme', repo: 'site', title: 'Title', body: 'Body',
+      accessToken: 'token', owner: 'acme', repo: 'site', title: ' Title   here ', body: 'Body',
     })).resolves.toMatchObject({ issueNumber: 7 })
-    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Title', body: 'Body' })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Title here', body: 'Body' })
 
     fetchMock.mockResolvedValueOnce(new Response('{}', { status: 422 }))
     await expect(createGithubIssue({
@@ -162,6 +162,28 @@ describe('GitHub issue requests', () => {
       title: 'Title',
       body: 'x'.repeat(65_537),
     })).rejects.toThrow('github_issue_content_too_large')
+
+    await expect(createGithubIssue({
+      accessToken: 'secret', owner: 'acme', repo: 'site', title: '   ', body: 'Body',
+    })).rejects.toThrow('github_issue_title_invalid')
+  })
+
+  it('caps oversized titles without splitting Unicode characters', async () => {
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      number: 8,
+      html_url: 'https://github.com/acme/site/issues/8',
+      created_at: '2026-07-23T12:00:00Z',
+    }), { status: 201 }))
+    await createGithubIssue({
+      accessToken: 'token',
+      owner: 'acme',
+      repo: 'site',
+      title: '🚀'.repeat(130),
+      body: 'Body',
+    })
+    const title = JSON.parse(fetchMock.mock.calls[0][1].body).title as string
+    expect(Array.from(title)).toHaveLength(120)
+    expect(title).toBe(`${'🚀'.repeat(119)}…`)
   })
 
   it('maps search, indeterminate responses, and network failures safely', async () => {
