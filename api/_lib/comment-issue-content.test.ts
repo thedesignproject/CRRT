@@ -261,4 +261,20 @@ describe('generateCommentIssueContent', () => {
     const ftpRequest = JSON.parse(fetchMock.mock.calls[2][1].body)
     expect(JSON.parse(ftpRequest.messages[1].content).pageUrl).toBeNull()
   })
+
+  it.each(['ftp://example.com/private', 'http://example.com/page'])(
+    'handles page protocol %s without leaking unsupported metadata',
+    async (pageUrl) => {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        choices: [{ message: { content: 42 } }],
+      }), { status: 200 }))
+      await expect(generateCommentIssueContent({ ...comment, pageUrl })).resolves.toMatchObject({
+        summary: comment.body,
+      })
+      const request = JSON.parse(fetchMock.mock.calls[0][1].body)
+      expect(JSON.parse(request.messages[1].content).pageUrl).toBe(
+        pageUrl.startsWith('http:') ? pageUrl : null,
+      )
+    },
+  )
 })
