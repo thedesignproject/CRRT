@@ -50,8 +50,12 @@ export function CommentDetail({
           <div className="flex items-center justify-between px-6 h-[44px] shrink-0 border-b border-border bg-card">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="font-mono font-medium">#{selectedComment.id}</span>
-              <span>·</span>
-              <span className="font-mono">{truncateUrl(selectedComment.pageUrl)}</span>
+              {selectedComment.pageUrl ? (
+                <>
+                  <span>·</span>
+                  <span className="font-mono">{truncateUrl(selectedComment.pageUrl)}</span>
+                </>
+              ) : null}
               <span>·</span>
               {(() => {
                 const ds = getDisplayStatus(selectedComment)
@@ -82,7 +86,7 @@ export function CommentDetail({
                   >
                     <img
                       src={selectedComment.screenshotUrl}
-                      alt={`Screenshot of ${selectedComment.pageUrl}`}
+                      alt={selectedComment.pageUrl ? `Screenshot of ${selectedComment.pageUrl}` : 'Feedback screenshot'}
                       className="max-w-full max-h-[520px] w-auto h-auto object-contain"
                       draggable={false}
                     />
@@ -96,13 +100,17 @@ export function CommentDetail({
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-foreground">No screenshot captured</p>
-                      <p className="text-[11px] text-muted-foreground">Pin placed at ({selectedComment.x}, {selectedComment.y})</p>
+                      {selectedComment.x != null && selectedComment.y != null ? (
+                        <p className="text-[11px] text-muted-foreground">Pin placed at ({selectedComment.x}, {selectedComment.y})</p>
+                      ) : null}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/60 border border-border">
-                    <SelectorIcon size={12} />
-                    <code className="text-[12px] font-mono text-foreground/70 break-all">{selectedComment.selector}</code>
-                  </div>
+                  {selectedComment.selector ? (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/60 border border-border">
+                      <SelectorIcon size={12} />
+                      <code className="text-[12px] font-mono text-foreground/70 break-all">{selectedComment.selector}</code>
+                    </div>
+                  ) : null}
                 </div>
               )}
 
@@ -132,11 +140,11 @@ export function CommentDetail({
                         {selectedComment.anchor.containerSelector} · chars {selectedComment.anchor.startOffset}–{selectedComment.anchor.endOffset}
                       </div>
                     </div>
-                  ) : (
+                  ) : selectedComment.selector ? (
                     <div className="mt-2 text-xs font-mono text-muted-foreground">
                       {selectedComment.selector}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -171,9 +179,11 @@ export function CommentDetail({
 
               <div className="w-px h-5 bg-border mx-1" />
 
-              <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl, '_blank')}>
-                <ExternalLinkIcon size={13} /> Open page
-              </ActionBtn>
+              {selectedComment.pageUrl ? (
+                <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl!, '_blank')}>
+                  <ExternalLinkIcon size={13} /> Open page
+                </ActionBtn>
+              ) : null}
 
               <div className="flex-1" />
 

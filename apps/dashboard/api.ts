@@ -27,10 +27,10 @@ export interface TextRangeAnchorRecord {
 export interface CommentRecord {
   id: string
   projectId: string
-  pageUrl: string
-  selector: string
-  x: number
-  y: number
+  pageUrl: string | null
+  selector: string | null
+  x: number | null
+  y: number | null
   body: string
   reviewStatus: 'open' | 'accepted' | 'rejected'
   implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'

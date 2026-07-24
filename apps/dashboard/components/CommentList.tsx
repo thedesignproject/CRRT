@@ -216,7 +216,7 @@ export function CommentList({
                       </span>
                     ) : (
                       <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto truncate max-w-[140px]">
-                        {comment.selector.split(' > ').pop()}
+                        {comment.selector?.split(' > ').pop() || 'No page context'}
                       </span>
                     )}
                   </div>

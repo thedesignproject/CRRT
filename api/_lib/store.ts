@@ -19,10 +19,10 @@ const getSupabase = getServiceSupabase
 type CommentRow = {
   id: string
   project_id: string
-  url: string
-  x: number
-  y: number
-  element: string
+  url: string | null
+  x: number | null
+  y: number | null
+  element: string | null
   comment: string
   status: string | null
   implementation_status: ImplementationStatus | null
