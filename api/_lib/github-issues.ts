@@ -1,16 +1,17 @@
 import { createHmac } from 'node:crypto'
 
 const MAX_GITHUB_ISSUE_BODY_BYTES = 65_536
+export const MAX_GITHUB_ISSUE_TITLE_LENGTH = 120
 
 export type GithubIssueComment = {
   id: string
   body: string
   authorName: string | null
-  pageUrl: string
+  pageUrl: string | null
   imageUrl: string | null
-  selector: string
-  x: number
-  y: number
+  selector: string | null
+  x: number | null
+  y: number | null
   targetType: 'element_point' | 'text_range'
   anchor: Record<string, unknown> | null
 }
@@ -78,6 +79,15 @@ function present(anchor: Record<string, unknown>, key: string) {
   return value === null || value === undefined ? null : JSON.stringify(value)
 }
 
+function normalizeGithubIssueTitle(value: string) {
+  const title = value.trim().replace(/\s+/g, ' ')
+  if (!title) throw new Error('github_issue_title_invalid')
+  const characters = Array.from(title)
+  return characters.length <= MAX_GITHUB_ISSUE_TITLE_LENGTH
+    ? title
+    : `${characters.slice(0, MAX_GITHUB_ISSUE_TITLE_LENGTH - 1).join('').trimEnd()}…`
+}
+
 export function formatGithubIssueBody(
   comment: GithubIssueComment,
   content: GithubIssueContent,
@@ -94,7 +104,8 @@ export function formatGithubIssueBody(
 
   const selected: string[] = []
   if (comment.selector) selected.push(`Selector: \`${comment.selector}\``)
-  if (Number.isFinite(comment.x) && Number.isFinite(comment.y)) {
+  if (typeof comment.x === 'number' && typeof comment.y === 'number'
+    && Number.isFinite(comment.x) && Number.isFinite(comment.y)) {
     selected.push(`Coordinates: ${comment.x}, ${comment.y}`)
   }
   if (comment.targetType) selected.push(`Target type: ${comment.targetType}`)
@@ -156,12 +167,13 @@ export async function createGithubIssue(input: {
   if (Buffer.byteLength(input.body, 'utf8') > MAX_GITHUB_ISSUE_BODY_BYTES) {
     throw new Error('github_issue_content_too_large')
   }
+  const title = normalizeGithubIssueTitle(input.title)
   const path = `${encodeURIComponent(input.owner)}/${encodeURIComponent(input.repo)}`
   let response: Response
   try {
     response = await fetch(`https://api.github.com/repos/${path}/issues`, {
       method: 'POST',
-      body: JSON.stringify({ title: input.title, body: input.body }),
+      body: JSON.stringify({ title, body: input.body }),
       headers: githubHeaders(input.accessToken),
       redirect: 'error',
       signal: AbortSignal.timeout(10_000),

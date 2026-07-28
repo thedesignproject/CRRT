@@ -68,6 +68,7 @@ describe('generateCommentIssueContent', () => {
     const request = JSON.parse(init.body)
     expect(request.messages[0].content).toContain('"additionalProperties":false')
     expect(request.messages[0].content).toContain('Every value must be a JSON string')
+    expect(request.messages[0].content).toContain('at most 120 characters')
     const userContent = request.messages[1].content
     expect(userContent).toContain('https://example.com/pricing')
     expect(userContent).not.toContain('token=secret')
@@ -252,13 +253,18 @@ describe('generateCommentIssueContent', () => {
     expect(JSON.parse(request.messages[1].content)).not.toHaveProperty('coordinates')
 
     fetchMock.mockResolvedValueOnce(response())
+    await generateCommentIssueContent({ ...comment, pageUrl: null })
+    expect(JSON.parse(JSON.parse(fetchMock.mock.calls[1][1].body).messages[1].content).pageUrl)
+      .toBeNull()
+
+    fetchMock.mockResolvedValueOnce(response())
     await generateCommentIssueContent({ ...comment, pageUrl: 'http://example.com/path?secret=yes' })
-    const httpRequest = JSON.parse(fetchMock.mock.calls[1][1].body)
+    const httpRequest = JSON.parse(fetchMock.mock.calls[2][1].body)
     expect(JSON.parse(httpRequest.messages[1].content).pageUrl).toBe('http://example.com/path')
 
     fetchMock.mockResolvedValueOnce(response())
     await generateCommentIssueContent({ ...comment, pageUrl: 'ftp://example.com/private' })
-    const ftpRequest = JSON.parse(fetchMock.mock.calls[2][1].body)
+    const ftpRequest = JSON.parse(fetchMock.mock.calls[3][1].body)
     expect(JSON.parse(ftpRequest.messages[1].content).pageUrl).toBeNull()
   })
 

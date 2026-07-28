@@ -89,13 +89,12 @@ describe('<GitHubRepositorySettings />', () => {
     const popup = { closed: false } as Window
     const open = vi.spyOn(window, 'open').mockReturnValue(popup)
 
-    render(<GitHubRepositorySettings {...props} />)
+    render(<GitHubRepositorySettings {...props} apiBase="http://127.0.0.1:3001/api" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Use organization @acme' }))
     expect(open).toHaveBeenCalledWith(
       'https://github.com/login/oauth/authorize?state=reuse',
       'crrt-github-connect',
-      expect.stringContaining('popup'),
     )
 
     act(() => {
@@ -103,17 +102,17 @@ describe('<GitHubRepositorySettings />', () => {
         origin: 'https://attacker.example', source: popup, data: installMessage(),
       }))
       window.dispatchEvent(new MessageEvent('message', {
-        origin: window.location.origin, source: window, data: installMessage(),
+        origin: 'http://127.0.0.1:3001', source: window, data: installMessage(),
       }))
       window.dispatchEvent(new MessageEvent('message', {
-        origin: window.location.origin, source: popup, data: installMessage({ projectKey: 'other-project' }),
+        origin: 'http://127.0.0.1:3001', source: popup, data: installMessage({ projectKey: 'other-project' }),
       }))
     })
     expect(screen.queryByLabelText(/Repository/)).not.toBeInTheDocument()
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
-        origin: window.location.origin, source: popup, data: installMessage(),
+        origin: 'http://127.0.0.1:3001', source: popup, data: installMessage(),
       }))
     })
     const select = await screen.findByLabelText('Repository · @PyPranav')
@@ -149,7 +148,7 @@ describe('<GitHubRepositorySettings />', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Install the CRRT GitHub App' }))
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
-        origin: window.location.origin,
+        origin: new URL(API).origin,
         source: popup,
         data: installMessage({ repositories: [{ owner: 'x', name: 'y', repoUrl: 'javascript:alert(1)' }] }),
       }))
@@ -158,7 +157,7 @@ describe('<GitHubRepositorySettings />', () => {
 
     act(() => {
       window.dispatchEvent(new MessageEvent('message', {
-        origin: window.location.origin,
+        origin: new URL(API).origin,
         source: popup,
         data: { type: 'crrt:github-app-install', ok: false, error: 'secret-upstream-detail' },
       }))

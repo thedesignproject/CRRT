@@ -7,6 +7,7 @@ import {
 import {
   connectGithubRepo,
   disconnectGithubRepo,
+  getGithubIssueConnection,
   getProjectMember,
   getRepoConfig,
   normalizeGitHubRepoUrl,
@@ -23,11 +24,6 @@ const TEXT_FIELDS = [
   { key: 'devCommand', max: 400 },
   { key: 'testCommand', max: 400 },
 ] as const satisfies ReadonlyArray<{ key: keyof RepoConfigPatch; max: number }>
-
-async function requireProjectAdmin(userId: string, projectKey: string) {
-  const membership = await getProjectMember(userId, projectKey)
-  return membership?.role === 'admin'
-}
 
 function hasAuthorizationBearer(req: VercelRequest) {
   return typeof req.headers.authorization === 'string'
@@ -51,11 +47,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
 
   try {
-    if (!(await requireProjectAdmin(user.userId, projectKey))) {
+    const statusOnly = req.method === 'GET' && getStringQuery(req.query.view) === 'status'
+    const membership = await getProjectMember(user.userId, projectKey)
+    if (!membership || (!statusOnly && membership.role !== 'admin')) {
       return jsonError(req, res, 403, 'Admin role required')
     }
 
     if (req.method === 'GET') {
+      if (statusOnly) {
+        const connection = await getGithubIssueConnection(projectKey)
+        setCors(req, res, ['GET', 'PATCH', 'OPTIONS'])
+        res.setHeader('Cache-Control', 'no-store')
+        return res.status(200).json({
+          githubConnectionStatus: connection ? 'connected' : 'disconnected',
+        })
+      }
       const config = await getRepoConfig(projectKey)
       setCors(req, res, ['GET', 'PATCH', 'OPTIONS'])
       return res.status(200).json(config)

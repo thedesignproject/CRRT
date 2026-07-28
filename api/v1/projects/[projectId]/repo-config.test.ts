@@ -8,6 +8,7 @@ vi.mock('../../../_lib/github-app.js', () => ({
 vi.mock('../../../_lib/store.js', () => ({
   connectGithubRepo: vi.fn(),
   disconnectGithubRepo: vi.fn(),
+  getGithubIssueConnection: vi.fn(),
   getProjectMember: vi.fn(),
   getRepoConfig: vi.fn(),
   normalizeGitHubRepoUrl: vi.fn((value: string) => value === 'bad' ? null : ({
@@ -27,6 +28,7 @@ import {
 import {
   connectGithubRepo,
   disconnectGithubRepo,
+  getGithubIssueConnection,
   getProjectMember,
   getRepoConfig,
   updateRepoConfig,
@@ -57,6 +59,7 @@ beforeEach(() => {
   } as never)
   vi.mocked(connectGithubRepo).mockReset()
   vi.mocked(disconnectGithubRepo).mockReset()
+  vi.mocked(getGithubIssueConnection).mockReset()
   vi.mocked(getProjectMember).mockReset()
   vi.mocked(getRepoConfig).mockReset()
   vi.mocked(updateRepoConfig).mockReset()
@@ -140,6 +143,22 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     expect(connectGithubRepo).toHaveBeenCalledWith('p', 'u', 'https://github.com/acme/widgets', '99', 4)
     expect(res.headers['Cache-Control']).toBe('no-store')
     expect(res.body).not.toHaveProperty('githubInstallationId')
+  })
+
+  it.each([
+    [null, 'disconnected'],
+    [{ owner: 'acme', repo: 'site', installationId: 'private', connectionVersion: 2 }, 'connected'],
+  ] as const)('returns only safe status to project members', async (connection, status) => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'member' })
+    vi.mocked(getGithubIssueConnection).mockResolvedValue(connection)
+    const res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', view: 'status' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual({ githubConnectionStatus: status })
+    expect(JSON.stringify(res.body)).not.toContain('private')
+    expect(res.headers['Cache-Control']).toBe('no-store')
+    expect(getRepoConfig).not.toHaveBeenCalled()
   })
 
   it('disconnects the complete GitHub connection', async () => {
