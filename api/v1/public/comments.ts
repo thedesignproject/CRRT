@@ -185,6 +185,9 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/gif'])
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024 // 5 MB
+const MAX_COMMENT_BODY_LENGTH = 8_000
+const MAX_PAGE_URL_LENGTH = 2_048
+const MAX_SELECTOR_LENGTH = 1_000
 
 async function uploadImage(projectKey: string, mimeType: string, base64Data: string): Promise<string> {
   const buffer = Buffer.from(base64Data, 'base64')
@@ -209,8 +212,26 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     const { projectKey, projectId, pageUrl, selector, x, y, body, imageBase64, imageMimeType, authorName } = req.body ?? {}
     const resolvedProjectKey = typeof projectKey === 'string' ? projectKey : projectId
 
-    if (!resolvedProjectKey || !pageUrl || !selector || !body) {
+    if (
+      typeof resolvedProjectKey !== 'string'
+      || !resolvedProjectKey
+      || typeof pageUrl !== 'string'
+      || !pageUrl
+      || typeof selector !== 'string'
+      || !selector
+      || typeof body !== 'string'
+      || !body
+    ) {
       return jsonError(req, res, 400, 'Missing required fields: projectKey, pageUrl, selector, body')
+    }
+    if (pageUrl.length > MAX_PAGE_URL_LENGTH) {
+      return jsonError(req, res, 400, 'pageUrl must be 2048 characters or fewer')
+    }
+    if (selector.length > MAX_SELECTOR_LENGTH) {
+      return jsonError(req, res, 400, 'selector must be 1000 characters or fewer')
+    }
+    if (body.length > MAX_COMMENT_BODY_LENGTH) {
+      return jsonError(req, res, 400, 'body must be 8000 characters or fewer')
     }
 
     if (typeof x !== 'number' || !Number.isFinite(x) || typeof y !== 'number' || !Number.isFinite(y)) {

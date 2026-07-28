@@ -840,6 +840,33 @@ describe('api/v1/public/comments', () => {
     expect(createPublicComment).not.toHaveBeenCalled()
   })
 
+  it.each([
+    [{ projectKey: 42 }, 'Missing required fields: projectKey, pageUrl, selector, body'],
+    [{ pageUrl: 42 }, 'Missing required fields: projectKey, pageUrl, selector, body'],
+    [{ selector: 42 }, 'Missing required fields: projectKey, pageUrl, selector, body'],
+    [{ body: 42 }, 'Missing required fields: projectKey, pageUrl, selector, body'],
+    [{ pageUrl: 'x'.repeat(2_049) }, 'pageUrl must be 2048 characters or fewer'],
+    [{ selector: 'x'.repeat(1_001) }, 'selector must be 1000 characters or fewer'],
+    [{ body: 'x'.repeat(8_001) }, 'body must be 8000 characters or fewer'],
+  ])('bounds public comment text fields: %j', async (override, error) => {
+    const res = mockRes()
+    await call(mockReq({
+      body: {
+        projectKey: 'demo-project',
+        pageUrl: 'https://example.com',
+        selector: 'body',
+        x: 10,
+        y: 20,
+        body: 'Hello',
+        ...override,
+      },
+    }), res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error })
+    expect(createPublicComment).not.toHaveBeenCalled()
+  })
+
   it('validates optional author names', async () => {
     const nonStringRes = mockRes()
     await call(mockReq({

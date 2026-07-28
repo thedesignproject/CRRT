@@ -79,11 +79,14 @@ describe('GitHub issue formatting', () => {
   })
 
   it('rejects malformed URLs and missing marker configuration', () => {
-    expect(formatGithubIssueBody({
+    const body = formatGithubIssueBody({
       ...comment,
       pageUrl: 'not a URL',
       imageUrl: 'not a URL',
-    }, content, '<!-- marker -->')).not.toContain('## Page')
+      anchor: null,
+    }, content, '<!-- marker -->')
+    expect(body).not.toContain('## Page')
+    expect(body).toContain('Target type: text_range')
     delete process.env.WIDGET_AUTH_SECRET
     expect(() => createCommentIssueMarker(comment.id)).toThrow('missing_widget_auth_secret')
   })
