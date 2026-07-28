@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
-import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import { parseCommentTarget } from '../../_lib/anchor.js'
@@ -173,7 +173,9 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
       return jsonError(req, res, 400, 'reviewStatus must be open, accepted, or rejected')
     }
 
-    const comment = await updateReviewStatus(id, nextStatus)
+    const existing = await getComment(id)
+    if (!existing?.projectId) return jsonError(req, res, 404, 'Comment not found')
+    const comment = await updateReviewStatus(existing.projectId, id, nextStatus)
     setCors(req, res, METHODS)
     return res.status(200).json(comment)
   } catch (error) {
