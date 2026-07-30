@@ -1,0 +1,304 @@
+name: Vercel Deploy
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [trunk]
+
+permissions:
+  contents: read
+  deployments: write
+  pull-requests: write
+
+concurrency:
+  group: vercel-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'push' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    env:
+      DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+    steps:
+      - name: Select deployment target
+        id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+            echo "environment=Production" >> "$GITHUB_OUTPUT"
+            echo "production=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "environment=Preview (PR #$PR_NUMBER)" >> "$GITHUB_OUTPUT"
+            echo "production=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out deployment commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ env.DEPLOY_SHA }}
+          persist-credentials: false
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install Vercel CLI
+        run: bun add --global vercel@56.2.1
+
+      - name: Create isolated deployment source
+        id: source
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERCEL_ORG_ID:-}" ] || [ -z "${VERCEL_PROJECT_ID:-}" ]; then
+            echo "::error::VERCEL_ORG_ID and VERCEL_PROJECT_ID must be configured"
+            exit 1
+          fi
+
+          SOURCE_DIR="$RUNNER_TEMP/vercel-source"
+          ARCHIVE_PATH="$RUNNER_TEMP/vercel-source.tgz"
+
+          mkdir -p "$SOURCE_DIR"
+          git archive --format=tar.gz --output="$ARCHIVE_PATH" "$DEPLOY_SHA"
+          tar -xzf "$ARCHIVE_PATH" -C "$SOURCE_DIR"
+          mkdir -p "$SOURCE_DIR/.vercel"
+
+          PROJECT_FILE="$SOURCE_DIR/.vercel/project.json" node -e '
+            const fs = require("node:fs");
+            fs.writeFileSync(
+              process.env.PROJECT_FILE,
+              JSON.stringify({
+                orgId: process.env.VERCEL_ORG_ID,
+                projectId: process.env.VERCEL_PROJECT_ID,
+              }),
+            );
+          '
+
+          echo "directory=$SOURCE_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub deployment
+        id: create_deployment
+        uses: actions/github-script@v8
+        env:
+          DEPLOY_ENVIRONMENT: ${{ steps.target.outputs.environment }}
+          IS_PRODUCTION: ${{ steps.target.outputs.production }}
+          DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
+          RUN_URL: ${{ env.RUN_URL }}
+        with:
+          script: |
+            const production = process.env.IS_PRODUCTION === 'true';
+            const { data: deployment } =
+              await github.rest.repos.createDeployment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: process.env.DEPLOY_SHA,
+                auto_merge: false,
+                required_contexts: [],
+                environment: process.env.DEPLOY_ENVIRONMENT,
+                description: production
+                  ? 'Vercel production deployment'
+                  : 'Vercel preview deployment',
+                transient_environment: !production,
+                production_environment: production,
+                payload: {
+                  run_id: context.runId,
+                },
+              });
+
+            core.setOutput('deployment_id', String(deployment.id));
+
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'in_progress',
+              log_url: process.env.RUN_URL,
+              description: 'Vercel is building the deployment.',
+              auto_inactive: false,
+            });
+
+      - name: Deploy to Vercel
+        id: vercel
+        shell: bash
+        env:
+          IS_PRODUCTION: ${{ steps.target.outputs.production }}
+          SOURCE_DIR: ${{ steps.source.outputs.directory }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::VERCEL_TOKEN must be configured"
+            exit 1
+          fi
+
+          ARGS=(
+            deploy
+            --cwd "$SOURCE_DIR"
+            --archive=tgz
+            --token "$VERCEL_TOKEN"
+            --yes
+            --no-color
+          )
+          if [ "$IS_PRODUCTION" = "true" ]; then
+            ARGS+=(--prod)
+          fi
+
+          vercel "${ARGS[@]}" > "$RUNNER_TEMP/deployment-url.txt"
+          DEPLOYMENT_URL="$(tr -d '\r\n' < "$RUNNER_TEMP/deployment-url.txt")"
+
+          case "$DEPLOYMENT_URL" in
+            https://*) ;;
+            *)
+              echo "::error::Vercel did not return a valid deployment URL"
+              exit 1
+              ;;
+          esac
+
+          echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Publish successful deployment
+        uses: actions/github-script@v8
+        env:
+          DEPLOYMENT_ID: ${{ steps.create_deployment.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
+          DEPLOY_ENVIRONMENT: ${{ steps.target.outputs.environment }}
+          RUN_URL: ${{ env.RUN_URL }}
+        with:
+          script: |
+            const deploymentId = Number(process.env.DEPLOYMENT_ID);
+
+            // GitHub's auto_inactive option excludes transient previews and
+            // production deployments, so retire earlier deployments here.
+            const { data: previousDeployments } =
+              await github.rest.repos.listDeployments({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                environment: process.env.DEPLOY_ENVIRONMENT,
+                per_page: 25,
+              });
+
+            for (const deployment of previousDeployments) {
+              if (deployment.id === deploymentId) continue;
+
+              const { data: statuses } =
+                await github.rest.repos.listDeploymentStatuses({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.id,
+                  per_page: 1,
+                });
+              if (!statuses[0] || statuses[0].state === 'inactive') continue;
+
+              try {
+                await github.rest.repos.createDeploymentStatus({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  deployment_id: deployment.id,
+                  state: 'inactive',
+                  log_url: process.env.RUN_URL,
+                  description: `Superseded by deployment ${deploymentId}.`,
+                  auto_inactive: false,
+                });
+              } catch (error) {
+                core.warning(
+                  `Could not retire deployment ${deployment.id}: ${error.message}`,
+                );
+              }
+            }
+
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deploymentId,
+              state: 'success',
+              log_url: process.env.RUN_URL,
+              environment_url: process.env.DEPLOYMENT_URL,
+              description: 'Vercel deployment completed successfully.',
+              auto_inactive: false,
+            });
+
+      - name: Update preview comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v8
+        env:
+          DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
+          DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
+        with:
+          script: |
+            const marker = '<!-- crrt-vercel-preview -->';
+            const body = [
+              marker,
+              '### Vercel preview',
+              '',
+              `[View deployment](${process.env.DEPLOYMENT_URL})`,
+              '',
+              `Commit: \`${process.env.DEPLOY_SHA}\``,
+            ].join('\n');
+
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100,
+              },
+            );
+            const existing = comments.find(
+              (comment) =>
+                comment.user?.login === 'github-actions[bot]' &&
+                comment.body?.includes(marker),
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Publish failed deployment
+        if: failure() && steps.create_deployment.outputs.deployment_id != ''
+        uses: actions/github-script@v8
+        env:
+          DEPLOYMENT_ID: ${{ steps.create_deployment.outputs.deployment_id }}
+          DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
+          RUN_URL: ${{ env.RUN_URL }}
+        with:
+          script: |
+            const status = {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: Number(process.env.DEPLOYMENT_ID),
+              state: 'failure',
+              log_url: process.env.RUN_URL,
+              description: 'The Vercel deployment workflow failed.',
+              auto_inactive: false,
+            };
+            if (process.env.DEPLOYMENT_URL) {
+              status.environment_url = process.env.DEPLOYMENT_URL;
+            }
+            await github.rest.repos.createDeploymentStatus(status);

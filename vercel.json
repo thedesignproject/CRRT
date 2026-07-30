@@ -1,7 +1,12 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "bun run vercel-build",
+  "installCommand": "bun install --frozen-lockfile",
   "devCommand": "vite --config apps/landing/vite.config.ts --port $PORT",
   "outputDirectory": "apps/landing/dist",
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "api/**/*.ts": {
       "memory": 128,
