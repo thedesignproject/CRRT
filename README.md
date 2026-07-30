@@ -141,7 +141,7 @@ Schema is managed with [Drizzle ORM](https://orm.drizzle.team). The source of tr
 ### Applying the schema
 
 - **Development:** `bun db:push` — syncs the schema directly to your database. Fast iteration, skips migration history.
-- **Production:** `bun db:migrate` — applies versioned migrations from `db/migrations/`. `vercel-build` runs this on every deploy.
+- **Production:** `bun db:migrate` — applies versioned migrations from `db/migrations/`. `deploy-build` runs this on every deploy.
 
 ### Generating a new migration
 
@@ -317,7 +317,7 @@ And the client-side equivalents for the widget + dashboard:
 bun run db:migrate
 ```
 
-`vercel-build` does this on every deploy, but the first time you'll want to run it locally so the schema is in place before you push.
+`deploy-build` does this on every deploy, but the first time you'll want to run it locally so the schema is in place before you push.
 
 ### 4. Deploy
 
@@ -327,12 +327,12 @@ If you're targeting Vercel:
 vercel deploy
 ```
 
-The `vercel.json` at the repo root sets `buildCommand` to `bun run vercel-build`, which typechecks, builds the landing app to `apps/landing/dist`, and runs pending migrations. The dashboard is currently built separately — wire `bun run build:dashboard` into your pipeline and route `/dashboard/*` to its output if you want both surfaces under one deploy.
+The `vercel.json` at the repo root sets `buildCommand` to `bun run deploy-build`, which typechecks, builds the landing app to `apps/landing/dist`, builds the dashboard into `apps/landing/dist/dashboard`, and runs pending migrations. Both surfaces ship in one deploy.
 
 If you're targeting another runtime, the relevant outputs are:
 
 - `apps/landing/dist/` — static landing page
-- `apps/dashboard/dist/` — static dashboard SPA (build with `bun run build:dashboard`)
+- `apps/landing/dist/dashboard/` — static dashboard SPA (build with `bun run build:dashboard`)
 - `api/` — Vercel-style serverless handlers; adapt them to your platform if needed
 
 ### 5. Smoke test

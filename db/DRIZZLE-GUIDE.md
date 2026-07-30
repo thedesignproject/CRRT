@@ -13,9 +13,9 @@ Read this before any schema edit. `README.md` covers the basic commands; this fi
 ## Auto-apply pipeline
 
 ```
-git push (main)
+git push (trunk)
   → Vercel triggers prod build
-  → buildCommand = `bun run vercel-build`
+  → buildCommand = `bun run deploy-build`
   → bun run typecheck          (fail → abort, DB untouched)
   → vite build                 (fail → abort, DB untouched)
   → bun run db:migrate         (applies new migrations to prod DB)

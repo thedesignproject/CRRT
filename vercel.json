@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "bun run vercel-build",
+  "buildCommand": "bun run deploy-build",
   "installCommand": "bun install --frozen-lockfile",
   "devCommand": "vite --config apps/landing/vite.config.ts --port $PORT",
   "outputDirectory": "apps/landing/dist",

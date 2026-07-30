@@ -113,7 +113,7 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
         </P>
         <CodeBlock language="bash" code={migrateSnippet} />
         <P>
-          <InlineCode>vercel-build</InlineCode> runs <InlineCode>db:migrate</InlineCode> automatically on
+          <InlineCode>deploy-build</InlineCode> runs <InlineCode>db:migrate</InlineCode> automatically on
           each deploy, so subsequent schema bumps apply themselves.
         </P>
       </Section>
@@ -125,8 +125,8 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
         <CodeBlock language="bash" code={deploySnippet} />
         <P>
           <InlineCode>vercel.json</InlineCode> sets <InlineCode>buildCommand</InlineCode> to{' '}
-          <InlineCode>bun run vercel-build</InlineCode>, which typechecks, builds the landing app, and
-          applies pending migrations.
+          <InlineCode>bun run deploy-build</InlineCode>, which typechecks, builds the landing app and
+          dashboard into one output, and applies pending migrations.
         </P>
 
         <H3>On another runtime</H3>
@@ -138,7 +138,7 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
             <InlineCode>apps/landing/dist/</InlineCode> — static landing page.
           </li>
           <li>
-            <InlineCode>apps/dashboard/dist/</InlineCode> — static dashboard SPA (build with{' '}
+            <InlineCode>apps/landing/dist/dashboard/</InlineCode> — static dashboard SPA (build with{' '}
             <InlineCode>bun run build:dashboard</InlineCode>).
           </li>
           <li>
