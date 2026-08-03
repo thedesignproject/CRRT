@@ -1971,7 +1971,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', lineHeight: 0 }}>
           <div
             data-fw-launcher-menu
+            id="crrt-launcher-menu"
             role="menu"
+            aria-hidden={!launcherOpen}
             aria-label="CRRT actions"
             style={{
               position: 'absolute',
@@ -2029,6 +2031,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
           <button
             type="button"
             aria-expanded={launcherOpen}
+            aria-haspopup="menu"
+            aria-controls="crrt-launcher-menu"
             aria-label={launcherOpen ? 'Close CRRT menu' : 'Open CRRT menu'}
             onClick={(e) => {
               if (mode !== 'idle') return

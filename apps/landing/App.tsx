@@ -34,7 +34,9 @@ function getDemoProjectId(prefix: string) {
 
 export function App() {
   const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
-  const projectId = getDemoProjectId(import.meta.env.VITE_PROJECT_KEY ?? 'crrt-landing-demo')
+  const projectId = getDemoProjectId(
+    import.meta.env.VITE_PROJECT_KEY ?? import.meta.env.VITE_PROJECT_ID ?? 'crrt-landing-demo',
+  )
 
   // /docs/* shows the docs surface. Anything else renders the marketing site.
   // SSR-safe: location is read only after mount.
