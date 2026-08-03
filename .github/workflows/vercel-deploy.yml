@@ -91,7 +91,7 @@ jobs:
 
       - name: Create GitHub deployment
         id: create_deployment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOY_ENVIRONMENT: ${{ steps.target.outputs.environment }}
           IS_PRODUCTION: ${{ steps.target.outputs.production }}
@@ -171,7 +171,7 @@ jobs:
           echo "url=$DEPLOYMENT_URL" >> "$GITHUB_OUTPUT"
 
       - name: Publish successful deployment
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOYMENT_ID: ${{ steps.create_deployment.outputs.deployment_id }}
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
@@ -233,7 +233,7 @@ jobs:
 
       - name: Update preview comment
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
           DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
@@ -282,7 +282,7 @@ jobs:
 
       - name: Publish failed deployment
         if: failure() && steps.create_deployment.outputs.deployment_id != ''
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           DEPLOYMENT_ID: ${{ steps.create_deployment.outputs.deployment_id }}
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
