@@ -22,6 +22,7 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [signupSent, setSignupSent] = useState(false)
+  const [accountExists, setAccountExists] = useState(false)
   const [resetSent, setResetSent] = useState(false)
 
   // Sync mode if the user uses browser back / forward.
@@ -30,6 +31,7 @@ export function LoginPage() {
       setMode(modeFromPath(relPath(window.location.pathname)))
       setError(null)
       setSignupSent(false)
+      setAccountExists(false)
       setResetSent(false)
     }
     window.addEventListener('popstate', onPop)
@@ -42,6 +44,7 @@ export function LoginPage() {
     setMode(modeFromPath(path))
     setError(null)
     setSignupSent(false)
+    setAccountExists(false)
     setResetSent(false)
   }
 
@@ -55,13 +58,24 @@ export function LoginPage() {
         if (signinError) throw signinError
         navigate('/')
       } else if (mode === 'signup') {
-        const { error: signupError } = await supabase.auth.signUp({
+        const { data, error: signupError } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: `${window.location.origin}${route('/')}` },
         })
+        if (
+          signupError?.code === 'user_already_exists' ||
+          signupError?.message.toLowerCase() === 'user already registered'
+        ) {
+          setAccountExists(true)
+          return
+        }
         if (signupError) throw signupError
-        setSignupSent(true)
+        if (data.user?.identities?.length === 0) {
+          setAccountExists(true)
+        } else {
+          setSignupSent(true)
+        }
       } else {
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}${route('/reset-password')}`,
@@ -77,6 +91,7 @@ export function LoginPage() {
   }
 
   if (signupSent) return <CheckEmail email={email} variant="signup" onBackToSignIn={() => navigate('/login')} />
+  if (accountExists) return <AccountExists onSignIn={() => navigate('/login')} />
   if (resetSent) return <CheckEmail email={email} variant="reset" onBackToSignIn={() => navigate('/login')} />
 
   const isSignup = mode === 'signup'
@@ -375,6 +390,17 @@ export function LoginPage() {
   )
 }
 
+function AccountExists({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <AuthNotice
+      heading="account already exists"
+      body="there's already an account for this email. sign in to continue."
+      actionLabel="sign in →"
+      onAction={onSignIn}
+    />
+  )
+}
+
 function FieldLabel({ htmlFor, children }: { htmlFor: string; children: React.ReactNode }) {
   return (
     <label
@@ -444,6 +470,20 @@ function CheckEmail({
         <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. click it, then come back here to sign in.
       </>
     )
+  return <AuthNotice heading={heading} body={body} actionLabel="← back to sign in" onAction={onBackToSignIn} />
+}
+
+function AuthNotice({
+  heading,
+  body,
+  actionLabel,
+  onAction,
+}: {
+  heading: React.ReactNode
+  body: React.ReactNode
+  actionLabel: string
+  onAction: () => void
+}) {
   return (
     <div
       className="scanlines"
@@ -517,7 +557,7 @@ function CheckEmail({
         </p>
         <button
           type="button"
-          onClick={onBackToSignIn}
+          onClick={onAction}
           style={{
             fontFamily: 'var(--crrt-font-body)',
             fontSize: 14,
@@ -527,7 +567,7 @@ function CheckEmail({
             cursor: 'pointer',
           }}
         >
-          ← back to sign in
+          {actionLabel}
         </button>
       </div>
     </div>
