@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -67,6 +67,22 @@ describe('LoginPage signup', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'sign in →' }))
     await waitFor(() => expect(window.location.pathname).toBe('/login'))
+  })
+
+  it('clears the existing-account notice when browser history changes', async () => {
+    signUp.mockResolvedValue({
+      data: { user: { identities: [] }, session: null },
+      error: null,
+    })
+
+    await submitSignup()
+    expect(await screen.findByText('account already exists')).toBeInTheDocument()
+
+    window.history.pushState({}, '', '/login')
+    fireEvent.popState(window)
+
+    expect(await screen.findByText('welcome back')).toBeInTheDocument()
+    expect(screen.queryByText('account already exists')).not.toBeInTheDocument()
   })
 
   it('shows the confirmation message for a newly created account', async () => {
