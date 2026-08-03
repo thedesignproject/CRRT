@@ -163,6 +163,12 @@ export const comments = pgTable(
     targetType: text('target_type').default('element_point'),
     // TextRangeAnchor JSON for text_range comments; null means no anchor
     anchor: jsonb('anchor'),
+    githubIssueNumber: integer('github_issue_number'),
+    githubIssueUrl: text('github_issue_url'),
+    githubIssueCreatedAt: timestamp('github_issue_created_at', { withTimezone: true }),
+    githubIssueLeaseToken: uuid('github_issue_lease_token'),
+    githubIssueLeaseExpiresAt: timestamp('github_issue_lease_expires_at', { withTimezone: true }),
+    githubIssueUncertainAt: timestamp('github_issue_uncertain_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
@@ -173,6 +179,30 @@ export const comments = pgTable(
       t.projectId,
       t.status,
       t.implementationStatus,
+    ),
+    githubIssueFieldsCheck: check(
+      'comments_github_issue_fields_check',
+      sql`(
+        (${t.githubIssueNumber} is null and ${t.githubIssueUrl} is null and ${t.githubIssueCreatedAt} is null)
+        or
+        (${t.githubIssueNumber} > 0 and ${t.githubIssueUrl} is not null and ${t.githubIssueCreatedAt} is not null)
+      )`,
+    ),
+    githubIssueLeaseCheck: check(
+      'comments_github_issue_lease_check',
+      sql`(
+        (${t.githubIssueLeaseToken} is null and ${t.githubIssueLeaseExpiresAt} is null)
+        or
+        (${t.githubIssueLeaseToken} is not null and ${t.githubIssueLeaseExpiresAt} is not null)
+      )`,
+    ),
+    githubIssueStateCheck: check(
+      'comments_github_issue_state_check',
+      sql`(
+        (${t.githubIssueNumber} is null)
+        or
+        (${t.githubIssueLeaseToken} is null and ${t.githubIssueUncertainAt} is null)
+      )`,
     ),
   }),
 )

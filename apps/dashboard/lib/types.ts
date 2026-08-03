@@ -1,5 +1,6 @@
 import type { PromptTarget } from '../hooks/useAgentSession'
 import type { CommentTargetType, TextRangeAnchorRecord } from '../api'
+import type { GitHubIssueRecord } from '../api'
 
 export type ReviewStatus = 'open' | 'accepted' | 'rejected'
 export type ImplStatus = 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
@@ -11,8 +12,8 @@ export interface Comment {
   projectId: string
   pageUrl: string
   selector: string
-  x: number
-  y: number
+  x: number | null
+  y: number | null
   body: string
   reviewStatus: ReviewStatus
   implementationStatus: ImplStatus
@@ -25,6 +26,7 @@ export interface Comment {
   screenshotUrl: string | null
   targetType: CommentTargetType
   anchor: TextRangeAnchorRecord | null
+  githubIssue: GitHubIssueRecord | null
 }
 
 export interface AgentMeta {

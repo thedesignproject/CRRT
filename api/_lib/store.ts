@@ -19,10 +19,10 @@ const getSupabase = getServiceSupabase
 type CommentRow = {
   id: string
   project_id: string
-  url: string
-  x: number
-  y: number
-  element: string
+  url: string | null
+  x: number | null
+  y: number | null
+  element: string | null
   comment: string
   status: string | null
   implementation_status: ImplementationStatus | null
@@ -31,6 +31,12 @@ type CommentRow = {
   author_name: string | null
   target_type: string | null
   anchor: Record<string, unknown> | null
+  github_issue_number?: number | null
+  github_issue_url?: string | null
+  github_issue_created_at?: string | null
+  github_issue_lease_token?: string | null
+  github_issue_lease_expires_at?: string | null
+  github_issue_uncertain_at?: string | null
   created_at: string
   updated_at: string | null
 }
@@ -39,6 +45,8 @@ type CommentRow = {
 // hand-rolled select list elsewhere) silently drops fields from responses.
 const COMMENT_COLUMNS =
   'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, target_type, anchor, created_at, updated_at'
+const COMMENT_GITHUB_ISSUE_COLUMNS =
+  `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
 
 type ProjectRow = {
   public_key: string
@@ -160,6 +168,19 @@ function mapComment(row: CommentRow) {
     anchor: row.anchor ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at || row.created_at,
+  }
+}
+
+function mapProjectComment(row: CommentRow) {
+  return {
+    ...mapComment(row),
+    githubIssue: row.github_issue_number && row.github_issue_url && row.github_issue_created_at
+      ? {
+          issueNumber: row.github_issue_number,
+          issueUrl: row.github_issue_url,
+          createdAt: row.github_issue_created_at,
+        }
+      : null,
   }
 }
 
@@ -893,6 +914,29 @@ export async function getRepoConfig(projectKey: string) {
   return mapRepoConfig(data as RepoConfigRow | null)
 }
 
+export async function getGithubIssueConnection(projectKey: string) {
+  const { data, error } = await getSupabase()
+    .from('project_repo_configs')
+    .select('github_owner, github_repo, github_installation_id, github_connection_version')
+    .eq('project_key', projectKey)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  const row = data as {
+    github_owner: string | null
+    github_repo: string | null
+    github_installation_id: string | null
+    github_connection_version: number
+  } | null
+  if (!row?.github_owner || !row.github_repo || !row.github_installation_id) return null
+  return {
+    owner: row.github_owner,
+    repo: row.github_repo,
+    installationId: row.github_installation_id,
+    connectionVersion: row.github_connection_version,
+  }
+}
+
 export async function getGithubConnectionVersion(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -1199,6 +1243,137 @@ export async function listComments(projectKey: string, filters: {
   return (data || []).map((row) => mapComment(row as CommentRow))
 }
 
+export async function listProjectComments(projectKey: string, filters: {
+  pageUrl?: string
+  reviewStatus?: ReviewStatus
+  implementationStatus?: ImplementationStatus
+} = {}) {
+  let query = getSupabase()
+    .from('comments')
+    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .eq('project_id', projectKey)
+
+  if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
+  if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
+  if (filters.implementationStatus) query = query.eq('implementation_status', filters.implementationStatus)
+
+  const { data, error } = await query.order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data || []).map((row) => mapProjectComment(row as CommentRow))
+}
+
+export async function getCommentForGithubIssue(projectKey: string, commentId: string) {
+  const { data, error } = await getSupabase()
+    .from('comments')
+    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .eq('id', commentId)
+    .eq('project_id', projectKey)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  const row = data as CommentRow
+  return {
+    ...mapProjectComment(row),
+    githubIssueLeaseToken: row.github_issue_lease_token ?? null,
+    githubIssueLeaseExpiresAt: row.github_issue_lease_expires_at ?? null,
+    githubIssueUncertainAt: row.github_issue_uncertain_at ?? null,
+  }
+}
+
+export async function claimCommentGithubIssue(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+  leaseMilliseconds = 5 * 60_000,
+  recovery = false,
+) {
+  const leaseSeconds = Number.isFinite(leaseMilliseconds)
+    ? Math.ceil(leaseMilliseconds / 1_000)
+    : 5 * 60
+  const { data, error } = await getSupabase()
+    .rpc('claim_comment_github_issue', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+      p_lease_seconds: leaseSeconds,
+      p_recovery: recovery,
+    } as never)
+    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapProjectComment(data as CommentRow) : null
+}
+
+export async function finalizeCommentGithubIssue(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+  issue: { issueNumber: number; issueUrl: string; createdAt: string },
+) {
+  const { data, error } = await getSupabase()
+    .rpc('finalize_comment_github_issue', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+      p_issue_number: issue.issueNumber,
+      p_issue_url: issue.issueUrl,
+      p_issue_created_at: issue.createdAt,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
+export async function releaseCommentGithubIssue(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+) {
+  const { data, error } = await getSupabase()
+    .rpc('release_comment_github_issue', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
+export async function markCommentGithubIssueUncertain(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+) {
+  const { data, error } = await getSupabase()
+    .rpc('mark_comment_github_issue_uncertain', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
+export async function resetCommentGithubIssueAttempt(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+) {
+  const { data, error } = await getSupabase()
+    .rpc('reset_comment_github_issue_attempt', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
 export async function listAcceptedCommentsForPage(projectKey: string, pageUrl: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -1271,15 +1446,18 @@ export async function getComment(commentId: string) {
   return data ? mapComment(data as CommentRow) : null
 }
 
-export async function updateReviewStatus(commentId: string, reviewStatus: ReviewStatus) {
+export async function updateReviewStatus(
+  projectKey: string,
+  commentId: string,
+  reviewStatus: ReviewStatus,
+) {
   const supabase = getSupabase()
   const { data, error } = await supabase
-    .from('comments')
-    .update({
-      status: toLegacyStatus(reviewStatus),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', commentId)
+    .rpc('update_comment_review_status', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_status: toLegacyStatus(reviewStatus),
+    } as never)
     .select(COMMENT_COLUMNS)
     .single()
 

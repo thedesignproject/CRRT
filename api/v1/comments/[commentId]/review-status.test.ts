@@ -100,6 +100,7 @@ describe('api/v1/comments/[commentId]/review-status', () => {
     let res = mockRes()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { reviewStatus: 'accepted' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
+    expect(updateReviewStatus).toHaveBeenCalledWith('p', 'c', 'accepted')
     expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'comment.reviewed' }))
 
     vi.mocked(updateReviewStatus).mockRejectedValueOnce(new Error('boom'))
