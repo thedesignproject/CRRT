@@ -379,7 +379,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     unmount()
 
     Element.prototype.scrollIntoView = vi.fn()
-    render(
+    const palette = render(
       <CommandPalette
         onClose={vi.fn()}
         comments={[commentWithoutPageContext]}
@@ -393,6 +393,18 @@ describe('<CommentDetail /> GitHub issue action', () => {
       target: { value: 'missing page' },
     })
     expect(screen.getByText('No results for "missing page"')).toBeInTheDocument()
+
+    palette.unmount()
+    render(
+      <CommandPalette
+        onClose={vi.fn()}
+        comments={[{ ...comment, pageUrl: '/settings' }]}
+        onSelect={vi.fn()}
+        onAction={vi.fn()}
+        selectedCommentId=""
+      />,
+    )
+    expect(screen.getByText('Ada · /settings')).toBeInTheDocument()
   })
 
 })
