@@ -29,10 +29,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const authorizeUrl = buildGitHubAuthorizeUrl(setupAuthState)
     setCors(req, res, ['GET', 'OPTIONS'])
+    res.setHeader('Cache-Control', 'no-store')
     res.setHeader('Location', authorizeUrl)
     return res.status(302).end()
   } catch (error) {
-    console.error(error)
+    console.error('GitHub setup redirect failed')
     return jsonError(req, res, 500, 'Internal server error')
   }
 }

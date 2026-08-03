@@ -27,10 +27,10 @@ export interface TextRangeAnchorRecord {
 export interface CommentRecord {
   id: string
   projectId: string
-  pageUrl: string
-  selector: string
-  x: number
-  y: number
+  pageUrl: string | null
+  selector: string | null
+  x: number | null
+  y: number | null
   body: string
   reviewStatus: 'open' | 'accepted' | 'rejected'
   implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
@@ -39,8 +39,19 @@ export interface CommentRecord {
   authorName: string | null
   targetType?: CommentTargetType
   anchor?: TextRangeAnchorRecord | null
+  githubIssue?: GitHubIssueRecord | null
   createdAt: string
   updatedAt: string
+}
+
+export interface GitHubIssueRecord {
+  issueNumber: number
+  issueUrl: string
+  createdAt: string
+}
+
+export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
+  created: boolean
 }
 
 export interface ProjectSessionResponse {
@@ -308,11 +319,18 @@ export function removeProjectMember(apiBase: string, accessToken: string, projec
   )
 }
 
+export type GitHubConnectionStatus = 'disconnected' | 'reconnect_required' | 'connected'
+
+export interface ProjectGitHubStatus {
+  githubConnectionStatus: 'disconnected' | 'connected'
+}
+
 export interface RepoConfig {
   projectKey: string
   repoUrl: string | null
   githubOwner: string | null
   githubRepo: string | null
+  githubConnectionStatus: GitHubConnectionStatus
   localPath: string | null
   defaultBranch: string | null
   installCommand: string | null
@@ -322,16 +340,73 @@ export interface RepoConfig {
   agentInstructions: string | null
 }
 
+export type GitHubRepoConfig = RepoConfig
+
+export interface GitHubInstallationOption {
+  id: string
+  githubAccountLogin: string
+  githubAccountType: 'User' | 'Organization'
+  lastVerifiedAt: string
+  authorizeUrl: string
+}
+
+export interface GitHubInstallOptions {
+  installUrl: string
+  installations: GitHubInstallationOption[]
+}
+
 // Server-side cap for agentInstructions (mirrored from
 // api/v1/projects/[projectId]/repo-config.ts AGENT_INSTRUCTIONS_MAX).
 export const AGENT_INSTRUCTIONS_MAX = 4000
 
-// Repo config is admin-gated server-side; GET returns null when the project
-// has no config row yet.
+// Full repo config is admin-gated server-side; GET returns null when the
+// project has no config row yet.
 export function getProjectRepoConfig(apiBase: string, accessToken: string, projectKey: string) {
   return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
     headers: { ...authHeaders(accessToken) },
   })
+}
+
+export function getProjectGitHubStatus(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<ProjectGitHubStatus>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config?view=status`,
+    { headers: { ...authHeaders(accessToken) }, cache: 'no-store' },
+  )
+}
+
+export function getGitHubInstallOptions(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubInstallOptions>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/github/install`,
+    { headers: { ...authHeaders(accessToken) }, cache: 'no-store' },
+  )
+}
+
+export function connectProjectGitHubRepo(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  repoUrl: string,
+  installationToken: string,
+) {
+  return requestJson<GitHubRepoConfig>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ repoUrl, installationToken }),
+    },
+  )
+}
+
+export function disconnectProjectGitHubRepo(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<GitHubRepoConfig>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ repoUrl: null }),
+    },
+  )
 }
 
 // Partial patch: absent keys stay untouched, null (or '') clears a field.
@@ -339,7 +414,7 @@ export function updateProjectRepoConfig(
   apiBase: string,
   accessToken: string,
   projectKey: string,
-  patch: Partial<Pick<RepoConfig, 'repoUrl' | 'localPath' | 'devCommand' | 'testCommand' | 'agentInstructions'>>,
+  patch: Partial<Pick<RepoConfig, 'localPath' | 'devCommand' | 'testCommand' | 'agentInstructions'>>,
 ) {
   return requestJson<RepoConfig | null>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
     method: 'PATCH',
@@ -475,6 +550,16 @@ export function updateImplementationStatus(apiBase: string, accessToken: string,
     },
     body: JSON.stringify({ implementationStatus }),
   })
+}
+
+export function createCommentGithubIssue(apiBase: string, accessToken: string, commentId: string) {
+  return requestJson<GitHubIssueCreationResponse>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/github-issue`,
+    {
+      method: 'POST',
+      headers: { ...authHeaders(accessToken) },
+    },
+  )
 }
 
 export function createShare(apiBase: string, accessToken: string, body: Record<string, unknown>) {

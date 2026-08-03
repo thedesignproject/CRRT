@@ -1,9 +1,18 @@
-import { createHmac, createSign, randomBytes, timingSafeEqual } from 'node:crypto'
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  createSign,
+  randomBytes,
+  timingSafeEqual,
+} from 'node:crypto'
 
 const INSTALL_STATE_TTL_SECONDS = 600
 const INSTALL_STATE_TYPE = 'github_app_install_state'
 const INSTALLATION_TOKEN_TYPE = 'github_app_installation_token'
 const SETUP_AUTH_STATE_TYPE = 'github_app_setup_auth_state'
+const REUSE_AUTH_STATE_TYPE = 'github_app_reuse_auth_state'
 
 type GitHubAppSignedPayload = {
   type: string
@@ -20,10 +29,16 @@ export type GitHubAppInstallState = GitHubAppSignedPayload & {
 
 export type GitHubAppInstallationToken = GitHubAppSignedPayload & {
   installationId: string
+  expectedConnectionVersion: number
 }
 
 export type GitHubAppSetupAuthState = GitHubAppSignedPayload & {
   installationId: string
+  origin: string
+}
+
+export type GitHubAppReuseAuthState = GitHubAppSignedPayload & {
+  installationRef: string
   origin: string
 }
 
@@ -33,6 +48,12 @@ export type InstalledGitHubRepo = {
   fullName: string
   private: boolean
   repoUrl: string
+}
+
+export type InstalledGitHubAccount = {
+  id: string
+  login: string
+  type: 'User' | 'Organization'
 }
 
 function requiredEnv(name: string) {
@@ -49,12 +70,63 @@ function privateKey() {
   return requiredEnv('GITHUB_APP_PRIVATE_KEY').replace(/\\n/g, '\n')
 }
 
+async function fetchGitHub(input: string, init: RequestInit, errorCode: string) {
+  try {
+    return await fetch(input, init)
+  } catch {
+    throw new Error(errorCode)
+  }
+}
+
+async function githubJson(response: Response, errorCode: string) {
+  try {
+    return await response.json() as Record<string, unknown>
+  } catch {
+    throw new Error(errorCode)
+  }
+}
+
 function stateSecret() {
   return requiredEnv('WIDGET_AUTH_SECRET')
 }
 
 function signInstallState(body: string) {
   return createHmac('sha256', stateSecret()).update(body).digest('base64url')
+}
+
+function installationTokenKey() {
+  return createHash('sha256')
+    .update(INSTALLATION_TOKEN_TYPE)
+    .update('\0')
+    .update(stateSecret())
+    .digest()
+}
+
+function verifiedSignedBody(token: string) {
+  const [body, signature, extra] = token.split('.')
+  if (!body || !signature || extra !== undefined) return null
+
+  const expected = signInstallState(body)
+  const actualBuffer = Buffer.from(signature)
+  const expectedBuffer = Buffer.from(expected)
+  if (actualBuffer.length !== expectedBuffer.length) return null
+  if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null
+  return body
+}
+
+function validateSignedPayload<T extends GitHubAppSignedPayload>(
+  payload: T,
+  expectedType: string,
+  nowSeconds: number,
+) {
+  if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
+  if (
+    payload.type !== expectedType
+    || typeof payload.projectKey !== 'string'
+    || typeof payload.userId !== 'string'
+    || typeof payload.nonce !== 'string'
+  ) return null
+  return payload
 }
 
 export function createGitHubAppInstallState(
@@ -77,25 +149,30 @@ function decodeSignedInstallPayload<T extends GitHubAppSignedPayload>(
   expectedType: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const [body, signature, extra] = token.split('.')
-  if (!body || !signature || extra !== undefined) return null
-
-  const expected = signInstallState(body)
-  const actualBuffer = Buffer.from(signature)
-  const expectedBuffer = Buffer.from(expected)
-  if (actualBuffer.length !== expectedBuffer.length) return null
-  if (!timingSafeEqual(actualBuffer, expectedBuffer)) return null
+  const body = verifiedSignedBody(token)
+  if (!body) return null
 
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as T
-    if (typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
-    if (
-      payload.type !== expectedType
-      || typeof payload.projectKey !== 'string'
-      || typeof payload.userId !== 'string'
-      || typeof payload.nonce !== 'string'
-    ) return null
-    return payload
+    return validateSignedPayload(payload, expectedType, nowSeconds)
+  } catch {
+    return null
+  }
+}
+
+function decodeInstallationToken(token: string, nowSeconds: number) {
+  const body = verifiedSignedBody(token)
+  if (!body) return null
+
+  try {
+    const encrypted = Buffer.from(body, 'base64url')
+    if (encrypted.length <= 28) return null
+    const decipher = createDecipheriv('aes-256-gcm', installationTokenKey(), encrypted.subarray(0, 12))
+    decipher.setAAD(Buffer.from(INSTALLATION_TOKEN_TYPE))
+    decipher.setAuthTag(encrypted.subarray(12, 28))
+    const plaintext = Buffer.concat([decipher.update(encrypted.subarray(28)), decipher.final()])
+    const payload = JSON.parse(plaintext.toString('utf8')) as GitHubAppInstallationToken
+    return validateSignedPayload(payload, INSTALLATION_TOKEN_TYPE, nowSeconds)
   } catch {
     return null
   }
@@ -111,7 +188,7 @@ export function verifyGitHubAppInstallState(
 }
 
 export function createGitHubAppInstallationToken(
-  input: Pick<GitHubAppInstallationToken, 'projectKey' | 'userId' | 'installationId'>,
+  input: Pick<GitHubAppInstallationToken, 'projectKey' | 'userId' | 'installationId' | 'expectedConnectionVersion'>,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload: GitHubAppInstallationToken = {
@@ -121,7 +198,11 @@ export function createGitHubAppInstallationToken(
     iat: nowSeconds,
     exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
   }
-  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', installationTokenKey(), iv)
+  cipher.setAAD(Buffer.from(INSTALLATION_TOKEN_TYPE))
+  const encrypted = Buffer.concat([cipher.update(JSON.stringify(payload), 'utf8'), cipher.final()])
+  const body = Buffer.concat([iv, cipher.getAuthTag(), encrypted]).toString('base64url')
   return `${body}.${signInstallState(body)}`
 }
 
@@ -140,12 +221,32 @@ export function createGitHubAppSetupAuthState(
   return `${body}.${signInstallState(body)}`
 }
 
+export function createGitHubAppReuseAuthState(
+  input: Pick<GitHubAppReuseAuthState, 'projectKey' | 'userId' | 'origin' | 'installationRef'>,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload: GitHubAppReuseAuthState = {
+    ...input,
+    type: REUSE_AUTH_STATE_TYPE,
+    nonce: randomBytes(16).toString('base64url'),
+    iat: nowSeconds,
+    exp: nowSeconds + INSTALL_STATE_TTL_SECONDS,
+  }
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url')
+  return `${body}.${signInstallState(body)}`
+}
+
 export function verifyGitHubAppInstallationToken(
   token: string,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
-  const payload = decodeSignedInstallPayload<GitHubAppInstallationToken>(token, INSTALLATION_TOKEN_TYPE, nowSeconds)
-  if (!payload || typeof payload.installationId !== 'string') return null
+  const payload = decodeInstallationToken(token, nowSeconds)
+  if (
+    !payload
+    || typeof payload.installationId !== 'string'
+    || !Number.isSafeInteger(payload.expectedConnectionVersion)
+    || payload.expectedConnectionVersion < 0
+  ) return null
   return payload
 }
 
@@ -155,6 +256,15 @@ export function verifyGitHubAppSetupAuthState(
 ) {
   const payload = decodeSignedInstallPayload<GitHubAppSetupAuthState>(state, SETUP_AUTH_STATE_TYPE, nowSeconds)
   if (!payload || typeof payload.installationId !== 'string' || typeof payload.origin !== 'string') return null
+  return payload
+}
+
+export function verifyGitHubAppReuseAuthState(
+  state: string,
+  nowSeconds = Math.floor(Date.now() / 1000),
+) {
+  const payload = decodeSignedInstallPayload<GitHubAppReuseAuthState>(state, REUSE_AUTH_STATE_TYPE, nowSeconds)
+  if (!payload || typeof payload.installationRef !== 'string' || typeof payload.origin !== 'string') return null
   return payload
 }
 
@@ -177,7 +287,7 @@ export function createGitHubAppJwt(nowSeconds = Math.floor(Date.now() / 1000)) {
 }
 
 export async function createInstallationAccessToken(installationId: string) {
-  const response = await fetch(
+  const response = await fetchGitHub(
     `https://api.github.com/app/installations/${encodeURIComponent(installationId)}/access_tokens`,
     {
       method: 'POST',
@@ -186,12 +296,36 @@ export async function createInstallationAccessToken(installationId: string) {
         Authorization: `Bearer ${createGitHubAppJwt()}`,
       },
     },
+    'github_installation_token_failed',
   )
-  const body = await response.json() as { token?: unknown }
+  const body = await githubJson(response, 'github_installation_token_failed')
   if (!response.ok || typeof body.token !== 'string') {
     throw new Error('github_installation_token_failed')
   }
   return body.token
+}
+
+export async function assertGitHubInstallationRepoAccess(
+  installationId: string,
+  owner: string,
+  repo: string,
+) {
+  const accessToken = await createInstallationAccessToken(installationId)
+  const path = `${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`
+  const response = await fetchGitHub(`https://api.github.com/repos/${path}`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+  }, 'github_installation_repo_lookup_failed')
+
+  if (!response.ok) {
+    throw new Error(
+      response.status === 404
+        ? 'github_installation_repo_inaccessible'
+        : 'github_installation_repo_lookup_failed',
+    )
+  }
 }
 
 export async function assertGitHubUserInstallationAccess(accessToken: string, installationId: string) {
@@ -201,15 +335,31 @@ export async function assertGitHubUserInstallationAccess(accessToken: string, in
     const url = new URL('https://api.github.com/user/installations')
     url.searchParams.set('per_page', '100')
     url.searchParams.set('page', String(page))
-    const response = await fetch(url.toString(), {
+    const response = await fetchGitHub(url.toString(), {
       headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
-    })
-    const body = await response.json() as { installations?: Array<Record<string, unknown>> }
+    }, 'github_user_installations_failed')
+    const body = await githubJson(response, 'github_user_installations_failed') as {
+      installations?: Array<Record<string, unknown>>
+    }
     if (!response.ok || !Array.isArray(body.installations)) {
       throw new Error('github_user_installations_failed')
     }
 
-    if (body.installations.some((installation) => String(installation.id) === installationId)) return
+    const installation = body.installations.find((candidate) => String(candidate.id) === installationId)
+    if (installation) {
+      const account = installation.account as Record<string, unknown> | undefined
+      if (
+        !account
+        || (account.type !== 'User' && account.type !== 'Organization')
+        || (typeof account.id !== 'string' && typeof account.id !== 'number')
+        || typeof account.login !== 'string'
+      ) throw new Error('github_user_installations_failed')
+      return {
+        id: String(account.id),
+        login: account.login,
+        type: account.type,
+      } satisfies InstalledGitHubAccount
+    }
     if (body.installations.length < 100) throw new Error('github_installation_inaccessible')
     page += 1
   }
@@ -242,10 +392,12 @@ export async function listUserInstallationRepositories(
     const url = new URL(`https://api.github.com/user/installations/${encodeURIComponent(installationId)}/repositories`)
     url.searchParams.set('per_page', '100')
     url.searchParams.set('page', String(page))
-    const response = await fetch(url.toString(), {
+    const response = await fetchGitHub(url.toString(), {
       headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
-    })
-    const body = await response.json() as { repositories?: Array<Record<string, unknown>> }
+    }, 'github_installation_repos_failed')
+    const body = await githubJson(response, 'github_installation_repos_failed') as {
+      repositories?: Array<Record<string, unknown>>
+    }
     if (!response.ok || !Array.isArray(body.repositories)) {
       throw new Error('github_installation_repos_failed')
     }

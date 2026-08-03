@@ -19,10 +19,10 @@ const getSupabase = getServiceSupabase
 type CommentRow = {
   id: string
   project_id: string
-  url: string
-  x: number
-  y: number
-  element: string
+  url: string | null
+  x: number | null
+  y: number | null
+  element: string | null
   comment: string
   status: string | null
   implementation_status: ImplementationStatus | null
@@ -31,6 +31,12 @@ type CommentRow = {
   author_name: string | null
   target_type: string | null
   anchor: Record<string, unknown> | null
+  github_issue_number?: number | null
+  github_issue_url?: string | null
+  github_issue_created_at?: string | null
+  github_issue_lease_token?: string | null
+  github_issue_lease_expires_at?: string | null
+  github_issue_uncertain_at?: string | null
   created_at: string
   updated_at: string | null
 }
@@ -39,6 +45,8 @@ type CommentRow = {
 // hand-rolled select list elsewhere) silently drops fields from responses.
 const COMMENT_COLUMNS =
   'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, target_type, anchor, created_at, updated_at'
+const COMMENT_GITHUB_ISSUE_COLUMNS =
+  `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
 
 type ProjectRow = {
   public_key: string
@@ -62,6 +70,7 @@ type RepoConfigRow = {
   repo_url: string | null
   github_owner: string | null
   github_repo: string | null
+  github_installation_id: string | null
   local_path: string | null
   default_branch: string | null
   install_command: string | null
@@ -69,6 +78,43 @@ type RepoConfigRow = {
   test_command: string | null
   build_command: string | null
   agent_instructions: string | null
+}
+
+type GitHubUserInstallationRow = {
+  id: string
+  user_id: string
+  installation_id: string
+  github_account_id: string
+  github_account_login: string
+  github_account_type: 'User' | 'Organization'
+  last_verified_at: string
+}
+
+const REPO_CONFIG_COLUMNS =
+  'project_key, repo_url, github_owner, github_repo, github_installation_id, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions'
+
+const GITHUB_USER_INSTALLATION_COLUMNS =
+  'id, user_id, installation_id, github_account_id, github_account_login, github_account_type, last_verified_at'
+
+function mapGitHubUserInstallation(row: GitHubUserInstallationRow) {
+  return {
+    id: row.id,
+    installationId: row.installation_id,
+    githubAccountId: row.github_account_id,
+    githubAccountLogin: row.github_account_login,
+    githubAccountType: row.github_account_type,
+    lastVerifiedAt: row.last_verified_at,
+  }
+}
+
+function publicGitHubUserInstallation(row: GitHubUserInstallationRow) {
+  const mapped = mapGitHubUserInstallation(row)
+  return {
+    id: mapped.id,
+    githubAccountLogin: mapped.githubAccountLogin,
+    githubAccountType: mapped.githubAccountType,
+    lastVerifiedAt: mapped.lastVerifiedAt,
+  }
 }
 
 type ShareRow = {
@@ -125,6 +171,19 @@ function mapComment(row: CommentRow) {
   }
 }
 
+function mapProjectComment(row: CommentRow) {
+  return {
+    ...mapComment(row),
+    githubIssue: row.github_issue_number && row.github_issue_url && row.github_issue_created_at
+      ? {
+          issueNumber: row.github_issue_number,
+          issueUrl: row.github_issue_url,
+          createdAt: row.github_issue_created_at,
+        }
+      : null,
+  }
+}
+
 function mapProject(row: ProjectRow) {
   return {
     publicKey: row.public_key,
@@ -138,11 +197,17 @@ function mapProject(row: ProjectRow) {
 
 function mapRepoConfig(row: RepoConfigRow | null) {
   if (!row) return null
+  const githubConnectionStatus = !row.repo_url
+    ? 'disconnected'
+    : row.github_installation_id
+      ? 'connected'
+      : 'reconnect_required'
   return {
     projectKey: row.project_key,
     repoUrl: row.repo_url,
     githubOwner: row.github_owner,
     githubRepo: row.github_repo,
+    githubConnectionStatus,
     localPath: row.local_path,
     defaultBranch: row.default_branch,
     installCommand: row.install_command,
@@ -841,12 +906,107 @@ export async function getRepoConfig(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_repo_configs')
-    .select('project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
+    .select(REPO_CONFIG_COLUMNS)
     .eq('project_key', projectKey)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   return mapRepoConfig(data as RepoConfigRow | null)
+}
+
+export async function getGithubIssueConnection(projectKey: string) {
+  const { data, error } = await getSupabase()
+    .from('project_repo_configs')
+    .select('github_owner, github_repo, github_installation_id, github_connection_version')
+    .eq('project_key', projectKey)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  const row = data as {
+    github_owner: string | null
+    github_repo: string | null
+    github_installation_id: string | null
+    github_connection_version: number
+  } | null
+  if (!row?.github_owner || !row.github_repo || !row.github_installation_id) return null
+  return {
+    owner: row.github_owner,
+    repo: row.github_repo,
+    installationId: row.github_installation_id,
+    connectionVersion: row.github_connection_version,
+  }
+}
+
+export async function getGithubConnectionVersion(projectKey: string) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('project_repo_configs')
+    .select('github_connection_version')
+    .eq('project_key', projectKey)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  const version = (data as { github_connection_version?: unknown } | null)?.github_connection_version
+  return typeof version === 'number' && Number.isSafeInteger(version) && version >= 0 ? version : 0
+}
+
+export async function listGitHubUserInstallations(userId: string) {
+  const { data, error } = await getSupabase()
+    .from('github_user_installations')
+    .select(GITHUB_USER_INSTALLATION_COLUMNS)
+    .eq('user_id', userId)
+    .order('github_account_login')
+
+  if (error) throw new Error(error.message)
+  return ((data ?? []) as GitHubUserInstallationRow[]).map(publicGitHubUserInstallation)
+}
+
+export async function getGitHubUserInstallation(userId: string, installationRef: string) {
+  const { data, error } = await getSupabase()
+    .from('github_user_installations')
+    .select(GITHUB_USER_INSTALLATION_COLUMNS)
+    .eq('user_id', userId)
+    .eq('id', installationRef)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapGitHubUserInstallation(data as GitHubUserInstallationRow) : null
+}
+
+export async function upsertGitHubUserInstallation(input: {
+  userId: string
+  installationId: string
+  githubAccountId: string
+  githubAccountLogin: string
+  githubAccountType: 'User' | 'Organization'
+}) {
+  const now = new Date().toISOString()
+  const { data, error } = await getSupabase()
+    .from('github_user_installations')
+    .upsert([{
+      user_id: input.userId,
+      installation_id: input.installationId,
+      github_account_id: input.githubAccountId,
+      github_account_login: input.githubAccountLogin,
+      github_account_type: input.githubAccountType,
+      last_verified_at: now,
+      updated_at: now,
+    }] as never, { onConflict: 'user_id,installation_id' })
+    .select(GITHUB_USER_INSTALLATION_COLUMNS)
+    .single()
+
+  if (error) throw new Error(error.message)
+  return mapGitHubUserInstallation(data as GitHubUserInstallationRow)
+}
+
+export async function deleteGitHubUserInstallation(userId: string, installationRef: string) {
+  const { error } = await getSupabase()
+    .from('github_user_installations')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', installationRef)
+
+  if (error) throw new Error(error.message)
 }
 
 export function normalizeGitHubRepoUrl(value: string): {
@@ -886,6 +1046,65 @@ export function normalizeGitHubRepoUrl(value: string): {
     githubOwner: owner,
     githubRepo: normalizedRepo,
   }
+}
+
+export async function connectGithubRepo(
+  projectKey: string,
+  userId: string,
+  repoUrl: string,
+  installationId: string,
+  expectedVersion: number,
+) {
+  const normalized = normalizeGitHubRepoUrl(repoUrl)
+  if (!normalized) throw new Error('invalid_github_repo')
+
+  const { data, error } = await getSupabase()
+    .rpc('write_github_repo_connection_if_admin', {
+      p_project_key: projectKey,
+      p_user_id: userId,
+      p_expected_version: expectedVersion,
+      p_repo_url: normalized.repoUrl,
+      p_github_owner: normalized.githubOwner,
+      p_github_repo: normalized.githubRepo,
+      p_github_installation_id: installationId,
+    } as never)
+    .select(REPO_CONFIG_COLUMNS)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) throw new Error('stale_connection_attempt')
+  return mapRepoConfig(data as RepoConfigRow)
+}
+
+const MAX_CONNECTION_WRITE_ATTEMPTS = 3
+
+async function disconnectGithubRepoWithRetry(projectKey: string, userId: string) {
+  const supabase = getSupabase()
+
+  for (let attempt = 0; attempt < MAX_CONNECTION_WRITE_ATTEMPTS; attempt += 1) {
+    const version = await getGithubConnectionVersion(projectKey)
+    const { data, error } = await supabase
+      .rpc('write_github_repo_connection_if_admin', {
+        p_project_key: projectKey,
+        p_user_id: userId,
+        p_expected_version: version,
+        p_repo_url: null,
+        p_github_owner: null,
+        p_github_repo: null,
+        p_github_installation_id: null,
+      } as never)
+      .select(REPO_CONFIG_COLUMNS)
+      .maybeSingle()
+
+    if (error) throw new Error(error.message)
+    if (data) return mapRepoConfig(data as RepoConfigRow)
+  }
+
+  throw new Error('stale_connection_attempt')
+}
+
+export async function disconnectGithubRepo(projectKey: string, userId: string) {
+  return disconnectGithubRepoWithRetry(projectKey, userId)
 }
 
 export type RepoConfigPatch = {
@@ -1024,6 +1243,137 @@ export async function listComments(projectKey: string, filters: {
   return (data || []).map((row) => mapComment(row as CommentRow))
 }
 
+export async function listProjectComments(projectKey: string, filters: {
+  pageUrl?: string
+  reviewStatus?: ReviewStatus
+  implementationStatus?: ImplementationStatus
+} = {}) {
+  let query = getSupabase()
+    .from('comments')
+    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .eq('project_id', projectKey)
+
+  if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
+  if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
+  if (filters.implementationStatus) query = query.eq('implementation_status', filters.implementationStatus)
+
+  const { data, error } = await query.order('created_at', { ascending: false })
+  if (error) throw new Error(error.message)
+  return (data || []).map((row) => mapProjectComment(row as CommentRow))
+}
+
+export async function getCommentForGithubIssue(projectKey: string, commentId: string) {
+  const { data, error } = await getSupabase()
+    .from('comments')
+    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .eq('id', commentId)
+    .eq('project_id', projectKey)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  if (!data) return null
+  const row = data as CommentRow
+  return {
+    ...mapProjectComment(row),
+    githubIssueLeaseToken: row.github_issue_lease_token ?? null,
+    githubIssueLeaseExpiresAt: row.github_issue_lease_expires_at ?? null,
+    githubIssueUncertainAt: row.github_issue_uncertain_at ?? null,
+  }
+}
+
+export async function claimCommentGithubIssue(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+  leaseMilliseconds = 5 * 60_000,
+  recovery = false,
+) {
+  const leaseSeconds = Number.isFinite(leaseMilliseconds)
+    ? Math.ceil(leaseMilliseconds / 1_000)
+    : 5 * 60
+  const { data, error } = await getSupabase()
+    .rpc('claim_comment_github_issue', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+      p_lease_seconds: leaseSeconds,
+      p_recovery: recovery,
+    } as never)
+    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapProjectComment(data as CommentRow) : null
+}
+
+export async function finalizeCommentGithubIssue(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+  issue: { issueNumber: number; issueUrl: string; createdAt: string },
+) {
+  const { data, error } = await getSupabase()
+    .rpc('finalize_comment_github_issue', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+      p_issue_number: issue.issueNumber,
+      p_issue_url: issue.issueUrl,
+      p_issue_created_at: issue.createdAt,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
+export async function releaseCommentGithubIssue(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+) {
+  const { data, error } = await getSupabase()
+    .rpc('release_comment_github_issue', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
+export async function markCommentGithubIssueUncertain(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+) {
+  const { data, error } = await getSupabase()
+    .rpc('mark_comment_github_issue_uncertain', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
+export async function resetCommentGithubIssueAttempt(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+) {
+  const { data, error } = await getSupabase()
+    .rpc('reset_comment_github_issue_attempt', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_lease_token: leaseToken,
+    } as never)
+
+  if (error) throw new Error(error.message)
+  return data === true
+}
+
 export async function listAcceptedCommentsForPage(projectKey: string, pageUrl: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
@@ -1096,15 +1446,18 @@ export async function getComment(commentId: string) {
   return data ? mapComment(data as CommentRow) : null
 }
 
-export async function updateReviewStatus(commentId: string, reviewStatus: ReviewStatus) {
+export async function updateReviewStatus(
+  projectKey: string,
+  commentId: string,
+  reviewStatus: ReviewStatus,
+) {
   const supabase = getSupabase()
   const { data, error } = await supabase
-    .from('comments')
-    .update({
-      status: toLegacyStatus(reviewStatus),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', commentId)
+    .rpc('update_comment_review_status', {
+      p_comment_id: commentId,
+      p_project_key: projectKey,
+      p_status: toLegacyStatus(reviewStatus),
+    } as never)
     .select(COMMENT_COLUMNS)
     .single()
 

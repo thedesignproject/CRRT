@@ -44,6 +44,8 @@ export const projectMembers = pgTable(
     projectKey: text('project_key')
       .notNull()
       .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    // References auth.users(id) ON DELETE CASCADE. Drizzle cannot model the
+    // auth schema, so the generated migration adds this cross-schema FK.
     userId: uuid('user_id').notNull(),
     role: text('role').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -54,6 +56,34 @@ export const projectMembers = pgTable(
     roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member')`),
   }),
 )
+
+// A GitHub App installation may be reused across multiple CRRT projects, and
+// organization installations may be accessible to multiple CRRT users. Keep
+// the private GitHub installation id behind an opaque row id and scope every
+// runtime lookup by user_id.
+export const githubUserInstallations = pgTable(
+  'github_user_installations',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    userId: uuid('user_id').notNull(),
+    installationId: text('installation_id').notNull(),
+    githubAccountId: text('github_account_id').notNull(),
+    githubAccountLogin: text('github_account_login').notNull(),
+    githubAccountType: text('github_account_type').notNull(),
+    lastVerifiedAt: timestamp('last_verified_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    userIdx: index('github_user_installations_user_id_idx').on(t.userId),
+    userInstallationUnique: uniqueIndex('github_user_installations_user_installation_unique')
+      .on(t.userId, t.installationId),
+    accountTypeCheck: check(
+      'github_user_installations_account_type_check',
+      sql`${t.githubAccountType} in ('User', 'Organization')`,
+    ),
+  }),
+).enableRLS()
 
 // Global super-admin allowlist. Membership grants cross-tenant read access
 // through the `/api/v1/admin/*` endpoints. `user_id` references auth.users(id);
@@ -90,6 +120,8 @@ export const projectRepoConfigs = pgTable('project_repo_configs', {
   repoUrl: text('repo_url'),
   githubOwner: text('github_owner'),
   githubRepo: text('github_repo'),
+  githubInstallationId: text('github_installation_id'),
+  githubConnectionVersion: integer('github_connection_version').notNull().default(0),
   localPath: text('local_path'),
   defaultBranch: text('default_branch').notNull().default('main'),
   installCommand: text('install_command'),
@@ -131,6 +163,12 @@ export const comments = pgTable(
     targetType: text('target_type').default('element_point'),
     // TextRangeAnchor JSON for text_range comments; null means no anchor
     anchor: jsonb('anchor'),
+    githubIssueNumber: integer('github_issue_number'),
+    githubIssueUrl: text('github_issue_url'),
+    githubIssueCreatedAt: timestamp('github_issue_created_at', { withTimezone: true }),
+    githubIssueLeaseToken: uuid('github_issue_lease_token'),
+    githubIssueLeaseExpiresAt: timestamp('github_issue_lease_expires_at', { withTimezone: true }),
+    githubIssueUncertainAt: timestamp('github_issue_uncertain_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow(),
   },
@@ -141,6 +179,30 @@ export const comments = pgTable(
       t.projectId,
       t.status,
       t.implementationStatus,
+    ),
+    githubIssueFieldsCheck: check(
+      'comments_github_issue_fields_check',
+      sql`(
+        (${t.githubIssueNumber} is null and ${t.githubIssueUrl} is null and ${t.githubIssueCreatedAt} is null)
+        or
+        (${t.githubIssueNumber} > 0 and ${t.githubIssueUrl} is not null and ${t.githubIssueCreatedAt} is not null)
+      )`,
+    ),
+    githubIssueLeaseCheck: check(
+      'comments_github_issue_lease_check',
+      sql`(
+        (${t.githubIssueLeaseToken} is null and ${t.githubIssueLeaseExpiresAt} is null)
+        or
+        (${t.githubIssueLeaseToken} is not null and ${t.githubIssueLeaseExpiresAt} is not null)
+      )`,
+    ),
+    githubIssueStateCheck: check(
+      'comments_github_issue_state_check',
+      sql`(
+        (${t.githubIssueNumber} is null)
+        or
+        (${t.githubIssueLeaseToken} is null and ${t.githubIssueUncertainAt} is null)
+      )`,
     ),
   }),
 )

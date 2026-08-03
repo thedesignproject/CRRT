@@ -480,6 +480,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           goNext={goNext}
           toggleReview={toggleReview}
           handleToggleDone={handleToggleDone}
+          apiBase={API_BASE}
+          accessToken={accessToken}
         />
 
         {sidebarOpen && (

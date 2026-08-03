@@ -981,6 +981,7 @@ describe('comment functions', () => {
     }
 
     const supabase = {
+      rpc: vi.fn(() => chain),
       from: vi.fn((table: string) => {
         if (table === 'feedback_share_items') {
           return {
@@ -1081,7 +1082,7 @@ describe('comment functions', () => {
   it('updateReviewStatus keeps target metadata in its response', async () => {
     const { selects } = buildCommentsSupabase({ result: { data: TEXT_RANGE_ROW, error: null } })
 
-    const comment = await updateReviewStatus('comment-1', 'accepted')
+    const comment = await updateReviewStatus('project-1', 'comment-1', 'accepted')
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comment.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
