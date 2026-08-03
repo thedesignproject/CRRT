@@ -17,8 +17,8 @@ export function mapServerComment(record: CommentRecord): Comment {
   return {
     id: record.id,
     projectId: record.projectId,
-    pageUrl: record.pageUrl || '',
-    selector: record.selector || '',
+    pageUrl: record.pageUrl,
+    selector: record.selector,
     x: record.x,
     y: record.y,
     body: record.body,

@@ -46,8 +46,8 @@ export function CommandPalette({ onClose, comments, onSelect, onAction, selected
         return (
           c.body.toLowerCase().includes(q) ||
           c.author.toLowerCase().includes(q) ||
-          c.selector.toLowerCase().includes(q) ||
-          c.pageUrl.toLowerCase().includes(q)
+          c.selector?.toLowerCase().includes(q) ||
+          c.pageUrl?.toLowerCase().includes(q)
         )
       })
       .slice(0, 8)
@@ -55,7 +55,7 @@ export function CommandPalette({ onClose, comments, onSelect, onAction, selected
         id: c.id,
         type: 'comment',
         label: c.body.length > 80 ? c.body.slice(0, 80) + '…' : c.body,
-        detail: `${c.author} · ${truncateUrl(c.pageUrl)}`,
+        detail: c.pageUrl ? `${c.author} · ${truncateUrl(c.pageUrl)}` : c.author,
         icon: 'comment',
       }))
 

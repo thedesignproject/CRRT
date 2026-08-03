@@ -7,8 +7,12 @@ vi.mock('../api', () => ({
 }))
 
 import { createCommentGithubIssue, getProjectGitHubStatus } from '../api'
+import type { CommentRecord } from '../api'
+import { mapServerComment } from '../lib/comment'
 import type { Comment } from '../lib/types'
+import { CommandPalette } from './CommandPalette'
 import { CommentDetail } from './CommentDetail'
+import { CommentList } from './CommentList'
 
 const issue = {
   issueNumber: 42,
@@ -36,6 +40,28 @@ const comment: Comment = {
   anchor: null,
   githubIssue: null,
 }
+
+const recordWithoutPageContext: CommentRecord = {
+  id: 'legacy-comment',
+  projectId: 'project-1',
+  pageUrl: null,
+  selector: null,
+  x: null,
+  y: null,
+  body: 'The feedback is still available.',
+  reviewStatus: 'accepted',
+  implementationStatus: 'unassigned',
+  claimedByAgentId: null,
+  imageUrl: null,
+  authorName: null,
+  createdAt: '2026-07-23T08:27:59Z',
+  updatedAt: '2026-07-23T08:27:59Z',
+  targetType: 'element_point',
+  anchor: null,
+  githubIssue: null,
+}
+
+const commentWithoutPageContext = mapServerComment(recordWithoutPageContext)
 
 const props = {
   selectedComment: comment,
@@ -173,8 +199,8 @@ describe('<CommentDetail /> GitHub issue action', () => {
       {...props}
       selectedComment={{
         ...comment,
-        pageUrl: '',
-        selector: '',
+        pageUrl: null,
+        selector: null,
         x: null,
         y: null,
         author: 'Anonymous',
@@ -205,7 +231,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       {...props}
       selectedComment={{
         ...comment,
-        pageUrl: '',
+        pageUrl: null,
         screenshotUrl: 'https://cdn.example/image.png',
         implementationStatus: 'done',
       }}
@@ -303,6 +329,82 @@ describe('<CommentDetail /> GitHub issue action', () => {
     fireEvent.click(button)
     expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer')
     open.mockRestore()
+  })
+
+  it('preserves nullable page metadata and renders the feedback safely', () => {
+    expect(commentWithoutPageContext).toMatchObject({
+      pageUrl: null,
+      selector: null,
+      x: null,
+      y: null,
+      author: 'Anonymous',
+    })
+
+    const { container } = render(
+      <CommentDetail
+        {...props}
+        selectedComment={commentWithoutPageContext}
+        projectComments={[commentWithoutPageContext]}
+        filteredComments={[commentWithoutPageContext]}
+      />,
+    )
+
+    expect(screen.getByText('The feedback is still available.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open page' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Pin placed at/)).not.toBeInTheDocument()
+    expect(container.querySelector('code')).not.toBeInTheDocument()
+  })
+
+  it('keeps list and command-palette browsing safe without page metadata', () => {
+    const { unmount } = render(
+      <CommentList
+        filteredComments={[commentWithoutPageContext]}
+        counts={{ all: 1, open: 0, ready: 1, done: 0, rejected: 0 }}
+        statusFilter="all"
+        selectFilter={vi.fn()}
+        bulkMode={false}
+        enterBulkMode={vi.fn()}
+        exitBulkMode={vi.fn()}
+        bulkSelectedIds={new Set()}
+        toggleSelectAllVisible={vi.fn()}
+        applyBulkAction={vi.fn()}
+        toggleBulkSelect={vi.fn()}
+        commentsLoading={false}
+        commentsError={null}
+        selectedCommentId={commentWithoutPageContext.id}
+        setSelectedCommentId={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('No page context')).toBeInTheDocument()
+    unmount()
+
+    Element.prototype.scrollIntoView = vi.fn()
+    const palette = render(
+      <CommandPalette
+        onClose={vi.fn()}
+        comments={[commentWithoutPageContext]}
+        onSelect={vi.fn()}
+        onAction={vi.fn()}
+        selectedCommentId=""
+      />,
+    )
+    expect(screen.getAllByText('Anonymous')).toHaveLength(1)
+    fireEvent.change(screen.getByPlaceholderText(/Search feedback/), {
+      target: { value: 'missing page' },
+    })
+    expect(screen.getByText('No results for "missing page"')).toBeInTheDocument()
+
+    palette.unmount()
+    render(
+      <CommandPalette
+        onClose={vi.fn()}
+        comments={[{ ...comment, pageUrl: '/settings' }]}
+        onSelect={vi.fn()}
+        onAction={vi.fn()}
+        selectedCommentId=""
+      />,
+    )
+    expect(screen.getByText('Ada · /settings')).toBeInTheDocument()
   })
 
 })
