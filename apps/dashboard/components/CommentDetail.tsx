@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react'
+import { createCommentGithubIssue, getProjectGitHubStatus } from '../api'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { timeAgo, truncateUrl } from '../lib/format'
@@ -28,6 +30,8 @@ interface CommentDetailProps {
   goNext: () => void
   toggleReview: (c: Comment, target: 'accepted' | 'rejected') => void
   handleToggleDone: (id: string) => void
+  apiBase: string
+  accessToken: string
 }
 
 export function CommentDetail({
@@ -42,7 +46,76 @@ export function CommentDetail({
   goNext,
   toggleReview,
   handleToggleDone,
+  apiBase,
+  accessToken,
 }: CommentDetailProps) {
+  const [issueBusy, setIssueBusy] = useState(false)
+  const [issueError, setIssueError] = useState<string | null>(null)
+  const [githubConnected, setGithubConnected] = useState(false)
+  const [createdIssues, setCreatedIssues] = useState<Record<string, NonNullable<Comment['githubIssue']>>>({})
+  const issueRequests = useRef(new Map<string, symbol>())
+  const connectionRequest = useRef(0)
+  const selectedId = selectedComment?.id ?? null
+  const selectedIdRef = useRef(selectedId)
+  selectedIdRef.current = selectedId
+  const githubIssue = selectedComment
+    ? selectedComment.githubIssue ?? createdIssues[selectedComment.id] ?? null
+    : null
+
+  useEffect(() => {
+    setIssueBusy(selectedId !== null && issueRequests.current.has(selectedId))
+    setIssueError(null)
+  }, [selectedId])
+
+  useEffect(() => {
+    const request = connectionRequest.current + 1
+    connectionRequest.current = request
+    setGithubConnected(false)
+    if (!selectedProject) return
+    void getProjectGitHubStatus(apiBase, accessToken, selectedProject).then(
+      ({ githubConnectionStatus }) => {
+        if (connectionRequest.current === request) {
+          setGithubConnected(githubConnectionStatus === 'connected')
+        }
+      },
+      () => {
+        if (connectionRequest.current === request) setGithubConnected(false)
+      },
+    )
+  }, [accessToken, apiBase, selectedProject])
+
+  const handleGithubIssue = async (comment: Comment) => {
+    if (githubIssue) {
+      const opened = window.open(githubIssue.issueUrl, '_blank', 'noopener,noreferrer')
+      if (opened) opened.opener = null
+      return
+    }
+    if (
+      comment.reviewStatus !== 'accepted'
+      || issueRequests.current.has(comment.id)
+    ) return
+    const commentId = comment.id
+    const request = Symbol(commentId)
+    issueRequests.current.set(commentId, request)
+    setIssueBusy(true)
+    setIssueError(null)
+    try {
+      const result = await createCommentGithubIssue(apiBase, accessToken, commentId)
+      setCreatedIssues((current) => ({ ...current, [commentId]: {
+        issueNumber: result.issueNumber,
+        issueUrl: result.issueUrl,
+        createdAt: result.createdAt,
+      } }))
+    } catch {
+      if (selectedIdRef.current === commentId && issueRequests.current.get(commentId) === request) {
+        setIssueError('Could not create the GitHub issue. Try again.')
+      }
+    } finally {
+      issueRequests.current.delete(commentId)
+      if (selectedIdRef.current === commentId) setIssueBusy(false)
+    }
+  }
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-background">
       {selectedComment ? (
@@ -86,7 +159,9 @@ export function CommentDetail({
                   >
                     <img
                       src={selectedComment.screenshotUrl}
-                      alt={selectedComment.pageUrl ? `Screenshot of ${selectedComment.pageUrl}` : 'Feedback screenshot'}
+                      alt={selectedComment.pageUrl
+                        ? `Screenshot of ${selectedComment.pageUrl}`
+                        : 'Feedback screenshot'}
                       className="max-w-full max-h-[520px] w-auto h-auto object-contain"
                       draggable={false}
                     />
@@ -100,17 +175,19 @@ export function CommentDetail({
                     </div>
                     <div>
                       <p className="text-xs font-semibold text-foreground">No screenshot captured</p>
-                      {selectedComment.x != null && selectedComment.y != null ? (
-                        <p className="text-[11px] text-muted-foreground">Pin placed at ({selectedComment.x}, {selectedComment.y})</p>
-                      ) : null}
+                      {Number.isFinite(selectedComment.x) && Number.isFinite(selectedComment.y) && (
+                        <p className="text-[11px] text-muted-foreground">
+                          Pin placed at ({selectedComment.x}, {selectedComment.y})
+                        </p>
+                      )}
                     </div>
                   </div>
-                  {selectedComment.selector ? (
+                  {selectedComment.selector && (
                     <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/60 border border-border">
                       <SelectorIcon size={12} />
                       <code className="text-[12px] font-mono text-foreground/70 break-all">{selectedComment.selector}</code>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               )}
 
@@ -179,11 +256,55 @@ export function CommentDetail({
 
               <div className="w-px h-5 bg-border mx-1" />
 
-              {selectedComment.pageUrl ? (
+              {selectedComment.pageUrl && (
                 <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl!, '_blank')}>
                   <ExternalLinkIcon size={13} /> Open page
                 </ActionBtn>
-              ) : null}
+              )}
+
+              <span
+                className="relative inline-flex group"
+                tabIndex={!githubIssue && !githubConnected ? 0 : undefined}
+                aria-label={!githubIssue && !githubConnected
+                  ? 'Connect a GitHub repository from Project Settings'
+                  : undefined}
+              >
+                <ActionBtn
+                  variant="neutral"
+                  onClick={() => handleGithubIssue(selectedComment)}
+                  disabled={!githubIssue && (
+                    !githubConnected
+                    || selectedComment.reviewStatus !== 'accepted'
+                    || issueBusy
+                  )}
+                >
+                  <ExternalLinkIcon size={13} />
+                  {githubIssue
+                    ? 'Open GitHub Issue'
+                    : issueBusy
+                      ? 'Creating issue…'
+                      : selectedComment.reviewStatus === 'accepted'
+                        ? 'Create GitHub Issue'
+                        : 'Accept to create issue'}
+                </ActionBtn>
+                {!githubIssue && !githubConnected && (
+                  <span
+                    role="tooltip"
+                    className={cn(
+                      'pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-64',
+                      '-translate-x-1/2 rounded-md border border-border bg-popover px-2.5 py-1.5',
+                      'text-[11px] font-medium text-popover-foreground shadow-md opacity-0',
+                      'transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100',
+                    )}
+                  >
+                    Connect a GitHub repository from Project Settings
+                  </span>
+                )}
+              </span>
+
+              {issueError && (
+                <span role="alert" className="text-xs text-status-rejected">{issueError}</span>
+              )}
 
               <div className="flex-1" />
 

@@ -54,7 +54,10 @@ function openGitHubPopup(url: string) {
   } catch {
     return null
   }
-  return window.open(url, 'crrt-github-connect', 'popup,width=760,height=760')
+  // A named tab preserves window.opener for the origin-checked postMessage
+  // callback without relying on popup windows, which some embedded/local
+  // browsers acknowledge but never present.
+  return window.open(url, 'crrt-github-connect')
 }
 
 export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
@@ -95,8 +98,9 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
   useEffect(() => { void loadConfig() }, [loadConfig])
 
   useEffect(() => {
+    const callbackOrigin = new URL(apiBase, window.location.href).origin
     function onMessage(event: MessageEvent) {
-      if (event.origin !== window.location.origin || event.source !== popup.current) return
+      if (event.origin !== callbackOrigin || event.source !== popup.current) return
       const message = event.data as Partial<InstallMessage> | null
       if (!message || message.type !== 'crrt:github-app-install') return
       if (message.ok !== true) {
@@ -127,7 +131,7 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
       window.removeEventListener('message', onMessage)
       stopPopupPoll()
     }
-  }, [projectKey, stopPopupPoll])
+  }, [apiBase, projectKey, stopPopupPoll])
 
   async function chooseConnection() {
     setBusy(true)

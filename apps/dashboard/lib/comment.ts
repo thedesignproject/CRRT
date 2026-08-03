@@ -33,6 +33,7 @@ export function mapServerComment(record: CommentRecord): Comment {
     screenshotUrl: record.imageUrl,
     targetType: record.targetType ?? 'element_point',
     anchor: record.anchor ?? null,
+    githubIssue: record.githubIssue ?? null,
   }
 }
 

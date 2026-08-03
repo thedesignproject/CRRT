@@ -4,11 +4,11 @@ vi.mock('../../../_lib/auth.js', () => ({
   requireUser: vi.fn(),
   requireProjectMembership: vi.fn(),
 }))
-vi.mock('../../../_lib/store.js', () => ({ listComments: vi.fn() }))
+vi.mock('../../../_lib/store.js', () => ({ listProjectComments: vi.fn() }))
 
 import handler from './comments.js'
 import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
-import { listComments } from '../../../_lib/store.js'
+import { listProjectComments } from '../../../_lib/store.js'
 
 function mockRes() {
   return {
@@ -27,7 +27,7 @@ const call = (req: unknown, res: unknown) =>
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
   vi.mocked(requireProjectMembership).mockReset()
-  vi.mocked(listComments).mockReset()
+  vi.mocked(listProjectComments).mockReset()
 })
 
 describe('api/v1/projects/[projectId]/comments', () => {
@@ -69,14 +69,14 @@ describe('api/v1/projects/[projectId]/comments', () => {
   it('lists comments for members; returns 500 on store throw', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(requireProjectMembership).mockResolvedValue(true)
-    vi.mocked(listComments).mockResolvedValueOnce([{ id: 'c1' }] as never)
+    vi.mocked(listProjectComments).mockResolvedValueOnce([{ id: 'c1' }] as never)
 
     let res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual([{ id: 'c1' }])
 
-    vi.mocked(listComments).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(listProjectComments).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
