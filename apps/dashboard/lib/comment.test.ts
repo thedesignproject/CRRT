@@ -21,8 +21,8 @@ describe('mapServerComment', () => {
       updatedAt: '2026-07-23T12:00:00Z',
     }
     expect(mapServerComment(record)).toMatchObject({
-      pageUrl: '',
-      selector: '',
+      pageUrl: null,
+      selector: null,
       x: null,
       y: null,
       author: 'Anonymous',

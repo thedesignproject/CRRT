@@ -123,13 +123,13 @@ export function CommentDetail({
           <div className="flex items-center justify-between px-6 h-[44px] shrink-0 border-b border-border bg-card">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <span className="font-mono font-medium">#{selectedComment.id}</span>
-              <span>·</span>
-              {selectedComment.pageUrl && (
+              {selectedComment.pageUrl ? (
                 <>
-                  <span className="font-mono">{truncateUrl(selectedComment.pageUrl)}</span>
                   <span>·</span>
+                  <span className="font-mono">{truncateUrl(selectedComment.pageUrl)}</span>
                 </>
-              )}
+              ) : null}
+              <span>·</span>
               {(() => {
                 const ds = getDisplayStatus(selectedComment)
                 return (
@@ -257,7 +257,7 @@ export function CommentDetail({
               <div className="w-px h-5 bg-border mx-1" />
 
               {selectedComment.pageUrl && (
-                <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl, '_blank')}>
+                <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl!, '_blank')}>
                   <ExternalLinkIcon size={13} /> Open page
                 </ActionBtn>
               )}

@@ -10,8 +10,8 @@ export type DisplayStatus = 'open' | 'ready' | 'done' | 'rejected'
 export interface Comment {
   id: string
   projectId: string
-  pageUrl: string
-  selector: string
+  pageUrl: string | null
+  selector: string | null
   x: number | null
   y: number | null
   body: string
