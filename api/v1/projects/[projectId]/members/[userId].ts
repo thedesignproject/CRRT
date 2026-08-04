@@ -4,6 +4,7 @@ import { changeProjectMemberRole, getProjectMember, removeProjectMember, type Pr
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
@@ -16,6 +17,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const targetUserId = getStringQuery(req.query.userId)
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
   if (!targetUserId) return jsonError(req, res, 400, 'Missing userId')
+  if (!UUID_RE.test(targetUserId)) return jsonError(req, res, 400, 'Invalid userId')
 
   try {
     const membership = await getProjectMember(user.userId, projectKey)

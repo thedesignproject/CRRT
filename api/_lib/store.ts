@@ -384,6 +384,10 @@ export type ProjectMemberRoleChange = {
   changed: boolean
 }
 
+function isProjectMemberRole(value: unknown): value is ProjectMemberRole {
+  return value === 'owner' || value === 'admin' || value === 'member'
+}
+
 export async function changeProjectMemberRole(input: {
   projectKey: string
   actorUserId: string
@@ -410,11 +414,14 @@ export async function changeProjectMemberRole(input: {
   if (result.status === 'owner_required') throw new Error('owner_required')
   if (result.status === 'owner_protected') throw new Error('owner_protected')
   if (result.status === 'invalid_role') throw new Error('invalid_role')
+  const expectedChanged = result.status === 'updated'
   if (
     (result.status !== 'updated' && result.status !== 'unchanged')
-    || !result.previousRole
-    || !result.role
+    || !isProjectMemberRole(result.previousRole)
+    || !isProjectMemberRole(result.role)
     || typeof result.changed !== 'boolean'
+    || result.changed !== expectedChanged
+    || (expectedChanged ? result.previousRole === result.role : result.previousRole !== result.role)
   ) throw new Error('invalid_role_change_result')
 
   return {

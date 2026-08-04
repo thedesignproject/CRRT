@@ -9,8 +9,26 @@ describeDatabase('comment GitHub issue database fencing', () => {
   const sql = postgres(databaseUrl as string, { max: 6 })
   const projectKey = `github-issue-${randomUUID()}`
   const commentIds = Array.from({ length: 5 }, () => randomUUID())
+  const actorUserId = randomUUID()
+  const targetUserId = randomUUID()
 
   beforeAll(async () => {
+    await sql`
+      insert into auth.users (id, email)
+      values
+        (${actorUserId}::uuid, ${`actor-${actorUserId}@example.com`}),
+        (${targetUserId}::uuid, ${`target-${targetUserId}@example.com`})
+    `
+    await sql`
+      insert into projects (public_key, slug, name, allowed_origins, claimable)
+      values (${projectKey}, ${projectKey}, 'GitHub issue fencing', '{}', false)
+    `
+    await sql`
+      insert into project_members (project_key, user_id, role, is_owner)
+      values
+        (${projectKey}, ${actorUserId}::uuid, 'admin', true),
+        (${projectKey}, ${targetUserId}::uuid, 'member', false)
+    `
     await sql`
       insert into comments (id, project_id, comment, status)
       values
@@ -24,6 +42,8 @@ describeDatabase('comment GitHub issue database fencing', () => {
 
   afterAll(async () => {
     await sql`delete from comments where project_id = ${projectKey}`
+    await sql`delete from projects where public_key = ${projectKey}`
+    await sql`delete from auth.users where id in (${actorUserId}::uuid, ${targetUserId}::uuid)`
     await sql.end()
   })
 
@@ -95,7 +115,11 @@ describeDatabase('comment GitHub issue database fencing', () => {
     `).rejects.toThrow('github_issue_creation_in_progress')
 
     await expect(sql`
-      select remove_project_member(${projectKey}, ${randomUUID()}::uuid)
+      select remove_project_member(
+        ${projectKey},
+        ${actorUserId}::uuid,
+        ${targetUserId}::uuid
+      )
     `).rejects.toThrow('github_issue_creation_in_progress')
 
     await sql`

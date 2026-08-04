@@ -11,6 +11,8 @@ import handler from './[userId].js'
 import { requireUser } from '../../../../_lib/auth.js'
 import { changeProjectMemberRole, getProjectMember, removeProjectMember } from '../../../../_lib/store.js'
 
+const TARGET_USER_ID = '00000000-0000-0000-0000-000000000001'
+
 function mockRes() {
   return {
     statusCode: 200,
@@ -35,20 +37,20 @@ beforeEach(() => {
 describe('api/v1/projects/[projectId]/members/[userId]', () => {
   it('handles preflight OPTIONS', async () => {
     const res = mockRes()
-    await call({ method: 'OPTIONS', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'OPTIONS', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(204)
   })
 
   it('rejects non-DELETE + unauthenticated', async () => {
     let res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'GET', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(405)
 
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
       r.status(401).json({ error: 'Unauthorized' }); return null
     })
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(401)
   })
 
@@ -56,12 +58,17 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
 
     let res = mockRes()
-    await call({ method: 'DELETE', query: { userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
     await call({ method: 'DELETE', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)
+
+    res = mockRes()
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'not-a-uuid' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ error: 'Invalid userId' })
   })
 
   it('enforces admin role', async () => {
@@ -69,12 +76,12 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
 
     vi.mocked(getProjectMember).mockResolvedValueOnce(null)
     let res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'member' })
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
   })
 
@@ -85,39 +92,39 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     // success
     vi.mocked(removeProjectMember).mockResolvedValueOnce(true)
     let res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(removeProjectMember).toHaveBeenCalledWith('p', 'u', 'm')
-    expect(res.body).toMatchObject({ projectKey: 'p', userId: 'm' })
+    expect(removeProjectMember).toHaveBeenCalledWith('p', 'u', TARGET_USER_ID)
+    expect(res.body).toMatchObject({ projectKey: 'p', userId: TARGET_USER_ID })
 
     // not found
     vi.mocked(removeProjectMember).mockResolvedValueOnce(false)
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(404)
 
     // owner protection
     vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('owner_protected'))
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(409)
 
     // authorization is rechecked atomically by the removal RPC
     vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('forbidden'))
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     // generic error
     vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('db down'))
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
 
     // non-Error throw → 500 (msg stays undefined)
     vi.mocked(removeProjectMember).mockImplementationOnce(() => { throw 'string-not-error' })
     res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: TARGET_USER_ID }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
   })
 
@@ -126,19 +133,19 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
 
     let res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: {}, headers: {} }, res)
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: {}, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
-    const changed = { projectKey: 'p', userId: 'm', previousRole: 'member', role: 'admin', changed: true }
+    const changed = { projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'member', role: 'admin', changed: true }
     vi.mocked(changeProjectMemberRole).mockResolvedValue(changed as never)
     res = mockRes()
     await call({
-      method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'admin' }, headers: {},
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'admin' }, headers: {},
     }, res)
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual(changed)
     expect(changeProjectMemberRole).toHaveBeenCalledWith({
-      projectKey: 'p', actorUserId: 'u', targetUserId: 'm', role: 'admin',
+      projectKey: 'p', actorUserId: 'u', targetUserId: TARGET_USER_ID, role: 'admin',
     })
   })
 
@@ -153,7 +160,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(changeProjectMemberRole).mockRejectedValue(new Error(message))
     const res = mockRes()
     await call({
-      method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'member' }, headers: {},
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'member' }, headers: {},
     }, res)
     expect(res.statusCode).toBe(status)
   })
