@@ -170,6 +170,22 @@ describe('ProjectSettings role controls', () => {
     expect(screen.getByLabelText('Remove member@example.com')).toBeDisabled()
   })
 
+  it('ignores Escape while an ownership transfer is pending', async () => {
+    const change = deferred<void>()
+    const state = settings({ changeRole: vi.fn().mockReturnValue(change.promise) })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'owner' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+
+    expect(screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })).toBeTruthy()
+    change.resolve()
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+  })
+
   it('does not surface a stale role error after switching projects', async () => {
     const change = deferred<void>()
     const state = settings({ changeRole: vi.fn().mockReturnValue(change.promise) })
