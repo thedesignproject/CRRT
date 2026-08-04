@@ -78,7 +78,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     expect(res.statusCode).toBe(403)
   })
 
-  it('removes a member, 404s a missing one, 409s the last admin, 500s on error', async () => {
+  it('removes a member, 404s a missing one, protects the owner, and handles errors', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
 
@@ -95,12 +95,6 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     res = mockRes()
     await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
     expect(res.statusCode).toBe(404)
-
-    // last admin
-    vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('last_admin'))
-    res = mockRes()
-    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
-    expect(res.statusCode).toBe(409)
 
     // owner protection
     vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('owner_protected'))

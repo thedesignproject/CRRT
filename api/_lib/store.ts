@@ -347,8 +347,9 @@ export async function listProjectMemberIds(projectKey: string) {
 
 /**
  * Remove a member from a project. Requires the actor to still be an admin and
- * refuses to remove the owner or last remaining admin. Returns false when the
- * target wasn't in the project so callers can map that to a 404.
+ * refuses to remove the owner. Returns false when the target wasn't in the
+ * project so callers can map that to a 404. The owner is always backed by the
+ * database `admin` role, so no separate last-admin guard is needed.
  *
  * The count + delete run inside the `remove_project_member` DB function (see
  * migration 0014) which locks the project's membership rows before checking
@@ -370,7 +371,6 @@ export async function removeProjectMember(
   if (error) throw new Error(error.message)
   if (data === 'forbidden') throw new Error('forbidden')
   if (data === 'owner_protected') throw new Error('owner_protected')
-  if (data === 'last_admin') throw new Error('last_admin')
   if (data === 'not_found') return false
   if (data === 'removed') return true
   throw new Error('invalid_remove_result')

@@ -575,11 +575,6 @@ describe('removeProjectMember', () => {
     expect(await removeProjectMember('p', 'actor', 'gone')).toBe(false)
   })
 
-  it('refuses to remove the last admin', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'last_admin', error: null }) as never)
-    await expect(removeProjectMember('p', 'actor', 'a')).rejects.toThrow('last_admin')
-  })
-
   it('refuses to remove the project owner', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'owner_protected', error: null }) as never)
     await expect(removeProjectMember('p', 'actor', 'owner')).rejects.toThrow('owner_protected')
