@@ -28,6 +28,110 @@ WHERE member.project_key = ranked.project_key
   AND member.user_id = ranked.user_id
   AND ranked.position = 1;--> statement-breakpoint
 
+CREATE FUNCTION public.claim_project(
+  p_user_id uuid,
+  p_project_key text,
+  p_name text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  v_project public.projects%ROWTYPE;
+  v_created boolean := false;
+BEGIN
+  IF p_user_id IS NULL OR p_project_key IS NULL OR p_project_key = '' THEN
+    RETURN jsonb_build_object('status', 'invalid_input');
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-project-claim:' || p_project_key, 0));
+
+  SELECT project.*
+  INTO v_project
+  FROM public.projects AS project
+  WHERE project.public_key = p_project_key
+  FOR UPDATE;
+
+  IF NOT FOUND THEN
+    IF p_name IS NULL THEN
+      RETURN jsonb_build_object('status', 'not_found');
+    END IF;
+
+    BEGIN
+      INSERT INTO public.projects (
+        public_key,
+        slug,
+        name,
+        allowed_origins,
+        claimable
+      )
+      VALUES (p_project_key, p_project_key, p_name, '{}', false)
+      RETURNING * INTO v_project;
+      v_created := true;
+    EXCEPTION
+      WHEN unique_violation THEN
+        SELECT project.*
+        INTO v_project
+        FROM public.projects AS project
+        WHERE project.public_key = p_project_key
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+          RETURN jsonb_build_object('status', 'already_claimed');
+        END IF;
+    END;
+  END IF;
+
+  PERFORM 1
+  FROM public.project_members AS member
+  WHERE member.project_key = p_project_key
+  ORDER BY member.user_id
+  FOR UPDATE;
+
+  IF EXISTS (
+    SELECT 1
+    FROM public.project_members AS member
+    WHERE member.project_key = p_project_key AND member.is_owner
+  ) THEN
+    RETURN jsonb_build_object('status', 'already_claimed');
+  END IF;
+
+  IF NOT v_created THEN
+    IF NOT v_project.claimable THEN
+      RETURN jsonb_build_object('status', 'already_claimed');
+    END IF;
+
+    UPDATE public.projects AS project
+    SET claimable = false, updated_at = now()
+    WHERE project.public_key = p_project_key
+    RETURNING project.* INTO v_project;
+  END IF;
+
+  INSERT INTO public.project_repo_configs (project_key, default_branch)
+  VALUES (p_project_key, 'main')
+  ON CONFLICT (project_key) DO NOTHING;
+
+  INSERT INTO public.project_members (project_key, user_id, role, is_owner)
+  VALUES (p_project_key, p_user_id, 'admin', true)
+  ON CONFLICT (project_key, user_id) DO UPDATE
+  SET role = 'admin', is_owner = true;
+
+  RETURN jsonb_build_object(
+    'status', 'claimed',
+    'project', jsonb_build_object(
+      'public_key', v_project.public_key,
+      'slug', v_project.slug,
+      'name', v_project.name,
+      'allowed_origins', v_project.allowed_origins,
+      'created_at', v_project.created_at,
+      'updated_at', v_project.updated_at
+    )
+  );
+END;
+$$;--> statement-breakpoint
+
 CREATE OR REPLACE FUNCTION public.change_project_member_role(
   p_project_key text,
   p_actor_user_id uuid,
@@ -201,7 +305,9 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 
+REVOKE ALL ON FUNCTION public.claim_project(uuid, text, text) FROM PUBLIC;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.change_project_member_role(text, uuid, uuid, text) FROM PUBLIC;--> statement-breakpoint
 REVOKE ALL ON FUNCTION public.remove_project_member(text, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.claim_project(uuid, text, text) TO service_role;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.change_project_member_role(text, uuid, uuid, text) TO service_role;--> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.remove_project_member(text, uuid, uuid) TO service_role;
