@@ -64,11 +64,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         role: requestedRole as ProjectMemberRole,
       })
       if (changed.changed) {
-        waitUntil(sendRoleChangeEmailInBackground({
-          change: changed,
-          actorEmail: user.email,
-          dashboardUrl: getProjectRoleChangeDashboardUrl(),
-        }))
+        try {
+          waitUntil(sendRoleChangeEmailInBackground({
+            change: changed,
+            actorEmail: user.email,
+            dashboardUrl: getProjectRoleChangeDashboardUrl(),
+          }))
+        } catch (scheduleError) {
+          console.warn('Project role change email scheduling failed', scheduleError)
+        }
       }
       setCors(req, res, METHODS)
       return res.status(200).json(changed)

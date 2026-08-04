@@ -46,11 +46,16 @@ export function buildProjectRoleChangeEmail(input: ProjectRoleChangeEmailInput) 
     ? `You now own ${subjectProjectName} on CRRT`
     : `Your role changed on ${subjectProjectName}`
   const headline = isOwnershipTransfer ? 'You’re the owner.' : `You’re now ${input.role === 'admin' ? 'an admin' : 'a member'}.`
-  const body = `${input.actorEmail} changed your role on ${input.projectName} from ${input.previousRole} to ${input.role}.`
+  const textActorEmail = sanitizeEmailHeader(input.actorEmail)
+  const textProjectName = sanitizeEmailHeader(input.projectName)
+  const textPreviousRole = sanitizeEmailHeader(input.previousRole)
+  const textRole = sanitizeEmailHeader(input.role)
+  const textDashboardUrl = sanitizeEmailHeader(input.dashboardUrl)
+  const body = `${textActorEmail} changed your role on ${textProjectName} from ${textPreviousRole} to ${textRole}.`
 
   return {
     subject,
-    text: `${body}\n\nOpen dashboard: ${input.dashboardUrl}`,
+    text: `${body}\n\nOpen dashboard: ${textDashboardUrl}`,
     html: `
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#0A0A0A" style="margin:0;padding:0;background:#0A0A0A;">
   <tr>

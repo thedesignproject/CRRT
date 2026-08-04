@@ -46,6 +46,8 @@ describe('project role change email', () => {
 
     const injected = buildProjectRoleChangeEmail(input({ projectName: 'Demo\r\nBcc: victim@example.com' }))
     expect(injected.subject).toBe('Your role changed on Demo Bcc: victim@example.com')
+    expect(injected.text).not.toContain('\r\nBcc:')
+    expect(injected.text).toContain('Demo Bcc: victim@example.com')
   })
 
   it('uses only the configured application origin for dashboard links', () => {

@@ -41,7 +41,7 @@ beforeEach(() => {
   vi.mocked(changeProjectMemberRole).mockReset()
   vi.mocked(getProject).mockReset().mockResolvedValue({ name: 'Demo' } as never)
   vi.mocked(getProjectMember).mockReset()
-  vi.mocked(getUserEmailsByIds).mockReset().mockResolvedValue({ m: 'member@example.com' })
+  vi.mocked(getUserEmailsByIds).mockReset().mockResolvedValue({ [TARGET_USER_ID]: 'member@example.com' })
   vi.mocked(removeProjectMember).mockReset()
   vi.mocked(sendProjectRoleChangeEmail).mockReset().mockResolvedValue({ skipped: false })
   vi.mocked(getProjectRoleChangeDashboardUrl).mockReset().mockReturnValue('https://crrt.ai/dashboard')
@@ -173,19 +173,19 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     vi.mocked(changeProjectMemberRole).mockResolvedValue({
-      projectKey: 'p', userId: 'm', previousRole: 'member', role: 'member', changed: false,
+      projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'member', role: 'member', changed: false,
     })
     let res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'member' }, headers: {} }, res)
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'member' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(waitUntil).not.toHaveBeenCalled()
 
     vi.mocked(changeProjectMemberRole).mockResolvedValue({
-      projectKey: 'p', userId: 'm', previousRole: 'member', role: 'admin', changed: true,
+      projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'member', role: 'admin', changed: true,
     })
     vi.mocked(getUserEmailsByIds).mockResolvedValue({})
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'admin' }, headers: {} }, res)
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'admin' }, headers: {} }, res)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
     expect(sendProjectRoleChangeEmail).not.toHaveBeenCalled()
   })
@@ -194,15 +194,34 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     vi.mocked(changeProjectMemberRole).mockResolvedValue({
-      projectKey: 'p', userId: 'm', previousRole: 'member', role: 'admin', changed: true,
+      projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'member', role: 'admin', changed: true,
     })
     vi.mocked(sendProjectRoleChangeEmail).mockResolvedValue({ skipped: true })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'admin' }, headers: {} }, res)
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'admin' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
     expect(warnSpy).toHaveBeenCalledWith('Project role change email skipped: email configuration is missing')
+    warnSpy.mockRestore()
+  })
+
+  it('does not fail a completed role change when email scheduling throws', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(changeProjectMemberRole).mockResolvedValue({
+      projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'member', role: 'admin', changed: true,
+    })
+    vi.mocked(waitUntil).mockImplementationOnce(() => { throw new Error('runtime unavailable') })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call({
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'admin' }, headers: {},
+    }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(warnSpy).toHaveBeenCalledWith('Project role change email scheduling failed', expect.any(Error))
     warnSpy.mockRestore()
   })
 
@@ -210,14 +229,14 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     vi.mocked(changeProjectMemberRole).mockResolvedValue({
-      projectKey: 'p', userId: 'm', previousRole: 'admin', role: 'owner', changed: true,
+      projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'admin', role: 'owner', changed: true,
     })
     vi.mocked(getProject).mockResolvedValue(null)
     vi.mocked(sendProjectRoleChangeEmail).mockRejectedValue(new Error('resend down'))
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const res = mockRes()
     await call({
-      method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'owner' },
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'owner' },
       headers: { host: 'preview.example.com', 'x-forwarded-proto': 'https' },
     }, res)
     expect(res.statusCode).toBe(200)
