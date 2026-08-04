@@ -1,0 +1,3 @@
+ALTER TABLE "project_members" ADD COLUMN "is_owner" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "project_members_one_owner_idx" ON "project_members" USING btree ("project_key") WHERE "project_members"."is_owner";--> statement-breakpoint
+ALTER TABLE "project_members" ADD CONSTRAINT "project_members_owner_role_check" CHECK (not "project_members"."is_owner" or "project_members"."role" = 'admin');

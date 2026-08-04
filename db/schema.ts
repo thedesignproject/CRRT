@@ -48,12 +48,17 @@ export const projectMembers = pgTable(
     // auth schema, so the generated migration adds this cross-schema FK.
     userId: uuid('user_id').notNull(),
     role: text('role').notNull(),
+    isOwner: boolean('is_owner').notNull().default(false),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.projectKey, t.userId] }),
     userIdx: index('project_members_user_id_idx').on(t.userId),
+    oneOwnerIdx: uniqueIndex('project_members_one_owner_idx')
+      .on(t.projectKey)
+      .where(sql`${t.isOwner}`),
     roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member')`),
+    ownerRoleCheck: check('project_members_owner_role_check', sql`not ${t.isOwner} or ${t.role} = 'admin'`),
   }),
 )
 
