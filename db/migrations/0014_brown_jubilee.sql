@@ -235,7 +235,6 @@ DECLARE
   v_actor_role text;
   v_role text;
   v_is_owner boolean;
-  v_admin_count integer;
 BEGIN
   PERFORM 1
   FROM public.project_members AS member
@@ -285,17 +284,6 @@ BEGIN
       )
   ) THEN
     RAISE EXCEPTION 'github_issue_creation_in_progress';
-  END IF;
-
-  IF v_role = 'admin' THEN
-    SELECT count(*)
-    INTO v_admin_count
-    FROM public.project_members AS member
-    WHERE member.project_key = p_project_key AND member.role = 'admin';
-
-    IF v_admin_count <= 1 THEN
-      RETURN 'last_admin';
-    END IF;
   END IF;
 
   DELETE FROM public.project_members AS member
