@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
-vi.mock('../../../_lib/project-invite-email.js', () => ({ sendProjectInviteEmail: vi.fn() }))
+vi.mock('../../../_lib/project-invite-email.js', () => ({
+  getProjectInviteDashboardUrl: vi.fn(() => 'https://app.example/dashboard'),
+  sendProjectInviteEmail: vi.fn(),
+}))
 vi.mock('../../../_lib/store.js', () => ({
   createInvite: vi.fn(),
   createNotification: vi.fn(),
@@ -173,7 +176,7 @@ describe('api/v1/projects/[projectId]/invites', () => {
       projectName: 'Demo project',
       inviterEmail: 'a@b.c',
       role: 'admin',
-      dashboardUrl: 'http://localhost:3000/dashboard',
+      dashboardUrl: 'https://app.example/dashboard',
     })
 
     // happy path: invitee has no account → notification skipped
@@ -224,16 +227,38 @@ describe('api/v1/projects/[projectId]/invites', () => {
       method: 'POST',
       query: { projectId: 'p' },
       body: { email: 'x@y.z' },
-      headers: { host: 'preview.example.com', 'x-forwarded-proto': 'https' },
+      headers: { host: 'attacker.example', 'x-forwarded-proto': 'http' },
     }, res)
 
     expect(res.statusCode).toBe(201)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
     expect(sendProjectInviteEmail).toHaveBeenCalledWith(expect.objectContaining({
       projectName: 'p',
-      dashboardUrl: 'https://preview.example.com/dashboard',
+      dashboardUrl: 'https://app.example/dashboard',
     }))
     expect(warnSpy).toHaveBeenCalledWith('Project invite email failed', expect.any(Error))
+    warnSpy.mockRestore()
+  })
+
+  it('warns when background email configuration is missing', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(createInvite).mockResolvedValue({ projectKey: 'p', email: 'x@y.z' } as never)
+    vi.mocked(findUserIdByEmail).mockResolvedValue(null)
+    vi.mocked(sendProjectInviteEmail).mockResolvedValue({ skipped: true })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const res = mockRes()
+    await call({
+      method: 'POST',
+      query: { projectId: 'p' },
+      body: { email: 'x@y.z' },
+      headers: {},
+    }, res)
+
+    expect(res.statusCode).toBe(201)
+    await vi.mocked(waitUntil).mock.calls[0]?.[0]
+    expect(warnSpy).toHaveBeenCalledWith('Project invite email skipped: email configuration is missing')
     warnSpy.mockRestore()
   })
 })

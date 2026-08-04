@@ -23,6 +23,10 @@ export function getProjectInviteEmailTimeoutMs(env = process.env) {
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms) : DEFAULT_TIMEOUT_MS
 }
 
+export function getProjectInviteDashboardUrl(env = process.env) {
+  return `${(env.APP_URL || 'https://crrt.ai').replace(/\/$/, '')}/dashboard`
+}
+
 export function buildProjectInviteEmail(input: ProjectInviteEmailInput) {
   const projectName = escapeHtml(input.projectName)
   const inviterEmail = escapeHtml(input.inviterEmail)

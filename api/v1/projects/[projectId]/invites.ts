@@ -10,8 +10,11 @@ import {
   getProjectMember,
   listProjectInvites,
 } from '../../../_lib/store.js'
-import { getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
-import { sendProjectInviteEmail } from '../../../_lib/project-invite-email.js'
+import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
+import {
+  getProjectInviteDashboardUrl,
+  sendProjectInviteEmail,
+} from '../../../_lib/project-invite-email.js'
 
 const METHODS = ['GET', 'POST', 'DELETE', 'OPTIONS']
 
@@ -24,13 +27,14 @@ async function sendProjectInviteEmailInBackground(input: {
 }) {
   try {
     const project = await getProject(input.projectKey)
-    await sendProjectInviteEmail({
+    const result = await sendProjectInviteEmail({
       recipient: input.email,
       projectName: project?.name ?? input.projectKey,
       inviterEmail: input.inviterEmail,
       role: input.role,
       dashboardUrl: input.dashboardUrl,
     })
+    if (result.skipped) console.warn('Project invite email skipped: email configuration is missing')
   } catch (error) {
     console.warn('Project invite email failed', error)
   }
@@ -101,7 +105,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       inviterEmail: user.email,
       projectKey,
       role,
-      dashboardUrl: `${getAppUrl(req)}/dashboard`,
+      dashboardUrl: getProjectInviteDashboardUrl(),
     }))
 
     setCors(req, res, METHODS)

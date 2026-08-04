@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProjectInviteEmail,
+  getProjectInviteDashboardUrl,
   getProjectInviteEmailTimeoutMs,
   sendProjectInviteEmail,
 } from './project-invite-email.js'
@@ -56,6 +57,12 @@ describe('project invite email', () => {
     expect(getProjectInviteEmailTimeoutMs()).toBe(25)
     process.env.COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS = 'invalid'
     expect(getProjectInviteEmailTimeoutMs()).toBe(5_000)
+  })
+
+  it('builds dashboard links from trusted configuration', () => {
+    expect(getProjectInviteDashboardUrl({})).toBe('https://crrt.ai/dashboard')
+    expect(getProjectInviteDashboardUrl({ APP_URL: 'https://app.example/' }))
+      .toBe('https://app.example/dashboard')
   })
 
   it('skips without configuration or a recipient', async () => {
