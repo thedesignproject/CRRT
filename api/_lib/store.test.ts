@@ -411,6 +411,11 @@ describe('membership helpers + claim', () => {
     await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
+      claimRpc: { data: null, error: null },
+    }) as never)
+    await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       claimRpc: { data: null, error: { message: 'db boom' } },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
