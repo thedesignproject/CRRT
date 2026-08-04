@@ -1,11 +1,13 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../../_lib/auth.js'
-import { getProjectMember, removeProjectMember } from '../../../../_lib/store.js'
+import { changeProjectMemberRole, getProjectMember, removeProjectMember, type ProjectMemberRole } from '../../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 
+const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  if (handleOptions(req, res, ['DELETE', 'OPTIONS'])) return
-  if (req.method !== 'DELETE') return methodNotAllowed(req, res, ['DELETE', 'OPTIONS'])
+  if (handleOptions(req, res, METHODS)) return
+  if (req.method !== 'PATCH' && req.method !== 'DELETE') return methodNotAllowed(req, res, METHODS)
   const user = await requireUser(req, res)
   if (!user) return
 
@@ -20,13 +22,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!membership) return jsonError(req, res, 403, 'Forbidden')
     if (membership.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
 
+    if (req.method === 'PATCH') {
+      const requestedRole = (req.body as { role?: unknown } | undefined)?.role
+      if (requestedRole !== 'owner' && requestedRole !== 'admin' && requestedRole !== 'member') {
+        return jsonError(req, res, 400, 'Invalid role')
+      }
+      const changed = await changeProjectMemberRole({
+        projectKey,
+        actorUserId: user.userId,
+        targetUserId,
+        role: requestedRole as ProjectMemberRole,
+      })
+      setCors(req, res, METHODS)
+      return res.status(200).json(changed)
+    }
+
     const removed = await removeProjectMember(projectKey, targetUserId)
     if (!removed) return jsonError(req, res, 404, 'Member not found')
 
-    setCors(req, res, ['DELETE', 'OPTIONS'])
+    setCors(req, res, METHODS)
     return res.status(200).json({ projectKey, userId: targetUserId })
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
+    if (msg === 'not_found') return jsonError(req, res, 404, 'Member not found')
+    if (msg === 'forbidden') return jsonError(req, res, 403, 'Admin role required')
+    if (msg === 'owner_required') return jsonError(req, res, 403, 'Only the owner can transfer ownership')
+    if (msg === 'owner_protected') return jsonError(req, res, 409, 'Transfer ownership before changing the owner')
     if (msg === 'last_admin') return jsonError(req, res, 409, 'Cannot remove the last admin')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')

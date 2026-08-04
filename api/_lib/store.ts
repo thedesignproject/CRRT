@@ -63,7 +63,10 @@ type ProjectMemberRow = {
   project_key: string
   user_id: string
   role: 'admin' | 'member'
+  is_owner: boolean
 }
+
+export type ProjectMemberRole = 'owner' | 'admin' | 'member'
 
 type RepoConfigRow = {
   project_key: string
@@ -281,18 +284,19 @@ export async function listProjectsForUser(userId: string) {
 export async function getProjectMember(
   userId: string,
   projectKey: string,
-): Promise<{ role: 'admin' | 'member' } | null> {
+): Promise<{ role: 'admin' | 'member'; isOwner?: boolean } | null> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('project_key, user_id, role')
+    .select('project_key, user_id, role, is_owner')
     .eq('user_id', userId)
     .eq('project_key', projectKey)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!data) return null
-  return { role: (data as ProjectMemberRow).role }
+  const member = data as ProjectMemberRow
+  return { role: member.role, isOwner: member.is_owner }
 }
 
 export async function isProjectMember(userId: string, projectKey: string): Promise<boolean> {
@@ -302,6 +306,7 @@ export async function isProjectMember(userId: string, projectKey: string): Promi
 type ProjectMemberDetailRow = {
   user_id: string
   role: 'admin' | 'member'
+  is_owner: boolean
   created_at: string
 }
 
@@ -314,7 +319,7 @@ export async function listProjectMembers(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('user_id, role, created_at')
+    .select('user_id, role, is_owner, created_at')
     .eq('project_key', projectKey)
     .order('created_at', { ascending: true })
 
@@ -324,7 +329,7 @@ export async function listProjectMembers(projectKey: string) {
   return rows.map((r) => ({
     userId: r.user_id,
     email: emails[r.user_id] ?? null,
-    role: r.role,
+    role: r.is_owner ? 'owner' as const : r.role,
     createdAt: r.created_at,
   }))
 }
@@ -358,8 +363,59 @@ export async function removeProjectMember(projectKey: string, userId: string): P
   })
 
   if (error) throw new Error(error.message)
+  if (data === 'owner_protected') throw new Error('owner_protected')
   if (data === 'last_admin') throw new Error('last_admin')
   return data === 'removed'
+}
+
+export type ProjectMemberRoleChange = {
+  projectKey: string
+  userId: string
+  previousRole: ProjectMemberRole
+  role: ProjectMemberRole
+  changed: boolean
+}
+
+export async function changeProjectMemberRole(input: {
+  projectKey: string
+  actorUserId: string
+  targetUserId: string
+  role: ProjectMemberRole
+}): Promise<ProjectMemberRoleChange> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('change_project_member_role', {
+    p_project_key: input.projectKey,
+    p_actor_user_id: input.actorUserId,
+    p_target_user_id: input.targetUserId,
+    p_role: input.role,
+  })
+  if (error) throw new Error(error.message)
+
+  const result = (data ?? {}) as {
+    status?: string
+    previousRole?: ProjectMemberRole
+    role?: ProjectMemberRole
+    changed?: boolean
+  }
+  if (result.status === 'not_found') throw new Error('not_found')
+  if (result.status === 'forbidden') throw new Error('forbidden')
+  if (result.status === 'owner_required') throw new Error('owner_required')
+  if (result.status === 'owner_protected') throw new Error('owner_protected')
+  if (result.status === 'invalid_role') throw new Error('invalid_role')
+  if (
+    (result.status !== 'updated' && result.status !== 'unchanged')
+    || !result.previousRole
+    || !result.role
+    || typeof result.changed !== 'boolean'
+  ) throw new Error('invalid_role_change_result')
+
+  return {
+    projectKey: input.projectKey,
+    userId: input.targetUserId,
+    previousRole: result.previousRole,
+    role: result.role,
+    changed: result.changed,
+  }
 }
 
 /**
@@ -756,7 +812,7 @@ export async function claimProject(
 
   const { error: memberError } = await supabase
     .from('project_members')
-    .insert([{ project_key: projectKey, user_id: userId, role: 'admin' }] as never)
+    .insert([{ project_key: projectKey, user_id: userId, role: 'admin', is_owner: true }] as never)
 
   if (memberError && memberError.code !== '23505') {
     throw new Error(memberError.message)

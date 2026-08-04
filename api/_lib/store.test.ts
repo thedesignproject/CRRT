@@ -276,7 +276,7 @@ describe('releaseCommentActivityEmailReservation', () => {
 })
 
 type MembershipMocks = {
-  memberSingle?: { data: { role: 'admin' | 'member' } | null; error: { message: string } | null }
+  memberSingle?: { data: { role: 'admin' | 'member'; is_owner: boolean } | null; error: { message: string } | null }
   memberList?: { data: Array<{ project_key: string }> | null; error: { message: string } | null }
   memberInsertError?: { code?: string; message: string } | null
   projectsIn?: { data: ProjectRow[] | null; error: { message: string } | null }
@@ -328,9 +328,9 @@ function membershipSupabase(m: MembershipMocks = {}) {
 describe('membership helpers + claim', () => {
   it('getProjectMember + isProjectMember cover hit / miss / error', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberSingle: { data: { role: 'admin' }, error: null },
+      memberSingle: { data: { role: 'admin', is_owner: true }, error: null },
     }) as never)
-    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin' })
+    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true })
     expect(await isProjectMember('u', 'p')).toBe(true)
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
