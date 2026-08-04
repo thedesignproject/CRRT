@@ -62,7 +62,7 @@ export function useProjectSettings(
   currentProjectKey.current = projectKey
 
   const refresh = useCallback(async () => {
-    if (!projectKey) return
+    if (!projectKey || currentProjectKey.current !== projectKey) return
     const sequence = ++refreshSequence.current
     const isCurrent = () => currentProjectKey.current === projectKey && refreshSequence.current === sequence
     setLoading(true)
@@ -70,7 +70,7 @@ export function useProjectSettings(
     setRepoConfigError(null)
     if (mocksEnabled) {
       if (!isCurrent()) return
-      setMembers([{ userId: currentUserId, email: 'you@example.com', role: 'admin', createdAt: new Date().toISOString() }])
+      setMembers([{ userId: currentUserId, email: 'you@example.com', role: 'owner', createdAt: new Date().toISOString() }])
       setInvites([])
       setRepoConfig(null)
       setLoadedProjectKey(projectKey)

@@ -43,6 +43,10 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null)
   const pendingAction = useRef(false)
   const actionSequence = useRef(0)
+  const projectKeyRef = useRef(project.publicKey)
+  const transferTriggerRef = useRef<HTMLSelectElement | null>(null)
+  const teamHeadingRef = useRef<HTMLHeadingElement | null>(null)
+  projectKeyRef.current = project.publicKey
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
@@ -54,6 +58,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     setActionError(null)
     setInviteRole('member')
     setTransferTarget(null)
+    transferTriggerRef.current = null
   }, [project.publicKey])
   // Repo config loads async (and re-loads per project): sync when it lands.
   useEffect(() => { setInstructions(settings.repoConfig?.agentInstructions ?? '') }, [project.publicKey, settings.repoConfig])
@@ -97,8 +102,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   // The server normalizes entries ("https://App.Foo.com/x" → "app.foo.com")
   // and rejects unparseable ones, so the client only checks for non-empty.
   async function saveDomains(next: string[]) {
+    const requestedProjectKey = project.publicKey
     const updated = await settings.updateAllowedOrigins(next)
-    setDomains(updated.allowedOrigins)
+    if (projectKeyRef.current === requestedProjectKey) setDomains(updated.allowedOrigins)
   }
 
   const domainValid = domainInput.trim() !== ''
@@ -149,9 +155,22 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const sectionTitle = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
   const card = 'rounded-lg border border-border bg-card'
 
-  function requestRoleChange(member: ProjectMember, role: ProjectMemberRole) {
-    if (role === 'owner') setTransferTarget(member)
+  function requestRoleChange(member: ProjectMember, role: ProjectMemberRole, trigger: HTMLSelectElement) {
+    if (role === 'owner') {
+      transferTriggerRef.current = trigger
+      setTransferTarget(member)
+    }
     else void run(() => settings.changeRole(member.userId, role), member.userId)
+  }
+
+  function closeOwnershipTransfer() {
+    const trigger = transferTriggerRef.current
+    setTransferTarget(null)
+    transferTriggerRef.current = null
+    setTimeout(() => {
+      if (trigger?.isConnected) trigger.focus()
+      else teamHeadingRef.current?.focus()
+    }, 0)
   }
 
   async function confirmOwnershipTransfer(target: ProjectMember) {
@@ -159,7 +178,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
       () => settings.changeRole(target.userId, 'owner'),
       target.userId,
     )
-    if (transferred) setTransferTarget(null)
+    if (transferred) closeOwnershipTransfer()
   }
 
   return (
@@ -331,7 +350,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
         {/* Team */}
         <section className="mt-8">
-          <h2 className={sectionTitle}>Team{members.length > 0 && ` (${members.length})`}</h2>
+          <h2 ref={teamHeadingRef} tabIndex={-1} className={sectionTitle}>Team{members.length > 0 && ` (${members.length})`}</h2>
           <div className={cn(card, 'mt-3 divide-y divide-border')}>
             {loading ? (
               <div className="flex items-center justify-center py-8"><Spinner size={16} /></div>
@@ -356,8 +375,8 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                     {isAdmin && !isProjectOwner ? (
                       <select
                         value={m.role}
-                        onChange={(event) => requestRoleChange(m, event.target.value as ProjectMemberRole)}
-                        disabled={pendingId !== null}
+                        onChange={(event) => requestRoleChange(m, event.target.value as ProjectMemberRole, event.currentTarget)}
+                        disabled={pendingId !== null || transferTarget !== null}
                         aria-label={`Role for ${label}`}
                         className="px-2 py-1 rounded-md border border-border bg-background text-[11px] font-semibold text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
                       >
@@ -376,7 +395,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                     {canRemove && (
                       <button
                         onClick={() => run(() => settings.removeMember(m.userId), m.userId)}
-                        disabled={pendingId !== null}
+                        disabled={pendingId !== null || transferTarget !== null}
                         aria-label={`Remove ${m.email ?? m.userId}`}
                         className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
                       >
@@ -390,7 +409,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           </div>
 
           {transferTarget && (
-            <div role="alertdialog" aria-label="Confirm ownership transfer" className="mt-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+            <div
+              role="alertdialog"
+              aria-label="Confirm ownership transfer"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape' && pendingId === null) closeOwnershipTransfer()
+              }}
+              className="mt-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
+            >
               <p className="text-[12px] text-foreground">
                 Transfer ownership to <span className="font-semibold">{transferTarget.email ?? transferTarget.userId}</span>?
               </p>
@@ -400,12 +426,11 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                   type="button"
                   onClick={() => { void confirmOwnershipTransfer(transferTarget) }}
                   disabled={pendingId !== null}
-                  autoFocus
                   className={submitBtn(pendingId === null)}
                 >
                   {pendingId === transferTarget.userId ? 'Transferring…' : 'Transfer ownership'}
                 </button>
-                <button type="button" onClick={() => setTransferTarget(null)} disabled={pendingId !== null} className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50">
+                <button type="button" onClick={closeOwnershipTransfer} disabled={pendingId !== null} autoFocus className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50">
                   Cancel
                 </button>
               </div>

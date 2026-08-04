@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Project, ProjectMember } from '../api'
 
@@ -63,14 +63,21 @@ describe('ProjectSettings role controls', () => {
 
     fireEvent.change(role, { target: { value: 'owner' } })
     expect(screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Transfer ownership' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus()
+    fireEvent.keyDown(screen.getByRole('alertdialog'), { key: 'Escape' })
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(role).toHaveFocus())
+
+    fireEvent.change(role, { target: { value: 'owner' } })
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('alertdialog')).toBeNull()
+    await waitFor(() => expect(role).toHaveFocus())
 
     fireEvent.change(role, { target: { value: 'owner' } })
     fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
     await waitFor(() => expect(state.changeRole).toHaveBeenCalledWith('member', 'owner'))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await waitFor(() => expect(role).toHaveFocus())
   })
 
   it('lets admins manage non-owner roles but not transfer ownership', () => {
@@ -96,6 +103,21 @@ describe('ProjectSettings role controls', () => {
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Transfer conflicted'))
     expect(screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Transfer ownership' })).not.toBeDisabled()
+  })
+
+  it('moves focus to the team heading when the transfer selector is gone', async () => {
+    const change = deferred<void>()
+    const state = settings({ changeRole: vi.fn().mockReturnValue(change.promise) })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    const role = screen.getByLabelText('Role for member@example.com')
+    fireEvent.change(role, { target: { value: 'owner' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
+    role.remove()
+    change.resolve()
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Team (2)' })).toHaveFocus())
   })
 
   it('normalizes a non-error ownership transfer rejection', async () => {
@@ -134,6 +156,20 @@ describe('ProjectSettings role controls', () => {
     await waitFor(() => expect(screen.getByLabelText('Role for admin@example.com')).not.toBeDisabled())
   })
 
+  it('blocks other member mutations while confirming an ownership transfer', () => {
+    const admin = { ...member, userId: 'admin', email: 'admin@example.com', role: 'admin' as const }
+    const state = settings({ members: [owner, admin, member] })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'owner' } })
+
+    expect(screen.getByLabelText('Role for admin@example.com')).toBeDisabled()
+    expect(screen.getByLabelText('Remove admin@example.com')).toBeDisabled()
+    expect(screen.getByLabelText('Role for member@example.com')).toBeDisabled()
+    expect(screen.getByLabelText('Remove member@example.com')).toBeDisabled()
+  })
+
   it('does not surface a stale role error after switching projects', async () => {
     const change = deferred<void>()
     const state = settings({ changeRole: vi.fn().mockReturnValue(change.promise) })
@@ -167,6 +203,43 @@ describe('ProjectSettings role controls', () => {
 
     await waitFor(() => expect(state.invite).toHaveBeenCalledWith('new@example.com', 'admin'))
     expect((screen.getByLabelText('Invitation role') as HTMLSelectElement).value).toBe('member')
+  })
+
+  it('ignores an allowed-domain response from a previously selected project', async () => {
+    const updateA = deferred<Project>()
+    const projectA = { ...project, allowedOrigins: ['a.example'] }
+    const projectB = { ...project, publicKey: 'other', slug: 'other', name: 'Other', allowedOrigins: ['b.example'] }
+    const stateA = settings({ updateAllowedOrigins: vi.fn().mockReturnValue(updateA.promise) })
+    const stateB = settings({
+      updateAllowedOrigins: vi.fn().mockResolvedValue({
+        ...projectB,
+        allowedOrigins: ['b.example', 'new.example'],
+      }),
+    })
+    vi.mocked(useProjectSettings).mockImplementation((_api, _token, projectKey) => (
+      projectKey === project.publicKey ? stateA : stateB
+    ) as never)
+    const rendered = view('owner', projectA)
+
+    fireEvent.click(screen.getByLabelText('Remove a.example'))
+    rendered.rerender(<ProjectSettings
+      project={projectB}
+      apiBase="/api"
+      accessToken="token"
+      currentUserId="owner"
+      onBack={vi.fn()}
+      onProjectsChanged={vi.fn()}
+    />)
+    await act(async () => {
+      updateA.resolve({ ...projectA, allowedOrigins: [] })
+      await updateA.promise
+    })
+
+    expect(screen.getByText('b.example')).toBeTruthy()
+    expect(screen.queryByText('a.example')).toBeNull()
+    fireEvent.change(screen.getByLabelText('Add allowed domain'), { target: { value: 'new.example' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add' }))
+    await waitFor(() => expect(stateB.updateAllowedOrigins).toHaveBeenCalledWith(['b.example', 'new.example']))
   })
 
   it('rejects an invalid invitation form submission', () => {
