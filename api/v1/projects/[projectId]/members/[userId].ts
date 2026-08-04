@@ -19,7 +19,10 @@ async function sendRoleChangeEmailInBackground(input: {
       getUserEmailsByIds([input.change.userId]),
     ])
     const recipient = emails[input.change.userId]
-    if (!recipient) return
+    if (!recipient) {
+      console.warn('Project role change email skipped: recipient email is missing')
+      return
+    }
     const result = await sendProjectRoleChangeEmail({
       recipient,
       projectName: project?.name ?? input.change.projectKey,

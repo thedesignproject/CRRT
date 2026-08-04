@@ -184,10 +184,13 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
       projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'member', role: 'admin', changed: true,
     })
     vi.mocked(getUserEmailsByIds).mockResolvedValue({})
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     res = mockRes()
     await call({ method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'admin' }, headers: {} }, res)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
     expect(sendProjectRoleChangeEmail).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith('Project role change email skipped: recipient email is missing')
+    warnSpy.mockRestore()
   })
 
   it('logs missing configuration without failing the role change', async () => {
