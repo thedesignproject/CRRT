@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { cn } from '../lib/utils'
@@ -41,25 +41,43 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [instructions, setInstructions] = useState('')
   const [instructionsBusy, setInstructionsBusy] = useState(false)
   const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null)
+  const pendingAction = useRef(false)
+  const actionSequence = useRef(0)
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
   useEffect(() => { setDomains(project.allowedOrigins) }, [project.publicKey, project.allowedOrigins])
-  useEffect(() => { setInviteRole('member'); setTransferTarget(null) }, [project.publicKey])
+  useEffect(() => {
+    actionSequence.current += 1
+    pendingAction.current = false
+    setPendingId(null)
+    setActionError(null)
+    setInviteRole('member')
+    setTransferTarget(null)
+  }, [project.publicKey])
   // Repo config loads async (and re-loads per project): sync when it lands.
   useEffect(() => { setInstructions(settings.repoConfig?.agentInstructions ?? '') }, [project.publicKey, settings.repoConfig])
 
   const nameChanged = name.trim() !== '' && name.trim() !== project.name
 
   async function run(action: () => Promise<unknown>, key: string | null) {
+    if (pendingAction.current) return false
+    pendingAction.current = true
+    const sequence = ++actionSequence.current
+    const isCurrent = () => actionSequence.current === sequence
     setActionError(null)
     setPendingId(key)
     try {
       await action()
+      return isCurrent()
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : 'Something went wrong')
+      if (isCurrent()) setActionError(err instanceof Error ? err.message : 'Something went wrong')
+      return false
     } finally {
-      setPendingId(null)
+      if (isCurrent()) {
+        pendingAction.current = false
+        setPendingId(null)
+      }
     }
   }
 
@@ -101,7 +119,6 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const instructionsChanged = instructions.trim() !== (settings.repoConfig?.agentInstructions ?? '')
   const instructionsUnavailable = loading || settings.repoConfigError !== null
   async function saveInstructions() {
-    if (!instructionsChanged || instructionsBusy || instructionsUnavailable) return
     setActionError(null)
     setInstructionsBusy(true)
     try {
@@ -135,6 +152,15 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   function requestRoleChange(member: ProjectMember, role: ProjectMemberRole) {
     if (role === 'owner') setTransferTarget(member)
     else void run(() => settings.changeRole(member.userId, role), member.userId)
+  }
+
+  async function confirmOwnershipTransfer() {
+    if (!transferTarget) return
+    const transferred = await run(
+      () => settings.changeRole(transferTarget.userId, 'owner'),
+      transferTarget.userId,
+    )
+    if (transferred) setTransferTarget(null)
   }
 
   return (
@@ -332,7 +358,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                       <select
                         value={m.role}
                         onChange={(event) => requestRoleChange(m, event.target.value as ProjectMemberRole)}
-                        disabled={pendingId === m.userId}
+                        disabled={pendingId !== null}
                         aria-label={`Role for ${label}`}
                         className="px-2 py-1 rounded-md border border-border bg-background text-[11px] font-semibold text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
                       >
@@ -351,7 +377,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                     {canRemove && (
                       <button
                         onClick={() => run(() => settings.removeMember(m.userId), m.userId)}
-                        disabled={pendingId === m.userId}
+                        disabled={pendingId !== null}
                         aria-label={`Remove ${m.email ?? m.userId}`}
                         className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
                       >
@@ -373,13 +399,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { void run(() => settings.changeRole(transferTarget.userId, 'owner'), transferTarget.userId).then(() => setTransferTarget(null)) }}
-                  disabled={pendingId === transferTarget.userId}
-                  className={submitBtn(pendingId !== transferTarget.userId)}
+                  onClick={() => { void confirmOwnershipTransfer() }}
+                  disabled={pendingId !== null}
+                  autoFocus
+                  className={submitBtn(pendingId === null)}
                 >
                   {pendingId === transferTarget.userId ? 'Transferring…' : 'Transfer ownership'}
                 </button>
-                <button type="button" onClick={() => setTransferTarget(null)} className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                <button type="button" onClick={() => setTransferTarget(null)} disabled={pendingId !== null} className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50">
                   Cancel
                 </button>
               </div>
@@ -389,7 +416,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           {isAdmin && (
             <form
               onSubmit={(e) => { e.preventDefault(); sendInvite() }}
-              className="mt-3 flex items-center gap-2"
+              className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center"
             >
               <input
                 type="email"
@@ -436,7 +463,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                   </div>
                   <button
                     onClick={() => run(() => settings.cancelInvite(inv.email), inv.email)}
-                    disabled={pendingId === inv.email}
+                    disabled={pendingId !== null}
                     className="px-2.5 py-1.5 rounded-md text-[11px] font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
                   >
                     {pendingId === inv.email ? 'Canceling…' : 'Cancel'}

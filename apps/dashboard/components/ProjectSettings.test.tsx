@@ -20,6 +20,13 @@ const member: ProjectMember = {
   userId: 'member', email: 'member@example.com', role: 'member', createdAt: '2026-01-02T00:00:00Z',
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+  return { promise, resolve, reject }
+}
+
 function settings(overrides: Record<string, unknown> = {}) {
   return {
     members: [owner, member], invites: [], repoConfig: null, repoConfigError: null,
@@ -30,9 +37,9 @@ function settings(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function view(current = 'owner') {
+function view(current = 'owner', selectedProject = project) {
   return render(<ProjectSettings
-    project={project}
+    project={selectedProject}
     apiBase="/api"
     accessToken="token"
     currentUserId={current}
@@ -56,6 +63,7 @@ describe('ProjectSettings role controls', () => {
 
     fireEvent.change(role, { target: { value: 'owner' } })
     expect(screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Transfer ownership' })).toHaveFocus()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('alertdialog')).toBeNull()
 
@@ -77,6 +85,62 @@ describe('ProjectSettings role controls', () => {
     expect(state.changeRole).toHaveBeenCalledWith('member', 'admin')
   })
 
+  it('keeps failed ownership transfers open for retry', async () => {
+    const state = settings({ changeRole: vi.fn().mockRejectedValue(new Error('Transfer conflicted')) })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'owner' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Transfer conflicted'))
+    expect(screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Transfer ownership' })).not.toBeDisabled()
+  })
+
+  it('serializes member mutations while one is pending', async () => {
+    const change = deferred<void>()
+    const admin = { ...member, userId: 'admin', email: 'admin@example.com', role: 'admin' as const }
+    const state = settings({
+      members: [owner, admin, member],
+      changeRole: vi.fn().mockReturnValue(change.promise),
+    })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'admin' } })
+
+    expect(screen.getByLabelText('Role for admin@example.com')).toBeDisabled()
+    expect(screen.getByLabelText('Remove admin@example.com')).toBeDisabled()
+    fireEvent.click(screen.getByLabelText('Remove admin@example.com'))
+    expect(state.removeMember).not.toHaveBeenCalled()
+
+    change.resolve()
+    await waitFor(() => expect(screen.getByLabelText('Role for admin@example.com')).not.toBeDisabled())
+  })
+
+  it('does not surface a stale role error after switching projects', async () => {
+    const change = deferred<void>()
+    const state = settings({ changeRole: vi.fn().mockReturnValue(change.promise) })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    const rendered = view()
+
+    fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'owner' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
+    rendered.rerender(<ProjectSettings
+      project={{ ...project, publicKey: 'other' }}
+      apiBase="/api"
+      accessToken="token"
+      currentUserId="owner"
+      onBack={vi.fn()}
+      onProjectsChanged={vi.fn()}
+    />)
+
+    change.reject(new Error('Stale transfer error'))
+    await waitFor(() => expect(screen.queryByText('Stale transfer error')).toBeNull())
+    expect(screen.queryByRole('alertdialog')).toBeNull()
+  })
+
   it('submits and resets the selected invitation role', async () => {
     const state = settings()
     vi.mocked(useProjectSettings).mockReturnValue(state as never)
@@ -88,6 +152,56 @@ describe('ProjectSettings role controls', () => {
 
     await waitFor(() => expect(state.invite).toHaveBeenCalledWith('new@example.com', 'admin'))
     expect((screen.getByLabelText('Invitation role') as HTMLSelectElement).value).toBe('member')
+  })
+
+  it('rejects an invalid invitation form submission', () => {
+    const state = settings()
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    const inviteButton = screen.getByRole('button', { name: 'Invite' })
+    fireEvent.submit(inviteButton.closest('form')!)
+    expect(state.invite).not.toHaveBeenCalled()
+  })
+
+  it('saves updated agent instructions', async () => {
+    const state = settings({
+      repoConfig: { agentInstructions: 'old' },
+      saveAgentInstructions: vi.fn().mockResolvedValue(undefined),
+    })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.change(screen.getByLabelText('Agent instructions'), { target: { value: 'new' } })
+    fireEvent.click(screen.getAllByRole('button', { name: 'Save' }).find((button) => !button.hasAttribute('disabled'))!)
+
+    await waitFor(() => expect(state.saveAgentInstructions).toHaveBeenCalledWith('new'))
+  })
+
+  it('renders loading and empty team states', () => {
+    vi.mocked(useProjectSettings).mockReturnValue(settings({ loading: true, members: [] }) as never)
+    const rendered = view()
+    expect(document.querySelector('.animate-spin')).toBeTruthy()
+
+    vi.mocked(useProjectSettings).mockReturnValue(settings({ loading: false, members: [] }) as never)
+    rendered.rerender(<ProjectSettings
+      project={project}
+      apiBase="/api"
+      accessToken="token"
+      currentUserId="owner"
+      onBack={vi.fn()}
+      onProjectsChanged={vi.fn()}
+    />)
+    expect(screen.getByText('No members yet.')).toBeTruthy()
+  })
+
+  it('removes a non-owner member', async () => {
+    const state = settings({ removeMember: vi.fn().mockResolvedValue(undefined) })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.click(screen.getByLabelText('Remove member@example.com'))
+    await waitFor(() => expect(state.removeMember).toHaveBeenCalledWith('member'))
   })
 
   it('shows read-only member roles and falls back to a user id during transfer', () => {
