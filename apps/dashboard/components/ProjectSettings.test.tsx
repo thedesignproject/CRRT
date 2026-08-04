@@ -98,21 +98,36 @@ describe('ProjectSettings role controls', () => {
     expect(screen.getByRole('button', { name: 'Transfer ownership' })).not.toBeDisabled()
   })
 
+  it('normalizes a non-error ownership transfer rejection', async () => {
+    const state = settings({ changeRole: vi.fn().mockRejectedValue('Transfer conflicted') })
+    vi.mocked(useProjectSettings).mockReturnValue(state as never)
+    view()
+
+    fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'owner' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Something went wrong'))
+  })
+
   it('serializes member mutations while one is pending', async () => {
     const change = deferred<void>()
     const admin = { ...member, userId: 'admin', email: 'admin@example.com', role: 'admin' as const }
+    let removeAdmin!: HTMLElement
     const state = settings({
       members: [owner, admin, member],
-      changeRole: vi.fn().mockReturnValue(change.promise),
+      changeRole: vi.fn().mockImplementation(() => {
+        removeAdmin.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+        return change.promise
+      }),
     })
     vi.mocked(useProjectSettings).mockReturnValue(state as never)
     view()
 
+    removeAdmin = screen.getByLabelText('Remove admin@example.com')
     fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'admin' } })
 
     expect(screen.getByLabelText('Role for admin@example.com')).toBeDisabled()
     expect(screen.getByLabelText('Remove admin@example.com')).toBeDisabled()
-    fireEvent.click(screen.getByLabelText('Remove admin@example.com'))
     expect(state.removeMember).not.toHaveBeenCalled()
 
     change.resolve()

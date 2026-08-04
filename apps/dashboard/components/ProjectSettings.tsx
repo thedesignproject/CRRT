@@ -154,11 +154,10 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     else void run(() => settings.changeRole(member.userId, role), member.userId)
   }
 
-  async function confirmOwnershipTransfer() {
-    if (!transferTarget) return
+  async function confirmOwnershipTransfer(target: ProjectMember) {
     const transferred = await run(
-      () => settings.changeRole(transferTarget.userId, 'owner'),
-      transferTarget.userId,
+      () => settings.changeRole(target.userId, 'owner'),
+      target.userId,
     )
     if (transferred) setTransferTarget(null)
   }
@@ -399,7 +398,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { void confirmOwnershipTransfer() }}
+                  onClick={() => { void confirmOwnershipTransfer(transferTarget) }}
                   disabled={pendingId !== null}
                   autoFocus
                   className={submitBtn(pendingId === null)}
