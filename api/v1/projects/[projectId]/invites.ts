@@ -1,16 +1,40 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../_lib/auth.js'
 import {
   createInvite,
   createNotification,
   deleteProjectInvite,
   findUserIdByEmail,
+  getProject,
   getProjectMember,
   listProjectInvites,
 } from '../../../_lib/store.js'
-import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
+import { getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
+import { sendProjectInviteEmail } from '../../../_lib/project-invite-email.js'
 
 const METHODS = ['GET', 'POST', 'DELETE', 'OPTIONS']
+
+async function sendProjectInviteEmailInBackground(input: {
+  email: string
+  inviterEmail: string
+  projectKey: string
+  role: 'admin' | 'member'
+  dashboardUrl: string
+}) {
+  try {
+    const project = await getProject(input.projectKey)
+    await sendProjectInviteEmail({
+      recipient: input.email,
+      projectName: project?.name ?? input.projectKey,
+      inviterEmail: input.inviterEmail,
+      role: input.role,
+      dashboardUrl: input.dashboardUrl,
+    })
+  } catch (error) {
+    console.warn('Project invite email failed', error)
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
@@ -71,6 +95,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (notifError) {
       console.warn('invite.received notif failed:', notifError)
     }
+
+    waitUntil(sendProjectInviteEmailInBackground({
+      email,
+      inviterEmail: user.email,
+      projectKey,
+      role,
+      dashboardUrl: `${getAppUrl(req)}/dashboard`,
+    }))
 
     setCors(req, res, METHODS)
     return res.status(201).json(invite)
