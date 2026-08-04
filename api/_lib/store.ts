@@ -779,17 +779,9 @@ export async function getAdminStats(now = new Date()): Promise<AdminStats> {
 }
 
 /**
- * Take ownership of a project. Two ways in:
- *  - Existing unclaimed project (widget-made): a conditional UPDATE flips
- *    `claimable=false`. Only the first caller wins the race; the rest see zero
- *    rows and either `already_claimed` (row exists) or fall through to create.
- *  - Brand-new project (dashboard create flow): when no row exists and a `name`
- *    is supplied, create the project (claimable=false) + seed its repo config,
- *    then add the caller as admin. A 23505 on insert means we lost the race.
- *
- * Without a `name`, a missing project is `not_found` (the paste-existing-key
- * path). The membership INSERT is idempotent — a duplicate (23505) just means
- * we already own it.
+ * Atomically claim an existing widget-made project or create a dashboard-made
+ * project. The database function serializes claims by project key and commits
+ * the project, repo config, and admin-backed owner membership together.
  */
 export async function claimProject(
   userId: string,
@@ -797,71 +789,32 @@ export async function claimProject(
   name?: string,
 ): Promise<ReturnType<typeof mapProject>> {
   const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('claim_project', {
+    p_user_id: userId,
+    p_project_key: projectKey,
+    p_name: name ?? null,
+  })
+  if (error) throw new Error(error.message)
 
-  const { data: updatedRows, error: updateError } = await supabase
-    .from('projects')
-    .update({ claimable: false, updated_at: new Date().toISOString() })
-    .eq('public_key', projectKey)
-    .eq('claimable', true)
-    .select(PROJECT_COLUMNS)
-
-  if (updateError) throw new Error(updateError.message)
-
-  let claimed: ReturnType<typeof mapProject>
-
-  if (!updatedRows || updatedRows.length === 0) {
-    const existing = await getProject(projectKey)
-    if (existing) throw new Error('already_claimed')
-    if (!name) throw new Error('not_found')
-    claimed = await createClaimedProject(projectKey, name)
-  } else {
-    claimed = mapProject(updatedRows[0] as ProjectRow)
+  const result = (data ?? {}) as { status?: string; project?: unknown }
+  if (result.status === 'not_found') throw new Error('not_found')
+  if (result.status === 'already_claimed') throw new Error('already_claimed')
+  if (result.status !== 'claimed' || !isClaimedProjectRow(result.project, projectKey)) {
+    throw new Error('invalid_claim_result')
   }
-
-  const { error: memberError } = await supabase
-    .from('project_members')
-    .insert([{ project_key: projectKey, user_id: userId, role: 'admin', is_owner: true }] as never)
-
-  if (memberError && memberError.code !== '23505') {
-    throw new Error(memberError.message)
-  }
-
-  return claimed
+  return mapProject(result.project)
 }
 
-/**
- * Insert a dashboard-created project (slug mirrors the public key, as in
- * `ensurePublicProject`) plus its default repo config. A 23505 on the project
- * insert means a concurrent claim won the key — surface as `already_claimed`.
- */
-async function createClaimedProject(projectKey: string, name: string) {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('projects')
-    .insert([{
-      public_key: projectKey,
-      slug: projectKey,
-      name,
-      allowed_origins: [],
-      claimable: false,
-    }] as never)
-    .select(PROJECT_COLUMNS)
-    .single()
-
-  if (error) {
-    if (error.code === '23505') throw new Error('already_claimed')
-    throw new Error(error.message)
-  }
-
-  const { error: repoError } = await supabase
-    .from('project_repo_configs')
-    .insert([{ project_key: projectKey, default_branch: 'main' }] as never)
-
-  if (repoError && repoError.code !== '23505') {
-    throw new Error(repoError.message)
-  }
-
-  return mapProject(data as ProjectRow)
+function isClaimedProjectRow(value: unknown, projectKey: string): value is ProjectRow {
+  if (!value || typeof value !== 'object') return false
+  const row = value as Partial<ProjectRow>
+  return row.public_key === projectKey
+    && typeof row.slug === 'string'
+    && typeof row.name === 'string'
+    && (row.allowed_origins === null
+      || (Array.isArray(row.allowed_origins) && row.allowed_origins.every((origin) => typeof origin === 'string')))
+    && typeof row.created_at === 'string'
+    && typeof row.updated_at === 'string'
 }
 
 /** Slugify a display name into a candidate project key (matches the dashboard's rule). */
