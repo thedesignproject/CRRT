@@ -627,6 +627,9 @@ describe('changeProjectMemberRole', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: { status: 'updated' }, error: null }) as never)
     await expect(change()).rejects.toThrow('invalid_role_change_result')
 
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: null }) as never)
+    await expect(change()).rejects.toThrow('invalid_role_change_result')
+
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: { message: 'boom' } }) as never)
     await expect(change()).rejects.toThrow('boom')
   })
