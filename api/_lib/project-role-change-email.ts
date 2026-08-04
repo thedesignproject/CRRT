@@ -21,9 +21,17 @@ function escapeHtml(value: string) {
     .replace(/"/g, '&quot;')
 }
 
+function sanitizeEmailHeader(value: string) {
+  return value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim()
+}
+
 export function getProjectRoleChangeEmailTimeoutMs(env = process.env) {
   const ms = Number(env.COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS)
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms) : DEFAULT_TIMEOUT_MS
+}
+
+export function getProjectRoleChangeDashboardUrl(env = process.env) {
+  return `${(env.APP_URL || 'https://crrt.ai').replace(/\/$/, '')}/dashboard`
 }
 
 export function buildProjectRoleChangeEmail(input: ProjectRoleChangeEmailInput) {
@@ -33,9 +41,10 @@ export function buildProjectRoleChangeEmail(input: ProjectRoleChangeEmailInput) 
   const role = escapeHtml(input.role)
   const dashboardUrl = escapeHtml(input.dashboardUrl)
   const isOwnershipTransfer = input.role === 'owner'
+  const subjectProjectName = sanitizeEmailHeader(input.projectName)
   const subject = isOwnershipTransfer
-    ? `You now own ${input.projectName} on CRRT`
-    : `Your role changed on ${input.projectName}`
+    ? `You now own ${subjectProjectName} on CRRT`
+    : `Your role changed on ${subjectProjectName}`
   const headline = isOwnershipTransfer ? 'You’re the owner.' : `You’re now ${input.role === 'admin' ? 'an admin' : 'a member'}.`
   const body = `${input.actorEmail} changed your role on ${input.projectName} from ${input.previousRole} to ${input.role}.`
 

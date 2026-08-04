@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProjectRoleChangeEmail,
+  getProjectRoleChangeDashboardUrl,
   getProjectRoleChangeEmailTimeoutMs,
   sendProjectRoleChangeEmail,
 } from './project-role-change-email.js'
@@ -42,6 +43,15 @@ describe('project role change email', () => {
 
     const member = buildProjectRoleChangeEmail(input({ previousRole: 'admin', role: 'member' }))
     expect(member.html).toContain('You’re now a member.')
+
+    const injected = buildProjectRoleChangeEmail(input({ projectName: 'Demo\r\nBcc: victim@example.com' }))
+    expect(injected.subject).toBe('Your role changed on Demo Bcc: victim@example.com')
+  })
+
+  it('uses only the configured application origin for dashboard links', () => {
+    expect(getProjectRoleChangeDashboardUrl({ APP_URL: 'https://app.example/' } as NodeJS.ProcessEnv))
+      .toBe('https://app.example/dashboard')
+    expect(getProjectRoleChangeDashboardUrl({} as NodeJS.ProcessEnv)).toBe('https://crrt.ai/dashboard')
   })
 
   it('parses the shared timeout configuration safely', () => {

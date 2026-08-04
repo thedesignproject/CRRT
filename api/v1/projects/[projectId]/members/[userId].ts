@@ -2,8 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../../_lib/auth.js'
 import { changeProjectMemberRole, getProject, getProjectMember, getUserEmailsByIds, removeProjectMember, type ProjectMemberRole, type ProjectMemberRoleChange } from '../../../../_lib/store.js'
-import { getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
-import { sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
+import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
+import { getProjectRoleChangeDashboardUrl, sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -20,7 +20,7 @@ async function sendRoleChangeEmailInBackground(input: {
     ])
     const recipient = emails[input.change.userId]
     if (!recipient) return
-    await sendProjectRoleChangeEmail({
+    const result = await sendProjectRoleChangeEmail({
       recipient,
       projectName: project?.name ?? input.change.projectKey,
       actorEmail: input.actorEmail,
@@ -28,6 +28,7 @@ async function sendRoleChangeEmailInBackground(input: {
       role: input.change.role,
       dashboardUrl: input.dashboardUrl,
     })
+    if (result.skipped) console.warn('Project role change email skipped: email configuration is missing')
   } catch (error) {
     console.warn('Project role change email failed', error)
   }
@@ -66,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         waitUntil(sendRoleChangeEmailInBackground({
           change: changed,
           actorEmail: user.email,
-          dashboardUrl: `${getAppUrl(req)}/dashboard`,
+          dashboardUrl: getProjectRoleChangeDashboardUrl(),
         }))
       }
       setCors(req, res, METHODS)

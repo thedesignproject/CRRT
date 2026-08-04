@@ -2,7 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
-vi.mock('../../../../_lib/project-role-change-email.js', () => ({ sendProjectRoleChangeEmail: vi.fn() }))
+vi.mock('../../../../_lib/project-role-change-email.js', () => ({
+  getProjectRoleChangeDashboardUrl: vi.fn(() => 'https://crrt.ai/dashboard'),
+  sendProjectRoleChangeEmail: vi.fn(),
+}))
 vi.mock('../../../../_lib/store.js', () => ({
   changeProjectMemberRole: vi.fn(),
   getProject: vi.fn(),
@@ -14,7 +17,7 @@ vi.mock('../../../../_lib/store.js', () => ({
 import handler from './[userId].js'
 import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../../_lib/auth.js'
-import { sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
+import { getProjectRoleChangeDashboardUrl, sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
 import { changeProjectMemberRole, getProject, getProjectMember, getUserEmailsByIds, removeProjectMember } from '../../../../_lib/store.js'
 
 const TARGET_USER_ID = '00000000-0000-0000-0000-000000000001'
@@ -41,6 +44,7 @@ beforeEach(() => {
   vi.mocked(getUserEmailsByIds).mockReset().mockResolvedValue({ m: 'member@example.com' })
   vi.mocked(removeProjectMember).mockReset()
   vi.mocked(sendProjectRoleChangeEmail).mockReset().mockResolvedValue({ skipped: false })
+  vi.mocked(getProjectRoleChangeDashboardUrl).mockReset().mockReturnValue('https://crrt.ai/dashboard')
   vi.mocked(waitUntil).mockReset()
 })
 
@@ -161,7 +165,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
     expect(sendProjectRoleChangeEmail).toHaveBeenCalledWith({
       recipient: 'member@example.com', projectName: 'Demo', actorEmail: 'a@b.c',
-      previousRole: 'member', role: 'admin', dashboardUrl: 'http://localhost:3000/dashboard',
+      previousRole: 'member', role: 'admin', dashboardUrl: 'https://crrt.ai/dashboard',
     })
   })
 
@@ -186,7 +190,23 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     expect(sendProjectRoleChangeEmail).not.toHaveBeenCalled()
   })
 
-  it('falls back to the project key and isolates background email failures', async () => {
+  it('logs missing configuration without failing the role change', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(changeProjectMemberRole).mockResolvedValue({
+      projectKey: 'p', userId: 'm', previousRole: 'member', role: 'admin', changed: true,
+    })
+    vi.mocked(sendProjectRoleChangeEmail).mockResolvedValue({ skipped: true })
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'admin' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    await vi.mocked(waitUntil).mock.calls[0]?.[0]
+    expect(warnSpy).toHaveBeenCalledWith('Project role change email skipped: email configuration is missing')
+    warnSpy.mockRestore()
+  })
+
+  it('falls back to the project key, uses a trusted CTA, and isolates background email failures', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     vi.mocked(changeProjectMemberRole).mockResolvedValue({
@@ -203,8 +223,9 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     expect(res.statusCode).toBe(200)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
     expect(sendProjectRoleChangeEmail).toHaveBeenCalledWith(expect.objectContaining({
-      projectName: 'p', dashboardUrl: 'https://preview.example.com/dashboard',
+      projectName: 'p', dashboardUrl: 'https://crrt.ai/dashboard',
     }))
+    expect(getProjectRoleChangeDashboardUrl).toHaveBeenCalled()
     expect(warnSpy).toHaveBeenCalledWith('Project role change email failed', expect.any(Error))
     warnSpy.mockRestore()
   })
