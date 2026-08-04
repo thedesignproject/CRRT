@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 const DEFAULT_FROM = 'CRRT <activity@mail.crrt.ai>'
 const DEFAULT_TIMEOUT_MS = 5_000
 const RESEND_ENDPOINT = 'https://api.resend.com/emails'
@@ -8,6 +10,7 @@ export type ProjectInviteEmailInput = {
   inviterEmail: string
   role: 'admin' | 'member'
   dashboardUrl: string
+  idempotencyKey: string
 }
 
 function escapeHtml(value: string) {
@@ -20,6 +23,13 @@ function escapeHtml(value: string) {
 
 function sanitizeEmailHeader(value: string) {
   return value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim()
+}
+
+export function getProjectInviteEmailIdempotencyKey(projectKey: string, recipient: string) {
+  const digest = createHash('sha256')
+    .update(`${projectKey}\0${recipient.trim().toLowerCase()}`)
+    .digest('hex')
+  return `project-invite/${digest}`
 }
 
 export function getProjectInviteEmailTimeoutMs(env = process.env) {
@@ -37,11 +47,15 @@ export function buildProjectInviteEmail(input: ProjectInviteEmailInput) {
   const dashboardUrl = escapeHtml(input.dashboardUrl)
   const role = escapeHtml(input.role)
   const subject = `You're invited to ${sanitizeEmailHeader(input.projectName)} on CRRT`
-  const body = `${input.inviterEmail} invited you to join ${input.projectName} as ${input.role}.`
+  const textInviterEmail = sanitizeEmailHeader(input.inviterEmail)
+  const textProjectName = sanitizeEmailHeader(input.projectName)
+  const textRole = sanitizeEmailHeader(input.role)
+  const textDashboardUrl = sanitizeEmailHeader(input.dashboardUrl)
+  const body = `${textInviterEmail} invited you to join ${textProjectName} as ${textRole}.`
 
   return {
     subject,
-    text: `${body}\n\nReview invitation: ${input.dashboardUrl}`,
+    text: `${body}\n\nReview invitation: ${textDashboardUrl}`,
     html: `
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="#0A0A0A" style="margin:0;padding:0;background:#0A0A0A;">
   <tr>
@@ -84,6 +98,7 @@ export async function sendProjectInviteEmail(input: ProjectInviteEmailInput) {
       headers: {
         Authorization: `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
+        'Idempotency-Key': input.idempotencyKey,
       },
       signal: controller.signal,
       body: JSON.stringify({

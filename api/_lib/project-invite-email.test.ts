@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildProjectInviteEmail,
   getProjectInviteDashboardUrl,
+  getProjectInviteEmailIdempotencyKey,
   getProjectInviteEmailTimeoutMs,
   sendProjectInviteEmail,
 } from './project-invite-email.js'
@@ -15,6 +16,7 @@ function input(overrides: Partial<Parameters<typeof sendProjectInviteEmail>[0]> 
     inviterEmail: 'owner@example.com',
     role: 'member' as const,
     dashboardUrl: 'https://crrt.ai/dashboard',
+    idempotencyKey: 'project-invite/test',
     ...overrides,
   }
 }
@@ -51,6 +53,15 @@ describe('project invite email', () => {
 
     const injected = buildProjectInviteEmail(input({ projectName: 'Demo\r\nBcc: victim@example.com' }))
     expect(injected.subject).toBe("You're invited to Demo Bcc: victim@example.com on CRRT")
+    expect(injected.text).not.toContain('\r\nBcc:')
+    expect(injected.text).toContain('Demo Bcc: victim@example.com')
+  })
+
+  it('creates a stable, recipient-normalized idempotency key', () => {
+    const key = getProjectInviteEmailIdempotencyKey('project-a', ' Invitee@Example.com ')
+    expect(key).toMatch(/^project-invite\/[a-f0-9]{64}$/)
+    expect(key).toBe(getProjectInviteEmailIdempotencyKey('project-a', 'invitee@example.com'))
+    expect(key).not.toBe(getProjectInviteEmailIdempotencyKey('project-b', 'invitee@example.com'))
   })
 
   it('uses a safe timeout default and accepts a positive override', () => {
@@ -85,6 +96,7 @@ describe('project invite email', () => {
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://api.resend.com/emails')
     expect(init.signal).toBeInstanceOf(AbortSignal)
+    expect(new Headers(init.headers).get('Idempotency-Key')).toBe('project-invite/test')
     expect(JSON.parse(String(init.body))).toMatchObject({
       from: 'CRRT <invites@mail.crrt.ai>',
       to: 'invitee@example.com',

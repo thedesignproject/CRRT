@@ -13,6 +13,7 @@ import {
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import {
   getProjectInviteDashboardUrl,
+  getProjectInviteEmailIdempotencyKey,
   sendProjectInviteEmail,
 } from '../../../_lib/project-invite-email.js'
 
@@ -24,6 +25,7 @@ async function sendProjectInviteEmailInBackground(input: {
   projectKey: string
   role: 'admin' | 'member'
   dashboardUrl: string
+  idempotencyKey: string
 }) {
   try {
     const project = await getProject(input.projectKey)
@@ -33,6 +35,7 @@ async function sendProjectInviteEmailInBackground(input: {
       inviterEmail: input.inviterEmail,
       role: input.role,
       dashboardUrl: input.dashboardUrl,
+      idempotencyKey: input.idempotencyKey,
     })
     if (result.skipped) console.warn('Project invite email skipped: email configuration is missing')
   } catch (error) {
@@ -84,6 +87,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const invite = await createInvite({ projectKey, email, role, invitedBy: user.userId })
 
+    try {
+      waitUntil(sendProjectInviteEmailInBackground({
+        email,
+        inviterEmail: user.email,
+        projectKey,
+        role,
+        dashboardUrl: getProjectInviteDashboardUrl(),
+        idempotencyKey: getProjectInviteEmailIdempotencyKey(projectKey, email),
+      }))
+    } catch (scheduleError) {
+      console.warn('Project invite email scheduling failed', scheduleError)
+    }
+
     // Notif emit is fire-and-forget: invite row is already persisted, and the
     // invitee will still see it on next GET /invites even if realtime fanout
     // fails (e.g. notifications table missing, transient DB error).
@@ -99,14 +115,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } catch (notifError) {
       console.warn('invite.received notif failed:', notifError)
     }
-
-    waitUntil(sendProjectInviteEmailInBackground({
-      email,
-      inviterEmail: user.email,
-      projectKey,
-      role,
-      dashboardUrl: getProjectInviteDashboardUrl(),
-    }))
 
     setCors(req, res, METHODS)
     return res.status(201).json(invite)
