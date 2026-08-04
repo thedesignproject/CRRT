@@ -46,7 +46,7 @@ DECLARE
   v_target_is_owner boolean;
   v_previous_role text;
 BEGIN
-  IF p_role NOT IN ('owner', 'admin', 'member') THEN
+  IF p_role IS NULL OR p_role NOT IN ('owner', 'admin', 'member') THEN
     RETURN jsonb_build_object('status', 'invalid_role');
   END IF;
 
@@ -115,17 +115,52 @@ BEGIN
 END;
 $$;--> statement-breakpoint
 
-CREATE OR REPLACE FUNCTION public.remove_project_member(p_project_key text, p_user_id uuid)
+DROP FUNCTION public.remove_project_member(text, uuid);--> statement-breakpoint
+
+CREATE FUNCTION public.remove_project_member(
+  p_project_key text,
+  p_actor_user_id uuid,
+  p_target_user_id uuid
+)
 RETURNS text
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
+  v_actor_role text;
   v_role text;
   v_is_owner boolean;
   v_admin_count integer;
 BEGIN
+  PERFORM 1
+  FROM public.project_members AS member
+  WHERE member.project_key = p_project_key
+  ORDER BY member.user_id
+  FOR UPDATE;
+
+  SELECT member.role
+  INTO v_actor_role
+  FROM public.project_members AS member
+  WHERE member.project_key = p_project_key AND member.user_id = p_actor_user_id;
+
+  IF v_actor_role IS NULL OR v_actor_role <> 'admin' THEN
+    RETURN 'forbidden';
+  END IF;
+
+  SELECT member.role, member.is_owner
+  INTO v_role, v_is_owner
+  FROM public.project_members AS member
+  WHERE member.project_key = p_project_key AND member.user_id = p_target_user_id;
+
+  IF v_role IS NULL THEN
+    RETURN 'not_found';
+  END IF;
+
+  IF v_is_owner THEN
+    RETURN 'owner_protected';
+  END IF;
+
   PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project_key, 0));
 
   UPDATE public.comments AS comment
@@ -148,25 +183,6 @@ BEGIN
     RAISE EXCEPTION 'github_issue_creation_in_progress';
   END IF;
 
-  PERFORM 1
-  FROM public.project_members AS member
-  WHERE member.project_key = p_project_key
-  ORDER BY member.user_id
-  FOR UPDATE;
-
-  SELECT member.role, member.is_owner
-  INTO v_role, v_is_owner
-  FROM public.project_members AS member
-  WHERE member.project_key = p_project_key AND member.user_id = p_user_id;
-
-  IF v_role IS NULL THEN
-    RETURN 'not_found';
-  END IF;
-
-  IF v_is_owner THEN
-    RETURN 'owner_protected';
-  END IF;
-
   IF v_role = 'admin' THEN
     SELECT count(*)
     INTO v_admin_count
@@ -179,11 +195,13 @@ BEGIN
   END IF;
 
   DELETE FROM public.project_members AS member
-  WHERE member.project_key = p_project_key AND member.user_id = p_user_id;
+  WHERE member.project_key = p_project_key AND member.user_id = p_target_user_id;
 
   RETURN 'removed';
 END;
 $$;--> statement-breakpoint
 
 REVOKE ALL ON FUNCTION public.change_project_member_role(text, uuid, uuid, text) FROM PUBLIC;--> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.change_project_member_role(text, uuid, uuid, text) TO service_role;
+REVOKE ALL ON FUNCTION public.remove_project_member(text, uuid, uuid) FROM PUBLIC;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.change_project_member_role(text, uuid, uuid, text) TO service_role;--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.remove_project_member(text, uuid, uuid) TO service_role;
