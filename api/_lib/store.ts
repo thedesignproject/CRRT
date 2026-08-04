@@ -346,26 +346,34 @@ export async function listProjectMemberIds(projectKey: string) {
 }
 
 /**
- * Remove a member from a project. Refuses to remove the last remaining admin
- * (`last_admin`) so a project can never be orphaned. Returns false when the
- * member wasn't in the project so callers can map that to a 404.
+ * Remove a member from a project. Requires the actor to still be an admin and
+ * refuses to remove the owner or last remaining admin. Returns false when the
+ * target wasn't in the project so callers can map that to a 404.
  *
  * The count + delete run inside the `remove_project_member` DB function (see
- * migration 0003) which locks the project's admin rows before counting — doing
- * it here in two queries would race, letting concurrent admin removals both pass
- * the guard and orphan the project.
+ * migration 0014) which locks the project's membership rows before checking
+ * the actor and target — doing either check here would race with concurrent role
+ * changes and removals.
  */
-export async function removeProjectMember(projectKey: string, userId: string): Promise<boolean> {
+export async function removeProjectMember(
+  projectKey: string,
+  actorUserId: string,
+  targetUserId: string,
+): Promise<boolean> {
   const supabase = getSupabase()
   const { data, error } = await supabase.rpc('remove_project_member', {
     p_project_key: projectKey,
-    p_user_id: userId,
+    p_actor_user_id: actorUserId,
+    p_target_user_id: targetUserId,
   })
 
   if (error) throw new Error(error.message)
+  if (data === 'forbidden') throw new Error('forbidden')
   if (data === 'owner_protected') throw new Error('owner_protected')
   if (data === 'last_admin') throw new Error('last_admin')
-  return data === 'removed'
+  if (data === 'not_found') return false
+  if (data === 'removed') return true
+  throw new Error('invalid_remove_result')
 }
 
 export type ProjectMemberRoleChange = {

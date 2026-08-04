@@ -87,7 +87,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     let res = mockRes()
     await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(removeProjectMember).toHaveBeenCalledWith('p', 'm')
+    expect(removeProjectMember).toHaveBeenCalledWith('p', 'u', 'm')
     expect(res.body).toMatchObject({ projectKey: 'p', userId: 'm' })
 
     // not found
@@ -107,6 +107,12 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     res = mockRes()
     await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
     expect(res.statusCode).toBe(409)
+
+    // authorization is rechecked atomically by the removal RPC
+    vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('forbidden'))
+    res = mockRes()
+    await call({ method: 'DELETE', query: { projectId: 'p', userId: 'm' }, headers: {} }, res)
+    expect(res.statusCode).toBe(403)
 
     // generic error
     vi.mocked(removeProjectMember).mockRejectedValueOnce(new Error('db down'))

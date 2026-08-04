@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(changed)
     }
 
-    const removed = await removeProjectMember(projectKey, targetUserId)
+    const removed = await removeProjectMember(projectKey, user.userId, targetUserId)
     if (!removed) return jsonError(req, res, 404, 'Member not found')
 
     setCors(req, res, METHODS)
