@@ -18,6 +18,10 @@ function escapeHtml(value: string) {
     .replace(/"/g, '&quot;')
 }
 
+function sanitizeEmailHeader(value: string) {
+  return value.replace(/[\u0000-\u001f\u007f]+/g, ' ').trim()
+}
+
 export function getProjectInviteEmailTimeoutMs(env = process.env) {
   const ms = Number(env.COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS)
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms) : DEFAULT_TIMEOUT_MS
@@ -32,7 +36,7 @@ export function buildProjectInviteEmail(input: ProjectInviteEmailInput) {
   const inviterEmail = escapeHtml(input.inviterEmail)
   const dashboardUrl = escapeHtml(input.dashboardUrl)
   const role = escapeHtml(input.role)
-  const subject = `You're invited to ${input.projectName} on CRRT`
+  const subject = `You're invited to ${sanitizeEmailHeader(input.projectName)} on CRRT`
   const body = `${input.inviterEmail} invited you to join ${input.projectName} as ${input.role}.`
 
   return {

@@ -48,6 +48,9 @@ describe('project invite email', () => {
     const admin = buildProjectInviteEmail(input({ role: 'admin' }))
     expect(admin.text).toContain('as admin')
     expect(admin.html).toContain('>admin</strong>')
+
+    const injected = buildProjectInviteEmail(input({ projectName: 'Demo\r\nBcc: victim@example.com' }))
+    expect(injected.subject).toBe("You're invited to Demo Bcc: victim@example.com on CRRT")
   })
 
   it('uses a safe timeout default and accepts a positive override', () => {
