@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../lib/mocks', () => ({ mocksEnabled: false }))
 vi.mock('../api', () => ({
   cancelProjectInvite: vi.fn(),
+  changeProjectMemberRole: vi.fn(),
   getProjectRepoConfig: vi.fn(),
   inviteProjectMember: vi.fn(),
   listProjectInvites: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock('../api', () => ({
 }))
 
 import {
+  changeProjectMemberRole,
   getProjectRepoConfig,
   listProjectInvites,
   listProjectMembers,
@@ -57,6 +59,7 @@ function repoConfig(projectKey: string, agentInstructions: string): RepoConfig {
 }
 
 beforeEach(() => {
+  vi.mocked(changeProjectMemberRole).mockReset()
   vi.mocked(listProjectMembers).mockReset()
   vi.mocked(listProjectInvites).mockReset().mockResolvedValue([])
   vi.mocked(getProjectRepoConfig).mockReset()
@@ -64,6 +67,23 @@ beforeEach(() => {
 })
 
 describe('useProjectSettings repo config', () => {
+  it('recognizes owners and refreshes after a role change', async () => {
+    const owner: ProjectMember = { ...admin('a'), role: 'owner' }
+    vi.mocked(listProjectMembers).mockResolvedValue([owner])
+    vi.mocked(getProjectRepoConfig).mockResolvedValue(repoConfig('a', ''))
+    vi.mocked(changeProjectMemberRole).mockResolvedValue({
+      projectKey: 'a', userId: 'target', previousRole: 'member', role: 'admin', changed: true,
+    })
+    const { result } = renderHook(() => useProjectSettings('/api', 'token', 'a', owner.userId))
+
+    await waitFor(() => expect(result.current.isOwner).toBe(true))
+    await act(() => result.current.changeRole('target', 'admin'))
+
+    expect(result.current.isAdmin).toBe(true)
+    expect(changeProjectMemberRole).toHaveBeenCalledWith('/api', 'token', 'a', 'target', 'admin')
+    expect(listProjectMembers).toHaveBeenCalledTimes(2)
+  })
+
   it('ignores a stale response after switching projects', async () => {
     const projectA = deferred<ProjectMember[]>()
     vi.mocked(listProjectMembers).mockImplementation((_api, _token, projectKey) => (

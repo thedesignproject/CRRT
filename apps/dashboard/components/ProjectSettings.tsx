@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { AGENT_INSTRUCTIONS_MAX, type Project } from '../api'
+import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
@@ -26,12 +26,13 @@ interface ProjectSettingsProps {
 
 export function ProjectSettings({ project, apiBase, accessToken, currentUserId, onBack, onProjectsChanged }: ProjectSettingsProps) {
   const settings = useProjectSettings(apiBase, accessToken, project.publicKey, currentUserId, onProjectsChanged)
-  const { members, invites, loading, error, isAdmin } = settings
+  const { members, invites, loading, error, isAdmin, isOwner } = settings
 
   const [name, setName] = useState(project.name)
   const [nameBusy, setNameBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member')
   const [inviteBusy, setInviteBusy] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [domains, setDomains] = useState<string[]>(project.allowedOrigins)
@@ -39,14 +40,15 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [domainBusy, setDomainBusy] = useState(false)
   const [instructions, setInstructions] = useState('')
   const [instructionsBusy, setInstructionsBusy] = useState(false)
+  const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null)
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
   useEffect(() => { setDomains(project.allowedOrigins) }, [project.publicKey, project.allowedOrigins])
+  useEffect(() => { setInviteRole('member'); setTransferTarget(null) }, [project.publicKey])
   // Repo config loads async (and re-loads per project): sync when it lands.
   useEffect(() => { setInstructions(settings.repoConfig?.agentInstructions ?? '') }, [project.publicKey, settings.repoConfig])
 
-  const adminCount = members.filter((m) => m.role === 'admin').length
   const nameChanged = name.trim() !== '' && name.trim() !== project.name
 
   async function run(action: () => Promise<unknown>, key: string | null) {
@@ -117,8 +119,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     setActionError(null)
     setInviteBusy(true)
     try {
-      await settings.invite(inviteEmail.trim().toLowerCase())
+      await settings.invite(inviteEmail.trim().toLowerCase(), inviteRole)
       setInviteEmail('')
+      setInviteRole('member')
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to send invite')
     } finally {
@@ -128,6 +131,11 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
   const sectionTitle = 'text-[11px] font-semibold uppercase tracking-wider text-muted-foreground'
   const card = 'rounded-lg border border-border bg-card'
+
+  function requestRoleChange(member: ProjectMember, role: ProjectMemberRole) {
+    if (role === 'owner') setTransferTarget(member)
+    else void run(() => settings.changeRole(member.userId, role), member.userId)
+  }
 
   return (
     <main className="flex-1 overflow-auto">
@@ -307,8 +315,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
             ) : (
               members.map((m) => {
                 const isSelf = m.userId === currentUserId
-                const isLastAdmin = m.role === 'admin' && adminCount <= 1
-                const canRemove = isAdmin && !isLastAdmin
+                const isProjectOwner = m.role === 'owner'
+                const canRemove = isAdmin && !isProjectOwner
+                const label = m.email ?? m.userId
                 return (
                   <div key={m.userId} className="flex items-center gap-3 px-4 py-3">
                     <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-[11px] font-bold text-primary shrink-0">
@@ -319,12 +328,26 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                         {m.email ?? m.userId}{isSelf && <span className="text-muted-foreground"> (you)</span>}
                       </div>
                     </div>
-                    <span className={cn(
-                      'text-[10px] font-semibold px-2 py-0.5 rounded-full',
-                      m.role === 'admin' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
-                    )}>
-                      {m.role}
-                    </span>
+                    {isAdmin && !isProjectOwner ? (
+                      <select
+                        value={m.role}
+                        onChange={(event) => requestRoleChange(m, event.target.value as ProjectMemberRole)}
+                        disabled={pendingId === m.userId}
+                        aria-label={`Role for ${label}`}
+                        className="px-2 py-1 rounded-md border border-border bg-background text-[11px] font-semibold text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
+                      >
+                        <option value="member">member</option>
+                        <option value="admin">admin</option>
+                        {isOwner && <option value="owner">owner</option>}
+                      </select>
+                    ) : (
+                      <span className={cn(
+                        'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                        m.role !== 'member' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                      )}>
+                        {m.role}
+                      </span>
+                    )}
                     {canRemove && (
                       <button
                         onClick={() => run(() => settings.removeMember(m.userId), m.userId)}
@@ -340,6 +363,28 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
               })
             )}
           </div>
+
+          {transferTarget && (
+            <div role="alertdialog" aria-label="Confirm ownership transfer" className="mt-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+              <p className="text-[12px] text-foreground">
+                Transfer ownership to <span className="font-semibold">{transferTarget.email ?? transferTarget.userId}</span>?
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">You will remain an admin after the transfer.</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => { void run(() => settings.changeRole(transferTarget.userId, 'owner'), transferTarget.userId).then(() => setTransferTarget(null)) }}
+                  disabled={pendingId === transferTarget.userId}
+                  className={submitBtn(pendingId !== transferTarget.userId)}
+                >
+                  {pendingId === transferTarget.userId ? 'Transferring…' : 'Transfer ownership'}
+                </button>
+                <button type="button" onClick={() => setTransferTarget(null)} className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
 
           {isAdmin && (
             <form
@@ -357,6 +402,16 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                 autoComplete="off"
                 spellCheck={false}
               />
+              <select
+                value={inviteRole}
+                onChange={(event) => setInviteRole(event.target.value as 'admin' | 'member')}
+                disabled={inviteBusy}
+                aria-label="Invitation role"
+                className="px-3 py-2 rounded-md border border-border bg-background text-xs text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
+              >
+                <option value="member">member</option>
+                <option value="admin">admin</option>
+              </select>
               <button
                 type="submit"
                 disabled={!inviteValid || inviteBusy}
