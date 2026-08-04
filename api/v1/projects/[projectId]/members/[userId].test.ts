@@ -1,15 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
+vi.mock('../../../../_lib/project-role-change-email.js', () => ({ sendProjectRoleChangeEmail: vi.fn() }))
 vi.mock('../../../../_lib/store.js', () => ({
   changeProjectMemberRole: vi.fn(),
+  getProject: vi.fn(),
   getProjectMember: vi.fn(),
+  getUserEmailsByIds: vi.fn(),
   removeProjectMember: vi.fn(),
 }))
 
 import handler from './[userId].js'
+import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../../_lib/auth.js'
-import { changeProjectMemberRole, getProjectMember, removeProjectMember } from '../../../../_lib/store.js'
+import { sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
+import { changeProjectMemberRole, getProject, getProjectMember, getUserEmailsByIds, removeProjectMember } from '../../../../_lib/store.js'
 
 const TARGET_USER_ID = '00000000-0000-0000-0000-000000000001'
 
@@ -30,8 +36,12 @@ const call = (req: unknown, res: unknown) =>
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
   vi.mocked(changeProjectMemberRole).mockReset()
+  vi.mocked(getProject).mockReset().mockResolvedValue({ name: 'Demo' } as never)
   vi.mocked(getProjectMember).mockReset()
+  vi.mocked(getUserEmailsByIds).mockReset().mockResolvedValue({ m: 'member@example.com' })
   vi.mocked(removeProjectMember).mockReset()
+  vi.mocked(sendProjectRoleChangeEmail).mockReset().mockResolvedValue({ skipped: false })
+  vi.mocked(waitUntil).mockReset()
 })
 
 describe('api/v1/projects/[projectId]/members/[userId]', () => {
@@ -147,6 +157,56 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     expect(changeProjectMemberRole).toHaveBeenCalledWith({
       projectKey: 'p', actorUserId: 'u', targetUserId: TARGET_USER_ID, role: 'admin',
     })
+    expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise))
+    await vi.mocked(waitUntil).mock.calls[0]?.[0]
+    expect(sendProjectRoleChangeEmail).toHaveBeenCalledWith({
+      recipient: 'member@example.com', projectName: 'Demo', actorEmail: 'a@b.c',
+      previousRole: 'member', role: 'admin', dashboardUrl: 'http://localhost:3000/dashboard',
+    })
+  })
+
+  it('does not email unchanged roles and skips members without a resolved email', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(changeProjectMemberRole).mockResolvedValue({
+      projectKey: 'p', userId: 'm', previousRole: 'member', role: 'member', changed: false,
+    })
+    let res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'member' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(waitUntil).not.toHaveBeenCalled()
+
+    vi.mocked(changeProjectMemberRole).mockResolvedValue({
+      projectKey: 'p', userId: 'm', previousRole: 'member', role: 'admin', changed: true,
+    })
+    vi.mocked(getUserEmailsByIds).mockResolvedValue({})
+    res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'admin' }, headers: {} }, res)
+    await vi.mocked(waitUntil).mock.calls[0]?.[0]
+    expect(sendProjectRoleChangeEmail).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the project key and isolates background email failures', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    vi.mocked(changeProjectMemberRole).mockResolvedValue({
+      projectKey: 'p', userId: 'm', previousRole: 'admin', role: 'owner', changed: true,
+    })
+    vi.mocked(getProject).mockResolvedValue(null)
+    vi.mocked(sendProjectRoleChangeEmail).mockRejectedValue(new Error('resend down'))
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const res = mockRes()
+    await call({
+      method: 'PATCH', query: { projectId: 'p', userId: 'm' }, body: { role: 'owner' },
+      headers: { host: 'preview.example.com', 'x-forwarded-proto': 'https' },
+    }, res)
+    expect(res.statusCode).toBe(200)
+    await vi.mocked(waitUntil).mock.calls[0]?.[0]
+    expect(sendProjectRoleChangeEmail).toHaveBeenCalledWith(expect.objectContaining({
+      projectName: 'p', dashboardUrl: 'https://preview.example.com/dashboard',
+    }))
+    expect(warnSpy).toHaveBeenCalledWith('Project role change email failed', expect.any(Error))
+    warnSpy.mockRestore()
   })
 
   it.each([
