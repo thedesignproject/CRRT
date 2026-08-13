@@ -127,12 +127,12 @@ function LauncherAction({
         border: 0,
         borderRadius: 10,
         background: 'transparent',
-        color: '#FFFFFF',
+        color: 'var(--fw-foreground)',
         textAlign: 'left',
         cursor: 'pointer',
         fontFamily: 'inherit',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.07)' }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-07)' }}
       onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
     >
       <span
@@ -143,8 +143,8 @@ function LauncherAction({
           display: 'inline-flex',
           alignItems: 'center',
           justifyContent: 'center',
-          background: 'rgba(255, 255, 255, 0.05)',
-          border: '1px solid rgba(255, 255, 255, 0.09)',
+          background: 'var(--fw-contrast-05)',
+          border: '1px solid var(--fw-contrast-09)',
           color: '#E8853D',
         }}
       >
@@ -165,7 +165,7 @@ function LauncherAction({
         >
           {title}
         </span>
-        <span style={{ fontSize: 12, color: '#A8A29A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {subtitle}
         </span>
       </span>
@@ -174,9 +174,9 @@ function LauncherAction({
           minWidth: 26,
           padding: '4px 7px',
           borderRadius: 6,
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          background: 'rgba(10, 10, 10, 0.62)',
-          color: '#E8E5DF',
+          border: '1px solid var(--fw-contrast-12)',
+          background: 'var(--fw-key-background)',
+          color: 'var(--fw-foreground-soft)',
           fontSize: 11,
           fontFamily: "'JetBrains Mono', ui-monospace, monospace",
           textAlign: 'center',
@@ -238,9 +238,9 @@ function AgentAuthGate({
           transform: 'translate(-50%, -50%)',
           borderRadius: 18,
           border: '1px solid rgba(232, 133, 61, 0.22)',
-          background: '#0D0D0D',
+          background: 'var(--fw-surface-solid)',
           boxShadow: '0 24px 80px rgba(0, 0, 0, 0.58)',
-          color: '#FFFFFF',
+          color: 'var(--fw-foreground)',
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           overflow: 'hidden',
         }}
@@ -255,10 +255,10 @@ function AgentAuthGate({
             right: 12,
             width: 30,
             height: 30,
-            border: '1px solid rgba(255, 255, 255, 0.08)',
+            border: '1px solid var(--fw-contrast-08)',
             borderRadius: 9999,
-            background: 'rgba(255, 255, 255, 0.03)',
-            color: '#A8A29A',
+            background: 'var(--fw-contrast-03)',
+            color: 'var(--fw-foreground-muted)',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
@@ -287,7 +287,7 @@ function AgentAuthGate({
           <h2 style={{ margin: 0, fontSize: 22, lineHeight: 1.1, letterSpacing: 0, fontWeight: 750 }}>
             Log in to copy prompt
           </h2>
-          <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.5, color: '#A8A29A' }}>
+          <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.5, color: 'var(--fw-foreground-muted)' }}>
             Preview the agent prompt first. Copying it requires an account so CRRT can track the handoff.
           </p>
           <div
@@ -295,9 +295,9 @@ function AgentAuthGate({
               marginTop: 16,
               padding: '10px 12px',
               borderRadius: 10,
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              color: '#E8E5DF',
+              background: 'var(--fw-contrast-04)',
+              border: '1px solid var(--fw-contrast-06)',
+              color: 'var(--fw-foreground-soft)',
               fontSize: 13,
             }}
           >
@@ -337,8 +337,8 @@ function AgentAuthGate({
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                border: '1px solid rgba(255, 255, 255, 0.10)',
-                color: '#FFFFFF',
+                border: '1px solid var(--fw-contrast-10)',
+                color: 'var(--fw-foreground)',
                 textDecoration: 'none',
                 fontSize: 14,
                 fontWeight: 650,
@@ -358,7 +358,11 @@ export function FeedbackWidget({ disabled = false, ...props }: FeedbackWidgetPro
   return <FeedbackWidgetInner {...props} />
 }
 
-function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omit<FeedbackWidgetProps, 'disabled'>) {
+function FeedbackWidgetInner({
+  projectId,
+  apiBase = 'https://crrt.ai/api',
+  theme = 'dark',
+}: Omit<FeedbackWidgetProps, 'disabled'>) {
   useEffect(() => {
     ensureWidgetFonts()
   }, [])
@@ -1014,7 +1018,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
   const launcherActive = launcherOpen || mode !== 'idle'
 
   return (
-    <div {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '' }}>
+    <div {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-theme': theme }}>
       {/* Overlay — purely visual, clicks pass through */}
       {mode === 'selecting' && (
         <div
@@ -1071,8 +1075,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               display: 'flex',
               flexDirection: 'column',
               width: 340,
-              background: '#181818',
-              border: '1px solid rgba(255, 255, 255, 0.06)',
+              background: 'var(--fw-surface)',
+              border: '1px solid var(--fw-contrast-06)',
               borderRadius: 14,
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
               boxShadow: '0 12px 32px rgba(10, 10, 10, 0.4), 0 2px 8px rgba(10, 10, 10, 0.2)',
@@ -1092,7 +1096,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                 padding: '3px 8px',
                 borderRadius: 4,
                 background: 'rgba(255, 176, 0, 0.18)',
-                color: '#FFB000',
+                color: 'var(--fw-time-chip-label)',
                 fontFamily: "'VT323', 'JetBrains Mono', monospace",
                 fontSize: 13,
                 letterSpacing: '0.04em',
@@ -1107,7 +1111,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                 padding: '3px 8px',
                 borderRadius: 4,
                 background: 'rgba(232, 133, 61, 0.15)',
-                color: '#E8853D',
+                color: 'var(--fw-location-chip-label)',
                 fontFamily: "'JetBrains Mono', monospace",
                 fontSize: 11,
                 lineHeight: 1,
@@ -1145,7 +1149,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                   background: 'transparent',
                   border: 'none',
                   outline: 'none',
-                  color: '#FFFFFF',
+                  color: 'var(--fw-foreground)',
                   fontSize: 14,
                   fontFamily: 'inherit',
                   lineHeight: 1.5,
@@ -1170,22 +1174,22 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                 gap: 10,
                 padding: '8px 12px',
                 margin: '0 14px 6px',
-                background: 'rgba(255, 255, 255, 0.03)',
-                border: '1px solid rgba(255, 255, 255, 0.06)',
+                background: 'var(--fw-contrast-03)',
+                border: '1px solid var(--fw-contrast-06)',
                 borderRadius: 8,
               }}>
                 <img
                   src={imagePreviewUrl}
                   alt="captured element"
-                  style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid rgba(255,255,255,0.08)' }}
+                  style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)' }}
                 />
-                <span style={{ fontSize: 12, color: '#A8A29A', flex: 1, fontFamily: 'inherit' }}>Screenshot</span>
+                <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', flex: 1, fontFamily: 'inherit' }}>Screenshot</span>
                 <button
                   onClick={() => clearImage()}
                   aria-label="Remove screenshot"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6B6560', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 4 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = '#FFFFFF')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = '#6B6560')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fw-foreground-faint)', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 4 }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fw-foreground)')}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fw-foreground-faint)')}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -1200,7 +1204,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '8px 10px 10px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+              borderTop: '1px solid var(--fw-contrast-06)',
               marginTop: 4,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -1239,16 +1243,16 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     padding: '0 12px',
                     borderRadius: 9999,
                     background: 'transparent',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    color: '#A8A29A',
+                    border: '1px solid var(--fw-contrast-08)',
+                    color: 'var(--fw-foreground-muted)',
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                     transition: 'background 150ms ease, color 150ms ease',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#FFFFFF' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-04)'; e.currentTarget.style.color = 'var(--fw-foreground)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' }}
                 >
                   Cancel
                 </button>
@@ -1264,9 +1268,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     height: 30,
                     padding: '0 14px',
                     borderRadius: 9999,
-                    border: '1px solid ' + (!comment.trim() || sending ? 'rgba(255,255,255,0.06)' : '#B85F1F'),
-                    background: !comment.trim() || sending ? 'rgba(255,255,255,0.04)' : '#E8853D',
-                    color: !comment.trim() || sending ? '#6B6560' : '#FFFFFF',
+                    border: '1px solid ' + (!comment.trim() || sending ? 'var(--fw-contrast-06)' : '#B85F1F'),
+                    background: !comment.trim() || sending ? 'var(--fw-contrast-04)' : '#E8853D',
+                    color: !comment.trim() || sending ? 'var(--fw-foreground-faint)' : '#FFFFFF',
                     fontSize: 13,
                     fontWeight: 500,
                     cursor: !comment.trim() || sending ? 'default' : 'pointer',
@@ -1379,13 +1383,13 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               >
                 <div style={{
                   width: TOOLTIP_W,
-                  background: 'rgba(18, 18, 18, 0.96)',
+                  background: 'var(--fw-surface-translucent)',
                   backdropFilter: 'blur(20px)',
                   WebkitBackdropFilter: 'blur(20px)',
                   borderRadius: tailRadius,
                   padding: 14,
                   boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  border: '1px solid var(--fw-contrast-08)',
                   fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
                   animation: 'fw-tooltip-liquid 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
                   transformOrigin: tailOrigin,
@@ -1404,8 +1408,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>{pinAuthor}</span>
-                      <span style={{ fontSize: 12, color: '#6B6560' }}>{timeAgo(c.createdAt)}</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fw-foreground)' }}>{pinAuthor}</span>
+                      <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{timeAgo(c.createdAt)}</span>
                     </div>
                     {c.anchor && (
                       <TextRangeQuote
@@ -1413,7 +1417,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         style={{ fontSize: 12, marginBottom: 4, WebkitLineClamp: 2 }}
                       />
                     )}
-                    <div style={{ fontSize: 13, color: '#E8E5DF', lineHeight: 1.4, wordBreak: 'break-word' }}>
+                    <div style={{ fontSize: 13, color: 'var(--fw-foreground-soft)', lineHeight: 1.4, wordBreak: 'break-word' }}>
                       {c.body}
                     </div>
                   </div>
@@ -1438,8 +1442,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     style={{
                       ...pinPopoverStyle(c),
                       width: 300,
-                      background: '#181818',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      background: 'var(--fw-surface)',
+                      border: '1px solid var(--fw-contrast-08)',
                       borderRadius: 16,
                       boxShadow: '0 12px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
                       padding: 16,
@@ -1458,8 +1462,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         {initial}
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#FFFFFF', marginBottom: 2 }}>{pinAuthor}</div>
-                        <div style={{ fontSize: 12, color: '#6B6560' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fw-foreground)', marginBottom: 2 }}>{pinAuthor}</div>
+                        <div style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>
                           #{pinNumber} &middot; {timeAgo(c.createdAt)}
                         </div>
                       </div>
@@ -1487,18 +1491,18 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                           rows={3}
                           style={{
                             width: '100%', boxSizing: 'border-box',
-                            fontSize: 14, lineHeight: 1.5, color: '#FFFFFF',
-                            border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
+                            fontSize: 14, lineHeight: 1.5, color: 'var(--fw-foreground)',
+                            border: '1px solid var(--fw-contrast-08)', borderRadius: 8,
                             padding: '8px 10px', fontFamily: 'inherit',
-                            outline: 'none', resize: 'vertical', background: '#222',
+                            outline: 'none', resize: 'vertical', background: 'var(--fw-surface-input)',
                           }}
                           onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
-                          onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
+                          onBlur={(e) => (e.target.style.borderColor = 'var(--fw-contrast-08)')}
                         />
                         <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
                           <button
                             onClick={() => setEditingId(null)}
-                            style={{ fontSize: 12, color: '#A8A29A', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}
+                            style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}
                           >Cancel</button>
                           <button
                             onClick={() => saveEdit(c.id)}
@@ -1514,7 +1518,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                             style={{ marginBottom: 10 }}
                           />
                         )}
-                        <div style={{ fontSize: 14, lineHeight: 1.6, color: '#E8E5DF', marginBottom: bodyMarginBottom }}>
+                        <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--fw-foreground-soft)', marginBottom: bodyMarginBottom }}>
                           {c.body}
                         </div>
                       </>
@@ -1525,7 +1529,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         src={c.imageUrl}
                         alt=""
                         onClick={() => window.open(c.imageUrl!, '_blank')}
-                        style={{ width: '100%', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
+                        style={{ width: '100%', borderRadius: 8, border: '1px solid var(--fw-contrast-08)', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
                       />
                     )}
                   </div>
@@ -1555,14 +1559,14 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
           bottom: 0,
           width: 340,
           zIndex: 2147483647,
-          background: '#0A0A0A',
+          background: 'var(--fw-surface-deep)',
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
           display: 'flex',
           flexDirection: 'column',
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           boxShadow: sidebarOpen ? '-8px 0 32px rgba(0,0,0,0.5)' : 'none',
-          borderLeft: '1px solid rgba(255, 255, 255, 0.06)',
+          borderLeft: '1px solid var(--fw-contrast-06)',
         }}
       >
         {/* Header */}
@@ -1571,13 +1575,13 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
           alignItems: 'center',
           padding: '16px 16px 12px',
           gap: 12,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+          borderBottom: '1px solid var(--fw-contrast-06)',
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: '#FFFFFF' }}>
+            <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: 'var(--fw-foreground)' }}>
               Feedback
             </div>
-            <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: '#6B6560' }}>
+            <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: 'var(--fw-foreground-faint)' }}>
               {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'} · {readyForAgentCount} ready
             </div>
           </div>
@@ -1587,9 +1591,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
             style={{
               width: 34,
               height: 34,
-              background: 'rgba(255,255,255,0.03)',
-              border: '1px solid rgba(255,255,255,0.06)',
-              color: '#A8A29A',
+              background: 'var(--fw-contrast-03)',
+              border: '1px solid var(--fw-contrast-06)',
+              color: 'var(--fw-foreground-muted)',
               cursor: 'pointer',
               padding: 0,
               borderRadius: 9999,
@@ -1598,8 +1602,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               justifyContent: 'center',
               transition: 'color 0.15s, background 0.15s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.04)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29A'; e.currentTarget.style.background = 'rgba(255,255,255,0.03)' }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--fw-foreground)'; e.currentTarget.style.background = 'var(--fw-contrast-04)' }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fw-foreground-muted)'; e.currentTarget.style.background = 'var(--fw-contrast-03)' }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -1612,7 +1616,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         <div
           style={{
             padding: '14px 16px 12px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+            borderBottom: '1px solid var(--fw-contrast-04)',
           }}
         >
           <button
@@ -1627,7 +1631,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               borderRadius: 10,
               border: '1px solid rgba(232, 133, 61, 0.28)',
               background: 'rgba(232, 133, 61, 0.08)',
-              color: '#FFFFFF',
+              color: 'var(--fw-foreground)',
               cursor: 'pointer',
               fontFamily: 'inherit',
               textAlign: 'left',
@@ -1661,7 +1665,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                 <span style={{ display: 'block', fontSize: 13, fontWeight: 650, lineHeight: 1.25 }}>
                   Open agent
                 </span>
-                <span style={{ display: 'block', marginTop: 2, fontSize: 12, color: '#A8A29A', lineHeight: 1.35 }}>
+                <span style={{ display: 'block', marginTop: 2, fontSize: 12, color: 'var(--fw-foreground-muted)', lineHeight: 1.35 }}>
                   {readyForAgentCount > 0
                     ? `${readyForAgentCount} ready comment${readyForAgentCount === 1 ? '' : 's'}`
                     : 'Approve comments to queue work'}
@@ -1672,8 +1676,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                 flexShrink: 0,
                 padding: '3px 7px',
                 borderRadius: 9999,
-                border: '1px solid rgba(255, 255, 255, 0.10)',
-                color: '#A8A29A',
+                border: '1px solid var(--fw-contrast-10)',
+                color: 'var(--fw-foreground-muted)',
                 fontSize: 11,
                 lineHeight: 1,
               }}
@@ -1684,10 +1688,10 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         </div>
 
         {/* Filter row */}
-        <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+        <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
           <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ fontSize: 13, color: '#FFFFFF', fontWeight: 600 }}>{sidebarTitle}</span>
-            <span style={{ fontSize: 12, color: '#6B6560' }}>{filteredComments.length}</span>
+            <span style={{ fontSize: 13, color: 'var(--fw-foreground)', fontWeight: 600 }}>{sidebarTitle}</span>
+            <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{filteredComments.length}</span>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
             {([
@@ -1704,16 +1708,16 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                   style={{
                     height: 32,
                     borderRadius: 9999,
-                    border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid rgba(255, 255, 255, 0.06)',
-                    background: active ? 'rgba(232, 133, 61, 0.13)' : 'rgba(255, 255, 255, 0.03)',
-                    color: active ? '#E8853D' : '#A8A29A',
+                    border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
+                    background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
+                    color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
                     fontSize: 12,
                     fontWeight: 650,
                   }}
                 >
-                  {item.label} <span style={{ color: active ? '#E8A06B' : '#6B6560', fontWeight: 500 }}>{item.count}</span>
+                  {item.label} <span style={{ color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)', fontWeight: 500 }}>{item.count}</span>
                 </button>
               )
             })}
@@ -1723,7 +1727,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
         {/* Comment list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {sortedComments.length === 0 && (
-            <div style={{ color: '#555', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
+            <div style={{ color: 'var(--fw-empty-state)', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
               {visibleComments.length === 0
                 ? 'No comments yet'
                 : filterStatus === 'approved'
@@ -1748,12 +1752,12 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     cursor: isEditing ? 'default' : 'pointer',
                     position: 'relative',
                     zIndex: isMenuOpen ? 100000 : 'auto',
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.04)',
+                    borderBottom: '1px solid var(--fw-contrast-04)',
                     opacity: isResolved ? 0.55 : 1,
                     transition: 'background 0.1s, opacity 0.2s',
                     animation: sidebarOpen ? `fw-slide-in 0.2s ease ${i * 0.04}s both` : 'none',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)' }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-02)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
                 >
                   {/* Top row: avatar + name + meta + actions */}
@@ -1770,11 +1774,11 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     </div>
                     {/* Name + meta inline */}
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fw-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {c.authorName ?? 'User'}
                       </span>
-                      <span style={{ fontSize: 12, color: '#6B6560', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {timeAgo(c.createdAt)} <span style={{ color: '#3A3A3A' }}>·</span> <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>#{pinNum}</span>
+                      <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>
+                        {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span> <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>#{pinNum}</span>
                       </span>
                     </div>
                     {/* Actions inline — same row as the author */}
@@ -1813,15 +1817,15 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         aria-label="More"
                         style={{
                           width: 28, height: 28, borderRadius: 7,
-                          border: '1px solid ' + (isMenuOpen ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.08)'),
-                          background: isMenuOpen ? 'rgba(255,255,255,0.06)' : 'transparent',
+                          border: '1px solid ' + (isMenuOpen ? 'var(--fw-contrast-14)' : 'var(--fw-contrast-08)'),
+                          background: isMenuOpen ? 'var(--fw-contrast-06)' : 'transparent',
                           cursor: 'pointer',
                           display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: '#A8A29A', padding: 0,
+                          color: 'var(--fw-foreground-muted)', padding: 0,
                           transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
                         }}
-                        onMouseEnter={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = '#FFFFFF' } }}
-                        onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#A8A29A' } }}
+                        onMouseEnter={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'var(--fw-contrast-06)'; e.currentTarget.style.color = 'var(--fw-foreground)' } }}
+                        onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' } }}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
                       </button>
@@ -1842,16 +1846,16 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         rows={2}
                         style={{
                           width: '100%', boxSizing: 'border-box',
-                          fontSize: 14, lineHeight: 1.5, color: '#FFFFFF',
-                          border: '1px solid rgba(255,255,255,0.08)', borderRadius: 6,
+                          fontSize: 14, lineHeight: 1.5, color: 'var(--fw-foreground)',
+                          border: '1px solid var(--fw-contrast-08)', borderRadius: 6,
                           padding: '8px 10px', fontFamily: 'inherit',
-                          outline: 'none', resize: 'none', background: '#181818',
+                          outline: 'none', resize: 'none', background: 'var(--fw-surface)',
                         }}
                         onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
-                        onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.08)')}
+                        onBlur={(e) => (e.target.style.borderColor = 'var(--fw-contrast-08)')}
                       />
                       <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
-                        <button onClick={() => setEditingId(null)} style={{ fontSize: 12, color: '#A8A29A', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Cancel</button>
+                        <button onClick={() => setEditingId(null)} style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Cancel</button>
                         <button onClick={() => saveEdit(c.id)} style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 600, background: '#E8853D', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}>Save</button>
                       </div>
                     </div>
@@ -1867,7 +1871,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                         style={{
                           fontSize: 13.5,
                           lineHeight: 1.5,
-                          color: isResolved ? '#6B6560' : '#E8E5DF',
+                          color: isResolved ? 'var(--fw-foreground-faint)' : 'var(--fw-foreground-soft)',
                           marginLeft: 32,
                           wordBreak: 'break-word',
                         }}
@@ -1884,7 +1888,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                             marginLeft: 32,
                             maxWidth: 'calc(100% - 32px)',
                             borderRadius: 6,
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            border: '1px solid var(--fw-contrast-06)',
                             cursor: 'zoom-in',
                             display: 'block',
                             filter: isResolved ? 'grayscale(0.7) brightness(0.5)' : 'none',
@@ -1905,7 +1909,7 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                       onClick={(e) => e.stopPropagation()}
                       style={{
                         position: 'absolute', top: 34, right: 12, zIndex: 99999,
-                        background: '#2a2a2a', border: '1px solid #3a3a3a', borderRadius: 8,
+                        background: 'var(--fw-surface-raised)', border: '1px solid var(--fw-surface-divider)', borderRadius: 8,
                         padding: '4px 0', minWidth: 160,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                         animation: 'fw-tooltip-in 0.1s ease both',
@@ -1913,8 +1917,8 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                     >
                       <button
                         onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
-                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#ccc', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = '#333')}
+                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
@@ -1922,18 +1926,18 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
                       </button>
                       <button
                         onClick={() => { setEditingId(c.id); setEditText(c.body); setMenuOpenId(null) }}
-                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#ccc', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = '#333')}
+                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                         Edit
                       </button>
-                      <div style={{ height: 1, background: '#3a3a3a', margin: '4px 0' }} />
+                      <div style={{ height: 1, background: 'var(--fw-surface-divider)', margin: '4px 0' }} />
                       <button
                         onClick={() => { deleteComment(c.id); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#ef4444', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = '#333')}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
@@ -1983,9 +1987,9 @@ function FeedbackWidgetInner({ projectId, apiBase = 'https://crrt.ai/api' }: Omi
               padding: 8,
               borderRadius: 16,
               lineHeight: 1.2,
-              background: 'rgba(13, 13, 13, 0.96)',
-              border: '1px solid rgba(255, 255, 255, 0.10)',
-              boxShadow: '0 18px 54px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.04)',
+              background: 'var(--fw-menu-translucent)',
+              border: '1px solid var(--fw-contrast-10)',
+              boxShadow: '0 18px 54px rgba(0, 0, 0, 0.42), inset 0 1px 0 var(--fw-contrast-04)',
               backdropFilter: 'blur(18px)',
               WebkitBackdropFilter: 'blur(18px)',
               opacity: launcherOpen ? 1 : 0,

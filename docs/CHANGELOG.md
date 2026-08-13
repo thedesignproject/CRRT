@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `<FeedbackWidget theme="light | dark | system">` lets integrations match the host application's appearance while preserving the existing dark theme by default.
+
 ## [0.3.7] - 2026-04-24
 
 ### Added

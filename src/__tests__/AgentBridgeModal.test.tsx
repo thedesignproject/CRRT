@@ -96,6 +96,9 @@ describe('<AgentBridgeModal />', () => {
     expect(document.body.textContent).toContain('Dana')
     expect(document.body.textContent).toContain('Second note')
     expect(document.body.textContent).toContain('In progress')
+    const inProgress = Array.from(document.querySelectorAll<HTMLSpanElement>('span'))
+      .find((element) => element.textContent === 'In progress')
+    expect(inProgress?.style.color).toBe('var(--fw-info-label)')
     expect(document.body.textContent).not.toContain('Open one')
     // The single open comment surfaces the "waiting on review" footer.
     expect(document.body.textContent).toContain('more comment')
@@ -127,6 +130,9 @@ describe('<AgentBridgeModal />', () => {
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
     expect(writeText.mock.calls[0]![0]).toContain('ACT ONLY ON THESE FEEDBACK ITEMS')
     expect(document.body.textContent).toContain('Copied ✓')
+    const copiedLabel = Array.from(document.querySelectorAll<HTMLDivElement>('div'))
+      .find((element) => element.childElementCount === 0 && element.textContent === 'Copied ✓')
+    expect(copiedLabel?.style.color).toBe('var(--fw-active-label)')
 
     // After the 1600ms reset `copied` clears but `selected` persists, exposing
     // the selected-target styling.
