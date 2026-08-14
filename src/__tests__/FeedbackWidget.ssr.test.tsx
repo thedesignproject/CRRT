@@ -11,4 +11,11 @@ describe('FeedbackWidget SSR', () => {
       createElement(FeedbackWidget, { projectId: 'project-test' }),
     )).not.toThrow()
   })
+
+  it('renders the system theme without accessing browser globals', () => {
+    const html = renderToString(
+      createElement(FeedbackWidget, { projectId: 'project-test', theme: 'system' }),
+    )
+    expect(html).toContain('data-crrt-theme="system"')
+  })
 })

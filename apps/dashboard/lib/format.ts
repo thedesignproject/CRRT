@@ -85,5 +85,7 @@ Use these exact config values:
 - apiBase:   ${apiBase}
 - projectId: ${projectId}
 
+If the app already owns light/dark theme state, pass it to the optional theme prop. Use theme="system" only when the widget should follow the browser's preferred color scheme. Omit theme to preserve the default dark appearance.
+
 Follow the codebase's existing conventions (TypeScript, formatter, project structure). Don't refactor unrelated code.`
 }
