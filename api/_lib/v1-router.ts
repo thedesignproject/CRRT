@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { jsonError } from './http.js'
+import { getStringQuery, jsonError } from './http.js'
 
 /**
  * Self-host patch — NOT part of upstream CRRT.
@@ -124,8 +124,20 @@ function matchRoute(pathSegments: string[]): { route: RouteDef; params: Record<s
   return best ? { route: best.route, params: best.params } : null
 }
 
-export async function dispatchV1(req: VercelRequest, res: VercelResponse, pathSegments: (string | undefined)[]) {
-  if (pathSegments.some((s) => !s)) {
+const SEGMENT_KEYS = ['seg1', 'seg2', 'seg3', 'seg4'] as const
+
+/**
+ * Reads exactly `depth` segments (seg1..segN) off req.query. `depth` must
+ * match the calling file's own nesting — api/v1/[seg1].ts passes 1,
+ * [seg1]/[seg2].ts passes 2, etc. — so req.query can't be confused by a
+ * caller-supplied `?seg2=...` querystring value on a shallower route.
+ */
+export async function dispatchV1(req: VercelRequest, res: VercelResponse, depth: 1 | 2 | 3 | 4) {
+  const pathSegments = SEGMENT_KEYS
+    .slice(0, depth)
+    .map((key) => getStringQuery(req.query[key]))
+
+  if (pathSegments.some((s) => s === undefined)) {
     return jsonError(req, res, 404, 'Not found')
   }
 
