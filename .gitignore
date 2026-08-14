@@ -16,3 +16,4 @@ AUDIT.md
 skills-lock.json
 .env.docker.local
 supabase/.branches/_current_branch
+.env*

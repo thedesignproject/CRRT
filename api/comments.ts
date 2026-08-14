@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import v1Handler from './v1/public/comments.js'
+import v1Handler from './_v1-handlers/public/comments.js'
 
 /**
  * Legacy proxy — old widget versions still call /api/comments.
