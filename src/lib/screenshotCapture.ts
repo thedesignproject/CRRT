@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const MODERN_COLOR_FUNCTION_RE = /\b(oklab|oklch)\(([^()]*)\)/gi
 const UNSUPPORTED_COLOR_RE = /\b(?:oklab|oklch)\(/i
@@ -180,6 +180,10 @@ export async function captureElement(el: HTMLElement): Promise<Blob | null> {
 export function useScreenshotCapture() {
   const [image, setImage] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  // html2canvas capture is async (and lazily imports its own chunk), so a fast
+  // Send click can otherwise beat it to completion and ship the comment with
+  // no image at all. toBase64() awaits this to close that race.
+  const pendingCaptureRef = useRef<Promise<Blob | null> | null>(null)
 
   useEffect(() => {
     if (!image) { setPreviewUrl(null); return }
@@ -189,15 +193,32 @@ export function useScreenshotCapture() {
   }, [image])
 
   const capture = useCallback((el: HTMLElement) => {
-    captureElement(el).then((blob) => { if (blob) setImage(blob) })
+    const pending: Promise<Blob | null> = captureElement(el).then((blob) => {
+      // Only apply the result if nothing (clear(), a newer capture()) superseded
+      // this one while it was in flight — otherwise a stale screenshot could
+      // resurrect itself onto an unrelated, later comment.
+      if (blob && pendingCaptureRef.current === pending) setImage(blob)
+      return blob
+    })
+    pendingCaptureRef.current = pending
+    return pending
   }, [])
 
-  const clear = useCallback(() => setImage(null), [])
+  const clear = useCallback(() => {
+    pendingCaptureRef.current = null
+    setImage(null)
+  }, [])
 
   const toBase64 = useCallback(async (): Promise<{ base64: string; mimeType: string } | null> => {
-    if (!image) return null
-    return { base64: await fileToBase64(image), mimeType: image.type }
-  }, [image])
+    // Read the resolved blob straight off the promise rather than the `image`
+    // state var — state from setImage() above may not have re-rendered yet.
+    // `pendingCaptureRef` and `image` are only ever cleared together (see
+    // clear() above), so there's no case where falling back to `image` here
+    // would return anything `pendingCaptureRef` doesn't already cover.
+    const finalImage = pendingCaptureRef.current ? await pendingCaptureRef.current.catch(() => null) : null
+    if (!finalImage) return null
+    return { base64: await fileToBase64(finalImage), mimeType: finalImage.type }
+  }, [])
 
   return { image, previewUrl, capture, clear, toBase64 }
 }
