@@ -291,11 +291,21 @@ export function claimProject(apiBase: string, accessToken: string, projectKey: s
   })
 }
 
+export type ProjectMemberRole = 'owner' | 'admin' | 'member'
+
 export interface ProjectMember {
   userId: string
   email: string | null
-  role: 'admin' | 'member'
+  role: ProjectMemberRole
   createdAt: string
+}
+
+export interface ProjectMemberRoleChange {
+  projectKey: string
+  userId: string
+  previousRole: ProjectMemberRole
+  role: ProjectMemberRole
+  changed: boolean
 }
 
 export interface ProjectInvite {
@@ -316,6 +326,23 @@ export function removeProjectMember(apiBase: string, accessToken: string, projec
   return requestJson<{ projectKey: string; userId: string }>(
     `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/members/${encodeURIComponent(userId)}`,
     { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function changeProjectMemberRole(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  userId: string,
+  role: ProjectMemberRole,
+) {
+  return requestJson<ProjectMemberRoleChange>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/members/${encodeURIComponent(userId)}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ role }),
+    },
   )
 }
 

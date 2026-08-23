@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   cancelProjectInvite as apiCancelInvite,
+  changeProjectMemberRole as apiChangeRole,
   getProjectRepoConfig,
   inviteProjectMember as apiInvite,
   listProjectInvites,
@@ -12,6 +13,7 @@ import {
   type Project,
   type ProjectInvite,
   type ProjectMember,
+  type ProjectMemberRole,
   type RepoConfig,
 } from '../api'
 import { mocksEnabled } from '../lib/mocks'
@@ -24,11 +26,13 @@ export interface UseProjectSettingsResult {
   loading: boolean
   error: string | null
   isAdmin: boolean
+  isOwner: boolean
   refresh: () => Promise<void>
   rename: (name: string) => Promise<Project>
   updateAllowedOrigins: (domains: string[]) => Promise<Project>
   saveAgentInstructions: (value: string) => Promise<RepoConfig | null>
   invite: (email: string, role?: 'admin' | 'member') => Promise<void>
+  changeRole: (userId: string, role: ProjectMemberRole) => Promise<void>
   removeMember: (userId: string) => Promise<void>
   cancelInvite: (email: string) => Promise<void>
 }
@@ -58,7 +62,7 @@ export function useProjectSettings(
   currentProjectKey.current = projectKey
 
   const refresh = useCallback(async () => {
-    if (!projectKey) return
+    if (!projectKey || currentProjectKey.current !== projectKey) return
     const sequence = ++refreshSequence.current
     const isCurrent = () => currentProjectKey.current === projectKey && refreshSequence.current === sequence
     setLoading(true)
@@ -66,7 +70,7 @@ export function useProjectSettings(
     setRepoConfigError(null)
     if (mocksEnabled) {
       if (!isCurrent()) return
-      setMembers([{ userId: currentUserId, email: 'you@example.com', role: 'admin', createdAt: new Date().toISOString() }])
+      setMembers([{ userId: currentUserId, email: 'you@example.com', role: 'owner', createdAt: new Date().toISOString() }])
       setInvites([])
       setRepoConfig(null)
       setLoadedProjectKey(projectKey)
@@ -82,7 +86,7 @@ export function useProjectSettings(
 
       let rc: RepoConfig | null = null
       let rcError: string | null = null
-      const isProjectAdmin = m.some((member) => member.userId === currentUserId && member.role === 'admin')
+      const isProjectAdmin = m.some((member) => member.userId === currentUserId && member.role !== 'member')
       if (isProjectAdmin) {
         try {
           rc = await getProjectRepoConfig(apiBase, accessToken, projectKey)
@@ -145,6 +149,11 @@ export function useProjectSettings(
     await refresh()
   }, [apiBase, accessToken, projectKey, refresh])
 
+  const changeRole = useCallback(async (userId: string, role: ProjectMemberRole) => {
+    await apiChangeRole(apiBase, accessToken, projectKey, userId, role)
+    await refresh()
+  }, [apiBase, accessToken, projectKey, refresh])
+
   const cancelInvite = useCallback(async (email: string) => {
     await apiCancelInvite(apiBase, accessToken, projectKey, email)
     await refresh()
@@ -156,7 +165,9 @@ export function useProjectSettings(
   const currentRepoConfig = hasCurrentProject ? repoConfig : null
   const currentRepoConfigError = hasCurrentProject ? repoConfigError : null
   const currentError = hasCurrentProject ? error : null
-  const currentIsAdmin = currentMembers.some((m) => m.userId === currentUserId && m.role === 'admin')
+  const currentMember = currentMembers.find((m) => m.userId === currentUserId)
+  const currentIsAdmin = currentMember?.role === 'owner' || currentMember?.role === 'admin'
+  const currentIsOwner = currentMember?.role === 'owner'
 
   return {
     members: currentMembers,
@@ -166,11 +177,13 @@ export function useProjectSettings(
     loading: hasCurrentProject ? loading : true,
     error: currentError,
     isAdmin: currentIsAdmin,
+    isOwner: currentIsOwner,
     refresh,
     rename,
     updateAllowedOrigins,
     saveAgentInstructions,
     invite,
+    changeRole,
     removeMember,
     cancelInvite,
   }
