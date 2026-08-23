@@ -3,6 +3,8 @@ import type { TextRangeAnchor } from '../../lib/textAnchor'
 export interface FeedbackWidgetProps {
   projectId: string
   apiBase?: string
+  /** Visual theme. `system` follows the browser's preferred color scheme. */
+  theme?: 'light' | 'dark' | 'system'
   /** When true, the widget renders nothing and registers no listeners. */
   disabled?: boolean
 }

@@ -19,14 +19,14 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
           aria-label="Approve"
           style={{
             width: 24, height: 24, borderRadius: 6,
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            border: '1px solid var(--fw-contrast-10)',
             background: 'transparent', cursor: 'pointer',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#6B6560', padding: 0,
+            color: 'var(--fw-foreground-faint)', padding: 0,
             transition: 'border-color 0.15s, color 0.15s, background 0.15s',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#22c55e'; e.currentTarget.style.color = '#22c55e'; e.currentTarget.style.background = 'rgba(34, 197, 94, 0.08)' }}
-          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#6B6560'; e.currentTarget.style.background = 'transparent' }}
+          onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--fw-contrast-10)'; e.currentTarget.style.color = 'var(--fw-foreground-faint)'; e.currentTarget.style.background = 'transparent' }}
         >
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
         </button>
@@ -36,15 +36,15 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
         aria-label="More options"
         style={{
           width: 24, height: 24, borderRadius: 6,
-          border: menuOpen ? '1px solid rgba(255,255,255,0.14)' : '1px solid rgba(255,255,255,0.1)',
-          background: menuOpen ? 'rgba(255,255,255,0.06)' : 'transparent',
+          border: menuOpen ? '1px solid var(--fw-contrast-14)' : '1px solid var(--fw-contrast-10)',
+          background: menuOpen ? 'var(--fw-contrast-06)' : 'transparent',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: menuOpen ? '#FFFFFF' : '#6B6560', padding: 0,
+          color: menuOpen ? 'var(--fw-foreground)' : 'var(--fw-foreground-faint)', padding: 0,
           transition: 'background 0.15s, border-color 0.15s, color 0.15s',
         }}
-        onMouseEnter={(e) => { if (!menuOpen) { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.color = '#FFFFFF' } }}
-        onMouseLeave={(e) => { if (!menuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6B6560' } }}
+        onMouseEnter={(e) => { if (!menuOpen) { e.currentTarget.style.background = 'var(--fw-contrast-04)'; e.currentTarget.style.color = 'var(--fw-foreground)' } }}
+        onMouseLeave={(e) => { if (!menuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-faint)' } }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
       </button>
@@ -59,8 +59,8 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             onClick={(e) => e.stopPropagation()}
             style={{
               position: 'absolute', top: 30, right: 0, zIndex: 99999,
-              background: '#181818',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
+              background: 'var(--fw-surface)',
+              border: '1px solid var(--fw-contrast-08)',
               borderRadius: 10,
               padding: '4px 0', minWidth: 180,
               boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
@@ -69,8 +69,8 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
           >
             <button
               onClick={() => { onToggleResolve(); setMenuOpen(false) }}
-              style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#E8E5DF', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)')}
+              style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
@@ -78,8 +78,8 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             </button>
             <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
-              style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#E8E5DF', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)')}
+              style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
               onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
@@ -88,15 +88,15 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             {onViewList && (
               <button
                 onClick={() => { onViewList(); setMenuOpen(false) }}
-                style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#E8E5DF', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255, 255, 255, 0.04)')}
+                style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
                 onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
                 View list
               </button>
             )}
-            <div style={{ height: 1, background: 'rgba(255, 255, 255, 0.06)', margin: '4px 0' }} />
+            <div style={{ height: 1, background: 'var(--fw-contrast-06)', margin: '4px 0' }} />
             <button
               onClick={() => { onDelete(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#ef4444', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}

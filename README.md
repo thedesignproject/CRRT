@@ -68,6 +68,7 @@ Props:
 | --- | --- | --- | --- |
 | `projectId` | `string` | yes | Project public key used for comment capture. |
 | `apiBase` | `string` | no | Base URL of the backend that serves the widget API. Defaults to `https://crrt.ai/api`. Override to point at a self-hosted deployment. |
+| `theme` | `'light' \| 'dark' \| 'system'` | no | Widget appearance. Defaults to `dark`; `system` follows `prefers-color-scheme`. |
 | `disabled` | `boolean` | no | When `true`, the widget renders nothing — no UI, no listeners, no API calls. Defaults to `false`. Useful for turning the widget off per environment (e.g. production). |
 
 ## API surfaces
