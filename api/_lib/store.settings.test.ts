@@ -4,6 +4,7 @@ vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 
 import { getServiceSupabase } from './supabase.js'
 import {
+  changeProjectMemberRole,
   connectGithubRepo,
   deleteGitHubUserInstallation,
   deleteProjectInvite,
@@ -541,10 +542,16 @@ describe('listProjectMembers', () => {
   it('maps rows with null emails when no service key is configured', async () => {
     delete process.env.SUPABASE_SERVICE_ROLE_KEY
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: [{ user_id: 'u1', role: 'admin', created_at: 't' }], error: null }],
+      project_members: [{ data: [
+        { user_id: 'u1', role: 'admin', is_owner: true, created_at: 't' },
+        { user_id: 'u2', role: 'member', is_owner: false, created_at: 't2' },
+      ], error: null }],
     }) as never)
     const out = await listProjectMembers('p')
-    expect(out).toEqual([{ userId: 'u1', email: null, role: 'admin', createdAt: 't' }])
+    expect(out).toEqual([
+      { userId: 'u1', email: null, role: 'owner', createdAt: 't' },
+      { userId: 'u2', email: null, role: 'member', createdAt: 't2' },
+    ])
   })
 
   it('returns an empty roster when the table yields no rows', async () => {
@@ -565,22 +572,89 @@ describe('listProjectMembers', () => {
 describe('removeProjectMember', () => {
   it('returns false when the member is not in the project', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'not_found', error: null }) as never)
-    expect(await removeProjectMember('p', 'gone')).toBe(false)
+    expect(await removeProjectMember('p', 'actor', 'gone')).toBe(false)
   })
 
-  it('refuses to remove the last admin', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'last_admin', error: null }) as never)
-    await expect(removeProjectMember('p', 'a')).rejects.toThrow('last_admin')
+  it('refuses to remove the project owner', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'owner_protected', error: null }) as never)
+    await expect(removeProjectMember('p', 'actor', 'owner')).rejects.toThrow('owner_protected')
+  })
+
+  it('refuses removal when the actor is no longer an admin', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'forbidden', error: null }) as never)
+    await expect(removeProjectMember('p', 'actor', 'member')).rejects.toThrow('forbidden')
   })
 
   it('removes a member when the guard passes', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: 'removed', error: null }) as never)
-    expect(await removeProjectMember('p', 'a')).toBe(true)
+    const db = supabaseRpc({ data: 'removed', error: null })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+    expect(await removeProjectMember('p', 'actor', 'a')).toBe(true)
+    expect(db.rpc).toHaveBeenCalledWith('remove_project_member', {
+      p_project_key: 'p',
+      p_actor_user_id: 'actor',
+      p_target_user_id: 'a',
+    })
   })
 
   it('throws when the rpc errors', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: { message: 'boom' } }) as never)
-    await expect(removeProjectMember('p', 'a')).rejects.toThrow('boom')
+    await expect(removeProjectMember('p', 'actor', 'a')).rejects.toThrow('boom')
+  })
+
+  it('fails closed when the rpc returns an unknown result', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: null }) as never)
+    await expect(removeProjectMember('p', 'actor', 'a')).rejects.toThrow('invalid_remove_result')
+  })
+})
+
+describe('changeProjectMemberRole', () => {
+  const change = (role: 'owner' | 'admin' | 'member' = 'admin') => changeProjectMemberRole({
+    projectKey: 'p', actorUserId: 'actor', targetUserId: 'target', role,
+  })
+
+  it('maps updated and unchanged RPC results', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({
+      data: { status: 'updated', previousRole: 'member', role: 'admin', changed: true }, error: null,
+    }) as never)
+    await expect(change()).resolves.toEqual({
+      projectKey: 'p', userId: 'target', previousRole: 'member', role: 'admin', changed: true,
+    })
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({
+      data: { status: 'unchanged', previousRole: 'owner', role: 'owner', changed: false }, error: null,
+    }) as never)
+    await expect(change('owner')).resolves.toMatchObject({ role: 'owner', changed: false })
+  })
+
+  it.each(['not_found', 'forbidden', 'owner_required', 'owner_protected', 'invalid_role'])(
+    'maps the %s status to an application error',
+    async (status) => {
+      vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: { status }, error: null }) as never)
+      await expect(change()).rejects.toThrow(status)
+    },
+  )
+
+  it('rejects malformed results and database errors', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: { status: 'updated' }, error: null }) as never)
+    await expect(change()).rejects.toThrow('invalid_role_change_result')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: null }) as never)
+    await expect(change()).rejects.toThrow('invalid_role_change_result')
+
+    for (const data of [
+      { status: 'updated', previousRole: 'superadmin', role: 'owner', changed: true },
+      { status: 'updated', previousRole: 'member', role: 'superadmin', changed: true },
+      { status: 'updated', previousRole: 'member', role: 'admin', changed: false },
+      { status: 'updated', previousRole: 'admin', role: 'admin', changed: true },
+      { status: 'unchanged', previousRole: 'admin', role: 'member', changed: false },
+      { status: 'unchanged', previousRole: 'admin', role: 'admin', changed: true },
+    ]) {
+      vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data, error: null }) as never)
+      await expect(change()).rejects.toThrow('invalid_role_change_result')
+    }
+
+    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({ data: null, error: { message: 'boom' } }) as never)
+    await expect(change()).rejects.toThrow('boom')
   })
 })
 

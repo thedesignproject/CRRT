@@ -276,14 +276,11 @@ describe('releaseCommentActivityEmailReservation', () => {
 })
 
 type MembershipMocks = {
-  memberSingle?: { data: { role: 'admin' | 'member' } | null; error: { message: string } | null }
+  memberSingle?: { data: { role: 'admin' | 'member'; is_owner: boolean } | null; error: { message: string } | null }
   memberList?: { data: Array<{ project_key: string }> | null; error: { message: string } | null }
-  memberInsertError?: { code?: string; message: string } | null
   projectsIn?: { data: ProjectRow[] | null; error: { message: string } | null }
-  projectsUpdate?: { data: ProjectRow[] | null; error: { message: string } | null }
   projectsSingle?: { data: ProjectRow | null; error: { message: string } | null }
-  projectInsert?: { data: ProjectRow | null; error: { code?: string; message: string } | null }
-  repoInsert?: { error: { code?: string; message: string } | null }
+  claimRpc?: { data: unknown; error: { message: string } | null }
 }
 
 function membershipSupabase(m: MembershipMocks = {}) {
@@ -302,7 +299,6 @@ function membershipSupabase(m: MembershipMocks = {}) {
               return second
             }),
           })),
-          insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })),
         }
       }
       return {
@@ -310,27 +306,18 @@ function membershipSupabase(m: MembershipMocks = {}) {
           in: vi.fn(() => ({ order: vi.fn(() => Promise.resolve(m.projectsIn ?? { data: [], error: null })) })),
           eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(m.projectsSingle ?? { data: null, error: null })) })),
         })),
-        update: vi.fn(() => ({
-          eq: vi.fn(() => ({
-            eq: vi.fn(() => ({ select: vi.fn(() => Promise.resolve(m.projectsUpdate ?? { data: [], error: null })) })),
-          })),
-        })),
-        // projects insert → .select().single(); repo-config insert → awaited directly
-        insert: vi.fn(() => ({
-          select: vi.fn(() => ({ single: vi.fn(() => Promise.resolve(m.projectInsert ?? { data: null, error: null })) })),
-          then: (r: (v: unknown) => unknown) => Promise.resolve(m.repoInsert ?? { error: null }).then(r),
-        })),
       }
     }),
+    rpc: vi.fn(() => Promise.resolve(m.claimRpc ?? { data: null, error: null })),
   }
 }
 
 describe('membership helpers + claim', () => {
   it('getProjectMember + isProjectMember cover hit / miss / error', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberSingle: { data: { role: 'admin' }, error: null },
+      memberSingle: { data: { role: 'admin', is_owner: true }, error: null },
     }) as never)
-    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin' })
+    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true })
     expect(await isProjectMember('u', 'p')).toBe(true)
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
@@ -371,85 +358,67 @@ describe('membership helpers + claim', () => {
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
   })
 
-  it('claimProject: success path', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [PROJECT_ROW], error: null },
-    }) as never)
-    expect((await claimProject('u', 'pk')).publicKey).toBe('pk')
+  it('claimProject atomically returns the claimed project and forwards creation input', async () => {
+    const claimedProject = { ...PROJECT_ROW, allowed_origins: ['https://example.com'] }
+    const db = membershipSupabase({
+      claimRpc: { data: { status: 'claimed', project: claimedProject }, error: null },
+    })
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+
+    expect((await claimProject('u', 'pk', 'Acme')).publicKey).toBe('pk')
+    expect(db.rpc).toHaveBeenCalledWith('claim_project', {
+      p_user_id: 'u', p_project_key: 'pk', p_name: 'Acme',
+    })
+
+    const existingDb = membershipSupabase({
+      claimRpc: { data: { status: 'claimed', project: { ...claimedProject, allowed_origins: null } }, error: null },
+    })
+    vi.mocked(getServiceSupabase).mockReturnValue(existingDb as never)
+    await expect(claimProject('u', 'pk')).resolves.toMatchObject({ allowedOrigins: [] })
+    expect(existingDb.rpc).toHaveBeenCalledWith('claim_project', {
+      p_user_id: 'u', p_project_key: 'pk', p_name: null,
+    })
   })
 
-  it('claimProject: not_found / already_claimed / 23505 race / member-insert error / update error', async () => {
+  it.each(['not_found', 'already_claimed'])('claimProject maps %s', async (status) => {
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: null, error: null },
+      claimRpc: { data: { status }, error: null },
     }) as never)
-    await expect(claimProject('u', 'pk')).rejects.toThrow('not_found')
+    await expect(claimProject('u', 'pk')).rejects.toThrow(status)
+  })
+
+  it('claimProject fails closed for malformed success data and database errors', async () => {
+    const malformedProjects = [
+      undefined,
+      'not-an-object',
+      { ...PROJECT_ROW, allowed_origins: [], public_key: 'another-project' },
+      { ...PROJECT_ROW, allowed_origins: [], slug: null },
+      { ...PROJECT_ROW, allowed_origins: [], name: null },
+      { ...PROJECT_ROW, allowed_origins: [42] },
+      { ...PROJECT_ROW, allowed_origins: [], created_at: null },
+      { ...PROJECT_ROW, allowed_origins: [], updated_at: null },
+    ]
+    for (const project of malformedProjects) {
+      vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
+        claimRpc: { data: { status: 'claimed', project }, error: null },
+      }) as never)
+      await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
+    }
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: PROJECT_ROW, error: null },
+      claimRpc: { data: { status: 'invalid_input' }, error: null },
     }) as never)
-    await expect(claimProject('u', 'pk')).rejects.toThrow('already_claimed')
+    await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [PROJECT_ROW], error: null },
-      memberInsertError: { code: '23505', message: 'dup' },
+      claimRpc: { data: null, error: null },
     }) as never)
-    expect((await claimProject('u', 'pk')).publicKey).toBe('pk')
+    await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [PROJECT_ROW], error: null },
-      memberInsertError: { code: '50000', message: 'boom' },
-    }) as never)
-    await expect(claimProject('u', 'pk')).rejects.toThrow('boom')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: null, error: { message: 'db boom' } },
+      claimRpc: { data: null, error: { message: 'db boom' } },
     }) as never)
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
-  })
-
-  it('claimProject create-and-claim: creates a new project when none exists and a name is given', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: null, error: null },
-      projectInsert: { data: PROJECT_ROW, error: null },
-    }) as never)
-    expect((await claimProject('u', 'pk', 'Acme')).publicKey).toBe('pk')
-  })
-
-  it('claimProject create-and-claim: maps insert 23505 to already_claimed, propagates other errors', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: null, error: null },
-      projectInsert: { data: null, error: { code: '23505', message: 'dup' } },
-    }) as never)
-    await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('already_claimed')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: null, error: null },
-      projectInsert: { data: null, error: { code: '50000', message: 'boom' } },
-    }) as never)
-    await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('boom')
-  })
-
-  it('claimProject create-and-claim: surfaces repo-config errors but ignores 23505', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: null, error: null },
-      projectInsert: { data: PROJECT_ROW, error: null },
-      repoInsert: { error: { code: '50000', message: 'repo boom' } },
-    }) as never)
-    await expect(claimProject('u', 'pk', 'Acme')).rejects.toThrow('repo boom')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsUpdate: { data: [], error: null },
-      projectsSingle: { data: null, error: null },
-      projectInsert: { data: PROJECT_ROW, error: null },
-      repoInsert: { error: { code: '23505', message: 'dup' } },
-    }) as never)
-    expect((await claimProject('u', 'pk', 'Acme')).publicKey).toBe('pk')
   })
 })
 

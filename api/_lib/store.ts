@@ -63,7 +63,10 @@ type ProjectMemberRow = {
   project_key: string
   user_id: string
   role: 'admin' | 'member'
+  is_owner: boolean
 }
+
+export type ProjectMemberRole = 'owner' | 'admin' | 'member'
 
 type RepoConfigRow = {
   project_key: string
@@ -281,18 +284,19 @@ export async function listProjectsForUser(userId: string) {
 export async function getProjectMember(
   userId: string,
   projectKey: string,
-): Promise<{ role: 'admin' | 'member' } | null> {
+): Promise<{ role: 'admin' | 'member'; isOwner?: boolean } | null> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('project_key, user_id, role')
+    .select('project_key, user_id, role, is_owner')
     .eq('user_id', userId)
     .eq('project_key', projectKey)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
   if (!data) return null
-  return { role: (data as ProjectMemberRow).role }
+  const member = data as ProjectMemberRow
+  return { role: member.role, isOwner: member.is_owner }
 }
 
 export async function isProjectMember(userId: string, projectKey: string): Promise<boolean> {
@@ -302,6 +306,7 @@ export async function isProjectMember(userId: string, projectKey: string): Promi
 type ProjectMemberDetailRow = {
   user_id: string
   role: 'admin' | 'member'
+  is_owner: boolean
   created_at: string
 }
 
@@ -314,7 +319,7 @@ export async function listProjectMembers(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('user_id, role, created_at')
+    .select('user_id, role, is_owner, created_at')
     .eq('project_key', projectKey)
     .order('created_at', { ascending: true })
 
@@ -324,7 +329,7 @@ export async function listProjectMembers(projectKey: string) {
   return rows.map((r) => ({
     userId: r.user_id,
     email: emails[r.user_id] ?? null,
-    role: r.role,
+    role: r.is_owner ? 'owner' as const : r.role,
     createdAt: r.created_at,
   }))
 }
@@ -341,25 +346,91 @@ export async function listProjectMemberIds(projectKey: string) {
 }
 
 /**
- * Remove a member from a project. Refuses to remove the last remaining admin
- * (`last_admin`) so a project can never be orphaned. Returns false when the
- * member wasn't in the project so callers can map that to a 404.
+ * Remove a member from a project. Requires the actor to still be an admin and
+ * refuses to remove the owner. Returns false when the target wasn't in the
+ * project so callers can map that to a 404. The owner is always backed by the
+ * database `admin` role, so no separate last-admin guard is needed.
  *
  * The count + delete run inside the `remove_project_member` DB function (see
- * migration 0003) which locks the project's admin rows before counting — doing
- * it here in two queries would race, letting concurrent admin removals both pass
- * the guard and orphan the project.
+ * migration 0014) which locks the project's membership rows before checking
+ * the actor and target — doing either check here would race with concurrent role
+ * changes and removals.
  */
-export async function removeProjectMember(projectKey: string, userId: string): Promise<boolean> {
+export async function removeProjectMember(
+  projectKey: string,
+  actorUserId: string,
+  targetUserId: string,
+): Promise<boolean> {
   const supabase = getSupabase()
   const { data, error } = await supabase.rpc('remove_project_member', {
     p_project_key: projectKey,
-    p_user_id: userId,
+    p_actor_user_id: actorUserId,
+    p_target_user_id: targetUserId,
   })
 
   if (error) throw new Error(error.message)
-  if (data === 'last_admin') throw new Error('last_admin')
-  return data === 'removed'
+  if (data === 'forbidden') throw new Error('forbidden')
+  if (data === 'owner_protected') throw new Error('owner_protected')
+  if (data === 'not_found') return false
+  if (data === 'removed') return true
+  throw new Error('invalid_remove_result')
+}
+
+export type ProjectMemberRoleChange = {
+  projectKey: string
+  userId: string
+  previousRole: ProjectMemberRole
+  role: ProjectMemberRole
+  changed: boolean
+}
+
+function isProjectMemberRole(value: unknown): value is ProjectMemberRole {
+  return value === 'owner' || value === 'admin' || value === 'member'
+}
+
+export async function changeProjectMemberRole(input: {
+  projectKey: string
+  actorUserId: string
+  targetUserId: string
+  role: ProjectMemberRole
+}): Promise<ProjectMemberRoleChange> {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('change_project_member_role', {
+    p_project_key: input.projectKey,
+    p_actor_user_id: input.actorUserId,
+    p_target_user_id: input.targetUserId,
+    p_role: input.role,
+  })
+  if (error) throw new Error(error.message)
+
+  const result = (data ?? {}) as {
+    status?: string
+    previousRole?: ProjectMemberRole
+    role?: ProjectMemberRole
+    changed?: boolean
+  }
+  if (result.status === 'not_found') throw new Error('not_found')
+  if (result.status === 'forbidden') throw new Error('forbidden')
+  if (result.status === 'owner_required') throw new Error('owner_required')
+  if (result.status === 'owner_protected') throw new Error('owner_protected')
+  if (result.status === 'invalid_role') throw new Error('invalid_role')
+  const expectedChanged = result.status === 'updated'
+  if (
+    (result.status !== 'updated' && result.status !== 'unchanged')
+    || !isProjectMemberRole(result.previousRole)
+    || !isProjectMemberRole(result.role)
+    || typeof result.changed !== 'boolean'
+    || result.changed !== expectedChanged
+    || (expectedChanged ? result.previousRole === result.role : result.previousRole !== result.role)
+  ) throw new Error('invalid_role_change_result')
+
+  return {
+    projectKey: input.projectKey,
+    userId: input.targetUserId,
+    previousRole: result.previousRole,
+    role: result.role,
+    changed: result.changed,
+  }
 }
 
 /**
@@ -715,17 +786,9 @@ export async function getAdminStats(now = new Date()): Promise<AdminStats> {
 }
 
 /**
- * Take ownership of a project. Two ways in:
- *  - Existing unclaimed project (widget-made): a conditional UPDATE flips
- *    `claimable=false`. Only the first caller wins the race; the rest see zero
- *    rows and either `already_claimed` (row exists) or fall through to create.
- *  - Brand-new project (dashboard create flow): when no row exists and a `name`
- *    is supplied, create the project (claimable=false) + seed its repo config,
- *    then add the caller as admin. A 23505 on insert means we lost the race.
- *
- * Without a `name`, a missing project is `not_found` (the paste-existing-key
- * path). The membership INSERT is idempotent — a duplicate (23505) just means
- * we already own it.
+ * Atomically claim an existing widget-made project or create a dashboard-made
+ * project. The database function serializes claims by project key and commits
+ * the project, repo config, and admin-backed owner membership together.
  */
 export async function claimProject(
   userId: string,
@@ -733,71 +796,32 @@ export async function claimProject(
   name?: string,
 ): Promise<ReturnType<typeof mapProject>> {
   const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('claim_project', {
+    p_user_id: userId,
+    p_project_key: projectKey,
+    p_name: name ?? null,
+  })
+  if (error) throw new Error(error.message)
 
-  const { data: updatedRows, error: updateError } = await supabase
-    .from('projects')
-    .update({ claimable: false, updated_at: new Date().toISOString() })
-    .eq('public_key', projectKey)
-    .eq('claimable', true)
-    .select(PROJECT_COLUMNS)
-
-  if (updateError) throw new Error(updateError.message)
-
-  let claimed: ReturnType<typeof mapProject>
-
-  if (!updatedRows || updatedRows.length === 0) {
-    const existing = await getProject(projectKey)
-    if (existing) throw new Error('already_claimed')
-    if (!name) throw new Error('not_found')
-    claimed = await createClaimedProject(projectKey, name)
-  } else {
-    claimed = mapProject(updatedRows[0] as ProjectRow)
+  const result = (data ?? {}) as { status?: string; project?: unknown }
+  if (result.status === 'not_found') throw new Error('not_found')
+  if (result.status === 'already_claimed') throw new Error('already_claimed')
+  if (result.status !== 'claimed' || !isClaimedProjectRow(result.project, projectKey)) {
+    throw new Error('invalid_claim_result')
   }
-
-  const { error: memberError } = await supabase
-    .from('project_members')
-    .insert([{ project_key: projectKey, user_id: userId, role: 'admin' }] as never)
-
-  if (memberError && memberError.code !== '23505') {
-    throw new Error(memberError.message)
-  }
-
-  return claimed
+  return mapProject(result.project)
 }
 
-/**
- * Insert a dashboard-created project (slug mirrors the public key, as in
- * `ensurePublicProject`) plus its default repo config. A 23505 on the project
- * insert means a concurrent claim won the key — surface as `already_claimed`.
- */
-async function createClaimedProject(projectKey: string, name: string) {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('projects')
-    .insert([{
-      public_key: projectKey,
-      slug: projectKey,
-      name,
-      allowed_origins: [],
-      claimable: false,
-    }] as never)
-    .select(PROJECT_COLUMNS)
-    .single()
-
-  if (error) {
-    if (error.code === '23505') throw new Error('already_claimed')
-    throw new Error(error.message)
-  }
-
-  const { error: repoError } = await supabase
-    .from('project_repo_configs')
-    .insert([{ project_key: projectKey, default_branch: 'main' }] as never)
-
-  if (repoError && repoError.code !== '23505') {
-    throw new Error(repoError.message)
-  }
-
-  return mapProject(data as ProjectRow)
+function isClaimedProjectRow(value: unknown, projectKey: string): value is ProjectRow {
+  if (!value || typeof value !== 'object') return false
+  const row = value as Partial<ProjectRow>
+  return row.public_key === projectKey
+    && typeof row.slug === 'string'
+    && typeof row.name === 'string'
+    && (row.allowed_origins === null
+      || (Array.isArray(row.allowed_origins) && row.allowed_origins.every((origin) => typeof origin === 'string')))
+    && typeof row.created_at === 'string'
+    && typeof row.updated_at === 'string'
 }
 
 /** Slugify a display name into a candidate project key (matches the dashboard's rule). */
