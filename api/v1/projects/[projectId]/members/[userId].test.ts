@@ -193,6 +193,24 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     warnSpy.mockRestore()
   })
 
+  it('does not email a member who successfully changes their own role', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: TARGET_USER_ID, email: 'actor@example.com' })
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+    const changed = {
+      projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'admin', role: 'member', changed: true,
+    }
+    vi.mocked(changeProjectMemberRole).mockResolvedValue(changed)
+
+    const res = mockRes()
+    await call({
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'member' }, headers: {},
+    }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toEqual(changed)
+    expect(waitUntil).not.toHaveBeenCalled()
+  })
+
   it('logs missing configuration without failing the role change', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'actor@example.com' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })

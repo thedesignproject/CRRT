@@ -66,7 +66,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         targetUserId,
         role: requestedRole as ProjectMemberRole,
       })
-      if (changed.changed) {
+      if (changed.changed && changed.userId !== user.userId) {
         try {
           waitUntil(sendRoleChangeEmailInBackground({
             change: changed,
