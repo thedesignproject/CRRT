@@ -198,7 +198,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     const changed = {
       projectKey: 'p', userId: TARGET_USER_ID, previousRole: 'admin', role: 'member', changed: true,
-    }
+    } as const
     vi.mocked(changeProjectMemberRole).mockResolvedValue(changed)
 
     const res = mockRes()
