@@ -3,11 +3,13 @@ import { HowItWorks } from './sections/HowItWorks'
 import { FakeDashboard } from './sections/FakeDashboard'
 import { Closing } from './sections/Closing'
 import { Pricing } from './sections/Pricing'
+import { ProductAudit } from './sections/ProductAudit'
 import { Footer } from './sections/Footer'
 import { EasterEgg } from './components/EasterEgg'
 import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
 import { DocsApp } from './docs/DocsApp'
+import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 
@@ -42,6 +44,7 @@ export function App() {
   // SSR-safe: location is read only after mount.
   const initialPath = typeof window === 'undefined' ? '/' : window.location.pathname
   const isDocs = initialPath.startsWith('/docs')
+  const isLocalAudit = initialPath.startsWith('/audit/local')
 
   useScrollProgress()
 
@@ -54,12 +57,17 @@ export function App() {
     )
   }
 
+  if (isLocalAudit) {
+    return <ProductAuditWorkspace />
+  }
+
   return (
     <>
       <ScrollRuler />
       <Hero />
       <HowItWorks />
       <FakeDashboard />
+      <ProductAudit />
       <Closing />
       <Pricing />
       <Footer />
