@@ -2,6 +2,10 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { FeedbackWidget } from '../components/FeedbackWidget'
 
+const screenshotMock = vi.hoisted(() => ({
+  result: 'ready' as 'ready' | 'capturing' | 'failed',
+}))
+
 // useScreenshotCapture defers to html2canvas which can't run in happy-dom.
 // Replace the hook with a minimal in-test version so the screenshot preview
 // path (`imagePreviewUrl &&`) actually mounts when capture() fires.
@@ -14,11 +18,22 @@ vi.mock('../lib/screenshotCapture', async () => {
     ...actual,
     useScreenshotCapture: () => {
       const [image, setImage] = React.useState<Blob | null>(null)
+      const [status, setStatus] = React.useState<'idle' | 'capturing' | 'ready' | 'failed'>('idle')
       return {
         image,
         previewUrl: image ? 'blob:mock' : null,
-        capture: () => setImage(new Blob(['x'], { type: 'image/png' })),
-        clear: () => setImage(null),
+        status,
+        capture: () => {
+          setImage(null)
+          setStatus(screenshotMock.result)
+          if (screenshotMock.result === 'ready') {
+            setImage(new Blob(['x'], { type: 'image/png' }))
+          }
+        },
+        clear: () => {
+          setImage(null)
+          setStatus('idle')
+        },
         toBase64: async () =>
           image ? { base64: 'eA==', mimeType: image.type } : null,
       }
@@ -150,6 +165,7 @@ async function openCardEditByBody(bodyText: string) {
 
 describe('<FeedbackWidget />', () => {
   beforeEach(() => {
+    screenshotMock.result = 'ready'
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' })
     // happy-dom's URL implementation lacks createObjectURL; the screenshot
     // preview hook calls it whenever a blob is set.
@@ -435,6 +451,46 @@ describe('<FeedbackWidget />', () => {
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Screenshot')
+      })
+    })
+
+    it('shows capture progress and prevents sending before the screenshot settles', async () => {
+      screenshotMock.result = 'capturing'
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const { textarea, getSendButton } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'wait for the viewport' } })
+
+      expect(document.body.textContent).toContain('Capturing screenshot…')
+      expect(getSendButton()).toBeDisabled()
+      fireEvent.click(getSendButton())
+      expect(calls.some((call) => call.init?.method === 'POST')).toBe(false)
+    })
+
+    it('surfaces capture failure, retries, and still allows a comment without an image', async () => {
+      screenshotMock.result = 'failed'
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const { textarea, getSendButton } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'capture failed visibly' } })
+
+      expect(document.body.textContent).toContain('Screenshot unavailable')
+      expect(getSendButton()).not.toBeDisabled()
+
+      screenshotMock.result = 'ready'
+      fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="Retry screenshot"]')!)
+      await waitFor(() => {
+        expect(document.querySelector('[aria-label="Remove screenshot"]')).not.toBeNull()
+      })
+
+      fireEvent.click(document.querySelector<HTMLButtonElement>('[aria-label="Remove screenshot"]')!)
+      fireEvent.click(getSendButton())
+      await waitFor(() => {
+        const post = calls.find((call) => call.init?.method === 'POST')
+        expect(post).toBeDefined()
+        expect(JSON.parse(String(post?.init?.body)).imageBase64).toBeUndefined()
       })
     })
 

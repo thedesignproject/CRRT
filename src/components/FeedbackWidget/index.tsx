@@ -519,7 +519,16 @@ function FeedbackWidgetInner({
   const signUpUrl = useMemo(() => dashboardAuthUrl(apiBase, '/dashboard/signup'), [apiBase])
   const loginUrl = useMemo(() => dashboardAuthUrl(apiBase, '/dashboard/login'), [apiBase])
 
-  const { image, previewUrl: imagePreviewUrl, capture: captureImage, clear: clearImage, toBase64: encodeImage } = useScreenshotCapture()
+  const {
+    image,
+    previewUrl: imagePreviewUrl,
+    status: screenshotStatus,
+    capture: captureImage,
+    clear: clearImage,
+    toBase64: encodeImage,
+  } = useScreenshotCapture()
+  const screenshotCapturing = screenshotStatus === 'capturing'
+  const sendDisabled = !comment.trim() || sending || screenshotCapturing
 
   // --- Fetch comments on mount ---
   useEffect(() => {
@@ -641,7 +650,13 @@ function FeedbackWidgetInner({
         url: window.location.href,
       })
 
-      captureImage(el)
+      const rect = el.getBoundingClientRect()
+      captureImage({
+        left: rect.left,
+        top: rect.top,
+        width: rect.width,
+        height: rect.height,
+      })
 
       if (!authorNameRef.current) {
         setShowNameModal(true)
@@ -666,7 +681,7 @@ function FeedbackWidgetInner({
 
   // --- Send comment ---
   const handleSend = useCallback(async () => {
-    if (!comment.trim() || !target || sendingRef.current) return
+    if (!comment.trim() || !target || sendingRef.current || screenshotCapturing) return
 
     if (!authorNameRef.current) {
       pendingSendAfterName.current = true
@@ -748,7 +763,7 @@ function FeedbackWidgetInner({
       sendingRef.current = false
       setSending(false)
     }
-  }, [comment, target, projectId, apiBase, encodeImage, clearImage])
+  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing])
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
@@ -1166,8 +1181,8 @@ function FeedbackWidgetInner({
               />
             )}
 
-            {/* Screenshot thumbnail */}
-            {imagePreviewUrl && (
+            {/* Screenshot capture status */}
+            {screenshotStatus !== 'idle' && (
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1178,23 +1193,46 @@ function FeedbackWidgetInner({
                 border: '1px solid var(--fw-contrast-06)',
                 borderRadius: 8,
               }}>
-                <img
-                  src={imagePreviewUrl}
-                  alt="captured element"
-                  style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)' }}
-                />
-                <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', flex: 1, fontFamily: 'inherit' }}>Screenshot</span>
-                <button
-                  onClick={() => clearImage()}
-                  aria-label="Remove screenshot"
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fw-foreground-faint)', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 4 }}
-                  onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fw-foreground)')}
-                  onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fw-foreground-faint)')}
-                >
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                  </svg>
-                </button>
+                {imagePreviewUrl ? (
+                  <img
+                    src={imagePreviewUrl}
+                    alt="captured viewport"
+                    style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)' }}
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    style={{ height: 36, width: 56, borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-contrast-04)' }}
+                  />
+                )}
+                <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', flex: 1, fontFamily: 'inherit' }}>
+                  {screenshotStatus === 'capturing'
+                    ? 'Capturing screenshot…'
+                    : screenshotStatus === 'failed'
+                      ? 'Screenshot unavailable'
+                      : 'Screenshot'}
+                </span>
+                {screenshotStatus === 'ready' ? (
+                  <button
+                    onClick={() => clearImage()}
+                    aria-label="Remove screenshot"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fw-foreground-faint)', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 4 }}
+                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fw-foreground)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fw-foreground-faint)')}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                ) : screenshotStatus === 'failed' ? (
+                  <button
+                    onClick={() => captureImage()}
+                    aria-label="Retry screenshot"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fw-foreground-muted)', padding: 2, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}
+                  >
+                    Retry
+                  </button>
+                ) : null}
               </div>
             )}
 
@@ -1258,7 +1296,7 @@ function FeedbackWidgetInner({
                 </button>
                 <button
                   onClick={handleSend}
-                  disabled={!comment.trim() || sending}
+                  disabled={sendDisabled}
                   aria-label="Send"
                   style={{
                     display: 'inline-flex',
@@ -1268,18 +1306,18 @@ function FeedbackWidgetInner({
                     height: 30,
                     padding: '0 14px',
                     borderRadius: 9999,
-                    border: '1px solid ' + (!comment.trim() || sending ? 'var(--fw-contrast-06)' : '#B85F1F'),
-                    background: !comment.trim() || sending ? 'var(--fw-contrast-04)' : '#E8853D',
-                    color: !comment.trim() || sending ? 'var(--fw-foreground-faint)' : '#FFFFFF',
+                    border: '1px solid ' + (sendDisabled ? 'var(--fw-contrast-06)' : '#B85F1F'),
+                    background: sendDisabled ? 'var(--fw-contrast-04)' : '#E8853D',
+                    color: sendDisabled ? 'var(--fw-foreground-faint)' : '#FFFFFF',
                     fontSize: 13,
                     fontWeight: 500,
-                    cursor: !comment.trim() || sending ? 'default' : 'pointer',
+                    cursor: sendDisabled ? 'default' : 'pointer',
                     fontFamily: 'inherit',
                     transition: 'background 150ms ease',
                   }}
                   /* v8 ignore next 2 */
-                  onMouseEnter={(e) => { if (comment.trim() && !sending) e.currentTarget.style.background = '#B85F1F' }}
-                  onMouseLeave={(e) => { if (comment.trim() && !sending) e.currentTarget.style.background = '#E8853D' }}
+                  onMouseEnter={(e) => { if (!sendDisabled) e.currentTarget.style.background = '#B85F1F' }}
+                  onMouseLeave={(e) => { if (!sendDisabled) e.currentTarget.style.background = '#E8853D' }}
                 >
                   <span>Send</span>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">

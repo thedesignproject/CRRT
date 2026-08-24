@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const MODERN_COLOR_FUNCTION_RE = /\b(oklab|oklch)\(([^()]*)\)/gi
 const UNSUPPORTED_COLOR_RE = /\b(?:oklab|oklch)\(/i
 const OK_AXIS_PERCENT_SCALE = 0.4
+const MAX_CAPTURE_EDGE = 1920
+const CAPTURE_PADDING = 10
 const COLOR_PROPERTIES = [
   'background-color',
   'background-image',
@@ -144,33 +146,106 @@ function sanitizeModernColorFunctions(clonedDocument: Document) {
   }
 }
 
-export async function captureElement(el: HTMLElement): Promise<Blob | null> {
+export type ScreenshotCaptureStatus = 'idle' | 'capturing' | 'ready' | 'failed'
+
+export interface ScreenshotFocusRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+export interface ScreenshotCaptureRegion {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+function centeredRegion(
+  start: number,
+  size: number,
+  viewportSize: number,
+) {
+  const visibleStart = clamp(start, 0, viewportSize)
+  const visibleEnd = clamp(start + size, 0, viewportSize)
+  const visibleSize = Math.max(0, visibleEnd - visibleStart)
+  const regionSize = Math.min(
+    viewportSize,
+    visibleSize + CAPTURE_PADDING * 2,
+  )
+  const center = visibleSize > 0
+    ? visibleStart + visibleSize / 2
+    : clamp(start, 0, viewportSize)
+
+  return {
+    start: clamp(center - regionSize / 2, 0, viewportSize - regionSize),
+    size: regionSize,
+  }
+}
+
+export function calculateCaptureRegion(
+  focus: ScreenshotFocusRect | null,
+  viewportWidth: number,
+  viewportHeight: number,
+): ScreenshotCaptureRegion {
+  if (!focus) {
+    return { left: 0, top: 0, width: viewportWidth, height: viewportHeight }
+  }
+
+  const horizontal = centeredRegion(
+    focus.left,
+    focus.width,
+    viewportWidth,
+  )
+  const vertical = centeredRegion(
+    focus.top,
+    focus.height,
+    viewportHeight,
+  )
+
+  return {
+    left: horizontal.start,
+    top: vertical.start,
+    width: horizontal.size,
+    height: vertical.size,
+  }
+}
+
+export async function captureViewport(
+  focus: ScreenshotFocusRect | null = null,
+): Promise<Blob | null> {
   try {
     const { default: html2canvas } = await import('html2canvas')
-    const rect = el.getBoundingClientRect()
-    const canvas = await html2canvas(document.body, {
+    const viewportWidth = window.innerWidth
+    const viewportHeight = window.innerHeight
+    const region = calculateCaptureRegion(focus, viewportWidth, viewportHeight)
+    const scale = Math.min(
+      window.devicePixelRatio,
+      MAX_CAPTURE_EDGE / Math.max(region.width, region.height),
+    )
+    const canvas = await html2canvas(document.documentElement, {
       useCORS: true,
       logging: false,
-      scale: window.devicePixelRatio,
-      x: rect.left,
-      y: rect.top,
-      width: rect.width,
-      height: rect.height,
-      scrollX: -window.scrollX,
-      scrollY: -window.scrollY,
-      windowWidth: document.documentElement.offsetWidth,
-      windowHeight: document.documentElement.offsetHeight,
+      scale,
+      x: window.scrollX + region.left,
+      y: window.scrollY + region.top,
+      width: region.width,
+      height: region.height,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY,
+      windowWidth: viewportWidth,
+      windowHeight: viewportHeight,
       ignoreElements: (node) => node.hasAttribute('data-fw'),
       onclone: sanitizeModernColorFunctions,
     })
-    return new Promise((resolve) => {
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          console.warn('[FeedbackWidget] Screenshot capture failed: canvas.toBlob() returned null')
-        }
-        resolve(blob)
-      }, 'image/png')
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(resolve, 'image/png')
     })
+    if (!blob) {
+      console.warn('[FeedbackWidget] Screenshot capture failed: canvas.toBlob() returned null')
+    }
+    return blob
   } catch (error) {
     console.warn('[FeedbackWidget] Screenshot capture failed:', error)
     return null
@@ -180,6 +255,9 @@ export async function captureElement(el: HTMLElement): Promise<Blob | null> {
 export function useScreenshotCapture() {
   const [image, setImage] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [status, setStatus] = useState<ScreenshotCaptureStatus>('idle')
+  const captureIdRef = useRef(0)
+  const lastFocusRef = useRef<ScreenshotFocusRect | null>(null)
 
   useEffect(() => {
     if (!image) { setPreviewUrl(null); return }
@@ -188,16 +266,31 @@ export function useScreenshotCapture() {
     return () => URL.revokeObjectURL(url)
   }, [image])
 
-  const capture = useCallback((el: HTMLElement) => {
-    captureElement(el).then((blob) => { if (blob) setImage(blob) })
+  const capture = useCallback(async (focus?: ScreenshotFocusRect) => {
+    if (focus) lastFocusRef.current = focus
+    const captureId = ++captureIdRef.current
+    setImage(null)
+    setStatus('capturing')
+
+    const blob = await captureViewport(lastFocusRef.current)
+    if (captureId !== captureIdRef.current) return null
+
+    setImage(blob)
+    setStatus(blob ? 'ready' : 'failed')
+    return blob
   }, [])
 
-  const clear = useCallback(() => setImage(null), [])
+  const clear = useCallback(() => {
+    captureIdRef.current += 1
+    lastFocusRef.current = null
+    setImage(null)
+    setStatus('idle')
+  }, [])
 
   const toBase64 = useCallback(async (): Promise<{ base64: string; mimeType: string } | null> => {
     if (!image) return null
     return { base64: await fileToBase64(image), mimeType: image.type }
   }, [image])
 
-  return { image, previewUrl, capture, clear, toBase64 }
+  return { image, previewUrl, status, capture, clear, toBase64 }
 }
