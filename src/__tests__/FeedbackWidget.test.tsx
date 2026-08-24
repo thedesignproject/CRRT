@@ -468,6 +468,16 @@ describe('<FeedbackWidget />', () => {
       expect(calls.some((call) => call.init?.method === 'POST')).toBe(false)
     })
 
+    it('ignores the send shortcut when the comment is empty', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      await enterCommentingMode()
+      fireEvent.keyDown(window, { key: 'Enter', metaKey: true })
+
+      expect(calls.some((call) => call.init?.method === 'POST')).toBe(false)
+    })
+
     it('surfaces capture failure, retries, and still allows a comment without an image', async () => {
       screenshotMock.result = 'failed'
       const calls = mockFetch()

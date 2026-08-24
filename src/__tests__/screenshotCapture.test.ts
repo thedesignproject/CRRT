@@ -147,7 +147,7 @@ describe('screenshot color conversion', () => {
 
     expect(result.current.status).toBe('idle')
     await act(async () => {
-      await result.current.capture()
+      await result.current.capture({ left: 10, top: 20, width: 30, height: 40 })
     })
     expect(result.current.status).toBe('ready')
     expect(result.current.image).toBe(screenshot)

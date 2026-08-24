@@ -1316,8 +1316,8 @@ function FeedbackWidgetInner({
                     transition: 'background 150ms ease',
                   }}
                   /* v8 ignore next 2 */
-                  onMouseEnter={(e) => { if (!sendDisabled) e.currentTarget.style.background = '#B85F1F' }}
-                  onMouseLeave={(e) => { if (!sendDisabled) e.currentTarget.style.background = '#E8853D' }}
+                  onMouseEnter={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#B85F1F' }}
+                  onMouseLeave={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#E8853D' }}
                 >
                   <span>Send</span>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
