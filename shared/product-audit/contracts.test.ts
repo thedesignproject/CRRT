@@ -60,6 +60,7 @@ describe('shared Product Audit contracts', () => {
   })
 
   it('accepts live reports while preserving Open as the only finding status', () => {
+    const evidence = { id: 'evidence-1', source: 'url', signalKey: 'navigation', location: '/', observation: 'The primary action is difficult to identify.', confidence: .82, direct: true }
     const report = auditReportSchema.parse({
       auditId: 'audit-live',
       inputUrl: 'https://example.com',
@@ -67,10 +68,13 @@ describe('shared Product Audit contracts', () => {
       evaluatedSources: ['url'],
       unavailableSources: ['repository', 'design-system', 'customer-rule'],
       findings: [],
-      evidence: [],
+      observations: [{ id: 'candidate-1', kind: 'opportunity', title: 'Clarify the primary action', summary: 'The primary action may be hard to identify.', impact: 'medium', confidence: .82, evidenceIds: ['evidence-1'], recommendation: 'Increase the primary action prominence.', status: 'needs-more-evidence', reason: 'The candidate did not clear verification and deterministic admission.', evidence: [evidence] }],
+      evidence: [evidence],
     })
 
     expect(report.mode).toBe('live')
     expect(report.findings).toEqual([])
+    expect(report.observations).toEqual([expect.objectContaining({ status: 'needs-more-evidence' })])
+    expect(() => auditReportSchema.parse({ ...report, observations: Array(6).fill(report.observations?.[0]) })).toThrow()
   })
 })

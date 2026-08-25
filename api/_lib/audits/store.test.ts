@@ -11,17 +11,21 @@ import {
 
 type Result = { data: unknown; error: null | { message?: string } }
 
-function chain(result: Result) {
+function chain(result: Result, beforeResolve: () => void = () => undefined) {
   const value: Record<string, unknown> = {}
   for (const method of ['select', 'update', 'upsert', 'eq', 'in', 'gt', 'order', 'limit', 'single', 'maybeSingle']) {
     value[method] = vi.fn(() => value)
   }
-  value.then = (resolve: (result: Result) => unknown, reject: (error: unknown) => unknown) => Promise.resolve(result).then(resolve, reject)
+  value.then = (resolve: (result: Result) => unknown, reject: (error: unknown) => unknown) => {
+    beforeResolve()
+    return Promise.resolve(result).then(resolve, reject)
+  }
   return value
 }
 
 const evidence = { id: 'e1', source: 'url' as const, signalKey: 'signal', location: '/', observation: 'Observed', confidence: 1, direct: true }
 const candidate = { id: 'c1', kind: 'problem' as const, title: 'Problem', summary: 'Summary', impact: 'high' as const, confidence: .95, evidenceIds: ['e1'], recommendation: 'Fix' }
+const rejectedCandidate = { ...candidate, id: 'c2', title: 'Possible opportunity', impact: 'medium' as const, confidence: .82 }
 const finding = { ...candidate, status: 'open' as const, admittedBy: 'direct-evidence' as const, evidence: [evidence] }
 const coverage = { evaluatedSources: ['url' as const], unavailableSources: ['repository' as const, 'design-system' as const, 'customer-rule' as const], routesAttempted: 1, routesEvaluated: 1 }
 const budgets = { maxRoutes: 5, maxActions: 20, wallClockMs: 300_000, modelTokens: 8_000, maxArtifacts: 10 }
@@ -90,6 +94,37 @@ describe('audit Supabase store', () => {
     await expect(listAuditEvents('a', '0', 10)).resolves.toMatchObject({ events: [{ payload: {} }] })
   })
 
+  it('projects evidenced non-admitted candidates separately from Open findings', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(client((table) => {
+      if (table === 'audit_candidates') return { data: [{ payload: candidate }, { payload: rejectedCandidate }, { payload: { ...rejectedCandidate, id: 'c3', evidenceIds: ['missing'] } }], error: null }
+      return rowFor(table)
+    }) as never)
+    await expect(getAuditResponse('a')).resolves.toMatchObject({
+      report: {
+        findings: [expect.objectContaining({ id: 'c1', status: 'open' })],
+        observations: [expect.objectContaining({ id: 'c2', status: 'needs-more-evidence', evidence: [expect.objectContaining({ id: 'e1' })] })],
+      },
+    })
+  })
+
+  it('reads the run before terminal report projections', async () => {
+    let runObserved = false
+    const db = {
+      rpc: vi.fn(),
+      from: vi.fn((table: string) => table === 'audit_runs'
+        ? chain(rowFor(table), () => { runObserved = true })
+        : chain(runObserved ? rowFor(table) : { data: null, error: { message: 'projection raced terminal state' } })),
+    }
+    vi.mocked(getServiceSupabase).mockReturnValue(db as never)
+    await expect(getAuditResponse('a')).resolves.toMatchObject({
+      status: 'completed',
+      report: { findings: [expect.objectContaining({ id: candidate.id })] },
+    })
+    expect(db.from.mock.calls.map(([table]) => table)).toEqual([
+      'audit_runs', 'audit_evidence', 'audit_candidates', 'audit_findings', 'audit_events',
+    ])
+  })
+
   it('projects active and failed runs without fabricating a report', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(client((table) => {
       if (table === 'audit_runs') return { data: { ...rowFor(table).data as object, status: 'failed', current_stage: 'failed', completed_at: null, error_code: 'blocked', error_message: 'Could not explore' }, error: null }
@@ -116,6 +151,9 @@ describe('audit Supabase store', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(errorClient as never)
     await expect(createAuditRun({ ownerKind: 'project', projectKey: 'p', creatorUserId: 'u', idempotencyKey: 'key', capabilityHash: null, sessionHash: null, ipHash: null, inputUrl: 'https://example.com', normalizedUrl: 'https://example.com/', mode: 'live', budgets, expiresAt: null })).rejects.toThrow('database unavailable')
     await expect(setAuditWorkflowRunId('a', 'run')).rejects.toThrow('database unavailable')
+    await expect(getAuditAccessRow('a')).rejects.toThrow('database unavailable')
+    vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => chain({ data: null, error: null })) } as never)
+    await expect(setAuditWorkflowRunId('missing', 'run')).rejects.toThrow('audit_workflow_link_failed')
     const noDataClient = { rpc: vi.fn(async () => ({ data: null, error: null })), from: vi.fn(() => chain({ data: null, error: {} })) }
     vi.mocked(getServiceSupabase).mockReturnValue(noDataClient as never)
     await expect(createAuditRun({ ownerKind: 'project', projectKey: 'p', creatorUserId: 'u', idempotencyKey: 'key', capabilityHash: null, sessionHash: null, ipHash: null, inputUrl: 'https://example.com', normalizedUrl: 'https://example.com/', mode: 'live', budgets, expiresAt: null })).rejects.toThrow('audit_create_failed')

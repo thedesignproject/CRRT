@@ -74,6 +74,12 @@ export const auditFindingSchema = auditCandidateSchema.extend({
   evidence: z.array(auditEvidenceSchema).min(1),
 })
 
+export const auditObservationSchema = auditCandidateSchema.extend({
+  status: z.literal('needs-more-evidence'),
+  reason: z.string().min(1),
+  evidence: z.array(auditEvidenceSchema).min(1),
+})
+
 export const auditReportSchema = z.object({
   auditId: z.string().min(1),
   inputUrl: z.url(),
@@ -81,6 +87,7 @@ export const auditReportSchema = z.object({
   evaluatedSources: z.array(auditSourceSchema),
   unavailableSources: z.array(auditSourceSchema),
   findings: z.array(auditFindingSchema).max(5),
+  observations: z.array(auditObservationSchema).max(5).optional(),
   evidence: z.array(auditEvidenceSchema),
   completedAt: z.iso.datetime({ offset: true }).optional(),
 })
@@ -189,6 +196,7 @@ export type AuditInput = z.infer<typeof auditInputSchema>
 export type AuditEvidence = z.infer<typeof auditEvidenceSchema>
 export type AuditCandidate = z.infer<typeof auditCandidateSchema>
 export type AuditFinding = z.infer<typeof auditFindingSchema>
+export type AuditObservation = z.infer<typeof auditObservationSchema>
 export type AuditReport = z.infer<typeof auditReportSchema>
 export type AuditProgress = z.infer<typeof auditProgressSchema>
 export type AuditBudgets = z.infer<typeof auditBudgetsSchema>
