@@ -5,8 +5,8 @@ vi.mock('../supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from '../supabase.js'
 import {
   acquireAuditStage, cancelAudit, completeAuditStage, createAuditRun, finalizeAudit, finishAuditPartial,
-  getAuditAccessRow, getAuditResponse, listAuditEvents, loadAuditPipelineState, markAuditFailed,
-  renewAuditStage, setAuditWorkflowRunId,
+  deferAuditStageRetry, finishAuditModelRateLimited, getAuditAccessRow, getAuditResponse, listAuditEvents,
+  loadAuditPipelineState, markAuditFailed, renewAuditStage, setAuditWorkflowRunId,
 } from './store.js'
 
 type Result = { data: unknown; error: null | { message?: string } }
@@ -55,12 +55,16 @@ describe('audit Supabase store', () => {
     await expect(renewAuditStage('a', 'explorer', 'lease')).resolves.toMatchObject({ status: 'completed' })
     await expect(completeAuditStage('a', 'explorer', 'lease', {})).resolves.toMatchObject({ status: 'completed' })
     await expect(finishAuditPartial('a', 'critic', 'lease', coverage, 'model_budget', 'Model input budget reached.')).resolves.toMatchObject({ status: 'completed' })
+    await expect(deferAuditStageRetry('a', 'critic', 'lease', now)).resolves.toMatchObject({ status: 'completed' })
     await expect(finalizeAudit('a', 'lease', [finding], coverage)).resolves.toMatchObject({ findingCount: 1 })
     await expect(finalizeAudit('a', 'lease', [], { ...coverage, partialReason: 'Blocked route' })).resolves.toMatchObject({ findingCount: 1 })
     await expect(cancelAudit('a')).resolves.toMatchObject({ status: 'completed' })
+    await expect(finishAuditModelRateLimited('a')).resolves.toMatchObject({ status: 'completed' })
     expect(db.rpc).toHaveBeenCalledWith('create_audit_run', expect.objectContaining({ p_owner_kind: 'anonymous', p_coverage: expect.objectContaining({ unavailableSources: expect.any(Array) }) }))
     expect(db.rpc).toHaveBeenCalledWith('renew_audit_stage_lease', expect.objectContaining({ p_stage: 'explorer', p_lease_seconds: 60 }))
     expect(db.rpc).toHaveBeenCalledWith('finish_audit_partial', expect.objectContaining({ p_stage: 'critic', p_error_code: 'model_budget' }))
+    expect(db.rpc).toHaveBeenCalledWith('defer_audit_stage_retry', expect.objectContaining({ p_stage: 'critic', p_retry_at: now }))
+    expect(db.rpc).toHaveBeenCalledWith('finish_audit_model_rate_limited', { p_audit_id: 'a' })
     expect(db.from).not.toHaveBeenCalledWith('audit_evidence')
   })
 

@@ -107,6 +107,16 @@ export async function finishAuditPartial(
   return requireData({ data, error }, 'audit_partial_finish_failed') as { status: string; runStatus?: string; findingCount?: number }
 }
 
+export async function deferAuditStageRetry(auditId: string, stage: 'critic' | 'verifier', leaseToken: string, retryAt: string) {
+  const { data, error } = await getServiceSupabase().rpc('defer_audit_stage_retry', {
+    p_audit_id: auditId,
+    p_stage: stage,
+    p_lease_token: leaseToken,
+    p_retry_at: retryAt,
+  })
+  return requireData({ data, error }, 'audit_stage_defer_failed') as { status: string; retryAt?: string; runStatus?: string }
+}
+
 export async function finalizeAudit(
   auditId: string,
   leaseToken: string,
@@ -133,6 +143,11 @@ export async function cancelAudit(auditId: string) {
 export async function markAuditFailed(auditId: string, code: string, message: string) {
   const { data, error } = await getServiceSupabase().rpc('mark_audit_run_failed', { p_audit_id: auditId, p_error_code: code, p_error_message: message })
   return requireData({ data, error }, 'audit_fail_write_failed') as { status: string; runStatus?: string }
+}
+
+export async function finishAuditModelRateLimited(auditId: string) {
+  const { data, error } = await getServiceSupabase().rpc('finish_audit_model_rate_limited', { p_audit_id: auditId })
+  return requireData({ data, error }, 'audit_rate_limit_finish_failed') as { status: string; runStatus?: string; findingCount?: number }
 }
 
 export async function loadAuditPipelineState(auditId: string) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { auditBudgets, auditCapabilities, auditLocalAccess, auditLocalExecution, auditModelConfig, auditTokenSecret } from './config.js'
+import { auditBudgets, auditCapabilities, auditLocalAccess, auditLocalExecution, auditModelConfig, auditModelInterStageDelay, auditTokenSecret } from './config.js'
 import { createAuditCapability, createOrVerifyAuditSession, hashAuditCapability, hashAuditIp } from './tokens.js'
 
 const secret = 's'.repeat(32)
@@ -20,9 +20,12 @@ describe('audit configuration and tokens', () => {
   })
 
   it('validates model endpoints and required configuration', () => {
-    expect(auditModelConfig({ AI_API_KEY: 'key', AI_MODEL: 'model' })).toMatchObject({ endpoint: 'https://api.openai.com/v1/chat/completions', attempts: 3, maxTokens: 8000, model: 'model' })
+    expect(auditModelConfig({ AI_API_KEY: 'key', AI_MODEL: 'model' })).toMatchObject({ endpoint: 'https://api.openai.com/v1/chat/completions', attempts: 3, maxTokens: 8000, model: 'model', useVercelGateway: false })
     expect(auditModelConfig({ AI_API_KEY: 'key', AI_MODEL: 'model', AI_CRITIC_MODEL: 'critic-model' }, 'critic').model).toBe('critic-model')
     expect(auditModelConfig({ AI_API_KEY: 'key', AI_MODEL: 'model', AI_CRITIC_MODEL: '  ' }, 'critic').model).toBe('model')
+    expect(auditModelConfig({ AI_API_BASE_URL: 'https://AI-GATEWAY.VERCEL.SH/v1', AI_API_KEY: 'key', AI_MODEL: 'model' })).toMatchObject({ endpoint: 'https://ai-gateway.vercel.sh/v1/chat/completions', useVercelGateway: true })
+    expect(auditModelInterStageDelay({ AI_API_BASE_URL: 'https://ai-gateway.vercel.sh/v1' })).toBe(15_000)
+    expect(auditModelInterStageDelay({ AI_API_BASE_URL: 'https://models.example/v1' })).toBe(0)
     expect(auditModelConfig({ NODE_ENV: 'test', AI_API_BASE_URL: 'http://localhost:11434/v1/', AI_API_KEY: 'k', AI_MODEL: 'm', AUDIT_MODEL_ATTEMPTS: '2' }).endpoint).toBe('http://localhost:11434/v1/chat/completions')
     expect(() => auditModelConfig({ AI_API_BASE_URL: 'http://example.com', AI_API_KEY: 'k', AI_MODEL: 'm' })).toThrow('invalid_audit_model_base_url')
     expect(() => auditModelConfig({})).toThrow('missing_audit_model_config')

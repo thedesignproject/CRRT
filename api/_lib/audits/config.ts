@@ -34,6 +34,7 @@ export function auditModelConfig(env = process.env, stage: 'critic' | 'verifier'
   const defaultModel = env.AI_MODEL?.trim()
   const model = stage === 'critic' ? env.AI_CRITIC_MODEL?.trim() || defaultModel : defaultModel
   const url = new URL(baseUrl)
+  const useVercelGateway = url.hostname.toLowerCase().includes('vercel')
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
   if (url.protocol !== 'https:' && !(env.NODE_ENV !== 'production' && local)) {
     throw new Error('invalid_audit_model_base_url')
@@ -46,10 +47,16 @@ export function auditModelConfig(env = process.env, stage: 'critic' | 'verifier'
     endpoint: url.toString(),
     apiKey,
     model,
+    useVercelGateway,
     maxTokens: auditBudgets(env).modelTokens,
     timeoutMs: boundedInteger(env.AUDIT_MODEL_TIMEOUT_MS, 45_000, 1_000, 120_000),
     attempts: boundedInteger(env.AUDIT_MODEL_ATTEMPTS, 3, 1, 5),
   }
+}
+
+export function auditModelInterStageDelay(env = process.env) {
+  const url = new URL(env.AI_API_BASE_URL?.trim() || 'https://api.openai.com/v1')
+  return url.hostname.toLowerCase().includes('vercel') ? 15_000 : 0
 }
 
 export function auditLocalExecution(env = process.env) {
