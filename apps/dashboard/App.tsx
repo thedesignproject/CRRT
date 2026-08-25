@@ -21,6 +21,7 @@ import { AddProjectPopover } from './components/AddProjectPopover'
 import { ProjectSettings } from './components/ProjectSettings'
 import { SuperAdminPanel } from './components/SuperAdminPanel'
 import { Spinner } from './components/primitives'
+import { ProductAuditPage } from './components/ProductAuditPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -68,6 +69,8 @@ export function App() {
 
   if (!session || !user) return <LoginPage />
 
+  const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
+  if (auditMatch) return <ProductAuditPage apiBase={API_BASE} accessToken={session.access_token} auditId={decodeURIComponent(auditMatch[1])} />
   return <AuthenticatedApp accessToken={session.access_token} user={user} onSignOut={signOut} />
 }
 

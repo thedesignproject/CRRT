@@ -528,7 +528,7 @@
 }
 
 .audit-stage strong,
-.audit-stage span { display: block; }
+.audit-stage div span { display: block; }
 .audit-stage strong { color: var(--crrt-ink-faint); font-size: 14px; }
 .audit-stage div span { margin-top: 4px; color: var(--crrt-ink-mute); font-size: 11px; line-height: 1.45; }
 .audit-stage small { color: var(--crrt-ink-mute); font-family: var(--crrt-font-crt); font-size: 13px; }
@@ -633,6 +633,14 @@
 .audit-finding h3 { margin: 14px 0 8px; color: var(--crrt-white); font-size: 21px; line-height: 1.25; }
 .audit-finding-body > p { margin: 0; color: var(--crrt-ink-faint); font-size: 13px; line-height: 1.6; }
 
+.audit-observations { margin-top: var(--crrt-space-5); padding: 24px; border: 1px solid var(--crrt-rule-dark); border-radius: var(--crrt-radius-2xl); background: var(--crrt-bg-deep-soft); }
+.audit-observations-heading h3 { margin: 8px 0 6px; color: var(--crrt-white); font-size: 19px; }
+.audit-observations-heading p,
+.audit-observation > p { margin: 0; color: var(--crrt-ink-faint); font-size: 13px; line-height: 1.6; }
+.audit-observation { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--crrt-rule-dark); }
+.audit-observation h4 { margin: 12px 0 6px; color: var(--crrt-white); font-size: 17px; }
+.audit-observation > small { display: block; margin-top: 12px; color: var(--crrt-ink-mute); font-family: var(--crrt-font-crt); font-size: 11px; }
+
 .audit-evidence-list {
   display: grid;
   gap: var(--crrt-space-3);
@@ -642,6 +650,8 @@
 .audit-evidence-list > div { padding: 12px 14px; border-left: 2px solid var(--crrt-rule-dark-strong); background: var(--crrt-bg-deep); }
 .audit-evidence-list span { color: var(--crrt-ink-mute); font-family: var(--crrt-font-crt); font-size: 13px; letter-spacing: var(--crrt-tracking-crt); }
 .audit-evidence-list p { margin: 5px 0 0; color: var(--crrt-ink-faint); font-size: 12px; line-height: 1.5; }
+.audit-evidence-list small { display: block; margin-top: 6px; color: var(--crrt-ink-mute); font-family: var(--crrt-font-crt); font-size: 12px; }
+.audit-stage-rail > .pill { margin: 24px 0 0 20px; }
 .audit-recommendation { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: var(--crrt-space-4); margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--crrt-rule-dark); }
 .audit-recommendation span { color: var(--crrt-carrot); font-family: var(--crrt-font-crt); font-size: 13px; letter-spacing: var(--crrt-tracking-crt); }
 .audit-recommendation p { margin: 0; color: var(--crrt-white); font-size: 12px; line-height: 1.5; }

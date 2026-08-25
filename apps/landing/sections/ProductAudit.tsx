@@ -1,34 +1,52 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { PillButton } from '../components/PillButton'
 import { useReveal } from '../lib/useReveal'
 import { LOCAL_AUDIT_URL, runLocalAudit } from '../product-audit/localAudit'
+import { createAudit, getAuditCapabilities } from '../../../shared/product-audit/browser-client'
 
 const localPreviewReport = runLocalAudit()
 
 type ProductAuditProps = {
-  onStartAudit?: (url: string) => void
+  onStartAudit?: (url: string) => void | Promise<void>
+  apiBase?: string
 }
 
-export function ProductAudit({ onStartAudit }: ProductAuditProps) {
+export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api' }: ProductAuditProps) {
   const reveal = useReveal<HTMLDivElement>()
   const [url, setUrl] = useState(LOCAL_AUDIT_URL)
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [available, setAvailable] = useState<boolean | null>(onStartAudit ? true : null)
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    if (onStartAudit) return
+    const controller = new AbortController()
+    void getAuditCapabilities(apiBase, controller.signal)
+      .then((capabilities) => setAvailable(capabilities.enabled && capabilities.anonymousEnabled))
+      .catch(() => setAvailable(false))
+    return () => controller.abort()
+  }, [apiBase, onStartAudit])
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const normalizedUrl = url.trim().replace(/\/$/, '')
-
-    if (normalizedUrl !== LOCAL_AUDIT_URL) {
-      setError(`Live crawling is not connected in this local build yet. Use ${LOCAL_AUDIT_URL} to run the controlled demo.`)
-      return
-    }
+    if (submitting) return
+    const normalizedUrl = url.trim()
+    if (!normalizedUrl) return setError('Enter a public product URL.')
 
     setError('')
+    setSubmitting(true)
     if (onStartAudit) {
-      onStartAudit(normalizedUrl)
+      await onStartAudit(normalizedUrl)
+      setSubmitting(false)
       return
     }
-    window.location.assign(`/audit/local?url=${encodeURIComponent(normalizedUrl)}`)
+    try {
+      const audit = await createAudit(apiBase, { url: normalizedUrl })
+      window.location.assign(`/audit/${audit.auditId}`)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not start the audit.')
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -96,6 +114,7 @@ export function ProductAudit({ onStartAudit }: ProductAuditProps) {
                 <input
                   id="audit-url"
                   type="url"
+                  required
                   value={url}
                   onChange={(event) => {
                     setUrl(event.target.value)
@@ -116,15 +135,15 @@ export function ProductAudit({ onStartAudit }: ProductAuditProps) {
                     outline: 'none',
                   }}
                 />
-                <PillButton type="submit" variant="carrot" size="lg">
-                  Run product audit →
+                <PillButton type="submit" variant="carrot" size="lg" disabled={submitting || available !== true}>
+                  {submitting ? 'Starting audit…' : available === null ? 'Checking availability…' : available ? 'Run product audit →' : 'Audits unavailable'}
                 </PillButton>
               </div>
               <p
                 id="audit-preview-note"
                 style={{ color: 'var(--crrt-ink-mute)', fontSize: 12, lineHeight: 1.5, margin: '12px 0 0' }}
               >
-                Local preview · controlled product fixture · no signup
+                Public URL only · no signup · findings stay Open
               </p>
               <p
                 id="audit-url-error"
