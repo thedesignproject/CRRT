@@ -1,11 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import {
+  auditEventSchema,
   auditInputSchema,
   auditProgressSchema,
   auditReportSchema,
+  auditRunResponseSchema,
 } from './contracts'
 
 describe('shared Product Audit contracts', () => {
+  it('accepts Supabase timestamp offsets in durable run projections', () => {
+    const timestamp = '2026-08-25T14:04:01.738452+00:00'
+    expect(auditRunResponseSchema.parse({
+      auditId: '11111111-1111-4111-8111-111111111111', inputUrl: 'https://example.com/', mode: 'live', status: 'completed', stage: 'completed',
+      progress: { auditId: '11111111-1111-4111-8111-111111111111', stage: 'completed', completedStages: ['explorer', 'critic'], observedEvidenceCount: 0, candidateCount: 0, admittedFindingCount: 0 },
+      coverage: { evaluatedSources: ['url'], unavailableSources: [], routesAttempted: 1, routesEvaluated: 1 },
+      report: { auditId: '11111111-1111-4111-8111-111111111111', inputUrl: 'https://example.com/', mode: 'live', evaluatedSources: ['url'], unavailableSources: [], findings: [], evidence: [], completedAt: timestamp },
+      error: null, createdAt: timestamp, startedAt: timestamp, completedAt: timestamp, cancelledAt: null, expiresAt: timestamp,
+    }).completedAt).toBe(timestamp)
+  })
   it('accepts URL-only and enriched audit inputs', () => {
     expect(auditInputSchema.parse({ url: 'https://example.com' })).toEqual({
       url: 'https://example.com',
@@ -23,6 +35,11 @@ describe('shared Product Audit contracts', () => {
   })
 
   it('supports production progress without allowing more than five findings', () => {
+    expect(auditEventSchema.parse({
+      sequence: '1', auditId: '11111111-1111-4111-8111-111111111111',
+      eventType: 'audit.stage.rate_limited', actorType: 'critic', stage: 'critic',
+      payload: { retryAt: '2026-08-25T14:05:01.738452+00:00' }, createdAt: '2026-08-25T14:04:01.738452+00:00',
+    }).eventType).toBe('audit.stage.rate_limited')
     expect(auditProgressSchema.parse({
       auditId: 'audit-1',
       stage: 'verifier',
