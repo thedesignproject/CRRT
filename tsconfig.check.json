@@ -12,5 +12,5 @@
       "@widget/*": ["./src/*"]
     }
   },
-  "include": ["src", "api", "apps/dashboard", "apps/landing"]
+  "include": ["src", "api", "apps/dashboard", "apps/landing", "workflows"]
 }
