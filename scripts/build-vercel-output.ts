@@ -10,6 +10,7 @@ import { PRODUCT_AUDIT_WORKFLOW_ID } from '../workflows/product-audit-id.js'
 const exec = promisify(execFile)
 const root = resolve(import.meta.dirname, '..')
 const output = join(root, '.vercel/output')
+const workflowRuntimePackages = ['nanoid', 'undici']
 
 async function apiFiles(directory = join(root, 'api')): Promise<string[]> {
   const files: string[] = []
@@ -85,6 +86,14 @@ async function buildApiFunction() {
       if ('fsPath' in file) await cp(String(file.fsPath), destination)
       else if ('data' in file) await writeFile(destination, file.data)
       else throw new Error(`Unsupported Vercel output file: ${path}`)
+    }
+    await mkdir(join(functionDirectory, 'node_modules'), { recursive: true })
+    for (const packageName of workflowRuntimePackages) {
+      await cp(
+        join(root, 'node_modules', packageName),
+        join(functionDirectory, 'node_modules', packageName),
+        { recursive: true },
+      )
     }
     await writeFile(join(functionDirectory, '.vc-config.json'), JSON.stringify({
       runtime: lambda.runtime, handler: lambda.handler, launcherType: 'Nodejs',
