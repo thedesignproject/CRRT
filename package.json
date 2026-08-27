@@ -64,6 +64,8 @@
     "html2canvas": "^1.4.1",
     "ipaddr.js": "1.9.1",
     "lucide-react": "^1.8.0",
+    "nanoid": "5.1.16",
+    "undici": "7.29.0",
     "workflow": "^4.8.4",
     "zod": "^4.4.3"
   },
