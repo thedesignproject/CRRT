@@ -1,5 +1,5 @@
 {
-  "lockfileVersion": 1,
+  "lockfileVersion": 3,
   "configVersion": 1,
   "workspaces": {
     "": {
@@ -54,8 +54,12 @@
     "@workflow/world-vercel@4.7.1": "patches/@workflow%2Fworld-vercel@4.7.1.patch",
   },
   "overrides": {
-    "nanoid@^5.0.0": "5.1.16",
-    "undici@^7.0.0": "7.29.0",
+    "nanoid@^5.0.0": {
+      ".": "5.1.16",
+    },
+    "undici@^7.0.0": {
+      ".": "7.29.0",
+    },
     "ws": "8.21.3",
   },
   "packages": {
