@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderToString } from 'react-dom/server'
 import type { AuditEvent, AuditRunResponse } from '../../../shared/product-audit/contracts'
 const auditState = vi.hoisted(() => ({ current: null as unknown }))
 vi.mock('../../../shared/product-audit/useAuditRun', async (importOriginal) => ({ ...await importOriginal(), useAuditRun: () => auditState.current }))
@@ -35,19 +36,25 @@ describe('ProductAuditWorkspace', () => {
   })
 
   it('shows live progress, unavailable sources, and cancellation', () => {
-    render(<ProductAuditWorkspace auditId={auditId} />)
+    const { rerender } = render(<ProductAuditWorkspace auditId={auditId} />)
     expect(screen.getByText('EXPLORER_IN_PROGRESS')).toBeInTheDocument()
     expect(screen.getAllByText('unavailable')).toHaveLength(3)
     fireEvent.click(screen.getByRole('button', { name: /cancel audit/i }))
     expect((auditState.current as ReturnType<typeof state>).cancel).toHaveBeenCalled()
+    auditState.current = { ...state(baseRun), cancelling: true }
+    rerender(<ProductAuditWorkspace auditId={auditId} />)
+    expect(screen.getByRole('button', { name: /cancelling/i })).toBeDisabled()
   })
 
   it('shows durable model-capacity waiting without claiming the stage is stuck', () => {
     auditState.current = state({ ...baseRun, stage: 'critic' }, null, [{ sequence: '8', auditId, eventType: 'audit.stage.rate_limited', actorType: 'critic', stage: 'critic', payload: { retryAt: now }, createdAt: now }])
-    render(<ProductAuditWorkspace auditId={auditId} />)
+    const { rerender } = render(<ProductAuditWorkspace auditId={auditId} />)
     expect(screen.getByText('WAITING_FOR_MODEL_CAPACITY')).toBeInTheDocument()
     expect(screen.getByText(/lease has been released safely/i)).toBeInTheDocument()
     expect(screen.getByText('waiting')).toBeInTheDocument()
+    auditState.current = state({ ...baseRun, stage: 'critic' }, null, [{ sequence: '9', auditId, eventType: 'audit.stage.rate_limited', actorType: 'critic', stage: 'critic', payload: {}, createdAt: now }])
+    rerender(<ProductAuditWorkspace auditId={auditId} />)
+    expect(screen.getByText(/retry with durable backoff/i)).toBeInTheDocument()
   })
 
   it('renders zero findings without padding', () => {
@@ -76,6 +83,11 @@ describe('ProductAuditWorkspace', () => {
     auditState.current = state({ ...baseRun, status: 'completed', stage: 'completed', completedAt: now, report: { auditId, inputUrl: baseRun.inputUrl, mode: 'live', evaluatedSources: ['url'], unavailableSources: baseRun.coverage.unavailableSources, findings: [finding, { ...finding, id: 'finding-2' }], evidence: finding.evidence, completedAt: now } })
     rerender(<ProductAuditWorkspace auditId={auditId} />)
     expect(screen.getByText('2 findings cleared the bar.')).toBeInTheDocument()
+    const evidenceWithoutMetadata = { ...finding.evidence[0], provenance: undefined, capture: undefined }
+    auditState.current = state({ ...baseRun, status: 'completed', stage: 'completed', completedAt: now, report: { auditId, inputUrl: baseRun.inputUrl, mode: 'live', evaluatedSources: ['url'], unavailableSources: baseRun.coverage.unavailableSources, findings: [{ ...finding, evidence: [evidenceWithoutMetadata] }], evidence: [evidenceWithoutMetadata], completedAt: now } })
+    rerender(<ProductAuditWorkspace auditId={auditId} />)
+    expect(screen.getByText('1 finding cleared the bar.')).toBeInTheDocument()
+    expect(screen.getByText('Observable URL evidence')).toBeInTheDocument()
   })
 
   it.each([
@@ -89,8 +101,23 @@ describe('ProductAuditWorkspace', () => {
 
   it('renders loading and polling errors without leaking credentials', () => {
     auditState.current = state(null, 'Unauthorized')
-    render(<ProductAuditWorkspace auditId={auditId} />)
+    const { rerender } = render(<ProductAuditWorkspace auditId={auditId} />)
     expect(screen.getByText('Unauthorized')).toBeInTheDocument()
     expect(screen.getByText(/tokens stay in request headers/i)).toBeInTheDocument()
+    auditState.current = state(null)
+    rerender(<ProductAuditWorkspace auditId={auditId} />)
+    expect(screen.getByText('Connecting to durable execution', { exact: false })).toBeInTheDocument()
+  })
+
+  it('derives audit IDs for browser and server rendering', () => {
+    window.history.pushState({}, '', '/')
+    const { container } = render(<ProductAuditWorkspace />)
+    expect(container.querySelector('.section-marker')).toHaveTextContent('/ product audit ·')
+    vi.stubGlobal('window', undefined)
+    try {
+      expect(renderToString(<ProductAuditWorkspace />)).toContain('/ product audit · ')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })

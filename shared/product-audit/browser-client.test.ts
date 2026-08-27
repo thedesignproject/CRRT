@@ -45,6 +45,7 @@ describe('Product Audit browser client', () => {
   })
   it('cleans malformed and expired capabilities', () => {
     const otherId = '22222222-2222-4222-8222-222222222222'
+    expect(readAuditCapability(otherId)).toBeUndefined()
     localStorage.setItem(`crrt:audit:capability:${otherId}`, 'bad json')
     expect(readAuditCapability(otherId)).toBeUndefined()
     localStorage.setItem(`crrt:audit:capability:${otherId}`, JSON.stringify({ token: 'old', expiresAt: '2020-01-01T00:00:00Z' }))

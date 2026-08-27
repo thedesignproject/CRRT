@@ -48,6 +48,24 @@ describe('useAuditRun', () => {
     expect(result.current.error).toBe('cannot cancel')
     unmount()
   })
+  it('uses safe fallback messages for non-Error failures', async () => {
+    vi.mocked(getAudit).mockRejectedValueOnce('offline').mockResolvedValue(run)
+    const { result, unmount } = renderHook(() => useAuditRun('/api', auditId))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(result.current.error).toBe('Audit polling failed')
+    vi.mocked(cancelAudit).mockRejectedValueOnce('blocked')
+    await act(async () => { await result.current.cancel() })
+    expect(result.current.error).toBe('Audit cancellation failed')
+    unmount()
+  })
+  it('ignores a polling rejection caused by cleanup aborting the request', async () => {
+    vi.mocked(getAudit).mockImplementation((_apiBase, _auditId, _accessToken, signal) => new Promise((_resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+    }))
+    const { unmount } = renderHook(() => useAuditRun('/api', auditId))
+    unmount()
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+  })
   it('renders a terminal report even when event polling fails', async () => {
     vi.mocked(getAudit).mockResolvedValue({ ...run, status: 'completed', stage: 'completed', completedAt: now, report: { auditId, inputUrl: run.inputUrl, mode: 'live', evaluatedSources: ['url'], unavailableSources: run.coverage.unavailableSources, findings: [], evidence: [], completedAt: now } })
     vi.mocked(getAuditEvents).mockRejectedValue(new Error('events unavailable'))
