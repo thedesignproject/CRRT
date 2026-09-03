@@ -10,6 +10,8 @@ export interface FeedbackWidgetProps {
   disabled?: boolean
   /** Private, account-owned comments supplied by the browser extension. */
   personalComments?: PersonalComments
+  /** Signed-in extension identity; never taken from the visited website. */
+  viewerEmail?: string
   /** Page interaction supplied by an isolated browser-extension frame. */
   page?: WidgetPage
 }

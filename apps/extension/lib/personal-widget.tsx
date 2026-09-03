@@ -58,5 +58,5 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
     if (identity !== undefined && activate) window.dispatchEvent(new CustomEvent('crrt:activate'))
   }, [identity, activate])
   if (identity === undefined) return null
-  return <><style>{`button, textarea, input { font: inherit }`}</style><FeedbackWidget key={identity ?? 'signed-out'} projectId="" personalComments={personalComments} page={page} /></>
+  return <><style>{`button, textarea, input { font: inherit }`}</style><FeedbackWidget key={identity ?? 'signed-out'} projectId="" personalComments={personalComments} viewerEmail={identity ?? undefined} page={page} /></>
 }

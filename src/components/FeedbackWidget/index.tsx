@@ -364,6 +364,7 @@ function FeedbackWidgetInner({
   apiBase = 'https://crrt.ai/api',
   theme = 'dark',
   personalComments,
+  viewerEmail,
   page,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
   useEffect(() => {
@@ -383,7 +384,10 @@ function FeedbackWidgetInner({
   const [showNameModal, setShowNameModal] = useState(false)
   const [nameInput, setNameInput] = useState('')
   useEffect(() => {
-    if (personalComments) { authorNameRef.current = 'You'; setAuthorName('You'); return }
+    if (personalComments) {
+      const name = viewerEmail || 'You'
+      authorNameRef.current = name; setAuthorName(name); return
+    }
     try {
       const stored = localStorage.getItem(AUTHOR_NAME_KEY)
       if (stored) {
@@ -391,7 +395,7 @@ function FeedbackWidgetInner({
         setAuthorName(stored)
       }
     } catch {}
-  }, [])
+  }, [personalComments, viewerEmail])
 
   function saveAuthorName(name: string) {
     const trimmed = name.trim()
@@ -1309,10 +1313,10 @@ function FeedbackWidgetInner({
                     style={{
                       width: 28, height: 28,
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      background: avatarColor(authorName),
+                      background: personalComments ? 'var(--fw-surface-raised)' : avatarColor(authorName),
                       border: 'none', borderRadius: '50%',
                       cursor: 'pointer', flexShrink: 0,
-                      color: '#FFFFFF', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                      color: personalComments ? 'var(--fw-foreground)' : '#FFFFFF', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
