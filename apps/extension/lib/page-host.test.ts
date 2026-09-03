@@ -19,6 +19,7 @@ beforeEach(() => {
 })
 afterEach(() => { stop(); element.remove(); vi.restoreAllMocks(); vi.useRealTimers() })
 it('handshakes, publishes normalized page geometry, validates frames, and uses only public hit-test bounds', async () => {
+  expect(frame.style.pointerEvents).toBe('none')
   await expect(receive({ kind: 'layout' }, 9)).rejects.toThrow('Unregistered')
   window.dispatchEvent(new CustomEvent('crrt:activate')); expect(channel.send).not.toHaveBeenCalled()
   expect(await receive({ kind: 'ready' })).toMatchObject({ kind: 'state', url: location.href.split('#')[0], activate: true })
@@ -70,6 +71,8 @@ it('never clips a newly opening surface to stale bounds, while keeping its trans
   }
   fireEvent.mouseMove(element, { clientX: 120, clientY: 120 })
   expect(frame.style.pointerEvents).toBe('auto')
+  await receive({ kind: 'selecting', value: true })
+  expect(frame.style.pointerEvents).toBe('none')
   await receive({ kind: 'layout', rects: [] })
   fireEvent.mouseMove(element); expect(frame.style.pointerEvents).toBe('none')
   expect(frame.style.clipPath).toBe('none')

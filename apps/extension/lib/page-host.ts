@@ -8,6 +8,7 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
   let frameId = 0, selecting = false, lastState = '', focus: ScreenshotFocusRect | null = null
   let targets: { id: string; selector: string }[] = []
   let hitRects: number[][] = []
+  frame.style.pointerEvents = 'none'
   let highlighted: HTMLElement | null = null, oldOutline = '', oldOffset = ''
   const originalCursor = document.body.style.cursor
   const send = (payload: unknown) => { if (frameId) void sendFrameMessage(frameId, payload).catch(() => {}) }
@@ -45,6 +46,7 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
       pointer(message.x, message.y)
     } else if (message.kind === 'selecting') {
       selecting = message.value; document.body.style.cursor = selecting ? 'crosshair' : originalCursor; highlight(null)
+      if (selecting) frame.style.pointerEvents = 'none'
     } else if (message.kind === 'track') { targets = message.targets; update() }
     else if (message.kind === 'capture') {
       // Let the composer and its loading state paint before DOM screenshot rendering takes the page thread.
