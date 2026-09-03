@@ -29,7 +29,7 @@ export function Closing() {
     >
       <div className="mx-auto" style={{ maxWidth: 1120 }}>
         <div className="flex items-center gap-3" style={{ marginBottom: 24 }}>
-          <span className="section-marker">/ 04 install</span>
+          <span className="section-marker">/ 05 install</span>
           <span style={{ width: 40, height: 1, background: 'var(--crrt-rule-dark)' }} />
           <span style={{ fontFamily: 'var(--crrt-font-crt)', fontSize: 18, letterSpacing: '0.08em', color: 'var(--crrt-phosphor)' }}>
             two minutes
