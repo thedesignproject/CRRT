@@ -31,11 +31,13 @@
     "dev:landing": "vite --config apps/landing/vite.config.ts",
     "dev:dashboard": "bash -c 'trap \"kill 0\" EXIT INT TERM; bunx vercel dev --listen 3000 & vite --config apps/dashboard/vite.config.ts'",
     "dev:dashboard:ui-only": "vite --config apps/dashboard/vite.config.ts",
+    "dev:extension": "wxt --config apps/extension/wxt.config.ts",
     "typecheck": "tsc --project tsconfig.check.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "build": "tsc && vite build",
     "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
+    "build:extension": "wxt build --config apps/extension/wxt.config.ts",
     "preview": "vite preview",
     "preview:dashboard": "vite preview --config apps/dashboard/vite.config.ts",
     "prepublishOnly": "npm run build",
@@ -82,6 +84,7 @@
     "@vercel/node": "^5.7.12",
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.1.4",
+    "@wxt-dev/module-react": "^1.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.10",
@@ -96,7 +99,8 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.9",
     "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "wxt": "^0.21.4"
   },
   "overrides": {
     "nanoid@^5.0.0": "5.1.16",

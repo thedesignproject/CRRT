@@ -1,0 +1,20 @@
+:root { color-scheme: dark; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a0a0a; color: #fff }
+* { box-sizing: border-box }
+body { margin: 0; min-width: 320px }
+main { display: grid; gap: 16px; padding: 24px }
+h1, p { margin: 0 }
+h1 { font-size: 20px; letter-spacing: -.01em }
+.eyebrow { color: #ffb000; font-family: "JetBrains Mono", monospace; font-size: 13px }
+.muted, label { color: #a8a29a; font-size: 13px }
+form, label { display: grid; gap: 8px }
+form { gap: 14px }
+input { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; background: #181818; color: #fff; padding: 10px 12px; font: inherit; outline: none }
+input:focus-visible { border-color: #e8853d; box-shadow: 0 0 0 2px rgba(232,133,61,.2) }
+button { border: 0; font: inherit; cursor: pointer }
+button:disabled { cursor: wait; opacity: .6 }
+.primary { border-radius: 999px; background: #e8853d; color: #fff; min-height: 40px; padding: 0 18px; font-weight: 600 }
+.primary:hover { background: #b85f1f }
+.primary:focus-visible, a:focus-visible, .link:focus-visible { outline: 2px solid #e8853d; outline-offset: 2px }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px }
+a, .link { background: none; color: #a8a29a; font-size: 12px; padding: 0; text-decoration: underline }
+.error { color: #ffb000; font-size: 12px; line-height: 1.5 }
