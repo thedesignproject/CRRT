@@ -252,7 +252,7 @@ export async function captureViewport(
   }
 }
 
-export function useScreenshotCapture() {
+export function useScreenshotCapture(captureSource: (focus: ScreenshotFocusRect | null) => Promise<Blob | null> = captureViewport) {
   const [image, setImage] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<ScreenshotCaptureStatus>('idle')
@@ -272,13 +272,13 @@ export function useScreenshotCapture() {
     setImage(null)
     setStatus('capturing')
 
-    const blob = await captureViewport(lastFocusRef.current)
+    const blob = await captureSource(lastFocusRef.current)
     if (captureId !== captureIdRef.current) return null
 
     setImage(blob)
     setStatus(blob ? 'ready' : 'failed')
     return blob
-  }, [])
+  }, [captureSource])
 
   const clear = useCallback(() => {
     captureIdRef.current += 1
