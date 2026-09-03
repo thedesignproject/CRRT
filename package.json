@@ -61,6 +61,7 @@
     "@supabase/supabase-js": "^2.49.4",
     "framer-motion": "^12.38.0",
     "html2canvas": "^1.4.1",
+    "ipaddr.js": "1.9.1",
     "lucide-react": "^1.8.0",
     "zod": "^4.4.3"
   },
@@ -91,5 +92,8 @@
     "vite": "^8.0.9",
     "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.4"
+  },
+  "overrides": {
+    "ws": "8.21.3"
   }
 }
