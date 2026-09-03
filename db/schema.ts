@@ -7,6 +7,7 @@ import {
   index,
   integer,
   jsonb,
+  pgSchema,
   pgView,
   pgTable,
   primaryKey,
@@ -148,12 +149,26 @@ export const projectCommentEmailCooldowns = pgTable('project_comment_email_coold
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// Reference only: not exported, so Drizzle does not manage Supabase's auth table.
+const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
+
+// A bounded rolling-hour ledger, independent of comment deletion. Versioned
+// compare-and-swap updates through Supabase serialize concurrent reservations.
+export const extensionCommentLimits = pgTable('extension_comment_limits', {
+  userId: uuid('user_id').primaryKey().references(() => authUsers.id, { onDelete: 'cascade' }),
+  attempts: timestamp('attempts', { withTimezone: true }).array().notNull().default(sql`'{}'::timestamptz[]`),
+  version: uuid('version').notNull().default(sql`gen_random_uuid()`),
+}).enableRLS()
+
 export const comments = pgTable(
   'comments',
   {
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     projectId: text('project_id'),
+    source: text('source').notNull().default('widget'),
+    createdByUserId: uuid('created_by_user_id').references(() => authUsers.id, { onDelete: 'cascade' }),
     url: text('url'),
+    pageHostname: text('page_hostname'),
     x: doublePrecision('x'),
     y: doublePrecision('y'),
     element: text('element'),
@@ -163,6 +178,7 @@ export const comments = pgTable(
     claimedByAgentId: text('claimed_by_agent_id'),
     createdBy: text('created_by').default('public'),
     imageUrl: text('image_url'),
+    screenshotStoragePath: text('screenshot_storage_path'),
     authorName: text('author_name'),
     // 'element_point' (click-to-pin) or 'text_range' (anchored to selected text)
     targetType: text('target_type').default('element_point'),
@@ -184,6 +200,20 @@ export const comments = pgTable(
       t.projectId,
       t.status,
       t.implementationStatus,
+    ),
+    extensionAuthorCreatedIdx: index('comments_extension_author_created_idx').on(
+      t.createdByUserId,
+      t.createdAt.desc(),
+    ),
+    extensionAuthorUrlIdx: index('comments_extension_author_url_idx').on(
+      t.createdByUserId,
+      t.url,
+      t.createdAt.desc(),
+    ),
+    sourceCheck: check('comments_source_check', sql`${t.source} in ('widget', 'extension')`),
+    extensionOwnershipCheck: check(
+      'comments_extension_ownership_check',
+      sql`${t.source} <> 'extension' or (${t.createdByUserId} is not null and ${t.pageHostname} is not null and ${t.projectId} is null)`,
     ),
     githubIssueFieldsCheck: check(
       'comments_github_issue_fields_check',
