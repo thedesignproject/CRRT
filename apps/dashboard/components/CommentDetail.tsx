@@ -269,7 +269,9 @@ export function CommentDetail({
               </>}
 
               {selectedComment.pageUrl && (
-                <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl!, '_blank')}>
+                <ActionBtn variant="neutral" onClick={() => {
+                  window.open(selectedComment.pageUrl!, '_blank', 'noopener,noreferrer')
+                }}>
                   <ExternalLinkIcon size={13} /> Open page
                 </ActionBtn>
               )}

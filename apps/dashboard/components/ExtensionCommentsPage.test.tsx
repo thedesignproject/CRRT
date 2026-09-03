@@ -64,7 +64,7 @@ describe('ExtensionCommentsPage', () => {
     expect(screen.getByAltText(`Screenshot of ${first.pageUrl}`)).toHaveAttribute('src', 'https://signed/image')
     expect(screen.getByText('Pin 12.34%, 56.78%')).toBeInTheDocument()
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
-    fireEvent.click(screen.getByRole('button', { name: 'Open page' })); expect(open).toHaveBeenCalledWith(first.pageUrl, '_blank')
+    fireEvent.click(screen.getByRole('button', { name: 'Open page' })); expect(open).toHaveBeenCalledWith(first.pageUrl, '_blank', 'noopener,noreferrer')
     for (const name of ['Select', 'Ready for Agent', 'Mark Done', 'Reject', 'Accept to create issue']) expect(screen.queryByRole('button', { name })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))

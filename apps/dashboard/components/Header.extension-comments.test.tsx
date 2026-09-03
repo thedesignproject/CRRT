@@ -24,7 +24,7 @@ describe('Header extension comments navigation', () => {
     expect(screen.getByRole('button', { name: /Project One/ })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'My comments' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByRole('button', { name: 'Project settings' })).toBeNull()
-    expect(screen.getByRole('button', { name: /Search Feedback/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Search feedback' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Project One' })); expect(fn).toHaveBeenCalledWith('one')
     view.rerender(<Header {...props} projects={[project]} selectedProject="one" commentsLoading />)
     expect(screen.getByRole('button', { name: 'My comments' })).toHaveAttribute('aria-pressed', 'false')

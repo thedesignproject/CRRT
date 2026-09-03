@@ -225,7 +225,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open page/ }))
     expect(props.toggleReview).toHaveBeenCalledTimes(2)
     expect(props.handleToggleDone).toHaveBeenCalledWith('comment-1')
-    expect(open).toHaveBeenCalledWith('https://example.com', '_blank')
+    expect(open).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer')
 
     rerender(<CommentDetail
       {...props}
