@@ -55,15 +55,15 @@ function ProjectAuditLauncher({ apiBase, accessToken }: Props) {
         <p className="mt-3 text-sm text-muted-foreground leading-6">Explorer observes the URL. Critic proposes candidates. Verifier admits only defensible Open findings.</p>
         <form onSubmit={submit} className="mt-8 border border-border rounded-xl bg-card p-6 grid gap-5">
           <label className="grid gap-2 text-xs font-semibold">Project
-            <select disabled={loading} value={projectKey} onChange={(event) => setProjectKey(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
+            <select name="projectKey" autoComplete="off" disabled={loading} value={projectKey} onChange={(event) => setProjectKey(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm">
               {projects.map((project) => <option value={project.publicKey} key={project.publicKey}>{project.name}</option>)}
             </select>
           </label>
           <label className="grid gap-2 text-xs font-semibold">Product URL
-            <input required type="url" value={url} onChange={(event) => setUrl(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-mono" />
+            <input name="url" autoComplete="url" spellCheck={false} required type="url" value={url} onChange={(event) => setUrl(event.target.value)} className="h-10 rounded-md border border-input bg-background px-3 text-sm font-mono" />
           </label>
           {error && <p role="alert" className="text-xs text-destructive">{error}</p>}
-          <button disabled={submitting || loading || !projectKey} className="h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50">{submitting ? 'Starting audit…' : 'Run product audit'}</button>
+          <button type="submit" disabled={submitting || loading || !projectKey} className="h-10 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">{submitting ? 'Starting audit…' : 'Run product audit'}</button>
         </form>
       </section>
     </Shell>
@@ -80,7 +80,7 @@ function ProjectAuditRun({ apiBase, accessToken, auditId }: Props) {
       <section className="max-w-6xl mx-auto px-6 py-10">
         <div className="flex flex-wrap gap-4 items-end justify-between border-b border-border pb-7">
           <div><span className="crrt-section-marker">/ product audit · {auditId}</span><h1 className="mt-3 text-2xl font-bold">{run?.inputUrl ?? 'Loading audit…'}</h1><p className="mt-2 text-xs text-muted-foreground">{run ? `${run.status} · ${run.stage} · created ${formatTime(run.createdAt)}` : 'Connecting to durable execution'}</p></div>
-          {run && !terminal && <button onClick={() => void audit.cancel()} disabled={audit.cancelling} className="px-3 py-2 border border-border rounded-md text-xs hover:bg-accent disabled:opacity-50">{audit.cancelling ? 'Cancelling…' : 'Cancel audit'}</button>}
+          {run && !terminal && <button type="button" onClick={() => void audit.cancel()} disabled={audit.cancelling} className="px-3 py-2 border border-border rounded-md text-xs hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">{audit.cancelling ? 'Cancelling…' : 'Cancel audit'}</button>}
         </div>
         <div className="grid lg:grid-cols-[260px_minmax(0,1fr)] gap-8 pt-8">
           <aside className="space-y-3">

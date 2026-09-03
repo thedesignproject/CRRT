@@ -113,7 +113,9 @@ export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_
               <div className="audit-url-form">
                 <input
                   id="audit-url"
+                  name="audit-url"
                   type="url"
+                  autoComplete="url"
                   required
                   value={url}
                   onChange={(event) => {

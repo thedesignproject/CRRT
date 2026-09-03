@@ -162,11 +162,13 @@ export function Header({
       <div className="flex items-center gap-2 ml-auto">
         <a href={route('/audits/new')} className="inline-flex px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
         <button
+          type="button"
           onClick={onOpenCmd}
+          aria-label="Search feedback"
           className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground text-xs w-9 sm:w-52 hover:border-muted-foreground/30 hover:bg-accent transition-colors cursor-pointer"
         >
           <SearchIcon />
-          <span className="hidden sm:block flex-1 text-left">Search Feedback...</span>
+          <span className="hidden sm:block flex-1 text-left">Search Feedback…</span>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border bg-card text-[10px] font-mono text-muted-foreground">
             <span className="text-[11px]">⌘</span>K
           </kbd>

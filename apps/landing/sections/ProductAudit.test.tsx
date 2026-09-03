@@ -13,6 +13,8 @@ describe('ProductAudit landing section', () => {
     const onStartAudit = vi.fn(() => new Promise<void>((resolve) => { release = resolve }))
     render(<ProductAudit onStartAudit={onStartAudit} />)
     const input = screen.getByLabelText(/product url/i)
+    expect(input).toHaveAttribute('name', 'audit-url')
+    expect(input).toHaveAttribute('autocomplete', 'url')
     fireEvent.change(input, { target: { value: 'https://example.com/product' } })
     const button = screen.getByRole('button', { name: /run product audit/i })
     fireEvent.click(button)

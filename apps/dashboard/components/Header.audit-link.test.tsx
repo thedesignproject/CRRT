@@ -12,5 +12,7 @@ describe('dashboard audit launcher link', () => {
     />)
     const link = screen.getByRole('link', { name: 'Run audit' })
     expect(link).toHaveAttribute('href', '/audits/new'); expect(link).not.toHaveClass('hidden')
+    expect(screen.getByRole('button', { name: 'Search feedback' })).toHaveAttribute('type', 'button')
+    expect(screen.getByText('Search Feedback…')).toBeInTheDocument()
   })
 })
