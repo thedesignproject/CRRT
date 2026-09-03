@@ -92,5 +92,8 @@
     "vite": "^8.0.9",
     "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.4"
+  },
+  "overrides": {
+    "ws": "8.21.3"
   }
 }

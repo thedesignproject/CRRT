@@ -78,6 +78,9 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
+      # Pin npm because the version bundled with Node 22 currently crashes in
+      # Arborist while resolving this Bun-managed dependency tree.
+      - run: npm install --global npm@11.16.0
       - run: npm install --package-lock-only --no-audit --no-fund
       - name: npm audit (runtime only, high + critical)
         run: npm audit --omit=dev --audit-level=high
