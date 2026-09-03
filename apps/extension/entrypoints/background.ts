@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser'
 import { defineBackground } from 'wxt/utils/define-background'
 import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../lib/auth'
+import { relayFrameMessage } from '../lib/frame-channel'
 
 type MessageResponse = { ok: true; data?: unknown } | { ok: false; error: string }
 
@@ -17,6 +18,7 @@ export default defineBackground(() => {
   const client = createExtensionSupabase()
   async function handleMessage(message: unknown, sender: unknown): Promise<MessageResponse | undefined> {
     try {
+      if ((message as { type?: string } | null)?.type === 'private:relay') return { ok: true, data: await relayFrameMessage(message, sender) }
       if (isAuthMessage(message)) return { ok: true, data: await handleAuthMessage(client, message) }
       if ((message as { type?: unknown } | null)?.type === 'auth:open-popup') {
         await browser.action.openPopup()

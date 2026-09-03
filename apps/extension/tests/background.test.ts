@@ -5,9 +5,11 @@ const browser = vi.hoisted(() => ({ action: { openPopup: vi.fn() }, tabs: { quer
 vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
 vi.mock('../lib/auth', () => ({ createExtensionSupabase: vi.fn(() => 'client'), handleAuthMessage: vi.fn(), isAuthMessage: vi.fn() }))
+vi.mock('../lib/frame-channel', () => ({ relayFrameMessage: vi.fn() }))
 
 import background, { activateCurrentTab } from '../entrypoints/background'
 import { handleAuthMessage, isAuthMessage } from '../lib/auth'
+import { relayFrameMessage } from '../lib/frame-channel'
 
 beforeEach(() => { vi.clearAllMocks(); state.listener = undefined })
 
@@ -19,6 +21,12 @@ function send(message: unknown) {
 }
 
 describe('extension background', () => {
+  it('relays private frame messages with their browser-provided sender', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(relayFrameMessage).mockResolvedValueOnce('reply')
+    await expect(send({ type: 'private:relay' })).resolves.toEqual({ ok: true, data: 'reply' })
+    expect(relayFrameMessage).toHaveBeenCalledWith({ type: 'private:relay' }, {})
+  })
   it('opens the existing action popup and reports browser failures', async () => {
     ;(background as unknown as () => void)()
     vi.mocked(isAuthMessage).mockReturnValue(false)

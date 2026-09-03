@@ -157,6 +157,17 @@ describe('screenshot color conversion', () => {
     expect(result.current.image).toBeNull()
   })
 
+  it('uses an injected capture source for extension screenshots', async () => {
+    const screenshot = new Blob(['extension'], { type: 'image/png' })
+    const captureSource = vi.fn().mockResolvedValue(screenshot)
+    const { result } = renderHook(() => useScreenshotCapture(captureSource))
+    const focus = { left: 10, top: 20, width: 30, height: 40 }
+    await act(async () => { await result.current.capture(focus) })
+    expect(captureSource).toHaveBeenCalledWith(focus)
+    expect(result.current.image).toBe(screenshot)
+    expect(html2canvas).not.toHaveBeenCalled()
+  })
+
   it('reports a failed capture', async () => {
     vi.mocked(html2canvas).mockResolvedValue(canvasReturning(null))
     vi.spyOn(console, 'warn').mockImplementation(() => {})
