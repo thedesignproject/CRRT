@@ -1,10 +1,41 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../../_lib/auth.js'
-import { changeProjectMemberRole, getProjectMember, removeProjectMember, type ProjectMemberRole } from '../../../../_lib/store.js'
+import { changeProjectMemberRole, getProject, getProjectMember, getUserEmailsByIds, removeProjectMember, type ProjectMemberRole, type ProjectMemberRoleChange } from '../../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
+import { getProjectRoleChangeDashboardUrl, sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+async function sendRoleChangeEmailInBackground(input: {
+  change: ProjectMemberRoleChange
+  actorEmail: string
+  dashboardUrl: string
+}) {
+  try {
+    const [project, emails] = await Promise.all([
+      getProject(input.change.projectKey),
+      getUserEmailsByIds([input.change.userId]),
+    ])
+    const recipient = emails[input.change.userId]
+    if (!recipient) {
+      console.warn('Project role change email skipped: recipient email is missing')
+      return
+    }
+    const result = await sendProjectRoleChangeEmail({
+      recipient,
+      projectName: project?.name ?? input.change.projectKey,
+      actorEmail: input.actorEmail,
+      previousRole: input.change.previousRole,
+      role: input.change.role,
+      dashboardUrl: input.dashboardUrl,
+    })
+    if (result.skipped) console.warn('Project role change email skipped: email configuration is missing')
+  } catch (error) {
+    console.warn('Project role change email failed', error)
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
@@ -35,6 +66,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         targetUserId,
         role: requestedRole as ProjectMemberRole,
       })
+      if (changed.changed && changed.userId !== user.userId) {
+        try {
+          waitUntil(sendRoleChangeEmailInBackground({
+            change: changed,
+            actorEmail: user.email,
+            dashboardUrl: getProjectRoleChangeDashboardUrl(),
+          }))
+        } catch (scheduleError) {
+          console.warn('Project role change email scheduling failed', scheduleError)
+        }
+      }
       setCors(req, res, METHODS)
       return res.status(200).json(changed)
     }
