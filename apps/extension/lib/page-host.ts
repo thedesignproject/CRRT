@@ -37,17 +37,18 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
     if (from !== frameId) throw new Error('Unregistered private frame')
     if (message.kind === 'layout') {
       // Only geometry crosses into the page DOM; never comment text or image URLs.
-      frame.style.clipPath = message.rects.length ? `path('${message.rects.map(([x, y, w, h]: number[]) => {
-        if (![x, y, w, h].every(Number.isFinite)) throw new Error('Invalid frame bounds')
-        return `M${x} ${y}h${w}v${h}h${-w}Z`
-      }).join(' ')}')` : 'inset(100%)'
-      hitRects = message.hitRects ?? message.rects
+      if (!message.rects.every((rect: number[]) => rect.every(Number.isFinite))) throw new Error('Invalid frame bounds')
+      hitRects = message.rects
+      // Hit testing controls clicks, not painting: stale bounds must never clip a new surface or its shadow.
+      frame.style.clipPath = 'none'
     } else if (message.kind === 'pointer') {
       pointer(message.x, message.y)
     } else if (message.kind === 'selecting') {
       selecting = message.value; document.body.style.cursor = selecting ? 'crosshair' : originalCursor; highlight(null)
     } else if (message.kind === 'track') { targets = message.targets; update() }
     else if (message.kind === 'capture') {
+      // Let the composer and its loading state paint before DOM screenshot rendering takes the page thread.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
       const blob = await captureViewport(focus)
       if (!blob) return null
       return new Promise((resolve, reject) => {
@@ -78,7 +79,7 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
     const point = anchor ? toPagePercent(anchor.midpointClient.x + scrollX, anchor.midpointClient.y + scrollY) : toPagePercent(event.pageX, event.pageY)
     send({ kind: 'target', target: { selector: anchor?.anchor.containerSelector ?? getSelector(element), ...point, url: location.href,
       ...(anchor ? { targetType: 'text_range', anchor: anchor.anchor } : {}) } })
-    frame.focus()
+    frame.focus({ preventScroll: true })
   }
   const key = (event: KeyboardEvent) => {
     if (event.ctrlKey || event.metaKey || event.altKey || event.repeat || (event.target as HTMLElement).closest?.('input,textarea,select,[contenteditable="true"]')) return

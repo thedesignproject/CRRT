@@ -42,7 +42,7 @@ it('keeps private UI in the frame while exchanging only page interactions throug
   expect(await props().page.capture()).toBeNull()
   channel.send.mockRejectedValueOnce(new Error('detached')); props().page.selecting(false)
   await act(async () => { vi.advanceTimersByTime(200) })
-  expect(channel.send).toHaveBeenCalledWith(0, { kind: 'layout', rects: [], hitRects: [] })
+  expect(channel.send).toHaveBeenCalledWith(0, { kind: 'layout', rects: [] })
   fireEvent.mouseMove(document.body, { clientX: 200, clientY: 300 })
   expect(channel.send).toHaveBeenLastCalledWith(0, { kind: 'pointer', x: 200, y: 300 })
   channel.send.mockClear(); fireEvent.mouseMove(view.container.firstChild!)

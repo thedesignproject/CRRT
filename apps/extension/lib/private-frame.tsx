@@ -15,7 +15,7 @@ const actions = {
   highlight: (selector: string) => tellHost({ kind: 'highlight', selector }),
 }
 
-// Clip the transparent frame to visible widget surfaces so the rest of the site stays interactive.
+// Measure interactive surfaces; the transparent frame paints independently of these hit-test bounds.
 // Include positioned descendants (e.g. the launcher menu), but never expose their contents.
 export function frameBounds(padding = 8) {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt] *')).flatMap((element) => {
@@ -59,8 +59,7 @@ export function usePrivateFrame() {
       if (alive) { apply(message); setActivate(message.activate) }
     }).catch(() => { /* A detached or restricted page has no widget surface. */ })
     const timer = window.setInterval(() => {
-      // Let shadows fade fully, but keep the larger transparent area click-through.
-      const next = JSON.stringify({ rects: frameBounds(128), hitRects: frameBounds() })
+      const next = JSON.stringify({ rects: frameBounds() })
       if (next !== layout) { layout = next; tellHost({ kind: 'layout', ...JSON.parse(next) }) }
     }, 100)
     return () => { alive = false; stop(); window.clearInterval(timer); document.removeEventListener('mousemove', pointer) }

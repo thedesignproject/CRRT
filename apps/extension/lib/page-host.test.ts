@@ -18,16 +18,16 @@ beforeEach(() => {
   receive = (message, from = 2) => channel.receive.mock.calls[0][0](message, from)
 })
 afterEach(() => { stop(); element.remove(); vi.restoreAllMocks(); vi.useRealTimers() })
-it('handshakes, publishes normalized page geometry, validates frames, and clips only public bounds', async () => {
+it('handshakes, publishes normalized page geometry, validates frames, and uses only public hit-test bounds', async () => {
   await expect(receive({ kind: 'layout' }, 9)).rejects.toThrow('Unregistered')
   window.dispatchEvent(new CustomEvent('crrt:activate')); expect(channel.send).not.toHaveBeenCalled()
   expect(await receive({ kind: 'ready' })).toMatchObject({ kind: 'state', url: location.href.split('#')[0], activate: true })
   expect(await receive({ kind: 'ready' })).toMatchObject({ activate: true })
   await expect(receive({ kind: 'ready' }, 3)).rejects.toThrow('Unregistered')
   await receive({ kind: 'layout', rects: [[1, 2, 3, 4]] })
-  expect(frame.style.clipPath).toBe("path('M1 2h3v4h-3Z')")
+  expect(frame.style.clipPath).toBe('none')
   await expect(receive({ kind: 'layout', rects: [[NaN, 2, 3, 4]] })).rejects.toThrow('Invalid frame bounds')
-  await receive({ kind: 'layout', rects: [] }); expect(frame.style.clipPath).toBe('inset(100%)')
+  await receive({ kind: 'layout', rects: [] }); expect(frame.style.clipPath).toBe('none')
   await receive({ kind: 'track', targets: [{ id: 'yes', selector: '#target' }, { id: 'no', selector: '#missing' }, { id: 'bad', selector: '[' }] })
   expect(channel.send).toHaveBeenLastCalledWith(2, expect.objectContaining({ liveIds: ['yes'] }))
   vi.mocked(element.getBoundingClientRect).mockReturnValue({ width: 0, height: 0 } as DOMRect)
@@ -48,7 +48,9 @@ it('selects and highlights host elements without capturing typing or clicking th
   expect(element.style.outline).toContain('2px')
   element.dataset.crrtExtension = ''; fireEvent.mouseMove(element); fireEvent.click(element)
   expect(element).toHaveStyle({ outlineWidth: '1px', outlineColor: 'blue' }); delete element.dataset.crrtExtension
+  const focus = vi.spyOn(frame, 'focus')
   fireEvent.mouseMove(element); fireEvent.click(element, { clientX: 20, clientY: 30 })
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true })
   expect(channel.send).toHaveBeenLastCalledWith(2, { kind: 'target', target: expect.objectContaining({ selector: '#target', url: location.href }) })
   expect(element).toHaveStyle({ outlineWidth: '1px', outlineColor: 'blue' })
   for (const modifier of ['ctrlKey', 'altKey', 'metaKey', 'repeat']) fireEvent.keyDown(element, { key: 'c', [modifier]: true })
@@ -59,10 +61,10 @@ it('selects and highlights host elements without capturing typing or clicking th
   await receive({ kind: 'highlight', selector: '#missing' })
   await receive({ kind: 'highlight', selector: '[' })
 })
-it('renders the full shadow while returning transparent margins to the host page', async () => {
+it('never clips a newly opening surface to stale bounds, while keeping its transparent margins click-through', async () => {
   await receive({ kind: 'ready' })
-  await receive({ kind: 'layout', rects: [[0, 0, 300, 300]], hitRects: [[100, 100, 44, 44]] })
-  expect(frame.style.clipPath).toBe("path('M0 0h300v300h-300Z')")
+  await receive({ kind: 'layout', rects: [[100, 100, 44, 44]] })
+  expect(frame.style.clipPath).toBe('none')
   for (const [x, y] of [[99, 120], [120, 99], [145, 120], [120, 145]]) {
     await receive({ kind: 'pointer', x, y }); expect(frame.style.pointerEvents).toBe('none')
   }
@@ -70,6 +72,7 @@ it('renders the full shadow while returning transparent margins to the host page
   expect(frame.style.pointerEvents).toBe('auto')
   await receive({ kind: 'layout', rects: [] })
   fireEvent.mouseMove(element); expect(frame.style.pointerEvents).toBe('none')
+  expect(frame.style.clipPath).toBe('none')
 })
 it('uses shared text anchors and focused screenshot capture across the private channel', async () => {
   await receive({ kind: 'ready' }); await receive({ kind: 'selecting', value: true })
@@ -83,12 +86,25 @@ it('uses shared text anchors and focused screenshot capture across the private c
   fireEvent.click(element)
   expect(channel.send).toHaveBeenLastCalledWith(2, { kind: 'target', target: expect.objectContaining({ targetType: 'text_range', selector: '#quote' }) })
   vi.mocked(captureViewport).mockResolvedValueOnce(null)
-  expect(await receive({ kind: 'capture' })).toBeNull()
+  const empty = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(32)
+  expect(await empty).toBeNull()
   vi.mocked(captureViewport).mockResolvedValue(new Blob(['image'], { type: 'image/png' }))
-  const capture = receive({ kind: 'capture' }); await vi.runOnlyPendingTimersAsync()
+  const capture = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(64)
   expect(await capture).toMatch(/^data:image\/png;base64,/)
   expect(captureViewport).toHaveBeenCalledWith(expect.objectContaining({ left: 10, width: 100 }))
   vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) { this.dispatchEvent(new Event('error')) })
-  await expect(receive({ kind: 'capture' })).rejects.toThrow('encoding failed')
+  const failed = expect(receive({ kind: 'capture' })).rejects.toThrow('encoding failed')
+  await vi.advanceTimersByTimeAsync(32); await failed
   stop(); expect(channel.stop).toHaveBeenCalled()
+})
+it('allows a paint between pin placement and expensive screenshot rendering', async () => {
+  await receive({ kind: 'ready' })
+  vi.mocked(captureViewport).mockResolvedValue(null)
+  const capture = receive({ kind: 'capture' })
+  expect(captureViewport).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(16)
+  expect(captureViewport).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(16)
+  await capture
+  expect(captureViewport).toHaveBeenCalledOnce()
 })
