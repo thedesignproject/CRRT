@@ -337,6 +337,223 @@ export const feedbackOperationKeys = pgTable(
   }),
 )
 
+// Durable Product Audit state. Runtime access is service-role-only; API
+// handlers authenticate project members or verify an anonymous capability
+// before reading or mutating these deny-all-RLS tables.
+export const auditRuns = pgTable(
+  'audit_runs',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    projectKey: text('project_key').references(() => projects.publicKey, { onDelete: 'cascade' }),
+    creatorUserId: uuid('creator_user_id'),
+    ownerKind: text('owner_kind').notNull(),
+    startIdempotencyKey: text('start_idempotency_key').notNull(),
+    capabilityTokenHash: text('capability_token_hash'),
+    anonymousSessionHash: text('anonymous_session_hash'),
+    anonymousIpHash: text('anonymous_ip_hash'),
+    inputUrl: text('input_url').notNull(),
+    normalizedUrl: text('normalized_url').notNull(),
+    mode: text('mode').notNull().default('live'),
+    status: text('status').notNull().default('queued'),
+    currentStage: text('current_stage').notNull().default('queued'),
+    workflowRunId: text('workflow_run_id').unique(),
+    budgets: jsonb('budgets').notNull().default(sql`'{}'::jsonb`),
+    coverage: jsonb('coverage').notNull().default(sql`'{}'::jsonb`),
+    unavailableSources: text('unavailable_sources').array().notNull().default(sql`'{}'`),
+    sourceSnapshot: jsonb('source_snapshot').notNull().default(sql`'{}'::jsonb`),
+    errorCode: text('error_code'),
+    errorMessage: text('error_message'),
+    stageLeaseToken: uuid('stage_lease_token'),
+    stageLeaseExpiresAt: timestamp('stage_lease_expires_at', { withTimezone: true }),
+    retryNotBefore: timestamp('retry_not_before', { withTimezone: true }),
+    stageAttempt: integer('stage_attempt').notNull().default(0),
+    startedAt: timestamp('started_at', { withTimezone: true }),
+    completedAt: timestamp('completed_at', { withTimezone: true }),
+    cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    projectCreatedIdx: index('audit_runs_project_created_idx').on(t.projectKey, t.createdAt.desc()),
+    anonymousSessionCreatedIdx: index('audit_runs_anonymous_session_created_idx')
+      .on(t.anonymousSessionHash, t.createdAt.desc()),
+    anonymousIpCreatedIdx: index('audit_runs_anonymous_ip_created_idx')
+      .on(t.anonymousIpHash, t.createdAt.desc()),
+    statusUpdatedIdx: index('audit_runs_status_updated_idx').on(t.status, t.updatedAt),
+    expiresIdx: index('audit_runs_expires_idx').on(t.expiresAt),
+    projectStartUnique: uniqueIndex('audit_runs_project_start_unique')
+      .on(t.creatorUserId, t.startIdempotencyKey)
+      .where(sql`${t.ownerKind} = 'project'`),
+    anonymousStartUnique: uniqueIndex('audit_runs_anonymous_start_unique')
+      .on(t.anonymousSessionHash, t.startIdempotencyKey)
+      .where(sql`${t.ownerKind} = 'anonymous'`),
+    ownerKindCheck: check(
+      'audit_runs_owner_kind_check',
+      sql`${t.ownerKind} in ('anonymous', 'project')`,
+    ),
+    ownerShapeCheck: check(
+      'audit_runs_owner_shape_check',
+      sql`(
+        (${t.ownerKind} = 'project' and ${t.projectKey} is not null and ${t.creatorUserId} is not null)
+        or
+        (${t.ownerKind} = 'anonymous' and ${t.projectKey} is null and ${t.creatorUserId} is null
+          and ${t.capabilityTokenHash} is not null and ${t.anonymousSessionHash} is not null
+          and ${t.anonymousIpHash} is not null and ${t.expiresAt} is not null)
+      )`,
+    ),
+    modeCheck: check('audit_runs_mode_check', sql`${t.mode} in ('local-fixture', 'live')`),
+    statusCheck: check(
+      'audit_runs_status_check',
+      sql`${t.status} in ('queued', 'running', 'completed', 'partial', 'failed', 'cancelled')`,
+    ),
+    stageCheck: check(
+      'audit_runs_stage_check',
+      sql`${t.currentStage} in ('queued', 'explorer', 'critic', 'verifier', 'completed', 'failed', 'cancelled')`,
+    ),
+    leaseShapeCheck: check(
+      'audit_runs_lease_shape_check',
+      sql`(${t.stageLeaseToken} is null) = (${t.stageLeaseExpiresAt} is null)`,
+    ),
+  }),
+).enableRLS()
+
+export const auditEvents = pgTable(
+  'audit_events',
+  {
+    id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
+    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    eventType: text('event_type').notNull(),
+    actorType: text('actor_type').notNull(),
+    actorId: text('actor_id'),
+    idempotencyKey: text('idempotency_key').notNull(),
+    stage: text('stage'),
+    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    auditSequenceIdx: index('audit_events_audit_sequence_idx').on(t.auditId, t.id),
+    idempotencyUnique: uniqueIndex('audit_events_idempotency_unique').on(t.auditId, t.idempotencyKey),
+    eventTypeCheck: check(
+      'audit_events_type_check',
+      sql`${t.eventType} in (
+        'audit.queued', 'audit.stage.started', 'audit.stage.rate_limited', 'audit.evidence.captured',
+        'audit.stage.completed', 'audit.coverage.partial', 'audit.finding.verified',
+        'audit.completed', 'audit.failed', 'audit.cancelled'
+      )`,
+    ),
+    actorTypeCheck: check(
+      'audit_events_actor_type_check',
+      sql`${t.actorType} in ('system', 'explorer', 'critic', 'verifier', 'user')`,
+    ),
+  }),
+).enableRLS()
+
+export const auditEvidence = pgTable(
+  'audit_evidence',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    evidenceKey: text('evidence_key').notNull(),
+    source: text('source').notNull(),
+    signalKey: text('signal_key').notNull(),
+    kind: text('kind').notNull(),
+    route: text('route').notNull(),
+    element: text('element'),
+    observation: text('observation').notNull(),
+    confidence: doublePrecision('confidence').notNull(),
+    direct: boolean('direct').notNull(),
+    provenance: jsonb('provenance').notNull().default(sql`'{}'::jsonb`),
+    artifact: jsonb('artifact'),
+    capture: jsonb('capture').notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    auditEvidenceUnique: uniqueIndex('audit_evidence_audit_key_unique').on(t.auditId, t.evidenceKey),
+    auditCreatedIdx: index('audit_evidence_audit_created_idx').on(t.auditId, t.createdAt),
+    sourceCheck: check(
+      'audit_evidence_source_check',
+      sql`${t.source} in ('customer-rule', 'design-system', 'repository', 'url', 'heuristic')`,
+    ),
+    confidenceCheck: check(
+      'audit_evidence_confidence_check',
+      sql`${t.confidence} >= 0 and ${t.confidence} <= 1`,
+    ),
+  }),
+).enableRLS()
+
+export const auditCandidates = pgTable(
+  'audit_candidates',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    candidateKey: text('candidate_key').notNull(),
+    payload: jsonb('payload').notNull(),
+    decision: text('decision').notNull().default('pending'),
+    rejectionReason: text('rejection_reason'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    auditCandidateUnique: uniqueIndex('audit_candidates_audit_key_unique').on(t.auditId, t.candidateKey),
+    auditCreatedIdx: index('audit_candidates_audit_created_idx').on(t.auditId, t.createdAt),
+    decisionCheck: check(
+      'audit_candidates_decision_check',
+      sql`${t.decision} in ('pending', 'admitted', 'rejected', 'merged')`,
+    ),
+  }),
+).enableRLS()
+
+export const auditFindings = pgTable(
+  'audit_findings',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    findingKey: text('finding_key').notNull(),
+    rank: integer('rank').notNull(),
+    status: text('status').notNull().default('open'),
+    admittedBy: text('admitted_by').notNull(),
+    payload: jsonb('payload').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    auditFindingUnique: uniqueIndex('audit_findings_audit_key_unique').on(t.auditId, t.findingKey),
+    auditRankUnique: uniqueIndex('audit_findings_audit_rank_unique').on(t.auditId, t.rank),
+    rankCheck: check('audit_findings_rank_check', sql`${t.rank} between 1 and 5`),
+    statusCheck: check('audit_findings_status_check', sql`${t.status} = 'open'`),
+    admittedByCheck: check(
+      'audit_findings_admitted_by_check',
+      sql`${t.admittedBy} in ('direct-evidence', 'independent-signals')`,
+    ),
+  }),
+).enableRLS()
+
+export const auditRateLimitWindows = pgTable(
+  'audit_rate_limit_windows',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    identityKind: text('identity_kind').notNull(),
+    identityHash: text('identity_hash').notNull(),
+    windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull().defaultNow(),
+    requestCount: integer('request_count').notNull().default(0),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    identityUnique: uniqueIndex('audit_rate_limit_windows_identity_unique')
+      .on(t.identityKind, t.identityHash),
+    windowIdx: index('audit_rate_limit_windows_window_idx').on(t.windowStartedAt),
+    identityKindCheck: check(
+      'audit_rate_limit_windows_identity_kind_check',
+      sql`${t.identityKind} in ('session', 'ip')`,
+    ),
+    requestCountCheck: check(
+      'audit_rate_limit_windows_request_count_check',
+      sql`${t.requestCount} >= 0`,
+    ),
+  }),
+).enableRLS()
+
 // Service-role-only projections used by the super-admin API. securityInvoker
 // preserves the underlying tables' deny-all RLS for browser-visible roles.
 export const adminUserMetrics = pgView('admin_user_metrics', {
