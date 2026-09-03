@@ -15,6 +15,7 @@ import { PinActionCluster, PinMarker } from './pin'
 import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
 import { TextRangeQuote } from './quote'
+import { listenForWidgetEvent } from './events'
 
 type CaretPositionDocument = Document & {
   caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
@@ -362,22 +363,27 @@ function FeedbackWidgetInner({
   projectId,
   apiBase = 'https://crrt.ai/api',
   theme = 'dark',
+  personalComments,
+  page,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
   useEffect(() => {
     ensureWidgetFonts()
   }, [])
 
   const [mode, setMode] = useState<Mode>('idle')
+  const widgetRef = useRef<HTMLDivElement>(null)
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
   const [sending, setSending] = useState(false)
   const [hovered, setHovered] = useState<Element | null>(null)
+  const [apiError, setApiError] = useState('')
 
   const [authorName, setAuthorName] = useState<string | null>(null)
   const authorNameRef = useRef<string | null>(null)
   const [showNameModal, setShowNameModal] = useState(false)
   const [nameInput, setNameInput] = useState('')
   useEffect(() => {
+    if (personalComments) { authorNameRef.current = 'You'; setAuthorName('You'); return }
     try {
       const stored = localStorage.getItem(AUTHOR_NAME_KEY)
       if (stored) {
@@ -396,6 +402,7 @@ function FeedbackWidgetInner({
   }
 
   function openNameEditor() {
+    if (personalComments) return
     setNameInput(authorNameRef.current ?? '')
     setShowNameModal(true)
   }
@@ -490,15 +497,16 @@ function FeedbackWidgetInner({
   // Poll location.href because some routers (e.g. Next.js App Router) cache
   // history.pushState at module load and bypass any wrapper we install.
   const [currentUrl, setCurrentUrl] = useState(() => (
-    typeof window === 'undefined' ? '' : window.location.href.split('#')[0]
+    page ? page.url : typeof window === 'undefined' ? '' : window.location.href.split('#')[0]
   ))
   useEffect(() => {
+    if (page) { setCurrentUrl(page.url); return }
     const id = window.setInterval(() => {
       const next = window.location.href.split('#')[0]
       setCurrentUrl((prev) => (prev === next ? prev : next))
     }, 300)
     return () => window.clearInterval(id)
-  }, [])
+  }, [page?.url])
 
   // Sidebar state
   const [comments, setComments] = useState<Comment[]>([])
@@ -526,25 +534,60 @@ function FeedbackWidgetInner({
     capture: captureImage,
     clear: clearImage,
     toBase64: encodeImage,
-  } = useScreenshotCapture()
+  } = useScreenshotCapture(page?.capture)
   const screenshotCapturing = screenshotStatus === 'capturing'
   const sendDisabled = !comment.trim() || sending || screenshotCapturing
+
+  useEffect(() => {
+    page?.selecting(mode === 'selecting')
+    return () => page?.selecting(false)
+  }, [mode, page?.selecting])
+  useEffect(() => { page?.track(comments.map(({ id, selector }) => ({ id, selector }))) }, [comments, page?.track])
+  useEffect(() => {
+    if (!page?.target) return
+    setTarget(page.target); setSelectedPin(null); setSidebarOpen(false); setMode('commenting')
+    void captureImage()
+  }, [page?.target])
+  useEffect(() => {
+    if (!page) return
+    setTarget(null); setComment(''); clearImage(); setMode('idle'); setSelectedPin(null)
+  }, [page?.url])
+
+  const pagePoint = (x: number, y: number) => page
+    ? { fixedX: x / 100 * page.width - page.scrollX, fixedY: y / 100 * page.height - page.scrollY }
+    : fromPagePercentFixed(x, y)
 
   // --- Fetch comments on mount ---
   useEffect(() => {
     let cancelled = false
-    fetchProjectComments(apiBase, projectId).then((nextComments) => {
+    let refreshVersion = 0
+    const request = personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId)
+    request.then((nextComments) => {
       if (!cancelled) setComments(nextComments)
-    })
+    }).catch((error) => { if (!cancelled) setApiError(String(error.message)) })
+    const refresh = async () => {
+      if (!personalComments) return
+      const version = ++refreshVersion
+      try {
+        const fresh = await personalComments.list(currentUrl)
+        if (!cancelled && version === refreshVersion) setComments((items) => items.map((item) => {
+          const updated = fresh.find((candidate) => candidate.id === item.id)
+          return updated ? { ...item, imageUrl: updated.imageUrl } : item
+        }))
+      } catch { /* Preserve drafts and loaded comments while offline. */ }
+    }
+    const timer = personalComments ? window.setInterval(refresh, 240_000) : undefined
+    window.addEventListener('focus', refresh)
     return () => {
       cancelled = true
+      window.clearInterval(timer); window.removeEventListener('focus', refresh)
     }
-  }, [projectId, apiBase])
+  }, [projectId, apiBase, personalComments, currentUrl])
 
   // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
   const [textHover, setTextHover] = useState(false)
   useEffect(() => {
-    if (mode !== 'selecting') return
+    if (mode !== 'selecting' || page) return
     const prev = document.body.style.cursor
     document.body.style.cursor = textHover ? 'text' : 'crosshair'
     return () => {
@@ -554,7 +597,7 @@ function FeedbackWidgetInner({
 
   // --- Highlight hovered element ---
   useEffect(() => {
-    if (mode !== 'selecting') {
+    if (mode !== 'selecting' || page) {
       setHovered(null)
       setTextHover(false)
       return
@@ -591,7 +634,7 @@ function FeedbackWidgetInner({
 
   // --- Handle element click / text selection in selecting mode ---
   useEffect(() => {
-    if (mode !== 'selecting') return
+    if (mode !== 'selecting' || page) return
 
     function onClick(e: MouseEvent) {
       const el = e.target as HTMLElement
@@ -692,6 +735,7 @@ function FeedbackWidgetInner({
 
     sendingRef.current = true
     setSending(true)
+    setApiError('')
 
     const commentText = comment.trim()
     const targetData = { ...target }
@@ -721,7 +765,7 @@ function FeedbackWidgetInner({
         payload.imageMimeType = encoded.mimeType
       }
 
-      const data = await postComment(apiBase, payload)
+      const data = await (personalComments ? personalComments.create(payload) : postComment(apiBase, payload))
       if (!data) return
 
       const newComment: Comment = {
@@ -758,18 +802,20 @@ function FeedbackWidgetInner({
       setMode('selecting')
       setSidebarOpen(false)
     } catch (err) {
+      setApiError(err instanceof Error ? err.message : 'Could not save comment')
       console.warn('[FeedbackWidget] API error:', err)
     } finally {
       sendingRef.current = false
       setSending(false)
     }
-  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing])
+  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments])
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName
-      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT'
+      const element = e.composedPath()[0] as HTMLElement
+      const tag = element.tagName
+      const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || element.isContentEditable
 
       if (e.key === 'Escape') {
         if (showNameModal) {
@@ -826,8 +872,7 @@ function FeedbackWidgetInner({
         setPinsVisible((v) => !v)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
   }, [mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal])
 
   function exitFeedbackMode() {
@@ -860,6 +905,7 @@ function FeedbackWidgetInner({
   }
 
   function openAgentBridge() {
+    if (personalComments) return
     setLauncherOpen(false)
     setAgentGateOpen(false)
     setSidebarOpen(false)
@@ -877,11 +923,10 @@ function FeedbackWidgetInner({
   useEffect(() => {
     if (!launcherOpen) return
     function onPointerDown(e: PointerEvent) {
-      const targetEl = e.target as HTMLElement
+      const targetEl = e.composedPath()[0] as HTMLElement
       if (!targetEl.closest('[data-fw-launcher-root]')) setLauncherOpen(false)
     }
-    document.addEventListener('pointerdown', onPointerDown, true)
-    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+    return listenForWidgetEvent(widgetRef.current!, 'pointerdown', onPointerDown, true)
   }, [launcherOpen])
 
   // External trigger — landing page "Drop a carrot" buttons dispatch this event.
@@ -897,20 +942,29 @@ function FeedbackWidgetInner({
     apiPatchReviewStatus(apiBase, commentId, reviewStatus)
   }
 
-  function deleteComment(commentId: string) {
+  async function deleteComment(commentId: string) {
+    if (personalComments) {
+      try { await personalComments.remove(commentId); setApiError('') }
+      catch (error) { setApiError(String((error as Error).message)); return }
+    }
     setComments((prev) => prev.filter((c) => c.id !== commentId))
-    apiDeleteComment(apiBase, commentId, projectId)
+    if (!personalComments) apiDeleteComment(apiBase, commentId, projectId)
   }
 
-  function saveEdit(commentId: string) {
+  async function saveEdit(commentId: string) {
     if (!editText.trim()) return
     const text = editText.trim()
+    if (personalComments) {
+      try { await personalComments.update(commentId, text); setApiError('') }
+      catch (error) { setApiError(String((error as Error).message)); return }
+    }
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: text } : c))
     setEditingId(null)
   }
 
   // --- Highlight element from comment ---
   function highlightElement(selector: string) {
+    if (page) { page.highlight(selector); return }
     try {
       const el = document.querySelector(selector)
       if (!el) return
@@ -929,7 +983,7 @@ function FeedbackWidgetInner({
     const pad = 16
     const popW = 300
     const popH = 300
-    const { fixedX, fixedY } = fromPagePercentFixed(target.x, target.y)
+    const { fixedX, fixedY } = pagePoint(target.x, target.y)
     let leftFixed = fixedX + pad
     let topFixed = fixedY + pad
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
@@ -947,7 +1001,7 @@ function FeedbackWidgetInner({
   const pinPopoverStyle = (c: Comment): React.CSSProperties => {
     const pad = 16
     const popW = 280
-    const { fixedX, fixedY } = fromPagePercentFixed(c.x, c.y)
+    const { fixedX, fixedY } = pagePoint(c.x, c.y)
     let leftFixed = fixedX + pad
     let topFixed = fixedY - 20
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
@@ -998,6 +1052,7 @@ function FeedbackWidgetInner({
   const filteredCommentsRef = useRef(filteredComments)
   filteredCommentsRef.current = filteredComments
   useEffect(() => {
+    if (page) { setLiveCommentIds(new Set(page.liveIds)); return }
     const recompute = () => {
       const next = new Set<string>()
       for (const c of filteredCommentsRef.current) {
@@ -1018,14 +1073,14 @@ function FeedbackWidgetInner({
     })
     obs.observe(document.body, { childList: true, subtree: true, attributes: true })
     return () => obs.disconnect()
-  }, [filteredComments])
+  }, [filteredComments, page?.liveIds])
   const commentCount = filteredComments.length
 
   // Sync on scroll when anything position:fixed is visible — popovers, the
   // commenting flow, or persisted pins. Gating keeps idle pages cheap.
   needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target || (pinsVisible && filteredComments.length > 0)
 
-  const pathDisplay = typeof window === 'undefined'
+  const pathDisplay = page ? new URL(page.url).pathname.slice(0, 28) : typeof window === 'undefined'
     ? '/'
     : window.location.pathname.slice(0, 28) || '/'
   const avatarInitial = authorName ? (getInitials(authorName) ?? authorName[0]?.toUpperCase() ?? 'U') : 'U'
@@ -1033,7 +1088,8 @@ function FeedbackWidgetInner({
   const launcherActive = launcherOpen || mode !== 'idle'
 
   return (
-    <div {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-theme': theme }}>
+    <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-theme': theme }}>
+      {apiError && <div role="alert" style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 2147483647, padding: 16, background: 'var(--fw-surface)', color: 'var(--fw-foreground)', borderRadius: 8 }}>{apiError}<button onClick={() => setApiError('')} aria-label="Dismiss error">×</button></div>}
       {/* Overlay — purely visual, clicks pass through */}
       {mode === 'selecting' && (
         <div
@@ -1333,7 +1389,7 @@ function FeedbackWidgetInner({
 
       {/* New comment pin at clicked position */}
       {mode === 'commenting' && target && (() => {
-        const { fixedX, fixedY } = fromPagePercentFixed(target.x, target.y)
+        const { fixedX, fixedY } = pagePoint(target.x, target.y)
         return (
           <div
             {...{ [WIDGET_ATTR]: '' }}
@@ -1355,7 +1411,8 @@ function FeedbackWidgetInner({
       {/* Persisted comment pins */}
       {pinsVisible && filteredComments.map((c, i) => {
         if (!liveCommentIds.has(c.id)) return null
-        const pinPos = getElementFixedPos(c.selector, c.x, c.y)
+        const point = pagePoint(c.x, c.y)
+        const pinPos = page ? { left: point.fixedX, top: point.fixedY } : getElementFixedPos(c.selector, c.x, c.y)
         if (!pinPos) return null
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
@@ -1507,6 +1564,7 @@ function FeedbackWidgetInner({
                       </div>
                       <PinActionCluster
                         key={c.id}
+                        reviewEnabled={!personalComments}
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
                         onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
@@ -1617,10 +1675,10 @@ function FeedbackWidgetInner({
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: 'var(--fw-foreground)' }}>
-              Feedback
+              {personalComments ? 'My extension comments' : 'Feedback'}
             </div>
             <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: 'var(--fw-foreground-faint)' }}>
-              {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'} · {readyForAgentCount} ready
+              {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}
             </div>
           </div>
           <button
@@ -1651,7 +1709,7 @@ function FeedbackWidgetInner({
         </div>
 
         {/* Agent CTA — visible path into agent flow, not only Shift+A. */}
-        <div
+        {!personalComments && <div
           style={{
             padding: '14px 16px 12px',
             borderBottom: '1px solid var(--fw-contrast-04)',
@@ -1723,10 +1781,10 @@ function FeedbackWidgetInner({
               Shift + A
             </span>
           </button>
-        </div>
+        </div>}
 
         {/* Filter row */}
-        <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
+        {!personalComments && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
           <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontSize: 13, color: 'var(--fw-foreground)', fontWeight: 600 }}>{sidebarTitle}</span>
             <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{filteredComments.length}</span>
@@ -1760,7 +1818,7 @@ function FeedbackWidgetInner({
               )
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Comment list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
@@ -1821,7 +1879,7 @@ function FeedbackWidgetInner({
                     </div>
                     {/* Actions inline — same row as the author */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      {isPending && (
+                      {!personalComments && isPending && (
                         <button
                           onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
                           title="Approve"
@@ -1953,7 +2011,7 @@ function FeedbackWidgetInner({
                         animation: 'fw-tooltip-in 0.1s ease both',
                       }}
                     >
-                      <button
+                      {!personalComments && <button
                         onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
@@ -1961,7 +2019,7 @@ function FeedbackWidgetInner({
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         {c.reviewStatus === 'accepted' ? 'Reopen' : 'Approve'}
-                      </button>
+                      </button>}
                       <button
                         onClick={() => { setEditingId(c.id); setEditText(c.body); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
@@ -2057,7 +2115,7 @@ function FeedbackWidgetInner({
                 setSidebarOpen(true)
               }}
             />
-            <LauncherAction
+            {!personalComments && <LauncherAction
               icon={<Bot size={17} />}
               title="Open agent"
               subtitle="Send context to agent"
@@ -2066,7 +2124,7 @@ function FeedbackWidgetInner({
                 setLauncherOpen(false)
                 openAgentBridge()
               }}
-            />
+            />}
           </div>
 
           {/* Primary launcher — click toggles menu; active state uses Paper orange border. */}
@@ -2076,9 +2134,14 @@ function FeedbackWidgetInner({
             aria-haspopup="menu"
             aria-controls="crrt-launcher-menu"
             aria-label={launcherOpen ? 'Close CRRT menu' : 'Open CRRT menu'}
-            onClick={(e) => {
+            onClick={async () => {
               if (mode !== 'idle') return
-              setLauncherOpen((value) => !value)
+              try {
+                if (personalComments?.beforeOpen && !await personalComments.beforeOpen()) return
+                setLauncherOpen((value) => !value)
+              } catch (error) {
+                setApiError(error instanceof Error ? error.message : 'Could not open CRRT')
+              }
             }}
             style={{
               position: 'relative',
