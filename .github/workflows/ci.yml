@@ -75,7 +75,7 @@ jobs:
       # own latest release hasn't yet dropped; blocking merges on that churn
       # would be dishonest). Everything else in this repo is bun. Dev-tree
       # hygiene is tracked via Dependabot (.github/dependabot.yml).
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
       # Pin npm because the version bundled with Node 22 currently crashes in
