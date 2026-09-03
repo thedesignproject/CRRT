@@ -34,7 +34,7 @@ export function methodNotAllowed(req: VercelRequest, res: VercelResponse, method
 }
 
 export function jsonError(req: VercelRequest, res: VercelResponse, status: number, error: string) {
-  setCors(req, res, ['GET', 'POST', 'PATCH', 'OPTIONS'])
+  setCors(req, res, ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
   return res.status(status).json({ error })
 }
 

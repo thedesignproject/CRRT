@@ -1,0 +1,4 @@
+-- Create `extension-feedback-images` as a private bucket in the Supabase
+-- dashboard. All access goes through authenticated CRRT API endpoints using
+-- the service-role client; clients receive short-lived signed read URLs.
+-- Do not add public or authenticated storage.objects policies for this bucket.
