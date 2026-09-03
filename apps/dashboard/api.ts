@@ -54,6 +54,28 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
   created: boolean
 }
 
+export interface ExtensionCommentRecord {
+  id: string
+  pageUrl: string
+  pageHostname: string
+  x: number
+  y: number
+  selector: string
+  body: string
+  screenshotUrl: string | null
+  createdAt: string
+  updatedAt: string
+  targetType?: CommentTargetType
+  anchor?: TextRangeAnchorRecord | null
+}
+
+export interface ExtensionCommentsPage {
+  items: ExtensionCommentRecord[]
+  page: number
+  limit: number
+  total: number
+}
+
 export interface ProjectSessionResponse {
   projectKey: string
   projectName: string
@@ -577,6 +599,27 @@ export function updateImplementationStatus(apiBase: string, accessToken: string,
     },
     body: JSON.stringify({ implementationStatus }),
   })
+}
+
+export function listExtensionComments(apiBase: string, accessToken: string, page = 1) {
+  return requestJson<ExtensionCommentsPage>(`${apiBase}/v1/extension/comments?page=${page}&limit=20`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function updateExtensionComment(apiBase: string, accessToken: string, commentId: string, body: string) {
+  return requestJson<ExtensionCommentRecord>(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ body }),
+  })
+}
+
+export async function deleteExtensionComment(apiBase: string, accessToken: string, commentId: string) {
+  const response = await fetch(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'DELETE', headers: { ...authHeaders(accessToken) },
+  })
+  if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
 }
 
 export function createCommentGithubIssue(apiBase: string, accessToken: string, commentId: string) {

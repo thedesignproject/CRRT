@@ -28,6 +28,8 @@ interface HeaderProps {
   onOpenCmd: () => void
   onOpenSettings: () => void
   settingsActive: boolean
+  onOpenExtensionComments: () => void
+  extensionCommentsActive: boolean
   apiBase: string
   accessToken: string
   onProjectsChanged: () => void
@@ -60,6 +62,8 @@ export function Header({
   onOpenCmd,
   onOpenSettings,
   settingsActive,
+  onOpenExtensionComments,
+  extensionCommentsActive,
   apiBase,
   accessToken,
   onProjectsChanged,
@@ -98,6 +102,7 @@ export function Header({
       <div className="w-px h-5 bg-border" />
 
       <nav className="flex items-center gap-1 flex-1 overflow-auto">
+        <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>My comments</button>
         {projectsLoading && projects.length === 0 ? (
           <span className="text-xs text-muted-foreground px-2">Loading projects…</span>
         ) : projectsError ? (
@@ -106,14 +111,15 @@ export function Header({
           <span className="text-xs text-muted-foreground px-2">No projects yet</span>
         ) : (
           projects.map((p) => {
-            const isActive = selectedProject === p.publicKey
+            const isActive = !extensionCommentsActive && selectedProject === p.publicKey
             const count = isActive ? commentCount : null
             return (
               <button
                 key={p.publicKey}
+                aria-pressed={isActive}
                 onClick={() => { setSelectedProject(p.publicKey); setStatusFilter('all'); setSelectedCommentId('') }}
                 className={cn(
-                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap',
+                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap',
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -165,7 +171,8 @@ export function Header({
           type="button"
           onClick={onOpenCmd}
           aria-label="Search feedback"
-          className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground text-xs w-9 sm:w-52 hover:border-muted-foreground/30 hover:bg-accent transition-colors cursor-pointer"
+          disabled={extensionCommentsActive}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground text-xs w-9 sm:w-52 hover:border-muted-foreground/30 hover:bg-accent transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         >
           <SearchIcon />
           <span className="hidden sm:block flex-1 text-left">Search Feedback…</span>
@@ -194,7 +201,7 @@ export function Header({
             <ShieldIcon size={15} />
           </button>
         )}
-        {selectedProject && (
+        {!extensionCommentsActive && selectedProject && (
           <button
             onClick={onOpenSettings}
             title="Project settings"
