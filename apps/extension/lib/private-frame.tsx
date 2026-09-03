@@ -17,7 +17,7 @@ const actions = {
 
 // Clip the transparent frame to visible widget surfaces so the rest of the site stays interactive.
 // Include positioned descendants (e.g. the launcher menu), but never expose their contents.
-export function frameBounds() {
+export function frameBounds(padding = 8) {
   return Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt] *')).flatMap((element) => {
     const style = getComputedStyle(element)
     if (!['fixed', 'absolute'].includes(style.position)) return []
@@ -27,8 +27,8 @@ export function frameBounds() {
     }
     const rect = element.getBoundingClientRect()
     if (style.pointerEvents === 'none' && rect.width >= innerWidth && rect.height >= innerHeight) return []
-    const left = Math.max(0, rect.left - 8), top = Math.max(0, rect.top - 8)
-    const right = Math.min(innerWidth, rect.right + 8), bottom = Math.min(innerHeight, rect.bottom + 8)
+    const left = Math.max(0, rect.left - padding), top = Math.max(0, rect.top - padding)
+    const right = Math.min(innerWidth, rect.right + padding), bottom = Math.min(innerHeight, rect.bottom + padding)
     return rect.width && rect.height && right > left && bottom > top ? [[left, top, right - left, bottom - top]] : []
   })
 }
@@ -49,14 +49,21 @@ export function usePrivateFrame() {
       else if (message.kind === 'outside') document.body.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
     }
     const stop = receiveFrameMessages((message, from) => { if (from === 0) apply(message) })
+    const pointer = (event: MouseEvent) => {
+      if (event.target === document.documentElement || event.target === document.body) {
+        tellHost({ kind: 'pointer', x: event.clientX, y: event.clientY })
+      }
+    }
+    document.addEventListener('mousemove', pointer)
     void sendFrameMessage<any>(0, { kind: 'ready' }).then((message) => {
       if (alive) { apply(message); setActivate(message.activate) }
     }).catch(() => { /* A detached or restricted page has no widget surface. */ })
     const timer = window.setInterval(() => {
-      const next = JSON.stringify(frameBounds())
-      if (next !== layout) { layout = next; tellHost({ kind: 'layout', rects: JSON.parse(next) }) }
+      // Let shadows fade fully, but keep the larger transparent area click-through.
+      const next = JSON.stringify({ rects: frameBounds(128), hitRects: frameBounds() })
+      if (next !== layout) { layout = next; tellHost({ kind: 'layout', ...JSON.parse(next) }) }
     }, 100)
-    return () => { alive = false; stop(); window.clearInterval(timer) }
+    return () => { alive = false; stop(); window.clearInterval(timer); document.removeEventListener('mousemove', pointer) }
   }, [])
   return { page, activate }
 }

@@ -1,4 +1,4 @@
-import { act, cleanup, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const channel = vi.hoisted(() => ({ receive: vi.fn(), send: vi.fn(), stop: vi.fn(), widget: vi.fn() }))
 vi.mock('./frame-channel', () => ({ receiveFrameMessages: channel.receive, sendFrameMessage: channel.send }))
@@ -42,7 +42,11 @@ it('keeps private UI in the frame while exchanging only page interactions throug
   expect(await props().page.capture()).toBeNull()
   channel.send.mockRejectedValueOnce(new Error('detached')); props().page.selecting(false)
   await act(async () => { vi.advanceTimersByTime(200) })
-  expect(channel.send).toHaveBeenCalledWith(0, { kind: 'layout', rects: [] })
+  expect(channel.send).toHaveBeenCalledWith(0, { kind: 'layout', rects: [], hitRects: [] })
+  fireEvent.mouseMove(document.body, { clientX: 200, clientY: 300 })
+  expect(channel.send).toHaveBeenLastCalledWith(0, { kind: 'pointer', x: 200, y: 300 })
+  channel.send.mockClear(); fireEvent.mouseMove(view.container.firstChild!)
+  expect(channel.send).not.toHaveBeenCalled()
   view.unmount(); expect(channel.stop).toHaveBeenCalled()
 })
 it('ignores readiness after unmount and tolerates a restricted or detached host', async () => {
@@ -70,5 +74,6 @@ it('publishes only visible interactive rectangles, including launcher popovers a
   element('position:fixed', { width: 0 }); element('position:fixed', { height: 0 })
   element('position:fixed', { left: 99999 }); element('position:fixed', { top: 99999 })
   expect(frameBounds()).toEqual([[2, 12, 116, 66], [0, 0, 28, 28]])
+  expect(frameBounds(128)).toEqual([[0, 0, 238, 198], [0, 0, 148, 148]])
   root.remove()
 })

@@ -59,6 +59,18 @@ it('selects and highlights host elements without capturing typing or clicking th
   await receive({ kind: 'highlight', selector: '#missing' })
   await receive({ kind: 'highlight', selector: '[' })
 })
+it('renders the full shadow while returning transparent margins to the host page', async () => {
+  await receive({ kind: 'ready' })
+  await receive({ kind: 'layout', rects: [[0, 0, 300, 300]], hitRects: [[100, 100, 44, 44]] })
+  expect(frame.style.clipPath).toBe("path('M0 0h300v300h-300Z')")
+  for (const [x, y] of [[99, 120], [120, 99], [145, 120], [120, 145]]) {
+    await receive({ kind: 'pointer', x, y }); expect(frame.style.pointerEvents).toBe('none')
+  }
+  fireEvent.mouseMove(element, { clientX: 120, clientY: 120 })
+  expect(frame.style.pointerEvents).toBe('auto')
+  await receive({ kind: 'layout', rects: [] })
+  fireEvent.mouseMove(element); expect(frame.style.pointerEvents).toBe('none')
+})
 it('uses shared text anchors and focused screenshot capture across the private channel', async () => {
   await receive({ kind: 'ready' }); await receive({ kind: 'selecting', value: true })
   const range = document.createRange(); range.selectNodeContents(element)

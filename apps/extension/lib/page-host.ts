@@ -7,9 +7,14 @@ import { receiveFrameMessages, sendFrameMessage } from './frame-channel'
 export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
   let frameId = 0, selecting = false, lastState = '', focus: ScreenshotFocusRect | null = null
   let targets: { id: string; selector: string }[] = []
+  let hitRects: number[][] = []
   let highlighted: HTMLElement | null = null, oldOutline = '', oldOffset = ''
   const originalCursor = document.body.style.cursor
   const send = (payload: unknown) => { if (frameId) void sendFrameMessage(frameId, payload).catch(() => {}) }
+  function pointer(x: number, y: number) {
+    frame.style.pointerEvents = hitRects.some(([left, top, width, height]) =>
+      x >= left && y >= top && x <= left + width && y <= top + height) ? 'auto' : 'none'
+  }
   function highlight(element: HTMLElement | null) {
     if (highlighted) { highlighted.style.outline = oldOutline; highlighted.style.outlineOffset = oldOffset }
     highlighted = element
@@ -36,6 +41,9 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
         if (![x, y, w, h].every(Number.isFinite)) throw new Error('Invalid frame bounds')
         return `M${x} ${y}h${w}v${h}h${-w}Z`
       }).join(' ')}')` : 'inset(100%)'
+      hitRects = message.hitRects ?? message.rects
+    } else if (message.kind === 'pointer') {
+      pointer(message.x, message.y)
     } else if (message.kind === 'selecting') {
       selecting = message.value; document.body.style.cursor = selecting ? 'crosshair' : originalCursor; highlight(null)
     } else if (message.kind === 'track') { targets = message.targets; update() }
@@ -50,6 +58,7 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
     }
   })
   function move(event: MouseEvent) {
+    pointer(event.clientX, event.clientY)
     if (!selecting) return
     const element = event.target as HTMLElement
     highlight(element.closest('[data-crrt-extension]') ? null : element)
