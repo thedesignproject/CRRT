@@ -44,7 +44,7 @@ export function App() {
   // SSR-safe: location is read only after mount.
   const initialPath = typeof window === 'undefined' ? '/' : window.location.pathname
   const isDocs = initialPath.startsWith('/docs')
-  const isLocalAudit = initialPath.startsWith('/audit/local')
+  const isAudit = initialPath.startsWith('/audit/')
 
   useScrollProgress()
 
@@ -57,7 +57,7 @@ export function App() {
     )
   }
 
-  if (isLocalAudit) {
+  if (isAudit) {
     return <ProductAuditWorkspace />
   }
 
