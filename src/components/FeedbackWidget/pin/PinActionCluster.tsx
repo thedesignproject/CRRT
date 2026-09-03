@@ -7,13 +7,14 @@ export interface PinActionClusterProps {
   onEdit: () => void
   onDelete: () => void
   onViewList?: () => void
+  reviewEnabled?: boolean
 }
 
-export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList }: PinActionClusterProps) {
+export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, reviewEnabled = true }: PinActionClusterProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, position: 'relative', flexShrink: 0 }}>
-      {!isResolved && (
+      {reviewEnabled && !isResolved && (
         <button
           onClick={(e) => { e.stopPropagation(); onResolve() }}
           aria-label="Approve"
@@ -67,7 +68,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
               animation: 'fw-tooltip-in 0.1s ease both',
             }}
           >
-            <button
+            {reviewEnabled && <button
               onClick={() => { onToggleResolve(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
@@ -75,7 +76,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
               {isResolved ? 'Reopen' : 'Approve'}
-            </button>
+            </button>}
             <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}

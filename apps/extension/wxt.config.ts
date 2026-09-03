@@ -18,6 +18,7 @@ export default defineConfig({
     version: '0.1.0',
     permissions: ['activeTab', 'scripting', 'storage'],
     host_permissions: ['http://*/*', 'https://*/*'],
+    web_accessible_resources: [{ resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] }],
     icons,
     action: { default_title: 'CRRT', default_icon: icons },
   },
