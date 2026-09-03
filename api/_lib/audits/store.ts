@@ -3,11 +3,13 @@ import {
   auditCandidateSchema,
   auditEvidenceSchema,
   auditFindingSchema,
+  auditObservationSchema,
   auditSourceCoverageSchema,
   type AuditBudgets,
   type AuditCandidate,
   type AuditEvidence,
   type AuditFinding,
+  type AuditObservation,
   type AuditMode,
   type AuditRunResponse,
   type AuditSourceCoverage,
@@ -61,12 +63,16 @@ export async function createAuditRun(input: CreateRunInput) {
     p_source_snapshot: { url: input.normalizedUrl, capturedAt: new Date().toISOString() },
     p_expires_at: input.expiresAt,
   })
-  return requireData({ data, error }, 'audit_create_failed') as { status: string; auditId?: string; scope?: string; retryAt?: string }
+  return requireData({ data, error }, 'audit_create_failed') as {
+    status: string; auditId?: string; scope?: string; retryAt?: string; runStatus?: string; expiresAt?: string | null
+  }
 }
 
 export async function setAuditWorkflowRunId(auditId: string, workflowRunId: string) {
-  const { error } = await getServiceSupabase().from('audit_runs').update({ workflow_run_id: workflowRunId, updated_at: new Date().toISOString() }).eq('id', auditId)
-  requireSuccess({ error }, 'audit_workflow_link_failed')
+  const { data, error } = await getServiceSupabase().from('audit_runs')
+    .update({ workflow_run_id: workflowRunId, updated_at: new Date().toISOString() })
+    .eq('id', auditId).select('id').maybeSingle()
+  requireData({ data, error }, 'audit_workflow_link_failed')
 }
 
 export async function getAuditAccessRow(auditId: string) {
@@ -171,21 +177,39 @@ function iso(value: unknown) {
   return typeof value === 'string' ? value : null
 }
 
+function projectObservations(candidates: AuditCandidate[], findings: AuditFinding[], evidence: AuditEvidence[]): AuditObservation[] {
+  const admittedIds = new Set(findings.map((finding) => finding.id))
+  const evidenceById = new Map(evidence.map((item) => [item.id, item]))
+  return candidates
+    .filter((candidate) => !admittedIds.has(candidate.id))
+    .map((candidate) => ({ candidate, evidence: candidate.evidenceIds.map((id) => evidenceById.get(id)).filter((item): item is AuditEvidence => Boolean(item)) }))
+    .filter(({ evidence: support }) => support.length > 0)
+    .slice(0, 5)
+    .map(({ candidate, evidence: support }) => auditObservationSchema.parse({
+      ...candidate,
+      status: 'needs-more-evidence',
+      reason: 'The candidate did not clear verification and deterministic admission.',
+      evidence: support,
+    }))
+}
+
 export async function getAuditResponse(auditId: string): Promise<AuditRunResponse | null> {
   const client = getServiceSupabase()
-  const [runResult, evidenceResult, candidateResult, findingResult, eventResult] = await Promise.all([
-    client.from('audit_runs').select('*').eq('id', auditId).maybeSingle(),
+  const runResult = await client.from('audit_runs').select('*').eq('id', auditId).maybeSingle()
+  requireSuccess(runResult, 'audit_read_failed')
+  if (!runResult.data) return null
+  const [evidenceResult, candidateResult, findingResult, eventResult] = await Promise.all([
     client.from('audit_evidence').select('*').eq('audit_id', auditId).order('created_at'),
-    client.from('audit_candidates').select('payload').eq('audit_id', auditId),
+    client.from('audit_candidates').select('payload').eq('audit_id', auditId).order('created_at'),
     client.from('audit_findings').select('payload').eq('audit_id', auditId).order('rank'),
     client.from('audit_events').select('stage,event_type').eq('audit_id', auditId).eq('event_type', 'audit.stage.completed'),
   ])
-  requireSuccess(runResult, 'audit_read_failed')
-  if (!runResult.data) return null
   for (const result of [evidenceResult, candidateResult, findingResult, eventResult]) requireSuccess(result, 'audit_projection_failed')
   const row = runResult.data as Row
   const evidence = (evidenceResult.data || []).map((item: Row) => auditEvidenceSchema.parse({ id: item.evidence_key, source: item.source, signalKey: item.signal_key, location: item.route, observation: item.observation, confidence: item.confidence, direct: item.direct, kind: item.kind, route: item.route, element: item.element, provenance: item.provenance, artifact: item.artifact, capture: item.capture }))
+  const candidates = (candidateResult.data || []).map((item: Row) => auditCandidateSchema.parse(item.payload))
   const findings = (findingResult.data || []).map((item: Row) => auditFindingSchema.parse(item.payload))
+  const observations = projectObservations(candidates, findings, evidence)
   const terminal = ['completed', 'partial'].includes(row.status)
   return {
     auditId: row.id,
@@ -203,7 +227,7 @@ export async function getAuditResponse(auditId: string): Promise<AuditRunRespons
       ...(row.error_message ? { error: row.error_message } : {}),
     },
     coverage: auditSourceCoverageSchema.parse(row.coverage),
-    report: terminal ? { auditId: row.id, inputUrl: row.normalized_url, mode: row.mode, evaluatedSources: row.coverage.evaluatedSources, unavailableSources: row.unavailable_sources, findings, evidence, ...(row.completed_at ? { completedAt: row.completed_at } : {}) } : null,
+    report: terminal ? { auditId: row.id, inputUrl: row.normalized_url, mode: row.mode, evaluatedSources: row.coverage.evaluatedSources, unavailableSources: row.unavailable_sources, findings, observations, evidence, ...(row.completed_at ? { completedAt: row.completed_at } : {}) } : null,
     error: row.error_code ? { code: row.error_code, message: row.error_message || 'Audit failed.', retryable: false } : null,
     createdAt: row.created_at,
     startedAt: iso(row.started_at),

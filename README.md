@@ -126,6 +126,24 @@ POST /api/v1/agent/shares/:slug/presence
 POST /api/v1/agent/shares/:slug/ops
 ```
 
+### Product Audit execution API
+
+Product Audit runs a durable Explorer → Critic → Verifier workflow for a public URL. Explorer runs in an isolated Vercel Sandbox, model output is schema-validated through the existing OpenAI-compatible configuration, and deterministic admission can return zero to five Open findings.
+
+```text
+GET  /api/v1/audits/capabilities
+POST /api/v1/audits
+GET  /api/v1/audits/:auditId
+GET  /api/v1/audits/:auditId/events?after=0&limit=50
+POST /api/v1/audits/:auditId/cancel
+```
+
+Creation requires `Idempotency-Key`. Project runs use a Supabase bearer token and `projectKey`. Anonymous runs use the returned signed `X-Audit-Session` value for subsequent creation and the per-audit `X-Audit-Token` for reads or cancellation; tokens are never placed in URLs. The server stores hashes only.
+
+Set `AUDIT_FEATURE_ENABLED=true`, `AUDIT_ANONYMOUS_ENABLED=true`, and a random `AUDIT_TOKEN_SECRET` of at least 32 characters. The exact demo host `demo.crrt.ai` uses deterministic evidence without DNS or AI; every other URL must resolve publicly and uses the Vercel Workflow/Sandbox environment plus `AI_API_BASE_URL`, `AI_API_KEY`, and `AI_MODEL`. Set `AI_CRITIC_MODEL` to use a separate, faster Critic model; it falls back to `AI_MODEL` when omitted. Gateway 429 responses release the stage lease, back off durably, and finish as a partial zero-finding report if capacity remains unavailable. Never commit real secrets.
+
+`bun run local:dev` runs live audit stages inline because its custom Bun API server does not expose Workflow SDK queue handlers. URL exploration still runs in an isolated `node:24-alpine` Docker container; pull that image before the first live local audit. The server binds only to loopback and lets unexpired anonymous reports reopen across local browser profiles without a capability token. Production always requires capability headers and uses Vercel Workflow and Vercel Sandbox.
+
 ## Database schema
 
 Schema is managed with [Drizzle ORM](https://orm.drizzle.team). The source of truth is `db/schema.ts`, which defines:
@@ -165,6 +183,16 @@ Required server variables:
 - `SUPABASE_KEY`
 - `REVIEWER_API_TOKEN`
 - `SHARE_TOKEN_SECRET`
+
+Product Audit server variables (when the feature is enabled):
+
+- `AUDIT_FEATURE_ENABLED` and `AUDIT_ANONYMOUS_ENABLED` - server-controlled availability
+- `AUDIT_TOKEN_SECRET` - signs anonymous browser sessions and capabilities
+- `AUDIT_LOCAL_EXECUTION` - local-only inline workflow adapter; ignored in production and set automatically by `local:dev`
+- `AI_API_BASE_URL`, `AI_API_KEY`, and `AI_MODEL` - OpenAI-compatible gateway configuration and Verifier/default model
+- `AI_CRITIC_MODEL` - optional Critic model override, for example `openai/gpt-oss-20b`; falls back to `AI_MODEL`
+- `AUDIT_MAX_ROUTES`, `AUDIT_MAX_ACTIONS`, `AUDIT_WALL_CLOCK_MS`, `AUDIT_MODEL_TOKENS`, and `AUDIT_MAX_ARTIFACTS` - optional bounded execution budgets
+- `AUDIT_MODEL_TIMEOUT_MS` and `AUDIT_MODEL_ATTEMPTS` - optional bounded provider retry controls
 
 Optional server variables:
 
@@ -284,7 +312,7 @@ CRRT is OSS-first. [crrt.ai](https://crrt.ai) is the easiest path — a managed 
 
 - **Postgres** for the data layer. Any provider works; we recommend [Supabase](https://supabase.com) so you get auth + storage out of the box — that's what the hosted instance runs on.
 - **A runtime** that can serve the Vercel-style serverless functions in `api/` plus the static builds in `apps/landing/` and `apps/dashboard/`. We deploy to Vercel; Fly, Render, Cloudflare Workers, or a Node container behind a reverse proxy all work as long as your function runtime is compatible with `@vercel/node`.
-- **Bun ≥ 1.1** for the build (`bun install`, `bun run build`).
+- **Bun ≥ 1.4** for the build (`bun install`, `bun run build`).
 
 ### 1. Clone and install
 

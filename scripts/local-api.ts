@@ -14,6 +14,12 @@ type Route = {
 }
 
 const root = new URL('../', import.meta.url)
+// This custom server does not expose Workflow SDK queue handlers, so live
+// audits run inline locally while production keeps Vercel Workflow durability.
+process.env.AUDIT_LOCAL_EXECUTION = 'true'
+// The server binds only to loopback, so anonymous local reports can be reopened
+// across browser profiles without weakening deployed capability-token checks.
+process.env.AUDIT_LOCAL_ACCESS_BYPASS = 'true'
 const routeFiles = Array.from(new Bun.Glob('api/**/*.ts').scanSync({ cwd: root.pathname }))
   .filter((file) => !file.includes('/_lib/') && !file.endsWith('.test.ts'))
 
