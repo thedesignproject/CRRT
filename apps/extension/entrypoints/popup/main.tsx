@@ -50,10 +50,10 @@ export function Popup() {
       <button className="primary" disabled={busy} onClick={activate}>Start commenting</button>
       <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}?view=extension-comments`} target="_blank" rel="noopener noreferrer">Dashboard</a><button className="link" disabled={busy} onClick={signOut}>Sign out</button></div>
     </> : <form onSubmit={signIn}>
-      <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-      <label>Password<input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+      <label>Email<input name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+      <label>Password<input name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
       <button className="primary" disabled={busy}>Sign in</button>
-      <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}signup`} target="_blank">Create account</a><a href={`${import.meta.env.WXT_DASHBOARD_URL}forgot-password`} target="_blank">Reset password</a></div>
+      <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}signup`} target="_blank" rel="noopener noreferrer">Create account</a><a href={`${import.meta.env.WXT_DASHBOARD_URL}forgot-password`} target="_blank" rel="noopener noreferrer">Reset password</a></div>
     </form>}
     {error && <p className="error" role="alert">{error}</p>}
   </main>
