@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
+import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { createCommentGithubIssue, getProjectGitHubStatus } from '../api'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { timeAgo, truncateUrl } from '../lib/format'
+import { asset } from '../lib/routes'
 import { DISPLAY_STATUS_LABELS, type Comment } from '../lib/types'
 import {
   BotIcon,
@@ -32,7 +33,12 @@ interface CommentDetailProps {
   handleToggleDone: (id: string) => void
   apiBase: string
   accessToken: string
+  personal?: false
+  bodyEditor?: ReactNode
+  personalActions?: ReactNode
 }
+
+type PersonalDetailProps = Omit<CommentDetailProps, 'personal' | 'toggleReview' | 'handleToggleDone'> & { personal: true; toggleReview?: never; handleToggleDone?: never }
 
 export function CommentDetail({
   selectedComment,
@@ -48,7 +54,10 @@ export function CommentDetail({
   handleToggleDone,
   apiBase,
   accessToken,
-}: CommentDetailProps) {
+  personal = false,
+  bodyEditor,
+  personalActions,
+}: CommentDetailProps | PersonalDetailProps) {
   const [issueBusy, setIssueBusy] = useState(false)
   const [issueError, setIssueError] = useState<string | null>(null)
   const [githubConnected, setGithubConnected] = useState(false)
@@ -71,7 +80,7 @@ export function CommentDetail({
     const request = connectionRequest.current + 1
     connectionRequest.current = request
     setGithubConnected(false)
-    if (!selectedProject) return
+    if (!selectedProject || personal) return
     void getProjectGitHubStatus(apiBase, accessToken, selectedProject).then(
       ({ githubConnectionStatus }) => {
         if (connectionRequest.current === request) {
@@ -82,7 +91,7 @@ export function CommentDetail({
         if (connectionRequest.current === request) setGithubConnected(false)
       },
     )
-  }, [accessToken, apiBase, selectedProject])
+  }, [accessToken, apiBase, selectedProject, personal])
 
   const handleGithubIssue = async (comment: Comment) => {
     if (githubIssue) {
@@ -117,20 +126,20 @@ export function CommentDetail({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-background">
+    <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
       {selectedComment ? (
         <>
           <div className="flex items-center justify-between px-6 h-[44px] shrink-0 border-b border-border bg-card">
-            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
               <span className="font-mono font-medium">#{selectedComment.id}</span>
               {selectedComment.pageUrl ? (
                 <>
                   <span>·</span>
-                  <span className="font-mono">{truncateUrl(selectedComment.pageUrl)}</span>
+                  <span className="font-mono truncate" title={selectedComment.pageUrl}>{truncateUrl(selectedComment.pageUrl)}</span>
                 </>
               ) : null}
-              <span>·</span>
-              {(() => {
+              {!personal && <span>·</span>}
+              {!personal && (() => {
                 const ds = getDisplayStatus(selectedComment)
                 return (
                   <span className={cn(
@@ -148,7 +157,7 @@ export function CommentDetail({
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            <div key={selectedComment.id} className="max-w-2xl mx-auto px-8 py-8 detail-enter">
+            <div key={selectedComment.id} className="max-w-2xl mx-auto px-4 sm:px-8 py-8 detail-enter">
               {selectedComment.screenshotUrl ? (
                 <div className="rounded-xl border border-border overflow-hidden mb-6 bg-muted/40 flex items-center justify-center">
                   <a
@@ -198,14 +207,15 @@ export function CommentDetail({
                 >
                   {selectedComment.authorInitial}
                 </div>
-                <div>
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 mb-1">
                     <span className="text-sm font-semibold text-foreground">{selectedComment.author}</span>
                     <span className="text-xs text-muted-foreground">{timeAgo(selectedComment.createdAt)}</span>
                   </div>
-                  <p className="text-[15px] leading-relaxed text-foreground">
+                  {bodyEditor ?? <p className="text-[15px] leading-relaxed text-foreground whitespace-pre-wrap break-words">
                     {selectedComment.body}
-                  </p>
+                  </p>}
+                  {personal && <p className="mt-2 text-xs text-muted-foreground">Pin {selectedComment.x}%, {selectedComment.y}%</p>}
                   {selectedComment.targetType === 'text_range' && selectedComment.anchor ? (
                     <div className="mt-3">
                       <p className="text-[13px] leading-relaxed border-l-2 border-primary bg-muted/60 px-3 py-2 rounded-md">
@@ -228,11 +238,12 @@ export function CommentDetail({
           </div>
 
           <div className="shrink-0 border-t border-border bg-card px-6 py-3">
-            <div className="flex items-center gap-2 max-w-2xl mx-auto">
-              <ActionBtn
+            <div className="flex flex-wrap items-center gap-2 max-w-2xl mx-auto">
+              {personalActions}
+              {!personal && <><ActionBtn
                 active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
                 variant="accept"
-                onClick={() => toggleReview(selectedComment, 'accepted')}
+                onClick={() => toggleReview!(selectedComment, 'accepted')}
                 shortcut="A"
               >
                 <BotIcon size={14} /> Ready for Agent
@@ -240,7 +251,7 @@ export function CommentDetail({
               <ActionBtn
                 active={selectedComment.implementationStatus === 'done'}
                 variant="done"
-                onClick={() => handleToggleDone(selectedComment.id)}
+                onClick={() => handleToggleDone!(selectedComment.id)}
                 shortcut="M"
               >
                 <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Done' : 'Mark Done'}
@@ -248,13 +259,14 @@ export function CommentDetail({
               <ActionBtn
                 active={selectedComment.reviewStatus === 'rejected'}
                 variant="reject"
-                onClick={() => toggleReview(selectedComment, 'rejected')}
+                onClick={() => toggleReview!(selectedComment, 'rejected')}
                 shortcut="D"
               >
                 <XIcon size={14} /> Reject
               </ActionBtn>
 
               <div className="w-px h-5 bg-border mx-1" />
+              </>}
 
               {selectedComment.pageUrl && (
                 <ActionBtn variant="neutral" onClick={() => window.open(selectedComment.pageUrl!, '_blank')}>
@@ -262,7 +274,7 @@ export function CommentDetail({
                 </ActionBtn>
               )}
 
-              <span
+              {!personal && <span
                 className="relative inline-flex group"
                 tabIndex={!githubIssue && !githubConnected ? 0 : undefined}
                 aria-label={!githubIssue && !githubConnected
@@ -300,7 +312,7 @@ export function CommentDetail({
                     Connect a GitHub repository from Project Settings
                   </span>
                 )}
-              </span>
+              </span>}
 
               {issueError && (
                 <span role="alert" className="text-xs text-status-rejected">{issueError}</span>
@@ -310,6 +322,7 @@ export function CommentDetail({
 
               <button
                 onClick={goPrev}
+                aria-label="Previous comment"
                 disabled={selectedIdx <= 0}
                 className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
@@ -320,6 +333,7 @@ export function CommentDetail({
               </span>
               <button
                 onClick={goNext}
+                aria-label="Next comment"
                 disabled={selectedIdx >= filteredComments.length - 1}
                 className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"
               >
@@ -328,6 +342,17 @@ export function CommentDetail({
             </div>
           </div>
         </>
+      ) : personal && !commentsLoading && !commentsError && projectComments.length === 0 ? (
+        <div className="flex-1 overflow-y-auto px-8 py-8">
+          <div className="min-h-full flex flex-col items-center justify-center text-center">
+            <img src={asset('crrt-isologo.png')} alt="" width={48} height={48} className="mb-4 shrink-0" style={{ imageRendering: 'pixelated' }} />
+            <h2 className="text-base font-semibold text-foreground mb-2">Try the CRRT extension</h2>
+            <p className="text-sm text-muted-foreground max-w-sm mb-6">
+              Comments you leave with the CRRT browser extension will appear here.
+            </p>
+            <ActionBtn variant="neutral" disabled>Coming soon</ActionBtn>
+          </div>
+        </div>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
         <ProjectEmptyState projectId={selectedProject} />
       ) : (
@@ -335,17 +360,19 @@ export function CommentDetail({
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
             <CursorIcon className="text-muted-foreground" />
           </div>
-          <p className="text-base font-semibold text-foreground mb-1">Select a comment</p>
+          <p className="text-base font-semibold text-foreground mb-1">{personal ? 'Select an extension comment' : 'Select a comment'}</p>
           <p className="text-sm text-muted-foreground max-w-xs">
-            Pick a feedback item from the list to see the full context, screenshot, and actions.
+            {personal
+              ? 'Pick one of your extension comments from the list to see its page context and screenshot.'
+              : 'Pick a feedback item from the list to see the full context, screenshot, and actions.'}
           </p>
-          <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">
+          {!personal && <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">
             <Kbd>J</Kbd><Kbd>K</Kbd> navigate
             <span className="mx-1">·</span>
             <Kbd>A</Kbd> ready
             <span className="mx-1">·</span>
             <Kbd>D</Kbd> reject
-          </div>
+          </div>}
         </div>
       )}
     </div>

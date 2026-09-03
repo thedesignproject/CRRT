@@ -20,6 +20,7 @@ import { WelcomeScreen } from './components/WelcomeScreen'
 import { AddProjectPopover } from './components/AddProjectPopover'
 import { ProjectSettings } from './components/ProjectSettings'
 import { SuperAdminPanel } from './components/SuperAdminPanel'
+import { ExtensionCommentsPage } from './components/ExtensionCommentsPage'
 import { Spinner } from './components/primitives'
 import { ProductAuditPage } from './components/ProductAuditPage'
 
@@ -78,7 +79,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin'>('feedback')
+  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments'>(() =>
+    new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
+  )
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
@@ -116,10 +119,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   useEffect(() => {
-    if (!selectedProject && projects.length > 0) {
+    if (view !== 'extension-comments' && !selectedProject && projects.length > 0) {
       setSelectedProject(projects[0].publicKey)
     }
-  }, [projects, selectedProject])
+  }, [projects, selectedProject, view])
 
   useEffect(() => {
     const next = serverComments.map(mapServerComment)
@@ -265,6 +268,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (view === 'extension-comments') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -301,7 +305,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode])
+  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -346,6 +350,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setView('feedback')
   }, [])
 
+  const openExtensionComments = useCallback(() => {
+    setView('extension-comments')
+    setSelectedProject('')
+    setSelectedCommentId('')
+    setPendingCommentSelection(null)
+    setCmdOpen(false)
+    exitBulkMode()
+  }, [exitBulkMode])
+
   const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
     setAddProjectBusy(true)
@@ -380,12 +393,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   // mark the flag so the welcome doesn't reappear if they cancel out of
   // the create-project modal.
   const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
-  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded
+  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments'
 
   if (showWelcome) {
     return (
       <>
         <WelcomeScreen
+          onOpenExtensionComments={openExtensionComments}
           onCreateProject={() => {
             markOnboarded()
             setOnboarded(true)
@@ -426,6 +440,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onOpenCmd={() => setCmdOpen(true)}
         onOpenSettings={() => setView((v) => (v === 'settings' ? 'feedback' : 'settings'))}
         settingsActive={view === 'settings'}
+        onOpenExtensionComments={openExtensionComments}
+        extensionCommentsActive={view === 'extension-comments'}
         apiBase={API_BASE}
         accessToken={accessToken}
         onProjectsChanged={refreshProjects}
@@ -439,7 +455,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
       />
 
-      {view === 'super-admin' && superadmin ? (
+      {view === 'extension-comments' ? (
+        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} />
+      ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (
         <ProjectSettings
@@ -512,7 +530,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       </div>
       )}
 
-      <StatusBar sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
+      <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
 
       {cmdOpen && (
         <CommandPalette
