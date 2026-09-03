@@ -312,7 +312,7 @@ CRRT is OSS-first. [crrt.ai](https://crrt.ai) is the easiest path — a managed 
 
 - **Postgres** for the data layer. Any provider works; we recommend [Supabase](https://supabase.com) so you get auth + storage out of the box — that's what the hosted instance runs on.
 - **A runtime** that can serve the Vercel-style serverless functions in `api/` plus the static builds in `apps/landing/` and `apps/dashboard/`. We deploy to Vercel; Fly, Render, Cloudflare Workers, or a Node container behind a reverse proxy all work as long as your function runtime is compatible with `@vercel/node`.
-- **Bun ≥ 1.1** for the build (`bun install`, `bun run build`).
+- **Bun ≥ 1.4** for the build (`bun install`, `bun run build`).
 
 ### 1. Clone and install
 

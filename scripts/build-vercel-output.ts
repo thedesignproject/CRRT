@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, relative, resolve } from 'node:path'
+import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { build } from '@vercel/node'
 import { FileFsRef, glob } from '@vercel/build-utils'
@@ -11,6 +11,11 @@ const exec = promisify(execFile)
 const root = resolve(import.meta.dirname, '..')
 const output = join(root, '.vercel/output')
 const workflowRuntimePackages = ['nanoid', 'undici']
+
+// The lockfile format is tied to the Bun version that launched this build.
+// Keep Vercel's nested builders on the same binary instead of falling back to
+// the older Bun bundled in the build image and silently resolving new versions.
+process.env.PATH = `${dirname(process.execPath)}${delimiter}${process.env.PATH || ''}`
 
 async function apiFiles(directory = join(root, 'api')): Promise<string[]> {
   const files: string[] = []
@@ -105,7 +110,7 @@ async function buildApiFunction() {
   }
 }
 
-await exec('bun', ['x', 'workflow', 'build', '--target', 'vercel-build-output-api'], { cwd: root })
+await exec(process.execPath, ['x', 'workflow', 'build', '--target', 'vercel-build-output-api'], { cwd: root })
 const manifest = JSON.parse(await readFile(join(output, 'diagnostics/workflows-manifest.json'), 'utf8')) as {
   workflows?: Record<string, Record<string, { workflowId?: string }>>
 }
