@@ -325,6 +325,7 @@ it('declares automatic HTTP(S) injection, avoids duplicate widgets, and supports
   expect(attach.mock.results[0].value.querySelector('[data-fw-crrt]')).toBeNull()
   expect(attach.mock.results[0].value.querySelector('iframe')).toHaveAttribute('src', 'chrome-extension://test/private.html')
   const frame = attach.mock.results[0].value.querySelector('iframe') as HTMLIFrameElement
+  expect(frame).toHaveAttribute('allow', 'microphone')
   const page = new DOMParser().parseFromString(readFileSync('apps/extension/entrypoints/private/index.html', 'utf8'), 'text/html')
   expect(frame.style.colorScheme).toBe('light')
   expect(page.documentElement.style.colorScheme).toBe(frame.style.colorScheme)

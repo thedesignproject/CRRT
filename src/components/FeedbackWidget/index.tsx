@@ -16,6 +16,7 @@ import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
 import { TextRangeQuote } from './quote'
 import { listenForWidgetEvent } from './events'
+import { SpeechInputButton } from './voice'
 
 type CaretPositionDocument = Document & {
   caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
@@ -376,6 +377,7 @@ function FeedbackWidgetInner({
   const [target, setTarget] = useState<ClickTarget | null>(null)
   const [comment, setComment] = useState('')
   const [sending, setSending] = useState(false)
+  const [speechStopSignal, setSpeechStopSignal] = useState(0)
   const [hovered, setHovered] = useState<Element | null>(null)
   const [apiError, setApiError] = useState('')
 
@@ -729,6 +731,7 @@ function FeedbackWidgetInner({
   // --- Send comment ---
   const handleSend = useCallback(async () => {
     if (!comment.trim() || !target || sendingRef.current || screenshotCapturing) return
+    setSpeechStopSignal((signal) => signal + 1)
 
     if (!authorNameRef.current) {
       pendingSendAfterName.current = true
@@ -1324,6 +1327,12 @@ function FeedbackWidgetInner({
                     {avatarInitial}
                   </button>
                 )}
+                <SpeechInputButton
+                  value={comment}
+                  onChange={setComment}
+                  stopSignal={speechStopSignal}
+                  disabled={sending}
+                />
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

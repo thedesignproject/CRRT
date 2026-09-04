@@ -11,6 +11,7 @@ export function mountWidget(activate = false) {
   host.dataset.crrtExtension = 'true'; host.dataset.fw = 'true'
   const frame = document.createElement('iframe')
   frame.title = 'CRRT private comments'
+  frame.allow = 'microphone'
   // Match private.html's root scheme so Chrome keeps the embedded canvas transparent on dark sites.
   frame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;background:transparent;z-index:2147483647;clip-path:inset(100%);color-scheme:light;'
   const disconnect = connectPageHost(frame, activate)
