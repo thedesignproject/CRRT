@@ -1,1 +1,1 @@
-export { SpeechInputButton, getSpeechRecognition } from './SpeechInputButton'
+export { SpeechInputButton, getSpeechSupport } from './SpeechInputButton'

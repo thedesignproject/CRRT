@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { act, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SpeechInputButton, getSpeechRecognition } from '../components/FeedbackWidget/voice'
+import { SpeechInputButton, getSpeechSupport } from '../components/FeedbackWidget/voice'
 
 type RecognitionResultEvent = Event & {
   resultIndex: number
@@ -16,7 +16,7 @@ class FakeSpeechRecognition {
   lang = ''
   onstart: (() => void) | null = null
   onend: (() => void) | null = null
-  onerror: (() => void) | null = null
+  onerror: ((event: Event & { error?: string }) => void) | null = null
   onresult: ((event: RecognitionResultEvent) => void) | null = null
   start = vi.fn(() => {
     if (FakeSpeechRecognition.throwOnStart) throw new Error('not allowed')
@@ -24,26 +24,51 @@ class FakeSpeechRecognition {
   })
   stop = vi.fn()
   abort = vi.fn()
+  constructor() { FakeSpeechRecognition.instances.push(this) }
+}
 
-  constructor() {
-    FakeSpeechRecognition.instances.push(this)
+const track = { stop: vi.fn() }
+const getTracks = vi.fn(() => [track] as unknown as MediaStreamTrack[])
+const stream = { getTracks } as unknown as MediaStream
+const analyser = {
+  fftSize: 0,
+  smoothingTimeConstant: 0,
+  frequencyBinCount: 4,
+  getByteFrequencyData: vi.fn((samples: Uint8Array) => samples.fill(96)),
+}
+const source = { connect: vi.fn() }
+class FakeAudioContext {
+  static instances: FakeAudioContext[] = []
+  createAnalyser = vi.fn(() => analyser)
+  createMediaStreamSource = vi.fn(() => source)
+  close = vi.fn(async () => {})
+  constructor() { FakeAudioContext.instances.push(this) }
+}
+
+const getUserMedia = vi.fn(async () => stream)
+let originalMediaDevices: PropertyDescriptor | undefined
+let animationCallback: FrameRequestCallback | undefined
+
+function installSupport(prefixed = false) {
+  if (prefixed) {
+    vi.stubGlobal('webkitSpeechRecognition', FakeSpeechRecognition)
+    vi.stubGlobal('webkitAudioContext', FakeAudioContext)
+  } else {
+    vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition)
+    vi.stubGlobal('AudioContext', FakeAudioContext)
   }
+  Object.defineProperty(window.navigator, 'mediaDevices', {
+    configurable: true,
+    value: { getUserMedia },
+  })
 }
 
 function Harness({ initial = '' }: { initial?: string }) {
   const [value, setValue] = useState(initial)
-  return (
-    <>
-      <SpeechInputButton value={value} onChange={setValue} />
-      <output>{value}</output>
-    </>
-  )
+  return <><SpeechInputButton value={value} onChange={setValue} /><output>{value}</output></>
 }
 
-function resultEvent(
-  results: Array<{ isFinal: boolean; transcript?: string }>,
-  resultIndex = 0,
-): RecognitionResultEvent {
+function resultEvent(results: Array<{ isFinal: boolean; transcript?: string }>, resultIndex = 0) {
   return {
     resultIndex,
     results: results.map(({ isFinal, transcript }) => ({
@@ -55,118 +80,190 @@ function resultEvent(
 
 describe('<SpeechInputButton />', () => {
   beforeEach(() => {
+    originalMediaDevices = Object.getOwnPropertyDescriptor(window.navigator, 'mediaDevices')
     FakeSpeechRecognition.instances = []
     FakeSpeechRecognition.throwOnStart = false
+    FakeAudioContext.instances = []
+    getUserMedia.mockClear().mockResolvedValue(stream)
+    track.stop.mockClear(); getTracks.mockClear()
+    analyser.getByteFrequencyData.mockClear(); source.connect.mockClear()
     vi.stubGlobal('SpeechRecognition', undefined)
     vi.stubGlobal('webkitSpeechRecognition', undefined)
+    vi.stubGlobal('AudioContext', undefined)
+    vi.stubGlobal('webkitAudioContext', undefined)
+    animationCallback = undefined
+    vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameRequestCallback) => {
+      animationCallback = callback
+      return 42
+    }))
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
   afterEach(() => {
-    vi.unstubAllGlobals()
-    vi.restoreAllMocks()
+    cleanup()
+    vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.useRealTimers()
     document.documentElement.removeAttribute('lang')
+    if (originalMediaDevices) Object.defineProperty(window.navigator, 'mediaDevices', originalMediaDevices)
+    else Reflect.deleteProperty(window.navigator, 'mediaDevices')
   })
 
-  it('does not render when the browser has no speech recognition API', () => {
-    expect(getSpeechRecognition(undefined)).toBeNull()
-    const { container } = render(<Harness />)
-    expect(container.querySelector('button')).toBeNull()
-  })
-
-  it('uses browser recognition to append final and interim speech to the draft', () => {
-    document.documentElement.lang = 'en-GB'
+  it('hides the control unless speech, audio analysis, and microphone capture are available', () => {
+    expect(getSpeechSupport(undefined, undefined)).toBeNull()
+    expect(getSpeechSupport(window as never, undefined)).toBeNull()
+    Object.defineProperty(window.navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } })
+    expect(getSpeechSupport(window as never, window.navigator.mediaDevices)).toBeNull()
     vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition)
-    const { getByRole } = render(<Harness initial="Typed first" />)
+    expect(getSpeechSupport(window as never, window.navigator.mediaDevices)).toBeNull()
+    expect(render(<Harness />).container.querySelector('button')).toBeNull()
+  })
 
-    const start = getByRole('button', { name: 'Start voice input' })
-    fireEvent.mouseEnter(start)
-    expect(start.style.color).toBe('var(--fw-foreground)')
-    fireEvent.mouseLeave(start)
-    expect(start.style.color).toBe('var(--fw-foreground-muted)')
-    fireEvent.click(start)
+  it('shows requesting feedback, live volume, and appends recognized speech', async () => {
+    document.documentElement.lang = 'en-GB'
+    installSupport()
+    const view = render(<Harness initial="Typed first" />)
+    const start = view.getByRole('button', { name: 'Start voice input' })
+    fireEvent.mouseEnter(start); expect(start.style.color).toBe('var(--fw-foreground)')
+    fireEvent.mouseLeave(start); expect(start.style.color).toBe('var(--fw-foreground-muted)')
+    await act(async () => { fireEvent.click(start) })
 
+    expect(getUserMedia).toHaveBeenCalledWith({ audio: true })
     const recognition = FakeSpeechRecognition.instances[0]
-    expect(recognition.continuous).toBe(true)
-    expect(recognition.interimResults).toBe(true)
-    expect(recognition.lang).toBe('en-GB')
-    expect(recognition.start).toHaveBeenCalledOnce()
+    expect(recognition).toMatchObject({ continuous: true, interimResults: true, lang: 'en-GB' })
+    expect(source.connect).toHaveBeenCalledWith(analyser)
+    expect(analyser.fftSize).toBe(64)
+    expect(analyser.smoothingTimeConstant).toBe(0.72)
+    const stop = view.getByRole('button', { name: 'Stop voice input' })
+    expect(stop).toHaveAttribute('aria-pressed', 'true')
+    expect(stop.querySelectorAll('span span')).toHaveLength(4)
+    await act(async () => animationCallback?.(1))
+    expect(stop.querySelectorAll<HTMLElement>('span span')[2].style.height).toBe('16px')
 
     act(() => recognition.onresult?.(resultEvent([
       { isFinal: true, transcript: 'spoken words' },
       { isFinal: false, transcript: 'in progress' },
       { isFinal: false },
     ])))
-    expect(getByRole('status').textContent).toBe('Typed first spoken words in progress')
-
+    expect(view.getByRole('status')).toHaveTextContent('Typed first spoken words in progress')
     act(() => recognition.onresult?.(resultEvent([
-      { isFinal: true, transcript: 'ignored earlier result' },
+      { isFinal: true, transcript: 'ignored' },
       { isFinal: true, transcript: 'finished phrase' },
     ], 1)))
-    expect(getByRole('status').textContent).toBe('Typed first spoken words finished phrase')
+    expect(view.getByRole('status')).toHaveTextContent('Typed first spoken words finished phrase')
 
-    const stop = getByRole('button', { name: 'Stop voice input' })
-    expect(stop).toHaveAttribute('aria-pressed', 'true')
-    fireEvent.mouseEnter(stop)
-    expect(stop.style.color).toBe('#FFFFFF')
-    fireEvent.mouseLeave(stop)
+    fireEvent.mouseEnter(stop); fireEvent.mouseLeave(stop)
     expect(stop.style.color).toBe('#FFFFFF')
     fireEvent.click(stop)
     expect(recognition.stop).toHaveBeenCalledOnce()
-    expect(getByRole('button', { name: 'Start voice input' })).toHaveAttribute('aria-pressed', 'false')
+    expect(track.stop).toHaveBeenCalled()
+    expect(FakeAudioContext.instances[0].close).toHaveBeenCalled()
+    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
   })
 
-  it('falls back to the prefixed API and navigator language', () => {
-    vi.stubGlobal('webkitSpeechRecognition', FakeSpeechRecognition)
-    const { getByRole } = render(<Harness />)
-    fireEvent.click(getByRole('button', { name: 'Start voice input' }))
-    expect(FakeSpeechRecognition.instances[0].lang).toBe(navigator.language)
-  })
-
-  it('uses the default locale when the document and browser do not provide one', () => {
-    vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition)
-    vi.spyOn(window.navigator, 'language', 'get').mockReturnValue('')
-    const { getByRole } = render(<Harness />)
-    fireEvent.click(getByRole('button', { name: 'Start voice input' }))
-    expect(FakeSpeechRecognition.instances[0].lang).toBe('en-US')
-  })
-
-  it('does nothing if browser support disappears before the user starts', () => {
-    vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition)
-    const { getByRole } = render(<Harness />)
-    vi.stubGlobal('SpeechRecognition', undefined)
-    fireEvent.click(getByRole('button', { name: 'Start voice input' }))
+  it('renders requesting state immediately and cancels a pending permission request', async () => {
+    let resolveStream!: (value: MediaStream) => void
+    getUserMedia.mockReturnValueOnce(new Promise((resolve) => { resolveStream = resolve }))
+    installSupport()
+    const view = render(<Harness />)
+    fireEvent.click(view.getByRole('button', { name: 'Start voice input' }))
+    expect(view.getByRole('button', { name: 'Requesting microphone access' })).toBeVisible()
+    fireEvent.click(view.getByRole('button', { name: 'Requesting microphone access' }))
+    await act(async () => resolveStream(stream))
+    expect(track.stop).toHaveBeenCalled()
     expect(FakeSpeechRecognition.instances).toHaveLength(0)
+
+    let rejectStream!: (error: Error) => void
+    getUserMedia.mockReturnValueOnce(new Promise((_, reject) => { rejectStream = reject }))
+    fireEvent.click(view.getByRole('button', { name: 'Start voice input' }))
+    fireEvent.click(view.getByRole('button', { name: 'Requesting microphone access' }))
+    await act(async () => rejectStream(new Error('cancelled request')))
+    expect(view.getByRole('button', { name: 'Start voice input' })).toBeVisible()
   })
 
-  it('returns to idle when recognition ends or errors and ignores stale callbacks', () => {
-    vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition)
-    const { getByRole } = render(<Harness />)
-    fireEvent.click(getByRole('button', { name: 'Start voice input' }))
-    const first = FakeSpeechRecognition.instances[0]
-    act(() => first.onend?.())
-    expect(getByRole('button', { name: 'Start voice input' })).not.toBeNull()
-
-    fireEvent.click(getByRole('button', { name: 'Start voice input' }))
-    const second = FakeSpeechRecognition.instances[1]
-    act(() => first.onerror?.())
-    expect(getByRole('button', { name: 'Stop voice input' })).not.toBeNull()
-    act(() => second.onerror?.())
-    expect(getByRole('button', { name: 'Start voice input' })).not.toBeNull()
+  it('shows specific temporary feedback when microphone access is blocked', async () => {
+    vi.useFakeTimers()
+    getUserMedia.mockRejectedValueOnce(new DOMException('blocked', 'NotAllowedError'))
+    installSupport()
+    const view = render(<Harness />)
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Start voice input' })) })
+    const error = view.getByRole('button', { name: 'Mic blocked here' })
+    expect(error).toHaveTextContent('Mic blocked here')
+    fireEvent.mouseEnter(error); fireEvent.mouseLeave(error)
+    expect(error.style.color).toBe('#E8853D')
+    act(() => vi.advanceTimersByTime(2200))
+    expect(view.getByRole('button', { name: 'Start voice input' })).toBeVisible()
   })
 
-  it('handles a synchronous start failure and aborts active recognition on unmount', () => {
-    vi.stubGlobal('SpeechRecognition', FakeSpeechRecognition)
+  it('uses prefixed APIs, locale fallbacks, and handles a recognition start failure', async () => {
+    installSupport(true)
+    vi.spyOn(window.navigator, 'language', 'get').mockReturnValue('')
     FakeSpeechRecognition.throwOnStart = true
-    const firstRender = render(<Harness />)
-    fireEvent.click(firstRender.getByRole('button', { name: 'Start voice input' }))
-    expect(firstRender.getByRole('button', { name: 'Start voice input' })).not.toBeNull()
-    firstRender.unmount()
+    const view = render(<Harness />)
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Start voice input' })) })
+    expect(FakeSpeechRecognition.instances[0].lang).toBe('en-US')
+    expect(view.getByRole('button', { name: 'Mic unavailable' })).toBeVisible()
+    expect(track.stop).toHaveBeenCalled()
+  })
 
-    FakeSpeechRecognition.throwOnStart = false
-    const secondRender = render(<Harness />)
-    fireEvent.click(secondRender.getByRole('button', { name: 'Start voice input' }))
-    const active = FakeSpeechRecognition.instances[FakeSpeechRecognition.instances.length - 1]
-    secondRender.unmount()
+  it('does nothing if support disappears before start', async () => {
+    installSupport()
+    const view = render(<Harness />)
+    vi.stubGlobal('SpeechRecognition', undefined)
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Start voice input' })) })
+    expect(getUserMedia).not.toHaveBeenCalled()
+  })
+
+  it('stops on an external submit signal and ignores stale start/result callbacks', async () => {
+    installSupport()
+    const onChange = vi.fn()
+    const view = render(<SpeechInputButton value="Draft" onChange={onChange} />)
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Start voice input' })) })
+    const recognition = FakeSpeechRecognition.instances[0]
+    const staleStart = recognition.onstart
+    const staleEnd = recognition.onend
+    const staleError = recognition.onerror
+    const staleResult = recognition.onresult
+
+    view.rerender(<SpeechInputButton value="Draft" onChange={onChange} stopSignal={1} disabled />)
+    expect(recognition.stop).toHaveBeenCalledOnce()
+    expect(recognition.onstart).toBeNull()
+    expect(recognition.onresult).toBeNull()
+    expect(track.stop).toHaveBeenCalled()
+    expect(view.getByRole('button', { name: 'Start voice input' })).toBeDisabled()
+
+    act(() => {
+      staleStart?.()
+      staleEnd?.()
+      staleError?.({ error: 'network' } as Event & { error: string })
+      staleResult?.(resultEvent([{ isFinal: true, transcript: 'late words' }]))
+    })
+    expect(onChange).not.toHaveBeenCalled()
+    expect(view.getByRole('button', { name: 'Start voice input' })).toBeVisible()
+  })
+
+  it('releases media on recognition end/error, reports policy blocks, and detaches on unmount', async () => {
+    installSupport()
+    const view = render(<Harness />)
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Start voice input' })) })
+    const first = FakeSpeechRecognition.instances[0]
+    const firstStaleError = first.onerror
+    act(() => first.onend?.())
+    expect(view.getByRole('button', { name: 'Start voice input' })).toBeVisible()
+    act(() => firstStaleError?.({ error: 'network' } as Event & { error: string }))
+    expect(view.getByRole('button', { name: 'Start voice input' })).toBeVisible()
+
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Start voice input' })) })
+    const second = FakeSpeechRecognition.instances[1]
+    expect(view.getByRole('button', { name: 'Stop voice input' })).toBeVisible()
+    act(() => second.onerror?.({ error: 'not-allowed' } as Event & { error: string }))
+    expect(view.getByRole('button', { name: 'Mic blocked here' })).toBeVisible()
+
+    await act(async () => { fireEvent.click(view.getByRole('button', { name: 'Mic blocked here' })) })
+    const active = FakeSpeechRecognition.instances[2]
+    view.unmount()
     expect(active.abort).toHaveBeenCalledOnce()
+    expect(active.onstart).toBeNull()
+    expect(active.onend).toBeNull()
+    expect(active.onerror).toBeNull()
+    expect(active.onresult).toBeNull()
   })
 })
