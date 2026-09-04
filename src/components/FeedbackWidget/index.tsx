@@ -16,6 +16,7 @@ import { NameModal } from './modal'
 import { SelectingInstructionBar } from './selecting'
 import { TextRangeQuote } from './quote'
 import { listenForWidgetEvent } from './events'
+import { SpeechInputButton } from './voice'
 
 type CaretPositionDocument = Document & {
   caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
@@ -1324,6 +1325,7 @@ function FeedbackWidgetInner({
                     {avatarInitial}
                   </button>
                 )}
+                <SpeechInputButton value={comment} onChange={setComment} />
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
