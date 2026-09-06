@@ -141,6 +141,20 @@
       "when": 1788709817154,
       "tag": "0019_remarkable_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788724459928,
+      "tag": "0020_sticky_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788724501204,
+      "tag": "0021_steep_hobgoblin",
+      "breakpoints": true
     }
   ]
 }

@@ -24,10 +24,10 @@ export type ExtensionComment = {
 }
 
 export type ExternalWorkDraft = {
-  provider: 'github'
+  provider: 'github' | 'linear'
   connected: boolean
   destination: string | null
-  existing: { issueNumber: number; issueUrl: string; createdAt: string } | null
+  existing: { issueNumber?: number; issueUrl?: string; externalUrl?: string; createdAt: string } | null
   draft: { title: string; body: string }
 }
 
@@ -80,13 +80,13 @@ export function deletePageComment(id: string) {
   return request<void>(`/v1/extension/comments/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
-export function getExternalWorkDraft(commentId: string) {
-  return request<ExternalWorkDraft>(`/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=github`)
+export function getExternalWorkDraft(commentId: string, provider: 'github' | 'linear' = 'github') {
+  return request<ExternalWorkDraft>(`/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`)
 }
 
-export function sendExternalWork(commentId: string, draft: { title: string; body: string }) {
-  return request<{ issueNumber: number; issueUrl: string; createdAt: string; created: boolean }>(
+export function sendExternalWork(commentId: string, provider: 'github' | 'linear', draft: { title: string; body: string }) {
+  return request<{ issueNumber?: number; issueUrl?: string; externalUrl?: string; createdAt: string; created: boolean }>(
     `/v1/comments/${encodeURIComponent(commentId)}/external-work`,
-    { method: 'POST', body: JSON.stringify({ provider: 'github', draft }) },
+    { method: 'POST', body: JSON.stringify({ provider, draft }) },
   )
 }

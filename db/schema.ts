@@ -119,6 +119,9 @@ export const projectInvites = pgTable(
   }),
 )
 
+// Reference only: not exported, so Drizzle does not manage Supabase's auth table.
+const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
+
 export const projectRepoConfigs = pgTable('project_repo_configs', {
   projectKey: text('project_key')
     .primaryKey()
@@ -139,6 +142,32 @@ export const projectRepoConfigs = pgTable('project_repo_configs', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+// OAuth credentials for native issue-tracker integrations. Tokens are always
+// encrypted by the API before they reach this table; RLS keeps the rows hidden
+// from the publishable Supabase client shipped in browser bundles.
+export const projectIntegrations = pgTable(
+  'project_integrations',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    accessTokenCiphertext: text('access_token_ciphertext').notNull(),
+    refreshTokenCiphertext: text('refresh_token_ciphertext'),
+    tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
+    workspaceId: text('workspace_id').notNull(),
+    workspaceName: text('workspace_name').notNull(),
+    containerId: text('container_id'),
+    containerName: text('container_name'),
+    createdBy: uuid('created_by').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    projectProviderUnique: uniqueIndex('project_integrations_project_provider_unique').on(t.projectKey, t.provider),
+    providerCheck: check('project_integrations_provider_check', sql`${t.provider} in ('linear', 'jira')`),
+  }),
+).enableRLS()
+
 export const projectCommentEmailCooldowns = pgTable('project_comment_email_cooldowns', {
   projectKey: text('project_key')
     .primaryKey()
@@ -148,9 +177,6 @@ export const projectCommentEmailCooldowns = pgTable('project_comment_email_coold
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
-
-// Reference only: not exported, so Drizzle does not manage Supabase's auth table.
-const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
 
 // A bounded rolling-hour ledger, independent of comment deletion. Versioned
 // compare-and-swap updates through Supabase serialize concurrent reservations.
@@ -447,6 +473,38 @@ export const auditRuns = pgTable(
       'audit_runs_lease_shape_check',
       sql`(${t.stageLeaseToken} is null) = (${t.stageLeaseExpiresAt} is null)`,
     ),
+  }),
+).enableRLS()
+
+// One durable result per feedback item and provider prevents normal retries
+// from creating duplicate work in external trackers.
+export const commentExternalWork = pgTable(
+  'comment_external_work',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    projectId: text('project_id').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+    commentId: uuid('comment_id').notNull().references(() => comments.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    state: text('state').notNull().default('creating'),
+    externalId: text('external_id'),
+    externalKey: text('external_key'),
+    externalUrl: text('external_url'),
+    leaseToken: uuid('lease_token').notNull(),
+    leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
+    uncertainAt: timestamp('uncertain_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    commentProviderUnique: uniqueIndex('comment_external_work_comment_provider_unique').on(t.commentId, t.provider),
+    projectCreatedIdx: index('comment_external_work_project_created_idx').on(t.projectId, t.createdAt.desc()),
+    providerCheck: check('comment_external_work_provider_check', sql`${t.provider} in ('linear', 'jira')`),
+    stateCheck: check('comment_external_work_state_check', sql`${t.state} in ('creating', 'created')`),
+    resultCheck: check('comment_external_work_result_check', sql`(
+      (${t.state} = 'creating' and ${t.externalId} is null and ${t.externalKey} is null and ${t.externalUrl} is null)
+      or
+      (${t.state} = 'created' and ${t.externalId} is not null and ${t.externalKey} is not null and ${t.externalUrl} is not null)
+    )`),
   }),
 ).enableRLS()
 

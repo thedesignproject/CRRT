@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../_lib/auth.js', () => ({ requireProjectCommentCapability: vi.fn(), requireUser: vi.fn() }))
-vi.mock('../../../_lib/store.js', () => ({ getComment: vi.fn(), getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn() }))
+vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireProjectCommentCapability: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../../../_lib/linear-connection.js', () => ({ getLinearAccessToken: vi.fn() }))
+vi.mock('../../../_lib/linear.js', () => ({ createLinearIssue: vi.fn() }))
+vi.mock('../../../_lib/store.js', () => ({
+  claimCommentExternalWork: vi.fn(), finalizeCommentExternalWork: vi.fn(), getComment: vi.fn(), getCommentExternalWork: vi.fn(),
+  getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(), markCommentExternalWorkUncertain: vi.fn(),
+  releaseCommentExternalWork: vi.fn(), updateReviewStatus: vi.fn(),
+}))
 vi.mock('./github-issue.js', () => ({ default: vi.fn() }))
 
 import handler from './external-work.js'
 import githubIssueHandler from './github-issue.js'
-import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
-import { getComment, getCommentForGithubIssue, getGithubIssueConnection } from '../../../_lib/store.js'
+import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
+import { createLinearIssue } from '../../../_lib/linear.js'
+import { claimCommentExternalWork, finalizeCommentExternalWork, getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration, markCommentExternalWorkUncertain } from '../../../_lib/store.js'
 
 function response() {
   return { statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
@@ -22,9 +30,17 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
   vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockResolvedValue(comment as never)
   vi.mocked(getCommentForGithubIssue).mockResolvedValue(comment as never)
   vi.mocked(getGithubIssueConnection).mockResolvedValue({ owner: 'acme', repo: 'store', installationId: 1, connectionVersion: 'v' } as never)
+  vi.mocked(getCommentExternalWork).mockResolvedValue(null)
+  vi.mocked(getProjectIntegration).mockResolvedValue({ id: 'integration', containerId: 'team', containerName: 'WEB · Web' } as never)
+  vi.mocked(getLinearAccessToken).mockResolvedValue('linear-token')
+  vi.mocked(claimCommentExternalWork).mockImplementation(async (input) => ({ id: 'work', state: 'creating', leaseToken: input.leaseToken } as never))
+  vi.mocked(markCommentExternalWorkUncertain).mockResolvedValue(true)
+  vi.mocked(createLinearIssue).mockResolvedValue({ externalId: 'issue', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1' })
+  vi.mocked(finalizeCommentExternalWork).mockResolvedValue({ createdAt: 'now' } as never)
 })
 
 describe('external work endpoint', () => {
@@ -103,5 +119,17 @@ describe('external work endpoint', () => {
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Could not prepare external work' })
+  })
+
+  it('prepares and durably creates Linear work before accepting feedback', async () => {
+    const prepared = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: {} }, prepared)
+    expect(prepared.body).toMatchObject({ provider: 'linear', connected: true, destination: 'WEB · Web' })
+
+    const created = response()
+    await call({ method: 'POST', query: { commentId: 'c' }, body: { provider: 'linear', draft: { title: 'Edited', body: 'Details' } }, headers: {} }, created)
+    expect(created.statusCode).toBe(201)
+    expect(createLinearIssue).toHaveBeenCalledWith('linear-token', { teamId: 'team', title: 'Edited', description: 'Details' })
+    expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({ externalKey: 'WEB-1' }))
   })
 })

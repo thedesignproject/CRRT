@@ -269,11 +269,12 @@ it('lets internal members edit and confirm a manual GitHub handoff from the exte
   fireEvent.click(view.container.querySelector('[data-fw-pin]')!)
   fireEvent.click(view.ui.getByRole('button', { name: 'More options' }))
   fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
+  fireEvent.click(await view.ui.findByRole('button', { name: 'GitHub' }))
   const title = await view.ui.findByRole('textbox', { name: 'External work title' })
   fireEvent.change(title, { target: { value: 'Edited title' } })
   fireEvent.change(view.ui.getByRole('textbox', { name: 'External work description' }), { target: { value: 'Edited body' } })
   fireEvent.click(view.ui.getByRole('button', { name: 'Create issue' }))
-  await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith('c1', { title: 'Edited title', body: 'Edited body' }))
+  await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith('c1', 'github', { title: 'Edited title', body: 'Edited body' }))
   expect(open).toHaveBeenCalledWith('https://github.com/acme/store/issues/1', '_blank', 'noopener,noreferrer')
 })
 
