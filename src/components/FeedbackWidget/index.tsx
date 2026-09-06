@@ -524,7 +524,7 @@ function FeedbackWidgetInner({
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
   const [pinsVisible, setPinsVisible] = useState(true)
   const [externalWork, setExternalWork] = useState<{
-    provider: 'github' | 'linear'
+    provider: 'github' | 'linear' | 'jira'
     commentId: string
     destination: string
     title: string
@@ -996,7 +996,7 @@ function FeedbackWidgetInner({
     setEditingId(null)
   }
 
-  async function prepareExternalWork(commentId: string, provider: 'github' | 'linear') {
+  async function prepareExternalWork(commentId: string, provider: 'github' | 'linear' | 'jira') {
     if (!personalComments?.externalWork || externalWorkRequestRef.current) return
     externalWorkRequestRef.current = true
     try {
@@ -2377,7 +2377,7 @@ function FeedbackWidgetInner({
             <div style={{ display: 'grid', gap: 8 }}>
               {personalComments.externalWork.providers.map((provider) => (
                 <button key={provider} type="button" onClick={() => { const id = externalProviderCommentId; setExternalProviderCommentId(null); void prepareExternalWork(id, provider) }} style={{ borderRadius: 8, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', color: 'var(--fw-foreground)', padding: '11px 12px', textAlign: 'left', fontWeight: 700, cursor: 'pointer' }}>
-                  {provider === 'github' ? 'GitHub' : 'Linear'}
+                  {provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'}
                 </button>
               ))}
             </div>
@@ -2394,7 +2394,7 @@ function FeedbackWidgetInner({
           style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
         >
           <div role="dialog" aria-modal="true" aria-labelledby="fw-external-work-title" style={{ width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
-            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to {externalWork.provider === 'github' ? 'GitHub' : 'Linear'}</h2>
+            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to {externalWork.provider === 'github' ? 'GitHub' : externalWork.provider === 'linear' ? 'Linear' : 'Jira'}</h2>
             <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Review and edit before creating in {externalWork.destination}.</p>
             <label style={{ display: 'block', color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
               Title

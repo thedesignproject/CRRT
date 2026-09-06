@@ -36,10 +36,10 @@ export function extensionComments(
     } : undefined,
     scope: project && onScopeChange ? { value: scope, onChange: onScopeChange } : undefined,
     externalWork: canSendExternalWork ? {
-      providers: ['github', 'linear'],
+      providers: ['github', 'linear', 'jira'],
       async prepare(provider, commentId) {
         const prepared = await getExternalWorkDraft(commentId, provider)
-        if (!prepared.connected) throw new Error(`Connect ${provider === 'github' ? 'GitHub' : 'Linear'} from Project Settings first.`)
+        if (!prepared.connected) throw new Error(`Connect ${provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'} from Project Settings first.`)
         if (prepared.existing) return {
           destination: prepared.destination ?? provider, title: '', body: '', existingUrl: prepared.existing.externalUrl ?? prepared.existing.issueUrl,
         }

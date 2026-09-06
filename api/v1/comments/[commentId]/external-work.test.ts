@@ -3,6 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireProjectCommentCapability: vi.fn(), requireUser: vi.fn() }))
 vi.mock('../../../_lib/linear-connection.js', () => ({ getLinearAccessToken: vi.fn() }))
 vi.mock('../../../_lib/linear.js', () => ({ createLinearIssue: vi.fn() }))
+vi.mock('../../../_lib/jira-connection.js', () => ({ getJiraAccessToken: vi.fn() }))
+vi.mock('../../../_lib/jira.js', () => ({ createJiraIssue: vi.fn(), getJiraDestinations: vi.fn() }))
 vi.mock('../../../_lib/store.js', () => ({
   claimCommentExternalWork: vi.fn(), finalizeCommentExternalWork: vi.fn(), getComment: vi.fn(), getCommentExternalWork: vi.fn(),
   getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(), markCommentExternalWorkUncertain: vi.fn(),
@@ -15,6 +17,8 @@ import githubIssueHandler from './github-issue.js'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
+import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
+import { createJiraIssue, getJiraDestinations } from '../../../_lib/jira.js'
 import { claimCommentExternalWork, finalizeCommentExternalWork, getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration, markCommentExternalWorkUncertain, releaseCommentExternalWork, updateReviewStatus } from '../../../_lib/store.js'
 
 function response() {
@@ -36,11 +40,20 @@ beforeEach(() => {
   vi.mocked(getCommentForGithubIssue).mockResolvedValue(comment as never)
   vi.mocked(getGithubIssueConnection).mockResolvedValue({ owner: 'acme', repo: 'store', installationId: 1, connectionVersion: 'v' } as never)
   vi.mocked(getCommentExternalWork).mockResolvedValue(null)
-  vi.mocked(getProjectIntegration).mockResolvedValue({ id: 'integration', containerId: 'team', containerName: 'WEB · Web' } as never)
+  vi.mocked(getProjectIntegration).mockImplementation(async (_project, provider) => ({
+    id: 'integration', containerId: provider === 'jira' ? '100' : 'team',
+    containerName: 'WEB · Web', workspaceId: provider === 'jira' ? 'cloud' : 'workspace',
+  } as never))
   vi.mocked(getLinearAccessToken).mockResolvedValue('linear-token')
+  vi.mocked(getJiraAccessToken).mockResolvedValue('jira-token')
+  vi.mocked(getJiraDestinations).mockResolvedValue([{
+    id: 'cloud:100', cloudId: 'cloud', siteName: 'Acme Jira', siteUrl: 'https://acme.atlassian.net',
+    projectId: '100', projectKey: 'WEB', projectName: 'Website',
+  }])
   vi.mocked(claimCommentExternalWork).mockImplementation(async (input) => ({ id: 'work', state: 'creating', leaseToken: input.leaseToken } as never))
   vi.mocked(markCommentExternalWorkUncertain).mockResolvedValue(true)
   vi.mocked(createLinearIssue).mockResolvedValue({ externalId: 'issue', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1' })
+  vi.mocked(createJiraIssue).mockResolvedValue({ externalId: 'jira-issue', externalKey: 'WEB-2', externalUrl: 'https://acme.atlassian.net/browse/WEB-2' })
   vi.mocked(finalizeCommentExternalWork).mockResolvedValue({ createdAt: 'now' } as never)
 })
 
@@ -60,7 +73,7 @@ describe('external work endpoint', () => {
     expect(githubIssueHandler).toHaveBeenCalledWith(req, res)
 
     const unsupported = response()
-    await call({ ...req, body: { provider: 'jira' } }, unsupported)
+    await call({ ...req, body: { provider: 'asana' } }, unsupported)
     expect(unsupported.statusCode).toBe(400)
   })
 
@@ -233,5 +246,20 @@ describe('external work endpoint', () => {
     await call(post(), res)
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'External issue creation failed' })
+  })
+
+  it('creates Jira work in the project selected by an admin', async () => {
+    const created = response()
+    await call({
+      method: 'POST', query: { commentId: 'c' },
+      body: { provider: 'jira', draft: { title: 'Edited for Jira', body: 'Jira details' } }, headers: {},
+    }, created)
+    expect(created.statusCode).toBe(201)
+    expect(getJiraDestinations).toHaveBeenCalledWith('jira-token')
+    expect(createJiraIssue).toHaveBeenCalledWith('jira-token', {
+      cloudId: 'cloud', siteUrl: 'https://acme.atlassian.net', projectId: '100',
+      title: 'Edited for Jira', description: 'Jira details',
+    })
+    expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({ externalKey: 'WEB-2' }))
   })
 })

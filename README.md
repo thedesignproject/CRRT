@@ -205,6 +205,8 @@ Optional server variables:
 - `COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS` - Resend request timeout, defaults to `5000`
 - `LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET` - enable native Linear OAuth and issue creation
 - `LINEAR_REDIRECT_URI` - optional fixed Linear callback URL; defaults to `APP_URL/v1/integrations/linear/callback`
+- `JIRA_CLIENT_ID` and `JIRA_CLIENT_SECRET` - enable native Jira Cloud OAuth and issue creation
+- `JIRA_REDIRECT_URI` - optional fixed Jira callback URL; defaults to `APP_URL/v1/integrations/jira/callback`
 
 The service-role key also lets the API resolve project member emails from Supabase Auth for comment activity notifications. Without it, that email path stays disabled because there are no resolved recipients.
 
