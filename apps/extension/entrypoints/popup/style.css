@@ -8,8 +8,8 @@ h1 { font-size: 20px; letter-spacing: -.01em }
 .muted, label { color: #a8a29a; font-size: 13px }
 form, label { display: grid; gap: 8px }
 form { gap: 14px }
-input { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; background: #181818; color: #fff; padding: 10px 12px; font: inherit; outline: none }
-input:focus-visible { border-color: #e8853d; box-shadow: 0 0 0 2px rgba(232,133,61,.2) }
+input, select { width: 100%; border: 1px solid rgba(255,255,255,.16); border-radius: 6px; background: #181818; color: #fff; padding: 10px 12px; font: inherit; outline: none }
+input:focus-visible, select:focus-visible { border-color: #e8853d; box-shadow: 0 0 0 2px rgba(232,133,61,.2) }
 button { border: 0; font: inherit; cursor: pointer }
 button:disabled { cursor: wait; opacity: .6 }
 .primary { border-radius: 999px; background: #e8853d; color: #fff; min-height: 40px; padding: 0 18px; font-weight: 600 }

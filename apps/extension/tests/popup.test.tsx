@@ -3,11 +3,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendMessage = vi.fn()
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
+const listExtensionProjects = vi.hoisted(() => vi.fn())
+const getActiveProject = vi.hoisted(() => vi.fn())
+const setActiveProject = vi.hoisted(() => vi.fn())
+vi.mock('../lib/comments-api', () => ({ listExtensionProjects }))
+vi.mock('../lib/project-context', () => ({ getActiveProject, setActiveProject }))
 
 document.body.innerHTML = '<div id="root"></div>'
 const { Popup } = await import('../entrypoints/popup/main')
 
-beforeEach(() => { sendMessage.mockReset(); document.body.innerHTML = ''; vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5173/dashboard/') })
+beforeEach(() => {
+  sendMessage.mockReset()
+  listExtensionProjects.mockReset().mockResolvedValue([])
+  getActiveProject.mockReset().mockResolvedValue(null)
+  setActiveProject.mockReset().mockResolvedValue(undefined)
+  document.body.innerHTML = ''
+  vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5173/dashboard/')
+})
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
 describe('extension popup', () => {
@@ -65,5 +77,37 @@ describe('extension popup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); await screen.findByText('logout down')
     sendMessage.mockRejectedValueOnce('bad')
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); await screen.findByText('Sign out failed'); view.unmount()
+  })
+
+  it('selects a project or private feedback destination', async () => {
+    const projects = [
+      { publicKey: 'p1', name: 'Storefront', allowedOrigins: ['store.example.com'] },
+      { publicKey: 'p2', name: 'Dashboard', allowedOrigins: [] },
+    ]
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockResolvedValueOnce(projects)
+    getActiveProject.mockResolvedValueOnce({ publicKey: 'p1', name: 'Storefront' })
+    const view = render(<Popup />)
+    const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+    expect(destination).toHaveValue('p1')
+
+    fireEvent.change(destination, { target: { value: 'p2' } })
+    await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith({ publicKey: 'p2', name: 'Dashboard' }))
+    expect(destination).toHaveValue('p2')
+
+    fireEvent.change(destination, { target: { value: '' } })
+    await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith(null))
+    expect(destination).toHaveValue('')
+    view.unmount()
+  })
+
+  it('clears a stale project selection that is no longer accessible', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockResolvedValueOnce([])
+    getActiveProject.mockResolvedValueOnce({ publicKey: 'gone', name: 'Gone' })
+    const view = render(<Popup />)
+    await screen.findByRole('combobox', { name: 'Feedback destination' })
+    expect(setActiveProject).toHaveBeenCalledWith(null)
+    view.unmount()
   })
 })

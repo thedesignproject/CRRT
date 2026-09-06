@@ -11,6 +11,8 @@ vi.mock('../lib/page-host', () => ({ connectPageHost: vi.fn(() => vi.fn()) }))
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
 vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), listPageComments: vi.fn(), updatePageComment: vi.fn() }))
+const getActiveProject = vi.hoisted(() => vi.fn())
+vi.mock('../lib/project-context', () => ({ getActiveProject }))
 vi.mock('../../../src/lib/screenshotCapture', () => ({
   useScreenshotCapture: () => {
     const [image, setImage] = useState<Blob | null>(null)
@@ -28,13 +30,14 @@ import { createPageComment, deletePageComment, extensionSession, listPageComment
 import type { WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 
-const comment: ExtensionComment = { id: 'c1', pageUrl: location.href.split('#')[0], pageHostname: 'localhost', x: 10, y: 20, selector: '#target', body: 'First', screenshotUrl: 'https://signed/one', createdAt: '2026-09-03', updatedAt: '2026-09-03' }
+const comment: ExtensionComment = { id: 'c1', projectId: null, pageUrl: location.href.split('#')[0], pageHostname: 'localhost', x: 10, y: 20, selector: '#target', body: 'First', screenshotUrl: 'https://signed/one', authorName: 'user@example.com', createdAt: '2026-09-03', updatedAt: '2026-09-03' }
 let target: HTMLElement
 
 beforeEach(() => {
   vi.clearAllMocks()
   sendMessage.mockResolvedValue({ ok: true })
   vi.mocked(extensionSession).mockResolvedValue({ email: 'user@example.com', accessToken: 'token' })
+  getActiveProject.mockReset().mockResolvedValue(null)
   vi.mocked(listPageComments).mockResolvedValue({ items: [comment], total: 1 })
   vi.mocked(createPageComment).mockResolvedValue({ ...comment, id: 'new', body: 'New' })
   vi.mocked(updatePageComment).mockResolvedValue(comment); vi.mocked(deletePageComment).mockResolvedValue()
@@ -89,6 +92,21 @@ it('mounts the actual idle widget, highlights selection, and sends through the p
   fireEvent.keyDown(window, { key: 'Escape' })
   fireEvent.keyDown(window, { key: 'A', shiftKey: true })
   expect(view.ui.queryByText('Open agent')).toBeNull()
+})
+
+it('uses the selected project for authenticated extension comments', async () => {
+  getActiveProject.mockResolvedValue({ publicKey: 'project', name: 'Storefront' })
+  vi.mocked(listPageComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
+  const view = setup()
+  await waitFor(() => expect(listPageComments).toHaveBeenCalledWith(location.href.split('#')[0], 1, 'project'))
+  fireEvent.keyDown(window, { key: 'f' })
+  expect(view.ui.getByText('Storefront')).toBeInTheDocument()
+  const textarea = await selectTarget(view)
+  fireEvent.change(textarea, { target: { value: 'Project feedback' } })
+  fireEvent.click(view.ui.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({
+    projectId: 'project', body: 'Project feedback',
+  })))
 })
 
 it('preserves a draft and screenshot when tokens refresh for the same account', async () => {

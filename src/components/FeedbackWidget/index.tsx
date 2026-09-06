@@ -1688,7 +1688,7 @@ function FeedbackWidgetInner({
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: 'var(--fw-foreground)' }}>
-              {personalComments ? 'My extension comments' : 'Feedback'}
+              {personalComments?.label ?? (personalComments ? 'My extension comments' : 'Feedback')}
             </div>
             <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: 'var(--fw-foreground-faint)' }}>
               {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}

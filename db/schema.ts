@@ -213,7 +213,7 @@ export const comments = pgTable(
     sourceCheck: check('comments_source_check', sql`${t.source} in ('widget', 'extension')`),
     extensionOwnershipCheck: check(
       'comments_extension_ownership_check',
-      sql`${t.source} <> 'extension' or (${t.createdByUserId} is not null and ${t.pageHostname} is not null and ${t.projectId} is null)`,
+      sql`${t.source} <> 'extension' or (${t.createdByUserId} is not null and ${t.pageHostname} is not null)`,
     ),
     githubIssueFieldsCheck: check(
       'comments_github_issue_fields_check',

@@ -18,7 +18,7 @@ Implementation:
 
 1. Expand the comments constraint so authenticated extension comments may carry a project key while personal comments remain nullable.
 2. Extend extension serialization with project identity and source without weakening screenshot ownership.
-3. Accept an optional project key on create after server-side membership and allowed-domain validation.
+3. Accept an optional project key on create after server-side membership validation. Domain matching is a convenience signal, not an authorization gate.
 4. Return accessible projects to the extension through the existing authenticated projects API.
 5. Add a simple project/private selector to the extension experience and persist the active choice locally.
 6. Reuse the project comments feed and dashboard presentation; do not copy or mirror comments.
@@ -27,7 +27,7 @@ Implementation:
 Acceptance:
 
 - A member can select a project, create an extension pin, and see it in that project's dashboard.
-- A forged inaccessible project key is rejected.
+- A forged inaccessible project key is rejected, while an accessible project may be selected manually from any page.
 - Personal mode still creates an owned comment with no project.
 - Project extension feedback can be marked Ready for Agent from the dashboard.
 

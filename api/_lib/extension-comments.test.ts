@@ -16,9 +16,9 @@ import {
 } from './extension-comments.js'
 
 const row = {
-  id: 'c1', url: 'https://example.com/a?q=1', page_hostname: 'example.com',
+  id: 'c1', project_id: null, url: 'https://example.com/a?q=1', page_hostname: 'example.com',
   x: 12, y: 34, element: '#target', comment: 'Hello',
-  screenshot_storage_path: null, created_at: '2026-01-01', updated_at: '2026-01-02',
+  screenshot_storage_path: null, author_name: 'u@example.com', created_at: '2026-01-01', updated_at: '2026-01-02',
 }
 
 class Query {
@@ -26,6 +26,7 @@ class Query {
   constructor(private response: unknown) {}
   select(...args: unknown[]) { this.calls.push(['select', ...args]); return this }
   eq(...args: unknown[]) { this.calls.push(['eq', ...args]); return this }
+  is(...args: unknown[]) { this.calls.push(['is', ...args]); return this }
   gte(...args: unknown[]) { this.calls.push(['gte', ...args]); return this }
   order(...args: unknown[]) { this.calls.push(['order', ...args]); return this }
   range(...args: unknown[]) { this.calls.push(['range', ...args]); return this }
@@ -100,6 +101,7 @@ describe('extension comment persistence', () => {
     let fake = client([{ data: [row], error: null, count: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(listExtensionComments('u1', {})).resolves.toMatchObject({ total: 0, page: 1, items: [{ body: 'Hello', screenshotUrl: null }] })
+    expect(fake.queries[0]?.calls).toContainEqual(['is', 'project_id', null])
     expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'url', expect.anything()])
 
     fake = client([{ data: null, error: null, count: 0 }])
@@ -111,6 +113,16 @@ describe('extension comment persistence', () => {
     const result = await listExtensionComments('u1', { pageUrl: 'https://example.com/a?q=1#x' })
     expect(result.items[0]?.screenshotUrl).toBe('https://signed')
     expect(fake.queries[0]?.calls).toContainEqual(['eq', 'url', 'https://example.com/a?q=1'])
+  })
+
+  it('lists project extension comments without restricting them to their creator', async () => {
+    const fake = client([{ data: [{ ...row, project_id: 'project' }], error: null, count: 1 }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(listExtensionComments('u1', { projectId: 'project' })).resolves.toMatchObject({
+      items: [{ projectId: 'project', authorName: 'u@example.com' }],
+    })
+    expect(fake.queries[0]?.calls).toContainEqual(['eq', 'project_id', 'project'])
+    expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'created_by_user_id', 'u1'])
   })
 
   it('surfaces list and signed-URL failures', async () => {
@@ -159,6 +171,18 @@ describe('extension comment persistence', () => {
     expect(fake.queries[0]?.calls).toContainEqual(['insert', expect.objectContaining({ page_hostname: 'example.com', comment: 'Hello' })])
     expect(reserveExtensionComment).toHaveBeenCalledWith(fake.value, 'u1')
     expect(vi.mocked(reserveExtensionComment).mock.invocationCallOrder[0]).toBeLessThan(fake.bucket.upload.mock.invocationCallOrder[0])
+  })
+
+  it('creates an authenticated project comment in the same comments collection', async () => {
+    const fake = client([{ data: { ...row, project_id: 'project' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    const result = await createExtensionComment('u1', {
+      pageUrl: row.url, body: 'Project feedback', selector: '#target', x: 1, y: 2,
+    }, 'project', 'u@example.com')
+    expect(result).toMatchObject({ projectId: 'project', authorName: 'u@example.com' })
+    expect(fake.queries[0]?.calls).toContainEqual(['insert', expect.objectContaining({
+      project_id: 'project', created_by_user_id: 'u1', author_name: 'u@example.com',
+    })])
   })
 
   it('validates create fields and screenshots', async () => {
