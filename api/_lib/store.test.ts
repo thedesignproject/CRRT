@@ -33,6 +33,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   notifyProjectMembersOfCommentActivity,
+  removeGuestCommentActivityNotifications,
   releaseCommentActivityEmailReservation,
   reserveCommentActivityEmail,
   slugifyProjectKey,
@@ -614,6 +615,30 @@ describe('notifications helpers', () => {
     }))
   })
 
+  it('removes derived activity metadata from guest notifications when feedback becomes internal', async () => {
+    const deleteEq = vi.fn()
+    const deleteChain = {
+      in: vi.fn(() => deleteChain),
+      eq: deleteEq,
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve),
+    }
+    deleteEq.mockImplementation(() => deleteChain)
+    const memberRoleEq = vi.fn().mockResolvedValue({ data: [{ user_id: 'guest-1' }], error: null })
+    const memberProjectEq = vi.fn(() => ({ eq: memberRoleEq }))
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn((table: string) => table === 'project_members'
+        ? { select: vi.fn(() => ({ eq: memberProjectEq })) }
+        : { delete: vi.fn(() => deleteChain) }),
+    } as never)
+
+    await removeGuestCommentActivityNotifications('p', 'c')
+
+    expect(deleteChain.in).toHaveBeenCalledWith('user_id', ['guest-1'])
+    expect(deleteEq).toHaveBeenCalledWith('kind', 'comment.activity')
+    expect(deleteEq).toHaveBeenCalledWith('payload->>projectKey', 'p')
+    expect(deleteEq).toHaveBeenCalledWith('payload->>latestCommentId', 'c')
+  })
+
   it('listProjectMemberIds returns member ids without resolving auth emails', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -985,6 +1010,7 @@ describe('comment functions', () => {
     const result = opts.result ?? { data: null, error: null }
     const selects: string[] = []
     const inserts: unknown[] = []
+    const eq = vi.fn(() => chain)
 
     const chain = {
       insert: vi.fn((rows: unknown[]) => {
@@ -996,7 +1022,7 @@ describe('comment functions', () => {
         selects.push(columns)
         return chain
       }),
-      eq: vi.fn(() => chain),
+      eq,
       in: vi.fn(() => chain),
       order: vi.fn(() => Promise.resolve(result)),
       single: vi.fn(() => Promise.resolve(result)),
@@ -1020,7 +1046,7 @@ describe('comment functions', () => {
     }
 
     vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
-    return { selects, inserts, createSignedUrl }
+    return { selects, inserts, createSignedUrl, eq }
   }
 
   it('createPublicComment inserts target metadata and selects it back', async () => {
@@ -1044,6 +1070,7 @@ describe('comment functions', () => {
       kind: 'text_range',
       selectedText: 'términos y condiciones',
     })
+    expect((inserts[0] as Record<string, unknown>).visibility).toBe('shared')
     expect(selects[0]).toContain('target_type, anchor')
     expect(created.targetType).toBe('text_range')
     expect(created.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
@@ -1081,13 +1108,15 @@ describe('comment functions', () => {
   })
 
   it('listComments maps legacy rows to element_point and selects target metadata', async () => {
-    const { selects } = buildCommentsSupabase({ result: { data: [LEGACY_ROW], error: null } })
+    const { selects, eq } = buildCommentsSupabase({ result: { data: [LEGACY_ROW], error: null } })
 
     const comments = await listComments('pk')
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comments[0].targetType).toBe('element_point')
     expect(comments[0].anchor).toBeNull()
+    expect(comments[0].visibility).toBe('shared')
+    expect(eq).toHaveBeenCalledWith('visibility', 'shared')
   })
 
   it('signs private extension screenshots for authenticated project comments', async () => {

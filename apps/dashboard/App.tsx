@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { acceptInvite as apiAcceptInvite, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
+import { acceptInvite as apiAcceptInvite, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
@@ -234,6 +234,23 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
   }, [handleReviewStatus])
+
+  const handleVisibilityChange = useCallback(async (id: string, visibility: 'shared' | 'internal') => {
+    const previous = comments.find((comment) => comment.id === id)?.visibility
+    setComments((current) => current.map((comment) => comment.id === id
+      ? { ...comment, visibility }
+      : comment))
+    try {
+      await apiUpdateVisibility(API_BASE, accessToken, id, visibility)
+    } catch (error) {
+      if (previous) {
+        setComments((current) => current.map((comment) => comment.id === id
+          ? { ...comment, visibility: previous }
+          : comment))
+      }
+      console.error('Failed to update feedback audience:', error)
+    }
+  }, [accessToken, comments])
 
   const toggleBulkSelect = useCallback((id: string) => {
     setBulkSelectedIds((prev) => {
@@ -538,6 +555,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           goNext={goNext}
           toggleReview={toggleReview}
           handleToggleDone={handleToggleDone}
+          onVisibilityChange={handleVisibilityChange}
           apiBase={API_BASE}
           accessToken={accessToken}
         />

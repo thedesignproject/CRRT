@@ -1327,6 +1327,20 @@ describe('api/v1/public/comments', () => {
     expect(res.headers['Access-Control-Allow-Origin']).toBe('*')
   })
 
+  it('does not expose internal feedback through the public mutation route', async () => {
+    vi.mocked(getComment).mockResolvedValue({
+      id: 'internal-comment', projectId: 'demo-project', visibility: 'internal',
+    } as never)
+    const res = mockRes()
+    await call(mockReq({
+      method: 'PATCH',
+      body: { id: 'internal-comment', reviewStatus: 'accepted' },
+    }), res)
+
+    expect(res.statusCode).toBe(404)
+    expect(updateReviewStatus).not.toHaveBeenCalled()
+  })
+
   it('normalizes widget review status aliases on PATCH', async () => {
     vi.mocked(getComment).mockResolvedValue({ id: 'comment-1', projectId: 'demo-project' } as never)
     vi.mocked(updateReviewStatus)

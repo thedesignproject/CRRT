@@ -97,15 +97,30 @@ it('mounts the actual idle widget, highlights selection, and sends through the p
 
 it('uses the selected project for authenticated extension comments', async () => {
   vi.mocked(listPageComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
-  const adapter = extensionComments({ publicKey: 'project', name: 'Storefront' })
+  const changeAudience = vi.fn()
+  const adapter = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['feedback:manage'],
+  }, 'internal', changeAudience)
   expect(adapter.label).toBe('Storefront')
+  expect(adapter.audience).toEqual({ value: 'internal', canChoose: true, onChange: changeAudience })
   await expect(adapter.list(location.href.split('#')[0])).resolves.toHaveLength(1)
   expect(listPageComments).toHaveBeenCalledWith(location.href.split('#')[0], 1, 'project')
   await adapter.create({
     projectId: 'project', pageUrl: location.href.split('#')[0], selector: '#target', x: 1, y: 2,
     body: 'Project feedback', targetType: 'element_point', anchor: null,
   })
-  expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project', body: 'Project feedback' }))
+  expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({
+    projectId: 'project', body: 'Project feedback', visibility: 'internal',
+  }))
+
+  const guest = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+  }, 'internal', changeAudience)
+  expect(guest.audience).toMatchObject({ value: 'shared', canChoose: false })
+  await guest.create({
+    pageUrl: location.href, selector: '#target', x: 1, y: 2, body: 'Guest feedback',
+  })
+  expect(createPageComment).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: 'shared' }))
 })
 
 it('keeps the default personal sidebar label for adapters without a custom label', async () => {

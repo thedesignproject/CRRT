@@ -15,6 +15,7 @@ export interface Comment {
   x: number | null
   y: number | null
   body: string
+  visibility?: 'shared' | 'internal'
   reviewStatus: ReviewStatus
   implementationStatus: ImplStatus
   claimedByAgentId: string | null

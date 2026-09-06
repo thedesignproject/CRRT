@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../_lib/auth.js', () => ({
   requireUser: vi.fn(),
-  requireProjectCapability: vi.fn(),
+  requireProjectCommentCapability: vi.fn(),
 }))
 vi.mock('../../../_lib/store.js', () => ({
   createFeedbackEvent: vi.fn(),
@@ -12,7 +12,7 @@ vi.mock('../../../_lib/store.js', () => ({
 }))
 
 import handler from './implementation-status.js'
-import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import {
   createFeedbackEvent,
   findActiveSharesForComment,
@@ -36,7 +36,7 @@ const call = (req: unknown, res: unknown) =>
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
-  vi.mocked(requireProjectCapability).mockReset()
+  vi.mocked(requireProjectCommentCapability).mockReset()
   vi.mocked(getComment).mockReset()
   vi.mocked(updateImplementationStatus).mockReset()
   vi.mocked(findActiveSharesForComment).mockReset()
@@ -76,7 +76,7 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
     expect(res.statusCode).toBe(404)
 
     vi.mocked(getComment).mockResolvedValueOnce({ id: 'c', projectId: 'p' } as never)
-    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_q, r) => {
+    vi.mocked(requireProjectCommentCapability).mockImplementationOnce(async (_q, r) => {
       r.status(403).json({ error: 'Forbidden' })
       return null
     })
@@ -88,7 +88,7 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
   it('updates implementation status and emits events; returns 500 on store throw', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getComment).mockResolvedValue({ id: 'c', projectId: 'p' } as never)
-    vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
+    vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
     vi.mocked(updateImplementationStatus).mockResolvedValueOnce({ id: 'c' } as never)
     vi.mocked(findActiveSharesForComment).mockResolvedValueOnce([{ id: 's1' }] as never)
 

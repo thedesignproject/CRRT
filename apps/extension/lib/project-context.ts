@@ -4,15 +4,26 @@ export type ExtensionProject = {
   publicKey: string
   name: string
   allowedOrigins: string[]
+  role?: 'owner' | 'admin' | 'member' | 'guest'
+  capabilities?: string[]
 }
 
-export type ExtensionProjectSelection = Pick<ExtensionProject, 'publicKey' | 'name'>
+export type ExtensionProjectSelection = Pick<ExtensionProject, 'publicKey' | 'name' | 'role' | 'capabilities'>
 
 export const ACTIVE_PROJECT_STORAGE_KEY = 'crrt:active-project'
 export const HOST_PROJECTS_STORAGE_KEY = 'crrt:projects-by-host'
 export const HOST_PROJECT_STORAGE_PREFIX = 'crrt:project-for-host:'
 
 export type HostProjectPreferences = Record<string, ExtensionProjectSelection | null>
+
+function projectSelection(project: ExtensionProject): ExtensionProjectSelection {
+  return {
+    publicKey: project.publicKey,
+    name: project.name,
+    ...(project.role ? { role: project.role } : {}),
+    ...(project.capabilities ? { capabilities: project.capabilities } : {}),
+  }
+}
 
 export function normalizePageHostname(pageUrl: string): string | null {
   try {
@@ -46,10 +57,10 @@ export function resolveProjectSelection(
     const preferred = preferences[hostname]
     if (preferred === null) return null
     const accessible = projects.find((project) => project.publicKey === preferred.publicKey)
-    if (accessible) return { publicKey: accessible.publicKey, name: accessible.name }
+    if (accessible) return projectSelection(accessible)
   }
   const matches = matchingProjects(pageUrl, projects)
-  return matches.length === 1 ? { publicKey: matches[0].publicKey, name: matches[0].name } : null
+  return matches.length === 1 ? projectSelection(matches[0]) : null
 }
 
 function isProjectSelection(value: unknown): value is ExtensionProjectSelection {
@@ -88,14 +99,18 @@ async function getHostProjectPreference(hostname: string): Promise<{
 export async function getActiveProject(): Promise<ExtensionProjectSelection | null> {
   const stored = await browser.storage.local.get(ACTIVE_PROJECT_STORAGE_KEY)
   const value = stored[ACTIVE_PROJECT_STORAGE_KEY]
-  return isProjectSelection(value)
-    ? { publicKey: value.publicKey, name: value.name }
-    : null
+  if (!isProjectSelection(value)) return null
+  return {
+        publicKey: value.publicKey,
+        name: value.name,
+        ...(value.role ? { role: value.role } : {}),
+        ...(Array.isArray(value.capabilities) ? { capabilities: value.capabilities } : {}),
+      }
 }
 
 export async function setActiveProject(project: ExtensionProjectSelection | null) {
   const current = await getActiveProject()
-  if (current?.publicKey === project?.publicKey && current?.name === project?.name) return
+  if (JSON.stringify(current) === JSON.stringify(project)) return
   if (project) await browser.storage.local.set({ [ACTIVE_PROJECT_STORAGE_KEY]: project })
   else await browser.storage.local.remove(ACTIVE_PROJECT_STORAGE_KEY)
 }

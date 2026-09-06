@@ -12,6 +12,7 @@ export type ExtensionComment = {
   y: number
   selector: string
   body: string
+  visibility?: 'shared' | 'internal'
   screenshotUrl: string | null
   authorName: string | null
   createdAt: string
@@ -52,7 +53,7 @@ export async function listPageComments(pageUrl: string, page = 1, projectId?: st
   return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
 }
 
-export function createPageComment(input: { projectId?: string; pageUrl: string; selector: string; x: number; y: number; body: string; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
+export function createPageComment(input: { projectId?: string; pageUrl: string; selector: string; x: number; y: number; body: string; visibility?: 'shared' | 'internal'; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
   return request<ExtensionComment>('/v1/extension/comments', { method: 'POST', body: JSON.stringify(input) })
 }
 

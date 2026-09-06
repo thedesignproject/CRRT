@@ -174,7 +174,9 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
     }
 
     const existing = await getComment(id)
-    if (!existing?.projectId) return jsonError(req, res, 404, 'Comment not found')
+    if (!existing?.projectId || existing.visibility === 'internal') {
+      return jsonError(req, res, 404, 'Comment not found')
+    }
     const comment = await updateReviewStatus(existing.projectId, id, nextStatus)
     setCors(req, res, METHODS)
     return res.status(200).json(comment)

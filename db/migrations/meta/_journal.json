@@ -134,6 +134,13 @@
       "when": 1788707819686,
       "tag": "0018_whole_frank_castle",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788709817154,
+      "tag": "0019_remarkable_mantis",
+      "breakpoints": true
     }
   ]
 }

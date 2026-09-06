@@ -757,6 +757,8 @@ function FeedbackWidgetInner({
         body: commentText,
       }
 
+      if (personalComments?.audience) payload.visibility = personalComments.audience.value
+
       if (authorNameRef.current) {
         payload.authorName = authorNameRef.current
       }
@@ -784,6 +786,7 @@ function FeedbackWidgetInner({
         selector: targetData.selector,
         body: commentText,
         reviewStatus: 'open',
+        visibility: data.visibility ?? personalComments?.audience?.value ?? 'shared',
         imageUrl: data.imageUrl ?? null,
         createdAt: data.createdAt ?? new Date().toISOString(),
         authorName: data.authorName ?? authorNameRef.current ?? undefined,
@@ -1182,6 +1185,27 @@ function FeedbackWidgetInner({
               }}>
                 Just now
               </span>
+              {personalComments?.audience && (
+                personalComments.audience.canChoose ? (
+                  <select
+                    aria-label="Feedback audience"
+                    value={personalComments.audience.value}
+                    onChange={(event) => personalComments.audience?.onChange?.(event.target.value as 'shared' | 'internal')}
+                    style={{
+                      marginLeft: 'auto', padding: '3px 7px', borderRadius: 4,
+                      border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-surface-raised)',
+                      color: 'var(--fw-foreground-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                    }}
+                  >
+                    <option value="shared">Shared</option>
+                    <option value="internal">Internal</option>
+                  </select>
+                ) : (
+                  <span style={{ marginLeft: 'auto', color: 'var(--fw-foreground-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                    Shared
+                  </span>
+                )
+              )}
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1889,6 +1913,11 @@ function FeedbackWidgetInner({
                       <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>
                         {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span> <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>#{pinNum}</span>
                       </span>
+                      {c.visibility && (
+                        <span style={{ fontSize: 10, color: 'var(--fw-foreground-faint)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {c.visibility}
+                        </span>
+                      )}
                     </div>
                     {/* Actions inline — same row as the author */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>

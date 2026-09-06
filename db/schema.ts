@@ -166,6 +166,7 @@ export const comments = pgTable(
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     projectId: text('project_id'),
     source: text('source').notNull().default('widget'),
+    visibility: text('visibility').notNull().default('shared'),
     createdByUserId: uuid('created_by_user_id').references(() => authUsers.id, { onDelete: 'cascade' }),
     url: text('url'),
     pageHostname: text('page_hostname'),
@@ -211,6 +212,7 @@ export const comments = pgTable(
       t.createdAt.desc(),
     ),
     sourceCheck: check('comments_source_check', sql`${t.source} in ('widget', 'extension')`),
+    visibilityCheck: check('comments_visibility_check', sql`${t.visibility} in ('shared', 'internal')`),
     extensionOwnershipCheck: check(
       'comments_extension_ownership_check',
       sql`${t.source} <> 'extension' or (${t.createdByUserId} is not null and ${t.pageHostname} is not null)`,

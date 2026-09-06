@@ -75,7 +75,12 @@ export function Popup() {
 
   async function chooseProject(publicKey: string) {
     const next = projects.find((project) => project.publicKey === publicKey) ?? null
-    const selection = next ? { publicKey: next.publicKey, name: next.name } : null
+    const selection = next ? {
+      publicKey: next.publicKey,
+      name: next.name,
+      ...(next.role ? { role: next.role } : {}),
+      ...(next.capabilities ? { capabilities: next.capabilities } : {}),
+    } : null
     setBusy(true); setError('')
     try {
       if (pageUrl) await setProjectForPage(pageUrl, selection)
