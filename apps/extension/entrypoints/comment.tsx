@@ -19,7 +19,16 @@ export function mountWidget(activate = false) {
   frame.src = browser.runtime.getURL('/private.html')
   host.attachShadow({ mode: 'closed' }).append(frame)
   document.documentElement.append(host)
-  window.addEventListener('pagehide', disconnect, { once: true })
+  let cleaned = false
+  const cleanup = () => {
+    if (cleaned) return
+    cleaned = true
+    disconnect()
+    host.remove()
+    window.removeEventListener('crrt:deactivate', cleanup)
+  }
+  window.addEventListener('crrt:deactivate', cleanup)
+  window.addEventListener('pagehide', cleanup, { once: true })
 }
 
 export default defineUnlistedScript(() => mountWidget(true))

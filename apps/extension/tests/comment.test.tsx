@@ -305,7 +305,7 @@ it('ignores a late load failure after the widget unmounts', async () => {
   expect(view.container).toBeEmptyDOMElement()
 })
 
-it('declares automatic HTTP(S) injection, avoids duplicate widgets, and supports popup activation', async () => {
+it('autoloads only in an activated tab, avoids duplicate widgets, and supports popup activation', async () => {
   expect(autoload.matches).toEqual(['http://*/*', 'https://*/*'])
   expect(config.manifest).toMatchObject({ host_permissions: ['http://*/*', 'https://*/*'] })
   expect((config.vite as () => unknown)()).toEqual({ build: { assetsInlineLimit: Infinity } })
@@ -319,7 +319,11 @@ it('declares automatic HTTP(S) injection, avoids duplicate widgets, and supports
   expect(readFileSync(assets[0].absoluteSrc)).toEqual(readFileSync('branding/design-system-crrt/Frame 11.png'))
   const spy = vi.spyOn(window, 'dispatchEvent')
   const attach = vi.spyOn(Element.prototype, 'attachShadow')
-  await act(async () => { autoload.main({} as never) })
+  sendMessage.mockResolvedValueOnce({ ok: true, data: false })
+  await act(async () => { await autoload.main({} as never) })
+  expect(document.querySelector('[data-crrt-extension]')).toBeNull()
+  sendMessage.mockResolvedValueOnce({ ok: true, data: true })
+  await act(async () => { await autoload.main({} as never) })
   const host = document.querySelector('[data-crrt-extension]')!
   expect(attach).toHaveBeenCalledWith({ mode: 'closed' })
   expect(attach.mock.results[0].value.querySelector('[data-fw-crrt]')).toBeNull()

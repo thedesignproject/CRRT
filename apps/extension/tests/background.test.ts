@@ -1,7 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ listener: undefined as ((message: unknown, sender: unknown, respond: (response: unknown) => void) => boolean) | undefined }))
-const browser = vi.hoisted(() => ({ action: { openPopup: vi.fn() }, tabs: { query: vi.fn() }, scripting: { executeScript: vi.fn() }, runtime: { onMessage: { addListener: vi.fn((value) => { state.listener = value }) } } }))
+const state = vi.hoisted(() => ({
+  listener: undefined as ((message: unknown, sender: unknown, respond: (response: unknown) => void) => boolean) | undefined,
+  removed: undefined as ((tabId: number) => void) | undefined,
+  session: {} as Record<string, unknown>,
+}))
+const browser = vi.hoisted(() => ({
+  action: { openPopup: vi.fn() },
+  tabs: {
+    query: vi.fn(),
+    onRemoved: { addListener: vi.fn((value) => { state.removed = value }) },
+  },
+  storage: { session: {
+    get: vi.fn(async (key: string) => ({ [key]: state.session[key] })),
+    set: vi.fn(async (values: Record<string, unknown>) => { Object.assign(state.session, values) }),
+    remove: vi.fn(async (key: string) => { delete state.session[key] }),
+  } },
+  scripting: { executeScript: vi.fn() },
+  runtime: { onMessage: { addListener: vi.fn((value) => { state.listener = value }) } },
+}))
 vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
 vi.mock('../lib/auth', () => ({ createExtensionSupabase: vi.fn(() => 'client'), handleAuthMessage: vi.fn(), isAuthMessage: vi.fn() }))
@@ -11,12 +28,12 @@ import background, { activateCurrentTab } from '../entrypoints/background'
 import { handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
 
-beforeEach(() => { vi.clearAllMocks(); state.listener = undefined })
+beforeEach(() => { vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.session = {} })
 
-function send(message: unknown) {
+function send(message: unknown, sender: unknown = {}) {
   return new Promise((resolve) => {
     // Simulate Chrome's callback contract, not native Promise listener support.
-    expect(state.listener!(message, {}, resolve)).toBe(true)
+    expect(state.listener!(message, sender, resolve)).toBe(true)
   })
 }
 
@@ -41,7 +58,26 @@ describe('extension background', () => {
   it('activates regular pages using temporary tab access', async () => {
     browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
     await activateCurrentTab()
+    expect(browser.storage.session.set).toHaveBeenCalledWith({ 'crrt:active-tab:7': true })
     expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['comment.js'] })
+  })
+
+  it('exposes activation only to the browser-provided tab and clears closed tabs', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    state.session['crrt:active-tab:7'] = true
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7 } })).resolves.toEqual({ ok: true, data: true })
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 8 } })).resolves.toEqual({ ok: true, data: false })
+    await expect(send({ type: 'comment:is-active' }, {})).resolves.toEqual({ ok: true, data: false })
+    state.removed!(7)
+    await vi.waitFor(() => expect(browser.storage.session.remove).toHaveBeenCalledWith('crrt:active-tab:7'))
+  })
+
+  it('rolls back activation when injection fails', async () => {
+    browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+    browser.scripting.executeScript.mockRejectedValueOnce(new Error('restricted'))
+    await expect(activateCurrentTab()).rejects.toThrow('restricted')
+    expect(browser.storage.session.remove).toHaveBeenCalledWith('crrt:active-tab:7')
   })
 
   it('rejects missing, internal, and malformed tabs', async () => {
