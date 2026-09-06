@@ -6,7 +6,7 @@ import { receiveFrameMessages, sendFrameMessage } from './frame-channel'
 
 export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
   let frameId = 0, selecting = false, lastState = '', focus: ScreenshotFocusRect | null = null
-  let targets: { id: string; selector: string }[] = []
+  let targets: { id: string; selector: string; x: number; y: number }[] = []
   let hitRects: number[][] = []
   frame.style.pointerEvents = 'none'
   let highlighted: HTMLElement | null = null, oldOutline = '', oldOffset = ''
@@ -22,12 +22,19 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
     if (element) { oldOutline = element.style.outline; oldOffset = element.style.outlineOffset; element.style.outline = '2px solid rgba(232,133,61,.6)'; element.style.outlineOffset = '2px' }
   }
   function state() {
-    const liveIds = targets.filter(({ selector }) => {
-      try { const rect = document.querySelector(selector)?.getBoundingClientRect(); return rect && (rect.width || rect.height) }
-      catch { return false }
+    const liveIds = targets.filter(({ selector, x, y }) => {
+      try {
+        const rect = document.querySelector(selector)?.getBoundingClientRect()
+        return Boolean((rect && (rect.width || rect.height)) || (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100))
+      } catch {
+        return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100
+      }
     }).map(({ id }) => id)
+    const embeddedProjectIds = Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt][data-crrt-project]'))
+      .map((node) => node.dataset.crrtProject)
+      .filter((projectId): projectId is string => Boolean(projectId))
     return { kind: 'state', url: location.href.split('#')[0], width: document.documentElement.scrollWidth,
-      height: document.documentElement.scrollHeight, scrollX, scrollY, liveIds }
+      height: document.documentElement.scrollHeight, scrollX, scrollY, liveIds, embeddedProjectIds }
   }
   function update() {
     const next = JSON.stringify(state())
@@ -58,6 +65,10 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
       })
     } else if (message.kind === 'highlight') {
       try { const element = document.querySelector<HTMLElement>(message.selector); element?.scrollIntoView({ behavior: 'smooth', block: 'center' }); highlight(element); window.setTimeout(() => highlight(null), 1400) } catch { /* stale selector */ }
+    } else if (message.kind === 'focus-embedded') {
+      const match = Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt][data-crrt-project]'))
+        .some((node) => node.dataset.crrtProject === message.projectId)
+      if (match) window.dispatchEvent(new CustomEvent('crrt:activate'))
     }
   })
   function move(event: MouseEvent) {

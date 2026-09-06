@@ -10,7 +10,7 @@ vi.mock('wxt/browser', () => ({ browser: { storage: { onChanged: storage }, runt
 vi.mock('../lib/page-host', () => ({ connectPageHost: vi.fn(() => vi.fn()) }))
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
-vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), listExtensionProjects: vi.fn(), listPageComments: vi.fn(), updatePageComment: vi.fn() }))
+vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), listExtensionProjects: vi.fn(), listPageComments: vi.fn(), listProjectComments: vi.fn(), updatePageComment: vi.fn() }))
 const resolveProjectForPage = vi.hoisted(() => vi.fn())
 vi.mock('../lib/project-context', () => ({ resolveProjectForPage }))
 vi.mock('../../../src/lib/screenshotCapture', () => ({
@@ -26,7 +26,7 @@ import script, { mountWidget } from '../entrypoints/comment'
 import { ExtensionWidget, extensionComments, personalComments } from '../lib/personal-widget'
 import autoload from '../entrypoints/autoload.content'
 import config from '../wxt.config'
-import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
+import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, listProjectComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import type { WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 
@@ -40,6 +40,7 @@ beforeEach(() => {
   vi.mocked(listExtensionProjects).mockResolvedValue([])
   resolveProjectForPage.mockReset().mockResolvedValue(null)
   vi.mocked(listPageComments).mockResolvedValue({ items: [comment], total: 1 })
+  vi.mocked(listProjectComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
   vi.mocked(createPageComment).mockResolvedValue({ ...comment, id: 'new', body: 'New' })
   vi.mocked(updatePageComment).mockResolvedValue(comment); vi.mocked(deletePageComment).mockResolvedValue()
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Public widget endpoints must not be used'))
@@ -96,7 +97,7 @@ it('mounts the actual idle widget, highlights selection, and sends through the p
 })
 
 it('uses the selected project for authenticated extension comments', async () => {
-  vi.mocked(listPageComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
+  vi.mocked(listProjectComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
   const changeAudience = vi.fn()
   const adapter = extensionComments({
     publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['feedback:manage'],
@@ -111,7 +112,7 @@ it('uses the selected project for authenticated extension comments', async () =>
   expect(extensionComments({ publicKey: 'legacy', name: 'Legacy project' }).audience)
     .toMatchObject({ canChoose: false })
   await expect(adapter.list(location.href.split('#')[0])).resolves.toHaveLength(1)
-  expect(listPageComments).toHaveBeenCalledWith(location.href.split('#')[0], 1, 'project')
+  expect(listProjectComments).toHaveBeenCalledWith('project', 1)
   await adapter.create({
     projectId: 'project', pageUrl: location.href.split('#')[0], selector: '#target', x: 1, y: 2,
     body: 'Project feedback', targetType: 'element_point', anchor: null,
@@ -136,7 +137,7 @@ it('renders selectable member and locked guest audiences in the composer', async
     publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['feedback:manage'],
   }, 'internal', changeAudience)
   let view = render(<FeedbackWidget projectId="project" personalComments={member} viewerEmail="user@example.com" />)
-  await waitFor(() => expect(listPageComments).toHaveBeenCalled())
+  await waitFor(() => expect(listProjectComments).toHaveBeenCalled())
   fireEvent.keyDown(window, { key: 'c' })
   fireEvent.mouseMove(target)
   fireEvent.click(target, { clientX: 30, clientY: 40 })
@@ -154,7 +155,7 @@ it('renders selectable member and locked guest audiences in the composer', async
     publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
   })
   view = render(<FeedbackWidget projectId="project" personalComments={guest} viewerEmail="guest@example.com" />)
-  await waitFor(() => expect(listPageComments).toHaveBeenCalled())
+  await waitFor(() => expect(listProjectComments).toHaveBeenCalled())
   fireEvent.keyDown(window, { key: 'c' })
   fireEvent.mouseMove(target)
   fireEvent.click(target, { clientX: 30, clientY: 40 })
@@ -179,6 +180,47 @@ it('uses a safe author fallback for extension comments without an author name', 
   await expect(personalComments.list(location.href.split('#')[0])).resolves.toEqual([
     expect.objectContaining({ authorName: 'You', projectId: '' }),
   ])
+})
+
+it('shows current-page pins and project-wide feedback without making other authors editable', async () => {
+  const project = { publicKey: 'project', name: 'Storefront', role: 'guest' as const, capabilities: ['feedback:read', 'feedback:create'] }
+  resolveProjectForPage.mockResolvedValue(project)
+  vi.mocked(listProjectComments).mockResolvedValue({
+    items: [
+      { ...comment, projectId: 'project', pageUrl: `${location.origin}${location.pathname}?utm_source=test`, editable: true },
+      { ...comment, id: 'other', projectId: 'project', pageUrl: 'https://site.test/checkout', body: 'Checkout feedback', editable: false },
+    ],
+    total: 2,
+  })
+  const page: WidgetPage = {
+    url: `${location.origin}${location.pathname}`,
+    width: 1000, height: 1000, scrollX: 0, scrollY: 0, liveIds: ['c1'],
+    capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn(),
+  }
+  const view = setup(false, page)
+  await waitFor(() => expect(view.container.querySelectorAll('[data-fw-pin]')).toHaveLength(1))
+  fireEvent.keyDown(window, { key: 'f' })
+  await view.ui.findByRole('button', { name: /This page/ })
+  expect(view.ui.queryByText('Checkout feedback')).toBeNull()
+  fireEvent.click(view.ui.getByRole('button', { name: /All feedback/ }))
+  expect(await view.ui.findByText('Checkout feedback')).toBeInTheDocument()
+  expect(view.container.querySelectorAll('[data-fw-pin]')).toHaveLength(1)
+  expect(view.ui.getAllByRole('button', { name: 'More' })).toHaveLength(1)
+})
+
+it('focuses an existing npm widget for the same project instead of rendering a duplicate', async () => {
+  const focusEmbedded = vi.fn()
+  resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read'] })
+  const page: WidgetPage = {
+    url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0,
+    liveIds: [], embeddedProjectIds: ['project'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(),
+    highlight: vi.fn(), focusEmbedded,
+  }
+  const view = setup(true, page)
+  await waitFor(() => expect(focusEmbedded).toHaveBeenCalledWith('project'))
+  expect(view.ui.queryByRole('button', { name: 'Open CRRT menu' })).toBeNull()
+  window.dispatchEvent(new CustomEvent('crrt:activate'))
+  expect(focusEmbedded).toHaveBeenCalledTimes(2)
 })
 
 it('preserves a draft and screenshot when tokens refresh for the same account', async () => {
@@ -238,7 +280,7 @@ it('uses host page geometry, targets, selectors and navigation in the isolated e
   const view = setup(false, page); await act(async () => {})
   const pin = view.container.querySelector('[data-fw-pin]')!
   expect(pin).toHaveStyle({ left: '190px', top: '569px' })
-  expect(page.track).toHaveBeenCalledWith([{ id: 'c1', selector: '#target' }])
+  expect(page.track).toHaveBeenCalledWith([{ id: 'c1', selector: '#target', x: 10, y: 20 }])
   fireEvent.click(pin)
   fireEvent.click(view.container.querySelector('[data-fw-pin-backdrop]')!)
   await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })

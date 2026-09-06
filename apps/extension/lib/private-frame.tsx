@@ -11,8 +11,9 @@ const actions = {
     } catch { return null }
   },
   selecting: (value: boolean) => tellHost({ kind: 'selecting', value }),
-  track: (targets: { id: string; selector: string }[]) => tellHost({ kind: 'track', targets }),
+  track: (targets: { id: string; selector: string; x: number; y: number }[]) => tellHost({ kind: 'track', targets }),
   highlight: (selector: string) => tellHost({ kind: 'highlight', selector }),
+  focusEmbedded: (projectId: string) => tellHost({ kind: 'focus-embedded', projectId }),
 }
 
 // Measure interactive surfaces; the transparent frame paints independently of these hit-test bounds.

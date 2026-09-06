@@ -2,17 +2,25 @@ import { useEffect, useMemo, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 import type { Comment, PersonalComments, WidgetPage } from '../../../src/components/FeedbackWidget/types'
-import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
+import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, listProjectComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import { resolveProjectForPage, type ExtensionProjectSelection } from './project-context'
 
 function widgetComment(comment: ExtensionComment): Comment {
-  return { ...comment, projectId: comment.projectId ?? '', reviewStatus: 'open', imageUrl: comment.screenshotUrl, authorName: comment.authorName ?? 'You' }
+  return {
+    ...comment,
+    projectId: comment.projectId ?? '',
+    reviewStatus: comment.reviewStatus ?? 'open',
+    imageUrl: comment.screenshotUrl,
+    authorName: comment.authorName ?? 'You',
+  }
 }
 
 export function extensionComments(
   project: ExtensionProjectSelection | null = null,
   visibility: 'shared' | 'internal' = 'shared',
   onVisibilityChange?: (visibility: 'shared' | 'internal') => void,
+  scope: 'page' | 'project' = 'page',
+  onScopeChange?: (scope: 'page' | 'project') => void,
 ): PersonalComments {
   const canChooseVisibility = project
     ? project.capabilities?.includes('feedback:manage')
@@ -25,6 +33,7 @@ export function extensionComments(
       canChoose: canChooseVisibility,
       onChange: onVisibilityChange,
     } : undefined,
+    scope: project && onScopeChange ? { value: scope, onChange: onScopeChange } : undefined,
     async beforeOpen() {
       if (await extensionSession()) return true
       const response = await browser.runtime.sendMessage({ type: 'auth:open-popup' })
@@ -38,7 +47,7 @@ export function extensionComments(
       let total: number
       do {
         const result = project
-          ? await listPageComments(pageUrl, page++, project.publicKey)
+          ? await listProjectComments(project.publicKey, page++)
           : await listPageComments(pageUrl, page++)
         items.push(...result.items.map(widgetComment)); total = result.total
         if (!result.items.length) break
@@ -66,6 +75,7 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
   const [identity, setIdentity] = useState<string | null | undefined>(undefined)
   const [project, setProject] = useState<ExtensionProjectSelection | null>(null)
   const [visibility, setVisibility] = useState<'shared' | 'internal'>('shared')
+  const [scope, setScope] = useState<'page' | 'project'>('page')
   useEffect(() => {
     let version = 0, alive = true
     const refresh = async () => {
@@ -79,6 +89,7 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
           setIdentity(session?.email ?? null)
           setProject(activeProject)
           setVisibility('shared')
+          setScope('page')
         }
       } catch { if (alive && current === version) setIdentity((previous) => previous === undefined ? null : previous) }
     }
@@ -87,12 +98,24 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
     return () => { alive = false; browser.storage.onChanged.removeListener(refresh) }
   }, [page?.url])
   const comments = useMemo(
-    () => extensionComments(project, visibility, setVisibility),
-    [project, visibility],
+    () => extensionComments(project, visibility, setVisibility, scope, setScope),
+    [project, scope, visibility],
+  )
+  const embeddedWidget = Boolean(
+    project && page?.embeddedProjectIds?.includes(project.publicKey),
   )
   useEffect(() => {
-    if (identity !== undefined && activate) window.dispatchEvent(new CustomEvent('crrt:activate'))
-  }, [identity, activate])
+    if (identity === undefined) return
+    if (!embeddedWidget || !project) {
+      if (activate) window.dispatchEvent(new CustomEvent('crrt:activate'))
+      return
+    }
+    const focusEmbedded = () => page?.focusEmbedded?.(project.publicKey)
+    if (activate) focusEmbedded()
+    window.addEventListener('crrt:activate', focusEmbedded)
+    return () => window.removeEventListener('crrt:activate', focusEmbedded)
+  }, [activate, embeddedWidget, identity, page?.focusEmbedded, project?.publicKey])
   if (identity === undefined) return null
+  if (embeddedWidget) return null
   return <><style>{`button, textarea, input { font: inherit }`}</style><FeedbackWidget key={`${identity ?? 'signed-out'}:${project?.publicKey ?? 'private'}`} projectId={project?.publicKey ?? ''} personalComments={comments} viewerEmail={identity ?? undefined} page={page} /></>
 }
