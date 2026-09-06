@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 import type { Comment, PersonalComments, WidgetPage } from '../../../src/components/FeedbackWidget/types'
-import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, listProjectComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
+import { createPageComment, deletePageComment, extensionSession, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import { resolveProjectForPage, type ExtensionProjectSelection } from './project-context'
 
 function widgetComment(comment: ExtensionComment): Comment {
@@ -26,6 +26,7 @@ export function extensionComments(
     ? project.capabilities?.includes('feedback:manage')
       ?? (project.role !== undefined && project.role !== 'guest')
     : false
+  const canSendExternalWork = Boolean(project?.capabilities?.includes('integrations:send'))
   return {
     label: project?.name ?? 'My extension comments',
     audience: project ? {
@@ -34,6 +35,20 @@ export function extensionComments(
       onChange: onVisibilityChange,
     } : undefined,
     scope: project && onScopeChange ? { value: scope, onChange: onScopeChange } : undefined,
+    externalWork: canSendExternalWork ? {
+      async prepare(commentId) {
+        const prepared = await getExternalWorkDraft(commentId)
+        if (!prepared.connected) throw new Error('Connect GitHub from Project Settings first.')
+        if (prepared.existing) return {
+          destination: prepared.destination ?? 'GitHub', title: '', body: '', existingUrl: prepared.existing.issueUrl,
+        }
+        return { destination: prepared.destination ?? 'GitHub', ...prepared.draft }
+      },
+      async send(commentId, draft) {
+        const result = await sendExternalWork(commentId, draft)
+        return { issueUrl: result.issueUrl }
+      },
+    } : undefined,
     async beforeOpen() {
       if (await extensionSession()) return true
       const response = await browser.runtime.sendMessage({ type: 'auth:open-popup' })

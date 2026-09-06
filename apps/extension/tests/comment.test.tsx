@@ -10,7 +10,7 @@ vi.mock('wxt/browser', () => ({ browser: { storage: { onChanged: storage }, runt
 vi.mock('../lib/page-host', () => ({ connectPageHost: vi.fn(() => vi.fn()) }))
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
-vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), listExtensionProjects: vi.fn(), listPageComments: vi.fn(), listProjectComments: vi.fn(), updatePageComment: vi.fn() }))
+vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), getExternalWorkDraft: vi.fn(), listExtensionProjects: vi.fn(), listPageComments: vi.fn(), listProjectComments: vi.fn(), sendExternalWork: vi.fn(), updatePageComment: vi.fn() }))
 const resolveProjectForPage = vi.hoisted(() => vi.fn())
 vi.mock('../lib/project-context', () => ({ resolveProjectForPage }))
 vi.mock('../../../src/lib/screenshotCapture', () => ({
@@ -26,7 +26,7 @@ import script, { mountWidget } from '../entrypoints/comment'
 import { ExtensionWidget, extensionComments, personalComments } from '../lib/personal-widget'
 import autoload from '../entrypoints/autoload.content'
 import config from '../wxt.config'
-import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, listProjectComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
+import { createPageComment, deletePageComment, extensionSession, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import type { WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 
@@ -42,6 +42,8 @@ beforeEach(() => {
   vi.mocked(listPageComments).mockResolvedValue({ items: [comment], total: 1 })
   vi.mocked(listProjectComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
   vi.mocked(createPageComment).mockResolvedValue({ ...comment, id: 'new', body: 'New' })
+  vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'github', connected: true, destination: 'acme/store', existing: null, draft: { title: 'Feedback title', body: 'Feedback body' } })
+  vi.mocked(sendExternalWork).mockResolvedValue({ issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now', created: true })
   vi.mocked(updatePageComment).mockResolvedValue(comment); vi.mocked(deletePageComment).mockResolvedValue()
   vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Public widget endpoints must not be used'))
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 10, top: 20, width: 100, height: 40 } as DOMRect)
@@ -241,6 +243,23 @@ it('refreshes an open personal sidebar and ignores offline or late interval resu
   await act(async () => { vi.advanceTimersByTime(15_000) })
   view.unmount()
   await act(async () => { resolve([{ ...comment, body: 'Late interval feedback' }]) })
+})
+
+it('lets internal members edit and confirm a manual GitHub handoff from the extension', async () => {
+  resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['feedback:read', 'feedback:create', 'integrations:send'] })
+  const page: WidgetPage = { url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0, liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
+  const open = vi.spyOn(window, 'open').mockReturnValue(null)
+  const view = setup(false, page)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+  fireEvent.click(await view.ui.findByRole('button', { name: 'More' }))
+  fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
+  const title = await view.ui.findByRole('textbox', { name: 'External work title' })
+  fireEvent.change(title, { target: { value: 'Edited title' } })
+  fireEvent.change(view.ui.getByRole('textbox', { name: 'External work description' }), { target: { value: 'Edited body' } })
+  fireEvent.click(view.ui.getByRole('button', { name: 'Create issue' }))
+  await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith('c1', { title: 'Edited title', body: 'Edited body' }))
+  expect(open).toHaveBeenCalledWith('https://github.com/acme/store/issues/1', '_blank', 'noopener,noreferrer')
 })
 
 it('focuses an existing npm widget for the same project instead of rendering a duplicate', async () => {

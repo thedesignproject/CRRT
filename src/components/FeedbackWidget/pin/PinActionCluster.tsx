@@ -7,11 +7,12 @@ export interface PinActionClusterProps {
   onEdit: () => void
   onDelete: () => void
   onViewList?: () => void
+  onSendTo?: () => void
   reviewEnabled?: boolean
   mutationEnabled?: boolean
 }
 
-export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, reviewEnabled = true, mutationEnabled = true }: PinActionClusterProps) {
+export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, onSendTo, reviewEnabled = true, mutationEnabled = true }: PinActionClusterProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, position: 'relative', flexShrink: 0 }}>
@@ -33,7 +34,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
         </button>
       )}
-      {(reviewEnabled || mutationEnabled || onViewList) && <button
+      {(reviewEnabled || mutationEnabled || onViewList || onSendTo) && <button
         onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
         aria-label="More options"
         style={{
@@ -77,6 +78,14 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
               {isResolved ? 'Reopen' : 'Approve'}
+            </button>}
+            {onSendTo && <button
+              onClick={() => { onSendTo(); setMenuOpen(false) }}
+              style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              <span aria-hidden="true">↗</span> Send to…
             </button>}
             {mutationEnabled && <button
               onClick={() => { onEdit(); setMenuOpen(false) }}

@@ -20,10 +20,11 @@ describe('createCommentGithubIssue', () => {
     await expect(createCommentGithubIssue('/api', 'session', 'comment/1'))
       .resolves.toMatchObject({ issueNumber: 42, created: true })
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/v1/comments/comment%2F1/github-issue',
+      '/api/v1/comments/comment%2F1/external-work',
       expect.objectContaining({
         method: 'POST',
-        headers: { Authorization: 'Bearer session' },
+        headers: { Authorization: 'Bearer session', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: 'github' }),
       }),
     )
   })
