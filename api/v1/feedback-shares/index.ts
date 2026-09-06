@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
 import { createFeedbackEvent, createShare, addShareItems, listAcceptedCommentsByIds, listAcceptedCommentsForPage } from '../../_lib/store.js'
 import { generateAccessToken, generateSlug, hashToken, encryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!projectId || (scopeType !== 'page' && scopeType !== 'selection')) {
       return jsonError(req, res, 400, 'scopeType must be page or selection')
     }
-    if (!(await requireProjectMembership(req, res, user, projectId))) return
+    if (!(await requireProjectCapability(req, res, user, projectId, 'agent:operate'))) return
 
     const comments = scopeType === 'page'
       ? await listAcceptedCommentsForPage(projectId, pageUrl)

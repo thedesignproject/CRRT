@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-vi.mock('../../../_lib/auth.js', () => ({ requireProjectMembership: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireUser: vi.fn() }))
 vi.mock('../../../_lib/extension-comments.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../_lib/extension-comments.js')>()
   return { ...actual, assignExtensionCommentToProject: vi.fn(), deleteExtensionComment: vi.fn(), getOwnedExtensionCommentScope: vi.fn(), updateExtensionComment: vi.fn() }
 })
 import handler from './[commentId].js'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { assignExtensionCommentToProject, deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
 
 const res = () => ({ statusCode: 200, body: null as unknown, headers: {} as Record<string, string>, status(code: number) { this.statusCode = code; return this }, json(body: unknown) { this.body = body; return this }, end() { return this }, setHeader(k: string, v: string) { this.headers[k] = v } })
@@ -13,7 +13,7 @@ const call = (req: unknown, response: unknown) => (handler as unknown as (a: unk
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
-  vi.mocked(requireProjectMembership).mockReset().mockResolvedValue(true)
+  vi.mocked(requireProjectCapability).mockReset().mockResolvedValue({ role: 'member' })
   vi.mocked(assignExtensionCommentToProject).mockReset()
   vi.mocked(deleteExtensionComment).mockReset()
   vi.mocked(getOwnedExtensionCommentScope).mockReset().mockResolvedValue({ projectId: null })
@@ -38,10 +38,10 @@ describe('extension comment item endpoint', () => {
   it('rechecks current access before mutating project comments', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
     vi.mocked(getOwnedExtensionCommentScope).mockResolvedValue({ projectId: 'project' })
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(false).mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce(null).mockResolvedValueOnce({ role: 'member' })
 
     let response = res(); await call({ method: 'PATCH', query: { commentId: 'c' }, body: { body: 'x' }, headers: {} }, response)
-    expect(requireProjectMembership).toHaveBeenCalledWith(expect.anything(), response, { userId: 'u', email: 'u@example.com' }, 'project')
+    expect(requireProjectCapability).toHaveBeenCalledWith(expect.anything(), response, { userId: 'u', email: 'u@example.com' }, 'project', 'feedback:create')
     expect(updateExtensionComment).not.toHaveBeenCalled()
 
     response = res(); await call({ method: 'DELETE', query: { commentId: 'c' }, headers: {} }, response)
@@ -62,10 +62,10 @@ describe('extension comment item endpoint', () => {
     let response = res()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: ' p ' }, headers: {} }, response)
     expect(response.statusCode).toBe(200)
-    expect(requireProjectMembership).toHaveBeenCalledWith(expect.anything(), response, user, 'p')
+    expect(requireProjectCapability).toHaveBeenCalledWith(expect.anything(), response, user, 'p', 'feedback:create')
     expect(assignExtensionCommentToProject).toHaveBeenCalledWith('u', 'c', 'p')
 
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(false)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
     response = res()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: 'blocked' }, headers: {} }, response)
     expect(assignExtensionCommentToProject).not.toHaveBeenCalledWith('u', 'c', 'blocked')

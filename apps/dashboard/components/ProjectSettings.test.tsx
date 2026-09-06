@@ -59,7 +59,7 @@ describe('ProjectSettings role controls', () => {
     expect(screen.queryByLabelText('Role for owner@example.com')).toBeNull()
     expect(screen.queryByLabelText('Remove owner@example.com')).toBeNull()
     const role = screen.getByLabelText('Role for member@example.com') as HTMLSelectElement
-    expect(Array.from(role.options).map((option) => option.value)).toEqual(['member', 'admin', 'owner'])
+    expect(Array.from(role.options).map((option) => option.value)).toEqual(['member', 'guest', 'admin', 'owner'])
 
     fireEvent.change(role, { target: { value: 'owner' } })
     expect(screen.getByRole('alertdialog', { name: 'Confirm ownership transfer' })).toBeTruthy()
@@ -87,7 +87,7 @@ describe('ProjectSettings role controls', () => {
     view('admin')
 
     const role = screen.getByLabelText('Role for member@example.com') as HTMLSelectElement
-    expect(Array.from(role.options).map((option) => option.value)).toEqual(['member', 'admin'])
+    expect(Array.from(role.options).map((option) => option.value)).toEqual(['member', 'guest', 'admin'])
     fireEvent.change(role, { target: { value: 'admin' } })
     expect(state.changeRole).toHaveBeenCalledWith('member', 'admin')
   })
@@ -218,7 +218,7 @@ describe('ProjectSettings role controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Invite' }))
 
     await waitFor(() => expect(state.invite).toHaveBeenCalledWith('new@example.com', 'admin'))
-    expect((screen.getByLabelText('Invitation role') as HTMLSelectElement).value).toBe('member')
+    expect((screen.getByLabelText('Invitation role') as HTMLSelectElement).value).toBe('guest')
   })
 
   it('ignores an allowed-domain response from a previously selected project', async () => {

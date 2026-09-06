@@ -2,12 +2,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { signUp } = vi.hoisted(() => ({ signUp: vi.fn() }))
+const { signInWithOtp, signUp } = vi.hoisted(() => ({ signInWithOtp: vi.fn(), signUp: vi.fn() }))
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: {
       signInWithPassword: vi.fn(),
+      signInWithOtp,
       signUp,
       resetPasswordForEmail: vi.fn(),
     },
@@ -26,7 +27,23 @@ async function submitSignup() {
 
 beforeEach(() => {
   signUp.mockReset()
+  signInWithOtp.mockReset()
   window.history.replaceState({}, '', '/signup')
+})
+
+describe('LoginPage invitation continuation', () => {
+  it('prefills the invited email and sends a magic link back to the invitation', async () => {
+    window.history.replaceState({}, '', '/login?invite=project%2Fone&email=guest%40example.com')
+    signInWithOtp.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    expect(screen.getByLabelText('email')).toHaveValue('guest@example.com')
+    fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'guest@example.com',
+      options: { emailRedirectTo: 'http://localhost:3000/?invite=project%2Fone' },
+    }))
+    expect(await screen.findByText(/secure sign-in link/)).toBeInTheDocument()
+  })
 })
 
 describe('LoginPage signup', () => {

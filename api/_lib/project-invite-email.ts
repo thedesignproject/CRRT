@@ -8,7 +8,7 @@ export type ProjectInviteEmailInput = {
   recipient: string
   projectName: string
   inviterEmail: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   dashboardUrl: string
   idempotencyKey: string
 }
@@ -37,8 +37,12 @@ export function getProjectInviteEmailTimeoutMs(env = process.env) {
   return Number.isFinite(ms) && ms > 0 ? Math.floor(ms) : DEFAULT_TIMEOUT_MS
 }
 
-export function getProjectInviteDashboardUrl(env = process.env) {
-  return `${(env.APP_URL || 'https://crrt.ai').replace(/\/$/, '')}/dashboard`
+export function getProjectInviteDashboardUrl(projectKey?: string, recipient?: string, env = process.env) {
+  const base = `${(env.APP_URL || 'https://crrt.ai').replace(/\/$/, '')}/dashboard`
+  if (!projectKey) return base
+  const query = new URLSearchParams({ invite: projectKey })
+  if (recipient) query.set('email', recipient.trim().toLowerCase())
+  return `${base}/login?${query}`
 }
 
 export function buildProjectInviteEmail(input: ProjectInviteEmailInput) {

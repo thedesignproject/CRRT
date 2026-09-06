@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../auth.js', () => ({ requireProjectMembership: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../auth.js', () => ({ requireProjectCapability: vi.fn(), requireUser: vi.fn() }))
 vi.mock('./store.js', () => ({ getAuditAccessRow: vi.fn() }))
 vi.mock('./tokens.js', () => ({ hashAuditCapability: vi.fn() }))
 
-import { requireProjectMembership, requireUser } from '../auth.js'
+import { requireProjectCapability, requireUser } from '../auth.js'
 import { requireAuditAccess } from './access.js'
 import { getAuditAccessRow } from './store.js'
 import { hashAuditCapability } from './tokens.js'
@@ -17,7 +17,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   delete process.env.AUDIT_LOCAL_ACCESS_BYPASS
   vi.mocked(requireUser).mockResolvedValue({ userId: 'user', email: 'u@example.com' })
-  vi.mocked(requireProjectMembership).mockResolvedValue(true)
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(hashAuditCapability).mockReturnValue('hash')
 })
 
@@ -40,7 +40,7 @@ describe('audit capability access', () => {
     vi.mocked(requireUser).mockResolvedValueOnce(null)
     res = response()
     expect(await requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id')).toBeNull()
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(false)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
     res = response()
     expect(await requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id')).toBeNull()
     res = response()

@@ -21,6 +21,7 @@ import handler from './invites.js'
 import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../_lib/auth.js'
 import {
+  getProjectInviteDashboardUrl,
   getProjectInviteEmailIdempotencyKey,
   sendProjectInviteEmail,
 } from '../../../_lib/project-invite-email.js'
@@ -62,6 +63,7 @@ beforeEach(() => {
   vi.mocked(createNotification).mockReset()
   vi.mocked(getProject).mockReset().mockResolvedValue({ name: 'Demo project' } as never)
   vi.mocked(sendProjectInviteEmail).mockReset().mockResolvedValue({ skipped: false })
+  vi.mocked(getProjectInviteDashboardUrl).mockClear()
   vi.mocked(waitUntil).mockReset()
   vi.mocked(listProjectInvites).mockReset()
   vi.mocked(deleteProjectInvite).mockReset()
@@ -190,6 +192,32 @@ describe('api/v1/projects/[projectId]/invites', () => {
       idempotencyKey: 'project-invite/test',
     })
     expect(getProjectInviteEmailIdempotencyKey).toHaveBeenCalledWith('p', 'x@y.z')
+    expect(getProjectInviteDashboardUrl).toHaveBeenCalledWith('p', 'x@y.z')
+
+    // Guest is an explicit, persisted feedback-only role.
+    vi.mocked(createInvite).mockResolvedValueOnce({ projectKey: 'p', email: 'guest@y.z', role: 'guest' } as never)
+    vi.mocked(findUserIdByEmail).mockResolvedValueOnce(null)
+    res = mockRes()
+    await call({
+      method: 'POST',
+      query: { projectId: 'p' },
+      body: { email: 'guest@y.z', role: 'guest' },
+      headers: {},
+    }, res)
+    expect(res.statusCode).toBe(201)
+    expect(createInvite).toHaveBeenLastCalledWith({
+      projectKey: 'p', email: 'guest@y.z', role: 'guest', invitedBy: 'u',
+    })
+
+    // Unknown roles are rejected instead of silently escalating or falling back.
+    res = mockRes()
+    await call({
+      method: 'POST',
+      query: { projectId: 'p' },
+      body: { email: 'x@y.z', role: 'viewer' },
+      headers: {},
+    }, res)
+    expect(res.statusCode).toBe(400)
 
     // happy path: invitee has no account → notification skipped
     vi.mocked(createInvite).mockResolvedValueOnce({ projectKey: 'p', email: 'x@y.z' } as never)

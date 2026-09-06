@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-vi.mock('../../../_lib/auth.js', () => ({ requireProjectMembership: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireUser: vi.fn() }))
 vi.mock('../../../_lib/extension-comments.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../_lib/extension-comments.js')>()
   return { ...actual, createExtensionComment: vi.fn(), listExtensionComments: vi.fn() }
 })
 import handler from './index.js'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { createExtensionComment, ExtensionCommentError, listExtensionComments } from '../../../_lib/extension-comments.js'
 
 const res = () => ({ statusCode: 200, body: null as unknown, headers: {} as Record<string, string>, status(code: number) { this.statusCode = code; return this }, json(body: unknown) { this.body = body; return this }, end() { return this }, setHeader(k: string, v: string) { this.headers[k] = v } })
@@ -13,7 +13,7 @@ const call = (req: unknown, response: unknown) => (handler as unknown as (a: unk
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
-  vi.mocked(requireProjectMembership).mockReset().mockResolvedValue(true)
+  vi.mocked(requireProjectCapability).mockReset().mockResolvedValue({ role: 'member' })
   vi.mocked(createExtensionComment).mockReset()
   vi.mocked(listExtensionComments).mockReset()
 })
@@ -40,14 +40,14 @@ describe('extension comments collection endpoint', () => {
 
     let response = res()
     await call({ method: 'GET', query: { projectId: 'project' }, headers: {} }, response)
-    expect(requireProjectMembership).toHaveBeenCalledWith(expect.anything(), response, user, 'project')
+    expect(requireProjectCapability).toHaveBeenCalledWith(expect.anything(), response, user, 'project', 'feedback:read')
     expect(listExtensionComments).toHaveBeenCalledWith('u', expect.objectContaining({ projectId: 'project' }))
 
     response = res()
     await call({ method: 'POST', body: { projectId: 'project' }, headers: {} }, response)
     expect(createExtensionComment).toHaveBeenCalledWith('u', { projectId: 'project' }, 'project', 'u@example.com')
 
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(false)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
     response = res()
     await call({ method: 'POST', body: { projectId: 'private-project' }, headers: {} }, response)
     expect(createExtensionComment).not.toHaveBeenCalledWith('u', expect.anything(), 'private-project', expect.anything())

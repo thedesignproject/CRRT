@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
+vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireUser: vi.fn() }))
 vi.mock('../../../_lib/store.js', () => ({
-  getProjectMember: vi.fn(),
   listProjectMembers: vi.fn(),
 }))
 
 import handler from './members.js'
-import { requireUser } from '../../../_lib/auth.js'
-import { getProjectMember, listProjectMembers } from '../../../_lib/store.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
+import { listProjectMembers } from '../../../_lib/store.js'
 
 function mockRes() {
   return {
@@ -26,7 +25,7 @@ const call = (req: unknown, res: unknown) =>
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
-  vi.mocked(getProjectMember).mockReset()
+  vi.mocked(requireProjectCapability).mockReset()
   vi.mocked(listProjectMembers).mockReset()
 })
 
@@ -59,13 +58,13 @@ describe('api/v1/projects/[projectId]/members GET', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
 
     // non-member
-    vi.mocked(getProjectMember).mockResolvedValueOnce(null)
+    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_q, r) => { r.status(403).json({ error: 'Forbidden' }); return null })
     let res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     // member → roster
-    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'member' })
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
     vi.mocked(listProjectMembers).mockResolvedValueOnce([{ userId: 'u', email: 'a@b.c', role: 'admin' }] as never)
     res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
@@ -73,7 +72,7 @@ describe('api/v1/projects/[projectId]/members GET', () => {
     expect(res.body).toEqual([{ userId: 'u', email: 'a@b.c', role: 'admin' }])
 
     // error
-    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'admin' })
     vi.mocked(listProjectMembers).mockRejectedValueOnce(new Error('db down'))
     res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)

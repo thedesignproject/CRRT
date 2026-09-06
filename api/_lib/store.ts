@@ -6,6 +6,7 @@ import {
   type AdminPage,
 } from './admin-pagination.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
+import { effectiveProjectRole, projectCapabilities, type ProjectRole, type StoredProjectRole } from './project-capabilities.js'
 
 // Every table/storage operation in this module goes through the service-role
 // client. Every public table has RLS enabled with no permissive policy
@@ -64,11 +65,11 @@ const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, created_at, up
 type ProjectMemberRow = {
   project_key: string
   user_id: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   is_owner: boolean
 }
 
-export type ProjectMemberRole = 'owner' | 'admin' | 'member'
+export type ProjectMemberRole = ProjectRole
 
 type RepoConfigRow = {
   project_key: string
@@ -274,11 +275,12 @@ export async function listProjectsForUser(userId: string) {
   const supabase = getSupabase()
   const { data: memberRows, error: memberError } = await supabase
     .from('project_members')
-    .select('project_key')
+    .select('project_key, role, is_owner')
     .eq('user_id', userId)
 
   if (memberError) throw new Error(memberError.message)
-  const keys = (memberRows || []).map((row) => String((row as { project_key: string }).project_key))
+  const memberships = (memberRows || []) as ProjectMemberRow[]
+  const keys = memberships.map((row) => row.project_key)
   if (keys.length === 0) return []
 
   const { data, error } = await supabase
@@ -288,13 +290,20 @@ export async function listProjectsForUser(userId: string) {
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapProject(row as ProjectRow))
+  const accessByProject = new Map(memberships.map((membership) => {
+    const role = effectiveProjectRole(membership.role, membership.is_owner)
+    return [membership.project_key, { role, capabilities: projectCapabilities(role) }]
+  }))
+  return (data || []).map((row) => ({
+    ...mapProject(row as ProjectRow),
+    ...accessByProject.get((row as ProjectRow).public_key),
+  }))
 }
 
 export async function getProjectMember(
   userId: string,
   projectKey: string,
-): Promise<{ role: 'admin' | 'member'; isOwner?: boolean } | null> {
+): Promise<{ role: StoredProjectRole; isOwner?: boolean } | null> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
@@ -315,7 +324,7 @@ export async function isProjectMember(userId: string, projectKey: string): Promi
 
 type ProjectMemberDetailRow = {
   user_id: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   is_owner: boolean
   created_at: string
 }
@@ -395,7 +404,7 @@ export type ProjectMemberRoleChange = {
 }
 
 function isProjectMemberRole(value: unknown): value is ProjectMemberRole {
-  return value === 'owner' || value === 'admin' || value === 'member'
+  return value === 'owner' || value === 'admin' || value === 'member' || value === 'guest'
 }
 
 export async function changeProjectMemberRole(input: {
@@ -563,7 +572,7 @@ export async function listAllUsers(options: {
 
 export type AdminProjectMember = {
   email: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
 }
 
 export type AdminProject = {
@@ -682,7 +691,7 @@ export async function listProjectsWithComments(options: {
     .in('project_key', keys)
   if (memberError) throw new Error(memberError.message)
 
-  type MemberRow = { project_key: string; user_id: string; role: 'admin' | 'member' }
+  type MemberRow = { project_key: string; user_id: string; role: StoredProjectRole }
   const rows = (memberRows || []) as MemberRow[]
   const membersByProject = new Map<string, MemberRow[]>()
   for (const row of rows) {
@@ -1984,7 +1993,7 @@ export async function markAllNotificationsRead(userId: string) {
 type InviteRow = {
   project_key: string
   email: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   invited_by: string
   created_at: string
 }
@@ -2002,7 +2011,7 @@ function mapInvite(row: InviteRow) {
 export async function createInvite(input: {
   projectKey: string
   email: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   invitedBy: string
 }) {
   const supabase = getSupabase()
@@ -2089,9 +2098,12 @@ async function deleteInvite(email: string, projectKey: string) {
  * the project_members row (idempotent via 23505), delete the invite. Returns
  * the inviter's user_id so the caller can emit an `invite.accepted` notif.
  */
-export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string> {
+export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string | null> {
   const invite = await getInvite(email, projectKey)
-  if (!invite) throw new Error('not_found')
+  if (!invite) {
+    if (await isProjectMember(userId, projectKey)) return null
+    throw new Error('not_found')
+  }
 
   const supabase = getSupabase()
   const { error: insertError } = await supabase

@@ -24,9 +24,19 @@ interface CommandPaletteProps {
   onSelect: (commentId: string) => void
   onAction: (action: string) => void
   selectedCommentId: string
+  canManageFeedback?: boolean
+  canOperateAgent?: boolean
 }
 
-export function CommandPalette({ onClose, comments, onSelect, onAction, selectedCommentId }: CommandPaletteProps) {
+export function CommandPalette({
+  onClose,
+  comments,
+  onSelect,
+  onAction,
+  selectedCommentId,
+  canManageFeedback = true,
+  canOperateAgent = true,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -59,12 +69,17 @@ export function CommandPalette({ onClose, comments, onSelect, onAction, selected
         icon: 'comment',
       }))
 
+    const allowedActions = CMD_ACTIONS.filter((action) => {
+      if (['accept', 'done', 'reject'].includes(action.id)) return canManageFeedback
+      if (action.id === 'toggle-sidebar') return canOperateAgent
+      return true
+    })
     const matchedActions = q
-      ? CMD_ACTIONS.filter((a) => a.label.toLowerCase().includes(q))
-      : CMD_ACTIONS
+      ? allowedActions.filter((a) => a.label.toLowerCase().includes(q))
+      : allowedActions
 
     return q ? [...matchedComments, ...matchedActions] : [...matchedActions, ...matchedComments]
-  }, [query, comments])
+  }, [query, comments, canManageFeedback, canOperateAgent])
 
   useEffect(() => {
     const list = listRef.current

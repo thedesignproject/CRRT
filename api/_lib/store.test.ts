@@ -277,8 +277,8 @@ describe('releaseCommentActivityEmailReservation', () => {
 })
 
 type MembershipMocks = {
-  memberSingle?: { data: { role: 'admin' | 'member'; is_owner: boolean } | null; error: { message: string } | null }
-  memberList?: { data: Array<{ project_key: string }> | null; error: { message: string } | null }
+  memberSingle?: { data: { role: 'admin' | 'member' | 'guest'; is_owner: boolean } | null; error: { message: string } | null }
+  memberList?: { data: Array<{ project_key: string; role: 'admin' | 'member' | 'guest'; is_owner: boolean }> | null; error: { message: string } | null }
   projectsIn?: { data: ProjectRow[] | null; error: { message: string } | null }
   projectsSingle?: { data: ProjectRow | null; error: { message: string } | null }
   claimRpc?: { data: unknown; error: { message: string } | null }
@@ -347,13 +347,13 @@ describe('membership helpers + claim', () => {
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'p1' }], error: null },
+      memberList: { data: [{ project_key: 'pk', role: 'guest', is_owner: false }], error: null },
       projectsIn: { data: [PROJECT_ROW], error: null },
     }) as never)
-    expect((await listProjectsForUser('u')).map((p) => p.publicKey)).toEqual(['pk'])
+    expect(await listProjectsForUser('u')).toEqual([expect.objectContaining({ publicKey: 'pk', role: 'guest', capabilities: ['feedback:read', 'feedback:create'] })])
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'p1' }], error: null },
+      memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
       projectsIn: { data: null, error: { message: 'boom' } },
     }) as never)
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
@@ -712,7 +712,7 @@ describe('notifications helpers', () => {
 type InviteRow = {
   project_key: string
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   invited_by: string
   created_at: string
 }
@@ -756,7 +756,10 @@ function inviteSupabase(m: InviteMocks = {}) {
         }
       }
       if (table === 'project_members') {
-        return { insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })) }
+        return {
+          insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })) })) })) })),
+        }
       }
       throw new Error(`Unmocked table ${table}`)
     }),

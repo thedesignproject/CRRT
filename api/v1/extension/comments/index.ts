@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { createExtensionComment, ExtensionCommentError, listExtensionComments } from '../../../_lib/extension-comments.js'
 import { handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (candidate !== undefined && candidate !== null && candidate !== '' && !projectId) {
       return jsonError(req, res, 400, 'projectId must be a string')
     }
-    if (projectId && !(await requireProjectMembership(req, res, user, projectId))) return
+    if (projectId && !(await requireProjectCapability(req, res, user, projectId, req.method === 'GET' ? 'feedback:read' : 'feedback:create'))) return
     const result = req.method === 'GET'
       ? await listExtensionComments(user.userId, { ...req.query, projectId })
       : await createExtensionComment(user.userId, req.body ?? {}, projectId, user.email)

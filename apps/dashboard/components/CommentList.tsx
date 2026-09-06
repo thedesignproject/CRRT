@@ -10,6 +10,7 @@ type Counts = { all: number; open: number; ready: number; done: number; rejected
 
 interface CommentListProps {
   personal?: false
+  readOnly?: boolean
   filteredComments: Comment[]
   counts: Counts
   statusFilter: StatusFilter
@@ -32,7 +33,7 @@ const EMPTY_SELECTION = new Set<string>()
 
 export function CommentList(props: CommentListProps | PersonalListProps) {
   const { filteredComments, counts, commentsLoading, commentsError, selectedCommentId, setSelectedCommentId } = props
-  const controls = props.personal ? null : props
+  const controls = props.personal || props.readOnly ? null : props
   const bulkMode = controls?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   return (

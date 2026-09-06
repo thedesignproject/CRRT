@@ -5,7 +5,11 @@ export interface Project {
   allowedOrigins: string[]
   createdAt: string
   updatedAt: string
+  role?: ProjectMemberRole
+  capabilities?: ProjectCapability[]
 }
+
+export type ProjectCapability = 'feedback:read' | 'feedback:create' | 'feedback:manage' | 'agent:operate' | 'integrations:send' | 'project:manage'
 
 export type CommentTargetType = 'element_point' | 'text_range'
 
@@ -186,7 +190,7 @@ export interface AdminUser {
 
 export interface AdminProjectMember {
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
 }
 
 export interface AdminProject {
@@ -315,7 +319,7 @@ export function claimProject(apiBase: string, accessToken: string, projectKey: s
   })
 }
 
-export type ProjectMemberRole = 'owner' | 'admin' | 'member'
+export type ProjectMemberRole = 'owner' | 'admin' | 'member' | 'guest'
 
 export interface ProjectMember {
   userId: string
@@ -335,7 +339,7 @@ export interface ProjectMemberRoleChange {
 export interface ProjectInvite {
   projectKey: string
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   invitedBy: string
   createdAt: string
 }
@@ -499,7 +503,7 @@ export function listProjectInvites(apiBase: string, accessToken: string, project
   })
 }
 
-export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' = 'member') {
+export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' | 'guest' = 'member') {
   return requestJson<ProjectInvite>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
