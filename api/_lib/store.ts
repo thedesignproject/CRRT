@@ -28,6 +28,8 @@ type CommentRow = {
   implementation_status: ImplementationStatus | null
   claimed_by_agent_id: string | null
   image_url: string | null
+  source?: string | null
+  screenshot_storage_path?: string | null
   author_name: string | null
   target_type: string | null
   anchor: Record<string, unknown> | null
@@ -44,7 +46,7 @@ type CommentRow = {
 // Single source of truth for comment selects — an omission here (or a
 // hand-rolled select list elsewhere) silently drops fields from responses.
 const COMMENT_COLUMNS =
-  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, target_type, anchor, created_at, updated_at'
+  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, source, screenshot_storage_path, author_name, target_type, anchor, created_at, updated_at'
 const COMMENT_GITHUB_ISSUE_COLUMNS =
   `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
 
@@ -185,6 +187,14 @@ function mapProjectComment(row: CommentRow) {
         }
       : null,
   }
+}
+
+async function mapProjectCommentWithPrivateImage(client: ReturnType<typeof getServiceSupabase>, row: CommentRow) {
+  const comment = mapProjectComment(row)
+  if (row.source !== 'extension' || !row.screenshot_storage_path) return comment
+  const { data, error } = await client.storage.from('extension-feedback-images').createSignedUrl(row.screenshot_storage_path, 300)
+  if (error && error.message !== 'Object not found') throw new Error(`Screenshot signing failed: ${error.message}`)
+  return { ...comment, imageUrl: data?.signedUrl ?? null }
 }
 
 function mapProject(row: ProjectRow) {
@@ -1272,7 +1282,8 @@ export async function listProjectComments(projectKey: string, filters: {
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
 } = {}) {
-  let query = getSupabase()
+  const supabase = getSupabase()
+  let query = supabase
     .from('comments')
     .select(COMMENT_GITHUB_ISSUE_COLUMNS)
     .eq('project_id', projectKey)
@@ -1283,7 +1294,7 @@ export async function listProjectComments(projectKey: string, filters: {
 
   const { data, error } = await query.order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapProjectComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow)))
 }
 
 export async function getCommentForGithubIssue(projectKey: string, commentId: string) {

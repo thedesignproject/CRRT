@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { deleteExtensionComment, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord } from '../api'
+import { assignExtensionComment, deleteExtensionComment, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord, type Project } from '../api'
 import { mapServerComment } from '../lib/comment'
 import { CommentList } from './CommentList'
 import { CommentDetail } from './CommentDetail'
@@ -7,7 +7,7 @@ import { ActionBtn } from './primitives'
 
 function errorText(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback }
 
-export function ExtensionCommentsPage({ apiBase, accessToken }: { apiBase: string; accessToken: string }) {
+export function ExtensionCommentsPage({ apiBase, accessToken, projects = [] }: { apiBase: string; accessToken: string; projects?: Project[] }) {
   const [items, setItems] = useState<ExtensionCommentRecord[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -18,6 +18,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken }: { apiBase: strin
   const [draft, setDraft] = useState('')
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
+  const [targetProject, setTargetProject] = useState('')
 
   useEffect(() => {
     let current = true
@@ -55,7 +56,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken }: { apiBase: strin
 
   function select(id: string) {
     if (busy) return
-    setSelectedId(id); setEditing(false); setError('')
+    setSelectedId(id); setEditing(false); setTargetProject(''); setError('')
   }
   function navigate(offset: number) {
     const next = comments[selectedIdx + offset]
@@ -94,6 +95,18 @@ export function ExtensionCommentsPage({ apiBase, accessToken }: { apiBase: strin
     finally { setBusy(false) }
   }
 
+  async function addToProject() {
+    if (!targetProject) return
+    setBusy(true); setError('')
+    try {
+      await assignExtensionComment(apiBase, accessToken, selectedId, targetProject)
+      setItems((current) => current.filter((item) => item.id !== selectedId))
+      setTotal((value) => Math.max(0, value - 1)); setSelectedId(''); setTargetProject('')
+      setReload((value) => value + 1)
+    } catch (reason) { setError(errorText(reason, 'Could not add comment to project')) }
+    finally { setBusy(false) }
+  }
+
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
     {error && items.length > 0 && <div role="alert" className="border-b border-border bg-card px-4 py-2 text-xs text-status-rejected">{error}</div>}
     <main className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
@@ -110,6 +123,14 @@ export function ExtensionCommentsPage({ apiBase, accessToken }: { apiBase: strin
         bodyEditor={editing && selected ? <textarea aria-label="Edit comment" value={draft} onChange={(event) => setDraft(event.target.value)} maxLength={8000} disabled={busy}
           className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring" /> : undefined}
         personalActions={selected && <>
+          {projects.length > 0 && <>
+          <select aria-label="Project for comment" value={targetProject} disabled={busy} onChange={(event) => setTargetProject(event.target.value)}
+            className="h-8 max-w-48 rounded-md border border-input bg-background px-2 text-xs text-foreground outline-none focus:ring-2 focus:ring-ring">
+            <option value="">Add to project…</option>
+            {projects.map((project) => <option key={project.publicKey} value={project.publicKey}>{project.name}</option>)}
+          </select>
+          <ActionBtn variant="neutral" disabled={busy || !targetProject} onClick={addToProject}>Add to project</ActionBtn>
+          </>}
           {editing ? <><ActionBtn variant="neutral" disabled={busy || !draft.trim()} onClick={save}>Save</ActionBtn><ActionBtn variant="neutral" disabled={busy} onClick={() => setEditing(false)}>Cancel</ActionBtn></>
             : <ActionBtn variant="neutral" disabled={busy} onClick={() => { setEditing(true); setDraft(selected.body) }}>Edit</ActionBtn>}
           <ActionBtn variant="neutral" disabled={busy} onClick={remove}>Delete</ActionBtn>

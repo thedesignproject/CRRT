@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { browser } from 'wxt/browser'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 import type { Comment, PersonalComments, WidgetPage } from '../../../src/components/FeedbackWidget/types'
-import { createPageComment, deletePageComment, extensionSession, listPageComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
-import { getActiveProject, type ExtensionProjectSelection } from './project-context'
+import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
+import { resolveProjectForPage, type ExtensionProjectSelection } from './project-context'
 
 function widgetComment(comment: ExtensionComment): Comment {
   return { ...comment, projectId: comment.projectId ?? '', reviewStatus: 'open', imageUrl: comment.screenshotUrl, authorName: comment.authorName ?? 'You' }
@@ -56,7 +56,10 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
     const refresh = async () => {
       const current = ++version
       try {
-        const [session, activeProject] = await Promise.all([extensionSession(), getActiveProject()])
+        const session = await extensionSession()
+        const activeProject = session && page?.url
+          ? await resolveProjectForPage(page.url, await listExtensionProjects())
+          : null
         if (alive && current === version) {
           setIdentity(session?.email ?? null)
           setProject(activeProject)
@@ -66,7 +69,7 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
     browser.storage.onChanged.addListener(refresh)
     void refresh()
     return () => { alive = false; browser.storage.onChanged.removeListener(refresh) }
-  }, [])
+  }, [page?.url])
   const comments = useMemo(() => extensionComments(project), [project?.publicKey, project?.name])
   useEffect(() => {
     if (identity !== undefined && activate) window.dispatchEvent(new CustomEvent('crrt:activate'))

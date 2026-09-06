@@ -10,9 +10,9 @@ vi.mock('wxt/browser', () => ({ browser: { storage: { onChanged: storage }, runt
 vi.mock('../lib/page-host', () => ({ connectPageHost: vi.fn(() => vi.fn()) }))
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
-vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), listPageComments: vi.fn(), updatePageComment: vi.fn() }))
-const getActiveProject = vi.hoisted(() => vi.fn())
-vi.mock('../lib/project-context', () => ({ getActiveProject }))
+vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), listExtensionProjects: vi.fn(), listPageComments: vi.fn(), updatePageComment: vi.fn() }))
+const resolveProjectForPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/project-context', () => ({ resolveProjectForPage }))
 vi.mock('../../../src/lib/screenshotCapture', () => ({
   useScreenshotCapture: () => {
     const [image, setImage] = useState<Blob | null>(null)
@@ -23,10 +23,10 @@ vi.mock('../../../src/lib/screenshotCapture', () => ({
 }))
 
 import script, { mountWidget } from '../entrypoints/comment'
-import { ExtensionWidget, personalComments } from '../lib/personal-widget'
+import { ExtensionWidget, extensionComments, personalComments } from '../lib/personal-widget'
 import autoload from '../entrypoints/autoload.content'
 import config from '../wxt.config'
-import { createPageComment, deletePageComment, extensionSession, listPageComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
+import { createPageComment, deletePageComment, extensionSession, listExtensionProjects, listPageComments, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import type { WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 
@@ -37,7 +37,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   sendMessage.mockResolvedValue({ ok: true })
   vi.mocked(extensionSession).mockResolvedValue({ email: 'user@example.com', accessToken: 'token' })
-  getActiveProject.mockReset().mockResolvedValue(null)
+  vi.mocked(listExtensionProjects).mockResolvedValue([])
+  resolveProjectForPage.mockReset().mockResolvedValue(null)
   vi.mocked(listPageComments).mockResolvedValue({ items: [comment], total: 1 })
   vi.mocked(createPageComment).mockResolvedValue({ ...comment, id: 'new', body: 'New' })
   vi.mocked(updatePageComment).mockResolvedValue(comment); vi.mocked(deletePageComment).mockResolvedValue()
@@ -95,18 +96,16 @@ it('mounts the actual idle widget, highlights selection, and sends through the p
 })
 
 it('uses the selected project for authenticated extension comments', async () => {
-  getActiveProject.mockResolvedValue({ publicKey: 'project', name: 'Storefront' })
   vi.mocked(listPageComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
-  const view = setup()
-  await waitFor(() => expect(listPageComments).toHaveBeenCalledWith(location.href.split('#')[0], 1, 'project'))
-  fireEvent.keyDown(window, { key: 'f' })
-  expect(view.ui.getByText('Storefront')).toBeInTheDocument()
-  const textarea = await selectTarget(view)
-  fireEvent.change(textarea, { target: { value: 'Project feedback' } })
-  fireEvent.click(view.ui.getByRole('button', { name: 'Send' }))
-  await waitFor(() => expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({
-    projectId: 'project', body: 'Project feedback',
-  })))
+  const adapter = extensionComments({ publicKey: 'project', name: 'Storefront' })
+  expect(adapter.label).toBe('Storefront')
+  await expect(adapter.list(location.href.split('#')[0])).resolves.toHaveLength(1)
+  expect(listPageComments).toHaveBeenCalledWith(location.href.split('#')[0], 1, 'project')
+  await adapter.create({
+    projectId: 'project', pageUrl: location.href.split('#')[0], selector: '#target', x: 1, y: 2,
+    body: 'Project feedback', targetType: 'element_point', anchor: null,
+  })
+  expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project', body: 'Project feedback' }))
 })
 
 it('keeps the default personal sidebar label for adapters without a custom label', async () => {

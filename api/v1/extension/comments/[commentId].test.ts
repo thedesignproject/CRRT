@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../../_lib/auth.js', () => ({ requireProjectMembership: vi.fn(), requireUser: vi.fn() }))
 vi.mock('../../../_lib/extension-comments.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../_lib/extension-comments.js')>()
-  return { ...actual, deleteExtensionComment: vi.fn(), getOwnedExtensionCommentScope: vi.fn(), updateExtensionComment: vi.fn() }
+  return { ...actual, assignExtensionCommentToProject: vi.fn(), deleteExtensionComment: vi.fn(), getOwnedExtensionCommentScope: vi.fn(), updateExtensionComment: vi.fn() }
 })
 import handler from './[commentId].js'
 import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
-import { deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
+import { assignExtensionCommentToProject, deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
 
 const res = () => ({ statusCode: 200, body: null as unknown, headers: {} as Record<string, string>, status(code: number) { this.statusCode = code; return this }, json(body: unknown) { this.body = body; return this }, end() { return this }, setHeader(k: string, v: string) { this.headers[k] = v } })
 const call = (req: unknown, response: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(req, response)
@@ -14,6 +14,7 @@ const call = (req: unknown, response: unknown) => (handler as unknown as (a: unk
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
   vi.mocked(requireProjectMembership).mockReset().mockResolvedValue(true)
+  vi.mocked(assignExtensionCommentToProject).mockReset()
   vi.mocked(deleteExtensionComment).mockReset()
   vi.mocked(getOwnedExtensionCommentScope).mockReset().mockResolvedValue({ projectId: null })
   vi.mocked(updateExtensionComment).mockReset()
@@ -53,6 +54,27 @@ describe('extension comment item endpoint', () => {
     const response = res(); await call({ method: 'DELETE', query: { commentId: 'c' }, headers: {} }, response)
     expect(response.statusCode).toBe(404)
     expect(deleteExtensionComment).not.toHaveBeenCalled()
+  })
+  it('assigns an owned private comment after checking project membership', async () => {
+    const user = { userId: 'u', email: 'u@example.com' }
+    vi.mocked(requireUser).mockResolvedValue(user)
+    vi.mocked(assignExtensionCommentToProject).mockResolvedValue({ id: 'c', projectId: 'p' } as never)
+    let response = res()
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: ' p ' }, headers: {} }, response)
+    expect(response.statusCode).toBe(200)
+    expect(requireProjectMembership).toHaveBeenCalledWith(expect.anything(), response, user, 'p')
+    expect(assignExtensionCommentToProject).toHaveBeenCalledWith('u', 'c', 'p')
+
+    vi.mocked(requireProjectMembership).mockResolvedValueOnce(false)
+    response = res()
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: 'blocked' }, headers: {} }, response)
+    expect(assignExtensionCommentToProject).not.toHaveBeenCalledWith('u', 'c', 'blocked')
+
+    for (const projectId of ['', 42]) {
+      response = res()
+      await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId }, headers: {} }, response)
+      expect(response.statusCode).toBe(400)
+    }
   })
   it('returns expected and unexpected failures', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })

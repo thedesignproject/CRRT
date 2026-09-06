@@ -56,6 +56,7 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
 
 export interface ExtensionCommentRecord {
   id: string
+  projectId: string | null
   pageUrl: string
   pageHostname: string
   x: number
@@ -63,6 +64,7 @@ export interface ExtensionCommentRecord {
   selector: string
   body: string
   screenshotUrl: string | null
+  authorName: string | null
   createdAt: string
   updatedAt: string
   targetType?: CommentTargetType
@@ -612,6 +614,14 @@ export function updateExtensionComment(apiBase: string, accessToken: string, com
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
     body: JSON.stringify({ body }),
+  })
+}
+
+export function assignExtensionComment(apiBase: string, accessToken: string, commentId: string, projectId: string) {
+  return requestJson<ExtensionCommentRecord>(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectId }),
   })
 }
 

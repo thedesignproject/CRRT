@@ -1,17 +1,19 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api', () => ({ deleteExtensionComment: vi.fn(), listExtensionComments: vi.fn(), updateExtensionComment: vi.fn(), getProjectGitHubStatus: vi.fn() }))
-import { deleteExtensionComment, getProjectGitHubStatus, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord } from '../api'
+vi.mock('../api', () => ({ assignExtensionComment: vi.fn(), deleteExtensionComment: vi.fn(), listExtensionComments: vi.fn(), updateExtensionComment: vi.fn(), getProjectGitHubStatus: vi.fn() }))
+import { assignExtensionComment, deleteExtensionComment, getProjectGitHubStatus, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord, type Project } from '../api'
 import { ExtensionCommentsPage } from './ExtensionCommentsPage'
 
-const first: ExtensionCommentRecord = { id: 'c1', pageUrl: 'https://example.com/path?q=1', pageHostname: 'example.com', x: 12.34, y: 56.78, selector: '#target', body: 'First comment', screenshotUrl: 'https://signed/image', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }
+const first: ExtensionCommentRecord = { id: 'c1', projectId: null, pageUrl: 'https://example.com/path?q=1', pageHostname: 'example.com', x: 12.34, y: 56.78, selector: '#target', body: 'First comment', screenshotUrl: 'https://signed/image', authorName: 'u@example.com', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }
 const second: ExtensionCommentRecord = { ...first, id: 'c2', pageHostname: 'two.example', body: 'Second comment', screenshotUrl: null }
+const project: Project = { publicKey: 'store', slug: 'store', name: 'Storefront', allowedOrigins: ['example.com'], createdAt: '2026-01-01', updatedAt: '2026-01-01' }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(listExtensionComments).mockResolvedValue({ items: [first, second], page: 1, limit: 20, total: 21 })
   vi.mocked(updateExtensionComment).mockImplementation(async (_api, _token, id, body) => ({ ...(id === 'c1' ? first : second), body }))
+  vi.mocked(assignExtensionComment).mockResolvedValue({ ...first, projectId: 'store' })
   vi.mocked(deleteExtensionComment).mockResolvedValue()
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
@@ -84,6 +86,18 @@ describe('ExtensionCommentsPage', () => {
     await waitFor(() => expect(deleteExtensionComment).toHaveBeenCalledWith('/api', 'token', 'c1'))
     expect(screen.queryByText('Updated')).not.toBeInTheDocument()
 
+  })
+
+  it('moves an owned private comment into an accessible project in place', async () => {
+    vi.mocked(listExtensionComments)
+      .mockResolvedValueOnce({ items: [first], page: 1, limit: 20, total: 1 })
+      .mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 })
+    render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+    fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Project for comment' }), { target: { value: 'store' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to project' }))
+    await waitFor(() => expect(assignExtensionComment).toHaveBeenCalledWith('/api', 'token', 'c1', 'store'))
+    await screen.findByText('No extension comments yet.')
   })
 
   it('shows empty and load error states', async () => {
