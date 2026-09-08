@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createCommentGithubIssue,
+  disconnectJira,
   disconnectLinear,
   getExternalWorkDraft,
+  getJiraIntegration,
   getLinearIntegration,
   getProjectGitHubStatus,
+  selectJiraProject,
   selectLinearTeam,
   updateImplementationStatus,
 } from './api'
@@ -116,5 +119,22 @@ describe('createCommentGithubIssue', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/linear', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ containerId: 'team' }) }))
     await disconnectLinear('/api', 'session', 'project/1')
     expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/linear', expect.objectContaining({ method: 'DELETE' }))
+  })
+
+  it('loads, authorizes, updates, and disconnects the Jira integration', async () => {
+    const payload = { provider: 'jira', connected: false, destinations: [] }
+    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(payload), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getJiraIntegration('/api', 'session', 'project/1')
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ cache: 'no-store' }))
+    await getJiraIntegration('/api', 'session', 'project/1', true)
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira?action=authorize', expect.anything())
+    await selectJiraProject('/api', 'session', 'project/1', 'cloud:100')
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ containerId: 'cloud:100' }) }))
+    await disconnectJira('/api', 'session', 'project/1')
+    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ method: 'DELETE' }))
   })
 })

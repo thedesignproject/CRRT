@@ -405,6 +405,11 @@ describe('<CommentDetail /> GitHub issue action', () => {
     fireEvent.click(button)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Check Project Settings')
+
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'Jira' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Jira issue')
   })
 
   it('does not request connection status when no project is selected', () => {
@@ -437,6 +442,24 @@ describe('<CommentDetail /> GitHub issue action', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
     await waitFor(() => expect(open).toHaveBeenCalledWith('https://linear.app/issue/WEB-1', '_blank', 'noopener,noreferrer'))
     expect(opened.opener).toBeNull()
+  })
+
+  it('creates Jira issues through the selected provider', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'jira', connected: true, destination: 'WEB · Website', existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    })
+    vi.mocked(sendExternalWork).mockResolvedValueOnce({ externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://acme.atlassian.net/browse/WEB-1', createdAt: 'now', created: true })
+    render(<CommentDetail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Jira' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Send to Jira')
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith(
+      props.apiBase, props.accessToken, comment.id, 'jira', { title: 'Title', body: 'Body' },
+    ))
+    expect(open).toHaveBeenCalledWith('https://acme.atlassian.net/browse/WEB-1', '_blank', 'noopener,noreferrer')
   })
 
   it('surfaces missing result URLs and tolerates blocked Linear issue tabs', async () => {
@@ -598,6 +621,17 @@ describe('<ExternalWorkDialog />', () => {
       onSubmit={onSubmit}
     />)
     expect(screen.getByRole('dialog')).toHaveTextContent('Send to Linear')
+
+    view.rerender(<ExternalWorkDialog
+      provider="jira"
+      destination="WEB · Website"
+      initialDraft={{ title: 'Title', body: 'Body' }}
+      busy={false}
+      error={null}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Send to Jira')
   })
 })
 
@@ -610,7 +644,8 @@ describe('<ExternalWorkProviderDialog />', () => {
     expect(onCancel).not.toHaveBeenCalled()
     fireEvent.click(screen.getByRole('button', { name: 'GitHub' }))
     fireEvent.click(screen.getByRole('button', { name: 'Linear' }))
-    expect(onSelect.mock.calls).toEqual([['github'], ['linear']])
+    fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
+    expect(onSelect.mock.calls).toEqual([['github'], ['linear'], ['jira']])
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
     fireEvent.mouseDown(screen.getByRole('presentation'))
     expect(onCancel).toHaveBeenCalledTimes(2)

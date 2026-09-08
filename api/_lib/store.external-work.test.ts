@@ -13,6 +13,7 @@ import {
   releaseCommentExternalWork,
   updateProjectIntegrationDestination,
   updateProjectIntegrationTokens,
+  updateProjectIntegrationWorkspaceDestination,
   upsertProjectIntegration,
 } from './store.js'
 
@@ -68,11 +69,19 @@ describe('external integration persistence', () => {
   it('updates destinations and tokens with nullable results and errors', async () => {
     queue(
       { data: integrationRow, error: null }, { data: null, error: null }, { data: null, error: { message: 'destination failed' } },
+      { data: integrationRow, error: null }, { data: null, error: null }, { data: null, error: { message: 'workspace destination failed' } },
       { data: integrationRow, error: null }, { data: null, error: null }, { data: null, error: { message: 'token failed' } },
     )
     await expect(updateProjectIntegrationDestination('project', 'linear', 'team', 'WEB · Web')).resolves.toMatchObject({ containerName: 'WEB · Web' })
     await expect(updateProjectIntegrationDestination('project', 'linear', 'team', 'WEB · Web')).resolves.toBeNull()
     await expect(updateProjectIntegrationDestination('project', 'linear', 'team', 'WEB · Web')).rejects.toThrow('destination failed')
+    const destination = {
+      projectKey: 'project', provider: 'jira' as const, workspaceId: 'cloud', workspaceName: 'Acme Jira',
+      containerId: '100', containerName: 'WEB · Website',
+    }
+    await expect(updateProjectIntegrationWorkspaceDestination(destination)).resolves.toMatchObject({ id: 'integration' })
+    await expect(updateProjectIntegrationWorkspaceDestination(destination)).resolves.toBeNull()
+    await expect(updateProjectIntegrationWorkspaceDestination(destination)).rejects.toThrow('workspace destination failed')
     const tokens = { id: 'integration', accessTokenCiphertext: 'new', refreshTokenCiphertext: null, tokenExpiresAt: null }
     await expect(updateProjectIntegrationTokens(tokens)).resolves.toMatchObject({ id: 'integration' })
     await expect(updateProjectIntegrationTokens(tokens)).resolves.toBeNull()

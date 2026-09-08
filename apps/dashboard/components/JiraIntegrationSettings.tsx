@@ -32,9 +32,9 @@ export function JiraIntegrationSettings({ apiBase, accessToken, projectKey }: { 
     return () => window.removeEventListener('message', onMessage)
   }, [apiBase, load, projectKey])
   useEffect(() => {
-    if (!busy || !popup.current) return
+    if (!busy) return
     const timer = window.setInterval(() => {
-      if (!popup.current?.closed) return
+      if (!popup.current || !popup.current.closed) return
       popup.current = null
       setBusy(false)
     }, 500)

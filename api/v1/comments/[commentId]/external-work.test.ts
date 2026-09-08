@@ -262,4 +262,16 @@ describe('external work endpoint', () => {
     })
     expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({ externalKey: 'WEB-2' }))
   })
+
+  it('rejects Jira creation when the selected project is no longer available', async () => {
+    vi.mocked(getJiraDestinations).mockResolvedValueOnce([])
+    const res = response()
+    await call({
+      method: 'POST', query: { commentId: 'c' },
+      body: { provider: 'jira', draft: { title: 'Edited for Jira', body: 'Jira details' } }, headers: {},
+    }, res)
+    expect(res.statusCode).toBe(502)
+    expect(createJiraIssue).not.toHaveBeenCalled()
+    expect(releaseCommentExternalWork).toHaveBeenCalled()
+  })
 })

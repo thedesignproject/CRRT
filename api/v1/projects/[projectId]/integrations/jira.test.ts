@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../../_lib/jira-connection.js', () => ({ getJiraAccessToken: vi.fn() }))
@@ -109,4 +109,75 @@ describe('Jira project integration API', () => {
     expect(res.statusCode).toBe(204)
     expect(deleteProjectIntegration).toHaveBeenCalledWith('p', 'jira')
   })
+
+  it('validates methods, authentication, project identifiers, and disconnected state', async () => {
+    let res = mockRes()
+    await call({ method: 'OPTIONS', query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(204)
+    res = mockRes()
+    await call({ method: 'POST', query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(405)
+    res = mockRes()
+    await call({ query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(405)
+    vi.mocked(requireUser).mockResolvedValueOnce(null)
+    res = mockRes()
+    await call({ method: 'GET', query: {}, headers: {} }, res)
+    expect(res.body).toBeNull()
+    res = mockRes()
+    await call({ method: 'GET', query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+    expect(res.body).toEqual({ connected: false, provider: 'jira', destinations: [] })
+  })
+
+  it('uses configured and request-derived callback URLs with safe origin fallbacks', async () => {
+    vi.stubEnv('JIRA_REDIRECT_URI', 'https://configured.test/callback')
+    let res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', action: 'authorize' }, headers: { origin: 'not a url', host: 'api.crrt.test' } }, res)
+    expect(createJiraOAuthState).toHaveBeenLastCalledWith(expect.objectContaining({ origin: 'https://api.crrt.test', redirectUri: 'https://configured.test/callback' }))
+
+    vi.stubEnv('JIRA_REDIRECT_URI', '')
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', action: 'authorize' }, headers: { host: 'api.crrt.test' } }, res)
+    expect(createJiraOAuthState).toHaveBeenLastCalledWith(expect.objectContaining({ origin: 'https://api.crrt.test', redirectUri: 'https://api.crrt.test/v1/integrations/jira/callback' }))
+  })
+
+  it('handles nullable current state and malformed PATCH bodies', async () => {
+    vi.mocked(getProjectIntegration).mockResolvedValue(integration as never)
+    let res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    vi.mocked(getProjectIntegration).mockResolvedValueOnce(integration as never).mockResolvedValueOnce({ ...integration, containerId: null } as never)
+    const values: unknown[] = ['cloud:100', 'cloud:100', null]
+    const body = { get containerId() { return values.shift() } }
+    res = mockRes()
+    await call({ method: 'PATCH', query: { projectId: 'p' }, body, headers: {} }, res)
+    expect(res.body).toMatchObject({ connected: false, workspace: 'Acme Jira', selectedDestinationId: null })
+  })
+
+  it('maps known setup errors to conflicts and unknown failures to a safe gateway error', async () => {
+    for (const message of ['missing_jira_oauth_credentials', 'jira_reauthorization_required']) {
+      vi.mocked(getProjectMember).mockRejectedValueOnce(new Error(message))
+      const res = mockRes()
+      await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+      expect(res.statusCode).toBe(409)
+      expect(res.body).toEqual({ error: message })
+    }
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('database secret'))
+    let res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+    expect(res.statusCode).toBe(502)
+    expect(res.body).toEqual({ error: 'Jira integration request failed' })
+    vi.mocked(getProjectMember).mockRejectedValueOnce('opaque')
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+    expect(res.statusCode).toBe(502)
+    expect(error).toHaveBeenCalledTimes(2)
+  })
 })
+
+afterEach(() => vi.unstubAllEnvs())
