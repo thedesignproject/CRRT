@@ -157,4 +157,14 @@ describe('PinActionCluster', () => {
     // Menu closes after click.
     expect(queryByText('View list')).toBeNull()
   })
+
+  it('keeps shared feedback read-only while still linking to the list', () => {
+    const { getByLabelText, getByText, queryByText } = render(
+      <PinActionCluster {...makeProps({ reviewEnabled: false, mutationEnabled: false, onViewList: vi.fn() })} />,
+    )
+    fireEvent.click(getByLabelText('More options'))
+    expect(getByText('View list')).toBeInTheDocument()
+    expect(queryByText('Edit')).toBeNull()
+    expect(queryByText('Delete')).toBeNull()
+  })
 })

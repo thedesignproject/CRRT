@@ -32,6 +32,8 @@ it('keeps private UI in the frame while exchanging only page interactions throug
   expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown', key: 'c' }))
   expect(outside).toHaveBeenCalledWith(expect.objectContaining({ type: 'pointerdown' }))
   props().page.selecting(true); props().page.track([{ id: '1', selector: '#target' }]); props().page.highlight('#target')
+  props().page.focusEmbedded('project')
+  expect(channel.send).toHaveBeenCalledWith(0, { kind: 'focus-embedded', projectId: 'project' })
   expect(channel.send).toHaveBeenCalledWith(0, { kind: 'highlight', selector: '#target' })
   channel.send.mockResolvedValueOnce(null)
   expect(await props().page.capture()).toBeNull()

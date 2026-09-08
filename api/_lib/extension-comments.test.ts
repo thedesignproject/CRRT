@@ -19,6 +19,7 @@ import {
 
 const row = {
   id: 'c1', project_id: null, url: 'https://example.com/a?q=1', page_hostname: 'example.com',
+  source: 'extension', created_by_user_id: 'u1', status: 'pending', image_url: null,
   x: 12, y: 34, element: '#target', comment: 'Hello',
   screenshot_storage_path: null, author_name: 'u@example.com', created_at: '2026-01-01', updated_at: '2026-01-02',
 }
@@ -29,6 +30,7 @@ class Query {
   select(...args: unknown[]) { this.calls.push(['select', ...args]); return this }
   eq(...args: unknown[]) { this.calls.push(['eq', ...args]); return this }
   is(...args: unknown[]) { this.calls.push(['is', ...args]); return this }
+  not(...args: unknown[]) { this.calls.push(['not', ...args]); return this }
   gte(...args: unknown[]) { this.calls.push(['gte', ...args]); return this }
   order(...args: unknown[]) { this.calls.push(['order', ...args]); return this }
   range(...args: unknown[]) { this.calls.push(['range', ...args]); return this }
@@ -118,13 +120,23 @@ describe('extension comment persistence', () => {
   })
 
   it('lists project extension comments without restricting them to their creator', async () => {
-    const fake = client([{ data: [{ ...row, project_id: 'project' }], error: null, count: 1 }])
+    const fake = client([{ data: [
+      { ...row, project_id: 'project' },
+      { ...row, id: 'widget', project_id: 'project', source: 'widget', created_by_user_id: null, status: 'approved', image_url: 'https://public/image.png' },
+    ], error: null, count: 2 }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(listExtensionComments('u1', { projectId: 'project' })).resolves.toMatchObject({
-      items: [{ projectId: 'project', authorName: 'u@example.com' }],
+      items: [
+        { projectId: 'project', authorName: 'u@example.com', editable: true },
+        { id: 'widget', reviewStatus: 'accepted', editable: false, screenshotUrl: 'https://public/image.png' },
+      ],
     })
     expect(fake.queries[0]?.calls).toContainEqual(['eq', 'project_id', 'project'])
+    for (const column of ['url', 'element', 'x', 'y']) {
+      expect(fake.queries[0]?.calls).toContainEqual(['not', column, 'is', null])
+    }
     expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'created_by_user_id', 'u1'])
+    expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'source', 'extension'])
 
     const guestFake = client([{ data: [{ ...row, project_id: 'project', visibility: 'shared' }], error: null, count: 1 }])
     vi.mocked(getServiceSupabase).mockReturnValue(guestFake.value as never)

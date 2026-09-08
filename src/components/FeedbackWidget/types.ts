@@ -24,10 +24,12 @@ export interface WidgetPage {
   scrollY: number
   target?: ClickTarget
   liveIds: string[]
+  embeddedProjectIds?: string[]
   capture(focus: ScreenshotFocusRect | null): Promise<Blob | null>
   selecting(value: boolean): void
-  track(comments: { id: string; selector: string }[]): void
+  track(comments: { id: string; selector: string; x: number; y: number }[]): void
   highlight(selector: string): void
+  focusEmbedded?(projectId: string): void
 }
 
 export interface PersonalComments {
@@ -38,6 +40,11 @@ export interface PersonalComments {
     value: 'shared' | 'internal'
     canChoose: boolean
     onChange?: (visibility: 'shared' | 'internal') => void
+  }
+  /** Optional project-wide list scope. Pins always remain scoped to the current page. */
+  scope?: {
+    value: 'page' | 'project'
+    onChange(value: 'page' | 'project'): void
   }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>
@@ -70,6 +77,8 @@ export interface Comment {
   body: string
   reviewStatus: ReviewStatus
   visibility?: 'shared' | 'internal'
+  /** Authenticated adapters can mark feedback from other authors as read-only. */
+  editable?: boolean
   imageUrl?: string | null
   createdAt: string
   authorName?: string

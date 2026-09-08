@@ -3,6 +3,7 @@ import { Bot, MessageCircle, PanelRightOpen, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { buildTextRangeAnchor } from '../../lib/textAnchor'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
+import { samePage } from '../../lib/pageIdentity'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
@@ -548,7 +549,11 @@ function FeedbackWidgetInner({
     page?.selecting(mode === 'selecting')
     return () => page?.selecting(false)
   }, [mode, page?.selecting])
-  useEffect(() => { page?.track(comments.map(({ id, selector }) => ({ id, selector }))) }, [comments, page?.track])
+  useEffect(() => {
+    page?.track(comments
+      .filter((item) => samePage(item.pageUrl, currentUrl))
+      .map(({ id, selector, x, y }) => ({ id, selector, x, y })))
+  }, [comments, currentUrl, page?.track])
   useEffect(() => {
     if (!page?.target) return
     setTarget(page.target); setSelectedPin(null); setSidebarOpen(false); setMode('commenting')
@@ -576,10 +581,7 @@ function FeedbackWidgetInner({
       const version = ++refreshVersion
       try {
         const fresh = await personalComments.list(currentUrl)
-        if (!cancelled && version === refreshVersion) setComments((items) => items.map((item) => {
-          const updated = fresh.find((candidate) => candidate.id === item.id)
-          return updated ? { ...item, imageUrl: updated.imageUrl } : item
-        }))
+        if (!cancelled && version === refreshVersion) setComments(fresh)
       } catch { /* Preserve drafts and loaded comments while offline. */ }
     }
     const timer = personalComments ? window.setInterval(refresh, 240_000) : undefined
@@ -589,6 +591,17 @@ function FeedbackWidgetInner({
       window.clearInterval(timer); window.removeEventListener('focus', refresh)
     }
   }, [projectId, apiBase, personalComments, currentUrl])
+
+  useEffect(() => {
+    if (!personalComments || !sidebarOpen) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void personalComments.list(currentUrl).then((fresh) => {
+        if (!cancelled) setComments(fresh)
+      }).catch(() => { /* Keep the last synchronized project state while offline. */ })
+    }, 15_000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [currentUrl, personalComments, sidebarOpen])
 
   // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
   const [textHover, setTextHover] = useState(false)
@@ -1025,23 +1038,28 @@ function FeedbackWidgetInner({
     }
   }
 
-  const visibleComments = useMemo(() => comments.filter((c) => {
-    if (new Date(c.createdAt) < COMMENT_CUTOFF) return false
-    const commentUrl = c.pageUrl.split('#')[0]
-    return commentUrl === currentUrl
-  }), [comments, currentUrl])
+  const allRecentComments = useMemo(() => comments.filter((c) => (
+    new Date(c.createdAt) >= COMMENT_CUTOFF
+  )), [comments])
+  const visibleComments = useMemo(() => allRecentComments.filter((c) => {
+    return samePage(c.pageUrl, currentUrl)
+  }), [allRecentComments, currentUrl])
   const filteredComments = useMemo(() => visibleComments.filter((c) => {
     const status = c.reviewStatus ?? 'open'
     if (filterStatus === 'open') return status === 'open'
     if (filterStatus === 'approved') return status === 'accepted'
     return true
   }), [visibleComments, filterStatus])
-  const sortedComments = useMemo(() => [...filteredComments].sort((a, b) => {
+  const sidebarBaseComments = personalComments?.scope?.value === 'project'
+    ? allRecentComments
+    : visibleComments
+  const sidebarComments = personalComments ? sidebarBaseComments : filteredComments
+  const sortedComments = useMemo(() => [...sidebarComments].sort((a, b) => {
     const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
     const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
-  }), [filteredComments])
+  }), [sidebarComments])
   const readyForAgentCount = useMemo(
     () => visibleComments.filter((c) => c.reviewStatus === 'accepted').length,
     [visibleComments],
@@ -1098,7 +1116,7 @@ function FeedbackWidgetInner({
   const launcherActive = launcherOpen || mode !== 'idle'
 
   return (
-    <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-theme': theme }}>
+    <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-project': projectId, 'data-crrt-theme': theme }}>
       {apiError && <div role="alert" style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 2147483647, padding: 16, background: 'var(--fw-surface)', color: 'var(--fw-foreground)', borderRadius: 8 }}>{apiError}<button onClick={() => setApiError('')} aria-label="Dismiss error">×</button></div>}
       {/* Overlay — purely visual, clicks pass through */}
       {mode === 'selecting' && (
@@ -1602,6 +1620,7 @@ function FeedbackWidgetInner({
                       <PinActionCluster
                         key={c.id}
                         reviewEnabled={!personalComments}
+                        mutationEnabled={!personalComments || c.editable !== false}
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
                         onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
@@ -1715,7 +1734,7 @@ function FeedbackWidgetInner({
               {personalComments?.label ?? (personalComments ? 'My extension comments' : 'Feedback')}
             </div>
             <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: 'var(--fw-foreground-faint)' }}>
-              {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}
+              {sidebarBaseComments.length} comment{sidebarBaseComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}
             </div>
           </div>
           <button
@@ -1820,6 +1839,32 @@ function FeedbackWidgetInner({
           </button>
         </div>}
 
+        {personalComments?.scope && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {([
+              { id: 'page', label: 'This page', count: visibleComments.length },
+              { id: 'project', label: 'All feedback', count: allRecentComments.length },
+            ] as const).map((item) => {
+              const active = personalComments.scope?.value === item.id
+              return <button
+                key={item.id}
+                type="button"
+                onClick={() => personalComments.scope?.onChange(item.id)}
+                style={{
+                  height: 32,
+                  borderRadius: 9999,
+                  border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
+                  background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
+                  color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 650,
+                }}
+              >
+                {item.label} <span style={{ color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)', fontWeight: 500 }}>{item.count}</span>
+              </button>
+            })}
+          </div>
+        </div>}
+
         {/* Filter row */}
         {!personalComments && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
           <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -1861,7 +1906,7 @@ function FeedbackWidgetInner({
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {sortedComments.length === 0 && (
             <div style={{ color: 'var(--fw-empty-state)', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
-              {visibleComments.length === 0
+              {sidebarBaseComments.length === 0
                 ? 'No comments yet'
                 : filterStatus === 'approved'
                   ? 'Approve comments to queue them here'
@@ -1870,6 +1915,7 @@ function FeedbackWidgetInner({
           )}
           {sortedComments.map((c, i) => {
               const pinNum = filteredComments.length - filteredComments.indexOf(c)
+              const isCurrentPage = samePage(c.pageUrl, currentUrl)
               const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
               const isPending = !c.reviewStatus || c.reviewStatus === 'open'
               const isEditing = editingId === c.id
@@ -1879,7 +1925,11 @@ function FeedbackWidgetInner({
                 <div
                   key={c.id}
                   className="fw-sidebar-card"
-                  onClick={() => { if (!isEditing && !isMenuOpen) { setSelectedPin(c.id); highlightElement(c.selector) } }}
+                  onClick={() => {
+                    if (isEditing || isMenuOpen) return
+                    if (isCurrentPage) { setSelectedPin(c.id); highlightElement(c.selector) }
+                    else window.open(c.pageUrl, '_blank', 'noopener,noreferrer')
+                  }}
                   style={{
                     padding: '14px 16px',
                     cursor: isEditing ? 'default' : 'pointer',
@@ -1911,7 +1961,10 @@ function FeedbackWidgetInner({
                         {c.authorName ?? 'User'}
                       </span>
                       <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span> <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>#{pinNum}</span>
+                        {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span>{' '}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                          {isCurrentPage ? `#${pinNum}` : (() => { try { return new URL(c.pageUrl).pathname || '/' } catch { return c.pageUrl } })()}
+                        </span>
                       </span>
                       {c.visibility && (
                         <span style={{ fontSize: 10, color: 'var(--fw-foreground-faint)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -1949,7 +2002,7 @@ function FeedbackWidgetInner({
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         </button>
                       )}
-                      <button
+                      {(c.editable !== false || !personalComments) && <button
                         onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
                         title="More"
                         aria-label="More"
@@ -1966,7 +2019,7 @@ function FeedbackWidgetInner({
                         onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' } }}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                      </button>
+                      </button>}
                     </div>
                   </div>
 

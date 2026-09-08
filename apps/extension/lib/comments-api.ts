@@ -13,6 +13,8 @@ export type ExtensionComment = {
   selector: string
   body: string
   visibility?: 'shared' | 'internal'
+  reviewStatus?: 'open' | 'accepted' | 'rejected'
+  editable?: boolean
   screenshotUrl: string | null
   authorName: string | null
   createdAt: string
@@ -50,6 +52,11 @@ export async function listExtensionProjects() {
 export async function listPageComments(pageUrl: string, page = 1, projectId?: string) {
   const query = new URLSearchParams({ pageUrl, limit: '50', page: String(page) })
   if (projectId) query.set('projectId', projectId)
+  return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
+}
+
+export async function listProjectComments(projectId: string, page = 1) {
+  const query = new URLSearchParams({ projectId, limit: '50', page: String(page) })
   return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
 }
 

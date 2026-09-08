@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 
-import { createPageComment, deletePageComment, listExtensionProjects, listPageComments, updatePageComment } from './comments-api'
+import { createPageComment, deletePageComment, listExtensionProjects, listPageComments, listProjectComments, updatePageComment } from './comments-api'
 
 const comment = { id: 'a/b', projectId: null, pageUrl: 'https://example.com', pageHostname: 'example.com', x: 1, y: 2, selector: '#x', body: 'Hi', screenshotUrl: null, authorName: 'u@example.com', createdAt: 'now', updatedAt: 'now' }
 
@@ -29,6 +29,15 @@ describe('extension comments API client', () => {
     await listPageComments(comment.pageUrl, 2, 'p')
     expect(fetch.mock.calls[0]?.[0]).toBe('https://crrt.ai/api/v1/projects')
     expect(fetch.mock.calls[1]?.[0]).toContain('projectId=p')
+  })
+
+  it('loads all canonical project feedback without an exact page filter', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ items: [comment], total: 1 }), { status: 200 }))
+    await listProjectComments('project', 2)
+    expect(fetch).toHaveBeenCalledWith(
+      'https://crrt.ai/api/v1/extension/comments?projectId=project&limit=50&page=2',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }),
+    )
   })
 
   it('creates, updates, and deletes comments', async () => {

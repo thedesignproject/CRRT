@@ -2,9 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabase } from './supabase.js'
 import { parseCommentTarget } from './anchor.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
+import { fromLegacyStatus } from './status.js'
 
 const BUCKET = 'extension-feedback-images'
-const SELECT = 'id,project_id,url,page_hostname,x,y,element,comment,visibility,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
+const SELECT = 'id,project_id,source,created_by_user_id,url,page_hostname,x,y,element,comment,status,visibility,image_url,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
 const MAX_BODY = 8_000
 const MAX_SELECTOR = 1_000
 const MAX_URL = 2_048
@@ -20,13 +21,17 @@ export class ExtensionCommentError extends Error {
 type CommentRow = {
   id: string
   project_id: string | null
+  source?: string | null
+  created_by_user_id?: string | null
   url: string
   page_hostname: string
   x: number
   y: number
   element: string
   comment: string
+  status?: string | null
   visibility?: 'shared' | 'internal' | null
+  image_url?: string | null
   screenshot_storage_path: string | null
   author_name: string | null
   created_at: string
@@ -45,6 +50,8 @@ export type ExtensionComment = {
   selector: string
   body: string
   visibility?: 'shared' | 'internal'
+  reviewStatus?: 'open' | 'accepted' | 'rejected'
+  editable?: boolean
   screenshotUrl: string | null
   authorName: string | null
   createdAt: string
@@ -106,8 +113,8 @@ function parseScreenshot(input: unknown) {
   return { buffer, mimeType: value.mimeType }
 }
 
-async function serialize(client: SupabaseClient, row: CommentRow): Promise<ExtensionComment> {
-  let screenshotUrl: string | null = null
+async function serialize(client: SupabaseClient, row: CommentRow, viewerUserId?: string): Promise<ExtensionComment> {
+  let screenshotUrl: string | null = row.image_url ?? null
   if (row.screenshot_storage_path) {
     const { data, error } = await client.storage.from(BUCKET).createSignedUrl(row.screenshot_storage_path, 300)
     // A retried DELETE can leave a row after its image was already removed.
@@ -124,6 +131,8 @@ async function serialize(client: SupabaseClient, row: CommentRow): Promise<Exten
     selector: row.element,
     body: row.comment,
     visibility: row.visibility ?? 'shared',
+    reviewStatus: fromLegacyStatus(row.status),
+    editable: row.source === 'extension' && row.created_by_user_id === viewerUserId,
     screenshotUrl,
     authorName: row.author_name,
     createdAt: row.created_at,
@@ -131,6 +140,16 @@ async function serialize(client: SupabaseClient, row: CommentRow): Promise<Exten
     targetType: row.target_type,
     anchor: row.anchor,
   }
+}
+
+function hasRenderableTarget(row: unknown): row is CommentRow {
+  const value = row as Partial<CommentRow>
+  return typeof value.url === 'string'
+    && typeof value.element === 'string'
+    && typeof value.x === 'number'
+    && Number.isFinite(value.x)
+    && typeof value.y === 'number'
+    && Number.isFinite(value.y)
 }
 
 export async function listExtensionComments(
@@ -141,16 +160,22 @@ export async function listExtensionComments(
   const client = getServiceSupabase()
   const { page, limit } = parseExtensionPagination(input)
   let query = client.from('comments').select(SELECT, { count: 'exact' })
-    .eq('source', 'extension')
-  query = input.projectId
-    ? query.eq('project_id', input.projectId)
-    : query.eq('created_by_user_id', userId).is('project_id', null)
+  if (input.projectId) {
+    query = query.eq('project_id', input.projectId)
+      .not('url', 'is', null)
+      .not('element', 'is', null)
+      .not('x', 'is', null)
+      .not('y', 'is', null)
+  } else {
+    query = query.eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+  }
   if (visibility) query = query.eq('visibility', visibility)
   query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1)
   if (input.pageUrl !== undefined) query = query.eq('url', normalizeExtensionPageUrl(input.pageUrl).pageUrl)
   const { data, error, count } = await query
   if (error) throw new Error(error.message)
-  return { items: await Promise.all(((data ?? []) as CommentRow[]).map((row) => serialize(client, row))), page, limit, total: count ?? 0 }
+  const renderable = (data ?? []).filter(hasRenderableTarget)
+  return { items: await Promise.all(renderable.map((row) => serialize(client, row, userId))), page, limit, total: count ?? 0 }
 }
 
 export async function createExtensionComment(
@@ -197,7 +222,7 @@ export async function createExtensionComment(
       throw new Error(`Screenshot upload failed: ${uploadError.message}`)
     }
   }
-  return serialize(client, data as CommentRow)
+  return serialize(client, data as CommentRow, userId)
 }
 
 export async function updateExtensionComment(userId: string, commentId: string, bodyValue: unknown) {
@@ -207,7 +232,7 @@ export async function updateExtensionComment(userId: string, commentId: string, 
     .eq('id', commentId).eq('source', 'extension').eq('created_by_user_id', userId).select(SELECT).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) throw new ExtensionCommentError(404, 'Comment not found')
-  return serialize(client, data as CommentRow)
+  return serialize(client, data as CommentRow, userId)
 }
 
 export async function getOwnedExtensionCommentScope(userId: string, commentId: string) {
@@ -241,7 +266,7 @@ export async function assignExtensionCommentToProject(
     .select(SELECT)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  if (data) return serialize(client, data as CommentRow)
+  if (data) return serialize(client, data as CommentRow, userId)
 
   const { data: current, error: currentError } = await client.from('comments')
     .select(SELECT)
@@ -254,7 +279,7 @@ export async function assignExtensionCommentToProject(
   if ((current as CommentRow).project_id !== projectId) {
     throw new ExtensionCommentError(409, 'Comment already belongs to another project')
   }
-  return serialize(client, current as CommentRow)
+  return serialize(client, current as CommentRow, userId)
 }
 
 export async function deleteExtensionComment(userId: string, commentId: string) {
