@@ -3,6 +3,7 @@ import {
   createCommentIssueMarker,
   createGithubIssue,
   findGithubIssueByMarker,
+  formatEditableGithubIssueBody,
   formatGithubIssueBody,
 } from './github-issues.js'
 
@@ -100,6 +101,14 @@ describe('GitHub issue formatting', () => {
     expect(body).not.toContain('Selected text:')
     expect(body).not.toContain('Prefix:')
     expect(body).not.toContain('Suffix:')
+  })
+
+  it('sanitizes embedded markers in an editable draft and appends the signed marker once', () => {
+    const body = formatEditableGithubIssueBody('Custom body\n\n<!-- crrt-comment:copied:bad -->', '<!-- signed -->')
+    expect(body).toBe('Custom body\n\n<!-- signed -->')
+    expect(() => formatEditableGithubIssueBody('   ', '<!-- signed -->')).toThrow('github_issue_body_invalid')
+    expect(() => formatEditableGithubIssueBody('x'.repeat(65_536), '<!-- signed -->'))
+      .toThrow('github_issue_content_too_large')
   })
 })
 

@@ -3,9 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 
-import { createPageComment, deletePageComment, listPageComments, updatePageComment } from './comments-api'
+import { createPageComment, deletePageComment, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment } from './comments-api'
 
-const comment = { id: 'a/b', pageUrl: 'https://example.com', pageHostname: 'example.com', x: 1, y: 2, selector: '#x', body: 'Hi', screenshotUrl: null, createdAt: 'now', updatedAt: 'now' }
+const comment = { id: 'a/b', projectId: null, pageUrl: 'https://example.com', pageHostname: 'example.com', x: 1, y: 2, selector: '#x', body: 'Hi', screenshotUrl: null, authorName: 'u@example.com', createdAt: 'now', updatedAt: 'now' }
 
 beforeEach(() => {
   vi.restoreAllMocks(); sendMessage.mockReset()
@@ -20,17 +20,49 @@ describe('extension comments API client', () => {
     expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/comments?pageUrl=https%3A%2F%2Fexample.com%2Fa%3Fq%3D1%23x&limit=50&page=1', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }))
   })
 
+  it('loads projects and scopes page comments to a selected project', async () => {
+    const projects = [{ publicKey: 'p', name: 'Project', allowedOrigins: ['example.com'] }]
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(projects), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ ...comment, projectId: 'p' }] }), { status: 200 }))
+    await expect(listExtensionProjects()).resolves.toEqual(projects)
+    await listPageComments(comment.pageUrl, 2, 'p')
+    expect(fetch.mock.calls[0]?.[0]).toBe('https://crrt.ai/api/v1/projects')
+    expect(fetch.mock.calls[1]?.[0]).toContain('projectId=p')
+  })
+
+  it('loads all canonical project feedback without an exact page filter', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ items: [comment], total: 1 }), { status: 200 }))
+    await listProjectComments('project', 2)
+    expect(fetch).toHaveBeenCalledWith(
+      'https://crrt.ai/api/v1/extension/comments?projectId=project&limit=50&page=2',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }),
+    )
+  })
+
   it('creates, updates, and deletes comments', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(comment), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(comment), { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    await createPageComment({ pageUrl: comment.pageUrl, selector: '#x', x: 1, y: 2, body: 'Hi', screenshot: null })
+    await createPageComment({ projectId: 'p', pageUrl: comment.pageUrl, selector: '#x', x: 1, y: 2, body: 'Hi', screenshot: null })
     await updatePageComment('a/b', 'Updated')
     await expect(deletePageComment('a/b')).resolves.toBeUndefined()
-    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: expect.stringContaining('"body":"Hi"') })
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: expect.stringContaining('"projectId":"p"') })
     expect(fetch.mock.calls[1]?.[0]).toContain('/a%2Fb')
     expect(fetch.mock.calls[2]?.[1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('prepares and confirms external work through the shared endpoint', async () => {
+    const prepared = { provider: 'github', connected: true, destination: 'acme/store', existing: null, draft: { title: 'T', body: 'B' } }
+    const created = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now', created: true }
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(prepared), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
+    await expect(getExternalWorkDraft('a/b')).resolves.toEqual(prepared)
+    await expect(sendExternalWork('a/b', { title: 'Edited', body: 'Body' })).resolves.toEqual(created)
+    expect(fetch.mock.calls[0]?.[0]).toContain('/a%2Fb/external-work?provider=github')
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ provider: 'github', draft: { title: 'Edited', body: 'Body' } }) })
   })
 
   it('rejects missing sessions and background failures', async () => {

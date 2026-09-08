@@ -1,20 +1,34 @@
 import { browser } from 'wxt/browser'
 import type { SessionSummary } from './auth'
 import type { Comment } from '../../../src/components/FeedbackWidget/types'
+import type { ExtensionProject } from './project-context'
 
 export type ExtensionComment = {
   id: string
+  projectId: string | null
   pageUrl: string
   pageHostname: string
   x: number
   y: number
   selector: string
   body: string
+  visibility?: 'shared' | 'internal'
+  reviewStatus?: 'open' | 'accepted' | 'rejected'
+  editable?: boolean
   screenshotUrl: string | null
+  authorName: string | null
   createdAt: string
   updatedAt: string
   targetType?: Comment['targetType']
   anchor?: Comment['anchor']
+}
+
+export type ExternalWorkDraft = {
+  provider: 'github'
+  connected: boolean
+  destination: string | null
+  existing: { issueNumber: number; issueUrl: string; createdAt: string } | null
+  draft: { title: string; body: string }
 }
 
 type AuthResponse = { ok: true; data: SessionSummary | null } | { ok: false; error: string }
@@ -39,12 +53,22 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 
-export async function listPageComments(pageUrl: string, page = 1) {
+export async function listExtensionProjects() {
+  return request<ExtensionProject[]>('/v1/projects')
+}
+
+export async function listPageComments(pageUrl: string, page = 1, projectId?: string) {
   const query = new URLSearchParams({ pageUrl, limit: '50', page: String(page) })
+  if (projectId) query.set('projectId', projectId)
   return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
 }
 
-export function createPageComment(input: { pageUrl: string; selector: string; x: number; y: number; body: string; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
+export async function listProjectComments(projectId: string, page = 1) {
+  const query = new URLSearchParams({ projectId, limit: '50', page: String(page) })
+  return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
+}
+
+export function createPageComment(input: { projectId?: string; pageUrl: string; selector: string; x: number; y: number; body: string; visibility?: 'shared' | 'internal'; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
   return request<ExtensionComment>('/v1/extension/comments', { method: 'POST', body: JSON.stringify(input) })
 }
 
@@ -54,4 +78,15 @@ export function updatePageComment(id: string, body: string) {
 
 export function deletePageComment(id: string) {
   return request<void>(`/v1/extension/comments/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export function getExternalWorkDraft(commentId: string) {
+  return request<ExternalWorkDraft>(`/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=github`)
+}
+
+export function sendExternalWork(commentId: string, draft: { title: string; body: string }) {
+  return request<{ issueNumber: number; issueUrl: string; createdAt: string; created: boolean }>(
+    `/v1/comments/${encodeURIComponent(commentId)}/external-work`,
+    { method: 'POST', body: JSON.stringify({ provider: 'github', draft }) },
+  )
 }

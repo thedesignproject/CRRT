@@ -3,6 +3,7 @@ import { Bot, MessageCircle, PanelRightOpen, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { buildTextRangeAnchor } from '../../lib/textAnchor'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
+import { samePage } from '../../lib/pageIdentity'
 import { AgentBridgeModal } from '../AgentBridgeModal'
 import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } from './types'
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
@@ -522,11 +523,20 @@ function FeedbackWidgetInner({
   const [agentGateOpen, setAgentGateOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
   const [pinsVisible, setPinsVisible] = useState(true)
+  const [externalWork, setExternalWork] = useState<{
+    commentId: string
+    destination: string
+    title: string
+    body: string
+    busy: boolean
+    error: string
+  } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   // Synchronous guard — state updates are async, so double-firing handleSend
   // in the same tick (e.g. Cmd+Enter held down) would otherwise slip past `sending`.
   const sendingRef = useRef(false)
+  const externalWorkRequestRef = useRef(false)
 
   const [postSendHint, setPostSendHint] = useState(false)
   const [launcherBump, setLauncherBump] = useState(false)
@@ -548,7 +558,11 @@ function FeedbackWidgetInner({
     page?.selecting(mode === 'selecting')
     return () => page?.selecting(false)
   }, [mode, page?.selecting])
-  useEffect(() => { page?.track(comments.map(({ id, selector }) => ({ id, selector }))) }, [comments, page?.track])
+  useEffect(() => {
+    page?.track(comments
+      .filter((item) => samePage(item.pageUrl, currentUrl))
+      .map(({ id, selector, x, y }) => ({ id, selector, x, y })))
+  }, [comments, currentUrl, page?.track])
   useEffect(() => {
     if (!page?.target) return
     setTarget(page.target); setSelectedPin(null); setSidebarOpen(false); setMode('commenting')
@@ -576,10 +590,7 @@ function FeedbackWidgetInner({
       const version = ++refreshVersion
       try {
         const fresh = await personalComments.list(currentUrl)
-        if (!cancelled && version === refreshVersion) setComments((items) => items.map((item) => {
-          const updated = fresh.find((candidate) => candidate.id === item.id)
-          return updated ? { ...item, imageUrl: updated.imageUrl } : item
-        }))
+        if (!cancelled && version === refreshVersion) setComments(fresh)
       } catch { /* Preserve drafts and loaded comments while offline. */ }
     }
     const timer = personalComments ? window.setInterval(refresh, 240_000) : undefined
@@ -589,6 +600,17 @@ function FeedbackWidgetInner({
       window.clearInterval(timer); window.removeEventListener('focus', refresh)
     }
   }, [projectId, apiBase, personalComments, currentUrl])
+
+  useEffect(() => {
+    if (!personalComments || !sidebarOpen) return
+    let cancelled = false
+    const timer = window.setInterval(() => {
+      void personalComments.list(currentUrl).then((fresh) => {
+        if (!cancelled) setComments(fresh)
+      }).catch(() => { /* Keep the last synchronized project state while offline. */ })
+    }, 15_000)
+    return () => { cancelled = true; window.clearInterval(timer) }
+  }, [currentUrl, personalComments, sidebarOpen])
 
   // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
   const [textHover, setTextHover] = useState(false)
@@ -757,6 +779,8 @@ function FeedbackWidgetInner({
         body: commentText,
       }
 
+      if (personalComments?.audience) payload.visibility = personalComments.audience.value
+
       if (authorNameRef.current) {
         payload.authorName = authorNameRef.current
       }
@@ -784,6 +808,7 @@ function FeedbackWidgetInner({
         selector: targetData.selector,
         body: commentText,
         reviewStatus: 'open',
+        visibility: data.visibility ?? personalComments?.audience?.value ?? 'shared',
         imageUrl: data.imageUrl ?? null,
         createdAt: data.createdAt ?? new Date().toISOString(),
         authorName: data.authorName ?? authorNameRef.current ?? undefined,
@@ -969,6 +994,45 @@ function FeedbackWidgetInner({
     setEditingId(null)
   }
 
+  async function prepareExternalWork(commentId: string) {
+    if (!personalComments?.externalWork || externalWorkRequestRef.current) return
+    externalWorkRequestRef.current = true
+    try {
+      const prepared = await personalComments.externalWork.prepare(commentId)
+      if (prepared.existingUrl) {
+        const opened = window.open(prepared.existingUrl, '_blank', 'noopener,noreferrer')
+        if (opened) opened.opener = null
+        return
+      }
+      setExternalWork({ commentId, destination: prepared.destination, title: prepared.title, body: prepared.body, busy: false, error: '' })
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Could not prepare external work')
+    } finally {
+      externalWorkRequestRef.current = false
+    }
+  }
+
+  async function sendExternalWorkDraft() {
+    if (!externalWork || !personalComments?.externalWork || externalWork.busy || externalWorkRequestRef.current) return
+    const request = externalWork
+    externalWorkRequestRef.current = true
+    setExternalWork({ ...request, busy: true, error: '' })
+    try {
+      const result = await personalComments.externalWork.send(request.commentId, { title: request.title.trim(), body: request.body.trim() })
+      setExternalWork(null)
+      const opened = window.open(result.issueUrl, '_blank', 'noopener,noreferrer')
+      if (opened) opened.opener = null
+    } catch (error) {
+      setExternalWork({
+        ...request,
+        busy: false,
+        error: error instanceof Error ? error.message : 'Could not create external work',
+      })
+    } finally {
+      externalWorkRequestRef.current = false
+    }
+  }
+
   // --- Highlight element from comment ---
   function highlightElement(selector: string) {
     if (page) { page.highlight(selector); return }
@@ -1022,23 +1086,28 @@ function FeedbackWidgetInner({
     }
   }
 
-  const visibleComments = useMemo(() => comments.filter((c) => {
-    if (new Date(c.createdAt) < COMMENT_CUTOFF) return false
-    const commentUrl = c.pageUrl.split('#')[0]
-    return commentUrl === currentUrl
-  }), [comments, currentUrl])
+  const allRecentComments = useMemo(() => comments.filter((c) => (
+    new Date(c.createdAt) >= COMMENT_CUTOFF
+  )), [comments])
+  const visibleComments = useMemo(() => allRecentComments.filter((c) => {
+    return samePage(c.pageUrl, currentUrl)
+  }), [allRecentComments, currentUrl])
   const filteredComments = useMemo(() => visibleComments.filter((c) => {
     const status = c.reviewStatus ?? 'open'
     if (filterStatus === 'open') return status === 'open'
     if (filterStatus === 'approved') return status === 'accepted'
     return true
   }), [visibleComments, filterStatus])
-  const sortedComments = useMemo(() => [...filteredComments].sort((a, b) => {
+  const sidebarBaseComments = personalComments?.scope?.value === 'project'
+    ? allRecentComments
+    : visibleComments
+  const sidebarComments = personalComments ? sidebarBaseComments : filteredComments
+  const sortedComments = useMemo(() => [...sidebarComments].sort((a, b) => {
     const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
     const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
     if (aResolved !== bResolved) return aResolved ? 1 : -1
     return 0
-  }), [filteredComments])
+  }), [sidebarComments])
   const readyForAgentCount = useMemo(
     () => visibleComments.filter((c) => c.reviewStatus === 'accepted').length,
     [visibleComments],
@@ -1095,7 +1164,7 @@ function FeedbackWidgetInner({
   const launcherActive = launcherOpen || mode !== 'idle'
 
   return (
-    <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-theme': theme }}>
+    <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-project': projectId, 'data-crrt-theme': theme }}>
       {apiError && <div role="alert" style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 2147483647, padding: 16, background: 'var(--fw-surface)', color: 'var(--fw-foreground)', borderRadius: 8 }}>{apiError}<button onClick={() => setApiError('')} aria-label="Dismiss error">×</button></div>}
       {/* Overlay — purely visual, clicks pass through */}
       {mode === 'selecting' && (
@@ -1182,6 +1251,27 @@ function FeedbackWidgetInner({
               }}>
                 Just now
               </span>
+              {personalComments?.audience && (
+                personalComments.audience.canChoose ? (
+                  <select
+                    aria-label="Feedback audience"
+                    value={personalComments.audience.value}
+                    onChange={(event) => personalComments.audience?.onChange?.(event.target.value as 'shared' | 'internal')}
+                    style={{
+                      marginLeft: 'auto', padding: '3px 7px', borderRadius: 4,
+                      border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-surface-raised)',
+                      color: 'var(--fw-foreground-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                    }}
+                  >
+                    <option value="shared">Shared</option>
+                    <option value="internal">Internal</option>
+                  </select>
+                ) : (
+                  <span style={{ marginLeft: 'auto', color: 'var(--fw-foreground-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                    Shared
+                  </span>
+                )
+              )}
               <span style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1578,6 +1668,10 @@ function FeedbackWidgetInner({
                       <PinActionCluster
                         key={c.id}
                         reviewEnabled={!personalComments}
+                        mutationEnabled={!personalComments || c.editable !== false}
+                        onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
+                          ? () => { void prepareExternalWork(c.id) }
+                          : undefined}
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
                         onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
@@ -1688,10 +1782,10 @@ function FeedbackWidgetInner({
         }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: 'var(--fw-foreground)' }}>
-              {personalComments ? 'My extension comments' : 'Feedback'}
+              {personalComments?.label ?? (personalComments ? 'My extension comments' : 'Feedback')}
             </div>
             <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: 'var(--fw-foreground-faint)' }}>
-              {visibleComments.length} comment{visibleComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}
+              {sidebarBaseComments.length} comment{sidebarBaseComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}
             </div>
           </div>
           <button
@@ -1796,6 +1890,32 @@ function FeedbackWidgetInner({
           </button>
         </div>}
 
+        {personalComments?.scope && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+            {([
+              { id: 'page', label: 'This page', count: visibleComments.length },
+              { id: 'project', label: 'All feedback', count: allRecentComments.length },
+            ] as const).map((item) => {
+              const active = personalComments.scope?.value === item.id
+              return <button
+                key={item.id}
+                type="button"
+                onClick={() => personalComments.scope?.onChange(item.id)}
+                style={{
+                  height: 32,
+                  borderRadius: 9999,
+                  border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
+                  background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
+                  color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
+                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 650,
+                }}
+              >
+                {item.label} <span style={{ color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)', fontWeight: 500 }}>{item.count}</span>
+              </button>
+            })}
+          </div>
+        </div>}
+
         {/* Filter row */}
         {!personalComments && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
           <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -1837,7 +1957,7 @@ function FeedbackWidgetInner({
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {sortedComments.length === 0 && (
             <div style={{ color: 'var(--fw-empty-state)', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
-              {visibleComments.length === 0
+              {sidebarBaseComments.length === 0
                 ? 'No comments yet'
                 : filterStatus === 'approved'
                   ? 'Approve comments to queue them here'
@@ -1846,6 +1966,7 @@ function FeedbackWidgetInner({
           )}
           {sortedComments.map((c, i) => {
               const pinNum = filteredComments.length - filteredComments.indexOf(c)
+              const isCurrentPage = samePage(c.pageUrl, currentUrl)
               const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
               const isPending = !c.reviewStatus || c.reviewStatus === 'open'
               const isEditing = editingId === c.id
@@ -1855,7 +1976,11 @@ function FeedbackWidgetInner({
                 <div
                   key={c.id}
                   className="fw-sidebar-card"
-                  onClick={() => { if (!isEditing && !isMenuOpen) { setSelectedPin(c.id); highlightElement(c.selector) } }}
+                  onClick={() => {
+                    if (isEditing || isMenuOpen) return
+                    if (isCurrentPage) { setSelectedPin(c.id); highlightElement(c.selector) }
+                    else window.open(c.pageUrl, '_blank', 'noopener,noreferrer')
+                  }}
                   style={{
                     padding: '14px 16px',
                     cursor: isEditing ? 'default' : 'pointer',
@@ -1887,8 +2012,16 @@ function FeedbackWidgetInner({
                         {c.authorName ?? 'User'}
                       </span>
                       <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span> <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>#{pinNum}</span>
+                        {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span>{' '}
+                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                          {isCurrentPage ? `#${pinNum}` : (() => { try { return new URL(c.pageUrl).pathname || '/' } catch { return c.pageUrl } })()}
+                        </span>
                       </span>
+                      {c.visibility && (
+                        <span style={{ fontSize: 10, color: 'var(--fw-foreground-faint)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          {c.visibility}
+                        </span>
+                      )}
                     </div>
                     {/* Actions inline — same row as the author */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
@@ -1920,7 +2053,7 @@ function FeedbackWidgetInner({
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         </button>
                       )}
-                      <button
+                      {(c.editable !== false || !personalComments || Boolean(personalComments?.externalWork)) && <button
                         onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
                         title="More"
                         aria-label="More"
@@ -1937,7 +2070,7 @@ function FeedbackWidgetInner({
                         onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' } }}
                       >
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                      </button>
+                      </button>}
                     </div>
                   </div>
 
@@ -2024,6 +2157,14 @@ function FeedbackWidgetInner({
                         animation: 'fw-tooltip-in 0.1s ease both',
                       }}
                     >
+                      {personalComments?.externalWork && c.reviewStatus !== 'rejected' && <button
+                        onClick={() => { void prepareExternalWork(c.id); setMenuOpenId(null) }}
+                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                      >
+                        <span aria-hidden="true">↗</span> Send to…
+                      </button>}
                       {!personalComments && <button
                         onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
@@ -2219,6 +2360,33 @@ function FeedbackWidgetInner({
           loginUrl={loginUrl}
           onClose={() => setAgentGateOpen(false)}
         />
+      )}
+
+      {externalWork && (
+        <div
+          {...{ [WIDGET_ATTR]: '' }}
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !externalWork.busy) setExternalWork(null) }}
+          style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="fw-external-work-title" style={{ width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
+            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to GitHub</h2>
+            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Review and edit before creating in {externalWork.destination}.</p>
+            <label style={{ display: 'block', color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
+              Title
+              <input aria-label="External work title" value={externalWork.title} maxLength={120} onChange={(event) => setExternalWork({ ...externalWork, title: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', font: 'inherit' }} />
+            </label>
+            <label style={{ display: 'block', marginTop: 14, color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
+              Description
+              <textarea aria-label="External work description" value={externalWork.body} rows={12} onChange={(event) => setExternalWork({ ...externalWork, body: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, resize: 'vertical', borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.5 }} />
+            </label>
+            {externalWork.error && <p role="alert" style={{ color: '#ef4444', fontSize: 12 }}>{externalWork.error}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button type="button" disabled={externalWork.busy} onClick={() => setExternalWork(null)} style={{ borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground-muted)', padding: '8px 12px', cursor: 'pointer' }}>Cancel</button>
+              <button type="button" disabled={externalWork.busy || !externalWork.title.trim() || !externalWork.body.trim()} onClick={() => { void sendExternalWorkDraft() }} style={{ borderRadius: 7, border: 0, background: '#E8853D', color: '#080808', padding: '8px 12px', fontWeight: 700, cursor: 'pointer', opacity: externalWork.busy ? .6 : 1 }}>{externalWork.busy ? 'Sending…' : 'Create issue'}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <FeedbackWidgetStyles />

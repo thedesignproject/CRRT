@@ -1,0 +1,2 @@
+ALTER TABLE "comments" DROP CONSTRAINT "comments_extension_ownership_check";--> statement-breakpoint
+ALTER TABLE "comments" ADD CONSTRAINT "comments_extension_ownership_check" CHECK ("comments"."source" <> 'extension' or ("comments"."created_by_user_id" is not null and "comments"."page_hostname" is not null));

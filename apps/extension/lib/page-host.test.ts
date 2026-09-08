@@ -19,10 +19,11 @@ beforeEach(() => {
 })
 afterEach(() => { stop(); element.remove(); vi.restoreAllMocks(); vi.useRealTimers() })
 it('handshakes, publishes normalized page geometry, validates frames, and uses only public hit-test bounds', async () => {
+  const embedded = document.createElement('div'); embedded.dataset.fwCrrt = ''; embedded.dataset.crrtProject = 'project'; document.body.append(embedded)
   expect(frame.style.pointerEvents).toBe('none')
   await expect(receive({ kind: 'layout' }, 9)).rejects.toThrow('Unregistered')
   window.dispatchEvent(new CustomEvent('crrt:activate')); expect(channel.send).not.toHaveBeenCalled()
-  expect(await receive({ kind: 'ready' })).toMatchObject({ kind: 'state', url: location.href.split('#')[0], activate: true })
+  expect(await receive({ kind: 'ready' })).toMatchObject({ kind: 'state', url: location.href.split('#')[0], activate: true, embeddedProjectIds: ['project'] })
   expect(await receive({ kind: 'ready' })).toMatchObject({ activate: true })
   await expect(receive({ kind: 'ready' }, 3)).rejects.toThrow('Unregistered')
   await receive({ kind: 'layout', rects: [[1, 2, 3, 4]] })
@@ -35,10 +36,16 @@ it('handshakes, publishes normalized page geometry, validates frames, and uses o
   await vi.advanceTimersByTimeAsync(600)
   expect(channel.send).toHaveBeenLastCalledWith(2, expect.objectContaining({ liveIds: [] }))
   await receive({ kind: 'unknown' })
+  const activateEmbedded = vi.spyOn(window, 'dispatchEvent')
+  await receive({ kind: 'focus-embedded', projectId: 'other' })
+  expect(activateEmbedded).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
+  await receive({ kind: 'focus-embedded', projectId: 'project' })
+  expect(activateEmbedded).toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
   await receive({ kind: 'selecting', value: false }); expect(document.body.style.cursor).not.toBe('crosshair')
   window.dispatchEvent(new Event('focus')); expect(channel.send).toHaveBeenLastCalledWith(2, { kind: 'focus' })
   channel.send.mockRejectedValueOnce(new Error('closed'))
   window.dispatchEvent(new CustomEvent('crrt:activate')); await Promise.resolve()
+  embedded.remove()
 })
 it('selects and highlights host elements without capturing typing or clicking the extension', async () => {
   await receive({ kind: 'ready' })
@@ -76,6 +83,28 @@ it('never clips a newly opening surface to stale bounds, while keeping its trans
   await receive({ kind: 'layout', rects: [] })
   fireEvent.mouseMove(element); expect(frame.style.pointerEvents).toBe('none')
   expect(frame.style.clipPath).toBe('none')
+})
+it('keeps pins live for height-only targets and valid fallback coordinates', async () => {
+  await receive({ kind: 'ready' })
+  vi.mocked(element.getBoundingClientRect).mockReturnValue({ width: 0, height: 10 } as DOMRect)
+  await receive({ kind: 'track', targets: [
+    { id: 'height', selector: '#target', x: Number.NaN, y: Number.NaN },
+    { id: 'coords', selector: '#missing', x: 0, y: 100 },
+    { id: 'bad-x', selector: '#missing', x: -1, y: 50 },
+    { id: 'high-x', selector: '#missing', x: 101, y: 50 },
+    { id: 'nan-x', selector: '#missing', x: Number.NaN, y: 50 },
+    { id: 'bad-y', selector: '#missing', x: 50, y: -1 },
+    { id: 'high-y', selector: '#missing', x: 50, y: 101 },
+    { id: 'nan-y', selector: '#missing', x: 50, y: Number.NaN },
+    { id: 'caught', selector: '[', x: 0, y: 100 },
+    { id: 'caught-bad-x', selector: '[', x: -1, y: 50 },
+    { id: 'caught-high-x', selector: '[', x: 101, y: 50 },
+    { id: 'caught-nan-x', selector: '[', x: Number.NaN, y: 50 },
+    { id: 'caught-bad-y', selector: '[', x: 50, y: -1 },
+    { id: 'caught-high-y', selector: '[', x: 50, y: 101 },
+    { id: 'caught-nan-y', selector: '[', x: 50, y: Number.NaN },
+  ] })
+  expect(channel.send).toHaveBeenLastCalledWith(2, expect.objectContaining({ liveIds: ['height', 'coords', 'caught'] }))
 })
 it('uses shared text anchors and focused screenshot capture across the private channel', async () => {
   await receive({ kind: 'ready' }); await receive({ kind: 'selecting', value: true })

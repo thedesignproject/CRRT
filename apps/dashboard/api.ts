@@ -5,7 +5,11 @@ export interface Project {
   allowedOrigins: string[]
   createdAt: string
   updatedAt: string
+  role?: ProjectMemberRole
+  capabilities?: ProjectCapability[]
 }
+
+export type ProjectCapability = 'feedback:read' | 'feedback:create' | 'feedback:manage' | 'agent:operate' | 'integrations:send' | 'project:manage'
 
 export type CommentTargetType = 'element_point' | 'text_range'
 
@@ -32,6 +36,7 @@ export interface CommentRecord {
   x: number | null
   y: number | null
   body: string
+  visibility?: 'shared' | 'internal'
   reviewStatus: 'open' | 'accepted' | 'rejected'
   implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
   claimedByAgentId: string | null
@@ -54,8 +59,17 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
   created: boolean
 }
 
+export interface ExternalWorkDraft {
+  provider: 'github'
+  connected: boolean
+  destination: string | null
+  existing: GitHubIssueRecord | null
+  draft: { title: string; body: string }
+}
+
 export interface ExtensionCommentRecord {
   id: string
+  projectId: string | null
   pageUrl: string
   pageHostname: string
   x: number
@@ -63,6 +77,7 @@ export interface ExtensionCommentRecord {
   selector: string
   body: string
   screenshotUrl: string | null
+  authorName: string | null
   createdAt: string
   updatedAt: string
   targetType?: CommentTargetType
@@ -184,7 +199,7 @@ export interface AdminUser {
 
 export interface AdminProjectMember {
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
 }
 
 export interface AdminProject {
@@ -313,7 +328,7 @@ export function claimProject(apiBase: string, accessToken: string, projectKey: s
   })
 }
 
-export type ProjectMemberRole = 'owner' | 'admin' | 'member'
+export type ProjectMemberRole = 'owner' | 'admin' | 'member' | 'guest'
 
 export interface ProjectMember {
   userId: string
@@ -333,7 +348,7 @@ export interface ProjectMemberRoleChange {
 export interface ProjectInvite {
   projectKey: string
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   invitedBy: string
   createdAt: string
 }
@@ -497,7 +512,7 @@ export function listProjectInvites(apiBase: string, accessToken: string, project
   })
 }
 
-export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' = 'member') {
+export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' | 'guest' = 'member') {
   return requestJson<ProjectInvite>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
@@ -579,6 +594,19 @@ export function listComments(apiBase: string, accessToken: string, projectId: st
   })
 }
 
+export function updateCommentVisibility(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  visibility: 'shared' | 'internal',
+) {
+  return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/visibility`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ visibility }),
+  })
+}
+
 export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus']) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
     method: 'PATCH',
@@ -615,6 +643,14 @@ export function updateExtensionComment(apiBase: string, accessToken: string, com
   })
 }
 
+export function assignExtensionComment(apiBase: string, accessToken: string, commentId: string, projectId: string) {
+  return requestJson<ExtensionCommentRecord>(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectId }),
+  })
+}
+
 export async function deleteExtensionComment(apiBase: string, accessToken: string, commentId: string) {
   const response = await fetch(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
     method: 'DELETE', headers: { ...authHeaders(accessToken) },
@@ -622,12 +658,25 @@ export async function deleteExtensionComment(apiBase: string, accessToken: strin
   if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
 }
 
-export function createCommentGithubIssue(apiBase: string, accessToken: string, commentId: string) {
+export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: 'github' = 'github') {
+  return requestJson<ExternalWorkDraft>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`,
+    { headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function createCommentGithubIssue(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  draft?: { title: string; body: string },
+) {
   return requestJson<GitHubIssueCreationResponse>(
-    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/github-issue`,
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
     {
       method: 'POST',
-      headers: { ...authHeaders(accessToken) },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ provider: 'github', ...(draft ? { draft } : {}) }),
     },
   )
 }

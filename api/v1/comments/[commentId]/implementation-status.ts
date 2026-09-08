@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createFeedbackEvent, findActiveSharesForComment, getComment, updateImplementationStatus } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { IMPLEMENTATION_STATUSES, type ImplementationStatus } from '../../../_lib/status.js'
@@ -23,7 +23,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const existing = await getComment(commentId)
     if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
-    if (!(await requireProjectMembership(req, res, user, existing.projectId))) return
+    if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
 
     const [comment, activeShares] = await Promise.all([
       updateImplementationStatus(commentId, { implementationStatus }),

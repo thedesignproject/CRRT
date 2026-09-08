@@ -58,7 +58,7 @@ export const projectMembers = pgTable(
     oneOwnerIdx: uniqueIndex('project_members_one_owner_idx')
       .on(t.projectKey)
       .where(sql`${t.isOwner}`),
-    roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member')`),
+    roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member', 'guest')`),
     ownerRoleCheck: check('project_members_owner_role_check', sql`not ${t.isOwner} or ${t.role} = 'admin'`),
   }),
 )
@@ -114,7 +114,7 @@ export const projectInvites = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.projectKey, t.email] }),
     emailIdx: index('project_invites_email_idx').on(t.email),
-    roleCheck: check('project_invites_role_check', sql`${t.role} in ('admin', 'member')`),
+    roleCheck: check('project_invites_role_check', sql`${t.role} in ('admin', 'member', 'guest')`),
     emailLowerCheck: check('project_invites_email_lower_check', sql`${t.email} = lower(${t.email})`),
   }),
 )
@@ -166,6 +166,7 @@ export const comments = pgTable(
     id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
     projectId: text('project_id'),
     source: text('source').notNull().default('widget'),
+    visibility: text('visibility').notNull().default('shared'),
     createdByUserId: uuid('created_by_user_id').references(() => authUsers.id, { onDelete: 'cascade' }),
     url: text('url'),
     pageHostname: text('page_hostname'),
@@ -211,9 +212,10 @@ export const comments = pgTable(
       t.createdAt.desc(),
     ),
     sourceCheck: check('comments_source_check', sql`${t.source} in ('widget', 'extension')`),
+    visibilityCheck: check('comments_visibility_check', sql`${t.visibility} in ('shared', 'internal')`),
     extensionOwnershipCheck: check(
       'comments_extension_ownership_check',
-      sql`${t.source} <> 'extension' or (${t.createdByUserId} is not null and ${t.pageHostname} is not null and ${t.projectId} is null)`,
+      sql`${t.source} <> 'extension' or (${t.createdByUserId} is not null and ${t.pageHostname} is not null)`,
     ),
     githubIssueFieldsCheck: check(
       'comments_github_issue_fields_check',

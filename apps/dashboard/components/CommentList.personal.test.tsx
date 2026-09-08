@@ -14,6 +14,8 @@ describe('shared feedback controls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Open 1' })); expect(props.selectFilter).toHaveBeenCalledWith('open')
     fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.setSelectedCommentId).toHaveBeenCalledWith('c1')
+    view.rerender(<CommentList {...props} filteredComments={[{ ...comment, visibility: 'internal' }]} />)
+    expect(screen.getByText('internal')).toHaveClass('bg-muted')
     view.rerender(<CommentList {...props} bulkMode />)
     fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.toggleBulkSelect).toHaveBeenCalledWith('c1')
     expect(screen.getByRole('button', { name: 'Ready' })).toBeDisabled()

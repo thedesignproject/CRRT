@@ -23,6 +23,7 @@ diff = subprocess.check_output(
         "git", "diff", "--unified=0", f"{base}...HEAD", "--",
         "src/**/*.ts", "src/**/*.tsx", "api/**/*.ts",
         "apps/dashboard/**/*.ts", "apps/dashboard/**/*.tsx",
+        "apps/extension/**/*.ts", "apps/extension/**/*.tsx",
     ],
     text=True,
 )

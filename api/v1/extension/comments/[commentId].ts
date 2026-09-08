@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../_lib/auth.js'
-import { deleteExtensionComment, ExtensionCommentError, updateExtensionComment } from '../../../_lib/extension-comments.js'
+import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { assignExtensionCommentToProject, deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
+import { feedbackVisibilityForRole } from '../../../_lib/project-capabilities.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
@@ -13,10 +14,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const commentId = getStringQuery(req.query.commentId)
   if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
   try {
+    const scope = await getOwnedExtensionCommentScope(user.userId, commentId)
+    if (!scope) return jsonError(req, res, 404, 'Comment not found')
+    if (scope.projectId && !(await requireProjectCommentCapability(
+      req,
+      res,
+      user,
+      { projectId: scope.projectId, visibility: scope.visibility },
+      'feedback:create',
+    ))) return
     if (req.method === 'DELETE') {
       await deleteExtensionComment(user.userId, commentId)
       setCors(req, res, METHODS)
       return res.status(204).end()
+    }
+    const projectCandidate = req.body?.projectId
+    if (projectCandidate !== undefined) {
+      if (typeof projectCandidate !== 'string' || !projectCandidate.trim()) {
+        return jsonError(req, res, 400, 'projectId must be a non-empty string')
+      }
+      const projectId = projectCandidate.trim()
+      const access = await requireProjectCapability(req, res, user, projectId, 'feedback:create')
+      if (!access) return
+      const requestedVisibility = req.body?.visibility ?? 'shared'
+      if (requestedVisibility !== 'shared' && requestedVisibility !== 'internal') {
+        return jsonError(req, res, 400, 'visibility must be shared or internal')
+      }
+      const result = await assignExtensionCommentToProject(
+        user.userId,
+        commentId,
+        projectId,
+        feedbackVisibilityForRole(access.role, requestedVisibility),
+      )
+      setCors(req, res, METHODS)
+      return res.status(200).json(result)
     }
     const result = await updateExtensionComment(user.userId, commentId, req.body?.body)
     setCors(req, res, METHODS)

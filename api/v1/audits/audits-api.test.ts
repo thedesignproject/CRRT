@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../_lib/auth.js', () => ({ requireProjectMembership: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireUser: vi.fn() }))
 vi.mock('../../_lib/audits/config.js', () => ({
   auditCapabilities: vi.fn(), auditBudgets: vi.fn(),
 }))
@@ -26,7 +26,7 @@ import capabilitiesHandler from './capabilities.js'
 import readHandler from './[auditId]/index.js'
 import eventsHandler from './[auditId]/events.js'
 import cancelHandler from './[auditId]/cancel.js'
-import { requireProjectMembership, requireUser } from '../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
 import { auditBudgets, auditCapabilities } from '../../_lib/audits/config.js'
 import { cancelAuditExecution, startAuditExecution } from '../../_lib/audits/execution.js'
 import { requireAuditAccess } from '../../_lib/audits/access.js'
@@ -74,7 +74,7 @@ beforeEach(() => {
   vi.mocked(setAuditWorkflowRunId).mockResolvedValue(undefined)
   vi.mocked(markAuditFailed).mockResolvedValue({ status: 'failed' })
   vi.mocked(requireUser).mockResolvedValue({ userId: 'user', email: 'user@example.com' })
-  vi.mocked(requireProjectMembership).mockResolvedValue(true)
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(requireAuditAccess).mockResolvedValue({ workflow_run_id: 'workflow-run' })
   vi.mocked(getAuditResponse).mockResolvedValue(runResponse as never)
   vi.mocked(listAuditEvents).mockResolvedValue({ events: [], nextCursor: '0' })
@@ -115,7 +115,7 @@ describe('Product Audit API', () => {
     vi.mocked(createAuditRun).mockResolvedValue({ status: 'existing', auditId, runStatus: 'running', expiresAt: null })
     const response = await call(createHandler, createReq({ url: 'https://example.com', projectKey: 'project' }, { 'idempotency-key': 'key', authorization: 'Bearer token' }))
     expect(response.statusCode).toBe(200)
-    expect(requireProjectMembership).toHaveBeenCalled()
+    expect(requireProjectCapability).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), 'project', 'feedback:manage')
     expect(response.body).not.toHaveProperty('auditToken')
     expect(response.body).toMatchObject({ status: 'running' })
     expect(startAuditExecution).not.toHaveBeenCalled()
@@ -160,7 +160,7 @@ describe('Product Audit API', () => {
     vi.mocked(requireUser).mockImplementationOnce(async (_req, res) => { res.status(401).json({ error: 'Unauthorized' }); return null })
     expect((await call(createHandler, createReq({ url: 'https://example.com', projectKey: 'p' }, { 'idempotency-key': 'key', authorization: 'Bearer bad' }))).statusCode).toBe(401)
     expect(validateAuditUrl).not.toHaveBeenCalled()
-    vi.mocked(requireProjectMembership).mockImplementationOnce(async (_req, res) => { res.status(403).json({ error: 'Forbidden' }); return false })
+    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_req, res) => { res.status(403).json({ error: 'Forbidden' }); return null })
     expect((await call(createHandler, createReq({ url: 'https://example.com', projectKey: 'p' }, { 'idempotency-key': 'key', authorization: 'Bearer token' }))).statusCode).toBe(403)
     expect(validateAuditUrl).not.toHaveBeenCalled()
   })

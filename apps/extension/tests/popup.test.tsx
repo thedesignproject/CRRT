@@ -3,11 +3,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sendMessage = vi.fn()
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
+const listExtensionProjects = vi.hoisted(() => vi.fn())
+const getCurrentTabUrl = vi.hoisted(() => vi.fn())
+const resolveProjectForPage = vi.hoisted(() => vi.fn())
+const setActiveProject = vi.hoisted(() => vi.fn())
+const setProjectForPage = vi.hoisted(() => vi.fn())
+vi.mock('../lib/comments-api', () => ({ listExtensionProjects }))
+vi.mock('../lib/project-context', () => ({ getCurrentTabUrl, resolveProjectForPage, setActiveProject, setProjectForPage }))
 
 document.body.innerHTML = '<div id="root"></div>'
 const { Popup } = await import('../entrypoints/popup/main')
 
-beforeEach(() => { sendMessage.mockReset(); document.body.innerHTML = ''; vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5173/dashboard/') })
+beforeEach(() => {
+  sendMessage.mockReset()
+  listExtensionProjects.mockReset().mockResolvedValue([])
+  getCurrentTabUrl.mockReset().mockResolvedValue('https://store.example.com/products')
+  resolveProjectForPage.mockReset().mockResolvedValue(null)
+  setActiveProject.mockReset().mockResolvedValue(undefined)
+  setProjectForPage.mockReset().mockResolvedValue(undefined)
+  document.body.innerHTML = ''
+  vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5173/dashboard/')
+})
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
 describe('extension popup', () => {
@@ -46,6 +62,10 @@ describe('extension popup', () => {
     let view = render(<Popup />)
     await screen.findByRole('alert'); expect(screen.getByText('load failed')).toBeInTheDocument(); view.unmount()
 
+    sendMessage.mockRejectedValueOnce('load failed')
+    view = render(<Popup />)
+    await screen.findByRole('alert'); expect(screen.getByText('Could not load CRRT')).toBeInTheDocument(); view.unmount()
+
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
     view = render(<Popup />); await screen.findByText('Sign in to CRRT')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'u@example.com' } })
@@ -65,5 +85,71 @@ describe('extension popup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); await screen.findByText('logout down')
     sendMessage.mockRejectedValueOnce('bad')
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); await screen.findByText('Sign out failed'); view.unmount()
+  })
+
+  it('selects a project or private feedback destination', async () => {
+    const projects = [
+      { publicKey: 'p1', name: 'Storefront', allowedOrigins: ['store.example.com'] },
+      { publicKey: 'p2', name: 'Dashboard', allowedOrigins: [], role: 'guest' as const, capabilities: ['feedback:read', 'feedback:create'] },
+    ]
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockResolvedValueOnce(projects)
+    resolveProjectForPage.mockResolvedValueOnce({ publicKey: 'p1', name: 'Storefront' })
+    const view = render(<Popup />)
+    const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+    expect(destination).toHaveValue('p1')
+    expect(resolveProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', projects)
+
+    fireEvent.change(destination, { target: { value: 'p2' } })
+    await waitFor(() => expect(setProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', {
+      publicKey: 'p2', name: 'Dashboard', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+    }))
+    expect(destination).toHaveValue('p2')
+
+    fireEvent.change(destination, { target: { value: '' } })
+    await waitFor(() => expect(setProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', null))
+    expect(destination).toHaveValue('')
+    view.unmount()
+  })
+
+  it('reports project selection failures without changing the destination', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockResolvedValueOnce([{ publicKey: 'p1', name: 'Storefront', allowedOrigins: [] }])
+    const view = render(<Popup />)
+    const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+
+    setProjectForPage.mockRejectedValueOnce(new Error('storage unavailable'))
+    fireEvent.change(destination, { target: { value: 'p1' } })
+    await screen.findByText('storage unavailable')
+    expect(destination).toHaveValue('')
+
+    setProjectForPage.mockRejectedValueOnce('offline')
+    fireEvent.change(destination, { target: { value: 'p1' } })
+    await screen.findByText('Could not save feedback destination')
+    expect(destination).toHaveValue('')
+    view.unmount()
+  })
+
+  it('uses the unique project resolved from the current page domain', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    const projects = [{ publicKey: 'store', name: 'Storefront', allowedOrigins: ['store.example.com'] }]
+    listExtensionProjects.mockResolvedValueOnce(projects)
+    resolveProjectForPage.mockResolvedValueOnce({ publicKey: 'store', name: 'Storefront' })
+    const view = render(<Popup />)
+    expect(await screen.findByRole('combobox', { name: 'Feedback destination' })).toHaveValue('store')
+    expect(resolveProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', projects)
+    view.unmount()
+  })
+
+  it('uses the popup fallback selection when the active tab is unsupported', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    getCurrentTabUrl.mockResolvedValueOnce(null)
+    listExtensionProjects.mockResolvedValueOnce([{ publicKey: 'store', name: 'Storefront', allowedOrigins: [] }])
+    const view = render(<Popup />)
+    const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+    fireEvent.change(destination, { target: { value: 'store' } })
+    await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith({ publicKey: 'store', name: 'Storefront' }))
+    expect(setProjectForPage).not.toHaveBeenCalled()
+    view.unmount()
   })
 })
