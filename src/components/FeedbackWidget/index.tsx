@@ -1023,9 +1023,11 @@ function FeedbackWidgetInner({
       const opened = window.open(result.issueUrl, '_blank', 'noopener,noreferrer')
       if (opened) opened.opener = null
     } catch (error) {
-      setExternalWork((current) => current?.commentId === request.commentId
-        ? { ...current, busy: false, error: error instanceof Error ? error.message : 'Could not create external work' }
-        : current)
+      setExternalWork({
+        ...request,
+        busy: false,
+        error: error instanceof Error ? error.message : 'Could not create external work',
+      })
     } finally {
       externalWorkRequestRef.current = false
     }
@@ -2372,11 +2374,11 @@ function FeedbackWidgetInner({
             <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Review and edit before creating in {externalWork.destination}.</p>
             <label style={{ display: 'block', color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
               Title
-              <input aria-label="External work title" value={externalWork.title} maxLength={120} onChange={(event) => setExternalWork((current) => current ? { ...current, title: event.target.value } : current)} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', font: 'inherit' }} />
+              <input aria-label="External work title" value={externalWork.title} maxLength={120} onChange={(event) => setExternalWork({ ...externalWork, title: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', font: 'inherit' }} />
             </label>
             <label style={{ display: 'block', marginTop: 14, color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
               Description
-              <textarea aria-label="External work description" value={externalWork.body} rows={12} onChange={(event) => setExternalWork((current) => current ? { ...current, body: event.target.value } : current)} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, resize: 'vertical', borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.5 }} />
+              <textarea aria-label="External work description" value={externalWork.body} rows={12} onChange={(event) => setExternalWork({ ...externalWork, body: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, resize: 'vertical', borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.5 }} />
             </label>
             {externalWork.error && <p role="alert" style={{ color: '#ef4444', fontSize: 12 }}>{externalWork.error}</p>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>

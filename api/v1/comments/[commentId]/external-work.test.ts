@@ -54,4 +54,54 @@ describe('external work endpoint', () => {
     expect(res.body).toBeNull()
     expect(getCommentForGithubIssue).not.toHaveBeenCalled()
   })
+
+  it('validates methods, authentication, identifiers, and comment scope', async () => {
+    let res = response()
+    await call({ method: 'OPTIONS', query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(204)
+
+    res = response()
+    await call({ method: 'PATCH', query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(405)
+
+    vi.mocked(requireUser).mockResolvedValueOnce(null)
+    res = response()
+    await call({ method: 'GET', query: { provider: 'github' }, headers: {} }, res)
+    expect(res.body).toBeNull()
+
+    res = response()
+    await call({ method: 'GET', query: { provider: 'github' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+
+    vi.mocked(getComment).mockResolvedValueOnce(null)
+    res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.statusCode).toBe(404)
+
+    vi.mocked(getComment).mockResolvedValueOnce({ ...comment, projectId: null } as never)
+    res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.statusCode).toBe(404)
+
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(null)
+    res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.statusCode).toBe(404)
+  })
+
+  it('reports disconnected projects, existing issues, and safe preparation failures', async () => {
+    const existing = { issueNumber: 7, issueUrl: 'https://github.com/acme/store/issues/7', createdAt: 'now' }
+    vi.mocked(getGithubIssueConnection).mockResolvedValueOnce(null)
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never)
+    let res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.body).toMatchObject({ connected: false, destination: null, existing })
+
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(getComment).mockRejectedValueOnce(new Error('database secret'))
+    res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'Could not prepare external work' })
+  })
 })

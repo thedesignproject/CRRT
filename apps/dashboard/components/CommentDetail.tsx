@@ -128,13 +128,13 @@ export function CommentDetail({
     } catch {
       if (selectedIdRef.current === commentId) setIssueError('Could not prepare the GitHub issue. Try again.')
     } finally {
-      if (issueRequests.current.get(commentId) === request) issueRequests.current.delete(commentId)
+      issueRequests.current.delete(commentId)
       if (selectedIdRef.current === commentId) setIssueBusy(false)
     }
   }
 
   const handleExternalWorkSubmit = async (draft: { title: string; body: string }) => {
-    if (!selectedComment || issueBusy) return
+    if (!selectedComment || issueBusy || issueRequests.current.has(selectedComment.id)) return
     const commentId = selectedComment.id
     const request = Symbol(commentId)
     issueRequests.current.set(commentId, request)
@@ -149,11 +149,11 @@ export function CommentDetail({
       } }))
       setExternalWorkDraft(null)
     } catch {
-      if (selectedIdRef.current === commentId && issueRequests.current.get(commentId) === request) {
+      if (selectedIdRef.current === commentId) {
         setIssueError('Could not create the GitHub issue. Try again.')
       }
     } finally {
-      if (issueRequests.current.get(commentId) === request) issueRequests.current.delete(commentId)
+      issueRequests.current.delete(commentId)
       if (selectedIdRef.current === commentId) setIssueBusy(false)
     }
   }
@@ -431,12 +431,12 @@ export function CommentDetail({
         </div>
       )}
       {externalWorkDraft && <ExternalWorkDialog
-        key={selectedId ?? 'external-work'}
+        key={selectedId}
         destination={externalWorkDraft.destination ?? 'GitHub'}
         initialDraft={externalWorkDraft.draft}
         busy={issueBusy}
         error={issueError}
-        onCancel={() => { if (!issueBusy) { setExternalWorkDraft(null); setIssueError(null) } }}
+        onCancel={() => { setExternalWorkDraft(null); setIssueError(null) }}
         onSubmit={handleExternalWorkSubmit}
       />}
     </div>

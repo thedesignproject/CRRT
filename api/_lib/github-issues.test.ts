@@ -107,6 +107,8 @@ describe('GitHub issue formatting', () => {
     const body = formatEditableGithubIssueBody('Custom body\n\n<!-- crrt-comment:copied:bad -->', '<!-- signed -->')
     expect(body).toBe('Custom body\n\n<!-- signed -->')
     expect(() => formatEditableGithubIssueBody('   ', '<!-- signed -->')).toThrow('github_issue_body_invalid')
+    expect(() => formatEditableGithubIssueBody('x'.repeat(65_536), '<!-- signed -->'))
+      .toThrow('github_issue_content_too_large')
   })
 })
 

@@ -163,6 +163,10 @@ describe('POST comment GitHub issue', () => {
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: issue } as never)
     expect((await call()).body).toEqual({ ...issue, created: false })
 
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'open', githubIssue: issue } as never)
+    expect((await call()).body).toEqual({ ...issue, created: false })
+    expect(updateReviewStatus).toHaveBeenCalledWith('project-1', 'comment-1', 'accepted')
+
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected' } as never)
     expect((await call()).body).toEqual({ error: 'comment_rejected' })
 
@@ -199,6 +203,19 @@ describe('POST comment GitHub issue', () => {
     expect(createGithubIssue).toHaveBeenCalledWith(expect.objectContaining({
       title: 'Customer-facing title', body: 'edited issue body',
     }))
+  })
+
+  it('rejects incomplete or malformed editable drafts before creating an issue', async () => {
+    for (const draft of [
+      { title: '', body: 'Body' },
+      { title: 'Title', body: '' },
+      { title: 7, body: 'Body' },
+    ]) {
+      const res = await call('POST', { commentId: 'comment-1' }, { draft })
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: 'invalid_external_work_draft' })
+    }
+    expect(createGithubIssue).not.toHaveBeenCalled()
   })
 
   it('recovers a marker match without creating another issue', async () => {
@@ -329,7 +346,9 @@ describe('POST comment GitHub issue', () => {
 
   it('does not post unless the database marks the attempt uncertain', async () => {
     vi.mocked(markCommentGithubIssueUncertain).mockResolvedValueOnce(false)
-    expect((await call()).statusCode).toBe(502)
+    const response = await call()
+    expect(response.statusCode).toBe(409)
+    expect(response.body).toEqual({ error: 'github_issue_creation_in_progress' })
     expect(createGithubIssue).not.toHaveBeenCalled()
     expect(releaseCommentGithubIssue).toHaveBeenCalled()
   })

@@ -122,6 +122,21 @@ it('uses the selected project for authenticated extension comments', async () =>
   expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({
     projectId: 'project', body: 'Project feedback', visibility: 'internal',
   }))
+  expect(adapter.externalWork).toBeUndefined()
+
+  const tracker = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'],
+  })
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+  await expect(tracker.externalWork?.prepare('c1')).rejects.toThrow('Connect GitHub')
+  const existing = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now' }
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: true, destination: null, existing, draft: { title: 'Ignored', body: 'Ignored' } })
+  await expect(tracker.externalWork?.prepare('c1')).resolves.toEqual({
+    destination: 'GitHub', title: '', body: '', existingUrl: existing.issueUrl,
+  })
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: true, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+  await expect(tracker.externalWork?.prepare('c1')).resolves.toEqual({ destination: 'GitHub', title: 'T', body: 'B' })
+  await expect(tracker.externalWork?.send('c1', { title: 'T', body: 'B' })).resolves.toEqual({ issueUrl: existing.issueUrl })
 
   const guest = extensionComments({
     publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
@@ -191,7 +206,7 @@ it('shows current-page pins and project-wide feedback without making other autho
   vi.mocked(listProjectComments).mockResolvedValue({
     items: [
       { ...comment, projectId: 'project', pageUrl: `${location.origin}${location.pathname}?utm_source=test`, editable: true },
-      { ...comment, id: 'other', projectId: 'project', pageUrl: 'https://site.test/checkout', body: 'Checkout feedback', authorName: null, editable: false },
+      { ...comment, id: 'other', projectId: 'project', pageUrl: 'https://site.test/checkout', body: 'Checkout feedback', authorName: null, reviewStatus: 'accepted', editable: false },
       { ...comment, id: 'root', projectId: 'project', pageUrl: 'https://else.test/', body: 'Homepage feedback', editable: false },
       { ...comment, id: 'about', projectId: 'project', pageUrl: 'about:', body: 'Protocol feedback', editable: false },
       { ...comment, id: 'legacy', projectId: 'project', pageUrl: 'legacy-url', body: 'Legacy feedback', editable: false },
@@ -251,8 +266,8 @@ it('lets internal members edit and confirm a manual GitHub handoff from the exte
   const open = vi.spyOn(window, 'open').mockReturnValue(null)
   const view = setup(false, page)
   await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
-  fireEvent.keyDown(window, { key: 'f' })
-  fireEvent.click(await view.ui.findByRole('button', { name: 'More' }))
+  fireEvent.click(view.container.querySelector('[data-fw-pin]')!)
+  fireEvent.click(view.ui.getByRole('button', { name: 'More options' }))
   fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
   const title = await view.ui.findByRole('textbox', { name: 'External work title' })
   fireEvent.change(title, { target: { value: 'Edited title' } })
@@ -260,6 +275,146 @@ it('lets internal members edit and confirm a manual GitHub handoff from the exte
   fireEvent.click(view.ui.getByRole('button', { name: 'Create issue' }))
   await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith('c1', { title: 'Edited title', body: 'Edited body' }))
   expect(open).toHaveBeenCalledWith('https://github.com/acme/store/issues/1', '_blank', 'noopener,noreferrer')
+})
+
+it('opens an existing handoff safely and hides handoff actions for rejected feedback', async () => {
+  resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'] })
+  const page: WidgetPage = { url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0, liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
+  const existing = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now' }
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: true, destination: 'acme/store', existing, draft: { title: '', body: '' } })
+  const opened = { opener: 'parent' }
+  const open = vi.spyOn(window, 'open').mockReturnValue(opened as never)
+  const view = setup(false, page)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+  fireEvent.click(await view.ui.findByRole('button', { name: 'More' }))
+  const send = view.ui.getByRole('button', { name: 'Send to…' })
+  fireEvent.mouseEnter(send)
+  fireEvent.mouseLeave(send)
+  fireEvent.click(send)
+  await waitFor(() => expect(open).toHaveBeenCalledWith(existing.issueUrl, '_blank', 'noopener,noreferrer'))
+  expect(opened.opener).toBeNull()
+  expect(view.ui.queryByRole('dialog')).toBeNull()
+  view.unmount()
+
+  vi.mocked(listProjectComments).mockResolvedValueOnce({
+    items: [{ ...comment, projectId: 'project', reviewStatus: 'rejected', editable: true }], total: 1,
+  })
+  const rejected = setup(false, page)
+  await waitFor(() => expect(rejected.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+  fireEvent.click(await rejected.ui.findByRole('button', { name: 'More' }))
+  expect(rejected.ui.queryByRole('button', { name: 'Send to…' })).toBeNull()
+})
+
+it('keeps the handoff dialog recoverable across preparation and send failures', async () => {
+  resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'] })
+  const page: WidgetPage = { url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0, liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
+  vi.mocked(sendExternalWork)
+    .mockRejectedValueOnce(new Error('Safe send error'))
+    .mockRejectedValueOnce('opaque failure')
+  const view = setup(false, page)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+
+  const openDialog = async () => {
+    fireEvent.click(await view.ui.findByRole('button', { name: 'More' }))
+    fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
+    return view.ui.findByRole('dialog')
+  }
+  let dialog = await openDialog()
+  fireEvent.mouseDown(dialog)
+  expect(view.ui.getByRole('dialog')).toBeInTheDocument()
+  fireEvent.mouseDown(dialog.parentElement!)
+  expect(view.ui.queryByRole('dialog')).toBeNull()
+
+  dialog = await openDialog()
+  fireEvent.click(view.ui.getByRole('button', { name: 'Cancel' }))
+  expect(view.ui.queryByRole('dialog')).toBeNull()
+  dialog = await openDialog()
+  const title = view.ui.getByRole('textbox', { name: 'External work title' })
+  const body = view.ui.getByRole('textbox', { name: 'External work description' })
+  fireEvent.change(title, { target: { value: ' ' } })
+  expect(view.ui.getByRole('button', { name: 'Create issue' })).toBeDisabled()
+  fireEvent.change(title, { target: { value: 'Title' } })
+  fireEvent.change(body, { target: { value: ' ' } })
+  expect(view.ui.getByRole('button', { name: 'Create issue' })).toBeDisabled()
+  fireEvent.change(body, { target: { value: 'Body' } })
+  fireEvent.click(view.ui.getByRole('button', { name: 'Create issue' }))
+  expect(await view.ui.findByRole('alert')).toHaveTextContent('Safe send error')
+
+  fireEvent.click(view.ui.getByRole('button', { name: 'Create issue' }))
+  expect(await view.ui.findByRole('alert')).toHaveTextContent('Could not create external work')
+
+  let resolveSend!: (value: { issueNumber: number; issueUrl: string; createdAt: string; created: boolean }) => void
+  vi.mocked(sendExternalWork).mockReturnValueOnce(new Promise((resolve) => { resolveSend = resolve }))
+  const create = view.ui.getByRole('button', { name: 'Create issue' })
+  act(() => { create.click(); create.click() })
+  expect(sendExternalWork).toHaveBeenCalledTimes(3)
+  expect(view.ui.getByRole('button', { name: 'Sending…' })).toBeDisabled()
+  fireEvent.mouseDown(view.ui.getByRole('dialog').parentElement!)
+  expect(view.ui.getByRole('dialog')).toBeInTheDocument()
+  const opened = { opener: 'parent' }
+  vi.spyOn(window, 'open').mockReturnValue(opened as never)
+  await act(async () => resolveSend({ issueNumber: 2, issueUrl: 'https://github.com/acme/store/issues/2', createdAt: 'now', created: true }))
+  expect(opened.opener).toBeNull()
+  expect(view.ui.queryByRole('dialog')).toBeNull()
+})
+
+it('shows safe handoff preparation errors from thrown and opaque failures', async () => {
+  const prepare = vi.fn()
+    .mockRejectedValueOnce(new Error('Safe prepare error'))
+    .mockRejectedValueOnce('opaque failure')
+  const adapter = {
+    ...personalComments,
+    list: vi.fn().mockResolvedValue([comment]),
+    externalWork: { prepare, send: vi.fn() },
+  }
+  const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+  const trigger = async () => {
+    fireEvent.click(view.getByRole('button', { name: 'More' }))
+    fireEvent.click(view.getByRole('button', { name: 'Send to…' }))
+  }
+  await trigger()
+  expect(await view.findByText('Safe prepare error')).toBeInTheDocument()
+  fireEvent.click(view.getByRole('button', { name: 'Dismiss error' }))
+  await trigger()
+  expect(await view.findByText('Could not prepare external work')).toBeInTheDocument()
+})
+
+it('deduplicates simultaneous handoff preparation requests and tolerates blocked existing-issue tabs', async () => {
+  let resolvePrepare!: (value: { destination: string; title: string; body: string; existingUrl?: string }) => void
+  const prepare = vi.fn().mockReturnValue(new Promise((resolve) => { resolvePrepare = resolve }))
+  const adapter = {
+    ...personalComments,
+    list: vi.fn().mockResolvedValue([comment]),
+    externalWork: { prepare, send: vi.fn() },
+  }
+  vi.spyOn(window, 'open').mockReturnValue(null)
+  const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+  fireEvent.click(view.getByRole('button', { name: 'More' }))
+  const send = view.getByRole('button', { name: 'Send to…' })
+  act(() => { send.click(); send.click() })
+  expect(prepare).toHaveBeenCalledTimes(1)
+  await act(async () => resolvePrepare({ destination: 'GitHub', title: '', body: '', existingUrl: 'https://github.com/acme/store/issues/1' }))
+  expect(window.open).toHaveBeenCalled()
+})
+
+it('keeps rejected personal pins unavailable for external handoff', async () => {
+  const adapter = {
+    ...personalComments,
+    list: vi.fn().mockResolvedValue([{ ...comment, reviewStatus: 'rejected' as const }]),
+    externalWork: { prepare: vi.fn(), send: vi.fn() },
+  }
+  const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.click(view.container.querySelector('[data-fw-pin]')!)
+  fireEvent.click(view.getByRole('button', { name: 'More options' }))
+  expect(view.queryByRole('button', { name: 'Send to…' })).toBeNull()
 })
 
 it('focuses an existing npm widget for the same project instead of rendering a duplicate', async () => {

@@ -14,6 +14,7 @@ import type { Comment } from '../lib/types'
 import { CommandPalette } from './CommandPalette'
 import { CommentDetail } from './CommentDetail'
 import { CommentList } from './CommentList'
+import { ExternalWorkDialog } from './ExternalWorkDialog'
 
 const issue = {
   issueNumber: 42,
@@ -189,6 +190,73 @@ describe('<CommentDetail /> GitHub issue action', () => {
     await screen.findByRole('button', { name: 'Open GitHub Issue' })
   })
 
+  it('shows safe preparation failures and handles disconnected preparation state', async () => {
+    vi.mocked(getExternalWorkDraft)
+      .mockRejectedValueOnce(new Error('response contained a secret'))
+      .mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'Title', body: 'Body' } })
+    render(<CommentDetail {...props} />)
+    const button = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Try again.')
+    fireEvent.click(button)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Try again.')
+  })
+
+  it('opens an issue discovered during preparation and protects its opener', async () => {
+    const opened = { opener: 'parent' }
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened as never)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'github', connected: true, destination: 'acme/site', existing: issue,
+      draft: { title: '', body: '' },
+    })
+    render(<CommentDetail {...props} />)
+    const button = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    await screen.findByRole('button', { name: 'Open GitHub Issue' })
+    expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer')
+    expect(opened.opener).toBeNull()
+  })
+
+  it('handles a blocked popup and a late preparation failure after selection changes', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'github', connected: true, destination: 'acme/site', existing: issue,
+      draft: { title: '', body: '' },
+    })
+    const first = render(<CommentDetail {...props} />)
+    const button = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    await waitFor(() => expect(open).toHaveBeenCalled())
+    first.unmount()
+
+    let rejectDraft!: (reason: Error) => void
+    vi.mocked(getExternalWorkDraft).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectDraft = reject }))
+    const view = render(<CommentDetail {...props} />)
+    const pending = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(pending).toBeEnabled())
+    fireEvent.click(pending)
+    const next = { ...comment, id: 'comment-2', body: 'Move the button' }
+    view.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    rejectDraft(new Error('late failure'))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('uses the default destination label and lets a prepared draft be cancelled', async () => {
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'github', connected: true, destination: null, existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    })
+    render(<CommentDetail {...props} />)
+    await openExternalWorkDraft()
+    expect(screen.getByRole('dialog')).toHaveTextContent('creating in GitHub')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
   it('clears transient state when selecting a different comment', async () => {
     vi.mocked(createCommentGithubIssue).mockRejectedValueOnce(new Error('failure'))
     const { rerender } = render(<CommentDetail {...props} />)
@@ -289,6 +357,33 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(getExternalWorkDraft).toHaveBeenCalledTimes(1)
     resolveDraft({ provider: 'github', connected: true, destination: 'acme/site', existing: null, draft: { title: 'Title', body: 'Body' } })
     await screen.findByRole('dialog')
+  })
+
+  it('does not dispatch duplicate creates before the busy render commits', async () => {
+    let resolveIssue!: (value: typeof issue & { created: boolean }) => void
+    vi.mocked(createCommentGithubIssue).mockReturnValueOnce(new Promise((resolve) => { resolveIssue = resolve }))
+    render(<CommentDetail {...props} />)
+    const create = await openExternalWorkDraft()
+    act(() => {
+      create.click()
+      create.click()
+    })
+    expect(createCommentGithubIssue).toHaveBeenCalledTimes(1)
+    resolveIssue({ ...issue, created: true })
+    await screen.findByRole('button', { name: 'Open GitHub Issue' })
+  })
+
+  it('does not surface a late create failure after selection changes', async () => {
+    let rejectIssue!: (reason: Error) => void
+    vi.mocked(createCommentGithubIssue).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectIssue = reject }))
+    const { rerender } = render(<CommentDetail {...props} />)
+    const create = await openExternalWorkDraft()
+    fireEvent.click(create)
+    const next = { ...comment, id: 'comment-2', body: 'Move the button' }
+    rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    rejectIssue(new Error('late failure'))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('renders the no-selection state safely', () => {
@@ -442,4 +537,41 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(screen.getByText('Ada · /settings')).toBeInTheDocument()
   })
 
+})
+
+describe('<ExternalWorkDialog />', () => {
+  it('only cancels through enabled controls or the backdrop', () => {
+    const onCancel = vi.fn()
+    const onSubmit = vi.fn()
+    const view = render(<ExternalWorkDialog
+      destination="acme/site"
+      initialDraft={{ title: ' Title ', body: ' Body ' }}
+      busy={false}
+      error={null}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    fireEvent.mouseDown(screen.getByRole('dialog'))
+    expect(onCancel).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('textbox', { name: 'External work description' }), { target: { value: ' Updated body ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    expect(onSubmit).toHaveBeenCalledWith({ title: 'Title', body: 'Updated body' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    fireEvent.mouseDown(screen.getByRole('presentation'))
+    expect(onCancel).toHaveBeenCalledTimes(2)
+
+    view.rerender(<ExternalWorkDialog
+      destination="acme/site"
+      initialDraft={{ title: 'Title', body: 'Body' }}
+      busy
+      error="Safe error"
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    fireEvent.mouseDown(screen.getByRole('presentation'))
+    expect(onCancel).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('Safe error')
+  })
 })

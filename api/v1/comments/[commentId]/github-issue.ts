@@ -43,7 +43,7 @@ function sameConnection(
 function safeErrorStatus(error: unknown) {
   const code = error instanceof Error ? error.message : ''
   if (code === 'github_issue_persistence_failed') return 500
-  if (code === 'github_issue_recovery_pending') return 409
+  if (code === 'github_issue_recovery_pending' || code === 'github_issue_creation_in_progress') return 409
   return code.startsWith('github_') ? 502 : 500
 }
 
@@ -231,11 +231,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (uncertain) console.error('GitHub issue result requires marker recovery')
     const status = safeErrorStatus(error)
+    const code = error instanceof Error ? error.message : ''
     return jsonError(
       req,
       res,
       status,
-      status === 409
+      code === 'github_issue_creation_in_progress'
+        ? 'github_issue_creation_in_progress'
+        : status === 409
         ? 'github_issue_recovery_pending'
         : status === 502 ? 'GitHub issue creation failed' : 'Issue creation failed',
     )
