@@ -729,6 +729,7 @@ type InviteMocks = {
   inviteInsertResult?: { data: InviteRow | null; error: { code?: string; message: string } | null }
   inviteDeleteError?: { message: string } | null
   inviteRestoreError?: { code?: string; message: string } | null
+  inviteRestoreRejection?: unknown
   memberInsertError?: { code?: string; message: string } | null
   memberSingle?: { data: { role: string; is_owner: boolean } | null; error: { message: string } | null }
 }
@@ -739,7 +740,11 @@ function inviteSupabase(m: InviteMocks = {}) {
       select: vi.fn(() => ({
         single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
       })),
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: m.inviteRestoreError ?? null }).then(resolve),
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => (
+        m.inviteRestoreRejection === undefined
+          ? Promise.resolve({ error: m.inviteRestoreError ?? null }).then(resolve)
+          : Promise.reject(m.inviteRestoreRejection).then(resolve, reject)
+      ),
     }
     return chain
   })
@@ -825,6 +830,12 @@ describe('invite helpers', () => {
   })
 
   it('acceptInvite: not_found / happy / membership 23505 tolerated / other error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: null, error: null },
+      memberSingle: { data: { role: 'guest', is_owner: false }, error: null },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
+
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('not_found')
 
@@ -876,6 +887,13 @@ describe('invite helpers', () => {
       inviteRestoreError: { code: '23505', message: 'restored concurrently' },
     }) as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      memberInsertError: { code: '50000', message: 'member boom' },
+      inviteRestoreRejection: 'restore unavailable',
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: restore unavailable')
   })
 })
 
