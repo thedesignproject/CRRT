@@ -81,6 +81,7 @@ vi.mock('./components/CommentDetail', () => ({
       props.selectedComment!.id,
       props.selectedComment!.visibility === 'internal' ? 'shared' : 'internal',
     )}>change audience</button>}
+    <button onClick={() => props.onVisibilityChange?.('missing-comment', 'internal')}>change missing audience</button>
   </div>,
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
@@ -213,6 +214,12 @@ describe('<App /> GitHub issue wiring', () => {
       imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
       visibility: 'shared', createdAt: '2026-01-01', updatedAt: '2026-01-01',
     })
+    fixtures.comments.push({
+      id: 'comment-2', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'main', x: 30, y: 40,
+      body: 'Other feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Other member', targetType: 'element_point', anchor: null, githubIssue: null,
+      visibility: 'shared', createdAt: '2026-01-02', updatedAt: '2026-01-02',
+    })
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
     fireEvent.click(await screen.findByRole('button', { name: 'change audience' }))
@@ -226,6 +233,10 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'change audience' }))
     await waitFor(() => expect(error).toHaveBeenCalledWith('Failed to update feedback audience:', expect.any(Error)))
     expect(screen.getByTestId('detail')).toHaveTextContent(':internal')
+
+    fixtures.updateVisibility.mockRejectedValueOnce(new Error('missing comment'))
+    fireEvent.click(screen.getByRole('button', { name: 'change missing audience' }))
+    await waitFor(() => expect(error).toHaveBeenCalledTimes(2))
   })
 
   it('opens My Comments directly from the extension link without selecting a project', () => {
