@@ -26,7 +26,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (req.method === 'PATCH') {
       const requestedRole = (req.body as { role?: unknown } | undefined)?.role
-      if (requestedRole !== 'owner' && requestedRole !== 'admin' && requestedRole !== 'member') {
+      if (
+        requestedRole !== 'owner'
+        && requestedRole !== 'admin'
+        && requestedRole !== 'member'
+        && requestedRole !== 'guest'
+      ) {
         return jsonError(req, res, 400, 'Invalid role')
       }
       const changed = await changeProjectMemberRole({

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
+import { acceptInvite as apiAcceptInvite, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
@@ -82,6 +82,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments'>(() =>
     new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
   )
+  const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite'))
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
@@ -93,7 +94,20 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
-  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, selectedProject || null)
+  const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
+  // Fail closed while project access is loading. The fallback only keeps
+  // backwards compatibility for project fixtures/API responses that predate
+  // explicit capabilities.
+  const canManageFeedback = activeProject
+    ? activeProject.capabilities?.includes('feedback:manage') ?? true
+    : false
+  const canOperateAgent = activeProject
+    ? activeProject.capabilities?.includes('agent:operate') ?? true
+    : false
+  const canManageProject = activeProject
+    ? activeProject.capabilities?.includes('project:manage') ?? true
+    : false
+  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, canOperateAgent ? selectedProject || null : null)
   const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
@@ -105,6 +119,27 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     try { return (localStorage.getItem('dashboard-theme') as 'light' | 'dark') || 'dark' } catch { return 'dark' }
   })
   const [, setTick] = useState(0)
+
+  useEffect(() => {
+    if (!pendingInvite) return
+    let current = true
+    apiAcceptInvite(API_BASE, accessToken, pendingInvite)
+      .then(() => {
+        if (!current) return
+        setSelectedProject(pendingInvite)
+        setView('feedback')
+        void refreshProjects()
+      })
+      .catch((error) => console.warn('Could not accept project invitation', error))
+      .finally(() => {
+        if (!current) return
+        const url = new URL(window.location.href)
+        url.searchParams.delete('invite'); url.searchParams.delete('email')
+        window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
+        setPendingInvite(null)
+      })
+    return () => { current = false }
+  }, [accessToken, pendingInvite, refreshProjects])
 
   useEffect(() => {
     const root = document.documentElement
@@ -160,7 +195,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [projectComments, statusFilter])
 
   const selectedComment = comments.find((c) => c.id === selectedCommentId) ?? null
-  const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
 
   const counts = useMemo(() => projectComments.reduce(
     (acc, c) => {
@@ -200,6 +234,23 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
   }, [handleReviewStatus])
+
+  const handleVisibilityChange = useCallback(async (id: string, visibility: 'shared' | 'internal') => {
+    const previous = comments.find((comment) => comment.id === id)?.visibility
+    setComments((current) => current.map((comment) => comment.id === id
+      ? { ...comment, visibility }
+      : comment))
+    try {
+      await apiUpdateVisibility(API_BASE, accessToken, id, visibility)
+    } catch (error) {
+      if (previous) {
+        setComments((current) => current.map((comment) => comment.id === id
+          ? { ...comment, visibility: previous }
+          : comment))
+      }
+      console.error('Failed to update feedback audience:', error)
+    }
+  }, [accessToken, comments])
 
   const toggleBulkSelect = useCallback((id: string) => {
     setBulkSelectedIds((prev) => {
@@ -294,7 +345,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
       if (e.key === ' ') { e.preventDefault(); goNext() }
 
-      if (selectedComment) {
+      if (selectedComment && canManageFeedback) {
         if (e.key === 'a') toggleReview(selectedComment, 'accepted')
         if (e.key === 'd') toggleReview(selectedComment, 'rejected')
         if (e.key === 'm') handleToggleDone(selectedComment.id)
@@ -305,7 +356,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view])
+  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -323,11 +374,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (action === 'filter-open') selectFilter('open')
     if (action === 'filter-ready') selectFilter('ready')
     if (action === 'filter-done') selectFilter('done')
-    if (selectedComment && action === 'accept') toggleReview(selectedComment, 'accepted')
-    if (selectedComment && action === 'reject') toggleReview(selectedComment, 'rejected')
-    if (selectedComment && action === 'done') handleToggleDone(selectedComment.id)
+    if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
+    if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
+    if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
     setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter])
+  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback])
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return
@@ -439,6 +490,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         addProjectError={addProjectError}
         onOpenCmd={() => setCmdOpen(true)}
         onOpenSettings={() => setView((v) => (v === 'settings' ? 'feedback' : 'settings'))}
+        canManageProject={canManageProject}
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
         extensionCommentsActive={view === 'extension-comments'}
@@ -456,7 +508,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       />
 
       {view === 'extension-comments' ? (
-        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} />
+        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (
@@ -472,6 +524,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) : (
       <div className="flex flex-1 overflow-hidden">
         <CommentList
+          readOnly={!canManageFeedback}
           filteredComments={filteredComments}
           counts={counts}
           statusFilter={statusFilter}
@@ -490,6 +543,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         />
 
         <CommentDetail
+          readOnly={!canManageFeedback}
           selectedComment={selectedComment}
           selectedProject={selectedProject}
           commentsLoading={commentsLoading}
@@ -501,11 +555,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           goNext={goNext}
           toggleReview={toggleReview}
           handleToggleDone={handleToggleDone}
+          onVisibilityChange={handleVisibilityChange}
           apiBase={API_BASE}
           accessToken={accessToken}
         />
 
-        {sidebarOpen && (
+        {sidebarOpen && canOperateAgent && (
           <AgentSidebar
             selectedProject={selectedProject}
             projectComments={projectComments}
@@ -539,6 +594,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onSelect={handleCmdSelect}
           onAction={handleCmdAction}
           selectedCommentId={selectedCommentId}
+          canManageFeedback={canManageFeedback}
+          canOperateAgent={canOperateAgent}
         />
       )}
     </div>

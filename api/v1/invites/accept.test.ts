@@ -77,6 +77,14 @@ describe('api/v1/invites/accept', () => {
       userId: 'inviter-1', kind: 'invite.accepted',
     }))
 
+    // A repeated magic-link continuation is idempotent and emits no duplicate notice.
+    vi.mocked(createNotification).mockClear()
+    vi.mocked(acceptInvite).mockResolvedValueOnce(null)
+    res = mockRes()
+    await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(createNotification).not.toHaveBeenCalled()
+
     // notif emit fails → accept still returns 200 (fanout is fire-and-forget)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     vi.mocked(acceptInvite).mockResolvedValueOnce('inviter-1')

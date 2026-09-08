@@ -131,6 +131,17 @@ export function formatGithubIssueBody(
   return sections.join('\n\n')
 }
 
+export function formatEditableGithubIssueBody(body: string, marker: string) {
+  const content = body.trim()
+  if (!content) throw new Error('github_issue_body_invalid')
+  const withoutMarkers = content.replace(/<!--\s*crrt-comment:[\s\S]*?-->/gi, '').trim()
+  const result = `${withoutMarkers}\n\n${marker}`
+  if (Buffer.byteLength(result, 'utf8') > MAX_GITHUB_ISSUE_BODY_BYTES) {
+    throw new Error('github_issue_content_too_large')
+  }
+  return result
+}
+
 export async function findGithubIssueByMarker(input: {
   accessToken: string
   owner: string

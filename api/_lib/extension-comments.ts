@@ -2,9 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabase } from './supabase.js'
 import { parseCommentTarget } from './anchor.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
+import { fromLegacyStatus } from './status.js'
 
 const BUCKET = 'extension-feedback-images'
-const SELECT = 'id,url,page_hostname,x,y,element,comment,screenshot_storage_path,created_at,updated_at,target_type,anchor'
+const SELECT = 'id,project_id,source,created_by_user_id,url,page_hostname,x,y,element,comment,status,visibility,image_url,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
 const MAX_BODY = 8_000
 const MAX_SELECTOR = 1_000
 const MAX_URL = 2_048
@@ -19,13 +20,20 @@ export class ExtensionCommentError extends Error {
 
 type CommentRow = {
   id: string
+  project_id: string | null
+  source?: string | null
+  created_by_user_id?: string | null
   url: string
   page_hostname: string
   x: number
   y: number
   element: string
   comment: string
+  status?: string | null
+  visibility?: 'shared' | 'internal' | null
+  image_url?: string | null
   screenshot_storage_path: string | null
+  author_name: string | null
   created_at: string
   updated_at: string
   target_type: string
@@ -34,13 +42,18 @@ type CommentRow = {
 
 export type ExtensionComment = {
   id: string
+  projectId: string | null
   pageUrl: string
   pageHostname: string
   x: number
   y: number
   selector: string
   body: string
+  visibility?: 'shared' | 'internal'
+  reviewStatus?: 'open' | 'accepted' | 'rejected'
+  editable?: boolean
   screenshotUrl: string | null
+  authorName: string | null
   createdAt: string
   updatedAt: string
   targetType: string
@@ -100,8 +113,8 @@ function parseScreenshot(input: unknown) {
   return { buffer, mimeType: value.mimeType }
 }
 
-async function serialize(client: SupabaseClient, row: CommentRow): Promise<ExtensionComment> {
-  let screenshotUrl: string | null = null
+async function serialize(client: SupabaseClient, row: CommentRow, viewerUserId?: string): Promise<ExtensionComment> {
+  let screenshotUrl: string | null = row.image_url ?? null
   if (row.screenshot_storage_path) {
     const { data, error } = await client.storage.from(BUCKET).createSignedUrl(row.screenshot_storage_path, 300)
     // A retried DELETE can leave a row after its image was already removed.
@@ -110,13 +123,18 @@ async function serialize(client: SupabaseClient, row: CommentRow): Promise<Exten
   }
   return {
     id: row.id,
+    projectId: row.project_id,
     pageUrl: row.url,
     pageHostname: row.page_hostname,
     x: row.x,
     y: row.y,
     selector: row.element,
     body: row.comment,
+    visibility: row.visibility ?? 'shared',
+    reviewStatus: fromLegacyStatus(row.status),
+    editable: row.source === 'extension' && row.created_by_user_id === viewerUserId,
     screenshotUrl,
+    authorName: row.author_name,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     targetType: row.target_type,
@@ -124,22 +142,49 @@ async function serialize(client: SupabaseClient, row: CommentRow): Promise<Exten
   }
 }
 
+function hasRenderableTarget(row: unknown): row is CommentRow {
+  const value = row as Partial<CommentRow>
+  return typeof value.url === 'string'
+    && typeof value.element === 'string'
+    && typeof value.x === 'number'
+    && Number.isFinite(value.x)
+    && typeof value.y === 'number'
+    && Number.isFinite(value.y)
+}
+
 export async function listExtensionComments(
   userId: string,
-  input: { page?: unknown; limit?: unknown; pageUrl?: unknown },
+  input: { page?: unknown; limit?: unknown; pageUrl?: unknown; projectId?: string | null },
+  visibility?: 'shared' | 'internal',
 ) {
   const client = getServiceSupabase()
   const { page, limit } = parseExtensionPagination(input)
   let query = client.from('comments').select(SELECT, { count: 'exact' })
-    .eq('source', 'extension').eq('created_by_user_id', userId)
-    .order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1)
+  if (input.projectId) {
+    query = query.eq('project_id', input.projectId)
+      .not('url', 'is', null)
+      .not('element', 'is', null)
+      .not('x', 'is', null)
+      .not('y', 'is', null)
+  } else {
+    query = query.eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+  }
+  if (visibility) query = query.eq('visibility', visibility)
+  query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1)
   if (input.pageUrl !== undefined) query = query.eq('url', normalizeExtensionPageUrl(input.pageUrl).pageUrl)
   const { data, error, count } = await query
   if (error) throw new Error(error.message)
-  return { items: await Promise.all(((data ?? []) as CommentRow[]).map((row) => serialize(client, row))), page, limit, total: count ?? 0 }
+  const renderable = (data ?? []).filter(hasRenderableTarget)
+  return { items: await Promise.all(renderable.map((row) => serialize(client, row, userId))), page, limit, total: count ?? 0 }
 }
 
-export async function createExtensionComment(userId: string, input: Record<string, unknown>) {
+export async function createExtensionComment(
+  userId: string,
+  input: Record<string, unknown>,
+  projectId: string | null = null,
+  authorName: string | null = null,
+  visibility: 'shared' | 'internal' = 'shared',
+) {
   const client = getServiceSupabase()
   const { pageUrl, pageHostname } = normalizeExtensionPageUrl(input.pageUrl)
   const body = requiredText(input.body, 'body', MAX_BODY)
@@ -158,9 +203,10 @@ export async function createExtensionComment(userId: string, input: Record<strin
   }
 
   const { data, error } = await client.from('comments').insert({
-    source: 'extension', created_by_user_id: userId, project_id: null,
+    source: 'extension', created_by_user_id: userId, project_id: projectId, visibility,
     url: pageUrl, page_hostname: pageHostname, x, y, element: selector,
-    comment: body, created_by: 'extension', screenshot_storage_path: screenshotStoragePath,
+    comment: body, created_by: 'extension', author_name: authorName,
+    screenshot_storage_path: screenshotStoragePath,
     target_type: target.targetType, anchor: target.anchor,
   }).select(SELECT).single()
   if (error) throw new Error(error.message)
@@ -176,7 +222,7 @@ export async function createExtensionComment(userId: string, input: Record<strin
       throw new Error(`Screenshot upload failed: ${uploadError.message}`)
     }
   }
-  return serialize(client, data as CommentRow)
+  return serialize(client, data as CommentRow, userId)
 }
 
 export async function updateExtensionComment(userId: string, commentId: string, bodyValue: unknown) {
@@ -186,7 +232,54 @@ export async function updateExtensionComment(userId: string, commentId: string, 
     .eq('id', commentId).eq('source', 'extension').eq('created_by_user_id', userId).select(SELECT).maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) throw new ExtensionCommentError(404, 'Comment not found')
-  return serialize(client, data as CommentRow)
+  return serialize(client, data as CommentRow, userId)
+}
+
+export async function getOwnedExtensionCommentScope(userId: string, commentId: string) {
+  const client = getServiceSupabase()
+  const { data, error } = await client.from('comments')
+    .select('project_id,visibility')
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? {
+    projectId: data.project_id as string | null,
+    visibility: (data.visibility ?? 'shared') as 'shared' | 'internal',
+  } : null
+}
+
+export async function assignExtensionCommentToProject(
+  userId: string,
+  commentId: string,
+  projectId: string,
+  visibility: 'shared' | 'internal' = 'shared',
+) {
+  const client = getServiceSupabase()
+  const { data, error } = await client.from('comments')
+    .update({ project_id: projectId, visibility, updated_at: new Date().toISOString() })
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .is('project_id', null)
+    .select(SELECT)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (data) return serialize(client, data as CommentRow, userId)
+
+  const { data: current, error: currentError } = await client.from('comments')
+    .select(SELECT)
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .maybeSingle()
+  if (currentError) throw new Error(currentError.message)
+  if (!current) throw new ExtensionCommentError(404, 'Comment not found')
+  if ((current as CommentRow).project_id !== projectId) {
+    throw new ExtensionCommentError(409, 'Comment already belongs to another project')
+  }
+  return serialize(client, current as CommentRow, userId)
 }
 
 export async function deleteExtensionComment(userId: string, commentId: string) {

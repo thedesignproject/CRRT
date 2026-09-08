@@ -20,8 +20,10 @@ import {
   listAcceptedCommentsForProject,
   listComments,
   listCommentsForShare,
+  listProjectComments,
   listProjectMemberIds,
   updateImplementationStatus,
+  updateCommentVisibility,
   updateReviewStatus,
   isProjectKeyAvailable,
   isProjectMember,
@@ -32,6 +34,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
   notifyProjectMembersOfCommentActivity,
+  removeGuestCommentActivityNotifications,
   releaseCommentActivityEmailReservation,
   reserveCommentActivityEmail,
   slugifyProjectKey,
@@ -276,8 +279,8 @@ describe('releaseCommentActivityEmailReservation', () => {
 })
 
 type MembershipMocks = {
-  memberSingle?: { data: { role: 'admin' | 'member'; is_owner: boolean } | null; error: { message: string } | null }
-  memberList?: { data: Array<{ project_key: string }> | null; error: { message: string } | null }
+  memberSingle?: { data: { role: 'admin' | 'member' | 'guest'; is_owner: boolean } | null; error: { message: string } | null }
+  memberList?: { data: Array<{ project_key: string; role: 'admin' | 'member' | 'guest'; is_owner: boolean }> | null; error: { message: string } | null }
   projectsIn?: { data: ProjectRow[] | null; error: { message: string } | null }
   projectsSingle?: { data: ProjectRow | null; error: { message: string } | null }
   claimRpc?: { data: unknown; error: { message: string } | null }
@@ -346,13 +349,19 @@ describe('membership helpers + claim', () => {
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'p1' }], error: null },
+      memberList: { data: [{ project_key: 'pk', role: 'guest', is_owner: false }], error: null },
       projectsIn: { data: [PROJECT_ROW], error: null },
     }) as never)
-    expect((await listProjectsForUser('u')).map((p) => p.publicKey)).toEqual(['pk'])
+    expect(await listProjectsForUser('u')).toEqual([expect.objectContaining({ publicKey: 'pk', role: 'guest', capabilities: ['feedback:read', 'feedback:create'] })])
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'p1' }], error: null },
+      memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
+      projectsIn: { data: null, error: null },
+    }) as never)
+    expect(await listProjectsForUser('u')).toEqual([])
+
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
+      memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
       projectsIn: { data: null, error: { message: 'boom' } },
     }) as never)
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
@@ -607,6 +616,57 @@ describe('notifications helpers', () => {
     }))
   })
 
+  it('removes derived activity metadata from guest notifications when feedback becomes internal', async () => {
+    const deleteEq = vi.fn()
+    const deleteChain = {
+      in: vi.fn(() => deleteChain),
+      eq: deleteEq,
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: null }).then(resolve),
+    }
+    deleteEq.mockImplementation(() => deleteChain)
+    const memberRoleEq = vi.fn().mockResolvedValue({ data: [{ user_id: 'guest-1' }], error: null })
+    const memberProjectEq = vi.fn(() => ({ eq: memberRoleEq }))
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn((table: string) => table === 'project_members'
+        ? { select: vi.fn(() => ({ eq: memberProjectEq })) }
+        : { delete: vi.fn(() => deleteChain) }),
+    } as never)
+
+    await removeGuestCommentActivityNotifications('p', 'c')
+
+    expect(deleteChain.in).toHaveBeenCalledWith('user_id', ['guest-1'])
+    expect(deleteEq).toHaveBeenCalledWith('kind', 'comment.activity')
+    expect(deleteEq).toHaveBeenCalledWith('payload->>projectKey', 'p')
+    expect(deleteEq).toHaveBeenCalledWith('payload->>latestCommentId', 'c')
+  })
+
+  it('handles empty guest lists and cleanup query failures', async () => {
+    const members = (result: { data: unknown; error: { message: string } | null }) => ({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue(result) })),
+        })),
+      })),
+    })
+    vi.mocked(getServiceSupabase).mockReturnValue(members({ data: null, error: null }) as never)
+    await expect(removeGuestCommentActivityNotifications('p', 'c')).resolves.toBeUndefined()
+
+    vi.mocked(getServiceSupabase).mockReturnValue(members({ data: null, error: { message: 'members down' } }) as never)
+    await expect(removeGuestCommentActivityNotifications('p', 'c')).rejects.toThrow('members down')
+
+    const deleteChain = {
+      in: vi.fn(), eq: vi.fn(),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: { message: 'cleanup down' } }).then(resolve),
+    }
+    deleteChain.in.mockReturnValue(deleteChain); deleteChain.eq.mockReturnValue(deleteChain)
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn((table: string) => table === 'project_members'
+        ? { select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [{ user_id: 'guest' }], error: null }) })) })) }
+        : { delete: vi.fn(() => deleteChain) }),
+    } as never)
+    await expect(removeGuestCommentActivityNotifications('p', 'c')).rejects.toThrow('cleanup down')
+  })
+
   it('listProjectMemberIds returns member ids without resolving auth emails', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -711,7 +771,7 @@ describe('notifications helpers', () => {
 type InviteRow = {
   project_key: string
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   invited_by: string
   created_at: string
 }
@@ -721,19 +781,45 @@ type InviteMocks = {
   inviteList?: { data: InviteRow[] | null; error: { message: string } | null }
   inviteInsertResult?: { data: InviteRow | null; error: { code?: string; message: string } | null }
   inviteDeleteError?: { message: string } | null
+  inviteRestoreError?: { code?: string; message: string } | null
+  inviteRestoreRejection?: unknown
   memberInsertError?: { code?: string; message: string } | null
+  memberSingle?: { data: { role: string; is_owner: boolean } | null; error: { message: string } | null }
 }
 
 function inviteSupabase(m: InviteMocks = {}) {
+  const inviteInsert = vi.fn(() => {
+    const chain = {
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
+      })),
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => (
+        m.inviteRestoreRejection === undefined
+          ? Promise.resolve({ error: m.inviteRestoreError ?? null }).then(resolve)
+          : Promise.reject(m.inviteRestoreRejection).then(resolve, reject)
+      ),
+    }
+    return chain
+  })
+  const inviteDelete = vi.fn(() => {
+    const chain = {
+      eq: vi.fn(() => chain),
+      select: vi.fn(() => chain),
+      maybeSingle: vi.fn(() => Promise.resolve({
+        ...(m.inviteSingle ?? { data: null, error: null }),
+        error: m.inviteDeleteError ?? m.inviteSingle?.error ?? null,
+      })),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: m.inviteDeleteError ?? null }).then(resolve),
+    }
+    return chain
+  })
   return {
+    inviteInsert,
+    inviteDelete,
     from: vi.fn((table: string) => {
       if (table === 'project_invites') {
         return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
-            })),
-          })),
+          insert: inviteInsert,
           select: vi.fn(() => {
             const chain = {
               eq: vi.fn(() => chain),
@@ -744,18 +830,14 @@ function inviteSupabase(m: InviteMocks = {}) {
             }
             return chain
           }),
-          delete: vi.fn(() => {
-            const chain = {
-              eq: vi.fn(() => chain),
-              then: (r: (v: unknown) => unknown) =>
-                Promise.resolve({ error: m.inviteDeleteError ?? null }).then(r),
-            }
-            return chain
-          }),
+          delete: inviteDelete,
         }
       }
       if (table === 'project_members') {
-        return { insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })) }
+        return {
+          insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(m.memberSingle ?? { data: null, error: null })) })) })) })),
+        }
       }
       throw new Error(`Unmocked table ${table}`)
     }),
@@ -801,8 +883,20 @@ describe('invite helpers', () => {
   })
 
   it('acceptInvite: not_found / happy / membership 23505 tolerated / other error', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: null, error: null },
+      memberSingle: { data: { role: 'guest', is_owner: false }, error: null },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
+
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('not_found')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: null, error: null },
+      memberSingle: { data: { role: 'member', is_owner: false }, error: null },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
 
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
     expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
@@ -813,11 +907,15 @@ describe('invite helpers', () => {
     }) as never)
     expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+    const failed = inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
       memberInsertError: { code: '50000', message: 'boom' },
-    }) as never)
+    })
+    vi.mocked(getServiceSupabase).mockReturnValue(failed as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('boom')
+    expect(failed.inviteInsert).toHaveBeenCalledWith([{
+      project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'inviter-1', created_at: 't',
+    }])
   })
 
   it('declineInvite: not_found / happy', async () => {
@@ -828,19 +926,33 @@ describe('invite helpers', () => {
     expect(await declineInvite('x@y.z', 'p')).toBe('inviter-1')
   })
 
-  it('getInvite lookup error / deleteInvite error bubble through accept', async () => {
-    // getInvite error path
+  it('claim errors and failed invite restoration bubble through accept', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: null, error: { message: 'lookup boom' } },
+      inviteSingle: { data: null, error: null },
+      inviteDeleteError: { message: 'claim boom' },
     }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('lookup boom')
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('claim boom')
 
-    // deleteInvite error path (invite found, member insert ok, delete fails)
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
-      inviteDeleteError: { message: 'delete boom' },
+      memberInsertError: { code: '50000', message: 'member boom' },
+      inviteRestoreError: { code: '50000', message: 'restore boom' },
     }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('delete boom')
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: Error: restore boom')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      memberInsertError: { code: '50000', message: 'member boom' },
+      inviteRestoreError: { code: '23505', message: 'restored concurrently' },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      memberInsertError: { code: '50000', message: 'member boom' },
+      inviteRestoreRejection: 'restore unavailable',
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: restore unavailable')
   })
 })
 
@@ -927,10 +1039,12 @@ describe('comment functions', () => {
   function buildCommentsSupabase(opts: {
     result?: QueryResult
     shareItems?: Array<{ comment_id: string }>
+    signedResult?: { data: { signedUrl: string } | null; error: { message: string } | null }
   } = {}) {
     const result = opts.result ?? { data: null, error: null }
     const selects: string[] = []
     const inserts: unknown[] = []
+    const eq = vi.fn(() => chain)
 
     const chain = {
       insert: vi.fn((rows: unknown[]) => {
@@ -942,13 +1056,14 @@ describe('comment functions', () => {
         selects.push(columns)
         return chain
       }),
-      eq: vi.fn(() => chain),
+      eq,
       in: vi.fn(() => chain),
       order: vi.fn(() => Promise.resolve(result)),
       single: vi.fn(() => Promise.resolve(result)),
       maybeSingle: vi.fn(() => Promise.resolve(result)),
     }
 
+    const createSignedUrl = vi.fn().mockResolvedValue(opts.signedResult ?? { data: { signedUrl: 'https://signed/private' }, error: null })
     const supabase = {
       rpc: vi.fn(() => chain),
       from: vi.fn((table: string) => {
@@ -961,10 +1076,11 @@ describe('comment functions', () => {
         }
         return chain
       }),
+      storage: { from: vi.fn(() => ({ createSignedUrl })) },
     }
 
     vi.mocked(getServiceSupabase).mockReturnValue(supabase as never)
-    return { selects, inserts }
+    return { selects, inserts, createSignedUrl, eq }
   }
 
   it('createPublicComment inserts target metadata and selects it back', async () => {
@@ -988,6 +1104,7 @@ describe('comment functions', () => {
       kind: 'text_range',
       selectedText: 'términos y condiciones',
     })
+    expect((inserts[0] as Record<string, unknown>).visibility).toBe('shared')
     expect(selects[0]).toContain('target_type, anchor')
     expect(created.targetType).toBe('text_range')
     expect(created.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
@@ -1025,13 +1142,42 @@ describe('comment functions', () => {
   })
 
   it('listComments maps legacy rows to element_point and selects target metadata', async () => {
-    const { selects } = buildCommentsSupabase({ result: { data: [LEGACY_ROW], error: null } })
+    const { selects, eq } = buildCommentsSupabase({ result: { data: [LEGACY_ROW], error: null } })
 
     const comments = await listComments('pk')
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comments[0].targetType).toBe('element_point')
     expect(comments[0].anchor).toBeNull()
+    expect(comments[0].visibility).toBe('shared')
+    expect(eq).toHaveBeenCalledWith('visibility', 'shared')
+  })
+
+  it('signs private extension screenshots for authenticated project comments', async () => {
+    const extensionRow = { ...LEGACY_ROW, source: 'extension', screenshot_storage_path: 'user/comment.png' }
+    const { createSignedUrl } = buildCommentsSupabase({ result: { data: [extensionRow], error: null } })
+
+    const comments = await listProjectComments('pk')
+
+    expect(comments[0].imageUrl).toBe('https://signed/private')
+    expect(createSignedUrl).toHaveBeenCalledWith('user/comment.png', 300)
+  })
+
+  it('tolerates missing private screenshots but rejects signing failures', async () => {
+    const extensionRow = { ...LEGACY_ROW, source: 'extension', screenshot_storage_path: 'user/comment.png' }
+    buildCommentsSupabase({
+      result: { data: [extensionRow], error: null },
+      signedResult: { data: null, error: { message: 'Object not found' } },
+    })
+    await expect(listProjectComments('pk')).resolves.toEqual([
+      expect.objectContaining({ imageUrl: null }),
+    ])
+
+    buildCommentsSupabase({
+      result: { data: [extensionRow], error: null },
+      signedResult: { data: null, error: { message: 'storage down' } },
+    })
+    await expect(listProjectComments('pk')).rejects.toThrow('Screenshot signing failed: storage down')
   })
 
   it('getComment selects target metadata and maps text_range rows', async () => {
@@ -1055,6 +1201,17 @@ describe('comment functions', () => {
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comment.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
+  })
+
+  it('updates comment visibility and handles missing rows or database errors', async () => {
+    buildCommentsSupabase({ result: { data: { ...TEXT_RANGE_ROW, visibility: 'internal' }, error: null } })
+    await expect(updateCommentVisibility('pk', 'comment-1', 'internal')).resolves.toMatchObject({ visibility: 'internal' })
+
+    buildCommentsSupabase({ result: { data: null, error: null } })
+    await expect(updateCommentVisibility('pk', 'missing', 'shared')).resolves.toBeNull()
+
+    buildCommentsSupabase({ result: { data: null, error: { message: 'visibility down' } } })
+    await expect(updateCommentVisibility('pk', 'comment-1', 'internal')).rejects.toThrow('visibility down')
   })
 
   it('updateImplementationStatus keeps target metadata in its response', async () => {

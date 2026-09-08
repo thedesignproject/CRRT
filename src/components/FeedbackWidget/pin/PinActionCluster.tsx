@@ -7,10 +7,12 @@ export interface PinActionClusterProps {
   onEdit: () => void
   onDelete: () => void
   onViewList?: () => void
+  onSendTo?: () => void
   reviewEnabled?: boolean
+  mutationEnabled?: boolean
 }
 
-export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, reviewEnabled = true }: PinActionClusterProps) {
+export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, onSendTo, reviewEnabled = true, mutationEnabled = true }: PinActionClusterProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, position: 'relative', flexShrink: 0 }}>
@@ -32,7 +34,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
         </button>
       )}
-      <button
+      {(reviewEnabled || mutationEnabled || onViewList || onSendTo) && <button
         onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
         aria-label="More options"
         style={{
@@ -48,7 +50,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
         onMouseLeave={(e) => { if (!menuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-faint)' } }}
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-      </button>
+      </button>}
 
       {menuOpen && (
         <>
@@ -77,7 +79,15 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
               {isResolved ? 'Reopen' : 'Approve'}
             </button>}
-            <button
+            {onSendTo && <button
+              onClick={() => { onSendTo(); setMenuOpen(false) }}
+              style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              <span aria-hidden="true">↗</span> Send to…
+            </button>}
+            {mutationEnabled && <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}
@@ -85,7 +95,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
               Edit
-            </button>
+            </button>}
             {onViewList && (
               <button
                 onClick={() => { onViewList(); setMenuOpen(false) }}
@@ -97,7 +107,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
                 View list
               </button>
             )}
-            <div style={{ height: 1, background: 'var(--fw-contrast-06)', margin: '4px 0' }} />
+            {mutationEnabled && <><div style={{ height: 1, background: 'var(--fw-contrast-06)', margin: '4px 0' }} />
             <button
               onClick={() => { onDelete(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#ef4444', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
@@ -106,7 +116,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
               Delete
-            </button>
+            </button></>}
           </div>
         </>
       )}

@@ -23,7 +23,7 @@ async function sendProjectInviteEmailInBackground(input: {
   email: string
   inviterEmail: string
   projectKey: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   dashboardUrl: string
   idempotencyKey: string
 }) {
@@ -80,9 +80,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // POST: send an invite.
     const body = (req.body ?? {}) as { email?: unknown; role?: unknown }
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-    const role = body.role === 'admin' ? 'admin' : 'member'
+    const role = body.role === undefined ? 'member' : body.role
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return jsonError(req, res, 400, 'Invalid email')
+    }
+    if (role !== 'admin' && role !== 'member' && role !== 'guest') {
+      return jsonError(req, res, 400, 'Invalid role')
     }
 
     const invite = await createInvite({ projectKey, email, role, invitedBy: user.userId })
@@ -93,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         inviterEmail: user.email,
         projectKey,
         role,
-        dashboardUrl: getProjectInviteDashboardUrl(),
+        dashboardUrl: getProjectInviteDashboardUrl(projectKey, email),
         idempotencyKey: getProjectInviteEmailIdempotencyKey(projectKey, email),
       }))
     } catch (scheduleError) {

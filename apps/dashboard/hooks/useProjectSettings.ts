@@ -31,7 +31,7 @@ export interface UseProjectSettingsResult {
   rename: (name: string) => Promise<Project>
   updateAllowedOrigins: (domains: string[]) => Promise<Project>
   saveAgentInstructions: (value: string) => Promise<RepoConfig | null>
-  invite: (email: string, role?: 'admin' | 'member') => Promise<void>
+  invite: (email: string, role?: 'admin' | 'member' | 'guest') => Promise<void>
   changeRole: (userId: string, role: ProjectMemberRole) => Promise<void>
   removeMember: (userId: string) => Promise<void>
   cancelInvite: (email: string) => Promise<void>
@@ -139,7 +139,7 @@ export function useProjectSettings(
     return config
   }, [apiBase, accessToken, projectKey])
 
-  const invite = useCallback(async (email: string, role: 'admin' | 'member' = 'member') => {
+  const invite = useCallback(async (email: string, role: 'admin' | 'member' | 'guest' = 'member') => {
     await apiInvite(apiBase, accessToken, projectKey, email, role)
     await refresh()
   }, [apiBase, accessToken, projectKey, refresh])

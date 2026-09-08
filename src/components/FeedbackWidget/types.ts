@@ -24,13 +24,33 @@ export interface WidgetPage {
   scrollY: number
   target?: ClickTarget
   liveIds: string[]
+  embeddedProjectIds?: string[]
   capture(focus: ScreenshotFocusRect | null): Promise<Blob | null>
   selecting(value: boolean): void
-  track(comments: { id: string; selector: string }[]): void
+  track(comments: { id: string; selector: string; x: number; y: number }[]): void
   highlight(selector: string): void
+  focusEmbedded?(projectId: string): void
 }
 
 export interface PersonalComments {
+  /** Sidebar label for this authenticated extension context. */
+  label?: string
+  /** Visible project audience. Guests receive a locked shared audience. */
+  audience?: {
+    value: 'shared' | 'internal'
+    canChoose: boolean
+    onChange?: (visibility: 'shared' | 'internal') => void
+  }
+  /** Optional project-wide list scope. Pins always remain scoped to the current page. */
+  scope?: {
+    value: 'page' | 'project'
+    onChange(value: 'page' | 'project'): void
+  }
+  /** Manual external-tracker handoff for authorized project members. */
+  externalWork?: {
+    prepare(commentId: string): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
+    send(commentId: string, draft: { title: string; body: string }): Promise<{ issueUrl: string }>
+  }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>
   list(pageUrl: string): Promise<Comment[]>
@@ -61,6 +81,9 @@ export interface Comment {
   selector: string
   body: string
   reviewStatus: ReviewStatus
+  visibility?: 'shared' | 'internal'
+  /** Authenticated adapters can mark feedback from other authors as read-only. */
+  editable?: boolean
   imageUrl?: string | null
   createdAt: string
   authorName?: string

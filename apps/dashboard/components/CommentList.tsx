@@ -10,6 +10,7 @@ type Counts = { all: number; open: number; ready: number; done: number; rejected
 
 interface CommentListProps {
   personal?: false
+  readOnly?: boolean
   filteredComments: Comment[]
   counts: Counts
   statusFilter: StatusFilter
@@ -32,7 +33,7 @@ const EMPTY_SELECTION = new Set<string>()
 
 export function CommentList(props: CommentListProps | PersonalListProps) {
   const { filteredComments, counts, commentsLoading, commentsError, selectedCommentId, setSelectedCommentId } = props
-  const controls = props.personal ? null : props
+  const controls = props.personal || props.readOnly ? null : props
   const bulkMode = controls?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   return (
@@ -197,6 +198,16 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
 
                   <div className="flex items-center gap-1.5 pl-[26px] flex-wrap">
                     {!props.personal && <StatusBadge comment={comment} />}
+                    {!props.personal && (
+                      <span className={cn(
+                        'rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                        comment.visibility === 'internal'
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-primary/10 text-primary',
+                      )}>
+                        {comment.visibility ?? 'shared'}
+                      </span>
+                    )}
                     {props.personal && <span className="text-[10px] text-muted-foreground truncate" title={comment.pageUrl ?? ''}>{comment.pageUrl}</span>}
                     {comment.claimedByAgentId && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-in-progress">

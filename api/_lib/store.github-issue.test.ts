@@ -82,6 +82,12 @@ describe('comment GitHub issue persistence', () => {
       issueUrl: row.github_issue_url,
       createdAt: row.github_issue_created_at,
     })
+
+    const guestBuilder = mockResult({ data: [row], error: null })
+    expect((await listProjectComments('project-1', {
+      visibility: 'shared', includeExternalWork: false,
+    }))[0]).not.toHaveProperty('githubIssue')
+    expect(guestBuilder.select).toHaveBeenCalledWith(expect.not.stringContaining('github_issue_url'))
   })
 
   it('maps an incomplete issue as null and applies project filters', async () => {

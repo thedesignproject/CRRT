@@ -157,4 +157,36 @@ describe('PinActionCluster', () => {
     // Menu closes after click.
     expect(queryByText('View list')).toBeNull()
   })
+
+  it('keeps shared feedback read-only while still linking to the list', () => {
+    const { getByLabelText, getByText, queryByText } = render(
+      <PinActionCluster {...makeProps({ reviewEnabled: false, mutationEnabled: false, onViewList: vi.fn() })} />,
+    )
+    fireEvent.click(getByLabelText('More options'))
+    expect(getByText('View list')).toBeInTheDocument()
+    expect(queryByText('Edit')).toBeNull()
+    expect(queryByText('Delete')).toBeNull()
+  })
+
+  it('hides the menu when no action is available', () => {
+    const { queryByLabelText } = render(
+      <PinActionCluster {...makeProps({ reviewEnabled: false, mutationEnabled: false })} />,
+    )
+    expect(queryByLabelText('More options')).toBeNull()
+  })
+
+  it('sends to an external tracker and applies hover styles', () => {
+    const onSendTo = vi.fn()
+    const { getByLabelText, getByRole } = render(
+      <PinActionCluster {...makeProps({ reviewEnabled: false, mutationEnabled: false, onSendTo })} />,
+    )
+    fireEvent.click(getByLabelText('More options'))
+    const send = getByRole('button', { name: 'Send to…' })
+    expect(() => {
+      fireEvent.mouseEnter(send)
+      fireEvent.mouseLeave(send)
+    }).not.toThrow()
+    fireEvent.click(send)
+    expect(onSendTo).toHaveBeenCalledTimes(1)
+  })
 })

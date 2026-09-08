@@ -6,6 +6,7 @@ import {
   type AdminPage,
 } from './admin-pagination.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
+import { effectiveProjectRole, projectCapabilities, type FeedbackVisibility, type ProjectRole, type StoredProjectRole } from './project-capabilities.js'
 
 // Every table/storage operation in this module goes through the service-role
 // client. Every public table has RLS enabled with no permissive policy
@@ -28,6 +29,9 @@ type CommentRow = {
   implementation_status: ImplementationStatus | null
   claimed_by_agent_id: string | null
   image_url: string | null
+  source?: string | null
+  visibility?: CommentVisibility | null
+  screenshot_storage_path?: string | null
   author_name: string | null
   target_type: string | null
   anchor: Record<string, unknown> | null
@@ -44,7 +48,7 @@ type CommentRow = {
 // Single source of truth for comment selects — an omission here (or a
 // hand-rolled select list elsewhere) silently drops fields from responses.
 const COMMENT_COLUMNS =
-  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, author_name, target_type, anchor, created_at, updated_at'
+  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, source, visibility, screenshot_storage_path, author_name, target_type, anchor, created_at, updated_at'
 const COMMENT_GITHUB_ISSUE_COLUMNS =
   `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
 
@@ -62,11 +66,12 @@ const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, created_at, up
 type ProjectMemberRow = {
   project_key: string
   user_id: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   is_owner: boolean
 }
 
-export type ProjectMemberRole = 'owner' | 'admin' | 'member'
+export type ProjectMemberRole = ProjectRole
+export type CommentVisibility = FeedbackVisibility
 
 type RepoConfigRow = {
   project_key: string
@@ -153,7 +158,32 @@ type EventRow = {
   created_at: string
 }
 
-function mapComment(row: CommentRow) {
+export type StoredComment = {
+  id: string
+  projectId: string
+  pageUrl: string | null
+  selector: string | null
+  x: number | null
+  y: number | null
+  body: string
+  visibility?: CommentVisibility
+  reviewStatus: ReviewStatus
+  implementationStatus: ImplementationStatus
+  claimedByAgentId: string | null
+  imageUrl: string | null
+  authorName: string | null
+  targetType: 'element_point' | 'text_range'
+  anchor: Record<string, unknown> | null
+  createdAt: string
+  updatedAt: string
+  githubIssue?: {
+    issueNumber: number
+    issueUrl: string
+    createdAt: string
+  } | null
+}
+
+function mapComment(row: CommentRow): StoredComment {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -162,6 +192,7 @@ function mapComment(row: CommentRow) {
     x: row.x,
     y: row.y,
     body: row.comment,
+    visibility: row.visibility ?? 'shared',
     reviewStatus: fromLegacyStatus(row.status),
     implementationStatus: row.implementation_status || 'unassigned',
     claimedByAgentId: row.claimed_by_agent_id,
@@ -185,6 +216,18 @@ function mapProjectComment(row: CommentRow) {
         }
       : null,
   }
+}
+
+async function mapProjectCommentWithPrivateImage(
+  client: ReturnType<typeof getServiceSupabase>,
+  row: CommentRow,
+  includeExternalWork = true,
+) {
+  const comment = includeExternalWork ? mapProjectComment(row) : mapComment(row)
+  if (row.source !== 'extension' || !row.screenshot_storage_path) return comment
+  const { data, error } = await client.storage.from('extension-feedback-images').createSignedUrl(row.screenshot_storage_path, 300)
+  if (error && error.message !== 'Object not found') throw new Error(`Screenshot signing failed: ${error.message}`)
+  return { ...comment, imageUrl: data?.signedUrl ?? null }
 }
 
 function mapProject(row: ProjectRow) {
@@ -264,11 +307,12 @@ export async function listProjectsForUser(userId: string) {
   const supabase = getSupabase()
   const { data: memberRows, error: memberError } = await supabase
     .from('project_members')
-    .select('project_key')
+    .select('project_key, role, is_owner')
     .eq('user_id', userId)
 
   if (memberError) throw new Error(memberError.message)
-  const keys = (memberRows || []).map((row) => String((row as { project_key: string }).project_key))
+  const memberships = (memberRows || []) as ProjectMemberRow[]
+  const keys = memberships.map((row) => row.project_key)
   if (keys.length === 0) return []
 
   const { data, error } = await supabase
@@ -278,13 +322,20 @@ export async function listProjectsForUser(userId: string) {
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapProject(row as ProjectRow))
+  const accessByProject = new Map(memberships.map((membership) => {
+    const role = effectiveProjectRole(membership.role, membership.is_owner)
+    return [membership.project_key, { role, capabilities: projectCapabilities(role) }]
+  }))
+  return (data || []).map((row) => ({
+    ...mapProject(row as ProjectRow),
+    ...accessByProject.get((row as ProjectRow).public_key),
+  }))
 }
 
 export async function getProjectMember(
   userId: string,
   projectKey: string,
-): Promise<{ role: 'admin' | 'member'; isOwner?: boolean } | null> {
+): Promise<{ role: StoredProjectRole; isOwner?: boolean } | null> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
@@ -305,7 +356,7 @@ export async function isProjectMember(userId: string, projectKey: string): Promi
 
 type ProjectMemberDetailRow = {
   user_id: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   is_owner: boolean
   created_at: string
 }
@@ -385,7 +436,7 @@ export type ProjectMemberRoleChange = {
 }
 
 function isProjectMemberRole(value: unknown): value is ProjectMemberRole {
-  return value === 'owner' || value === 'admin' || value === 'member'
+  return value === 'owner' || value === 'admin' || value === 'member' || value === 'guest'
 }
 
 export async function changeProjectMemberRole(input: {
@@ -553,7 +604,7 @@ export async function listAllUsers(options: {
 
 export type AdminProjectMember = {
   email: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
 }
 
 export type AdminProject = {
@@ -672,7 +723,7 @@ export async function listProjectsWithComments(options: {
     .in('project_key', keys)
   if (memberError) throw new Error(memberError.message)
 
-  type MemberRow = { project_key: string; user_id: string; role: 'admin' | 'member' }
+  type MemberRow = { project_key: string; user_id: string; role: StoredProjectRole }
   const rows = (memberRows || []) as MemberRow[]
   const membersByProject = new Map<string, MemberRow[]>()
   for (const row of rows) {
@@ -1188,6 +1239,7 @@ export async function createPublicComment(input: {
     .from('comments')
     .insert([{
       project_id: input.projectKey,
+      visibility: 'shared',
       url: input.pageUrl,
       x: input.x,
       y: input.y,
@@ -1257,6 +1309,7 @@ export async function listComments(projectKey: string, filters: {
     .from('comments')
     .select(COMMENT_COLUMNS)
     .eq('project_id', projectKey)
+    .eq('visibility', 'shared')
 
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
   if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
@@ -1271,19 +1324,30 @@ export async function listProjectComments(projectKey: string, filters: {
   pageUrl?: string
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
+  visibility?: CommentVisibility
+  includeExternalWork?: boolean
 } = {}) {
-  let query = getSupabase()
+  const supabase = getSupabase()
+  const columns: string = filters.includeExternalWork === false
+    ? COMMENT_COLUMNS
+    : COMMENT_GITHUB_ISSUE_COLUMNS
+  let query = supabase
     .from('comments')
-    .select(COMMENT_GITHUB_ISSUE_COLUMNS)
+    .select(columns)
     .eq('project_id', projectKey)
 
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
   if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
   if (filters.implementationStatus) query = query.eq('implementation_status', filters.implementationStatus)
+  if (filters.visibility) query = query.eq('visibility', filters.visibility)
 
   const { data, error } = await query.order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapProjectComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(
+    supabase,
+    row as unknown as CommentRow,
+    filters.includeExternalWork !== false,
+  )))
 }
 
 export async function getCommentForGithubIssue(projectKey: string, commentId: string) {
@@ -1452,6 +1516,7 @@ export async function deleteCommentById(commentId: string, projectKey: string): 
     .delete()
     .eq('id', commentId)
     .eq('project_id', projectKey)
+    .eq('visibility', 'shared')
     .select('id')
 
   if (error) throw new Error(error.message)
@@ -1510,6 +1575,24 @@ export async function updateImplementationStatus(commentId: string, patch: {
 
   if (error) throw new Error(error.message)
   return mapComment(data as CommentRow)
+}
+
+export async function updateCommentVisibility(
+  projectKey: string,
+  commentId: string,
+  visibility: CommentVisibility,
+) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase
+    .from('comments')
+    .update({ visibility, updated_at: new Date().toISOString() })
+    .eq('id', commentId)
+    .eq('project_id', projectKey)
+    .select(COMMENT_COLUMNS)
+    .maybeSingle()
+
+  if (error) throw new Error(error.message)
+  return data ? mapComment(data as CommentRow) : null
 }
 
 export async function createShare(input: {
@@ -1930,6 +2013,27 @@ export async function notifyProjectMembersOfCommentActivity(input: {
   ))
 }
 
+export async function removeGuestCommentActivityNotifications(projectKey: string, commentId: string) {
+  const supabase = getSupabase()
+  const { data: guests, error: memberError } = await supabase
+    .from('project_members')
+    .select('user_id')
+    .eq('project_key', projectKey)
+    .eq('role', 'guest')
+  if (memberError) throw new Error(memberError.message)
+  const guestIds = (guests ?? []).map((row) => String((row as { user_id: string }).user_id))
+  if (guestIds.length === 0) return
+
+  const { error } = await supabase
+    .from('notifications')
+    .delete()
+    .in('user_id', guestIds)
+    .eq('kind', 'comment.activity')
+    .eq('payload->>projectKey', projectKey)
+    .eq('payload->>latestCommentId', commentId)
+  if (error) throw new Error(error.message)
+}
+
 export async function listNotificationsForUser(
   userId: string,
   opts: { unreadOnly?: boolean; limit?: number } = {},
@@ -1973,7 +2077,7 @@ export async function markAllNotificationsRead(userId: string) {
 type InviteRow = {
   project_key: string
   email: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   invited_by: string
   created_at: string
 }
@@ -1991,7 +2095,7 @@ function mapInvite(row: InviteRow) {
 export async function createInvite(input: {
   projectKey: string
   email: string
-  role: 'admin' | 'member'
+  role: StoredProjectRole
   invitedBy: string
 }) {
   const supabase = getSupabase()
@@ -2051,51 +2155,64 @@ export async function deleteProjectInvite(projectKey: string, email: string): Pr
   return Array.isArray(data) && data.length > 0
 }
 
-async function getInvite(email: string, projectKey: string) {
+async function claimInvite(email: string, projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_invites')
-    .select('project_key, email, role, invited_by, created_at')
+    .delete()
     .eq('email', email.toLowerCase().trim())
     .eq('project_key', projectKey)
+    .select('project_key, email, role, invited_by, created_at')
     .maybeSingle()
   if (error) throw new Error(error.message)
   return data ? mapInvite(data as InviteRow) : null
 }
 
-async function deleteInvite(email: string, projectKey: string) {
+async function restoreInvite(invite: ReturnType<typeof mapInvite>) {
   const supabase = getSupabase()
   const { error } = await supabase
     .from('project_invites')
-    .delete()
-    .eq('email', email.toLowerCase().trim())
-    .eq('project_key', projectKey)
-  if (error) throw new Error(error.message)
+    .insert([{
+      project_key: invite.projectKey,
+      email: invite.email,
+      role: invite.role,
+      invited_by: invite.invitedBy,
+      created_at: invite.createdAt,
+    }] as never)
+  if (error && error.code !== '23505') throw new Error(error.message)
 }
 
 /**
- * Atomic invite acceptance: verify the invite exists for this email, insert
- * the project_members row (idempotent via 23505), delete the invite. Returns
- * the inviter's user_id so the caller can emit an `invite.accepted` notif.
+ * Claim the invite with one DELETE ... RETURNING statement so accept, decline,
+ * and cancellation have a single winner. Membership insertion is idempotent;
+ * a failed insertion restores the claimed invite for retry.
  */
-export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string> {
-  const invite = await getInvite(email, projectKey)
-  if (!invite) throw new Error('not_found')
+export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string | null> {
+  const invite = await claimInvite(email, projectKey)
+  if (!invite) {
+    if (await isProjectMember(userId, projectKey)) return null
+    throw new Error('not_found')
+  }
 
   const supabase = getSupabase()
   const { error: insertError } = await supabase
     .from('project_members')
     .insert([{ project_key: projectKey, user_id: userId, role: invite.role }] as never)
-  if (insertError && insertError.code !== '23505') throw new Error(insertError.message)
+  if (insertError && insertError.code !== '23505') {
+    try { await restoreInvite(invite) }
+    catch (restoreError) {
+      const message = String(restoreError)
+      throw new Error(`${insertError.message}; invite restore failed: ${message}`)
+    }
+    throw new Error(insertError.message)
+  }
 
-  await deleteInvite(email, projectKey)
   return invite.invitedBy
 }
 
 export async function declineInvite(email: string, projectKey: string): Promise<string> {
-  const invite = await getInvite(email, projectKey)
+  const invite = await claimInvite(email, projectKey)
   if (!invite) throw new Error('not_found')
-  await deleteInvite(email, projectKey)
   return invite.invitedBy
 }
 

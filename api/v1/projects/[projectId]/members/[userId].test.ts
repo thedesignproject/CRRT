@@ -147,6 +147,17 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     expect(changeProjectMemberRole).toHaveBeenCalledWith({
       projectKey: 'p', actorUserId: 'u', targetUserId: TARGET_USER_ID, role: 'admin',
     })
+
+    const guestChange = { ...changed, previousRole: 'admin', role: 'guest' }
+    vi.mocked(changeProjectMemberRole).mockResolvedValueOnce(guestChange as never)
+    res = mockRes()
+    await call({
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'guest' }, headers: {},
+    }, res)
+    expect(res.statusCode).toBe(200)
+    expect(changeProjectMemberRole).toHaveBeenLastCalledWith({
+      projectKey: 'p', actorUserId: 'u', targetUserId: TARGET_USER_ID, role: 'guest',
+    })
   })
 
   it.each([
