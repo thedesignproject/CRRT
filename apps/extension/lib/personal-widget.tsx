@@ -14,12 +14,10 @@ export function extensionComments(
   visibility: 'shared' | 'internal' = 'shared',
   onVisibilityChange?: (visibility: 'shared' | 'internal') => void,
 ): PersonalComments {
-  const canChooseVisibility = Boolean(
-    project && (
-      project.capabilities?.includes('feedback:manage')
+  const canChooseVisibility = project
+    ? project.capabilities?.includes('feedback:manage')
       ?? (project.role !== undefined && project.role !== 'guest')
-    ),
-  )
+    : false
   return {
     label: project?.name ?? 'My extension comments',
     audience: project ? {

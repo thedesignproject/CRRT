@@ -2201,7 +2201,7 @@ export async function acceptInvite(userId: string, email: string, projectKey: st
   if (insertError && insertError.code !== '23505') {
     try { await restoreInvite(invite) }
     catch (restoreError) {
-      const message = restoreError instanceof Error ? restoreError.message : String(restoreError)
+      const message = String(restoreError)
       throw new Error(`${insertError.message}; invite restore failed: ${message}`)
     }
     throw new Error(insertError.message)

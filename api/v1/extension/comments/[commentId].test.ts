@@ -82,6 +82,10 @@ describe('extension comment item endpoint', () => {
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: 'p', visibility: 'internal' }, headers: {} }, response)
     expect(assignExtensionCommentToProject).toHaveBeenLastCalledWith('u', 'c', 'p', 'shared')
 
+    response = res()
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: 'p', visibility: 'secret' }, headers: {} }, response)
+    expect(response.statusCode).toBe(400)
+
     vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
     response = res()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { projectId: 'blocked' }, headers: {} }, response)

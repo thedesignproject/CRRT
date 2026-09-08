@@ -254,4 +254,27 @@ describe('requireProjectMembership', () => {
       mockReq(), mockRes() as never, USER, { projectId: 'p', visibility: 'internal' }, 'feedback:manage',
     )).toEqual({ role: 'member' })
   })
+
+  it('fails closed when comment membership is missing, insufficient, or unavailable', async () => {
+    vi.mocked(getProjectMember).mockResolvedValueOnce(null)
+    let res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'shared' }, 'feedback:create',
+    )).toBeNull()
+    expect(res.statusCode).toBe(403)
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'guest', isOwner: false })
+    res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'shared' }, 'feedback:manage',
+    )).toBeNull()
+    expect(res.statusCode).toBe(403)
+
+    vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))
+    res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'shared' }, 'feedback:create',
+    )).toBeNull()
+    expect(res.statusCode).toBe(500)
+  })
 })

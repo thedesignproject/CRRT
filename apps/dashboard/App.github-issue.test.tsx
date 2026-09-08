@@ -15,6 +15,7 @@ const fixtures = vi.hoisted(() => ({
   updateImpl: vi.fn(),
   updateReview: vi.fn(),
   agentProject: vi.fn(),
+  updateVisibility: vi.fn(),
   fn: vi.fn(),
   superadmin: false,
   signedIn: true,
@@ -24,6 +25,7 @@ vi.mock('./api', () => ({
   acceptInvite: fixtures.acceptInvite,
   updateImplementationStatus: fixtures.updateImpl,
   updateReviewStatus: fixtures.updateReview,
+  updateCommentVisibility: fixtures.updateVisibility,
 }))
 
 vi.mock('./hooks/useAuth', () => ({
@@ -68,9 +70,18 @@ vi.mock('./hooks/useAgentSession', () => ({
 vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: fixtures.superadmin }) }))
 
 vi.mock('./components/CommentDetail', () => ({
-  CommentDetail: (props: { apiBase: string; accessToken: string }) => (
-    <div data-testid="detail">{props.apiBase}:{props.accessToken}</div>
-  ),
+  CommentDetail: (props: {
+    apiBase: string
+    accessToken: string
+    selectedComment?: { id: string; visibility?: 'shared' | 'internal' } | null
+    onVisibilityChange?: (id: string, visibility: 'shared' | 'internal') => void
+  }) => <div data-testid="detail">
+    {props.apiBase}:{props.accessToken}:{props.selectedComment?.visibility ?? 'none'}
+    {props.selectedComment && <button onClick={() => props.onVisibilityChange?.(
+      props.selectedComment!.id,
+      props.selectedComment!.visibility === 'internal' ? 'shared' : 'internal',
+    )}>change audience</button>}
+  </div>,
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
@@ -104,6 +115,7 @@ beforeEach(() => {
   fixtures.updateImpl.mockReset().mockResolvedValue(undefined)
   fixtures.updateReview.mockReset().mockResolvedValue(undefined)
   fixtures.agentProject.mockReset()
+  fixtures.updateVisibility.mockReset().mockResolvedValue(undefined)
   fixtures.comments.splice(0)
   fixtures.projects.splice(0, fixtures.projects.length, { publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' })
   fixtures.superadmin = false
@@ -192,6 +204,28 @@ describe('<App /> GitHub issue wiring', () => {
     })
     render(<App />)
     await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith(null))
+  })
+
+  it('updates feedback visibility optimistically and restores it after failure', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
+      body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      visibility: 'shared', createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'change audience' }))
+    await waitFor(() => expect(fixtures.updateVisibility).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'internal',
+    ))
+    expect(screen.getByTestId('detail')).toHaveTextContent(':internal')
+
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    fixtures.updateVisibility.mockRejectedValueOnce(new Error('visibility down'))
+    fireEvent.click(screen.getByRole('button', { name: 'change audience' }))
+    await waitFor(() => expect(error).toHaveBeenCalledWith('Failed to update feedback audience:', expect.any(Error)))
+    expect(screen.getByTestId('detail')).toHaveTextContent(':internal')
   })
 
   it('opens My Comments directly from the extension link without selecting a project', () => {

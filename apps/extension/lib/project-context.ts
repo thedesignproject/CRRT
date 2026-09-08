@@ -101,11 +101,11 @@ export async function getActiveProject(): Promise<ExtensionProjectSelection | nu
   const value = stored[ACTIVE_PROJECT_STORAGE_KEY]
   if (!isProjectSelection(value)) return null
   return {
-        publicKey: value.publicKey,
-        name: value.name,
-        ...(value.role ? { role: value.role } : {}),
-        ...(Array.isArray(value.capabilities) ? { capabilities: value.capabilities } : {}),
-      }
+    publicKey: value.publicKey,
+    name: value.name,
+    ...(value.role ? { role: value.role } : {}),
+    ...(Array.isArray(value.capabilities) ? { capabilities: value.capabilities } : {}),
+  }
 }
 
 export async function setActiveProject(project: ExtensionProjectSelection | null) {

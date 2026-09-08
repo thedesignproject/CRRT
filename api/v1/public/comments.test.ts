@@ -7,6 +7,7 @@ vi.mock('../../_lib/store.js', () => ({
   listComments: vi.fn(),
   listProjectMembers: vi.fn(),
   notifyProjectMembersOfCommentActivity: vi.fn(),
+  removeGuestCommentActivityNotifications: vi.fn(),
   releaseCommentActivityEmailReservation: vi.fn(),
   reserveCommentActivityEmail: vi.fn(),
   updateReviewStatus: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
 import { waitUntil } from '@vercel/functions'
 import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from '../../_lib/comment-activity-email.js'
-import { createPublicComment, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
@@ -79,6 +80,7 @@ beforeEach(() => {
   vi.mocked(listComments).mockReset()
   vi.mocked(listProjectMembers).mockReset()
   vi.mocked(notifyProjectMembersOfCommentActivity).mockReset()
+  vi.mocked(removeGuestCommentActivityNotifications).mockReset().mockResolvedValue(undefined)
   vi.mocked(releaseCommentActivityEmailReservation).mockReset()
   vi.mocked(reserveCommentActivityEmail).mockReset()
   vi.mocked(updateReviewStatus).mockReset()
@@ -289,6 +291,32 @@ describe('api/v1/public/comments', () => {
     })
     expect(reserveCommentActivityEmail).not.toHaveBeenCalled()
     expect(sendCommentActivityEmail).not.toHaveBeenCalled()
+  })
+
+  it('removes guest activity written after feedback becomes internal', async () => {
+    vi.mocked(ensurePublicProject).mockResolvedValue({
+      publicKey: 'demo-project', slug: 'demo-project', name: 'Demo', allowedOrigins: [], createdAt: '', updatedAt: '',
+    })
+    vi.mocked(createPublicComment).mockResolvedValue({
+      id: 'comment-1', projectId: 'demo-project', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
+      body: 'Hello', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: null, targetType: 'element_point', anchor: null, visibility: 'shared',
+      createdAt: '', updatedAt: '',
+    })
+    vi.mocked(getComment).mockResolvedValue({
+      id: 'comment-1', projectId: 'demo-project', visibility: 'internal',
+    } as never)
+
+    const res = mockRes()
+    await call(mockReq({
+      body: { projectKey: 'demo-project', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20, body: 'Hello' },
+    }), res)
+    await flushMicrotasks()
+
+    expect(res.statusCode).toBe(201)
+    expect(removeGuestCommentActivityNotifications).toHaveBeenCalledWith('demo-project', 'comment-1')
+    expect(vi.mocked(notifyProjectMembersOfCommentActivity).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(removeGuestCommentActivityNotifications).mock.invocationCallOrder[0])
   })
 
   it('returns 201 without waiting for hung activity notification writes', async () => {

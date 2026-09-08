@@ -58,6 +58,9 @@ describe('extension project context', () => {
     expect(resolveProjectSelection('https://shop.example.com', projects, {})).toEqual({ publicKey: 'store', name: 'Store' })
     expect(resolveProjectSelection('https://shop.example.com', projects, { 'shop.example.com': null })).toBeNull()
     expect(resolveProjectSelection('chrome://settings', projects, {})).toBeNull()
+    expect(resolveProjectSelection('https://team.example.dev', [{
+      publicKey: 'team', name: 'Team', allowedOrigins: ['example.dev'], role: 'member', capabilities: ['feedback:manage'],
+    }], {})).toEqual({ publicKey: 'team', name: 'Team', role: 'member', capabilities: ['feedback:manage'] })
   })
 
   it('persists automatic, manual, and private page choices', async () => {
@@ -85,6 +88,11 @@ describe('extension project context', () => {
     expect(local.set).toHaveBeenCalledTimes(calls)
     await setActiveProject(null)
     expect(storageState[ACTIVE_PROJECT_STORAGE_KEY]).toBeUndefined()
+
+    await setActiveProject({ publicKey: 'other', name: 'Other', role: 'guest', capabilities: ['feedback:read'] })
+    await expect(getActiveProject()).resolves.toEqual({
+      publicKey: 'other', name: 'Other', role: 'guest', capabilities: ['feedback:read'],
+    })
   })
 
   it('removes an inaccessible preference when its page has no automatic match', async () => {

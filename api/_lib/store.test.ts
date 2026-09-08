@@ -23,6 +23,7 @@ import {
   listProjectComments,
   listProjectMemberIds,
   updateImplementationStatus,
+  updateCommentVisibility,
   updateReviewStatus,
   isProjectKeyAvailable,
   isProjectMember,
@@ -639,6 +640,33 @@ describe('notifications helpers', () => {
     expect(deleteEq).toHaveBeenCalledWith('payload->>latestCommentId', 'c')
   })
 
+  it('handles empty guest lists and cleanup query failures', async () => {
+    const members = (result: { data: unknown; error: { message: string } | null }) => ({
+      from: vi.fn(() => ({
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue(result) })),
+        })),
+      })),
+    })
+    vi.mocked(getServiceSupabase).mockReturnValue(members({ data: null, error: null }) as never)
+    await expect(removeGuestCommentActivityNotifications('p', 'c')).resolves.toBeUndefined()
+
+    vi.mocked(getServiceSupabase).mockReturnValue(members({ data: null, error: { message: 'members down' } }) as never)
+    await expect(removeGuestCommentActivityNotifications('p', 'c')).rejects.toThrow('members down')
+
+    const deleteChain = {
+      in: vi.fn(), eq: vi.fn(),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: { message: 'cleanup down' } }).then(resolve),
+    }
+    deleteChain.in.mockReturnValue(deleteChain); deleteChain.eq.mockReturnValue(deleteChain)
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      from: vi.fn((table: string) => table === 'project_members'
+        ? { select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [{ user_id: 'guest' }], error: null }) })) })) }
+        : { delete: vi.fn(() => deleteChain) }),
+    } as never)
+    await expect(removeGuestCommentActivityNotifications('p', 'c')).rejects.toThrow('cleanup down')
+  })
+
   it('listProjectMemberIds returns member ids without resolving auth emails', async () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
@@ -864,6 +892,12 @@ describe('invite helpers', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('not_found')
 
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: null, error: null },
+      memberSingle: { data: { role: 'member', is_owner: false }, error: null },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
+
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
     expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
 
@@ -904,7 +938,7 @@ describe('invite helpers', () => {
       memberInsertError: { code: '50000', message: 'member boom' },
       inviteRestoreError: { code: '50000', message: 'restore boom' },
     }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: restore boom')
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: Error: restore boom')
 
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
@@ -1167,6 +1201,17 @@ describe('comment functions', () => {
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comment.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
+  })
+
+  it('updates comment visibility and handles missing rows or database errors', async () => {
+    buildCommentsSupabase({ result: { data: { ...TEXT_RANGE_ROW, visibility: 'internal' }, error: null } })
+    await expect(updateCommentVisibility('pk', 'comment-1', 'internal')).resolves.toMatchObject({ visibility: 'internal' })
+
+    buildCommentsSupabase({ result: { data: null, error: null } })
+    await expect(updateCommentVisibility('pk', 'missing', 'shared')).resolves.toBeNull()
+
+    buildCommentsSupabase({ result: { data: null, error: { message: 'visibility down' } } })
+    await expect(updateCommentVisibility('pk', 'comment-1', 'internal')).rejects.toThrow('visibility down')
   })
 
   it('updateImplementationStatus keeps target metadata in its response', async () => {

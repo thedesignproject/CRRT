@@ -35,6 +35,22 @@ beforeEach(() => {
 })
 
 describe('comment visibility endpoint', () => {
+  it('handles preflight, methods, authentication, and missing ids', async () => {
+    let res = response()
+    await call({ method: 'OPTIONS', headers: {} }, res)
+    expect(res.statusCode).toBe(204)
+    res = response()
+    await call({ method: 'GET', headers: {} }, res)
+    expect(res.statusCode).toBe(405)
+    vi.mocked(requireUser).mockResolvedValueOnce(null)
+    res = response()
+    await call({ method: 'PATCH', headers: {} }, res)
+    expect(getComment).not.toHaveBeenCalled()
+    res = response()
+    await call({ method: 'PATCH', query: {}, body: { visibility: 'shared' }, headers: {} }, res)
+    expect(res.statusCode).toBe(400)
+  })
+
   it('lets internal members change the audience', async () => {
     const res = response()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'internal' }, headers: {} }, res)
@@ -44,8 +60,8 @@ describe('comment visibility endpoint', () => {
     )
     expect(removeGuestCommentActivityNotifications).toHaveBeenCalledWith('p', 'c')
     expect(updateCommentVisibility).toHaveBeenCalledWith('p', 'c', 'internal')
-    expect(vi.mocked(removeGuestCommentActivityNotifications).mock.invocationCallOrder[0])
-      .toBeLessThan(vi.mocked(updateCommentVisibility).mock.invocationCallOrder[0])
+    expect(vi.mocked(updateCommentVisibility).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(removeGuestCommentActivityNotifications).mock.invocationCallOrder[0])
   })
 
   it('rejects guests and invalid or missing records without writing', async () => {
@@ -65,5 +81,26 @@ describe('comment visibility endpoint', () => {
     res = response()
     await call({ method: 'PATCH', query: { commentId: 'missing' }, body: { visibility: 'shared' }, headers: {} }, res)
     expect(res.statusCode).toBe(404)
+  })
+
+  it('returns missing and internal failures without premature cleanup', async () => {
+    vi.mocked(updateCommentVisibility).mockResolvedValueOnce(null)
+    let res = response()
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'internal' }, headers: {} }, res)
+    expect(res.statusCode).toBe(404)
+    expect(removeGuestCommentActivityNotifications).not.toHaveBeenCalled()
+
+    vi.mocked(updateCommentVisibility).mockResolvedValueOnce({ id: 'c', projectId: 'p', visibility: 'shared' } as never)
+    res = response()
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'shared' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(removeGuestCommentActivityNotifications).not.toHaveBeenCalled()
+
+    vi.mocked(getComment).mockRejectedValueOnce(new Error('database down'))
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    res = response()
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'shared' }, headers: {} }, res)
+    expect(res.statusCode).toBe(500)
+    expect(error).toHaveBeenCalledWith(expect.any(Error))
   })
 })

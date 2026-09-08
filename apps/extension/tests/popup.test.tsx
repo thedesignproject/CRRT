@@ -90,7 +90,7 @@ describe('extension popup', () => {
   it('selects a project or private feedback destination', async () => {
     const projects = [
       { publicKey: 'p1', name: 'Storefront', allowedOrigins: ['store.example.com'] },
-      { publicKey: 'p2', name: 'Dashboard', allowedOrigins: [] },
+      { publicKey: 'p2', name: 'Dashboard', allowedOrigins: [], role: 'guest' as const, capabilities: ['feedback:read', 'feedback:create'] },
     ]
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
     listExtensionProjects.mockResolvedValueOnce(projects)
@@ -101,7 +101,9 @@ describe('extension popup', () => {
     expect(resolveProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', projects)
 
     fireEvent.change(destination, { target: { value: 'p2' } })
-    await waitFor(() => expect(setProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', { publicKey: 'p2', name: 'Dashboard' }))
+    await waitFor(() => expect(setProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', {
+      publicKey: 'p2', name: 'Dashboard', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+    }))
     expect(destination).toHaveValue('p2')
 
     fireEvent.change(destination, { target: { value: '' } })

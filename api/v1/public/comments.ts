@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
-import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import { parseCommentTarget } from '../../_lib/anchor.js'
@@ -65,6 +65,10 @@ async function notifyProjectMembersOfCommentActivityInBackground(input: {
 }) {
   try {
     await notifyProjectMembersOfCommentActivity(input)
+    const current = await getComment(input.commentId)
+    if (current?.projectId === input.projectKey && current.visibility === 'internal') {
+      await removeGuestCommentActivityNotifications(input.projectKey, input.commentId)
+    }
   } catch (error) {
     console.warn('Comment activity notification failed', error)
   }

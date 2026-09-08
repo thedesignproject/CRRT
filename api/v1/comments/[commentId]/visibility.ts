@@ -21,11 +21,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const existing = await getComment(commentId)
     if (!existing?.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
+    const updated = await updateCommentVisibility(existing.projectId, commentId, visibility)
+    if (!updated) return jsonError(req, res, 404, 'Comment not found')
     if (visibility === 'internal') {
       await removeGuestCommentActivityNotifications(existing.projectId, commentId)
     }
-    const updated = await updateCommentVisibility(existing.projectId, commentId, visibility)
-    if (!updated) return jsonError(req, res, 404, 'Comment not found')
     setCors(req, res, METHODS)
     return res.status(200).json(updated)
   } catch (error) {

@@ -265,6 +265,10 @@ describe('extension comment persistence', () => {
       ['eq', 'created_by_user_id', 'u'],
     ]))
 
+    fake = client([{ data: { project_id: 'project', visibility: 'internal' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(getOwnedExtensionCommentScope('u', 'c1')).resolves.toEqual({ projectId: 'project', visibility: 'internal' })
+
     fake = client([{ data: { project_id: null }, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(getOwnedExtensionCommentScope('u', 'private')).resolves.toEqual({ projectId: null, visibility: 'shared' })
