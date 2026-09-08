@@ -39,10 +39,15 @@ beforeEach(() => {
 describe('extension project context', () => {
   it('normalizes pages and finds exact or parent-domain projects', () => {
     expect(normalizePageHostname('https://Shop.Example.com./products#x')).toBe('shop.example.com')
+    expect(normalizePageHostname('http://.')).toBeNull()
     expect(normalizePageHostname('chrome://settings')).toBeNull()
     expect(normalizePageHostname('bad')).toBeNull()
     expect(matchingProjects('https://app.example.com', projects).map((project) => project.publicKey)).toEqual(['store', 'app'])
     expect(matchingProjects('https://shop.example.com', projects).map((project) => project.publicKey)).toEqual(['store'])
+    expect(matchingProjects('chrome://settings', projects)).toEqual([])
+    expect(matchingProjects('https://scheme.test', [
+      { publicKey: 'scheme', name: 'Scheme', allowedOrigins: ['https://scheme.test'] },
+    ])).toHaveLength(1)
   })
 
   it('uses a remembered accessible choice before unique automatic matching', () => {
@@ -52,12 +57,15 @@ describe('extension project context', () => {
     })).toEqual({ publicKey: 'app', name: 'App' })
     expect(resolveProjectSelection('https://shop.example.com', projects, {})).toEqual({ publicKey: 'store', name: 'Store' })
     expect(resolveProjectSelection('https://shop.example.com', projects, { 'shop.example.com': null })).toBeNull()
+    expect(resolveProjectSelection('chrome://settings', projects, {})).toBeNull()
   })
 
   it('persists automatic, manual, and private page choices', async () => {
     await expect(resolveProjectForPage('https://shop.example.com/products', projects)).resolves.toEqual({ publicKey: 'store', name: 'Store' })
     expect(storageState[hostProjectStorageKey('shop.example.com')]).toMatchObject({ publicKey: 'store' })
     expect(await getActiveProject()).toBeNull()
+    await setActiveProject(null)
+    expect(local.remove).not.toHaveBeenCalled()
 
     await setProjectForPage('https://shop.example.com', { publicKey: 'other', name: 'Other' })
     await expect(resolveProjectForPage('https://shop.example.com/cart', projects)).resolves.toEqual({ publicKey: 'other', name: 'Other' })
@@ -80,10 +88,18 @@ describe('extension project context', () => {
   })
 
   it('removes an inaccessible preference when its page has no automatic match', async () => {
+    await expect(resolveProjectForPage('https://missing.test', projects)).resolves.toBeNull()
+    expect(local.remove).not.toHaveBeenCalled()
     storageState[HOST_PROJECTS_STORAGE_KEY] = { 'unknown.test': { publicKey: 'gone', name: 'Gone' } }
     await expect(resolveProjectForPage('https://unknown.test', projects)).resolves.toBeNull()
     expect(storageState[hostProjectStorageKey('unknown.test')]).toBeUndefined()
     expect(local.remove).toHaveBeenCalledWith(hostProjectStorageKey('unknown.test'))
+  })
+
+  it('ignores malformed legacy hostname preferences', async () => {
+    storageState[HOST_PROJECTS_STORAGE_KEY] = { 'unknown.test': { publicKey: 42 } }
+    await expect(resolveProjectForPage('https://unknown.test', projects)).resolves.toBeNull()
+    expect(local.set).not.toHaveBeenCalled()
   })
 
   it('migrates a legacy hostname preference once without rewriting stable resolutions', async () => {
@@ -93,6 +109,10 @@ describe('extension project context', () => {
     const writes = local.set.mock.calls.length
     await expect(resolveProjectForPage('https://shop.example.com', projects)).resolves.toEqual({ publicKey: 'store', name: 'Store' })
     expect(local.set).toHaveBeenCalledTimes(writes)
+
+    storageState[HOST_PROJECTS_STORAGE_KEY] = { 'private.test': null }
+    await expect(resolveProjectForPage('https://private.test', projects)).resolves.toBeNull()
+    expect(storageState[hostProjectStorageKey('private.test')]).toBeNull()
   })
 
   it('stores concurrent hostname choices independently', async () => {

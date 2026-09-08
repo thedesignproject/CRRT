@@ -97,7 +97,7 @@ export async function setActiveProject(project: ExtensionProjectSelection | null
   const current = await getActiveProject()
   if (current?.publicKey === project?.publicKey && current?.name === project?.name) return
   if (project) await browser.storage.local.set({ [ACTIVE_PROJECT_STORAGE_KEY]: project })
-  else if (current) await browser.storage.local.remove(ACTIVE_PROJECT_STORAGE_KEY)
+  else await browser.storage.local.remove(ACTIVE_PROJECT_STORAGE_KEY)
 }
 
 export async function resolveProjectForPage(pageUrl: string, projects: ExtensionProject[]) {
