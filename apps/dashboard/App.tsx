@@ -456,7 +456,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       />
 
       {view === 'extension-comments' ? (
-        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} />
+        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (

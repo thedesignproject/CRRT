@@ -3,7 +3,14 @@ import { createRoot } from 'react-dom/client'
 import { browser } from 'wxt/browser'
 import type { AuthMessage, SessionSummary } from '../../lib/auth'
 import { listExtensionProjects } from '../../lib/comments-api'
-import { getActiveProject, setActiveProject, type ExtensionProject, type ExtensionProjectSelection } from '../../lib/project-context'
+import {
+  getCurrentTabUrl,
+  resolveProjectForPage,
+  setActiveProject,
+  setProjectForPage,
+  type ExtensionProject,
+  type ExtensionProjectSelection,
+} from '../../lib/project-context'
 import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
@@ -22,6 +29,7 @@ export function Popup() {
   const [busy, setBusy] = useState(true)
   const [projects, setProjects] = useState<ExtensionProject[]>([])
   const [activeProject, setActiveProjectState] = useState<ExtensionProjectSelection | null>(null)
+  const [pageUrl, setPageUrl] = useState<string | null>(null)
 
   async function loadWorkspace(nextSession: SessionSummary | null) {
     setSession(nextSession)
@@ -30,13 +38,11 @@ export function Popup() {
       setActiveProjectState(null)
       return
     }
-    const [available, selected] = await Promise.all([listExtensionProjects(), getActiveProject()])
+    const [available, currentPageUrl] = await Promise.all([listExtensionProjects(), getCurrentTabUrl()])
+    const selected = currentPageUrl ? await resolveProjectForPage(currentPageUrl, available) : null
     setProjects(available)
-    const valid = selected && available.some((project) => project.publicKey === selected.publicKey)
-      ? selected
-      : null
-    if (selected && !valid) await setActiveProject(null)
-    setActiveProjectState(valid)
+    setPageUrl(currentPageUrl)
+    setActiveProjectState(selected)
   }
 
   useEffect(() => {
@@ -72,7 +78,8 @@ export function Popup() {
     const selection = next ? { publicKey: next.publicKey, name: next.name } : null
     setBusy(true); setError('')
     try {
-      await setActiveProject(selection)
+      if (pageUrl) await setProjectForPage(pageUrl, selection)
+      else await setActiveProject(selection)
       setActiveProjectState(selection)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save feedback destination')

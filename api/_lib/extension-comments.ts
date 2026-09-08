@@ -216,6 +216,33 @@ export async function getOwnedExtensionCommentScope(userId: string, commentId: s
   return data ? { projectId: data.project_id as string | null } : null
 }
 
+export async function assignExtensionCommentToProject(userId: string, commentId: string, projectId: string) {
+  const client = getServiceSupabase()
+  const { data, error } = await client.from('comments')
+    .update({ project_id: projectId, updated_at: new Date().toISOString() })
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .is('project_id', null)
+    .select(SELECT)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  if (data) return serialize(client, data as CommentRow)
+
+  const { data: current, error: currentError } = await client.from('comments')
+    .select(SELECT)
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .maybeSingle()
+  if (currentError) throw new Error(currentError.message)
+  if (!current) throw new ExtensionCommentError(404, 'Comment not found')
+  if ((current as CommentRow).project_id !== projectId) {
+    throw new ExtensionCommentError(409, 'Comment already belongs to another project')
+  }
+  return serialize(client, current as CommentRow)
+}
+
 export async function deleteExtensionComment(userId: string, commentId: string) {
   const client = getServiceSupabase()
   const { data, error } = await client.from('comments')

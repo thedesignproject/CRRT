@@ -14,7 +14,7 @@ export default defineConfig({
   },
   manifest: {
     name: 'CRRT',
-    description: 'Drop private visual comments on any page.',
+    description: 'Drop visual feedback on any page and share it with your CRRT projects.',
     version: '0.1.0',
     permissions: ['activeTab', 'scripting', 'storage'],
     host_permissions: ['http://*/*', 'https://*/*'],

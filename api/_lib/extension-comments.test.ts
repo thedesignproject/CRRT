@@ -10,6 +10,7 @@ import {
   deleteExtensionComment,
   ExtensionCommentError,
   getOwnedExtensionCommentScope,
+  assignExtensionCommentToProject,
   listExtensionComments,
   normalizeExtensionPageUrl,
   parseExtensionPagination,
@@ -270,6 +271,37 @@ describe('extension comment persistence', () => {
     fake = client([{ data: null, error: { message: 'scope down' } }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(getOwnedExtensionCommentScope('u', 'c1')).rejects.toThrow('scope down')
+  })
+
+  it('promotes an owned private comment in place and retries idempotently', async () => {
+    let fake = client([{ data: { ...row, project_id: 'project' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).resolves.toMatchObject({ id: 'c1', projectId: 'project' })
+    expect(fake.queries[0].calls).toEqual(expect.arrayContaining([
+      ['update', expect.objectContaining({ project_id: 'project' })],
+      ['eq', 'created_by_user_id', 'u'],
+      ['is', 'project_id', null],
+    ]))
+
+    fake = client([{ data: null, error: null }, { data: { ...row, project_id: 'project' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).resolves.toMatchObject({ projectId: 'project' })
+
+    fake = client([{ data: null, error: null }, { data: { ...row, project_id: 'other' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toMatchObject({ status: 409 })
+
+    fake = client([{ data: null, error: null }, { data: null, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'missing', 'project')).rejects.toMatchObject({ status: 404 })
+
+    fake = client([{ data: null, error: { message: 'assign down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toThrow('assign down')
+
+    fake = client([{ data: null, error: null }, { data: null, error: { message: 'lookup down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toThrow('lookup down')
   })
 
   it('deletes owned comments and their private screenshots', async () => {

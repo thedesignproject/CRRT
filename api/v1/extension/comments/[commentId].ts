@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
-import { deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
+import { assignExtensionCommentToProject, deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
@@ -20,6 +20,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await deleteExtensionComment(user.userId, commentId)
       setCors(req, res, METHODS)
       return res.status(204).end()
+    }
+    const projectCandidate = req.body?.projectId
+    if (projectCandidate !== undefined) {
+      if (typeof projectCandidate !== 'string' || !projectCandidate.trim()) {
+        return jsonError(req, res, 400, 'projectId must be a non-empty string')
+      }
+      const projectId = projectCandidate.trim()
+      if (!(await requireProjectMembership(req, res, user, projectId))) return
+      const result = await assignExtensionCommentToProject(user.userId, commentId, projectId)
+      setCors(req, res, METHODS)
+      return res.status(200).json(result)
     }
     const result = await updateExtensionComment(user.userId, commentId, req.body?.body)
     setCors(req, res, METHODS)
