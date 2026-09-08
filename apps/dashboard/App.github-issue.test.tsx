@@ -14,6 +14,7 @@ const fixtures = vi.hoisted(() => ({
   acceptInvite: vi.fn(),
   updateImpl: vi.fn(),
   updateReview: vi.fn(),
+  agentProject: vi.fn(),
   fn: vi.fn(),
   superadmin: false,
   signedIn: true,
@@ -53,13 +54,16 @@ vi.mock('./hooks/useComments', () => ({
   }),
 }))
 vi.mock('./hooks/useAgentSession', () => ({
-  useAgentSession: () => ({
+  useAgentSession: (_apiBase: string, project: string | null) => {
+    fixtures.agentProject(project)
+    return ({
     session: null,
     shareState: null,
     events: fixtures.comments,
     error: null,
     copyPrompt: fixtures.fn,
-  }),
+    })
+  },
 }))
 vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: fixtures.superadmin }) }))
 
@@ -99,6 +103,7 @@ beforeEach(() => {
   fixtures.acceptInvite.mockReset().mockResolvedValue(undefined)
   fixtures.updateImpl.mockReset().mockResolvedValue(undefined)
   fixtures.updateReview.mockReset().mockResolvedValue(undefined)
+  fixtures.agentProject.mockReset()
   fixtures.comments.splice(0)
   fixtures.projects.splice(0, fixtures.projects.length, { publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' })
   fixtures.superadmin = false
@@ -157,6 +162,36 @@ describe('<App /> GitHub issue wiring', () => {
     }
     expect(fixtures.updateReview).not.toHaveBeenCalled()
     expect(fixtures.updateImpl).not.toHaveBeenCalled()
+  })
+
+  it('runs review and completion actions for project managers', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
+      body: 'Managed feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
+    for (const key of ['a', 'd', 'm']) fireEvent.keyDown(window, { key })
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
+    expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+
+    fixtures.updateReview.mockClear(); fixtures.updateImpl.mockClear()
+    for (const name of ['command accept', 'command reject', 'command done']) {
+      fireEvent.click(screen.getByRole('button', { name: 'search' }))
+      fireEvent.click(screen.getByRole('button', { name }))
+    }
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
+    expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+  })
+
+  it('passes a null agent project while an empty project key is selected', async () => {
+    fixtures.projects.splice(0, fixtures.projects.length, {
+      publicKey: '', slug: '', name: 'Legacy project', allowedOrigins: [], createdAt: '', updatedAt: '',
+    })
+    render(<App />)
+    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith(null))
   })
 
   it('opens My Comments directly from the extension link without selecting a project', () => {
