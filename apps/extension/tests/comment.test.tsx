@@ -258,6 +258,21 @@ it('focuses an existing npm widget for the same project instead of rendering a d
   expect(focusEmbedded).toHaveBeenCalledTimes(2)
 })
 
+it('waits for activation before focusing an existing npm widget', async () => {
+  const focusEmbedded = vi.fn()
+  resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read'] })
+  const page: WidgetPage = {
+    url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0,
+    liveIds: [], embeddedProjectIds: ['project'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(),
+    highlight: vi.fn(), focusEmbedded,
+  }
+  setup(false, page)
+  await waitFor(() => expect(resolveProjectForPage).toHaveBeenCalled())
+  expect(focusEmbedded).not.toHaveBeenCalled()
+  window.dispatchEvent(new CustomEvent('crrt:activate'))
+  expect(focusEmbedded).toHaveBeenCalledWith('project')
+})
+
 it('preserves a draft and screenshot when tokens refresh for the same account', async () => {
   const view = setup()
   await act(async () => {})

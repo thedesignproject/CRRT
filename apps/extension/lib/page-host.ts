@@ -4,6 +4,10 @@ import { captureViewport, type ScreenshotFocusRect } from '../../../src/lib/scre
 import { toPagePercent } from '../../../src/components/FeedbackWidget/coords'
 import { receiveFrameMessages, sendFrameMessage } from './frame-channel'
 
+function hasValidCoordinates(x: number, y: number) {
+  return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100
+}
+
 export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
   let frameId = 0, selecting = false, lastState = '', focus: ScreenshotFocusRect | null = null
   let targets: { id: string; selector: string; x: number; y: number }[] = []
@@ -23,11 +27,12 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
   }
   function state() {
     const liveIds = targets.filter(({ selector, x, y }) => {
+      const validCoordinates = hasValidCoordinates(x, y)
       try {
         const rect = document.querySelector(selector)?.getBoundingClientRect()
-        return Boolean((rect && (rect.width || rect.height)) || (Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100))
+        return Boolean((rect && (rect.width || rect.height)) || validCoordinates)
       } catch {
-        return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100
+        return validCoordinates
       }
     }).map(({ id }) => id)
     const embeddedProjectIds = Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt][data-crrt-project]'))
