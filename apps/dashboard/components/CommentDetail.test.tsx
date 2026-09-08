@@ -14,6 +14,7 @@ import { CommandPalette } from './CommandPalette'
 import { CommentDetail } from './CommentDetail'
 import { CommentList } from './CommentList'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
+import { ExternalWorkProviderDialog } from './ExternalWorkProviderDialog'
 
 const issue = {
   issueNumber: 42,
@@ -198,9 +199,11 @@ describe('<CommentDetail /> GitHub issue action', () => {
     const button = screen.getByRole('button', { name: 'Send to…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Try again.')
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Check Project Settings and try again.')
     fireEvent.click(button)
-    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Try again.')
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Check Project Settings and try again.')
   })
 
   it('opens an issue discovered during preparation and protects its opener', async () => {
@@ -214,8 +217,8 @@ describe('<CommentDetail /> GitHub issue action', () => {
     const button = screen.getByRole('button', { name: 'Send to…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
-    await screen.findByRole('button', { name: 'Open GitHub Issue' })
-    expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer')
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer'))
     expect(opened.opener).toBeNull()
   })
 
@@ -229,6 +232,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     const button = screen.getByRole('button', { name: 'Send to…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
     await waitFor(() => expect(open).toHaveBeenCalled())
     first.unmount()
 
@@ -238,6 +242,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     const pending = screen.getByRole('button', { name: 'Send to…' })
     await waitFor(() => expect(pending).toBeEnabled())
     fireEvent.click(pending)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
     const next = { ...comment, id: 'comment-2', body: 'Move the button' }
     view.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
     rejectDraft(new Error('late failure'))
@@ -361,21 +366,21 @@ describe('<CommentDetail /> GitHub issue action', () => {
 
   it('does not dispatch duplicate creates before the busy render commits', async () => {
     let resolveIssue!: (value: typeof issue & { created: boolean }) => void
-    vi.mocked(createCommentGithubIssue).mockReturnValueOnce(new Promise((resolve) => { resolveIssue = resolve }))
+    vi.mocked(sendExternalWork).mockReturnValueOnce(new Promise((resolve) => { resolveIssue = resolve }))
     render(<CommentDetail {...props} />)
     const create = await openExternalWorkDraft()
     act(() => {
       create.click()
       create.click()
     })
-    expect(createCommentGithubIssue).toHaveBeenCalledTimes(1)
+    expect(sendExternalWork).toHaveBeenCalledTimes(1)
     resolveIssue({ ...issue, created: true })
-    await screen.findByRole('button', { name: 'Open GitHub Issue' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 
   it('does not surface a late create failure after selection changes', async () => {
     let rejectIssue!: (reason: Error) => void
-    vi.mocked(createCommentGithubIssue).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectIssue = reject }))
+    vi.mocked(sendExternalWork).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectIssue = reject }))
     const { rerender } = render(<CommentDetail {...props} />)
     const create = await openExternalWorkDraft()
     fireEvent.click(create)
@@ -416,6 +421,56 @@ describe('<CommentDetail /> GitHub issue action', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
     expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer')
     open.mockRestore()
+  })
+
+  it('creates Linear issues and opens the result without an opener reference', async () => {
+    const opened = { opener: 'parent' }
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened as never)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'linear', connected: true, destination: 'WEB · Web', existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    })
+    vi.mocked(sendExternalWork).mockResolvedValueOnce({ externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now', created: true })
+    render(<CommentDetail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://linear.app/issue/WEB-1', '_blank', 'noopener,noreferrer'))
+    expect(opened.opener).toBeNull()
+  })
+
+  it('surfaces missing result URLs and tolerates blocked Linear issue tabs', async () => {
+    vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: null, draft: { title: 'Title', body: 'Body' } })
+    vi.mocked(sendExternalWork)
+      .mockResolvedValueOnce({ created: true } as never)
+      .mockResolvedValueOnce({ externalUrl: 'https://linear.app/issue/WEB-2', created: true } as never)
+    vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<CommentDetail {...props} />)
+    const send = screen.getByRole('button', { name: 'Send to…' })
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create the external issue')
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('handles incomplete existing work, blocked Linear tabs, and provider-picker cancellation', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    vi.mocked(getExternalWorkDraft)
+      .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: 'i', externalKey: 'WEB-1', externalUrl: '', createdAt: 'now' }, draft: { title: '', body: '' } })
+      .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now' }, draft: { title: '', body: '' } })
+    render(<CommentDetail {...props} />)
+    const send = screen.getByRole('button', { name: 'Send to…' })
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Linear issue')
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    await waitFor(() => expect(open).toHaveBeenCalled())
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText('Choose a connected project integration.')).toBeNull()
   })
 
   it('preserves nullable page metadata and renders the feedback safely', () => {
@@ -501,6 +556,7 @@ describe('<ExternalWorkDialog />', () => {
     const onCancel = vi.fn()
     const onSubmit = vi.fn()
     const view = render(<ExternalWorkDialog
+      provider="github"
       destination="acme/site"
       initialDraft={{ title: ' Title ', body: ' Body ' }}
       busy={false}
@@ -519,6 +575,7 @@ describe('<ExternalWorkDialog />', () => {
     expect(onCancel).toHaveBeenCalledTimes(2)
 
     view.rerender(<ExternalWorkDialog
+      provider="github"
       destination="acme/site"
       initialDraft={{ title: 'Title', body: 'Body' }}
       busy
@@ -530,5 +587,32 @@ describe('<ExternalWorkDialog />', () => {
     expect(onCancel).toHaveBeenCalledTimes(2)
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
     expect(screen.getByRole('alert')).toHaveTextContent('Safe error')
+
+    view.rerender(<ExternalWorkDialog
+      provider="linear"
+      destination="WEB · Web"
+      initialDraft={{ title: 'Title', body: 'Body' }}
+      busy={false}
+      error={null}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Send to Linear')
+  })
+})
+
+describe('<ExternalWorkProviderDialog />', () => {
+  it('selects providers and only cancels from controls or the backdrop', () => {
+    const onCancel = vi.fn()
+    const onSelect = vi.fn()
+    render(<ExternalWorkProviderDialog onCancel={onCancel} onSelect={onSelect} />)
+    fireEvent.mouseDown(screen.getByRole('dialog'))
+    expect(onCancel).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Linear' }))
+    expect(onSelect.mock.calls).toEqual([['github'], ['linear']])
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.mouseDown(screen.getByRole('presentation'))
+    expect(onCancel).toHaveBeenCalledTimes(2)
   })
 })

@@ -128,8 +128,9 @@ export function CommentDetail({
     setIssueBusy(true)
     setIssueError(null)
     try {
-      if (!externalWorkDraft) return
-      const provider = externalWorkDraft.provider
+      // This handler is only mounted while a draft exists; request fencing above
+      // prevents a stale dialog from dispatching a second submission.
+      const provider = externalWorkDraft!.provider
       const result = await sendExternalWork(apiBase, accessToken, commentId, provider, draft)
       const url = result.externalUrl ?? result.issueUrl
       if (!url) throw new Error('missing_external_work_url')
@@ -414,7 +415,9 @@ export function CommentDetail({
         onCancel={() => setProviderPickerOpen(false)}
         onSelect={(provider) => {
           setProviderPickerOpen(false)
-          if (selectedComment) void prepareExternalWork(selectedComment, provider)
+          // The picker is only mounted for a selected comment and is closed by
+          // the selection-change effect before a replacement render can use it.
+          void prepareExternalWork(selectedComment!, provider)
         }}
       />}
     </div>

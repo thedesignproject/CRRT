@@ -15,7 +15,7 @@ import githubIssueHandler from './github-issue.js'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
-import { claimCommentExternalWork, finalizeCommentExternalWork, getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration, markCommentExternalWorkUncertain } from '../../../_lib/store.js'
+import { claimCommentExternalWork, finalizeCommentExternalWork, getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration, markCommentExternalWorkUncertain, releaseCommentExternalWork, updateReviewStatus } from '../../../_lib/store.js'
 
 function response() {
   return { statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
@@ -23,6 +23,7 @@ function response() {
     end() { return this }, setHeader(key: string, value: string) { this.headers[key] = value } }
 }
 const call = (req: unknown, res: unknown) => (handler as unknown as (request: unknown, response: unknown) => Promise<unknown>)(req, res)
+const post = (draft: unknown = { title: 'Title', body: 'Body' }) => ({ method: 'POST', query: { commentId: 'c' }, body: { provider: 'linear', draft }, headers: {} })
 
 const comment = { id: 'c', projectId: 'p', body: 'Move the CTA above the fold', authorName: 'Client', pageUrl: 'https://example.com', imageUrl: null, selector: '#cta', x: 10, y: 20, targetType: 'element_point' as const, anchor: null, reviewStatus: 'accepted', githubIssue: null }
 
@@ -131,5 +132,106 @@ describe('external work endpoint', () => {
     expect(created.statusCode).toBe(201)
     expect(createLinearIssue).toHaveBeenCalledWith('linear-token', { teamId: 'team', title: 'Edited', description: 'Details' })
     expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({ externalKey: 'WEB-1' }))
+  })
+
+  it('prepares disconnected and already-created Linear work without leaking tokens', async () => {
+    vi.mocked(getProjectIntegration).mockResolvedValueOnce(null)
+    let res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: {} }, res)
+    expect(res.body).toMatchObject({ connected: false, destination: null, existing: null })
+
+    vi.mocked(getCommentExternalWork).mockResolvedValueOnce({ state: 'created', externalId: 'i', externalKey: 'WEB-1', externalUrl: 'url', createdAt: 'now' } as never)
+    res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: {} }, res)
+    expect(res.body).toMatchObject({ existing: { externalKey: 'WEB-1', externalUrl: 'url' } })
+    expect(JSON.stringify(res.body)).not.toContain('linear-token')
+  })
+
+  it('rejects rejected feedback, missing connections, and malformed drafts', async () => {
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected' } as never)
+    let res = response()
+    await call(post(), res)
+    expect(res.statusCode).toBe(409)
+
+    vi.mocked(getProjectIntegration).mockResolvedValueOnce(null)
+    res = response()
+    await call(post(), res)
+    expect(res.statusCode).toBe(409)
+
+    for (const draft of [{ title: 1, body: 'Body' }, { title: 'Title', body: 1 }, { title: ' ', body: 'Body' }, { title: 'Title', body: ' ' }]) {
+      res = response()
+      await call(post(draft), res)
+      expect(res.statusCode).toBe(400)
+    }
+  })
+
+  it('returns existing records and accepted claims without duplicate creation', async () => {
+    const existing = { state: 'created', externalId: 'i', externalKey: 'WEB-1', externalUrl: 'url', createdAt: 'now' }
+    vi.mocked(getCommentExternalWork).mockResolvedValueOnce(existing as never)
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'open' } as never)
+    let res = response()
+    await call(post(), res)
+    expect(res.body).toMatchObject({ created: false, externalUrl: 'url' })
+    expect(updateReviewStatus).toHaveBeenCalled()
+
+    vi.mocked(getCommentExternalWork).mockResolvedValueOnce(existing as never)
+    res = response()
+    await call(post(), res)
+    expect(res.body).toMatchObject({ created: false })
+
+    vi.mocked(claimCommentExternalWork).mockResolvedValueOnce(existing as never)
+    res = response()
+    await call(post(), res)
+    expect(res.body).toMatchObject({ created: false, externalUrl: 'url' })
+  })
+
+  it('reports active and uncertain competing claims', async () => {
+    for (const claim of [null, { state: 'creating', leaseToken: 'other', uncertainAt: null }, { state: 'creating', leaseToken: 'other', uncertainAt: 'now' }]) {
+      vi.mocked(claimCommentExternalWork).mockResolvedValueOnce(claim as never)
+      const res = response()
+      await call(post(), res)
+      expect(res.statusCode).toBe(409)
+    }
+  })
+
+  it('releases a claim when authorization changes and protects the provider call fence', async () => {
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
+    let res = response()
+    await call(post(), res)
+    expect(releaseCommentExternalWork).toHaveBeenCalled()
+    expect(createLinearIssue).not.toHaveBeenCalled()
+
+    vi.mocked(markCommentExternalWorkUncertain).mockResolvedValueOnce(false)
+    res = response()
+    await call(post(), res)
+    expect(res.statusCode).toBe(409)
+
+    vi.mocked(finalizeCommentExternalWork).mockResolvedValueOnce(null)
+    res = response()
+    await call(post(), res)
+    expect(res.statusCode).toBe(502)
+  })
+
+  it('releases only deterministic provider failures and returns safe creation errors', async () => {
+    for (const failure of [new Error('linear_request_failed'), new Error('linear_issue_create_failed')]) {
+      vi.mocked(createLinearIssue).mockRejectedValueOnce(failure)
+      const res = response()
+      await call(post(), res)
+      expect(res.statusCode).toBe(502)
+    }
+    expect(releaseCommentExternalWork).toHaveBeenCalledTimes(2)
+
+    vi.mocked(createLinearIssue).mockRejectedValueOnce(new Error('linear_result_indeterminate'))
+    let res = response()
+    await call(post(), res)
+    expect(res.statusCode).toBe(502)
+    expect(releaseCommentExternalWork).toHaveBeenCalledTimes(2)
+
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(getComment).mockRejectedValueOnce('opaque')
+    res = response()
+    await call(post(), res)
+    expect(res.statusCode).toBe(500)
+    expect(res.body).toEqual({ error: 'External issue creation failed' })
   })
 })
