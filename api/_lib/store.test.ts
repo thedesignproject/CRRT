@@ -354,6 +354,12 @@ describe('membership helpers + claim', () => {
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
+      projectsIn: { data: null, error: null },
+    }) as never)
+    expect(await listProjectsForUser('u')).toEqual([])
+
+    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
+      memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
       projectsIn: { data: null, error: { message: 'boom' } },
     }) as never)
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
@@ -722,19 +728,40 @@ type InviteMocks = {
   inviteList?: { data: InviteRow[] | null; error: { message: string } | null }
   inviteInsertResult?: { data: InviteRow | null; error: { code?: string; message: string } | null }
   inviteDeleteError?: { message: string } | null
+  inviteRestoreError?: { code?: string; message: string } | null
   memberInsertError?: { code?: string; message: string } | null
+  memberSingle?: { data: { role: string; is_owner: boolean } | null; error: { message: string } | null }
 }
 
 function inviteSupabase(m: InviteMocks = {}) {
+  const inviteInsert = vi.fn(() => {
+    const chain = {
+      select: vi.fn(() => ({
+        single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
+      })),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: m.inviteRestoreError ?? null }).then(resolve),
+    }
+    return chain
+  })
+  const inviteDelete = vi.fn(() => {
+    const chain = {
+      eq: vi.fn(() => chain),
+      select: vi.fn(() => chain),
+      maybeSingle: vi.fn(() => Promise.resolve({
+        ...(m.inviteSingle ?? { data: null, error: null }),
+        error: m.inviteDeleteError ?? m.inviteSingle?.error ?? null,
+      })),
+      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: m.inviteDeleteError ?? null }).then(resolve),
+    }
+    return chain
+  })
   return {
+    inviteInsert,
+    inviteDelete,
     from: vi.fn((table: string) => {
       if (table === 'project_invites') {
         return {
-          insert: vi.fn(() => ({
-            select: vi.fn(() => ({
-              single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
-            })),
-          })),
+          insert: inviteInsert,
           select: vi.fn(() => {
             const chain = {
               eq: vi.fn(() => chain),
@@ -745,20 +772,13 @@ function inviteSupabase(m: InviteMocks = {}) {
             }
             return chain
           }),
-          delete: vi.fn(() => {
-            const chain = {
-              eq: vi.fn(() => chain),
-              then: (r: (v: unknown) => unknown) =>
-                Promise.resolve({ error: m.inviteDeleteError ?? null }).then(r),
-            }
-            return chain
-          }),
+          delete: inviteDelete,
         }
       }
       if (table === 'project_members') {
         return {
           insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })),
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })) })) })) })),
+          select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(m.memberSingle ?? { data: null, error: null })) })) })) })),
         }
       }
       throw new Error(`Unmocked table ${table}`)
@@ -817,11 +837,15 @@ describe('invite helpers', () => {
     }) as never)
     expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+    const failed = inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
       memberInsertError: { code: '50000', message: 'boom' },
-    }) as never)
+    })
+    vi.mocked(getServiceSupabase).mockReturnValue(failed as never)
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('boom')
+    expect(failed.inviteInsert).toHaveBeenCalledWith([{
+      project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'inviter-1', created_at: 't',
+    }])
   })
 
   it('declineInvite: not_found / happy', async () => {
@@ -832,19 +856,26 @@ describe('invite helpers', () => {
     expect(await declineInvite('x@y.z', 'p')).toBe('inviter-1')
   })
 
-  it('getInvite lookup error / deleteInvite error bubble through accept', async () => {
-    // getInvite error path
+  it('claim errors and failed invite restoration bubble through accept', async () => {
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: null, error: { message: 'lookup boom' } },
+      inviteSingle: { data: null, error: null },
+      inviteDeleteError: { message: 'claim boom' },
     }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('lookup boom')
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('claim boom')
 
-    // deleteInvite error path (invite found, member insert ok, delete fails)
     vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
       inviteSingle: { data: INVITE, error: null },
-      inviteDeleteError: { message: 'delete boom' },
+      memberInsertError: { code: '50000', message: 'member boom' },
+      inviteRestoreError: { code: '50000', message: 'restore boom' },
     }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('delete boom')
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: restore boom')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteSingle: { data: INVITE, error: null },
+      memberInsertError: { code: '50000', message: 'member boom' },
+      inviteRestoreError: { code: '23505', message: 'restored concurrently' },
+    }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom')
   })
 })
 

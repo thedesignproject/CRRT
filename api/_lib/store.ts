@@ -2071,35 +2071,40 @@ export async function deleteProjectInvite(projectKey: string, email: string): Pr
   return Array.isArray(data) && data.length > 0
 }
 
-async function getInvite(email: string, projectKey: string) {
+async function claimInvite(email: string, projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_invites')
-    .select('project_key, email, role, invited_by, created_at')
+    .delete()
     .eq('email', email.toLowerCase().trim())
     .eq('project_key', projectKey)
+    .select('project_key, email, role, invited_by, created_at')
     .maybeSingle()
   if (error) throw new Error(error.message)
   return data ? mapInvite(data as InviteRow) : null
 }
 
-async function deleteInvite(email: string, projectKey: string) {
+async function restoreInvite(invite: ReturnType<typeof mapInvite>) {
   const supabase = getSupabase()
   const { error } = await supabase
     .from('project_invites')
-    .delete()
-    .eq('email', email.toLowerCase().trim())
-    .eq('project_key', projectKey)
-  if (error) throw new Error(error.message)
+    .insert([{
+      project_key: invite.projectKey,
+      email: invite.email,
+      role: invite.role,
+      invited_by: invite.invitedBy,
+      created_at: invite.createdAt,
+    }] as never)
+  if (error && error.code !== '23505') throw new Error(error.message)
 }
 
 /**
- * Atomic invite acceptance: verify the invite exists for this email, insert
- * the project_members row (idempotent via 23505), delete the invite. Returns
- * the inviter's user_id so the caller can emit an `invite.accepted` notif.
+ * Claim the invite with one DELETE ... RETURNING statement so accept, decline,
+ * and cancellation have a single winner. Membership insertion is idempotent;
+ * a failed insertion restores the claimed invite for retry.
  */
 export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string | null> {
-  const invite = await getInvite(email, projectKey)
+  const invite = await claimInvite(email, projectKey)
   if (!invite) {
     if (await isProjectMember(userId, projectKey)) return null
     throw new Error('not_found')
@@ -2109,16 +2114,21 @@ export async function acceptInvite(userId: string, email: string, projectKey: st
   const { error: insertError } = await supabase
     .from('project_members')
     .insert([{ project_key: projectKey, user_id: userId, role: invite.role }] as never)
-  if (insertError && insertError.code !== '23505') throw new Error(insertError.message)
+  if (insertError && insertError.code !== '23505') {
+    try { await restoreInvite(invite) }
+    catch (restoreError) {
+      const message = restoreError instanceof Error ? restoreError.message : String(restoreError)
+      throw new Error(`${insertError.message}; invite restore failed: ${message}`)
+    }
+    throw new Error(insertError.message)
+  }
 
-  await deleteInvite(email, projectKey)
   return invite.invitedBy
 }
 
 export async function declineInvite(email: string, projectKey: string): Promise<string> {
-  const invite = await getInvite(email, projectKey)
+  const invite = await claimInvite(email, projectKey)
   if (!invite) throw new Error('not_found')
-  await deleteInvite(email, projectKey)
   return invite.invitedBy
 }
 

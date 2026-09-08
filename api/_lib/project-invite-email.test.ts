@@ -77,6 +77,8 @@ describe('project invite email', () => {
     expect(getProjectInviteDashboardUrl(undefined, undefined, {})).toBe('https://crrt.ai/dashboard')
     expect(getProjectInviteDashboardUrl(undefined, undefined, { APP_URL: 'https://app.example/' }))
       .toBe('https://app.example/dashboard')
+    expect(getProjectInviteDashboardUrl('project/a', undefined, { APP_URL: 'https://app.example/' }))
+      .toBe('https://app.example/dashboard/login?invite=project%2Fa')
     expect(getProjectInviteDashboardUrl('project/a', 'Guest@Example.com', { APP_URL: 'https://app.example/' }))
       .toBe('https://app.example/dashboard/login?invite=project%2Fa&email=guest%40example.com')
   })

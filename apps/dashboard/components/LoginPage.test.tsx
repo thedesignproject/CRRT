@@ -1,13 +1,14 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { renderToString } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { signInWithOtp, signUp } = vi.hoisted(() => ({ signInWithOtp: vi.fn(), signUp: vi.fn() }))
+const { signInWithOtp, signInWithPassword, signUp } = vi.hoisted(() => ({ signInWithOtp: vi.fn(), signInWithPassword: vi.fn(), signUp: vi.fn() }))
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
     auth: {
-      signInWithPassword: vi.fn(),
+      signInWithPassword,
       signInWithOtp,
       signUp,
       resetPasswordForEmail: vi.fn(),
@@ -27,11 +28,28 @@ async function submitSignup() {
 
 beforeEach(() => {
   signUp.mockReset()
+  signInWithPassword.mockReset()
   signInWithOtp.mockReset()
   window.history.replaceState({}, '', '/signup')
 })
 
 describe('LoginPage invitation continuation', () => {
+  it('renders the sign-in form during server rendering', () => {
+    vi.stubGlobal('window', undefined)
+    expect(renderToString(<LoginPage />)).toContain('welcome back')
+    vi.unstubAllGlobals()
+  })
+
+  it('continues password sign-in back to the pending invitation', async () => {
+    window.history.replaceState({}, '', '/login?invite=project%2Fone&email=guest%40example.com')
+    signInWithPassword.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalledWith({ email: 'guest@example.com', password: 'password' }))
+    expect(window.location.search).toBe('?invite=project%2Fone')
+  })
+
   it('prefills the invited email and sends a magic link back to the invitation', async () => {
     window.history.replaceState({}, '', '/login?invite=project%2Fone&email=guest%40example.com')
     signInWithOtp.mockResolvedValue({ error: null })
@@ -43,6 +61,19 @@ describe('LoginPage invitation continuation', () => {
       options: { emailRedirectTo: 'http://localhost:3000/?invite=project%2Fone' },
     }))
     expect(await screen.findByText(/secure sign-in link/)).toBeInTheDocument()
+  })
+
+  it('shows specific and fallback magic-link failures', async () => {
+    window.history.replaceState({}, '', '/login')
+    signInWithOtp.mockResolvedValueOnce({ error: new Error('email unavailable') })
+      .mockRejectedValueOnce('offline')
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'guest@example.com' } })
+
+    fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
+    expect(await screen.findByText(/email unavailable/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
+    expect(await screen.findByText(/Could not send sign-in link/)).toBeInTheDocument()
   })
 })
 
