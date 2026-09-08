@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { createCommentGithubIssue, getProjectGitHubStatus } from '../api'
+import { createCommentGithubIssue, getExternalWorkDraft, getProjectGitHubStatus, type ExternalWorkDraft } from '../api'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { timeAgo, truncateUrl } from '../lib/format'
@@ -18,6 +18,7 @@ import {
 } from './icons'
 import { ActionBtn, Kbd } from './primitives'
 import { ProjectEmptyState } from './ProjectEmptyState'
+import { ExternalWorkDialog } from './ExternalWorkDialog'
 
 interface CommentDetailProps {
   selectedComment: Comment | null
@@ -66,6 +67,7 @@ export function CommentDetail({
   const [issueError, setIssueError] = useState<string | null>(null)
   const [githubConnected, setGithubConnected] = useState(false)
   const [createdIssues, setCreatedIssues] = useState<Record<string, NonNullable<Comment['githubIssue']>>>({})
+  const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
   const issueRequests = useRef(new Map<string, symbol>())
   const connectionRequest = useRef(0)
   const selectedId = selectedComment?.id ?? null
@@ -78,6 +80,7 @@ export function CommentDetail({
   useEffect(() => {
     setIssueBusy(selectedId !== null && issueRequests.current.has(selectedId))
     setIssueError(null)
+    setExternalWorkDraft(null)
   }, [selectedId])
 
   useEffect(() => {
@@ -104,7 +107,7 @@ export function CommentDetail({
       return
     }
     if (
-      comment.reviewStatus !== 'accepted'
+      comment.reviewStatus === 'rejected'
       || issueRequests.current.has(comment.id)
     ) return
     const commentId = comment.id
@@ -113,14 +116,40 @@ export function CommentDetail({
     setIssueBusy(true)
     setIssueError(null)
     try {
-      const result = await createCommentGithubIssue(apiBase, accessToken, commentId)
+      const prepared = await getExternalWorkDraft(apiBase, accessToken, commentId)
+      if (!prepared.connected) throw new Error('github_repository_not_connected')
+      if (prepared.existing) {
+        setCreatedIssues((current) => ({ ...current, [commentId]: prepared.existing! }))
+        const opened = window.open(prepared.existing.issueUrl, '_blank', 'noopener,noreferrer')
+        if (opened) opened.opener = null
+      } else if (selectedIdRef.current === commentId) {
+        setExternalWorkDraft(prepared)
+      }
+    } catch {
+      if (selectedIdRef.current === commentId) setIssueError('Could not prepare the GitHub issue. Try again.')
+    } finally {
+      issueRequests.current.delete(commentId)
+      if (selectedIdRef.current === commentId) setIssueBusy(false)
+    }
+  }
+
+  const handleExternalWorkSubmit = async (draft: { title: string; body: string }) => {
+    if (!selectedComment || issueBusy || issueRequests.current.has(selectedComment.id)) return
+    const commentId = selectedComment.id
+    const request = Symbol(commentId)
+    issueRequests.current.set(commentId, request)
+    setIssueBusy(true)
+    setIssueError(null)
+    try {
+      const result = await createCommentGithubIssue(apiBase, accessToken, commentId, draft)
       setCreatedIssues((current) => ({ ...current, [commentId]: {
         issueNumber: result.issueNumber,
         issueUrl: result.issueUrl,
         createdAt: result.createdAt,
       } }))
+      setExternalWorkDraft(null)
     } catch {
-      if (selectedIdRef.current === commentId && issueRequests.current.get(commentId) === request) {
+      if (selectedIdRef.current === commentId) {
         setIssueError('Could not create the GitHub issue. Try again.')
       }
     } finally {
@@ -312,7 +341,7 @@ export function CommentDetail({
                   onClick={() => handleGithubIssue(selectedComment)}
                   disabled={!githubIssue && (
                     !githubConnected
-                    || selectedComment.reviewStatus !== 'accepted'
+                    || selectedComment.reviewStatus === 'rejected'
                     || issueBusy
                   )}
                 >
@@ -320,10 +349,10 @@ export function CommentDetail({
                   {githubIssue
                     ? 'Open GitHub Issue'
                     : issueBusy
-                      ? 'Creating issue…'
-                      : selectedComment.reviewStatus === 'accepted'
-                        ? 'Create GitHub Issue'
-                        : 'Accept to create issue'}
+                      ? 'Preparing issue…'
+                      : selectedComment.reviewStatus === 'rejected'
+                        ? 'Reopen to send'
+                        : 'Send to…'}
                 </ActionBtn>
                 {!githubIssue && !githubConnected && (
                   <span
@@ -340,7 +369,7 @@ export function CommentDetail({
                 )}
               </span>}
 
-              {issueError && (
+              {issueError && !externalWorkDraft && (
                 <span role="alert" className="text-xs text-status-rejected">{issueError}</span>
               )}
 
@@ -401,6 +430,15 @@ export function CommentDetail({
           </div>}
         </div>
       )}
+      {externalWorkDraft && <ExternalWorkDialog
+        key={selectedId}
+        destination={externalWorkDraft.destination ?? 'GitHub'}
+        initialDraft={externalWorkDraft.draft}
+        busy={issueBusy}
+        error={issueError}
+        onCancel={() => { setExternalWorkDraft(null); setIssueError(null) }}
+        onSubmit={handleExternalWorkSubmit}
+      />}
     </div>
   )
 }

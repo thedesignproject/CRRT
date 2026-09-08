@@ -523,11 +523,20 @@ function FeedbackWidgetInner({
   const [agentGateOpen, setAgentGateOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
   const [pinsVisible, setPinsVisible] = useState(true)
+  const [externalWork, setExternalWork] = useState<{
+    commentId: string
+    destination: string
+    title: string
+    body: string
+    busy: boolean
+    error: string
+  } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   // Synchronous guard — state updates are async, so double-firing handleSend
   // in the same tick (e.g. Cmd+Enter held down) would otherwise slip past `sending`.
   const sendingRef = useRef(false)
+  const externalWorkRequestRef = useRef(false)
 
   const [postSendHint, setPostSendHint] = useState(false)
   const [launcherBump, setLauncherBump] = useState(false)
@@ -983,6 +992,45 @@ function FeedbackWidgetInner({
     }
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: text } : c))
     setEditingId(null)
+  }
+
+  async function prepareExternalWork(commentId: string) {
+    if (!personalComments?.externalWork || externalWorkRequestRef.current) return
+    externalWorkRequestRef.current = true
+    try {
+      const prepared = await personalComments.externalWork.prepare(commentId)
+      if (prepared.existingUrl) {
+        const opened = window.open(prepared.existingUrl, '_blank', 'noopener,noreferrer')
+        if (opened) opened.opener = null
+        return
+      }
+      setExternalWork({ commentId, destination: prepared.destination, title: prepared.title, body: prepared.body, busy: false, error: '' })
+    } catch (error) {
+      setApiError(error instanceof Error ? error.message : 'Could not prepare external work')
+    } finally {
+      externalWorkRequestRef.current = false
+    }
+  }
+
+  async function sendExternalWorkDraft() {
+    if (!externalWork || !personalComments?.externalWork || externalWork.busy || externalWorkRequestRef.current) return
+    const request = externalWork
+    externalWorkRequestRef.current = true
+    setExternalWork({ ...request, busy: true, error: '' })
+    try {
+      const result = await personalComments.externalWork.send(request.commentId, { title: request.title.trim(), body: request.body.trim() })
+      setExternalWork(null)
+      const opened = window.open(result.issueUrl, '_blank', 'noopener,noreferrer')
+      if (opened) opened.opener = null
+    } catch (error) {
+      setExternalWork({
+        ...request,
+        busy: false,
+        error: error instanceof Error ? error.message : 'Could not create external work',
+      })
+    } finally {
+      externalWorkRequestRef.current = false
+    }
   }
 
   // --- Highlight element from comment ---
@@ -1621,6 +1669,9 @@ function FeedbackWidgetInner({
                         key={c.id}
                         reviewEnabled={!personalComments}
                         mutationEnabled={!personalComments || c.editable !== false}
+                        onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
+                          ? () => { void prepareExternalWork(c.id) }
+                          : undefined}
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
                         onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
@@ -2002,7 +2053,7 @@ function FeedbackWidgetInner({
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         </button>
                       )}
-                      {(c.editable !== false || !personalComments) && <button
+                      {(c.editable !== false || !personalComments || Boolean(personalComments?.externalWork)) && <button
                         onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
                         title="More"
                         aria-label="More"
@@ -2106,6 +2157,14 @@ function FeedbackWidgetInner({
                         animation: 'fw-tooltip-in 0.1s ease both',
                       }}
                     >
+                      {personalComments?.externalWork && c.reviewStatus !== 'rejected' && <button
+                        onClick={() => { void prepareExternalWork(c.id); setMenuOpenId(null) }}
+                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                      >
+                        <span aria-hidden="true">↗</span> Send to…
+                      </button>}
                       {!personalComments && <button
                         onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
@@ -2301,6 +2360,33 @@ function FeedbackWidgetInner({
           loginUrl={loginUrl}
           onClose={() => setAgentGateOpen(false)}
         />
+      )}
+
+      {externalWork && (
+        <div
+          {...{ [WIDGET_ATTR]: '' }}
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget && !externalWork.busy) setExternalWork(null) }}
+          style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="fw-external-work-title" style={{ width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
+            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to GitHub</h2>
+            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Review and edit before creating in {externalWork.destination}.</p>
+            <label style={{ display: 'block', color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
+              Title
+              <input aria-label="External work title" value={externalWork.title} maxLength={120} onChange={(event) => setExternalWork({ ...externalWork, title: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', font: 'inherit' }} />
+            </label>
+            <label style={{ display: 'block', marginTop: 14, color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
+              Description
+              <textarea aria-label="External work description" value={externalWork.body} rows={12} onChange={(event) => setExternalWork({ ...externalWork, body: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, resize: 'vertical', borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.5 }} />
+            </label>
+            {externalWork.error && <p role="alert" style={{ color: '#ef4444', fontSize: 12 }}>{externalWork.error}</p>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
+              <button type="button" disabled={externalWork.busy} onClick={() => setExternalWork(null)} style={{ borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground-muted)', padding: '8px 12px', cursor: 'pointer' }}>Cancel</button>
+              <button type="button" disabled={externalWork.busy || !externalWork.title.trim() || !externalWork.body.trim()} onClick={() => { void sendExternalWorkDraft() }} style={{ borderRadius: 7, border: 0, background: '#E8853D', color: '#080808', padding: '8px 12px', fontWeight: 700, cursor: 'pointer', opacity: externalWork.busy ? .6 : 1 }}>{externalWork.busy ? 'Sending…' : 'Create issue'}</button>
+            </div>
+          </div>
+        </div>
       )}
 
       <FeedbackWidgetStyles />

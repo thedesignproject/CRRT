@@ -59,6 +59,14 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
   created: boolean
 }
 
+export interface ExternalWorkDraft {
+  provider: 'github'
+  connected: boolean
+  destination: string | null
+  existing: GitHubIssueRecord | null
+  draft: { title: string; body: string }
+}
+
 export interface ExtensionCommentRecord {
   id: string
   projectId: string | null
@@ -650,12 +658,25 @@ export async function deleteExtensionComment(apiBase: string, accessToken: strin
   if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
 }
 
-export function createCommentGithubIssue(apiBase: string, accessToken: string, commentId: string) {
+export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: 'github' = 'github') {
+  return requestJson<ExternalWorkDraft>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`,
+    { headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function createCommentGithubIssue(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  draft?: { title: string; body: string },
+) {
   return requestJson<GitHubIssueCreationResponse>(
-    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/github-issue`,
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
     {
       method: 'POST',
-      headers: { ...authHeaders(accessToken) },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ provider: 'github', ...(draft ? { draft } : {}) }),
     },
   )
 }

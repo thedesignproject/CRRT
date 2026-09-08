@@ -46,6 +46,11 @@ export interface PersonalComments {
     value: 'page' | 'project'
     onChange(value: 'page' | 'project'): void
   }
+  /** Manual external-tracker handoff for authorized project members. */
+  externalWork?: {
+    prepare(commentId: string): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
+    send(commentId: string, draft: { title: string; body: string }): Promise<{ issueUrl: string }>
+  }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>
   list(pageUrl: string): Promise<Comment[]>

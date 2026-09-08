@@ -11,6 +11,7 @@ vi.mock('../../../_lib/github-issues.js', () => ({
   createCommentIssueMarker: vi.fn(),
   createGithubIssue: vi.fn(),
   findGithubIssueByMarker: vi.fn(),
+  formatEditableGithubIssueBody: vi.fn(),
   formatGithubIssueBody: vi.fn(),
 }))
 vi.mock('../../../_lib/store.js', () => ({
@@ -22,6 +23,7 @@ vi.mock('../../../_lib/store.js', () => ({
   markCommentGithubIssueUncertain: vi.fn(),
   releaseCommentGithubIssue: vi.fn(),
   resetCommentGithubIssueAttempt: vi.fn(),
+  updateReviewStatus: vi.fn(),
 }))
 
 import handler from './github-issue.js'
@@ -32,6 +34,7 @@ import {
   createCommentIssueMarker,
   createGithubIssue,
   findGithubIssueByMarker,
+  formatEditableGithubIssueBody,
   formatGithubIssueBody,
 } from '../../../_lib/github-issues.js'
 import {
@@ -43,6 +46,7 @@ import {
   markCommentGithubIssueUncertain,
   releaseCommentGithubIssue,
   resetCommentGithubIssueAttempt,
+  updateReviewStatus,
 } from '../../../_lib/store.js'
 
 function mockRes() {
@@ -56,10 +60,10 @@ function mockRes() {
     setHeader(key: string, value: string) { this.headers[key] = value },
   }
 }
-const call = (method = 'POST', query: Record<string, unknown> = { commentId: 'comment-1' }) => {
+const call = (method = 'POST', query: Record<string, unknown> = { commentId: 'comment-1' }, body: unknown = undefined) => {
   const res = mockRes()
   return (handler as never as (req: unknown, res: ReturnType<typeof mockRes>) => Promise<unknown>)({
-    method, query, headers: {},
+    method, query, body, headers: {},
   }, res).then(() => res)
 }
 
@@ -117,11 +121,13 @@ beforeEach(() => {
     implementationContext: 'Context',
   })
   vi.mocked(formatGithubIssueBody).mockReturnValue('issue body')
+  vi.mocked(formatEditableGithubIssueBody).mockReturnValue('edited issue body')
   vi.mocked(createGithubIssue).mockResolvedValue(issue)
   vi.mocked(finalizeCommentGithubIssue).mockResolvedValue(true)
   vi.mocked(markCommentGithubIssueUncertain).mockResolvedValue(true)
   vi.mocked(releaseCommentGithubIssue).mockResolvedValue(true)
   vi.mocked(resetCommentGithubIssueAttempt).mockResolvedValue(true)
+  vi.mocked(updateReviewStatus).mockResolvedValue(comment as never)
 })
 
 describe('POST comment GitHub issue', () => {
@@ -153,12 +159,16 @@ describe('POST comment GitHub issue', () => {
     expect((await call()).statusCode).toBe(404)
   })
 
-  it('returns persisted issues and rejects ineligible or disconnected comments', async () => {
+  it('returns persisted issues and rejects rejected or disconnected comments', async () => {
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: issue } as never)
     expect((await call()).body).toEqual({ ...issue, created: false })
 
-    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'open' } as never)
-    expect((await call()).body).toEqual({ error: 'comment_not_accepted' })
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'open', githubIssue: issue } as never)
+    expect((await call()).body).toEqual({ ...issue, created: false })
+    expect(updateReviewStatus).toHaveBeenCalledWith('project-1', 'comment-1', 'accepted')
+
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected' } as never)
+    expect((await call()).body).toEqual({ error: 'comment_rejected' })
 
     vi.mocked(getGithubIssueConnection).mockResolvedValueOnce(null)
     expect((await call()).body).toEqual({ error: 'github_repository_not_connected' })
@@ -181,6 +191,31 @@ describe('POST comment GitHub issue', () => {
       expect.any(String),
       issue,
     )
+  })
+
+  it('uses an editable draft while preserving the signed recovery marker', async () => {
+    const res = await call('POST', { commentId: 'comment-1' }, {
+      draft: { title: 'Customer-facing title', body: 'Edited implementation details' },
+    })
+    expect(res.statusCode).toBe(201)
+    expect(generateCommentIssueContent).not.toHaveBeenCalled()
+    expect(formatEditableGithubIssueBody).toHaveBeenCalledWith('Edited implementation details', '<!-- marker -->')
+    expect(createGithubIssue).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Customer-facing title', body: 'edited issue body',
+    }))
+  })
+
+  it('rejects incomplete or malformed editable drafts before creating an issue', async () => {
+    for (const draft of [
+      { title: '', body: 'Body' },
+      { title: 'Title', body: '' },
+      { title: 7, body: 'Body' },
+    ]) {
+      const res = await call('POST', { commentId: 'comment-1' }, { draft })
+      expect(res.statusCode).toBe(400)
+      expect(res.body).toEqual({ error: 'invalid_external_work_draft' })
+    }
+    expect(createGithubIssue).not.toHaveBeenCalled()
   })
 
   it('recovers a marker match without creating another issue', async () => {
@@ -311,7 +346,9 @@ describe('POST comment GitHub issue', () => {
 
   it('does not post unless the database marks the attempt uncertain', async () => {
     vi.mocked(markCommentGithubIssueUncertain).mockResolvedValueOnce(false)
-    expect((await call()).statusCode).toBe(502)
+    const response = await call()
+    expect(response.statusCode).toBe(409)
+    expect(response.body).toEqual({ error: 'github_issue_creation_in_progress' })
     expect(createGithubIssue).not.toHaveBeenCalled()
     expect(releaseCommentGithubIssue).toHaveBeenCalled()
   })

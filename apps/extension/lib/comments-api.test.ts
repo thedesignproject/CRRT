@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 
-import { createPageComment, deletePageComment, listExtensionProjects, listPageComments, listProjectComments, updatePageComment } from './comments-api'
+import { createPageComment, deletePageComment, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment } from './comments-api'
 
 const comment = { id: 'a/b', projectId: null, pageUrl: 'https://example.com', pageHostname: 'example.com', x: 1, y: 2, selector: '#x', body: 'Hi', screenshotUrl: null, authorName: 'u@example.com', createdAt: 'now', updatedAt: 'now' }
 
@@ -51,6 +51,18 @@ describe('extension comments API client', () => {
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: expect.stringContaining('"projectId":"p"') })
     expect(fetch.mock.calls[1]?.[0]).toContain('/a%2Fb')
     expect(fetch.mock.calls[2]?.[1]).toMatchObject({ method: 'DELETE' })
+  })
+
+  it('prepares and confirms external work through the shared endpoint', async () => {
+    const prepared = { provider: 'github', connected: true, destination: 'acme/store', existing: null, draft: { title: 'T', body: 'B' } }
+    const created = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now', created: true }
+    const fetch = vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify(prepared), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
+    await expect(getExternalWorkDraft('a/b')).resolves.toEqual(prepared)
+    await expect(sendExternalWork('a/b', { title: 'Edited', body: 'Body' })).resolves.toEqual(created)
+    expect(fetch.mock.calls[0]?.[0]).toContain('/a%2Fb/external-work?provider=github')
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ provider: 'github', draft: { title: 'Edited', body: 'Body' } }) })
   })
 
   it('rejects missing sessions and background failures', async () => {
