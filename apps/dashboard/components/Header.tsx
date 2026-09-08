@@ -27,6 +27,7 @@ interface HeaderProps {
   addProjectError: string | null
   onOpenCmd: () => void
   onOpenSettings: () => void
+  canManageProject?: boolean
   settingsActive: boolean
   onOpenExtensionComments: () => void
   extensionCommentsActive: boolean
@@ -61,6 +62,7 @@ export function Header({
   addProjectError,
   onOpenCmd,
   onOpenSettings,
+  canManageProject = true,
   settingsActive,
   onOpenExtensionComments,
   extensionCommentsActive,
@@ -201,7 +203,7 @@ export function Header({
             <ShieldIcon size={15} />
           </button>
         )}
-        {!extensionCommentsActive && selectedProject && (
+        {!extensionCommentsActive && selectedProject && canManageProject && (
           <button
             onClick={onOpenSettings}
             title="Project settings"

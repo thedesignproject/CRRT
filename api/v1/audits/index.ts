@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
 import { auditCreateRequestSchema, auditCreateResponseSchema } from '../../../shared/product-audit/contracts.js'
 import { auditBudgets, auditCapabilities } from '../../_lib/audits/config.js'
 import { cancelAuditExecution, startAuditExecution } from '../../_lib/audits/execution.js'
@@ -40,7 +40,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const user = await requireUser(req, res)
       if (!user) return
-      if (!(await requireProjectMembership(req, res, user, projectKey))) return
+      if (!(await requireProjectCapability(req, res, user, projectKey, 'feedback:manage'))) return
       creatorUserId = user.userId
     } else {
       if (!capabilities.anonymousEnabled) return jsonError(req, res, 403, 'Anonymous audits are unavailable')

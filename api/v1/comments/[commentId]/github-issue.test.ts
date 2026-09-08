@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../_lib/auth.js', () => ({
   requireUser: vi.fn(),
-  requireProjectMembership: vi.fn(),
+  requireProjectCapability: vi.fn(),
 }))
 vi.mock('../../../_lib/comment-issue-content.js', () => ({ generateCommentIssueContent: vi.fn() }))
 vi.mock('../../../_lib/github-app.js', () => ({ createInstallationAccessToken: vi.fn() }))
@@ -24,7 +24,7 @@ vi.mock('../../../_lib/store.js', () => ({
 }))
 
 import handler from './github-issue.js'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { generateCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import { createInstallationAccessToken } from '../../../_lib/github-app.js'
 import {
@@ -98,7 +98,7 @@ const claimedLease = () => {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(requireUser).mockResolvedValue({ userId: 'user-1', email: 'a@b.c' })
-  vi.mocked(requireProjectMembership).mockResolvedValue(true)
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockResolvedValue(comment as never)
   vi.mocked(getCommentForGithubIssue).mockImplementation(async () => ({
     ...comment,
@@ -141,9 +141,9 @@ describe('POST comment GitHub issue', () => {
     vi.mocked(getComment).mockResolvedValueOnce({ ...comment, projectId: null } as never)
     expect((await call()).statusCode).toBe(404)
 
-    vi.mocked(requireProjectMembership).mockImplementationOnce(async (_req, res) => {
+    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_req, res) => {
       res.status(403).json({ error: 'Forbidden' })
-      return false
+      return null
     })
     expect((await call()).statusCode).toBe(403)
 
@@ -198,11 +198,11 @@ describe('POST comment GitHub issue', () => {
 
     vi.mocked(getGithubIssueConnection).mockResolvedValue(connection)
     vi.mocked(findGithubIssueByMarker).mockResolvedValueOnce(issue)
-    vi.mocked(requireProjectMembership)
-      .mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability)
+      .mockResolvedValueOnce({ role: 'member' })
       .mockImplementationOnce(async (_req, response) => {
         response.status(403).json({ error: 'Forbidden' })
-        return false
+        return null
       })
     expect((await call()).statusCode).toBe(403)
     expect(finalizeCommentGithubIssue).not.toHaveBeenCalled()
@@ -269,11 +269,11 @@ describe('POST comment GitHub issue', () => {
     expect((await call()).statusCode).toBe(409)
 
     vi.mocked(getGithubIssueConnection).mockResolvedValue(connection)
-    vi.mocked(requireProjectMembership)
-      .mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability)
+      .mockResolvedValueOnce({ role: 'member' })
       .mockImplementationOnce(async (_req, res) => {
         res.status(403).json({ error: 'Forbidden' })
-        return false
+        return null
       })
     expect((await call()).statusCode).toBe(403)
   })

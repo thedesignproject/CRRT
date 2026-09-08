@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { generateCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import {
   createCommentIssueMarker,
@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const publicComment = await getComment(commentId)
     if (!publicComment?.projectId) return jsonError(req, res, 404, 'Comment not found')
     projectKey = publicComment.projectId
-    if (!(await requireProjectMembership(req, res, user, projectKey))) return
+    if (!(await requireProjectCapability(req, res, user, projectKey, 'integrations:send'))) return
 
     const comment = await getCommentForGithubIssue(projectKey, commentId)
     if (!comment) return jsonError(req, res, 404, 'Comment not found')
@@ -136,7 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         leaseToken = null
         return jsonError(req, res, 409, 'github_repository_connection_changed')
       }
-      if (!(await requireProjectMembership(req, res, user, projectKey))) {
+      if (!(await requireProjectCapability(req, res, user, projectKey, 'integrations:send'))) {
         await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
         leaseToken = null
         return
@@ -169,7 +169,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       leaseToken = null
       return jsonError(req, res, 409, 'github_repository_connection_changed')
     }
-    if (!(await requireProjectMembership(req, res, user, projectKey))) {
+    if (!(await requireProjectCapability(req, res, user, projectKey, 'integrations:send'))) {
       await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
       leaseToken = null
       return

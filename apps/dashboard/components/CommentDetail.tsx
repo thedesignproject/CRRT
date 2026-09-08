@@ -34,6 +34,7 @@ interface CommentDetailProps {
   apiBase: string
   accessToken: string
   personal?: false
+  readOnly?: boolean
   bodyEditor?: ReactNode
   personalActions?: ReactNode
 }
@@ -55,6 +56,7 @@ export function CommentDetail({
   apiBase,
   accessToken,
   personal = false,
+  readOnly = false,
   bodyEditor,
   personalActions,
 }: CommentDetailProps | PersonalDetailProps) {
@@ -80,7 +82,7 @@ export function CommentDetail({
     const request = connectionRequest.current + 1
     connectionRequest.current = request
     setGithubConnected(false)
-    if (!selectedProject || personal) return
+    if (!selectedProject || personal || readOnly) return
     void getProjectGitHubStatus(apiBase, accessToken, selectedProject).then(
       ({ githubConnectionStatus }) => {
         if (connectionRequest.current === request) {
@@ -91,7 +93,7 @@ export function CommentDetail({
         if (connectionRequest.current === request) setGithubConnected(false)
       },
     )
-  }, [accessToken, apiBase, selectedProject, personal])
+  }, [accessToken, apiBase, selectedProject, personal, readOnly])
 
   const handleGithubIssue = async (comment: Comment) => {
     if (githubIssue) {
@@ -240,7 +242,7 @@ export function CommentDetail({
           <div className="shrink-0 border-t border-border bg-card px-6 py-3">
             <div className="flex flex-wrap items-center gap-2 max-w-2xl mx-auto">
               {personalActions}
-              {!personal && <><ActionBtn
+              {!personal && !readOnly && <><ActionBtn
                 active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
                 variant="accept"
                 onClick={() => toggleReview!(selectedComment, 'accepted')}
@@ -276,7 +278,7 @@ export function CommentDetail({
                 </ActionBtn>
               )}
 
-              {!personal && <span
+              {!personal && !readOnly && <span
                 className="relative inline-flex group"
                 tabIndex={!githubIssue && !githubConnected ? 0 : undefined}
                 aria-label={!githubIssue && !githubConnected

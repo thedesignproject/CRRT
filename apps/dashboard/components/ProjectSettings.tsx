@@ -32,7 +32,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [nameBusy, setNameBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
-  const [inviteRole, setInviteRole] = useState<'admin' | 'member'>('member')
+  const [inviteRole, setInviteRole] = useState<'admin' | 'member' | 'guest'>('guest')
   const [inviteBusy, setInviteBusy] = useState(false)
   const [pendingId, setPendingId] = useState<string | null>(null)
   const [domains, setDomains] = useState<string[]>(project.allowedOrigins)
@@ -56,7 +56,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     pendingAction.current = false
     setPendingId(null)
     setActionError(null)
-    setInviteRole('member')
+    setInviteRole('guest')
     setTransferTarget(null)
     transferTriggerRef.current = null
   }, [project.publicKey])
@@ -144,7 +144,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     try {
       await settings.invite(inviteEmail.trim().toLowerCase(), inviteRole)
       setInviteEmail('')
-      setInviteRole('member')
+      setInviteRole('guest')
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Failed to send invite')
     } finally {
@@ -381,6 +381,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                         className="px-2 py-1 rounded-md border border-border bg-background text-[11px] font-semibold text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
                       >
                         <option value="member">member</option>
+                        <option value="guest">guest</option>
                         <option value="admin">admin</option>
                         {isOwner && <option value="owner">owner</option>}
                       </select>
@@ -455,12 +456,13 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
               />
               <select
                 value={inviteRole}
-                onChange={(event) => setInviteRole(event.target.value as 'admin' | 'member')}
+                onChange={(event) => setInviteRole(event.target.value as 'admin' | 'member' | 'guest')}
                 disabled={inviteBusy}
                 aria-label="Invitation role"
                 className="px-3 py-2 rounded-md border border-border bg-background text-xs text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
               >
-                <option value="member">member</option>
+                <option value="guest">guest — feedback only</option>
+                <option value="member">member — review and Agent</option>
                 <option value="admin">admin</option>
               </select>
               <button

@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { assignExtensionCommentToProject, deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const scope = await getOwnedExtensionCommentScope(user.userId, commentId)
     if (!scope) return jsonError(req, res, 404, 'Comment not found')
-    if (scope.projectId && !(await requireProjectMembership(req, res, user, scope.projectId))) return
+    if (scope.projectId && !(await requireProjectCapability(req, res, user, scope.projectId, 'feedback:create'))) return
     if (req.method === 'DELETE') {
       await deleteExtensionComment(user.userId, commentId)
       setCors(req, res, METHODS)
@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return jsonError(req, res, 400, 'projectId must be a non-empty string')
       }
       const projectId = projectCandidate.trim()
-      if (!(await requireProjectMembership(req, res, user, projectId))) return
+      if (!(await requireProjectCapability(req, res, user, projectId, 'feedback:create'))) return
       const result = await assignExtensionCommentToProject(user.userId, commentId, projectId)
       setCors(req, res, METHODS)
       return res.status(200).json(result)

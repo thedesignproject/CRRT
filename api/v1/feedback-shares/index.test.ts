@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/auth.js', () => ({
   requireUser: vi.fn(),
-  requireProjectMembership: vi.fn(),
+  requireProjectCapability: vi.fn(),
 }))
 
 vi.mock('../../_lib/store.js', () => ({
@@ -21,7 +21,7 @@ vi.mock('../../_lib/tokens.js', () => ({
 }))
 
 import handler from './index.js'
-import { requireProjectMembership, requireUser } from '../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
 import {
   addShareItems,
   createFeedbackEvent,
@@ -73,8 +73,8 @@ beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
   vi.mocked(requireUser).mockReset()
   vi.mocked(requireUser).mockResolvedValue({ userId: 'u-test', email: 'test@example.com' })
-  vi.mocked(requireProjectMembership).mockReset()
-  vi.mocked(requireProjectMembership).mockResolvedValue(true)
+  vi.mocked(requireProjectCapability).mockReset()
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(listAcceptedCommentsForPage).mockReset()
   vi.mocked(listAcceptedCommentsByIds).mockReset()
   vi.mocked(createShare).mockReset()
@@ -95,9 +95,9 @@ describe('api/v1/feedback-shares', () => {
   })
 
   it('returns 403 when user is not a project member', async () => {
-    vi.mocked(requireProjectMembership).mockImplementation(async (_req, res) => {
+    vi.mocked(requireProjectCapability).mockImplementation(async (_req, res) => {
       res.status(403).json({ error: 'Forbidden' })
-      return false
+      return null
     })
 
     const res = mockRes()

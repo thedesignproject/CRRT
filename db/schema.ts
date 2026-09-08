@@ -58,7 +58,7 @@ export const projectMembers = pgTable(
     oneOwnerIdx: uniqueIndex('project_members_one_owner_idx')
       .on(t.projectKey)
       .where(sql`${t.isOwner}`),
-    roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member')`),
+    roleCheck: check('project_members_role_check', sql`${t.role} in ('admin', 'member', 'guest')`),
     ownerRoleCheck: check('project_members_owner_role_check', sql`not ${t.isOwner} or ${t.role} = 'admin'`),
   }),
 )
@@ -114,7 +114,7 @@ export const projectInvites = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.projectKey, t.email] }),
     emailIdx: index('project_invites_email_idx').on(t.email),
-    roleCheck: check('project_invites_role_check', sql`${t.role} in ('admin', 'member')`),
+    roleCheck: check('project_invites_role_check', sql`${t.role} in ('admin', 'member', 'guest')`),
     emailLowerCheck: check('project_invites_email_lower_check', sql`${t.email} = lower(${t.email})`),
   }),
 )
