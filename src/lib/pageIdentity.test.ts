@@ -13,6 +13,7 @@ describe('page identity', () => {
 
   it('keeps product query parameters and safely handles malformed legacy values', () => {
     expect(samePage('https://example.com/search?q=carrot', 'https://example.com/search?q=potato')).toBe(false)
+    expect(normalizePageIdentity('https://example.com////')).toBe('https://example.com/')
     expect(normalizePageIdentity('legacy#anchor')).toBe('legacy')
   })
 })

@@ -185,12 +185,16 @@ it('uses a safe author fallback for extension comments without an author name', 
 it('shows current-page pins and project-wide feedback without making other authors editable', async () => {
   const project = { publicKey: 'project', name: 'Storefront', role: 'guest' as const, capabilities: ['feedback:read', 'feedback:create'] }
   resolveProjectForPage.mockResolvedValue(project)
+  const open = vi.spyOn(window, 'open').mockReturnValue(null)
   vi.mocked(listProjectComments).mockResolvedValue({
     items: [
       { ...comment, projectId: 'project', pageUrl: `${location.origin}${location.pathname}?utm_source=test`, editable: true },
-      { ...comment, id: 'other', projectId: 'project', pageUrl: 'https://site.test/checkout', body: 'Checkout feedback', editable: false },
+      { ...comment, id: 'other', projectId: 'project', pageUrl: 'https://site.test/checkout', body: 'Checkout feedback', authorName: null, editable: false },
+      { ...comment, id: 'root', projectId: 'project', pageUrl: 'https://else.test/', body: 'Homepage feedback', editable: false },
+      { ...comment, id: 'about', projectId: 'project', pageUrl: 'about:', body: 'Protocol feedback', editable: false },
+      { ...comment, id: 'legacy', projectId: 'project', pageUrl: 'legacy-url', body: 'Legacy feedback', editable: false },
     ],
-    total: 2,
+    total: 5,
   })
   const page: WidgetPage = {
     url: `${location.origin}${location.pathname}`,
@@ -204,8 +208,39 @@ it('shows current-page pins and project-wide feedback without making other autho
   expect(view.ui.queryByText('Checkout feedback')).toBeNull()
   fireEvent.click(view.ui.getByRole('button', { name: /All feedback/ }))
   expect(await view.ui.findByText('Checkout feedback')).toBeInTheDocument()
+  expect(view.ui.getByText('Homepage feedback')).toBeInTheDocument()
+  expect(view.ui.getByText('Protocol feedback')).toBeInTheDocument()
+  expect(view.ui.getByText('Legacy feedback')).toBeInTheDocument()
+  expect(view.ui.getByText('You')).toBeInTheDocument()
+  expect(view.ui.getAllByText('/')).toHaveLength(2)
+  expect(view.ui.getByText('legacy-url')).toBeInTheDocument()
+  fireEvent.click(view.ui.getByText('Checkout feedback'))
+  expect(open).toHaveBeenCalledWith('https://site.test/checkout', '_blank', 'noopener,noreferrer')
   expect(view.container.querySelectorAll('[data-fw-pin]')).toHaveLength(1)
   expect(view.ui.getAllByRole('button', { name: 'More' })).toHaveLength(1)
+})
+
+it('refreshes an open personal sidebar and ignores offline or late interval results', async () => {
+  vi.useFakeTimers()
+  const list = vi.fn().mockResolvedValue([comment])
+  const adapter = { ...personalComments, list }
+  const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
+  await act(async () => {})
+  fireEvent.keyDown(window, { key: 'f' })
+
+  list.mockResolvedValueOnce([{ ...comment, body: 'Fresh interval feedback' }])
+  await act(async () => { vi.advanceTimersByTime(15_000) })
+  expect(view.getByText('Fresh interval feedback')).toBeInTheDocument()
+
+  list.mockRejectedValueOnce(new Error('offline'))
+  await act(async () => { vi.advanceTimersByTime(15_000) })
+  expect(view.getByText('Fresh interval feedback')).toBeInTheDocument()
+
+  let resolve!: (comments: ExtensionComment[]) => void
+  list.mockReturnValueOnce(new Promise((done) => { resolve = done }))
+  await act(async () => { vi.advanceTimersByTime(15_000) })
+  view.unmount()
+  await act(async () => { resolve([{ ...comment, body: 'Late interval feedback' }]) })
 })
 
 it('focuses an existing npm widget for the same project instead of rendering a duplicate', async () => {
