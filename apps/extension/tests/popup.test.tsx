@@ -58,6 +58,10 @@ describe('extension popup', () => {
     let view = render(<Popup />)
     await screen.findByRole('alert'); expect(screen.getByText('load failed')).toBeInTheDocument(); view.unmount()
 
+    sendMessage.mockRejectedValueOnce('load failed')
+    view = render(<Popup />)
+    await screen.findByRole('alert'); expect(screen.getByText('Could not load CRRT')).toBeInTheDocument(); view.unmount()
+
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
     view = render(<Popup />); await screen.findByText('Sign in to CRRT')
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'u@example.com' } })

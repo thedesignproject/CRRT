@@ -120,6 +120,13 @@ it('keeps the default personal sidebar label for adapters without a custom label
   expect(view.getByText('My extension comments')).toBeInTheDocument()
 })
 
+it('uses a safe author fallback for extension comments without an author name', async () => {
+  vi.mocked(listPageComments).mockResolvedValue({ items: [{ ...comment, authorName: null }], total: 1 })
+  await expect(personalComments.list(location.href.split('#')[0])).resolves.toEqual([
+    expect.objectContaining({ authorName: 'You', projectId: '' }),
+  ])
+})
+
 it('preserves a draft and screenshot when tokens refresh for the same account', async () => {
   const view = setup()
   await act(async () => {})
