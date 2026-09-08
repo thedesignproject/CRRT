@@ -97,15 +97,70 @@ it('mounts the actual idle widget, highlights selection, and sends through the p
 
 it('uses the selected project for authenticated extension comments', async () => {
   vi.mocked(listPageComments).mockResolvedValue({ items: [{ ...comment, projectId: 'project' }], total: 1 })
-  const adapter = extensionComments({ publicKey: 'project', name: 'Storefront' })
+  const changeAudience = vi.fn()
+  const adapter = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['feedback:manage'],
+  }, 'internal', changeAudience)
   expect(adapter.label).toBe('Storefront')
+  expect(adapter.audience).toEqual({ value: 'internal', canChoose: true, onChange: changeAudience })
+  expect(personalComments.audience).toBeUndefined()
+  expect(extensionComments({ publicKey: 'legacy', name: 'Legacy member', role: 'member' }).audience)
+    .toMatchObject({ canChoose: true })
+  expect(extensionComments({ publicKey: 'legacy', name: 'Legacy guest', role: 'guest' }).audience)
+    .toMatchObject({ canChoose: false })
+  expect(extensionComments({ publicKey: 'legacy', name: 'Legacy project' }).audience)
+    .toMatchObject({ canChoose: false })
   await expect(adapter.list(location.href.split('#')[0])).resolves.toHaveLength(1)
   expect(listPageComments).toHaveBeenCalledWith(location.href.split('#')[0], 1, 'project')
   await adapter.create({
     projectId: 'project', pageUrl: location.href.split('#')[0], selector: '#target', x: 1, y: 2,
     body: 'Project feedback', targetType: 'element_point', anchor: null,
   })
-  expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'project', body: 'Project feedback' }))
+  expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({
+    projectId: 'project', body: 'Project feedback', visibility: 'internal',
+  }))
+
+  const guest = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+  }, 'internal', changeAudience)
+  expect(guest.audience).toMatchObject({ value: 'shared', canChoose: false })
+  await guest.create({
+    pageUrl: location.href, selector: '#target', x: 1, y: 2, body: 'Guest feedback',
+  })
+  expect(createPageComment).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: 'shared' }))
+})
+
+it('renders selectable member and locked guest audiences in the composer', async () => {
+  const changeAudience = vi.fn()
+  const member = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['feedback:manage'],
+  }, 'internal', changeAudience)
+  let view = render(<FeedbackWidget projectId="project" personalComments={member} viewerEmail="user@example.com" />)
+  await waitFor(() => expect(listPageComments).toHaveBeenCalled())
+  fireEvent.keyDown(window, { key: 'c' })
+  fireEvent.mouseMove(target)
+  fireEvent.click(target, { clientX: 30, clientY: 40 })
+  const memberComposer = await view.findByPlaceholderText('Leave your comment…')
+  const audience = view.getByRole('combobox', { name: 'Feedback audience' })
+  expect(audience).toHaveValue('internal')
+  fireEvent.change(audience, { target: { value: 'shared' } })
+  expect(changeAudience).toHaveBeenCalledWith('shared')
+  fireEvent.change(memberComposer, { target: { value: 'Internal note' } })
+  fireEvent.click(view.getByRole('button', { name: 'Send' }))
+  await waitFor(() => expect(createPageComment).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'internal' })))
+  view.unmount()
+
+  const guest = extensionComments({
+    publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+  })
+  view = render(<FeedbackWidget projectId="project" personalComments={guest} viewerEmail="guest@example.com" />)
+  await waitFor(() => expect(listPageComments).toHaveBeenCalled())
+  fireEvent.keyDown(window, { key: 'c' })
+  fireEvent.mouseMove(target)
+  fireEvent.click(target, { clientX: 30, clientY: 40 })
+  await view.findByPlaceholderText('Leave your comment…')
+  expect(view.queryByRole('combobox', { name: 'Feedback audience' })).toBeNull()
+  expect(view.getByText('Shared')).toBeInTheDocument()
 })
 
 it('keeps the default personal sidebar label for adapters without a custom label', async () => {

@@ -114,6 +114,18 @@ export function useNotifications(
           setNotifications((prev) => sortNotifications([next, ...prev.filter((p) => p.id !== next.id)]))
         },
       )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const deleted = payload.old as Partial<NotificationRow>
+          if (typeof deleted.id === 'string') {
+            setNotifications((prev) => prev.filter((notification) => notification.id !== deleted.id))
+          } else {
+            void refresh()
+          }
+        },
+      )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [userId, refresh])

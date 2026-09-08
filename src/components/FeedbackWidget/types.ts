@@ -33,6 +33,12 @@ export interface WidgetPage {
 export interface PersonalComments {
   /** Sidebar label for this authenticated extension context. */
   label?: string
+  /** Visible project audience. Guests receive a locked shared audience. */
+  audience?: {
+    value: 'shared' | 'internal'
+    canChoose: boolean
+    onChange?: (visibility: 'shared' | 'internal') => void
+  }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>
   list(pageUrl: string): Promise<Comment[]>
@@ -63,6 +69,7 @@ export interface Comment {
   selector: string
   body: string
   reviewStatus: ReviewStatus
+  visibility?: 'shared' | 'internal'
   imageUrl?: string | null
   createdAt: string
   authorName?: string

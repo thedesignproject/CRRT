@@ -125,6 +125,11 @@ describe('extension comment persistence', () => {
     })
     expect(fake.queries[0]?.calls).toContainEqual(['eq', 'project_id', 'project'])
     expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'created_by_user_id', 'u1'])
+
+    const guestFake = client([{ data: [{ ...row, project_id: 'project', visibility: 'shared' }], error: null, count: 1 }])
+    vi.mocked(getServiceSupabase).mockReturnValue(guestFake.value as never)
+    await listExtensionComments('guest', { projectId: 'project' }, 'shared')
+    expect(guestFake.queries[0]?.calls).toContainEqual(['eq', 'visibility', 'shared'])
   })
 
   it('surfaces list and signed-URL failures', async () => {
@@ -176,14 +181,14 @@ describe('extension comment persistence', () => {
   })
 
   it('creates an authenticated project comment in the same comments collection', async () => {
-    const fake = client([{ data: { ...row, project_id: 'project' }, error: null }])
+    const fake = client([{ data: { ...row, project_id: 'project', visibility: 'internal' }, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     const result = await createExtensionComment('u1', {
       pageUrl: row.url, body: 'Project feedback', selector: '#target', x: 1, y: 2,
-    }, 'project', 'u@example.com')
-    expect(result).toMatchObject({ projectId: 'project', authorName: 'u@example.com' })
+    }, 'project', 'u@example.com', 'internal')
+    expect(result).toMatchObject({ projectId: 'project', authorName: 'u@example.com', visibility: 'internal' })
     expect(fake.queries[0]?.calls).toContainEqual(['insert', expect.objectContaining({
-      project_id: 'project', created_by_user_id: 'u1', author_name: 'u@example.com',
+      project_id: 'project', created_by_user_id: 'u1', author_name: 'u@example.com', visibility: 'internal',
     })])
   })
 
@@ -252,17 +257,21 @@ describe('extension comment persistence', () => {
   it('resolves the project scope only for an owned extension comment', async () => {
     let fake = client([{ data: { project_id: 'project' }, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await expect(getOwnedExtensionCommentScope('u', 'c1')).resolves.toEqual({ projectId: 'project' })
+    await expect(getOwnedExtensionCommentScope('u', 'c1')).resolves.toEqual({ projectId: 'project', visibility: 'shared' })
     expect(fake.queries[0]?.calls).toEqual(expect.arrayContaining([
-      ['select', 'project_id'],
+      ['select', 'project_id,visibility'],
       ['eq', 'id', 'c1'],
       ['eq', 'source', 'extension'],
       ['eq', 'created_by_user_id', 'u'],
     ]))
 
+    fake = client([{ data: { project_id: 'project', visibility: 'internal' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(getOwnedExtensionCommentScope('u', 'c1')).resolves.toEqual({ projectId: 'project', visibility: 'internal' })
+
     fake = client([{ data: { project_id: null }, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await expect(getOwnedExtensionCommentScope('u', 'private')).resolves.toEqual({ projectId: null })
+    await expect(getOwnedExtensionCommentScope('u', 'private')).resolves.toEqual({ projectId: null, visibility: 'shared' })
 
     fake = client([{ data: null, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)

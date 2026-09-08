@@ -22,6 +22,7 @@ export function mapServerComment(record: CommentRecord): Comment {
     x: record.x,
     y: record.y,
     body: record.body,
+    visibility: record.visibility ?? 'shared',
     reviewStatus: record.reviewStatus,
     implementationStatus: record.implementationStatus,
     claimedByAgentId: record.claimedByAgentId,

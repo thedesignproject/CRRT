@@ -85,6 +85,33 @@ beforeEach(() => {
   vi.mocked(getProjectGitHubStatus).mockResolvedValue({ githubConnectionStatus: 'connected' })
 })
 
+describe('<CommentDetail /> feedback audience', () => {
+  it('lets internal members change visibility and presents guests as shared-only', () => {
+    const onVisibilityChange = vi.fn()
+    const view = render(
+      <CommentDetail
+        {...props}
+        selectedComment={{ ...comment, visibility: 'internal' }}
+        onVisibilityChange={onVisibilityChange}
+      />,
+    )
+    const audience = screen.getByRole('combobox', { name: 'Feedback audience' })
+    expect(audience).toHaveValue('internal')
+    fireEvent.change(audience, { target: { value: 'shared' } })
+    expect(onVisibilityChange).toHaveBeenCalledWith('comment-1', 'shared')
+
+    view.rerender(
+      <CommentDetail
+        {...props}
+        selectedComment={{ ...comment, visibility: 'shared' }}
+        readOnly
+      />,
+    )
+    expect(screen.queryByRole('combobox', { name: 'Feedback audience' })).toBeNull()
+    expect(screen.getByText('Shared with project')).toBeInTheDocument()
+  })
+})
+
 describe('<CommentDetail /> GitHub issue action', () => {
   it('creates an issue for accepted feedback and updates local state', async () => {
     let resolveIssue!: (value: typeof issue & { created: boolean }) => void

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canProject, effectiveProjectRole, projectCapabilities } from './project-capabilities.js'
+import { canProject, effectiveProjectRole, feedbackVisibilityForRole, projectCapabilities } from './project-capabilities.js'
 
 describe('project capabilities', () => {
   it('keeps guests in feedback contribution and internal roles in execution', () => {
@@ -10,5 +10,7 @@ describe('project capabilities', () => {
     expect(canProject('member', 'project:manage')).toBe(false)
     expect(canProject('admin', 'project:manage')).toBe(true)
     expect(effectiveProjectRole('admin', true)).toBe('owner')
+    expect(feedbackVisibilityForRole('guest', 'internal')).toBe('shared')
+    expect(feedbackVisibilityForRole('member', 'internal')).toBe('internal')
   })
 })

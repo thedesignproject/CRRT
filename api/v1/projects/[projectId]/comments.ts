@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { listProjectComments } from '../../../_lib/store.js'
 import type { ImplementationStatus, ReviewStatus } from '../../../_lib/status.js'
@@ -16,7 +16,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const projectId = getStringQuery(req.query.projectId)
     if (!projectId) return jsonError(req, res, 400, 'Missing projectId')
-    if (!(await requireProjectMembership(req, res, user, projectId))) return
+    const access = await requireProjectCapability(req, res, user, projectId, 'feedback:read')
+    if (!access) return
 
     const pageUrl = getStringQuery(req.query.pageUrl)
     const reviewStatus = getStringQuery(req.query.reviewStatus)
@@ -34,6 +35,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       pageUrl,
       reviewStatus: reviewStatus as ReviewStatus | undefined,
       implementationStatus: implementationStatus as ImplementationStatus | undefined,
+      visibility: access.role === 'guest' ? 'shared' : undefined,
+      includeExternalWork: access.role !== 'guest',
     })
 
     setCors(req, res, ['GET', 'OPTIONS'])

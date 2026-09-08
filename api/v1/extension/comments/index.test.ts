@@ -30,7 +30,7 @@ describe('extension comments collection endpoint', () => {
     vi.mocked(listExtensionComments).mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 })
     let response = res(); await call({ method: 'GET', query: {}, headers: {} }, response); expect(response.statusCode).toBe(200)
     vi.mocked(createExtensionComment).mockResolvedValue({ id: 'c' } as never)
-    response = res(); await call({ method: 'POST', body: undefined, headers: {} }, response); expect(response.statusCode).toBe(201); expect(createExtensionComment).toHaveBeenCalledWith('u', {}, null, 'u@example.com')
+    response = res(); await call({ method: 'POST', body: undefined, headers: {} }, response); expect(response.statusCode).toBe(201); expect(createExtensionComment).toHaveBeenCalledWith('u', {}, null, 'u@example.com', 'shared')
   })
   it('requires project membership before listing or creating project feedback', async () => {
     const user = { userId: 'u', email: 'u@example.com' }
@@ -41,11 +41,30 @@ describe('extension comments collection endpoint', () => {
     let response = res()
     await call({ method: 'GET', query: { projectId: 'project' }, headers: {} }, response)
     expect(requireProjectCapability).toHaveBeenCalledWith(expect.anything(), response, user, 'project', 'feedback:read')
-    expect(listExtensionComments).toHaveBeenCalledWith('u', expect.objectContaining({ projectId: 'project' }))
+    expect(listExtensionComments).toHaveBeenCalledWith('u', expect.objectContaining({ projectId: 'project' }), undefined)
 
     response = res()
     await call({ method: 'POST', body: { projectId: 'project' }, headers: {} }, response)
-    expect(createExtensionComment).toHaveBeenCalledWith('u', { projectId: 'project' }, 'project', 'u@example.com')
+    expect(createExtensionComment).toHaveBeenCalledWith('u', { projectId: 'project' }, 'project', 'u@example.com', 'shared')
+
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
+    response = res()
+    await call({ method: 'POST', body: { projectId: 'project', visibility: 'internal' }, headers: {} }, response)
+    expect(createExtensionComment).toHaveBeenLastCalledWith(
+      'u', { projectId: 'project', visibility: 'internal' }, 'project', 'u@example.com', 'internal',
+    )
+
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'guest' })
+    response = res()
+    await call({ method: 'POST', body: { projectId: 'project', visibility: 'internal' }, headers: {} }, response)
+    expect(createExtensionComment).toHaveBeenLastCalledWith(
+      'u', { projectId: 'project', visibility: 'internal' }, 'project', 'u@example.com', 'shared',
+    )
+
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'guest' })
+    response = res()
+    await call({ method: 'GET', query: { projectId: 'project' }, headers: {} }, response)
+    expect(listExtensionComments).toHaveBeenLastCalledWith('u', expect.objectContaining({ projectId: 'project' }), 'shared')
 
     vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
     response = res()
@@ -54,6 +73,10 @@ describe('extension comments collection endpoint', () => {
 
     response = res()
     await call({ method: 'POST', body: { projectId: 42 }, headers: {} }, response)
+    expect(response.statusCode).toBe(400)
+
+    response = res()
+    await call({ method: 'POST', body: { projectId: 'project', visibility: 'secret' }, headers: {} }, response)
     expect(response.statusCode).toBe(400)
   })
   it('returns expected and unexpected failures', async () => {

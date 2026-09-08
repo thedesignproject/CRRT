@@ -9,9 +9,22 @@ function widgetComment(comment: ExtensionComment): Comment {
   return { ...comment, projectId: comment.projectId ?? '', reviewStatus: 'open', imageUrl: comment.screenshotUrl, authorName: comment.authorName ?? 'You' }
 }
 
-export function extensionComments(project: ExtensionProjectSelection | null = null): PersonalComments {
+export function extensionComments(
+  project: ExtensionProjectSelection | null = null,
+  visibility: 'shared' | 'internal' = 'shared',
+  onVisibilityChange?: (visibility: 'shared' | 'internal') => void,
+): PersonalComments {
+  const canChooseVisibility = project
+    ? project.capabilities?.includes('feedback:manage')
+      ?? (project.role !== undefined && project.role !== 'guest')
+    : false
   return {
     label: project?.name ?? 'My extension comments',
+    audience: project ? {
+      value: canChooseVisibility ? visibility : 'shared',
+      canChoose: canChooseVisibility,
+      onChange: onVisibilityChange,
+    } : undefined,
     async beforeOpen() {
       if (await extensionSession()) return true
       const response = await browser.runtime.sendMessage({ type: 'auth:open-popup' })
@@ -35,6 +48,7 @@ export function extensionComments(project: ExtensionProjectSelection | null = nu
     async create(payload) {
       return widgetComment(await createPageComment({
         ...(project ? { projectId: project.publicKey } : {}),
+        ...(project ? { visibility: canChooseVisibility ? visibility : 'shared' } : {}),
         pageUrl: payload.pageUrl as string, selector: payload.selector as string,
         x: payload.x as number, y: payload.y as number, body: payload.body as string,
         targetType: payload.targetType as Comment['targetType'], anchor: payload.anchor as Comment['anchor'],
@@ -51,6 +65,7 @@ export const personalComments = extensionComments()
 export function ExtensionWidget({ activate, page }: { activate: boolean; page?: WidgetPage }) {
   const [identity, setIdentity] = useState<string | null | undefined>(undefined)
   const [project, setProject] = useState<ExtensionProjectSelection | null>(null)
+  const [visibility, setVisibility] = useState<'shared' | 'internal'>('shared')
   useEffect(() => {
     let version = 0, alive = true
     const refresh = async () => {
@@ -63,6 +78,7 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
         if (alive && current === version) {
           setIdentity(session?.email ?? null)
           setProject(activeProject)
+          setVisibility('shared')
         }
       } catch { if (alive && current === version) setIdentity((previous) => previous === undefined ? null : previous) }
     }
@@ -70,7 +86,10 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
     void refresh()
     return () => { alive = false; browser.storage.onChanged.removeListener(refresh) }
   }, [page?.url])
-  const comments = useMemo(() => extensionComments(project), [project?.publicKey, project?.name])
+  const comments = useMemo(
+    () => extensionComments(project, visibility, setVisibility),
+    [project, visibility],
+  )
   useEffect(() => {
     if (identity !== undefined && activate) window.dispatchEvent(new CustomEvent('crrt:activate'))
   }, [identity, activate])

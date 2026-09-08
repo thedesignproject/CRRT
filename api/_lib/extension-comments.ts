@@ -4,7 +4,7 @@ import { parseCommentTarget } from './anchor.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
 
 const BUCKET = 'extension-feedback-images'
-const SELECT = 'id,project_id,url,page_hostname,x,y,element,comment,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
+const SELECT = 'id,project_id,url,page_hostname,x,y,element,comment,visibility,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
 const MAX_BODY = 8_000
 const MAX_SELECTOR = 1_000
 const MAX_URL = 2_048
@@ -26,6 +26,7 @@ type CommentRow = {
   y: number
   element: string
   comment: string
+  visibility?: 'shared' | 'internal' | null
   screenshot_storage_path: string | null
   author_name: string | null
   created_at: string
@@ -43,6 +44,7 @@ export type ExtensionComment = {
   y: number
   selector: string
   body: string
+  visibility?: 'shared' | 'internal'
   screenshotUrl: string | null
   authorName: string | null
   createdAt: string
@@ -121,6 +123,7 @@ async function serialize(client: SupabaseClient, row: CommentRow): Promise<Exten
     y: row.y,
     selector: row.element,
     body: row.comment,
+    visibility: row.visibility ?? 'shared',
     screenshotUrl,
     authorName: row.author_name,
     createdAt: row.created_at,
@@ -133,6 +136,7 @@ async function serialize(client: SupabaseClient, row: CommentRow): Promise<Exten
 export async function listExtensionComments(
   userId: string,
   input: { page?: unknown; limit?: unknown; pageUrl?: unknown; projectId?: string | null },
+  visibility?: 'shared' | 'internal',
 ) {
   const client = getServiceSupabase()
   const { page, limit } = parseExtensionPagination(input)
@@ -141,6 +145,7 @@ export async function listExtensionComments(
   query = input.projectId
     ? query.eq('project_id', input.projectId)
     : query.eq('created_by_user_id', userId).is('project_id', null)
+  if (visibility) query = query.eq('visibility', visibility)
   query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1)
   if (input.pageUrl !== undefined) query = query.eq('url', normalizeExtensionPageUrl(input.pageUrl).pageUrl)
   const { data, error, count } = await query
@@ -153,6 +158,7 @@ export async function createExtensionComment(
   input: Record<string, unknown>,
   projectId: string | null = null,
   authorName: string | null = null,
+  visibility: 'shared' | 'internal' = 'shared',
 ) {
   const client = getServiceSupabase()
   const { pageUrl, pageHostname } = normalizeExtensionPageUrl(input.pageUrl)
@@ -172,7 +178,7 @@ export async function createExtensionComment(
   }
 
   const { data, error } = await client.from('comments').insert({
-    source: 'extension', created_by_user_id: userId, project_id: projectId,
+    source: 'extension', created_by_user_id: userId, project_id: projectId, visibility,
     url: pageUrl, page_hostname: pageHostname, x, y, element: selector,
     comment: body, created_by: 'extension', author_name: authorName,
     screenshot_storage_path: screenshotStoragePath,
@@ -207,19 +213,27 @@ export async function updateExtensionComment(userId: string, commentId: string, 
 export async function getOwnedExtensionCommentScope(userId: string, commentId: string) {
   const client = getServiceSupabase()
   const { data, error } = await client.from('comments')
-    .select('project_id')
+    .select('project_id,visibility')
     .eq('id', commentId)
     .eq('source', 'extension')
     .eq('created_by_user_id', userId)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  return data ? { projectId: data.project_id as string | null } : null
+  return data ? {
+    projectId: data.project_id as string | null,
+    visibility: (data.visibility ?? 'shared') as 'shared' | 'internal',
+  } : null
 }
 
-export async function assignExtensionCommentToProject(userId: string, commentId: string, projectId: string) {
+export async function assignExtensionCommentToProject(
+  userId: string,
+  commentId: string,
+  projectId: string,
+  visibility: 'shared' | 'internal' = 'shared',
+) {
   const client = getServiceSupabase()
   const { data, error } = await client.from('comments')
-    .update({ project_id: projectId, updated_at: new Date().toISOString() })
+    .update({ project_id: projectId, visibility, updated_at: new Date().toISOString() })
     .eq('id', commentId)
     .eq('source', 'extension')
     .eq('created_by_user_id', userId)

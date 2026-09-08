@@ -36,6 +36,7 @@ export interface CommentRecord {
   x: number | null
   y: number | null
   body: string
+  visibility?: 'shared' | 'internal'
   reviewStatus: 'open' | 'accepted' | 'rejected'
   implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
   claimedByAgentId: string | null
@@ -582,6 +583,19 @@ export function listComments(apiBase: string, accessToken: string, projectId: st
     headers: {
       ...authHeaders(accessToken),
     },
+  })
+}
+
+export function updateCommentVisibility(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  visibility: 'shared' | 'internal',
+) {
+  return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/visibility`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ visibility }),
   })
 }
 

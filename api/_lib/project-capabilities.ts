@@ -1,5 +1,6 @@
 export type StoredProjectRole = 'admin' | 'member' | 'guest'
 export type ProjectRole = 'owner' | StoredProjectRole
+export type FeedbackVisibility = 'shared' | 'internal'
 
 export type ProjectCapability =
   | 'feedback:read'
@@ -26,4 +27,11 @@ export function projectCapabilities(role: ProjectRole): ProjectCapability[] {
 
 export function canProject(role: ProjectRole, capability: ProjectCapability) {
   return CAPABILITIES[role].includes(capability)
+}
+
+export function feedbackVisibilityForRole(
+  role: ProjectRole,
+  requested: FeedbackVisibility = 'shared',
+): FeedbackVisibility {
+  return role === 'guest' ? 'shared' : requested
 }

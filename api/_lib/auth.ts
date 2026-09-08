@@ -42,6 +42,33 @@ export async function requireProjectCapability(
   return null
 }
 
+export async function requireProjectCommentCapability(
+  req: VercelRequest,
+  res: VercelResponse,
+  user: AuthenticatedUser,
+  comment: { projectId: string; visibility?: 'shared' | 'internal' },
+  capability: ProjectCapability,
+): Promise<{ role: ProjectRole } | null> {
+  try {
+    const membership = await getProjectMember(user.userId, comment.projectId)
+    if (!membership) {
+      jsonError(req, res, 403, 'Forbidden')
+      return null
+    }
+    const role = effectiveProjectRole(membership.role, membership.isOwner)
+    if (role === 'guest' && comment.visibility === 'internal') {
+      jsonError(req, res, 404, 'Comment not found')
+      return null
+    }
+    if (canProject(role, capability)) return { role }
+  } catch {
+    jsonError(req, res, 500, 'Membership check failed')
+    return null
+  }
+  jsonError(req, res, 403, 'Forbidden')
+  return null
+}
+
 export function requireReviewer(req: VercelRequest, res: VercelResponse) {
   const configured = process.env.REVIEWER_API_TOKEN
   if (!configured) {

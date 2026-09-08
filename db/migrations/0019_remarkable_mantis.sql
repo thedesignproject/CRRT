@@ -1,0 +1,2 @@
+ALTER TABLE "comments" ADD COLUMN "visibility" text DEFAULT 'shared' NOT NULL;--> statement-breakpoint
+ALTER TABLE "comments" ADD CONSTRAINT "comments_visibility_check" CHECK ("comments"."visibility" in ('shared', 'internal'));

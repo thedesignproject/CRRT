@@ -31,6 +31,7 @@ interface CommentDetailProps {
   goNext: () => void
   toggleReview: (c: Comment, target: 'accepted' | 'rejected') => void
   handleToggleDone: (id: string) => void
+  onVisibilityChange?: (id: string, visibility: 'shared' | 'internal') => void
   apiBase: string
   accessToken: string
   personal?: false
@@ -53,6 +54,7 @@ export function CommentDetail({
   goNext,
   toggleReview,
   handleToggleDone,
+  onVisibilityChange,
   apiBase,
   accessToken,
   personal = false,
@@ -242,6 +244,26 @@ export function CommentDetail({
           <div className="shrink-0 border-t border-border bg-card px-6 py-3">
             <div className="flex flex-wrap items-center gap-2 max-w-2xl mx-auto">
               {personalActions}
+              {!personal && (
+                readOnly ? (
+                  <span className="inline-flex h-8 items-center rounded-full border border-border px-3 text-[11px] font-semibold text-muted-foreground">
+                    Shared with project
+                  </span>
+                ) : (
+                  <label className="inline-flex h-8 items-center gap-2 rounded-full border border-border px-3 text-[11px] font-semibold text-muted-foreground">
+                    Audience
+                    <select
+                      aria-label="Feedback audience"
+                      value={selectedComment.visibility ?? 'shared'}
+                      onChange={(event) => onVisibilityChange?.(selectedComment.id, event.target.value as 'shared' | 'internal')}
+                      className="bg-transparent text-foreground outline-none"
+                    >
+                      <option value="shared">Shared</option>
+                      <option value="internal">Internal</option>
+                    </select>
+                  </label>
+                )
+              )}
               {!personal && !readOnly && <><ActionBtn
                 active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
                 variant="accept"

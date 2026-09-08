@@ -5,7 +5,7 @@ vi.mock('./store.js', () => ({ getProjectMember: vi.fn() }))
 
 import { getServiceSupabase, getSupabase } from './supabase.js'
 import { getProjectMember } from './store.js'
-import { isSuperAdmin, requireProjectCapability, requireProjectMembership, requireReviewer, requireSuperAdmin, requireUser } from './auth.js'
+import { isSuperAdmin, requireProjectCapability, requireProjectCommentCapability, requireProjectMembership, requireReviewer, requireSuperAdmin, requireUser } from './auth.js'
 
 // Stub getServiceSupabase().from('super_admins').select(...).eq(...).maybeSingle()
 function mockSuperAdminLookup(result: { data: unknown; error: unknown }) {
@@ -239,5 +239,42 @@ describe('requireProjectMembership', () => {
     const res = mockRes()
     expect(await requireProjectCapability(mockReq(), res as never, USER, 'p', 'agent:operate')).toBeNull()
     expect(res.statusCode).toBe(403)
+  })
+
+  it('conceals internal comment existence from guests', async () => {
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'guest', isOwner: false })
+    const res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'internal' }, 'feedback:manage',
+    )).toBeNull()
+    expect(res.statusCode).toBe(404)
+
+    vi.mocked(getProjectMember).mockResolvedValue({ role: 'member', isOwner: false })
+    expect(await requireProjectCommentCapability(
+      mockReq(), mockRes() as never, USER, { projectId: 'p', visibility: 'internal' }, 'feedback:manage',
+    )).toEqual({ role: 'member' })
+  })
+
+  it('fails closed when comment membership is missing, insufficient, or unavailable', async () => {
+    vi.mocked(getProjectMember).mockResolvedValueOnce(null)
+    let res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'shared' }, 'feedback:create',
+    )).toBeNull()
+    expect(res.statusCode).toBe(403)
+
+    vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'guest', isOwner: false })
+    res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'shared' }, 'feedback:manage',
+    )).toBeNull()
+    expect(res.statusCode).toBe(403)
+
+    vi.mocked(getProjectMember).mockRejectedValueOnce(new Error('db down'))
+    res = mockRes()
+    expect(await requireProjectCommentCapability(
+      mockReq(), res as never, USER, { projectId: 'p', visibility: 'shared' }, 'feedback:create',
+    )).toBeNull()
+    expect(res.statusCode).toBe(500)
   })
 })
