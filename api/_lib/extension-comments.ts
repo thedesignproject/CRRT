@@ -160,9 +160,15 @@ export async function listExtensionComments(
   const client = getServiceSupabase()
   const { page, limit } = parseExtensionPagination(input)
   let query = client.from('comments').select(SELECT, { count: 'exact' })
-  query = input.projectId
-    ? query.eq('project_id', input.projectId)
-    : query.eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+  if (input.projectId) {
+    query = query.eq('project_id', input.projectId)
+      .not('url', 'is', null)
+      .not('element', 'is', null)
+      .not('x', 'is', null)
+      .not('y', 'is', null)
+  } else {
+    query = query.eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+  }
   if (visibility) query = query.eq('visibility', visibility)
   query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1)
   if (input.pageUrl !== undefined) query = query.eq('url', normalizeExtensionPageUrl(input.pageUrl).pageUrl)

@@ -30,6 +30,7 @@ class Query {
   select(...args: unknown[]) { this.calls.push(['select', ...args]); return this }
   eq(...args: unknown[]) { this.calls.push(['eq', ...args]); return this }
   is(...args: unknown[]) { this.calls.push(['is', ...args]); return this }
+  not(...args: unknown[]) { this.calls.push(['not', ...args]); return this }
   gte(...args: unknown[]) { this.calls.push(['gte', ...args]); return this }
   order(...args: unknown[]) { this.calls.push(['order', ...args]); return this }
   range(...args: unknown[]) { this.calls.push(['range', ...args]); return this }
@@ -131,6 +132,9 @@ describe('extension comment persistence', () => {
       ],
     })
     expect(fake.queries[0]?.calls).toContainEqual(['eq', 'project_id', 'project'])
+    for (const column of ['url', 'element', 'x', 'y']) {
+      expect(fake.queries[0]?.calls).toContainEqual(['not', column, 'is', null])
+    }
     expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'created_by_user_id', 'u1'])
     expect(fake.queries[0]?.calls).not.toContainEqual(['eq', 'source', 'extension'])
 
