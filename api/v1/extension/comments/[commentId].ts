@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../_lib/auth.js'
-import { deleteExtensionComment, ExtensionCommentError, updateExtensionComment } from '../../../_lib/extension-comments.js'
+import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
@@ -13,6 +13,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const commentId = getStringQuery(req.query.commentId)
   if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
   try {
+    const scope = await getOwnedExtensionCommentScope(user.userId, commentId)
+    if (!scope) return jsonError(req, res, 404, 'Comment not found')
+    if (scope.projectId && !(await requireProjectMembership(req, res, user, scope.projectId))) return
     if (req.method === 'DELETE') {
       await deleteExtensionComment(user.userId, commentId)
       setCors(req, res, METHODS)

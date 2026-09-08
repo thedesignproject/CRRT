@@ -2,6 +2,8 @@ import { FormEvent, useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { browser } from 'wxt/browser'
 import type { AuthMessage, SessionSummary } from '../../lib/auth'
+import { listExtensionProjects } from '../../lib/comments-api'
+import { getActiveProject, setActiveProject, type ExtensionProject, type ExtensionProjectSelection } from '../../lib/project-context'
 import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
@@ -18,19 +20,42 @@ export function Popup() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(true)
+  const [projects, setProjects] = useState<ExtensionProject[]>([])
+  const [activeProject, setActiveProjectState] = useState<ExtensionProjectSelection | null>(null)
 
-  useEffect(() => { send({ type: 'auth:get' }).then((value) => setSession(value as SessionSummary | null)).catch((e) => setError(e.message)).finally(() => setBusy(false)) }, [])
+  async function loadWorkspace(nextSession: SessionSummary | null) {
+    setSession(nextSession)
+    if (!nextSession) {
+      setProjects([])
+      setActiveProjectState(null)
+      return
+    }
+    const [available, selected] = await Promise.all([listExtensionProjects(), getActiveProject()])
+    setProjects(available)
+    const valid = selected && available.some((project) => project.publicKey === selected.publicKey)
+      ? selected
+      : null
+    if (selected && !valid) await setActiveProject(null)
+    setActiveProjectState(valid)
+  }
+
+  useEffect(() => {
+    send({ type: 'auth:get' })
+      .then((value) => loadWorkspace(value as SessionSummary | null))
+      .catch((e) => setError(e instanceof Error ? e.message : 'Could not load CRRT'))
+      .finally(() => setBusy(false))
+  }, [])
 
   async function signIn(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
-    try { setSession(await send({ type: 'auth:sign-in', email, password }) as SessionSummary) }
+    try { await loadWorkspace(await send({ type: 'auth:sign-in', email, password }) as SessionSummary) }
     catch (e) { setError(e instanceof Error ? e.message : 'Sign in failed') }
     finally { setBusy(false) }
   }
 
   async function signOut() {
     setBusy(true); setError('')
-    try { await send({ type: 'auth:sign-out' }); setSession(null) }
+    try { await send({ type: 'auth:sign-out' }); await setActiveProject(null); await loadWorkspace(null) }
     catch (e) { setError(e instanceof Error ? e.message : 'Sign out failed') }
     finally { setBusy(false) }
   }
@@ -42,11 +67,31 @@ export function Popup() {
     finally { setBusy(false) }
   }
 
+  async function chooseProject(publicKey: string) {
+    const next = projects.find((project) => project.publicKey === publicKey) ?? null
+    const selection = next ? { publicKey: next.publicKey, name: next.name } : null
+    setBusy(true); setError('')
+    try {
+      await setActiveProject(selection)
+      setActiveProjectState(selection)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save feedback destination')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (busy && !session && !error) return <main><p className="eyebrow">CRRT.&gt;_</p><p>Loading…</p></main>
   return <main>
     <p className="eyebrow">CRRT.&gt;_</p><h1>{session ? 'Drop a carrot' : 'Sign in to CRRT'}</h1>
     {session ? <>
       <p className="muted">Signed in as {session.email}</p>
+      <label>Feedback destination
+        <select aria-label="Feedback destination" value={activeProject?.publicKey ?? ''} disabled={busy} onChange={(event) => { void chooseProject(event.target.value) }}>
+          <option value="">Private</option>
+          {projects.map((project) => <option key={project.publicKey} value={project.publicKey}>{project.name}</option>)}
+        </select>
+      </label>
       <button className="primary" disabled={busy} onClick={activate}>Start commenting</button>
       <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}?view=extension-comments`} target="_blank" rel="noopener noreferrer">Dashboard</a><button className="link" disabled={busy} onClick={signOut}>Sign out</button></div>
     </> : <form onSubmit={signIn}>

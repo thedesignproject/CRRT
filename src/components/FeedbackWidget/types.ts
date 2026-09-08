@@ -31,6 +31,8 @@ export interface WidgetPage {
 }
 
 export interface PersonalComments {
+  /** Sidebar label for this authenticated extension context. */
+  label?: string
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>
   list(pageUrl: string): Promise<Comment[]>

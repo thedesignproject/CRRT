@@ -1,9 +1,11 @@
 import { browser } from 'wxt/browser'
 import type { SessionSummary } from './auth'
 import type { Comment } from '../../../src/components/FeedbackWidget/types'
+import type { ExtensionProject } from './project-context'
 
 export type ExtensionComment = {
   id: string
+  projectId: string | null
   pageUrl: string
   pageHostname: string
   x: number
@@ -11,6 +13,7 @@ export type ExtensionComment = {
   selector: string
   body: string
   screenshotUrl: string | null
+  authorName: string | null
   createdAt: string
   updatedAt: string
   targetType?: Comment['targetType']
@@ -39,12 +42,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.status === 204 ? undefined as T : response.json() as Promise<T>
 }
 
-export async function listPageComments(pageUrl: string, page = 1) {
+export async function listExtensionProjects() {
+  return request<ExtensionProject[]>('/v1/projects')
+}
+
+export async function listPageComments(pageUrl: string, page = 1, projectId?: string) {
   const query = new URLSearchParams({ pageUrl, limit: '50', page: String(page) })
+  if (projectId) query.set('projectId', projectId)
   return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
 }
 
-export function createPageComment(input: { pageUrl: string; selector: string; x: number; y: number; body: string; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
+export function createPageComment(input: { projectId?: string; pageUrl: string; selector: string; x: number; y: number; body: string; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
   return request<ExtensionComment>('/v1/extension/comments', { method: 'POST', body: JSON.stringify(input) })
 }
 
