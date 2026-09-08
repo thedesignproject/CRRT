@@ -101,6 +101,24 @@ describe('extension popup', () => {
     view.unmount()
   })
 
+  it('reports project selection failures without changing the destination', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockResolvedValueOnce([{ publicKey: 'p1', name: 'Storefront', allowedOrigins: [] }])
+    const view = render(<Popup />)
+    const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+
+    setActiveProject.mockRejectedValueOnce(new Error('storage unavailable'))
+    fireEvent.change(destination, { target: { value: 'p1' } })
+    await screen.findByText('storage unavailable')
+    expect(destination).toHaveValue('')
+
+    setActiveProject.mockRejectedValueOnce('offline')
+    fireEvent.change(destination, { target: { value: 'p1' } })
+    await screen.findByText('Could not save feedback destination')
+    expect(destination).toHaveValue('')
+    view.unmount()
+  })
+
   it('clears a stale project selection that is no longer accessible', async () => {
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
     listExtensionProjects.mockResolvedValueOnce([])

@@ -109,6 +109,17 @@ it('uses the selected project for authenticated extension comments', async () =>
   })))
 })
 
+it('keeps the default personal sidebar label for adapters without a custom label', async () => {
+  const view = render(<FeedbackWidget
+    projectId=""
+    personalComments={{ ...personalComments, label: undefined }}
+    viewerEmail="user@example.com"
+  />)
+  await waitFor(() => expect(listPageComments).toHaveBeenCalled())
+  fireEvent.keyDown(window, { key: 'f' })
+  expect(view.getByText('My extension comments')).toBeInTheDocument()
+})
+
 it('preserves a draft and screenshot when tokens refresh for the same account', async () => {
   const view = setup()
   await act(async () => {})

@@ -204,6 +204,18 @@ export async function updateExtensionComment(userId: string, commentId: string, 
   return serialize(client, data as CommentRow)
 }
 
+export async function getOwnedExtensionCommentScope(userId: string, commentId: string) {
+  const client = getServiceSupabase()
+  const { data, error } = await client.from('comments')
+    .select('project_id')
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? { projectId: data.project_id as string | null } : null
+}
+
 export async function deleteExtensionComment(userId: string, commentId: string) {
   const client = getServiceSupabase()
   const { data, error } = await client.from('comments')

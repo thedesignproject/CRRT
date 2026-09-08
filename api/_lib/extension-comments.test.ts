@@ -9,6 +9,7 @@ import {
   createExtensionComment,
   deleteExtensionComment,
   ExtensionCommentError,
+  getOwnedExtensionCommentScope,
   listExtensionComments,
   normalizeExtensionPageUrl,
   parseExtensionPagination,
@@ -245,6 +246,30 @@ describe('extension comment persistence', () => {
     await expect(updateExtensionComment('u', 'missing', 'x')).rejects.toMatchObject({ status: 404 })
     fake = client([{ data: null, error: { message: 'update down' } }]); vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(updateExtensionComment('u', 'c', 'x')).rejects.toThrow('update down')
+  })
+
+  it('resolves the project scope only for an owned extension comment', async () => {
+    let fake = client([{ data: { project_id: 'project' }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(getOwnedExtensionCommentScope('u', 'c1')).resolves.toEqual({ projectId: 'project' })
+    expect(fake.queries[0]?.calls).toEqual(expect.arrayContaining([
+      ['select', 'project_id'],
+      ['eq', 'id', 'c1'],
+      ['eq', 'source', 'extension'],
+      ['eq', 'created_by_user_id', 'u'],
+    ]))
+
+    fake = client([{ data: { project_id: null }, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(getOwnedExtensionCommentScope('u', 'private')).resolves.toEqual({ projectId: null })
+
+    fake = client([{ data: null, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(getOwnedExtensionCommentScope('u', 'missing')).resolves.toBeNull()
+
+    fake = client([{ data: null, error: { message: 'scope down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(getOwnedExtensionCommentScope('u', 'c1')).rejects.toThrow('scope down')
   })
 
   it('deletes owned comments and their private screenshots', async () => {
