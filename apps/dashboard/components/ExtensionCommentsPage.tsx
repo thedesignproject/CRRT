@@ -96,7 +96,6 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [] }: {
   }
 
   async function addToProject() {
-    if (!targetProject) return
     setBusy(true); setError('')
     try {
       await assignExtensionComment(apiBase, accessToken, selectedId, targetProject)

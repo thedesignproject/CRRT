@@ -9,6 +9,7 @@ import {
   ACTIVE_PROJECT_STORAGE_KEY,
   getActiveProject,
   getCurrentTabUrl,
+  hostProjectStorageKey,
   HOST_PROJECTS_STORAGE_KEY,
   matchingProjects,
   normalizePageHostname,
@@ -28,7 +29,9 @@ const projects: ExtensionProject[] = [
 beforeEach(() => {
   vi.clearAllMocks()
   for (const key of Object.keys(storageState)) delete storageState[key]
-  local.get.mockImplementation(async (key: string) => ({ [key]: storageState[key] }))
+  local.get.mockImplementation(async (key: string) => Object.prototype.hasOwnProperty.call(storageState, key)
+    ? { [key]: storageState[key] }
+    : {})
   local.set.mockImplementation(async (values: Record<string, unknown>) => { Object.assign(storageState, values) })
   local.remove.mockImplementation(async (key: string) => { delete storageState[key] })
 })
@@ -53,27 +56,59 @@ describe('extension project context', () => {
 
   it('persists automatic, manual, and private page choices', async () => {
     await expect(resolveProjectForPage('https://shop.example.com/products', projects)).resolves.toEqual({ publicKey: 'store', name: 'Store' })
-    expect(storageState[HOST_PROJECTS_STORAGE_KEY]).toMatchObject({ 'shop.example.com': { publicKey: 'store' } })
-    expect(await getActiveProject()).toEqual({ publicKey: 'store', name: 'Store' })
+    expect(storageState[hostProjectStorageKey('shop.example.com')]).toMatchObject({ publicKey: 'store' })
+    expect(await getActiveProject()).toBeNull()
 
     await setProjectForPage('https://shop.example.com', { publicKey: 'other', name: 'Other' })
     await expect(resolveProjectForPage('https://shop.example.com/cart', projects)).resolves.toEqual({ publicKey: 'other', name: 'Other' })
 
     await setProjectForPage('https://shop.example.com', null)
     await expect(resolveProjectForPage('https://shop.example.com', projects)).resolves.toBeNull()
-    expect(storageState[HOST_PROJECTS_STORAGE_KEY]).toMatchObject({ 'shop.example.com': null })
+    expect(storageState[hostProjectStorageKey('shop.example.com')]).toBeNull()
   })
 
   it('drops inaccessible preferences and handles active state idempotently', async () => {
     storageState[HOST_PROJECTS_STORAGE_KEY] = { 'other.test': { publicKey: 'gone', name: 'Gone' } }
     await expect(resolveProjectForPage('https://other.test', projects)).resolves.toEqual({ publicKey: 'other', name: 'Other' })
-    expect(storageState[HOST_PROJECTS_STORAGE_KEY]).toEqual({ 'other.test': { publicKey: 'other', name: 'Other' } })
+    expect(storageState[hostProjectStorageKey('other.test')]).toEqual({ publicKey: 'other', name: 'Other' })
     await setActiveProject({ publicKey: 'other', name: 'Other' })
     const calls = local.set.mock.calls.length
     await setActiveProject({ publicKey: 'other', name: 'Other' })
     expect(local.set).toHaveBeenCalledTimes(calls)
     await setActiveProject(null)
     expect(storageState[ACTIVE_PROJECT_STORAGE_KEY]).toBeUndefined()
+  })
+
+  it('removes an inaccessible preference when its page has no automatic match', async () => {
+    storageState[HOST_PROJECTS_STORAGE_KEY] = { 'unknown.test': { publicKey: 'gone', name: 'Gone' } }
+    await expect(resolveProjectForPage('https://unknown.test', projects)).resolves.toBeNull()
+    expect(storageState[hostProjectStorageKey('unknown.test')]).toBeUndefined()
+    expect(local.remove).toHaveBeenCalledWith(hostProjectStorageKey('unknown.test'))
+  })
+
+  it('migrates a legacy hostname preference once without rewriting stable resolutions', async () => {
+    storageState[HOST_PROJECTS_STORAGE_KEY] = { 'shop.example.com': { publicKey: 'store', name: 'Old store' } }
+    await expect(resolveProjectForPage('https://shop.example.com', projects)).resolves.toEqual({ publicKey: 'store', name: 'Store' })
+    expect(storageState[hostProjectStorageKey('shop.example.com')]).toEqual({ publicKey: 'store', name: 'Old store' })
+    const writes = local.set.mock.calls.length
+    await expect(resolveProjectForPage('https://shop.example.com', projects)).resolves.toEqual({ publicKey: 'store', name: 'Store' })
+    expect(local.set).toHaveBeenCalledTimes(writes)
+  })
+
+  it('stores concurrent hostname choices independently', async () => {
+    await Promise.all([
+      setProjectForPage('https://shop.example.com', { publicKey: 'store', name: 'Store' }),
+      setProjectForPage('https://other.test', { publicKey: 'other', name: 'Other' }),
+    ])
+    expect(storageState[hostProjectStorageKey('shop.example.com')]).toEqual({ publicKey: 'store', name: 'Store' })
+    expect(storageState[hostProjectStorageKey('other.test')]).toEqual({ publicKey: 'other', name: 'Other' })
+    expect(storageState[ACTIVE_PROJECT_STORAGE_KEY]).toBeUndefined()
+  })
+
+  it('does not write global or hostname state for unsupported pages', async () => {
+    await expect(resolveProjectForPage('chrome://settings', projects)).resolves.toBeNull()
+    await setProjectForPage('not a page', { publicKey: 'store', name: 'Store' })
+    expect(local.set).not.toHaveBeenCalled()
   })
 
   it('reads the current regular tab URL only', async () => {

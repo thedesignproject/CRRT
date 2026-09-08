@@ -138,4 +138,16 @@ describe('extension popup', () => {
     expect(resolveProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', projects)
     view.unmount()
   })
+
+  it('uses the popup fallback selection when the active tab is unsupported', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    getCurrentTabUrl.mockResolvedValueOnce(null)
+    listExtensionProjects.mockResolvedValueOnce([{ publicKey: 'store', name: 'Storefront', allowedOrigins: [] }])
+    const view = render(<Popup />)
+    const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+    fireEvent.change(destination, { target: { value: 'store' } })
+    await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith({ publicKey: 'store', name: 'Storefront' }))
+    expect(setProjectForPage).not.toHaveBeenCalled()
+    view.unmount()
+  })
 })

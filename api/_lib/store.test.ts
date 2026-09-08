@@ -928,6 +928,7 @@ describe('comment functions', () => {
   function buildCommentsSupabase(opts: {
     result?: QueryResult
     shareItems?: Array<{ comment_id: string }>
+    signedResult?: { data: { signedUrl: string } | null; error: { message: string } | null }
   } = {}) {
     const result = opts.result ?? { data: null, error: null }
     const selects: string[] = []
@@ -950,7 +951,7 @@ describe('comment functions', () => {
       maybeSingle: vi.fn(() => Promise.resolve(result)),
     }
 
-    const createSignedUrl = vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed/private' }, error: null })
+    const createSignedUrl = vi.fn().mockResolvedValue(opts.signedResult ?? { data: { signedUrl: 'https://signed/private' }, error: null })
     const supabase = {
       rpc: vi.fn(() => chain),
       from: vi.fn((table: string) => {
@@ -1045,6 +1046,23 @@ describe('comment functions', () => {
 
     expect(comments[0].imageUrl).toBe('https://signed/private')
     expect(createSignedUrl).toHaveBeenCalledWith('user/comment.png', 300)
+  })
+
+  it('tolerates missing private screenshots but rejects signing failures', async () => {
+    const extensionRow = { ...LEGACY_ROW, source: 'extension', screenshot_storage_path: 'user/comment.png' }
+    buildCommentsSupabase({
+      result: { data: [extensionRow], error: null },
+      signedResult: { data: null, error: { message: 'Object not found' } },
+    })
+    await expect(listProjectComments('pk')).resolves.toEqual([
+      expect.objectContaining({ imageUrl: null }),
+    ])
+
+    buildCommentsSupabase({
+      result: { data: [extensionRow], error: null },
+      signedResult: { data: null, error: { message: 'storage down' } },
+    })
+    await expect(listProjectComments('pk')).rejects.toThrow('Screenshot signing failed: storage down')
   })
 
   it('getComment selects target metadata and maps text_range rows', async () => {

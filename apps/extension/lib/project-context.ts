@@ -10,6 +10,7 @@ export type ExtensionProjectSelection = Pick<ExtensionProject, 'publicKey' | 'na
 
 export const ACTIVE_PROJECT_STORAGE_KEY = 'crrt:active-project'
 export const HOST_PROJECTS_STORAGE_KEY = 'crrt:projects-by-host'
+export const HOST_PROJECT_STORAGE_PREFIX = 'crrt:project-for-host:'
 
 export type HostProjectPreferences = Record<string, ExtensionProjectSelection | null>
 
@@ -51,19 +52,44 @@ export function resolveProjectSelection(
   return matches.length === 1 ? { publicKey: matches[0].publicKey, name: matches[0].name } : null
 }
 
-async function getHostProjectPreferences(): Promise<HostProjectPreferences> {
+function isProjectSelection(value: unknown): value is ExtensionProjectSelection {
+  if (!value || typeof value !== 'object') return false
+  const project = value as Partial<ExtensionProjectSelection>
+  return typeof project.publicKey === 'string' && typeof project.name === 'string'
+}
+
+export function hostProjectStorageKey(hostname: string) {
+  return `${HOST_PROJECT_STORAGE_PREFIX}${hostname}`
+}
+
+async function getLegacyHostProjectPreferences(): Promise<HostProjectPreferences> {
   const stored = await browser.storage.local.get(HOST_PROJECTS_STORAGE_KEY)
   const value = stored[HOST_PROJECTS_STORAGE_KEY]
   return value && typeof value === 'object' ? value as HostProjectPreferences : {}
 }
 
+async function getHostProjectPreference(hostname: string): Promise<{
+  present: boolean
+  value: ExtensionProjectSelection | null
+}> {
+  const key = hostProjectStorageKey(hostname)
+  const stored = await browser.storage.local.get(key)
+  const value = stored[key]
+  if (value === null || isProjectSelection(value)) return { present: true, value }
+
+  const legacy = await getLegacyHostProjectPreferences()
+  if (!Object.prototype.hasOwnProperty.call(legacy, hostname)) return { present: false, value: null }
+  const legacyValue = legacy[hostname]
+  if (legacyValue !== null && !isProjectSelection(legacyValue)) return { present: false, value: null }
+  await browser.storage.local.set({ [key]: legacyValue })
+  return { present: true, value: legacyValue }
+}
+
 export async function getActiveProject(): Promise<ExtensionProjectSelection | null> {
   const stored = await browser.storage.local.get(ACTIVE_PROJECT_STORAGE_KEY)
   const value = stored[ACTIVE_PROJECT_STORAGE_KEY]
-  if (!value || typeof value !== 'object') return null
-  const project = value as Partial<ExtensionProjectSelection>
-  return typeof project.publicKey === 'string' && typeof project.name === 'string'
-    ? { publicKey: project.publicKey, name: project.name }
+  return isProjectSelection(value)
+    ? { publicKey: value.publicKey, name: value.name }
     : null
 }
 
@@ -76,36 +102,25 @@ export async function setActiveProject(project: ExtensionProjectSelection | null
 
 export async function resolveProjectForPage(pageUrl: string, projects: ExtensionProject[]) {
   const hostname = normalizePageHostname(pageUrl)
-  if (!hostname) {
-    await setActiveProject(null)
-    return null
-  }
-  const preferences = await getHostProjectPreferences()
-  const hadPreference = Object.prototype.hasOwnProperty.call(preferences, hostname)
-  const preferred = preferences[hostname]
+  if (!hostname) return null
+  const preference = await getHostProjectPreference(hostname)
+  const preferences = preference.present ? { [hostname]: preference.value } : {}
+  const preferred = preference.value
   const hasAccessiblePreference = preferred === null
-    || (preferred !== undefined && projects.some((project) => project.publicKey === preferred.publicKey))
+    || projects.some((project) => project.publicKey === preferred.publicKey)
   const selection = resolveProjectSelection(pageUrl, projects, preferences)
-  if (hadPreference && !hasAccessiblePreference) {
-    delete preferences[hostname]
-    if (selection) preferences[hostname] = selection
-    await browser.storage.local.set({ [HOST_PROJECTS_STORAGE_KEY]: preferences })
-  } else if (!hadPreference && selection) {
-    preferences[hostname] = selection
-    await browser.storage.local.set({ [HOST_PROJECTS_STORAGE_KEY]: preferences })
+  if (!preference.present || !hasAccessiblePreference) {
+    const key = hostProjectStorageKey(hostname)
+    if (selection) await browser.storage.local.set({ [key]: selection })
+    else if (preference.present) await browser.storage.local.remove(key)
   }
-  await setActiveProject(selection)
   return selection
 }
 
 export async function setProjectForPage(pageUrl: string, project: ExtensionProjectSelection | null) {
   const hostname = normalizePageHostname(pageUrl)
-  if (hostname) {
-    const preferences = await getHostProjectPreferences()
-    preferences[hostname] = project
-    await browser.storage.local.set({ [HOST_PROJECTS_STORAGE_KEY]: preferences })
-  }
-  await setActiveProject(project)
+  if (!hostname) return
+  await browser.storage.local.set({ [hostProjectStorageKey(hostname)]: project })
 }
 
 export async function getCurrentTabUrl() {

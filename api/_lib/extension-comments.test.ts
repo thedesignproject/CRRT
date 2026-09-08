@@ -294,6 +294,14 @@ describe('extension comment persistence', () => {
     fake = client([{ data: null, error: null }, { data: null, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(assignExtensionCommentToProject('u', 'missing', 'project')).rejects.toMatchObject({ status: 404 })
+
+    fake = client([{ data: null, error: { message: 'assign down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toThrow('assign down')
+
+    fake = client([{ data: null, error: null }, { data: null, error: { message: 'lookup down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toThrow('lookup down')
   })
 
   it('deletes owned comments and their private screenshots', async () => {

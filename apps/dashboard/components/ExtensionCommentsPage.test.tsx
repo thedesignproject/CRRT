@@ -100,6 +100,18 @@ describe('ExtensionCommentsPage', () => {
     await screen.findByText('No extension comments yet.')
   })
 
+  it('keeps the comment selected when project assignment fails', async () => {
+    vi.mocked(listExtensionComments).mockResolvedValue({ items: [first], page: 1, limit: 20, total: 1 })
+    vi.mocked(assignExtensionComment).mockRejectedValueOnce(new Error('assignment down'))
+    render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+    fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Project for comment' }), { target: { value: 'store' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add to project' }))
+    await screen.findByText('assignment down')
+    expect(screen.getAllByText('First comment')).toHaveLength(2)
+  })
+
   it('shows empty and load error states', async () => {
     vi.mocked(listExtensionComments).mockResolvedValueOnce({ items: [], page: 1, limit: 20, total: 0 })
     const view = render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
