@@ -4,14 +4,30 @@ import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../li
 import { relayFrameMessage } from '../lib/frame-channel'
 
 type MessageResponse = { ok: true; data?: unknown } | { ok: false; error: string }
+const activeTabKey = (tabId: number) => `crrt:active-tab:${tabId}`
 
-export async function activateCurrentTab(): Promise<void> {
+async function currentWebTab() {
   const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
   if (!tab?.id || !/^https?:/.test(tab.url ?? '')) throw new Error('Open a regular web page to start commenting')
-  await browser.scripting.executeScript({
-    target: { tabId: tab.id },
-    files: ['comment.js'],
-  })
+  return tab
+}
+
+export async function isTabActive(tabId: number) {
+  const key = activeTabKey(tabId)
+  const stored = await browser.storage.session.get(key)
+  return stored[key] === true
+}
+
+export async function activateCurrentTab(): Promise<void> {
+  const tab = await currentWebTab()
+  const key = activeTabKey(tab.id!)
+  await browser.storage.session.set({ [key]: true })
+  try {
+    await browser.scripting.executeScript({ target: { tabId: tab.id! }, files: ['comment.js'] })
+  } catch (error) {
+    await browser.storage.session.remove(key)
+    throw error
+  }
 }
 
 export default defineBackground(() => {
@@ -28,6 +44,10 @@ export default defineBackground(() => {
         await activateCurrentTab()
         return { ok: true }
       }
+      if ((message as { type?: unknown } | null)?.type === 'comment:is-active') {
+        const tabId = (sender as { tab?: { id?: number } } | null)?.tab?.id
+        return { ok: true, data: typeof tabId === 'number' && await isTabActive(tabId) }
+      }
       return undefined
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : 'Unexpected extension error' }
@@ -37,5 +57,8 @@ export default defineBackground(() => {
     void handleMessage(message, sender).then(sendResponse)
     // Keep the channel open on Chrome versions without Promise listener support.
     return true
+  })
+  browser.tabs.onRemoved.addListener((tabId) => {
+    void browser.storage.session.remove(activeTabKey(tabId))
   })
 })
