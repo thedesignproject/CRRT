@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { createCommentGithubIssue, getExternalWorkDraft, getProjectGitHubStatus, type ExternalWorkDraft } from '../api'
+import { getExternalWorkDraft, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider } from '../api'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { timeAgo, truncateUrl } from '../lib/format'
@@ -19,6 +19,7 @@ import {
 import { ActionBtn, Kbd } from './primitives'
 import { ProjectEmptyState } from './ProjectEmptyState'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
+import { ExternalWorkProviderDialog } from './ExternalWorkProviderDialog'
 
 interface CommentDetailProps {
   selectedComment: Comment | null
@@ -65,11 +66,10 @@ export function CommentDetail({
 }: CommentDetailProps | PersonalDetailProps) {
   const [issueBusy, setIssueBusy] = useState(false)
   const [issueError, setIssueError] = useState<string | null>(null)
-  const [githubConnected, setGithubConnected] = useState(false)
   const [createdIssues, setCreatedIssues] = useState<Record<string, NonNullable<Comment['githubIssue']>>>({})
   const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
+  const [providerPickerOpen, setProviderPickerOpen] = useState(false)
   const issueRequests = useRef(new Map<string, symbol>())
-  const connectionRequest = useRef(0)
   const selectedId = selectedComment?.id ?? null
   const selectedIdRef = useRef(selectedId)
   selectedIdRef.current = selectedId
@@ -81,52 +81,39 @@ export function CommentDetail({
     setIssueBusy(selectedId !== null && issueRequests.current.has(selectedId))
     setIssueError(null)
     setExternalWorkDraft(null)
+    setProviderPickerOpen(false)
   }, [selectedId])
 
-  useEffect(() => {
-    const request = connectionRequest.current + 1
-    connectionRequest.current = request
-    setGithubConnected(false)
-    if (!selectedProject || personal || readOnly) return
-    void getProjectGitHubStatus(apiBase, accessToken, selectedProject).then(
-      ({ githubConnectionStatus }) => {
-        if (connectionRequest.current === request) {
-          setGithubConnected(githubConnectionStatus === 'connected')
-        }
-      },
-      () => {
-        if (connectionRequest.current === request) setGithubConnected(false)
-      },
-    )
-  }, [accessToken, apiBase, selectedProject, personal, readOnly])
-
-  const handleGithubIssue = async (comment: Comment) => {
-    if (githubIssue) {
+  const prepareExternalWork = async (comment: Comment, provider: ExternalWorkProvider) => {
+    if (provider === 'github' && githubIssue) {
       const opened = window.open(githubIssue.issueUrl, '_blank', 'noopener,noreferrer')
       if (opened) opened.opener = null
       return
     }
-    if (
-      comment.reviewStatus === 'rejected'
-      || issueRequests.current.has(comment.id)
-    ) return
+    if (comment.reviewStatus === 'rejected' || issueRequests.current.has(comment.id)) return
     const commentId = comment.id
     const request = Symbol(commentId)
     issueRequests.current.set(commentId, request)
     setIssueBusy(true)
     setIssueError(null)
     try {
-      const prepared = await getExternalWorkDraft(apiBase, accessToken, commentId)
-      if (!prepared.connected) throw new Error('github_repository_not_connected')
+      const prepared = await getExternalWorkDraft(apiBase, accessToken, commentId, provider)
+      if (!prepared.connected) throw new Error(`${provider}_not_connected`)
       if (prepared.existing) {
-        setCreatedIssues((current) => ({ ...current, [commentId]: prepared.existing! }))
-        const opened = window.open(prepared.existing.issueUrl, '_blank', 'noopener,noreferrer')
+        const url = 'externalUrl' in prepared.existing && prepared.existing.externalUrl
+          ? prepared.existing.externalUrl
+          : 'issueUrl' in prepared.existing ? prepared.existing.issueUrl : ''
+        if (!url) throw new Error('missing_external_work_url')
+        if (provider === 'github' && 'issueUrl' in prepared.existing) {
+          setCreatedIssues((current) => ({ ...current, [commentId]: prepared.existing as NonNullable<Comment['githubIssue']> }))
+        }
+        const opened = window.open(url, '_blank', 'noopener,noreferrer')
         if (opened) opened.opener = null
       } else if (selectedIdRef.current === commentId) {
         setExternalWorkDraft(prepared)
       }
     } catch {
-      if (selectedIdRef.current === commentId) setIssueError('Could not prepare the GitHub issue. Try again.')
+      if (selectedIdRef.current === commentId) setIssueError(`Could not prepare the ${provider === 'github' ? 'GitHub' : 'Linear'} issue. Check Project Settings and try again.`)
     } finally {
       issueRequests.current.delete(commentId)
       if (selectedIdRef.current === commentId) setIssueBusy(false)
@@ -141,16 +128,23 @@ export function CommentDetail({
     setIssueBusy(true)
     setIssueError(null)
     try {
-      const result = await createCommentGithubIssue(apiBase, accessToken, commentId, draft)
-      setCreatedIssues((current) => ({ ...current, [commentId]: {
-        issueNumber: result.issueNumber,
-        issueUrl: result.issueUrl,
-        createdAt: result.createdAt,
+      // This handler is only mounted while a draft exists; request fencing above
+      // prevents a stale dialog from dispatching a second submission.
+      const provider = externalWorkDraft!.provider
+      const result = await sendExternalWork(apiBase, accessToken, commentId, provider, draft)
+      const url = result.externalUrl ?? result.issueUrl
+      if (!url) throw new Error('missing_external_work_url')
+      if (provider === 'github' && result.issueNumber) setCreatedIssues((current) => ({ ...current, [commentId]: {
+        issueNumber: result.issueNumber!, issueUrl: url, createdAt: result.createdAt,
       } }))
       setExternalWorkDraft(null)
+      if (provider === 'linear') {
+        const opened = window.open(url, '_blank', 'noopener,noreferrer')
+        if (opened) opened.opener = null
+      }
     } catch {
       if (selectedIdRef.current === commentId) {
-        setIssueError('Could not create the GitHub issue. Try again.')
+        setIssueError('Could not create the external issue. Try again.')
       }
     } finally {
       issueRequests.current.delete(commentId)
@@ -331,42 +325,19 @@ export function CommentDetail({
 
               {!personal && !readOnly && <span
                 className="relative inline-flex group"
-                tabIndex={!githubIssue && !githubConnected ? 0 : undefined}
-                aria-label={!githubIssue && !githubConnected
-                  ? 'Connect a GitHub repository from Project Settings'
-                  : undefined}
               >
                 <ActionBtn
                   variant="neutral"
-                  onClick={() => handleGithubIssue(selectedComment)}
-                  disabled={!githubIssue && (
-                    !githubConnected
-                    || selectedComment.reviewStatus === 'rejected'
-                    || issueBusy
-                  )}
+                  onClick={() => setProviderPickerOpen(true)}
+                  disabled={!selectedProject || (!githubIssue && selectedComment.reviewStatus === 'rejected') || issueBusy}
                 >
                   <ExternalLinkIcon size={13} />
-                  {githubIssue
-                    ? 'Open GitHub Issue'
-                    : issueBusy
-                      ? 'Preparing issue…'
-                      : selectedComment.reviewStatus === 'rejected'
-                        ? 'Reopen to send'
-                        : 'Send to…'}
+                  {issueBusy
+                    ? 'Preparing issue…'
+                    : selectedComment.reviewStatus === 'rejected' && !githubIssue
+                      ? 'Reopen to send'
+                      : 'Send to…'}
                 </ActionBtn>
-                {!githubIssue && !githubConnected && (
-                  <span
-                    role="tooltip"
-                    className={cn(
-                      'pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 w-max max-w-64',
-                      '-translate-x-1/2 rounded-md border border-border bg-popover px-2.5 py-1.5',
-                      'text-[11px] font-medium text-popover-foreground shadow-md opacity-0',
-                      'transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100',
-                    )}
-                  >
-                    Connect a GitHub repository from Project Settings
-                  </span>
-                )}
               </span>}
 
               {issueError && !externalWorkDraft && (
@@ -432,12 +403,22 @@ export function CommentDetail({
       )}
       {externalWorkDraft && <ExternalWorkDialog
         key={selectedId}
+        provider={externalWorkDraft.provider}
         destination={externalWorkDraft.destination ?? 'GitHub'}
         initialDraft={externalWorkDraft.draft}
         busy={issueBusy}
         error={issueError}
         onCancel={() => { setExternalWorkDraft(null); setIssueError(null) }}
         onSubmit={handleExternalWorkSubmit}
+      />}
+      {providerPickerOpen && <ExternalWorkProviderDialog
+        onCancel={() => setProviderPickerOpen(false)}
+        onSelect={(provider) => {
+          setProviderPickerOpen(false)
+          // The picker is only mounted for a selected comment and is closed by
+          // the selection-change effect before a replacement render can use it.
+          void prepareExternalWork(selectedComment!, provider)
+        }}
       />}
     </div>
   )

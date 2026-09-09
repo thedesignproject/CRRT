@@ -36,17 +36,20 @@ export function extensionComments(
     } : undefined,
     scope: project && onScopeChange ? { value: scope, onChange: onScopeChange } : undefined,
     externalWork: canSendExternalWork ? {
-      async prepare(commentId) {
-        const prepared = await getExternalWorkDraft(commentId)
-        if (!prepared.connected) throw new Error('Connect GitHub from Project Settings first.')
+      providers: ['github', 'linear'],
+      async prepare(provider, commentId) {
+        const prepared = await getExternalWorkDraft(commentId, provider)
+        if (!prepared.connected) throw new Error(`Connect ${provider === 'github' ? 'GitHub' : 'Linear'} from Project Settings first.`)
         if (prepared.existing) return {
-          destination: prepared.destination ?? 'GitHub', title: '', body: '', existingUrl: prepared.existing.issueUrl,
+          destination: prepared.destination ?? provider, title: '', body: '', existingUrl: prepared.existing.externalUrl ?? prepared.existing.issueUrl,
         }
-        return { destination: prepared.destination ?? 'GitHub', ...prepared.draft }
+        return { destination: prepared.destination ?? provider, ...prepared.draft }
       },
-      async send(commentId, draft) {
-        const result = await sendExternalWork(commentId, draft)
-        return { issueUrl: result.issueUrl }
+      async send(provider, commentId, draft) {
+        const result = await sendExternalWork(commentId, provider, draft)
+        const issueUrl = result.externalUrl ?? result.issueUrl
+        if (!issueUrl) throw new Error('Tracker did not return an issue URL.')
+        return { issueUrl }
       },
     } : undefined,
     async beforeOpen() {

@@ -98,11 +98,86 @@ type GitHubUserInstallationRow = {
   last_verified_at: string
 }
 
+export type ExternalIntegrationProvider = 'linear' | 'jira'
+
+type ProjectIntegrationRow = {
+  id: string
+  project_key: string
+  provider: ExternalIntegrationProvider
+  access_token_ciphertext: string
+  refresh_token_ciphertext: string | null
+  token_expires_at: string | null
+  workspace_id: string
+  workspace_name: string
+  container_id: string | null
+  container_name: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+type CommentExternalWorkRow = {
+  id: string
+  project_id: string
+  comment_id: string
+  provider: ExternalIntegrationProvider
+  state: 'creating' | 'created'
+  external_id: string | null
+  external_key: string | null
+  external_url: string | null
+  lease_token: string
+  lease_expires_at: string
+  uncertain_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 const REPO_CONFIG_COLUMNS =
   'project_key, repo_url, github_owner, github_repo, github_installation_id, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions'
 
 const GITHUB_USER_INSTALLATION_COLUMNS =
   'id, user_id, installation_id, github_account_id, github_account_login, github_account_type, last_verified_at'
+
+const PROJECT_INTEGRATION_COLUMNS =
+  'id, project_key, provider, access_token_ciphertext, refresh_token_ciphertext, token_expires_at, workspace_id, workspace_name, container_id, container_name, created_by, created_at, updated_at'
+const COMMENT_EXTERNAL_WORK_COLUMNS =
+  'id, project_id, comment_id, provider, state, external_id, external_key, external_url, lease_token, lease_expires_at, uncertain_at, created_at, updated_at'
+
+function mapProjectIntegration(row: ProjectIntegrationRow) {
+  return {
+    id: row.id,
+    projectKey: row.project_key,
+    provider: row.provider,
+    accessTokenCiphertext: row.access_token_ciphertext,
+    refreshTokenCiphertext: row.refresh_token_ciphertext,
+    tokenExpiresAt: row.token_expires_at,
+    workspaceId: row.workspace_id,
+    workspaceName: row.workspace_name,
+    containerId: row.container_id,
+    containerName: row.container_name,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+function mapCommentExternalWork(row: CommentExternalWorkRow) {
+  return {
+    id: row.id,
+    projectId: row.project_id,
+    commentId: row.comment_id,
+    provider: row.provider,
+    state: row.state,
+    externalId: row.external_id,
+    externalKey: row.external_key,
+    externalUrl: row.external_url,
+    leaseToken: row.lease_token,
+    leaseExpiresAt: row.lease_expires_at,
+    uncertainAt: row.uncertain_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
 
 function mapGitHubUserInstallation(row: GitHubUserInstallationRow) {
   return {
@@ -1023,6 +1098,208 @@ export async function getGithubConnectionVersion(projectKey: string) {
   if (error) throw new Error(error.message)
   const version = (data as { github_connection_version?: unknown } | null)?.github_connection_version
   return typeof version === 'number' && Number.isSafeInteger(version) && version >= 0 ? version : 0
+}
+
+export async function getProjectIntegration(projectKey: string, provider: ExternalIntegrationProvider) {
+  const { data, error } = await getSupabase()
+    .from('project_integrations')
+    .select(PROJECT_INTEGRATION_COLUMNS)
+    .eq('project_key', projectKey)
+    .eq('provider', provider)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapProjectIntegration(data as ProjectIntegrationRow) : null
+}
+
+export async function upsertProjectIntegration(input: {
+  projectKey: string
+  provider: ExternalIntegrationProvider
+  accessTokenCiphertext: string
+  refreshTokenCiphertext: string | null
+  tokenExpiresAt: string | null
+  workspaceId: string
+  workspaceName: string
+  containerId: string | null
+  containerName: string | null
+  createdBy: string
+}) {
+  const now = new Date().toISOString()
+  const { data, error } = await getSupabase()
+    .from('project_integrations')
+    .upsert({
+      project_key: input.projectKey,
+      provider: input.provider,
+      access_token_ciphertext: input.accessTokenCiphertext,
+      refresh_token_ciphertext: input.refreshTokenCiphertext,
+      token_expires_at: input.tokenExpiresAt,
+      workspace_id: input.workspaceId,
+      workspace_name: input.workspaceName,
+      container_id: input.containerId,
+      container_name: input.containerName,
+      created_by: input.createdBy,
+      updated_at: now,
+    } as never, { onConflict: 'project_key,provider' })
+    .select(PROJECT_INTEGRATION_COLUMNS)
+    .single()
+  if (error) throw new Error(error.message)
+  return mapProjectIntegration(data as ProjectIntegrationRow)
+}
+
+export async function updateProjectIntegrationDestination(
+  projectKey: string,
+  provider: ExternalIntegrationProvider,
+  containerId: string,
+  containerName: string,
+) {
+  const { data, error } = await getSupabase()
+    .from('project_integrations')
+    .update({ container_id: containerId, container_name: containerName, updated_at: new Date().toISOString() } as never)
+    .eq('project_key', projectKey)
+    .eq('provider', provider)
+    .select(PROJECT_INTEGRATION_COLUMNS)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapProjectIntegration(data as ProjectIntegrationRow) : null
+}
+
+export async function updateProjectIntegrationTokens(input: {
+  id: string
+  accessTokenCiphertext: string
+  refreshTokenCiphertext: string | null
+  tokenExpiresAt: string | null
+}) {
+  const { data, error } = await getSupabase()
+    .from('project_integrations')
+    .update({
+      access_token_ciphertext: input.accessTokenCiphertext,
+      refresh_token_ciphertext: input.refreshTokenCiphertext,
+      token_expires_at: input.tokenExpiresAt,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq('id', input.id)
+    .select(PROJECT_INTEGRATION_COLUMNS)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapProjectIntegration(data as ProjectIntegrationRow) : null
+}
+
+export async function deleteProjectIntegration(projectKey: string, provider: ExternalIntegrationProvider) {
+  const { error } = await getSupabase()
+    .from('project_integrations')
+    .delete()
+    .eq('project_key', projectKey)
+    .eq('provider', provider)
+  if (error) throw new Error(error.message)
+}
+
+export async function getCommentExternalWork(commentId: string, provider: ExternalIntegrationProvider) {
+  const { data, error } = await getSupabase()
+    .from('comment_external_work')
+    .select(COMMENT_EXTERNAL_WORK_COLUMNS)
+    .eq('comment_id', commentId)
+    .eq('provider', provider)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapCommentExternalWork(data as CommentExternalWorkRow) : null
+}
+
+export async function claimCommentExternalWork(input: {
+  projectId: string
+  commentId: string
+  provider: ExternalIntegrationProvider
+  leaseToken: string
+}) {
+  const now = new Date()
+  const { data, error } = await getSupabase()
+    .from('comment_external_work')
+    .insert({
+      project_id: input.projectId,
+      comment_id: input.commentId,
+      provider: input.provider,
+      state: 'creating',
+      lease_token: input.leaseToken,
+      lease_expires_at: new Date(now.getTime() + 120_000).toISOString(),
+      updated_at: now.toISOString(),
+    } as never)
+    .select(COMMENT_EXTERNAL_WORK_COLUMNS)
+    .maybeSingle()
+  if (error && (error as { code?: string }).code !== '23505') throw new Error(error.message)
+  if (data) return mapCommentExternalWork(data as CommentExternalWorkRow)
+  const existing = await getCommentExternalWork(input.commentId, input.provider)
+  if (
+    existing?.state !== 'creating'
+    || existing.uncertainAt
+    || Date.parse(existing.leaseExpiresAt) >= now.getTime()
+  ) return existing
+
+  // A process that died before marking the result uncertain could not have
+  // contacted the external provider yet, so its expired lease is safe to take.
+  const { data: reclaimed, error: reclaimError } = await getSupabase()
+    .from('comment_external_work')
+    .update({
+      lease_token: input.leaseToken,
+      lease_expires_at: new Date(now.getTime() + 120_000).toISOString(),
+      updated_at: now.toISOString(),
+    } as never)
+    .eq('id', existing.id)
+    .eq('lease_token', existing.leaseToken)
+    .eq('state', 'creating')
+    .is('uncertain_at', null)
+    .lt('lease_expires_at', now.toISOString())
+    .select(COMMENT_EXTERNAL_WORK_COLUMNS)
+    .maybeSingle()
+  if (reclaimError) throw new Error(reclaimError.message)
+  return reclaimed
+    ? mapCommentExternalWork(reclaimed as CommentExternalWorkRow)
+    : getCommentExternalWork(input.commentId, input.provider)
+}
+
+export async function markCommentExternalWorkUncertain(id: string, leaseToken: string) {
+  const { data, error } = await getSupabase()
+    .from('comment_external_work')
+    .update({ uncertain_at: new Date().toISOString(), updated_at: new Date().toISOString() } as never)
+    .eq('id', id)
+    .eq('lease_token', leaseToken)
+    .eq('state', 'creating')
+    .select('id')
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return Boolean(data)
+}
+
+export async function finalizeCommentExternalWork(input: {
+  id: string
+  leaseToken: string
+  externalId: string
+  externalKey: string
+  externalUrl: string
+}) {
+  const { data, error } = await getSupabase()
+    .from('comment_external_work')
+    .update({
+      state: 'created',
+      external_id: input.externalId,
+      external_key: input.externalKey,
+      external_url: input.externalUrl,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq('id', input.id)
+    .eq('lease_token', input.leaseToken)
+    .eq('state', 'creating')
+    .select(COMMENT_EXTERNAL_WORK_COLUMNS)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapCommentExternalWork(data as CommentExternalWorkRow) : null
+}
+
+export async function releaseCommentExternalWork(id: string, leaseToken: string) {
+  const { error } = await getSupabase()
+    .from('comment_external_work')
+    .delete()
+    .eq('id', id)
+    .eq('lease_token', leaseToken)
+    .eq('state', 'creating')
+  if (error) throw new Error(error.message)
 }
 
 export async function listGitHubUserInstallations(userId: string) {

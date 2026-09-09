@@ -59,12 +59,22 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
   created: boolean
 }
 
+export type ExternalWorkProvider = 'github' | 'linear'
+
 export interface ExternalWorkDraft {
-  provider: 'github'
+  provider: ExternalWorkProvider
   connected: boolean
   destination: string | null
-  existing: GitHubIssueRecord | null
+  existing: (GitHubIssueRecord & { externalUrl?: string }) | { externalId: string; externalKey: string; externalUrl: string; createdAt: string } | null
   draft: { title: string; body: string }
+}
+
+export interface ProjectTrackerIntegration {
+  provider: 'linear'
+  connected: boolean
+  workspace?: string
+  selectedDestinationId?: string | null
+  destinations: Array<{ id: string; name: string }>
 }
 
 export interface ExtensionCommentRecord {
@@ -658,10 +668,27 @@ export async function deleteExtensionComment(apiBase: string, accessToken: strin
   if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
 }
 
-export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: 'github' = 'github') {
+export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider = 'github') {
   return requestJson<ExternalWorkDraft>(
     `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`,
     { headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function sendExternalWork(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  provider: ExternalWorkProvider,
+  draft: { title: string; body: string },
+) {
+  return requestJson<{ issueNumber?: number; issueUrl?: string; externalId?: string; externalKey?: string; externalUrl?: string; createdAt: string; created: boolean }>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ provider, draft }),
+    },
   )
 }
 
@@ -671,13 +698,36 @@ export function createCommentGithubIssue(
   commentId: string,
   draft?: { title: string; body: string },
 ) {
-  return requestJson<GitHubIssueCreationResponse>(
-    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-      body: JSON.stringify({ provider: 'github', ...(draft ? { draft } : {}) }),
-    },
+  return draft
+    ? sendExternalWork(apiBase, accessToken, commentId, 'github', draft) as Promise<GitHubIssueCreationResponse>
+    : requestJson<GitHubIssueCreationResponse>(
+        `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+          body: JSON.stringify({ provider: 'github' }),
+        },
+      )
+}
+
+export function getLinearIntegration(apiBase: string, accessToken: string, projectKey: string, authorize = false) {
+  return requestJson<ProjectTrackerIntegration & { authorizeUrl?: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear${authorize ? '?action=authorize' : ''}`,
+    { cache: 'no-store', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function selectLinearTeam(apiBase: string, accessToken: string, projectKey: string, containerId: string) {
+  return requestJson<ProjectTrackerIntegration>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) }, body: JSON.stringify({ containerId }) },
+  )
+}
+
+export function disconnectLinear(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<void>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
   )
 }
 

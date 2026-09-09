@@ -183,7 +183,8 @@ Required server variables:
 - `SUPABASE_KEY` — the anon/publishable key; the dashboard includes it in the browser bundle
 - `SUPABASE_SERVICE_ROLE_KEY` — the privileged server-only key; never expose it to client code
 - `REVIEWER_API_TOKEN`
-- `SHARE_TOKEN_SECRET`
+- `SHARE_TOKEN_SECRET` - encrypts persisted share and native integration tokens
+- `WIDGET_AUTH_SECRET` - signs native integration OAuth state
 
 Product Audit server variables (when the feature is enabled):
 
@@ -202,6 +203,8 @@ Optional server variables:
 - `COMMENT_ACTIVITY_EMAIL_FROM` - sender for comment activity emails, defaults to `CRRT <activity@mail.crrt.ai>`
 - `COMMENT_ACTIVITY_EMAIL_COOLDOWN_HOURS` - per-project email cooldown window, defaults to `5`
 - `COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS` - Resend request timeout, defaults to `5000`
+- `LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET` - enable native Linear OAuth and issue creation
+- `LINEAR_REDIRECT_URI` - optional fixed Linear callback URL; defaults to `APP_URL/v1/integrations/linear/callback`
 
 The service-role key also lets the API resolve project member emails from Supabase Auth for comment activity notifications. Without it, that email path stays disabled because there are no resolved recipients.
 

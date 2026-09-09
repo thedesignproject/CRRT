@@ -4,6 +4,7 @@ import { useProjectSettings } from '../hooks/useProjectSettings'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
 import { GitHubRepositorySettings } from './GitHubRepositorySettings'
+import { LinearIntegrationSettings } from './LinearIntegrationSettings'
 import { Spinner } from './primitives'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
@@ -307,6 +308,8 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
             projectKey={project.publicKey}
           />
         )}
+
+        {isAdmin && <LinearIntegrationSettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />}
 
         {/* Agent instructions */}
         {isAdmin && (
