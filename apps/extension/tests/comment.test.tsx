@@ -6,8 +6,9 @@ import { resolve } from 'node:path'
 
 const storage = vi.hoisted(() => ({ addListener: vi.fn(), removeListener: vi.fn() }))
 const sendMessage = vi.hoisted(() => vi.fn())
+const disconnectPageHost = vi.hoisted(() => vi.fn())
 vi.mock('wxt/browser', () => ({ browser: { storage: { onChanged: storage }, runtime: { sendMessage, getURL: (path: string) => `chrome-extension://test${path}` } } }))
-vi.mock('../lib/page-host', () => ({ connectPageHost: vi.fn(() => vi.fn()) }))
+vi.mock('../lib/page-host', () => ({ connectPageHost: vi.fn(() => disconnectPageHost) }))
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
 vi.mock('../lib/comments-api', () => ({ extensionSession: vi.fn(), createPageComment: vi.fn(), deletePageComment: vi.fn(), getExternalWorkDraft: vi.fn(), listExtensionProjects: vi.fn(), listPageComments: vi.fn(), listProjectComments: vi.fn(), sendExternalWork: vi.fn(), updatePageComment: vi.fn() }))
@@ -49,7 +50,12 @@ beforeEach(() => {
   vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({ left: 10, top: 20, width: 100, height: 40 } as DOMRect)
   target = document.createElement('article'); target.id = 'target'; target.textContent = 'Page target'; document.body.append(target)
 })
-afterEach(() => { cleanup(); target.remove(); document.querySelector('[data-crrt-extension]')?.remove(); vi.restoreAllMocks(); vi.useRealTimers() })
+afterEach(() => {
+  cleanup(); target.remove()
+  window.dispatchEvent(new CustomEvent('crrt:deactivate'))
+  document.querySelector('[data-crrt-extension]')?.remove()
+  vi.restoreAllMocks(); vi.useRealTimers()
+})
 
 function setup(activate = false, page?: WidgetPage) {
   const host = document.createElement('div'); host.dataset.crrtExtension = 'true'; host.dataset.fw = ''; document.body.append(host)
@@ -57,6 +63,12 @@ function setup(activate = false, page?: WidgetPage) {
   const container = document.createElement('div'); shadow.append(container)
   const view = render(<ExtensionWidget activate={activate} page={page} />, { container })
   return { ...view, host, shadow, ui: within(container) }
+}
+
+function pageTransition(type: 'pagehide' | 'pageshow', persisted = false) {
+  const event = new Event(type) as PageTransitionEvent
+  Object.defineProperty(event, 'persisted', { value: persisted })
+  return event
 }
 
 async function selectTarget(view: ReturnType<typeof setup>) {
@@ -661,7 +673,7 @@ it('ignores a late load failure after the widget unmounts', async () => {
   expect(view.container).toBeEmptyDOMElement()
 })
 
-it('autoloads only in an activated tab, avoids duplicate widgets, and supports popup activation', async () => {
+it('autoloads only in an activated tab, restores from BFCache, and supports popup activation', async () => {
   expect(autoload.matches).toEqual(['http://*/*', 'https://*/*'])
   expect(config.manifest).toMatchObject({ host_permissions: ['http://*/*', 'https://*/*'] })
   expect((config.vite as () => unknown)()).toEqual({ build: { assetsInlineLimit: Infinity } })
@@ -675,11 +687,17 @@ it('autoloads only in an activated tab, avoids duplicate widgets, and supports p
   expect(readFileSync(assets[0].absoluteSrc)).toEqual(readFileSync('branding/design-system-crrt/Frame 11.png'))
   const spy = vi.spyOn(window, 'dispatchEvent')
   const attach = vi.spyOn(Element.prototype, 'attachShadow')
+  const listeners: Array<() => void> = []
+  const context = { addEventListener(target: Window, type: string, listener: EventListener) {
+    target.addEventListener(type, listener)
+    listeners.push(() => target.removeEventListener(type, listener))
+  } }
   sendMessage.mockResolvedValueOnce({ ok: true, data: false })
-  await act(async () => { await autoload.main({} as never) })
+  await act(async () => { await autoload.main(context as never) })
   expect(document.querySelector('[data-crrt-extension]')).toBeNull()
   sendMessage.mockResolvedValueOnce({ ok: true, data: true })
-  await act(async () => { await autoload.main({} as never) })
+  window.dispatchEvent(pageTransition('pageshow', true))
+  await waitFor(() => expect(document.querySelector('[data-crrt-extension]')).not.toBeNull())
   const host = document.querySelector('[data-crrt-extension]')!
   expect(attach).toHaveBeenCalledWith({ mode: 'closed' })
   expect(attach.mock.results[0].value.querySelector('[data-fw-crrt]')).toBeNull()
@@ -697,6 +715,22 @@ it('autoloads only in an activated tab, avoids duplicate widgets, and supports p
   expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
   await act(async () => { (script as unknown as () => void)() })
   expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
+  window.dispatchEvent(pageTransition('pagehide', true))
+  expect(host.isConnected).toBe(false)
+  sendMessage.mockResolvedValueOnce({ ok: true, data: true })
+  window.dispatchEvent(pageTransition('pageshow', true))
+  await waitFor(() => expect(document.querySelector('[data-crrt-extension]')).not.toBeNull())
+  listeners.forEach((remove) => remove())
+})
+
+it('cleans up a deactivated widget only once', () => {
+  mountWidget()
+  const host = document.querySelector('[data-crrt-extension]')!
+  window.dispatchEvent(new CustomEvent('crrt:deactivate'))
+  expect(disconnectPageHost).toHaveBeenCalledOnce()
+  expect(host.isConnected).toBe(false)
+  window.dispatchEvent(pageTransition('pagehide'))
+  expect(disconnectPageHost).toHaveBeenCalledOnce()
 })
 
 it('keeps private text, signed images, and mutation controls inaccessible to page DOM scripts', async () => {
