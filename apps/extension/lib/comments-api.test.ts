@@ -60,7 +60,7 @@ describe('extension comments API client', () => {
       .mockResolvedValueOnce(new Response(JSON.stringify(prepared), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
     await expect(getExternalWorkDraft('a/b')).resolves.toEqual(prepared)
-    await expect(sendExternalWork('a/b', { title: 'Edited', body: 'Body' })).resolves.toEqual(created)
+    await expect(sendExternalWork('a/b', 'github', { title: 'Edited', body: 'Body' })).resolves.toEqual(created)
     expect(fetch.mock.calls[0]?.[0]).toContain('/a%2Fb/external-work?provider=github')
     expect(fetch.mock.calls[1]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ provider: 'github', draft: { title: 'Edited', body: 'Body' } }) })
   })

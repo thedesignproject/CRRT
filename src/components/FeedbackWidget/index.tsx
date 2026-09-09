@@ -524,6 +524,7 @@ function FeedbackWidgetInner({
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
   const [pinsVisible, setPinsVisible] = useState(true)
   const [externalWork, setExternalWork] = useState<{
+    provider: 'github' | 'linear' | 'jira'
     commentId: string
     destination: string
     title: string
@@ -531,6 +532,7 @@ function FeedbackWidgetInner({
     busy: boolean
     error: string
   } | null>(null)
+  const [externalProviderCommentId, setExternalProviderCommentId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   // Synchronous guard — state updates are async, so double-firing handleSend
@@ -994,17 +996,17 @@ function FeedbackWidgetInner({
     setEditingId(null)
   }
 
-  async function prepareExternalWork(commentId: string) {
+  async function prepareExternalWork(commentId: string, provider: 'github' | 'linear' | 'jira') {
     if (!personalComments?.externalWork || externalWorkRequestRef.current) return
     externalWorkRequestRef.current = true
     try {
-      const prepared = await personalComments.externalWork.prepare(commentId)
+      const prepared = await personalComments.externalWork.prepare(provider, commentId)
       if (prepared.existingUrl) {
         const opened = window.open(prepared.existingUrl, '_blank', 'noopener,noreferrer')
         if (opened) opened.opener = null
         return
       }
-      setExternalWork({ commentId, destination: prepared.destination, title: prepared.title, body: prepared.body, busy: false, error: '' })
+      setExternalWork({ provider, commentId, destination: prepared.destination, title: prepared.title, body: prepared.body, busy: false, error: '' })
     } catch (error) {
       setApiError(error instanceof Error ? error.message : 'Could not prepare external work')
     } finally {
@@ -1018,7 +1020,7 @@ function FeedbackWidgetInner({
     externalWorkRequestRef.current = true
     setExternalWork({ ...request, busy: true, error: '' })
     try {
-      const result = await personalComments.externalWork.send(request.commentId, { title: request.title.trim(), body: request.body.trim() })
+      const result = await personalComments.externalWork.send(request.provider, request.commentId, { title: request.title.trim(), body: request.body.trim() })
       setExternalWork(null)
       const opened = window.open(result.issueUrl, '_blank', 'noopener,noreferrer')
       if (opened) opened.opener = null
@@ -1670,7 +1672,7 @@ function FeedbackWidgetInner({
                         reviewEnabled={!personalComments}
                         mutationEnabled={!personalComments || c.editable !== false}
                         onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
-                          ? () => { void prepareExternalWork(c.id) }
+                          ? () => { setExternalProviderCommentId(c.id) }
                           : undefined}
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
@@ -2158,7 +2160,7 @@ function FeedbackWidgetInner({
                       }}
                     >
                       {personalComments?.externalWork && c.reviewStatus !== 'rejected' && <button
-                        onClick={() => { void prepareExternalWork(c.id); setMenuOpenId(null) }}
+                        onClick={() => { setExternalProviderCommentId(c.id); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
@@ -2362,6 +2364,28 @@ function FeedbackWidgetInner({
         />
       )}
 
+      {externalProviderCommentId && personalComments?.externalWork && (
+        <div
+          {...{ [WIDGET_ATTR]: '' }}
+          role="presentation"
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setExternalProviderCommentId(null) }}
+          style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
+        >
+          <div role="dialog" aria-modal="true" aria-labelledby="fw-provider-title" style={{ width: 'min(360px, 100%)', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
+            <h2 id="fw-provider-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send feedback to…</h2>
+            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Choose a connected project integration.</p>
+            <div style={{ display: 'grid', gap: 8 }}>
+              {personalComments.externalWork.providers.map((provider) => (
+                <button key={provider} type="button" onClick={() => { const id = externalProviderCommentId; setExternalProviderCommentId(null); void prepareExternalWork(id, provider) }} style={{ borderRadius: 8, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', color: 'var(--fw-foreground)', padding: '11px 12px', textAlign: 'left', fontWeight: 700, cursor: 'pointer' }}>
+                  {provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}><button type="button" onClick={() => setExternalProviderCommentId(null)} style={{ borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground-muted)', padding: '8px 12px', cursor: 'pointer' }}>Cancel</button></div>
+          </div>
+        </div>
+      )}
+
       {externalWork && (
         <div
           {...{ [WIDGET_ATTR]: '' }}
@@ -2370,7 +2394,7 @@ function FeedbackWidgetInner({
           style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
         >
           <div role="dialog" aria-modal="true" aria-labelledby="fw-external-work-title" style={{ width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
-            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to GitHub</h2>
+            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to {externalWork.provider === 'github' ? 'GitHub' : externalWork.provider === 'linear' ? 'Linear' : 'Jira'}</h2>
             <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Review and edit before creating in {externalWork.destination}.</p>
             <label style={{ display: 'block', color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
               Title

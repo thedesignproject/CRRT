@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import type { ExternalWorkProvider } from '../api'
 
 export function ExternalWorkDialog({
+  provider,
   destination,
   initialDraft,
   busy,
@@ -8,6 +10,7 @@ export function ExternalWorkDialog({
   onCancel,
   onSubmit,
 }: {
+  provider: ExternalWorkProvider
   destination: string
   initialDraft: { title: string; body: string }
   busy: boolean
@@ -23,7 +26,7 @@ export function ExternalWorkDialog({
   }}>
     <div role="dialog" aria-modal="true" aria-labelledby="external-work-title" className="w-full max-w-xl rounded-xl border border-border bg-card p-5 shadow-2xl">
       <div className="mb-4">
-        <h2 id="external-work-title" className="text-base font-semibold text-foreground">Send to GitHub</h2>
+        <h2 id="external-work-title" className="text-base font-semibold text-foreground">Send to {provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'}</h2>
         <p className="mt-1 text-xs text-muted-foreground">Review and edit before creating in {destination}.</p>
       </div>
       <label className="block text-xs font-semibold text-muted-foreground">

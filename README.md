@@ -180,9 +180,11 @@ Example values live in `.env.example`.
 Required server variables:
 
 - `SUPABASE_URL`
-- `SUPABASE_KEY`
+- `SUPABASE_KEY` — the anon/publishable key; the dashboard includes it in the browser bundle
+- `SUPABASE_SERVICE_ROLE_KEY` — the privileged server-only key; never expose it to client code
 - `REVIEWER_API_TOKEN`
-- `SHARE_TOKEN_SECRET`
+- `SHARE_TOKEN_SECRET` - encrypts persisted share and native integration tokens
+- `WIDGET_AUTH_SECRET` - signs native integration OAuth state
 
 Product Audit server variables (when the feature is enabled):
 
@@ -201,8 +203,12 @@ Optional server variables:
 - `COMMENT_ACTIVITY_EMAIL_FROM` - sender for comment activity emails, defaults to `CRRT <activity@mail.crrt.ai>`
 - `COMMENT_ACTIVITY_EMAIL_COOLDOWN_HOURS` - per-project email cooldown window, defaults to `5`
 - `COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS` - Resend request timeout, defaults to `5000`
+- `LINEAR_CLIENT_ID` and `LINEAR_CLIENT_SECRET` - enable native Linear OAuth and issue creation
+- `LINEAR_REDIRECT_URI` - optional fixed Linear callback URL; defaults to `APP_URL/v1/integrations/linear/callback`
+- `JIRA_CLIENT_ID` and `JIRA_CLIENT_SECRET` - enable native Jira Cloud OAuth and issue creation
+- `JIRA_REDIRECT_URI` - optional fixed Jira callback URL; defaults to `APP_URL/v1/integrations/jira/callback`
 
-Comment activity emails also require `SUPABASE_SERVICE_ROLE_KEY` so the API can resolve project member emails from Supabase Auth. Without it, the email path stays disabled because there are no resolved recipients.
+The service-role key also lets the API resolve project member emails from Supabase Auth for comment activity notifications. Without it, that email path stays disabled because there are no resolved recipients.
 
 Useful client variables:
 
@@ -330,15 +336,14 @@ Copy `.env.example` to `.env`:
 cp .env.example .env
 ```
 
-Fill in the required server variables (see [Environment variables](#environment-variables)):
+Fill in the required variables (see [Environment variables](#environment-variables)):
 
-- `SUPABASE_URL`, `SUPABASE_KEY` — your Postgres + auth provider
+- `SUPABASE_URL`, `SUPABASE_KEY` — your Supabase URL and public anon/publishable key
+- `SUPABASE_SERVICE_ROLE_KEY` — your privileged server-only key; never expose it to client code
 - `REVIEWER_API_TOKEN` — long random string; gates the reviewer API endpoints
 - `SHARE_TOKEN_SECRET` — long random string; signs per-share bearer tokens
 
-And the client-side equivalents for the widget + dashboard:
-
-- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` — the dashboard reads these to talk to Supabase Auth.
+The dashboard reads `SUPABASE_URL` and `SUPABASE_KEY` at build time. Only the public key is included in the browser bundle.
 
 ### 3. Apply the database schema
 

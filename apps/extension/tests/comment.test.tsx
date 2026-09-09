@@ -139,16 +139,23 @@ it('uses the selected project for authenticated extension comments', async () =>
   const tracker = extensionComments({
     publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'],
   })
+  expect(tracker.externalWork?.providers).toEqual(['github', 'linear', 'jira'])
   vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
-  await expect(tracker.externalWork?.prepare('c1')).rejects.toThrow('Connect GitHub')
+  await expect(tracker.externalWork?.prepare('github', 'c1')).rejects.toThrow('Connect GitHub')
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'linear', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+  await expect(tracker.externalWork?.prepare('linear', 'c1')).rejects.toThrow('Connect Linear')
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+  await expect(tracker.externalWork?.prepare('jira', 'c1')).rejects.toThrow('Connect Jira')
   const existing = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now' }
   vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: true, destination: null, existing, draft: { title: 'Ignored', body: 'Ignored' } })
-  await expect(tracker.externalWork?.prepare('c1')).resolves.toEqual({
-    destination: 'GitHub', title: '', body: '', existingUrl: existing.issueUrl,
+  await expect(tracker.externalWork?.prepare('github', 'c1')).resolves.toEqual({
+    destination: 'github', title: '', body: '', existingUrl: existing.issueUrl,
   })
   vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: true, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
-  await expect(tracker.externalWork?.prepare('c1')).resolves.toEqual({ destination: 'GitHub', title: 'T', body: 'B' })
-  await expect(tracker.externalWork?.send('c1', { title: 'T', body: 'B' })).resolves.toEqual({ issueUrl: existing.issueUrl })
+  await expect(tracker.externalWork?.prepare('github', 'c1')).resolves.toEqual({ destination: 'github', title: 'T', body: 'B' })
+  await expect(tracker.externalWork?.send('github', 'c1', { title: 'T', body: 'B' })).resolves.toEqual({ issueUrl: existing.issueUrl })
+  vi.mocked(sendExternalWork).mockResolvedValueOnce({ created: true } as never)
+  await expect(tracker.externalWork?.send('linear', 'c1', { title: 'T', body: 'B' })).rejects.toThrow('Tracker did not return an issue URL')
 
   const guest = extensionComments({
     publicKey: 'project', name: 'Storefront', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
@@ -281,12 +288,45 @@ it('lets internal members edit and confirm a manual GitHub handoff from the exte
   fireEvent.click(view.container.querySelector('[data-fw-pin]')!)
   fireEvent.click(view.ui.getByRole('button', { name: 'More options' }))
   fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
+  fireEvent.click(await view.ui.findByRole('button', { name: 'GitHub' }))
   const title = await view.ui.findByRole('textbox', { name: 'External work title' })
   fireEvent.change(title, { target: { value: 'Edited title' } })
   fireEvent.change(view.ui.getByRole('textbox', { name: 'External work description' }), { target: { value: 'Edited body' } })
   fireEvent.click(view.ui.getByRole('button', { name: 'Create issue' }))
-  await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith('c1', { title: 'Edited title', body: 'Edited body' }))
+  await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith('c1', 'github', { title: 'Edited title', body: 'Edited body' }))
   expect(open).toHaveBeenCalledWith('https://github.com/acme/store/issues/1', '_blank', 'noopener,noreferrer')
+})
+
+it('cancels the provider picker safely and prepares Linear and Jira handoffs', async () => {
+  resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'] })
+  vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: null, draft: { title: 'Linear title', body: 'Linear body' } })
+  const page: WidgetPage = { url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0, liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
+  const view = setup(false, page)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
+  fireEvent.keyDown(window, { key: 'f' })
+  const openPicker = async () => {
+    fireEvent.click(await view.ui.findByRole('button', { name: 'More' }))
+    fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
+    return view.ui.findByRole('dialog', { name: 'Send feedback to…' })
+  }
+  let picker = await openPicker()
+  fireEvent.mouseDown(picker)
+  expect(view.ui.getByRole('dialog')).toBeInTheDocument()
+  fireEvent.mouseDown(picker.parentElement!)
+  expect(view.ui.queryByRole('dialog')).toBeNull()
+  await openPicker()
+  fireEvent.click(view.ui.getByRole('button', { name: 'Cancel' }))
+  expect(view.ui.queryByRole('dialog')).toBeNull()
+  await openPicker()
+  fireEvent.click(view.ui.getByRole('button', { name: 'Linear' }))
+  expect(await view.ui.findByRole('dialog')).toHaveTextContent('Send to Linear')
+  expect(getExternalWorkDraft).toHaveBeenCalledWith('c1', 'linear')
+  fireEvent.click(view.ui.getByRole('button', { name: 'Cancel' }))
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: true, destination: 'WEB · Website', existing: null, draft: { title: 'Jira title', body: 'Jira body' } })
+  await openPicker()
+  fireEvent.click(view.ui.getByRole('button', { name: 'Jira' }))
+  expect(await view.ui.findByRole('dialog')).toHaveTextContent('Send to Jira')
+  expect(getExternalWorkDraft).toHaveBeenCalledWith('c1', 'jira')
 })
 
 it('opens an existing handoff safely and hides handoff actions for rejected feedback', async () => {
@@ -304,6 +344,7 @@ it('opens an existing handoff safely and hides handoff actions for rejected feed
   fireEvent.mouseEnter(send)
   fireEvent.mouseLeave(send)
   fireEvent.click(send)
+  fireEvent.click(await view.ui.findByRole('button', { name: 'GitHub' }))
   await waitFor(() => expect(open).toHaveBeenCalledWith(existing.issueUrl, '_blank', 'noopener,noreferrer'))
   expect(opened.opener).toBeNull()
   expect(view.ui.queryByRole('dialog')).toBeNull()
@@ -332,6 +373,7 @@ it('keeps the handoff dialog recoverable across preparation and send failures', 
   const openDialog = async () => {
     fireEvent.click(await view.ui.findByRole('button', { name: 'More' }))
     fireEvent.click(view.ui.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(await view.ui.findByRole('button', { name: 'GitHub' }))
     return view.ui.findByRole('dialog')
   }
   let dialog = await openDialog()
@@ -380,7 +422,7 @@ it('shows safe handoff preparation errors from thrown and opaque failures', asyn
   const adapter = {
     ...personalComments,
     list: vi.fn().mockResolvedValue([comment]),
-    externalWork: { prepare, send: vi.fn() },
+    externalWork: { providers: ['github'] as Array<'github' | 'linear'>, prepare, send: vi.fn() },
   }
   const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
   await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
@@ -388,6 +430,7 @@ it('shows safe handoff preparation errors from thrown and opaque failures', asyn
   const trigger = async () => {
     fireEvent.click(view.getByRole('button', { name: 'More' }))
     fireEvent.click(view.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(await view.findByRole('button', { name: 'GitHub' }))
   }
   await trigger()
   expect(await view.findByText('Safe prepare error')).toBeInTheDocument()
@@ -402,7 +445,7 @@ it('deduplicates simultaneous handoff preparation requests and tolerates blocked
   const adapter = {
     ...personalComments,
     list: vi.fn().mockResolvedValue([comment]),
-    externalWork: { prepare, send: vi.fn() },
+    externalWork: { providers: ['github'] as Array<'github' | 'linear'>, prepare, send: vi.fn() },
   }
   vi.spyOn(window, 'open').mockReturnValue(null)
   const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
@@ -410,7 +453,9 @@ it('deduplicates simultaneous handoff preparation requests and tolerates blocked
   fireEvent.keyDown(window, { key: 'f' })
   fireEvent.click(view.getByRole('button', { name: 'More' }))
   const send = view.getByRole('button', { name: 'Send to…' })
-  act(() => { send.click(); send.click() })
+  fireEvent.click(send)
+  const github = await view.findByRole('button', { name: 'GitHub' })
+  act(() => { github.click(); github.click() })
   expect(prepare).toHaveBeenCalledTimes(1)
   await act(async () => resolvePrepare({ destination: 'GitHub', title: '', body: '', existingUrl: 'https://github.com/acme/store/issues/1' }))
   expect(window.open).toHaveBeenCalled()
@@ -420,7 +465,7 @@ it('keeps rejected personal pins unavailable for external handoff', async () => 
   const adapter = {
     ...personalComments,
     list: vi.fn().mockResolvedValue([{ ...comment, reviewStatus: 'rejected' as const }]),
-    externalWork: { prepare: vi.fn(), send: vi.fn() },
+    externalWork: { providers: ['github'] as Array<'github' | 'linear'>, prepare: vi.fn(), send: vi.fn() },
   }
   const view = render(<FeedbackWidget projectId="" personalComments={adapter} viewerEmail="user@example.com" />)
   await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
