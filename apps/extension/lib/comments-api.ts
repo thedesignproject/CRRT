@@ -24,7 +24,7 @@ export type ExtensionComment = {
 }
 
 export type ExternalWorkDraft = {
-  provider: 'github' | 'linear'
+  provider: 'github' | 'linear' | 'jira'
   connected: boolean
   destination: string | null
   existing: { issueNumber?: number; issueUrl?: string; externalUrl?: string; createdAt: string } | null
@@ -80,11 +80,11 @@ export function deletePageComment(id: string) {
   return request<void>(`/v1/extension/comments/${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
-export function getExternalWorkDraft(commentId: string, provider: 'github' | 'linear' = 'github') {
+export function getExternalWorkDraft(commentId: string, provider: 'github' | 'linear' | 'jira' = 'github') {
   return request<ExternalWorkDraft>(`/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`)
 }
 
-export function sendExternalWork(commentId: string, provider: 'github' | 'linear', draft: { title: string; body: string }) {
+export function sendExternalWork(commentId: string, provider: 'github' | 'linear' | 'jira', draft: { title: string; body: string }) {
   return request<{ issueNumber?: number; issueUrl?: string; externalUrl?: string; createdAt: string; created: boolean }>(
     `/v1/comments/${encodeURIComponent(commentId)}/external-work`,
     { method: 'POST', body: JSON.stringify({ provider, draft }) },

@@ -127,11 +127,13 @@ it('uses the selected project for authenticated extension comments', async () =>
   const tracker = extensionComments({
     publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'],
   })
-  expect(tracker.externalWork?.providers).toEqual(['github', 'linear'])
+  expect(tracker.externalWork?.providers).toEqual(['github', 'linear', 'jira'])
   vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
   await expect(tracker.externalWork?.prepare('github', 'c1')).rejects.toThrow('Connect GitHub')
   vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'linear', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
   await expect(tracker.externalWork?.prepare('linear', 'c1')).rejects.toThrow('Connect Linear')
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+  await expect(tracker.externalWork?.prepare('jira', 'c1')).rejects.toThrow('Connect Jira')
   const existing = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now' }
   vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: true, destination: null, existing, draft: { title: 'Ignored', body: 'Ignored' } })
   await expect(tracker.externalWork?.prepare('github', 'c1')).resolves.toEqual({
@@ -283,7 +285,7 @@ it('lets internal members edit and confirm a manual GitHub handoff from the exte
   expect(open).toHaveBeenCalledWith('https://github.com/acme/store/issues/1', '_blank', 'noopener,noreferrer')
 })
 
-it('cancels the provider picker safely and prepares Linear handoff', async () => {
+it('cancels the provider picker safely and prepares Linear and Jira handoffs', async () => {
   resolveProjectForPage.mockResolvedValue({ publicKey: 'project', name: 'Storefront', role: 'member', capabilities: ['integrations:send'] })
   vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: null, draft: { title: 'Linear title', body: 'Linear body' } })
   const page: WidgetPage = { url: location.href.split('#')[0], width: 1000, height: 1000, scrollX: 0, scrollY: 0, liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
@@ -307,6 +309,12 @@ it('cancels the provider picker safely and prepares Linear handoff', async () =>
   fireEvent.click(view.ui.getByRole('button', { name: 'Linear' }))
   expect(await view.ui.findByRole('dialog')).toHaveTextContent('Send to Linear')
   expect(getExternalWorkDraft).toHaveBeenCalledWith('c1', 'linear')
+  fireEvent.click(view.ui.getByRole('button', { name: 'Cancel' }))
+  vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: true, destination: 'WEB · Website', existing: null, draft: { title: 'Jira title', body: 'Jira body' } })
+  await openPicker()
+  fireEvent.click(view.ui.getByRole('button', { name: 'Jira' }))
+  expect(await view.ui.findByRole('dialog')).toHaveTextContent('Send to Jira')
+  expect(getExternalWorkDraft).toHaveBeenCalledWith('c1', 'jira')
 })
 
 it('opens an existing handoff safely and hides handoff actions for rejected feedback', async () => {

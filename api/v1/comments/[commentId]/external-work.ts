@@ -3,6 +3,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createDefaultCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import { formatGithubIssueBody } from '../../../_lib/github-issues.js'
+import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
+import { createJiraIssue, getJiraDestinations } from '../../../_lib/jira.js'
 import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
@@ -26,7 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
   if (req.method !== 'GET' && req.method !== 'POST') return methodNotAllowed(req, res, METHODS)
   const provider = req.method === 'GET' ? getStringQuery(req.query.provider) : req.body?.provider
-  if (provider !== 'github' && provider !== 'linear') return jsonError(req, res, 400, 'unsupported_external_work_provider')
+  if (provider !== 'github' && provider !== 'linear' && provider !== 'jira') return jsonError(req, res, 400, 'unsupported_external_work_provider')
   if (req.method === 'POST' && provider === 'github') return githubIssueHandler(req, res)
 
   const user = await requireUser(req, res)
@@ -41,9 +43,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const comment = await getCommentForGithubIssue(publicComment.projectId, commentId)
     if (!comment) return jsonError(req, res, 404, 'Comment not found')
     const content = createDefaultCommentIssueContent(comment)
-    if (provider === 'linear') {
-      const existing = await getCommentExternalWork(commentId, 'linear')
-      const integration = await getProjectIntegration(publicComment.projectId, 'linear')
+    if (provider === 'linear' || provider === 'jira') {
+      const existing = await getCommentExternalWork(commentId, provider)
+      const integration = await getProjectIntegration(publicComment.projectId, provider)
       if (req.method === 'GET') {
         setCors(req, res, METHODS)
         return res.status(200).json({
@@ -71,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           created: false,
         })
       }
-      if (!integration?.containerId) return jsonError(req, res, 409, 'linear_not_connected')
+      if (!integration?.containerId) return jsonError(req, res, 409, `${provider}_not_connected`)
       const draft = req.body?.draft
       const title = typeof draft?.title === 'string' ? draft.title.trim() : ''
       const body = typeof draft?.body === 'string' ? draft.body.trim() : ''
@@ -79,7 +81,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const leaseToken = randomUUID()
       const claim = await claimCommentExternalWork({
-        projectId: publicComment.projectId, commentId, provider: 'linear', leaseToken,
+        projectId: publicComment.projectId, commentId, provider, leaseToken,
       })
       if (claim?.state === 'created' && claim.externalUrl) {
         setCors(req, res, METHODS)
@@ -92,23 +94,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
       }
       if (!claim || claim.leaseToken !== leaseToken) {
-        return jsonError(req, res, 409, claim?.uncertainAt ? 'linear_issue_recovery_pending' : 'linear_issue_creation_in_progress')
+        return jsonError(req, res, 409, claim?.uncertainAt ? `${provider}_issue_recovery_pending` : `${provider}_issue_creation_in_progress`)
       }
       try {
-        const accessToken = await getLinearAccessToken(integration)
+        const accessToken = provider === 'linear'
+          ? await getLinearAccessToken(integration)
+          : await getJiraAccessToken(integration)
         if (!(await requireProjectCapability(req, res, user, publicComment.projectId, 'integrations:send'))) {
           await releaseCommentExternalWork(claim.id, leaseToken)
           return
         }
-        if (!(await markCommentExternalWorkUncertain(claim.id, leaseToken))) throw new Error('linear_issue_creation_in_progress')
-        const result = await createLinearIssue(accessToken, { teamId: integration.containerId, title, description: body })
+        if (!(await markCommentExternalWorkUncertain(claim.id, leaseToken))) throw new Error(`${provider}_issue_creation_in_progress`)
+        const result = provider === 'linear'
+          ? await createLinearIssue(accessToken, { teamId: integration.containerId, title, description: body })
+          : await (async () => {
+              const destinations = await getJiraDestinations(accessToken)
+              const destination = destinations.find((candidate) => (
+                candidate.cloudId === integration.workspaceId && candidate.projectId === integration.containerId
+              ))
+              if (!destination) throw new Error('jira_project_unavailable')
+              return createJiraIssue(accessToken, {
+                cloudId: destination.cloudId,
+                siteUrl: destination.siteUrl,
+                projectId: destination.projectId,
+                title,
+                description: body,
+              })
+            })()
         const finalized = await finalizeCommentExternalWork({ id: claim.id, leaseToken, ...result })
-        if (!finalized) throw new Error('linear_issue_persistence_failed')
+        if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
         await updateReviewStatus(publicComment.projectId, commentId, 'accepted')
         setCors(req, res, METHODS)
         return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
       } catch (error) {
-        if (error instanceof Error && ['linear_request_failed', 'linear_issue_create_failed'].includes(error.message)) {
+        if (error instanceof Error && [
+          'linear_request_failed', 'linear_issue_create_failed',
+          'jira_request_failed', 'jira_issue_create_failed', 'jira_issue_type_unavailable', 'jira_project_unavailable',
+        ].includes(error.message)) {
           await releaseCommentExternalWork(claim.id, leaseToken)
         }
         throw error
@@ -131,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const code = error instanceof Error ? error.message : ''
     const status = code.includes('recovery_pending') || code.includes('creation_in_progress')
       ? 409
-      : code.startsWith('linear_') ? 502 : 500
+      : code.startsWith('linear_') || code.startsWith('jira_') ? 502 : 500
     if (status === 500) console.error(error)
     return jsonError(req, res, status, req.method === 'POST' ? 'External issue creation failed' : 'Could not prepare external work')
   }

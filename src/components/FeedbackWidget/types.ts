@@ -48,9 +48,9 @@ export interface PersonalComments {
   }
   /** Manual external-tracker handoff for authorized project members. */
   externalWork?: {
-    providers: Array<'github' | 'linear'>
-    prepare(provider: 'github' | 'linear', commentId: string): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
-    send(provider: 'github' | 'linear', commentId: string, draft: { title: string; body: string }): Promise<{ issueUrl: string }>
+    providers: Array<'github' | 'linear' | 'jira'>
+    prepare(provider: 'github' | 'linear' | 'jira', commentId: string): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
+    send(provider: 'github' | 'linear' | 'jira', commentId: string, draft: { title: string; body: string }): Promise<{ issueUrl: string }>
   }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>

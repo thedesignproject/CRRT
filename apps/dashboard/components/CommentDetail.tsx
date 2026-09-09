@@ -21,6 +21,9 @@ import { ProjectEmptyState } from './ProjectEmptyState'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
 import { ExternalWorkProviderDialog } from './ExternalWorkProviderDialog'
 
+const providerLabel = (provider: ExternalWorkProvider) =>
+  provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'
+
 interface CommentDetailProps {
   selectedComment: Comment | null
   selectedProject: string
@@ -113,7 +116,7 @@ export function CommentDetail({
         setExternalWorkDraft(prepared)
       }
     } catch {
-      if (selectedIdRef.current === commentId) setIssueError(`Could not prepare the ${provider === 'github' ? 'GitHub' : 'Linear'} issue. Check Project Settings and try again.`)
+      if (selectedIdRef.current === commentId) setIssueError(`Could not prepare the ${providerLabel(provider)} issue. Check Project Settings and try again.`)
     } finally {
       issueRequests.current.delete(commentId)
       if (selectedIdRef.current === commentId) setIssueBusy(false)
@@ -138,7 +141,7 @@ export function CommentDetail({
         issueNumber: result.issueNumber!, issueUrl: url, createdAt: result.createdAt,
       } }))
       setExternalWorkDraft(null)
-      if (provider === 'linear') {
+      if (provider !== 'github') {
         const opened = window.open(url, '_blank', 'noopener,noreferrer')
         if (opened) opened.opener = null
       }

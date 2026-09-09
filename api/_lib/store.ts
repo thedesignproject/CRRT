@@ -1162,6 +1162,31 @@ export async function updateProjectIntegrationDestination(
   return data ? mapProjectIntegration(data as ProjectIntegrationRow) : null
 }
 
+export async function updateProjectIntegrationWorkspaceDestination(input: {
+  projectKey: string
+  provider: ExternalIntegrationProvider
+  workspaceId: string
+  workspaceName: string
+  containerId: string
+  containerName: string
+}) {
+  const { data, error } = await getSupabase()
+    .from('project_integrations')
+    .update({
+      workspace_id: input.workspaceId,
+      workspace_name: input.workspaceName,
+      container_id: input.containerId,
+      container_name: input.containerName,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq('project_key', input.projectKey)
+    .eq('provider', input.provider)
+    .select(PROJECT_INTEGRATION_COLUMNS)
+    .maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapProjectIntegration(data as ProjectIntegrationRow) : null
+}
+
 export async function updateProjectIntegrationTokens(input: {
   id: string
   accessTokenCiphertext: string

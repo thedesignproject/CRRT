@@ -59,7 +59,7 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
   created: boolean
 }
 
-export type ExternalWorkProvider = 'github' | 'linear'
+export type ExternalWorkProvider = 'github' | 'linear' | 'jira'
 
 export interface ExternalWorkDraft {
   provider: ExternalWorkProvider
@@ -70,7 +70,7 @@ export interface ExternalWorkDraft {
 }
 
 export interface ProjectTrackerIntegration {
-  provider: 'linear'
+  provider: 'linear' | 'jira'
   connected: boolean
   workspace?: string
   selectedDestinationId?: string | null
@@ -727,6 +727,27 @@ export function selectLinearTeam(apiBase: string, accessToken: string, projectKe
 export function disconnectLinear(apiBase: string, accessToken: string, projectKey: string) {
   return requestJson<void>(
     `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function getJiraIntegration(apiBase: string, accessToken: string, projectKey: string, authorize = false) {
+  return requestJson<ProjectTrackerIntegration & { authorizeUrl?: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira${authorize ? '?action=authorize' : ''}`,
+    { cache: 'no-store', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function selectJiraProject(apiBase: string, accessToken: string, projectKey: string, containerId: string) {
+  return requestJson<ProjectTrackerIntegration>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) }, body: JSON.stringify({ containerId }) },
+  )
+}
+
+export function disconnectJira(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<void>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
     { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
   )
 }

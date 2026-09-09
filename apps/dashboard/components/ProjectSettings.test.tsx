@@ -5,6 +5,7 @@ import type { Project, ProjectMember } from '../api'
 vi.mock('../hooks/useProjectSettings', () => ({ useProjectSettings: vi.fn() }))
 vi.mock('./GitHubRepositorySettings', () => ({ GitHubRepositorySettings: () => null }))
 vi.mock('./LinearIntegrationSettings', () => ({ LinearIntegrationSettings: () => null }))
+vi.mock('./JiraIntegrationSettings', () => ({ JiraIntegrationSettings: () => null }))
 
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { ProjectSettings } from './ProjectSettings'
