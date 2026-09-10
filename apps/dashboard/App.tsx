@@ -83,7 +83,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
   )
   const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite'))
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
   const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
@@ -417,7 +417,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       const project = await claimProject(projectKey, name)
       setSelectedProject(project.publicKey)
       setView('feedback')
-      setStatusFilter('all')
+      setStatusFilter('open')
       setSelectedCommentId('')
       setAddProjectOpen(false)
     } catch (err) {
@@ -430,7 +430,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const handleOpenCommentActivity = useCallback((payload: { projectKey: string; latestCommentId?: string }) => {
     setSelectedProject(payload.projectKey)
     setView('feedback')
-    setStatusFilter('all')
+    setStatusFilter('open')
     if (payload.latestCommentId) {
       setPendingCommentSelection({ projectKey: payload.projectKey, commentId: payload.latestCommentId })
       void refreshComments()
