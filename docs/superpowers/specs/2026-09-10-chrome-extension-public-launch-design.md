@@ -1,7 +1,7 @@
 # CRRT Chrome Extension Public Launch
 
 **Date:** 2026-09-10
-**Status:** Approved design, pending written-spec review
+**Status:** Approved
 **Baseline:** `trunk` at `d617a1b` (`#250`)
 
 ## 1. Summary
