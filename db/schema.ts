@@ -122,6 +122,43 @@ export const projectInvites = pgTable(
 // Reference only: not exported, so Drizzle does not manage Supabase's auth table.
 const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
 
+// One-time, server-created authorization grants used to establish a separate
+// Supabase session inside the Chrome extension. Raw codes, state values, PKCE
+// verifiers, and sessions never enter this table.
+export const extensionAuthHandoffs = pgTable(
+  'extension_auth_handoffs',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    codeHash: text('code_hash').notNull(),
+    stateHash: text('state_hash').notNull(),
+    pkceChallenge: text('pkce_challenge').notNull(),
+    userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+    extensionId: text('extension_id').notNull(),
+    redirectUri: text('redirect_uri').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    codeHashUnique: uniqueIndex('extension_auth_handoffs_code_hash_unique').on(t.codeHash),
+    expiresIdx: index('extension_auth_handoffs_expires_at_idx').on(t.expiresAt),
+    cleanupIdx: index('extension_auth_handoffs_cleanup_idx').on(t.consumedAt, t.expiresAt),
+    codeHashCheck: check('extension_auth_handoffs_code_hash_check', sql`${t.codeHash} ~ '^[0-9a-f]{64}$'`),
+    stateHashCheck: check('extension_auth_handoffs_state_hash_check', sql`${t.stateHash} ~ '^[0-9a-f]{64}$'`),
+    pkceChallengeCheck: check('extension_auth_handoffs_pkce_challenge_check', sql`${t.pkceChallenge} ~ '^[A-Za-z0-9_-]{43}$'`),
+    extensionIdCheck: check('extension_auth_handoffs_extension_id_check', sql`${t.extensionId} ~ '^[a-p]{32}$'`),
+    redirectCheck: check(
+      'extension_auth_handoffs_redirect_uri_check',
+      sql`${t.redirectUri} = 'https://' || ${t.extensionId} || '.chromiumapp.org/crrt-auth'`,
+    ),
+    expiryCheck: check('extension_auth_handoffs_expiry_check', sql`${t.expiresAt} > ${t.createdAt}`),
+    consumedCheck: check(
+      'extension_auth_handoffs_consumed_at_check',
+      sql`${t.consumedAt} is null or ${t.consumedAt} >= ${t.createdAt}`,
+    ),
+  }),
+).enableRLS()
+
 export const projectRepoConfigs = pgTable('project_repo_configs', {
   projectKey: text('project_key')
     .primaryKey()
