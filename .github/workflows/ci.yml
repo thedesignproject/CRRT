@@ -19,6 +19,9 @@ jobs:
     name: check (react ${{ matrix.react }})
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
