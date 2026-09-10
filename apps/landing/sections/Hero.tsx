@@ -8,7 +8,7 @@ import { PIN_GRADIENT } from '@widget/components/FeedbackWidget/constants'
 // from the landing deploy (see vercel.json rewrite — TODO when ready).
 export const DASHBOARD_HREF = import.meta.env.DEV ? 'http://localhost:5173' : '/dashboard'
 
-export function Hero({ authenticated = false }: { authenticated?: boolean }) {
+export function Hero({ authenticated }: { authenticated: boolean }) {
   return (
     <section
       className="scanlines relative"
