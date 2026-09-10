@@ -72,6 +72,7 @@ export function CommentDetail({
   const [createdIssues, setCreatedIssues] = useState<Record<string, NonNullable<Comment['githubIssue']>>>({})
   const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
   const [providerPickerOpen, setProviderPickerOpen] = useState(false)
+  const [selectorOpen, setSelectorOpen] = useState(false)
   const issueRequests = useRef(new Map<string, symbol>())
   const selectedId = selectedComment?.id ?? null
   const selectedIdRef = useRef(selectedId)
@@ -85,7 +86,12 @@ export function CommentDetail({
     setIssueError(null)
     setExternalWorkDraft(null)
     setProviderPickerOpen(false)
+    setSelectorOpen(false)
   }, [selectedId])
+
+  const selectorContext = selectedComment?.targetType === 'text_range' && selectedComment.anchor
+    ? selectedComment.anchor.containerSelector
+    : selectedComment?.selector
 
   const prepareExternalWork = async (comment: Comment, provider: ExternalWorkProvider) => {
     if (provider === 'github' && githubIssue) {
@@ -221,12 +227,6 @@ export function CommentDetail({
                       )}
                     </div>
                   </div>
-                  {selectedComment.selector && (
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-muted/60 border border-border">
-                      <SelectorIcon size={12} />
-                      <code className="text-[12px] font-mono text-foreground/70 break-all">{selectedComment.selector}</code>
-                    </div>
-                  )}
                 </div>
               )}
 
@@ -253,15 +253,29 @@ export function CommentDetail({
                         <span className="text-foreground font-medium">{selectedComment.anchor.selectedText}</span>
                         <span className="text-muted-foreground">{selectedComment.anchor.suffix}</span>
                       </p>
-                      <div className="mt-2 text-xs font-mono text-muted-foreground">
-                        {selectedComment.anchor.containerSelector} · chars {selectedComment.anchor.startOffset}–{selectedComment.anchor.endOffset}
-                      </div>
-                    </div>
-                  ) : selectedComment.selector ? (
-                    <div className="mt-2 text-xs font-mono text-muted-foreground">
-                      {selectedComment.selector}
                     </div>
                   ) : null}
+                  {selectorContext && (
+                    <div className="mt-3">
+                      <button
+                        type="button"
+                        aria-expanded={selectorOpen}
+                        onClick={() => setSelectorOpen((open) => !open)}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        <SelectorIcon size={12} />
+                        {selectorOpen ? 'Hide selector' : 'Show selector'}
+                      </button>
+                      {selectorOpen && (
+                        <div className="mt-2 px-3 py-2 rounded-md bg-muted/60 border border-border text-xs font-mono text-muted-foreground break-all">
+                          <code>{selectorContext}</code>
+                          {selectedComment.targetType === 'text_range' && selectedComment.anchor && (
+                            <span> · chars {selectedComment.anchor.startOffset}–{selectedComment.anchor.endOffset}</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

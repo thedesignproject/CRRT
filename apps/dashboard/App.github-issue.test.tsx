@@ -11,6 +11,7 @@ const fixtures = vi.hoisted(() => ({
     updatedAt: '',
   }] as Array<Record<string, unknown>>,
   comments: [] as Array<Record<string, unknown>>,
+  claimProject: vi.fn(),
   acceptInvite: vi.fn(),
   updateImpl: vi.fn(),
   updateReview: vi.fn(),
@@ -41,7 +42,7 @@ vi.mock('./hooks/useProjects', () => ({
     projects: fixtures.projects,
     loading: false,
     error: null,
-    claimProject: fixtures.fn,
+    claimProject: fixtures.claimProject,
     checkAvailability: fixtures.fn,
     refresh: fixtures.fn,
   }),
@@ -84,9 +85,11 @@ vi.mock('./components/CommentDetail', () => ({
     <button onClick={() => props.onVisibilityChange?.('missing-comment', 'internal')}>change missing audience</button>
   </div>,
 }))
-vi.mock('./components/Header', () => ({ Header: (props: { onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
+vi.mock('./components/Header', () => ({ Header: (props: { onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
-  CommentList: (props: { toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void }) => <>
+  CommentList: (props: { statusFilter: string; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void }) => <>
+    <span data-testid="status-filter">{props.statusFilter}</span>
+    <button onClick={() => props.selectFilter('all')}>show all</button>
     <button onClick={() => props.toggleBulkSelect('comment-1')}>toggle test comment</button>
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
@@ -113,6 +116,7 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/')
   fixtures.signedIn = true
   fixtures.acceptInvite.mockReset().mockResolvedValue(undefined)
+  fixtures.claimProject.mockReset().mockResolvedValue({ publicKey: 'new-project' })
   fixtures.updateImpl.mockReset().mockResolvedValue(undefined)
   fixtures.updateReview.mockReset().mockResolvedValue(undefined)
   fixtures.agentProject.mockReset()
@@ -125,6 +129,20 @@ beforeEach(() => {
 afterEach(() => window.history.replaceState({}, '', '/'))
 
 describe('<App /> GitHub issue wiring', () => {
+  it('opens the feedback list on Open', async () => {
+    render(<App />)
+    expect(await screen.findByTestId('status-filter')).toHaveTextContent('open')
+  })
+
+  it('returns to Open after creating a project', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+    expect(screen.getByTestId('status-filter')).toHaveTextContent('all')
+    fireEvent.click(screen.getByRole('button', { name: 'create project' }))
+    await waitFor(() => expect(fixtures.claimProject).toHaveBeenCalledWith('new-project', 'New project'))
+    expect(screen.getByTestId('status-filter')).toHaveTextContent('open')
+  })
+
   it('accepts a pending invitation and removes its continuation parameters', async () => {
     window.history.replaceState({}, '', '/?invite=project-2&email=guest%40example.com#feedback')
     render(<App />)

@@ -319,6 +319,46 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(screen.queryByText(/Pin placed at/)).not.toBeInTheDocument()
   })
 
+  it('hides selector context behind a toggle and resets it for the next comment', () => {
+    const view = render(<CommentDetail {...props} />)
+    const toggle = screen.getByRole('button', { name: 'Show selector' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('#hero')).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    expect(screen.getByText('#hero')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide selector' })).toHaveAttribute('aria-expanded', 'true')
+
+    const next = { ...comment, id: 'comment-2', selector: '#footer' }
+    view.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    expect(screen.getByRole('button', { name: 'Show selector' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('#footer')).not.toBeInTheDocument()
+  })
+
+  it('reveals text-range selector and character offsets on demand', () => {
+    const textRange = {
+      ...comment,
+      targetType: 'text_range' as const,
+      anchor: {
+        kind: 'text_range' as const,
+        prefix: 'Before ',
+        selectedText: 'selected',
+        normalizedText: 'selected',
+        suffix: ' after',
+        containerSelector: '#article > p',
+        startOffset: 7,
+        endOffset: 15,
+        createdFromUrl: 'https://example.com',
+      },
+    }
+    render(<CommentDetail {...props} selectedComment={textRange} projectComments={[textRange]} filteredComments={[textRange]} />)
+    expect(screen.getByText('selected')).toBeInTheDocument()
+    expect(screen.queryByText('#article > p')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show selector' }))
+    expect(screen.getByText('#article > p')).toBeInTheDocument()
+    expect(screen.getByText(/chars 7–15/)).toBeInTheDocument()
+  })
+
   it('renders screenshot and action variants and invokes nearby controls', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const { rerender } = render(<CommentDetail

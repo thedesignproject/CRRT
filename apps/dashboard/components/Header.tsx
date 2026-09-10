@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
-import { asset, route } from '../lib/routes'
+import { asset, landingRoute, route } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
 import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
@@ -80,7 +80,11 @@ export function Header({
 }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 px-5 h-[60px] shrink-0 border-b border-border bg-card">
-      <div className="flex items-center gap-2 mr-2">
+      <a
+        href={landingRoute('?stay=1')}
+        aria-label="CRRT marketing site"
+        className="flex items-center gap-2 mr-2"
+      >
         <img
           src={asset('crrt-isologo.png')}
           alt="CRRT"
@@ -99,7 +103,7 @@ export function Header({
         >
           CRRT.
         </span>
-      </div>
+      </a>
 
       <div className="w-px h-5 bg-border" />
 
@@ -119,7 +123,7 @@ export function Header({
               <button
                 key={p.publicKey}
                 aria-pressed={isActive}
-                onClick={() => { setSelectedProject(p.publicKey); setStatusFilter('all'); setSelectedCommentId('') }}
+                onClick={() => { setSelectedProject(p.publicKey); setStatusFilter('open'); setSelectedCommentId('') }}
                 className={cn(
                   'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap',
                   isActive
