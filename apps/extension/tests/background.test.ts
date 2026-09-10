@@ -58,19 +58,39 @@ describe('extension background', () => {
   it('activates regular pages using temporary tab access', async () => {
     browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
     await activateCurrentTab()
-    expect(browser.storage.session.set).toHaveBeenCalledWith({ 'crrt:active-tab:7': true })
+    expect(browser.storage.session.set).toHaveBeenCalledWith({ 'crrt:active-tab:7': { origin: 'https://example.com' } })
     expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['comment.js'] })
   })
 
-  it('exposes activation only to the browser-provided tab and clears closed tabs', async () => {
+  it('exposes activation only to the browser-provided tab and original page origin', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    state.session['crrt:active-tab:7'] = { origin: 'https://example.com' }
+    await expect(send({ type: 'comment:is-active' }, { url: 'https://example.com/next', tab: { id: 7, url: 'https://stale.test' } })).resolves.toEqual({ ok: true, data: true })
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 8, url: 'https://example.com' } })).resolves.toEqual({ ok: true, data: false })
+    await expect(send({ type: 'comment:is-active' }, {})).resolves.toEqual({ ok: true, data: false })
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'https://other.example' } })).resolves.toEqual({ ok: true, data: false })
+    expect(state.session).not.toHaveProperty('crrt:active-tab:7')
+  })
+
+  it('clears legacy, malformed, and closed-tab activation state', async () => {
     ;(background as unknown as () => void)()
     vi.mocked(isAuthMessage).mockReturnValue(false)
     state.session['crrt:active-tab:7'] = true
-    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7 } })).resolves.toEqual({ ok: true, data: true })
-    await expect(send({ type: 'comment:is-active' }, { tab: { id: 8 } })).resolves.toEqual({ ok: true, data: false })
-    await expect(send({ type: 'comment:is-active' }, {})).resolves.toEqual({ ok: true, data: false })
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'not a URL' } })).resolves.toEqual({ ok: true, data: false })
+    state.session['crrt:active-tab:7'] = { origin: 'https://example.com' }
     state.removed!(7)
     await vi.waitFor(() => expect(browser.storage.session.remove).toHaveBeenCalledWith('crrt:active-tab:7'))
+  })
+
+  it('deactivates only the tab identified by Chrome', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    state.session['crrt:active-tab:7'] = { origin: 'https://example.com' }
+    state.session['crrt:active-tab:8'] = { origin: 'https://example.com' }
+    await expect(send({ type: 'comment:deactivate', tabId: 8 }, { tab: { id: 7 } })).resolves.toEqual({ ok: true })
+    expect(state.session).toEqual({ 'crrt:active-tab:8': { origin: 'https://example.com' } })
+    await expect(send({ type: 'comment:deactivate' }, {})).resolves.toEqual({ ok: false, error: 'Tab activation unavailable' })
   })
 
   it('rolls back activation when injection fails', async () => {
@@ -81,7 +101,7 @@ describe('extension background', () => {
   })
 
   it('rejects missing, internal, and malformed tabs', async () => {
-    for (const tabs of [[], [{ id: 0, url: 'https://example.com' }], [{ id: 1, url: 'chrome://settings' }], [{ id: 1 }]]) {
+    for (const tabs of [[], [{ url: 'https://example.com' }], [{ id: 1, url: 'chrome://settings' }], [{ id: 1 }], [{ id: 1, url: 'not a URL' }]]) {
       browser.tabs.query.mockResolvedValueOnce(tabs)
       await expect(activateCurrentTab()).rejects.toThrow(/regular web page/)
     }

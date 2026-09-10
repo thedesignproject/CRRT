@@ -8,7 +8,7 @@ function hasValidCoordinates(x: number, y: number) {
   return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100
 }
 
-export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
+export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, deactivate: () => void) {
   let frameId = 0, selecting = false, lastState = '', focus: ScreenshotFocusRect | null = null
   let targets: { id: string; selector: string; x: number; y: number }[] = []
   let hitRects: number[][] = []
@@ -74,6 +74,8 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean) {
       const match = Array.from(document.querySelectorAll<HTMLElement>('[data-fw-crrt][data-crrt-project]'))
         .some((node) => node.dataset.crrtProject === message.projectId)
       if (match) window.dispatchEvent(new CustomEvent('crrt:activate'))
+    } else if (message.kind === 'deactivate') {
+      deactivate()
     }
   })
   function move(event: MouseEvent) {

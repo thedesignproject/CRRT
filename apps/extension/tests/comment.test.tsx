@@ -24,6 +24,7 @@ vi.mock('../../../src/lib/screenshotCapture', () => ({
 }))
 
 import script, { mountWidget } from '../entrypoints/comment'
+import { connectPageHost } from '../lib/page-host'
 import { ExtensionWidget, extensionComments, personalComments } from '../lib/personal-widget'
 import autoload from '../entrypoints/autoload.content'
 import config from '../wxt.config'
@@ -552,13 +553,25 @@ it('does not renew private images for the regular project widget', async () => {
   const view = render(<FeedbackWidget projectId="project" />)
   await act(async () => { fireEvent.focus(window) })
   expect(listPageComments).not.toHaveBeenCalled()
+  expect(view.queryByRole('button', { name: 'Hide CRRT on this tab' })).not.toBeInTheDocument()
   view.unmount()
 })
 
 it('uses host page geometry, targets, selectors and navigation in the isolated editor', async () => {
   const page: WidgetPage = { url: location.href.split('#')[0], width: 2000, height: 3000, scrollX: 10, scrollY: 20,
-    liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
+    liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn(), hide: vi.fn() }
   const view = setup(false, page); await act(async () => {})
+  const hide = view.ui.getByRole('button', { name: 'Hide CRRT on this tab' })
+  expect(hide).toHaveStyle({ opacity: '0', pointerEvents: 'none' })
+  fireEvent.mouseEnter(hide.parentElement!.parentElement!)
+  expect(hide).toHaveStyle({ opacity: '1', pointerEvents: 'auto' })
+  fireEvent.click(hide); expect(page.hide).toHaveBeenCalledOnce()
+  fireEvent.mouseLeave(hide.parentElement!.parentElement!)
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)) })
+  expect(hide).toHaveStyle({ opacity: '0' })
+  fireEvent.focus(hide); expect(hide).toHaveStyle({ opacity: '1' })
+  fireEvent.blur(hide); await act(async () => {})
+  expect(hide).toHaveStyle({ opacity: '0' })
   const pin = view.container.querySelector('[data-fw-pin]')!
   expect(pin).toHaveStyle({ left: '190px', top: '569px' })
   expect(page.track).toHaveBeenCalledWith([{ id: 'c1', selector: '#target', x: 10, y: 20 }])
@@ -774,9 +787,12 @@ it('autoloads only in an activated tab, restores from BFCache, and supports popu
 it('cleans up a deactivated widget only once', () => {
   mountWidget()
   const host = document.querySelector('[data-crrt-extension]')!
-  window.dispatchEvent(new CustomEvent('crrt:deactivate'))
+  const calls = vi.mocked(connectPageHost).mock.calls
+  const deactivate = calls[calls.length - 1]![2]
+  deactivate(); deactivate()
   expect(disconnectPageHost).toHaveBeenCalledOnce()
   expect(host.isConnected).toBe(false)
+  expect(sendMessage).toHaveBeenCalledWith({ type: 'comment:deactivate' })
   window.dispatchEvent(pageTransition('pagehide'))
   expect(disconnectPageHost).toHaveBeenCalledOnce()
 })

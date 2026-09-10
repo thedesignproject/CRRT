@@ -30,6 +30,8 @@ export interface WidgetPage {
   track(comments: { id: string; selector: string; x: number; y: number }[]): void
   highlight(selector: string): void
   focusEmbedded?(projectId: string): void
+  /** Hide the browser-extension surface for the current tab. */
+  hide?(): void
 }
 
 export interface PersonalComments {
