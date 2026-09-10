@@ -1,10 +1,4 @@
-import { Hero } from './sections/Hero'
-import { HowItWorks } from './sections/HowItWorks'
-import { FakeDashboard } from './sections/FakeDashboard'
-import { Closing } from './sections/Closing'
-import { Pricing } from './sections/Pricing'
-import { ProductAudit } from './sections/ProductAudit'
-import { Footer } from './sections/Footer'
+import { MarketingPage } from './MarketingPage'
 import { EasterEgg } from './components/EasterEgg'
 import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
@@ -64,13 +58,7 @@ export function App() {
   return (
     <>
       <ScrollRuler />
-      <Hero />
-      <HowItWorks />
-      <FakeDashboard />
-      <ProductAudit />
-      <Closing />
-      <Pricing />
-      <Footer />
+      <MarketingPage />
       <FeedbackWidget apiBase={apiBase} projectId={projectId} />
       <EasterEgg />
     </>

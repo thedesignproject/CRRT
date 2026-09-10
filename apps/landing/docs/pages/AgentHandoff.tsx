@@ -64,6 +64,34 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
       description="Review feedback in the dashboard, mark items Ready for Agent, copy a prompt, and let Claude Code or Codex work the queue."
     >
       <Section>
+        <H2>CRRT developer resources</H2>
+        <P>
+          The CRRT Agent API is an authenticated HTTP API for working on shared feedback.
+          Download the <a href="/openapi.json">OpenAPI 3.1 specification</a> for endpoint descriptions,
+          request parameters, response schemas, and authentication. Start with the{' '}
+          <a href="/llms.txt">CRRT agent guide</a> for when-to-use guidance.
+          No official CLI or MCP server is currently published; use an HTTP client such as curl.
+        </P>
+        <P>
+          Get a scoped share token from a human-created agent handoff. Announce presence before
+          reading state. Work only on accepted comments, claim each item before editing, and
+          report progress through the operations endpoint. Humans review the resulting changes.
+          A missing or invalid token returns 401; an expired or revoked share returns 410.
+          Keep tokens in environment variables and send them in the Authorization header.
+        </P>
+        <CodeBlock language="bash" code={String.raw`curl --fail-with-body -X POST \
+  "https://crrt.ai/api/v1/agent/shares/$CRRT_SHARE_SLUG/presence" \
+  -H "Authorization: Bearer $CRRT_SHARE_TOKEN" \
+  -H "X-Agent-Id: my-agent" \
+  -H "Content-Type: application/json" \
+  --data '{"status":"reading","summary":"Reviewing accepted feedback"}'
+
+curl --fail-with-body \
+  "https://crrt.ai/api/v1/agent/shares/$CRRT_SHARE_SLUG/state" \
+  -H "Authorization: Bearer $CRRT_SHARE_TOKEN"`} />
+      </Section>
+
+      <Section>
         <H2>The loop</H2>
         <Ol>
           <li>

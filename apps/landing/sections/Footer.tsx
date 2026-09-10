@@ -26,7 +26,7 @@ export function Footer() {
         >
           {[
             { label: 'GitHub', href: 'https://github.com/thedesignproject/CRRT', external: true },
-            { label: 'Docs', href: '#install' },
+            { label: 'Docs', href: '/docs' },
             { label: 'Status', href: 'https://github.com/thedesignproject/CRRT/issues', external: true },
           ].map((link) => (
             <a

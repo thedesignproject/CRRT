@@ -1,0 +1,967 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "CRRT Agent API",
+    "version": "1.0.0",
+    "description": "Authenticated HTTP API for scoped CRRT feedback handoffs. Obtain the slug and share token from a human-created handoff. Announce presence before reading state; work only on accepted comments. This specification describes the agent share API, not the internal dashboard/admin API.",
+    "license": {
+      "name": "Apache-2.0",
+      "identifier": "Apache-2.0"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://crrt.ai",
+      "description": "CRRT production"
+    }
+  ],
+  "externalDocs": {
+    "description": "CRRT agent handoff and authentication guide",
+    "url": "https://crrt.ai/docs/agent-handoff"
+  },
+  "security": [
+    {
+      "shareBearer": []
+    },
+    {
+      "shareHeader": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Agent shares",
+      "description": "Scoped feedback context and implementation workflow."
+    }
+  ],
+  "paths": {
+    "/api/v1/agent/shares/{slug}/presence": {
+      "post": {
+        "operationId": "reportAgentPresence",
+        "summary": "Announce or refresh agent presence",
+        "description": "Call before reading state and whenever status changes. State lists presence seen within the last 90 seconds.",
+        "tags": [
+          "Agent shares"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/slug"
+          },
+          {
+            "$ref": "#/components/parameters/agentId"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Announce or refresh agent presence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid share token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share or requested resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Unsupported HTTP method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Share expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PresenceInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/shares/{slug}/state": {
+      "get": {
+        "operationId": "getAgentShareState",
+        "summary": "Read shared feedback and project context",
+        "description": "Read after announcing presence. Implement only accepted comments and refresh before starting each item. The share token limits access to the shared scope.",
+        "tags": [
+          "Agent shares"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/slug"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read shared feedback and project context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/State"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid share token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share or requested resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Unsupported HTTP method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Share expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/shares/{slug}/events": {
+      "get": {
+        "operationId": "listAgentShareEvents",
+        "summary": "Read incremental share events",
+        "description": "Poll events after the last cursor; events are ordered by ascending id. The server defaults to 100 items and clamps limits to 1\u2013100.",
+        "tags": [
+          "Agent shares"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/slug"
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Return events after this event id.",
+            "schema": {
+              "type": "integer",
+              "default": 0
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Requested page size; values are clamped to 1\u2013100.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Read incremental share events",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Events"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid share token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share or requested resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Unsupported HTTP method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Share expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/shares/{slug}/ops": {
+      "post": {
+        "operationId": "applyAgentCommentOperation",
+        "summary": "Report a feedback implementation operation",
+        "description": "Claim before editing, then start and complete or block. Humans own reviewStatus; operations update implementationStatus only. Repeated Idempotency-Key values for the same share and agent return the prior event. Reopen releases a claim. Only act on accepted feedback.",
+        "tags": [
+          "Agent shares"
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/slug"
+          },
+          {
+            "$ref": "#/components/parameters/agentId"
+          },
+          {
+            "$ref": "#/components/parameters/idempotency"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report a feedback implementation operation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OperationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request fields",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid share token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share or requested resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Unsupported HTTP method",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Share expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Comment is claimed by another agent",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OperationInput"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "shareBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Scoped share token from a human-created CRRT handoff. Expires or can be revoked."
+      },
+      "shareHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Share-Token",
+        "description": "Alternative to the Authorization bearer header."
+      }
+    },
+    "parameters": {
+      "slug": {
+        "name": "slug",
+        "in": "path",
+        "required": true,
+        "description": "Share slug supplied by the human-created agent handoff.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "agentId": {
+        "name": "X-Agent-Id",
+        "in": "header",
+        "required": true,
+        "description": "Stable identifier for this coding agent.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "idempotency": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "Unique operation key. Reuse only to retry the same operation.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "Comment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "projectId": {
+            "type": "string"
+          },
+          "pageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "selector": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "x": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "y": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "body": {
+            "type": "string"
+          },
+          "reviewStatus": {
+            "type": "string",
+            "enum": [
+              "open",
+              "accepted",
+              "rejected"
+            ]
+          },
+          "implementationStatus": {
+            "type": "string",
+            "enum": [
+              "unassigned",
+              "claimed",
+              "in_progress",
+              "blocked",
+              "done"
+            ]
+          },
+          "claimedByAgentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "imageUrl": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "authorName": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targetType": {
+            "type": "string",
+            "enum": [
+              "element_point",
+              "text_range"
+            ]
+          },
+          "anchor": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "type": "string"
+          },
+          "visibility": {
+            "type": "string",
+            "enum": [
+              "shared",
+              "private"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "projectId",
+          "pageUrl",
+          "selector",
+          "x",
+          "y",
+          "body",
+          "reviewStatus",
+          "implementationStatus",
+          "claimedByAgentId",
+          "imageUrl",
+          "authorName",
+          "targetType",
+          "anchor",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "Presence": {
+        "type": "object",
+        "properties": {
+          "shareId": {
+            "type": "string"
+          },
+          "agentId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lastSeenAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "shareId",
+          "agentId",
+          "status",
+          "summary",
+          "lastSeenAt"
+        ]
+      },
+      "Event": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "shareId": {
+            "type": "string"
+          },
+          "commentId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "actorType": {
+            "type": "string"
+          },
+          "actorId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "createdAt": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shareId",
+          "commentId",
+          "actorType",
+          "actorId",
+          "eventType",
+          "payload",
+          "createdAt"
+        ]
+      },
+      "State": {
+        "type": "object",
+        "properties": {
+          "share": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "scopeType": {
+                "type": "string",
+                "enum": [
+                  "project",
+                  "page",
+                  "selection"
+                ]
+              },
+              "scopePageUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "expiresAt": {
+                "type": "string"
+              },
+              "revision": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "slug",
+              "scopeType",
+              "scopePageUrl",
+              "expiresAt",
+              "revision"
+            ]
+          },
+          "project": {
+            "type": "object",
+            "properties": {
+              "publicKey": {
+                "type": "string"
+              },
+              "slug": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "repoUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "localPath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "defaultBranch": {
+                "type": "string"
+              },
+              "installCommand": {
+                "type": "string"
+              },
+              "devCommand": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "testCommand": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "buildCommand": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "agentInstructions": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "publicKey",
+              "slug",
+              "name",
+              "repoUrl",
+              "localPath",
+              "defaultBranch",
+              "installCommand",
+              "devCommand",
+              "testCommand",
+              "buildCommand",
+              "agentInstructions"
+            ]
+          },
+          "comments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Comment"
+            }
+          },
+          "presence": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Presence"
+            }
+          },
+          "capabilities": {
+            "type": "object",
+            "properties": {
+              "presence": {
+                "type": "boolean"
+              },
+              "ops": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "presence",
+              "ops"
+            ]
+          }
+        },
+        "required": [
+          "share",
+          "project",
+          "comments",
+          "presence",
+          "capabilities"
+        ]
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "PresenceInput": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Agent status, e.g. reading, working, blocked, or done."
+          },
+          "summary": {
+            "type": "string",
+            "description": "Optional short activity summary."
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "OperationInput": {
+        "type": "object",
+        "properties": {
+          "op": {
+            "type": "string",
+            "enum": [
+              "comment.claim",
+              "comment.start",
+              "comment.note",
+              "comment.block",
+              "comment.complete",
+              "comment.reopen"
+            ]
+          },
+          "commentId": {
+            "type": "string"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Operation context, such as a summary of work or a blocker."
+          }
+        },
+        "required": [
+          "op",
+          "commentId"
+        ]
+      },
+      "OperationResult": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "const": true
+              },
+              "feedbackEventId": {
+                "type": "integer"
+              },
+              "comment": {
+                "$ref": "#/components/schemas/Comment"
+              }
+            },
+            "required": [
+              "success",
+              "feedbackEventId",
+              "comment"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "success": {
+                "type": "boolean",
+                "const": true
+              },
+              "duplicate": {
+                "type": "boolean",
+                "const": true
+              },
+              "feedbackEventId": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "success",
+              "duplicate",
+              "feedbackEventId"
+            ]
+          }
+        ]
+      },
+      "Events": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Event"
+            }
+          },
+          "nextCursor": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor"
+        ]
+      }
+    }
+  }
+}

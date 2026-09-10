@@ -15,8 +15,8 @@ export default defineConfig({
     setupFiles: ['./src/__tests__/setup.ts'],
     coverage: {
       reporter: ['text', 'text-summary', 'lcov'],
-      include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'apps/dashboard/**/*.{ts,tsx}', 'apps/landing/**/*.{ts,tsx}', 'apps/extension/**/*.{ts,tsx}', 'shared/product-audit/**/*.{ts,tsx}', 'workflows/**/*.ts'],
-      exclude: ['src/__tests__/**', '**/*.test.*', '**/*.d.ts'],
+      include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'apps/dashboard/**/*.{ts,tsx}', 'apps/landing/**/*.{ts,tsx}', 'apps/extension/**/*.{ts,tsx}', 'shared/product-audit/**/*.{ts,tsx}', 'workflows/**/*.ts', 'server/**/*.ts'],
+      exclude: ['src/__tests__/**', '**/*.test.*', '**/*.d.ts', 'server/public-site-entry.ts'],
     },
   },
 })

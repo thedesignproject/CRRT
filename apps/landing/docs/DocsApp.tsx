@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { updatePublicMetadata } from '../lib/publicMetadata'
 import { InstallPage } from './pages/Install'
 import { SelfHostPage } from './pages/SelfHost'
 import { AgentHandoffPage } from './pages/AgentHandoff'
@@ -19,6 +20,8 @@ export function DocsApp({ initialPath }: { initialPath: string }) {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
+  useEffect(() => { updatePublicMetadata(pathname) }, [pathname])
+
   function navigate(path: string) {
     // Hash links (e.g. "/#install") fall through to a real navigation so the
     // landing's section anchor still works.
@@ -32,12 +35,10 @@ export function DocsApp({ initialPath }: { initialPath: string }) {
     window.scrollTo({ top: 0, behavior: 'auto' })
   }
 
-  // Default unknown /docs/* paths to /docs/install — no 404 page yet, and
-  // sending visitors to the starting point is friendlier than a dead end.
-  const normalized =
-    pathname === '/docs' || pathname === '/docs/'
-      ? '/docs/install'
-      : pathname
+  // The server returns 404 for unknown paths; normalize optional trailing slashes
+  // here so the client renders the same guide as the prerendered document.
+  const cleanPath = pathname.replace(/\/$/, '')
+  const normalized = cleanPath === '/docs' ? '/docs/install' : cleanPath
 
   if (normalized === '/docs/self-host') {
     return <SelfHostPage pathname={normalized} onNavigate={navigate} />

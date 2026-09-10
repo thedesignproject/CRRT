@@ -5,6 +5,8 @@ import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { build } from '@vercel/node'
 import { FileFsRef, glob } from '@vercel/build-utils'
+import { publicPageRoutes, applicationFallbackRoutes } from './public-pages.js'
+import { buildPublicFunction } from './build-public-function.js'
 import { PRODUCT_AUDIT_WORKFLOW_ID } from '../workflows/product-audit-id.js'
 
 const exec = promisify(execFile)
@@ -123,6 +125,8 @@ if (!workflowIds.includes(PRODUCT_AUDIT_WORKFLOW_ID)) {
 await rm(join(output, 'static'), { recursive: true, force: true })
 await cp(join(root, 'apps/landing/dist'), join(output, 'static'), { recursive: true })
 await buildApiFunction()
+await buildPublicFunction(root, output)
+await rm(join(output, 'static/public-pages.json'))
 const workflowConfig = JSON.parse(await readFile(join(output, 'config.json'), 'utf8'))
 workflowConfig.routes = [
   { src: '^/api(?:/.*)?$', headers: {
@@ -133,10 +137,8 @@ workflowConfig.routes = [
   }, continue: true },
   ...workflowConfig.routes,
   { src: '^(/api(?:/.*)?)$', dest: '/api-router?__audit_path=$1' },
+  ...publicPageRoutes,
   { handle: 'filesystem' },
-  { src: '^/d/[^/]+/?$', dest: '/index.html' },
-  { src: '^/docs(?:/.*)?$', dest: '/index.html' },
-  { src: '^/dashboard(?:/.*)?$', dest: '/dashboard/index.html' },
-  { src: '^/audit(?:/.*)?$', dest: '/index.html' },
+  ...applicationFallbackRoutes,
 ]
 await writeFile(join(output, 'config.json'), JSON.stringify(workflowConfig, null, 2))
