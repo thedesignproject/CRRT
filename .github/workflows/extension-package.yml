@@ -1,0 +1,51 @@
+name: Extension package
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/extension-package.yml'
+      - 'apps/extension/**'
+      - 'scripts/package-extension.ts'
+      - 'package.json'
+      - 'bun.lock'
+  workflow_dispatch:
+  push:
+    tags: ['extension-v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    env:
+      WXT_API_BASE: https://crrt.ai/api
+      WXT_DASHBOARD_URL: https://crrt.ai/dashboard
+      WXT_SUPABASE_URL: ${{ github.event_name == 'pull_request' && 'https://ci-project.supabase.co' || vars.CRRT_SUPABASE_URL }}
+      WXT_SUPABASE_ANON_KEY: ${{ github.event_name == 'pull_request' && 'public-ci-build-key' || secrets.CRRT_SUPABASE_ANON_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bunx vitest run apps/extension
+      - name: Build and validate Store package
+        run: bun run package:extension
+      - name: Verify deterministic ZIP
+        run: |
+          FIRST=$(sha256sum artifacts/crrt-extension-*-chrome.zip | cut -d ' ' -f 1)
+          bun run package:extension
+          SECOND=$(sha256sum artifacts/crrt-extension-*-chrome.zip | cut -d ' ' -f 1)
+          test "$FIRST" = "$SECOND"
+      - name: Upload reviewed release artifacts
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: crrt-extension-${{ github.ref_name }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
