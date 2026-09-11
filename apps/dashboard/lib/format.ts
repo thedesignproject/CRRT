@@ -39,6 +39,8 @@ export function describeEvent(ev: FeedbackEvent): { kind: 'done' | 'claim' | 'fi
       return { kind: 'other', text: `${actor} note${note ? ` · ${note}` : ''}` }
     case 'comment.blocked':
       return { kind: 'other', text: `${actor} blocked${note ? ` · ${note}` : ''}` }
+    case 'comment.ready_for_testing':
+      return { kind: 'done', text: `${actor} ready for testing${summary ? ` · ${summary}` : ''}` }
     case 'comment.completed':
       return { kind: 'done', text: `${actor} done${summary ? ` · ${summary}` : ''}` }
     case 'comment.reopened':

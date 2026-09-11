@@ -49,6 +49,8 @@ All tokens live in [`branding/crrt/tokens.css`](./crrt/tokens.css). **Never devi
 | `--crrt-rule-dark` | `rgba(255,255,255,0.08)` | Rule Dark | Borders on dark grounds |
 | `--crrt-rule-dark-strong` | `rgba(255,255,255,0.16)` | Rule Dark Strong | Emphasized borders on dark grounds |
 
+Workflow status tokens use phosphor amber in dark mode and carrot deep in light mode: `--crrt-status-ready-for-testing` and `--crrt-status-ready-for-testing-bg` identify work waiting on human verification.
+
 ### 2.2 Color — semantic (shadcn mapping)
 
 These map to shadcn's standard variables. **Dark theme** (`:root`) is the default; **light theme** is `[data-theme="light"]`.

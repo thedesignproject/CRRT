@@ -19,6 +19,8 @@
   --status-in-progress-bg: oklch(0.22 0.03 250);
   --status-blocked: oklch(0.65 0.2 25);
   --status-blocked-bg: oklch(0.22 0.03 25);
+  --status-ready-for-testing: var(--crrt-status-ready-for-testing);
+  --status-ready-for-testing-bg: var(--crrt-status-ready-for-testing-bg);
   --agent-active: oklch(0.65 0.17 155);
 
   --scrollbar-thumb: oklch(0.30 0.005 90);
@@ -106,6 +108,8 @@
   --color-status-in-progress-bg: var(--status-in-progress-bg);
   --color-status-blocked: var(--status-blocked);
   --color-status-blocked-bg: var(--status-blocked-bg);
+  --color-status-ready-for-testing: var(--status-ready-for-testing);
+  --color-status-ready-for-testing-bg: var(--status-ready-for-testing-bg);
   --color-agent-active: var(--agent-active);
 }
 

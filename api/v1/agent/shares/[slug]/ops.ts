@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAgentId, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
-import { createFeedbackEvent, getComment, getOperationKey, saveOperationKey, shareContainsComment, updateImplementationStatus } from '../../../../_lib/store.js'
+import { applyAgentFeedbackOperation, getComment, getOperationKey, shareContainsComment } from '../../../../_lib/store.js'
 import { requireAgentShare } from '../../../../_lib/shares.js'
 import type { ImplementationStatus } from '../../../../_lib/status.js'
 
@@ -26,7 +26,7 @@ function eventTypeForOp(op: AgentOp) {
     case 'comment.block':
       return 'comment.blocked'
     case 'comment.complete':
-      return 'comment.completed'
+      return 'comment.ready_for_testing'
     case 'comment.reopen':
       return 'comment.reopened'
   }
@@ -41,7 +41,7 @@ function patchForOp(op: AgentOp, agentId: string): { implementationStatus?: Impl
     case 'comment.block':
       return { implementationStatus: 'blocked', claimedByAgentId: agentId }
     case 'comment.complete':
-      return { implementationStatus: 'done', claimedByAgentId: agentId }
+      return { implementationStatus: 'ready_for_testing', claimedByAgentId: agentId }
     case 'comment.reopen':
       return { implementationStatus: 'unassigned', claimedByAgentId: null }
     case 'comment.note':
@@ -92,32 +92,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const patch = patchForOp(op, agentId)
-    const updatedComment = patch
-      ? await updateImplementationStatus(commentId, patch)
-      : comment
-
-    const feedbackEvent = await createFeedbackEvent({
+    if (
+      (comment.implementationStatus === 'ready_for_testing' || comment.implementationStatus === 'done')
+      && patch
+      && patch.implementationStatus !== comment.implementationStatus
+    ) {
+      return jsonError(req, res, 409, 'Comment status can only be changed by a human reviewer')
+    }
+    const result = await applyAgentFeedbackOperation({
       shareId: authorized.share.id,
       commentId,
-      actorType: 'agent',
-      actorId: agentId,
+      agentId,
+      idempotencyKey,
+      operation: op,
       eventType: eventTypeForOp(op),
       payload: {
         ...(payload as Record<string, unknown>),
         idempotencyKey,
       },
+      implementationStatus: patch?.implementationStatus,
     })
 
-    await saveOperationKey(authorized.share.id, agentId, idempotencyKey, feedbackEvent.id)
+    if (result.outcome === 'duplicate') {
+      setCors(req, res, ['POST', 'OPTIONS'])
+      return res.status(200).json({
+        success: true,
+        duplicate: true,
+        feedbackEventId: result.feedbackEventId,
+      })
+    }
+    if (result.outcome === 'not_found') return jsonError(req, res, 404, 'Comment not found')
+    if (result.outcome === 'claimed_conflict') return jsonError(req, res, 409, 'Comment is claimed by another agent')
+    if (result.outcome === 'reviewer_owned') {
+      return jsonError(req, res, 409, 'Comment status can only be changed by a human reviewer')
+    }
 
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json({
       success: true,
-      feedbackEventId: feedbackEvent.id,
-      comment: updatedComment,
+      feedbackEventId: result.feedbackEventId,
+      comment: result.comment,
     })
   } catch (error) {
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }
-

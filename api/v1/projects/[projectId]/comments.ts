@@ -2,10 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { listProjectComments } from '../../../_lib/store.js'
-import type { ImplementationStatus, ReviewStatus } from '../../../_lib/status.js'
+import { IMPLEMENTATION_STATUSES, type ImplementationStatus, type ReviewStatus } from '../../../_lib/status.js'
 
 const REVIEW_STATUSES = new Set<ReviewStatus>(['open', 'accepted', 'rejected'])
-const IMPLEMENTATION_STATUSES = new Set<ImplementationStatus>(['unassigned', 'claimed', 'in_progress', 'blocked', 'done'])
+const VALID_IMPLEMENTATION_STATUSES = new Set<ImplementationStatus>(IMPLEMENTATION_STATUSES)
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
@@ -27,7 +27,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return jsonError(req, res, 400, 'Invalid reviewStatus')
     }
 
-    if (implementationStatus && !IMPLEMENTATION_STATUSES.has(implementationStatus as ImplementationStatus)) {
+    if (implementationStatus && !VALID_IMPLEMENTATION_STATUSES.has(implementationStatus as ImplementationStatus)) {
       return jsonError(req, res, 400, 'Invalid implementationStatus')
     }
 

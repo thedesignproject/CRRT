@@ -109,7 +109,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [] }: {
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
     {error && items.length > 0 && <div role="alert" className="border-b border-border bg-card px-4 py-2 text-xs text-status-rejected">{error}</div>}
     <main className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
-      <CommentList personal filteredComments={comments} counts={{ all: total, open: 0, ready: 0, done: 0, rejected: 0 }}
+      <CommentList personal filteredComments={comments} counts={{ all: total, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }}
         commentsLoading={loading} commentsError={items.length ? null : error} selectedCommentId={selectedId} setSelectedCommentId={select}
         footer={pages > 1 && <div className="flex items-center justify-center gap-3 border-t border-border px-4 py-3">
           <ActionBtn variant="neutral" disabled={loading || busy || page === 1} onClick={() => setPage((value) => value - 1)}>Previous</ActionBtn>

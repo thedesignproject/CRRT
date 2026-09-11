@@ -2,9 +2,9 @@ import type { PromptTarget } from '../hooks/useAgentSession'
 import type { CommentTargetType, ExternalWorkRecord, GitHubIssueRecord, TextRangeAnchorRecord } from '../api'
 
 export type ReviewStatus = 'open' | 'accepted' | 'rejected'
-export type ImplStatus = 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
-export type StatusFilter = 'all' | 'open' | 'ready' | 'done'
-export type DisplayStatus = 'open' | 'ready' | 'done' | 'rejected'
+export type ImplStatus = 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'ready_for_testing' | 'done'
+export type StatusFilter = 'all' | 'open' | 'ready' | 'ready_for_testing' | 'done'
+export type DisplayStatus = 'open' | 'ready' | 'ready_for_testing' | 'done' | 'rejected'
 
 export interface Comment {
   id: string
@@ -50,6 +50,7 @@ export const AUTHOR_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B9
 export const DISPLAY_STATUS_LABELS: Record<DisplayStatus, string> = {
   open: 'Open',
   ready: 'Ready for Agent',
+  ready_for_testing: 'Ready for testing',
   done: 'Done',
   rejected: 'Rejected',
 }

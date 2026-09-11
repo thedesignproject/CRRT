@@ -84,10 +84,13 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
           </li>
           <li>
             Paste the prompt in your agent. It reads only the Ready items via a per-share bearer token,
-            claims them, fixes them, and marks them <Strong>Done</Strong>.
+            claims them, fixes them, and marks them <Strong>Ready for testing</Strong>.
           </li>
           <li>
-            The sidebar reflects the queue live — claimed, working, done — as the agent reports back.
+            Test the proposed change, then mark it <Strong>Done</Strong>. The agent never makes that final call.
+          </li>
+          <li>
+            The sidebar reflects the queue live — claimed, working, ready for testing, done — as the work moves forward.
           </li>
         </Ol>
       </Section>
@@ -140,8 +143,9 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
         <CodeBlock language="http" code={agentStateSnippet} />
         <P>
           The agent fetches the state, claims comments (<InlineCode>POST .../presence</InlineCode>,{' '}
-          <InlineCode>POST .../ops</InlineCode>), reports progress, and marks each item Done when it ships
-          the fix. The dashboard polls and renders the same state live.
+          <InlineCode>POST .../ops</InlineCode>), reports progress, and marks each item Ready for testing when
+          it opens a pull request. The dashboard polls and renders the same state live; a human marks the item
+          Done after reviewing the result.
         </P>
 
         <Callout tone="info">

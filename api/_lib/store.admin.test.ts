@@ -168,6 +168,7 @@ describe('listProjectsWithComments', () => {
     claimed_comment_count: 1,
     in_progress_comment_count: 1,
     blocked_comment_count: 0,
+    ready_for_testing_comment_count: 1,
     done_comment_count: 0,
     feedback_share_count: 2,
     commented_url_count: 2,
@@ -221,7 +222,7 @@ describe('listProjectsWithComments', () => {
         commentCount: 1,
         commentStatusCounts: { pending: 1, accepted: 1, rejected: 1 },
         implementationStatusCounts: {
-          unassigned: 1, claimed: 1, inProgress: 1, blocked: 0, done: 0,
+          unassigned: 1, claimed: 1, inProgress: 1, blocked: 0, readyForTesting: 1, done: 0,
         },
         feedbackShareCount: 2,
         commentedUrlCount: 2,

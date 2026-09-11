@@ -298,6 +298,7 @@ export function CommentDetail({
                   <span className={cn(
                     'font-semibold',
                     ds === 'ready' && 'text-status-accepted',
+                    ds === 'ready_for_testing' && 'text-status-ready-for-testing',
                     ds === 'rejected' && 'text-status-rejected',
                     ds === 'done' && 'text-status-done',
                     ds === 'open' && 'text-muted-foreground',

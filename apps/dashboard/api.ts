@@ -38,7 +38,7 @@ export interface CommentRecord {
   body: string
   visibility?: 'shared' | 'internal'
   reviewStatus: 'open' | 'accepted' | 'rejected'
-  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
+  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'ready_for_testing' | 'done'
   claimedByAgentId: string | null
   imageUrl: string | null
   authorName: string | null
@@ -237,6 +237,7 @@ export interface AdminProject {
     claimed: number
     inProgress: number
     blocked: number
+    readyForTesting: number
     done: number
   }
   feedbackShareCount: number
