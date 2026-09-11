@@ -806,8 +806,8 @@ it('deactivates only through the private frame and cleans up after acknowledgeme
   expect(disconnectPageHost).toHaveBeenCalledOnce()
 })
 
-it('keeps the widget mounted when deactivation fails so the user can retry', async () => {
-  sendMessage.mockRejectedValueOnce(new Error('worker restarted'))
+it('keeps the widget mounted when deactivation is not acknowledged or fails so the user can retry', async () => {
+  sendMessage.mockResolvedValueOnce({ ok: true, data: false })
   mountWidget('activation-1')
   const host = document.querySelector('[data-crrt-extension]')!
   const calls = vi.mocked(connectPageHost).mock.calls
@@ -815,10 +815,14 @@ it('keeps the widget mounted when deactivation fails so the user can retry', asy
   deactivate()
   await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
   expect(host.isConnected).toBe(true)
+  sendMessage.mockRejectedValueOnce(new Error('worker restarted'))
+  deactivate()
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2))
+  expect(host.isConnected).toBe(true)
   sendMessage.mockResolvedValueOnce({ ok: true, data: true })
   deactivate()
   await waitFor(() => expect(host.isConnected).toBe(false))
-  expect(sendMessage).toHaveBeenCalledTimes(2)
+  expect(sendMessage).toHaveBeenCalledTimes(3)
 })
 
 it('keeps private text, signed images, and mutation controls inaccessible to page DOM scripts', async () => {

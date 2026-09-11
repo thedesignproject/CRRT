@@ -90,6 +90,9 @@ describe('extension background', () => {
     browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://other.example' })
     await expect(send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'https://other.example' } })).resolves.toEqual({ ok: true, data: null })
     expect(state.session).not.toHaveProperty('crrt:active-tab:7')
+    state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
+    await expect(send({ type: 'comment:is-active' }, { url: 'not a URL', tab: { id: 7 } })).resolves.toEqual({ ok: true, data: null })
+    expect(state.session).toHaveProperty('crrt:active-tab:7')
   })
 
   it('does not let a stale document clear a newer activation', async () => {
@@ -141,6 +144,8 @@ describe('extension background', () => {
     await expect(send({ type: 'comment:deactivate', tabId: 8, activationId: 'activation-7' }, { url: 'https://example.com', tab: { id: 7 } }))
       .resolves.toEqual({ ok: true, data: true })
     expect(state.session).toEqual({ 'crrt:active-tab:8': activation('https://example.com', 'activation-8') })
+    await expect(send({ type: 'comment:deactivate' }, { tab: { id: 8, url: 'https://example.com' } }))
+      .resolves.toEqual({ ok: true, data: false })
     await expect(send({ type: 'comment:deactivate' }, {})).resolves.toEqual({ ok: false, error: 'Tab activation unavailable' })
   })
 
@@ -192,6 +197,15 @@ describe('extension background', () => {
     browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://new.example/page' })
     state.updated!(7, { url: 'https://new.example/page' })
     await vi.waitFor(() => expect(state.session).not.toHaveProperty('crrt:active-tab:7'))
+    browser.storage.session.get.mockClear()
+    browser.storage.session.remove.mockClear()
+    browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://new.example/page' })
+    state.updated!(7, { url: 'https://new.example/page' })
+    await vi.waitFor(() => expect(browser.storage.session.get).toHaveBeenCalledWith('crrt:active-tab:7'))
+    expect(browser.storage.session.remove).not.toHaveBeenCalled()
+    browser.tabs.get.mockClear()
+    state.updated!(7, {})
+    expect(browser.tabs.get).not.toHaveBeenCalled()
   })
 
   it('rejects missing, internal, and malformed tabs', async () => {
