@@ -3,6 +3,7 @@ import { defineBackground } from 'wxt/utils/define-background'
 import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn, type HostedAuthMessage } from '../lib/hosted-auth'
+import { hasAcceptedDisclosure } from '../lib/disclosure'
 
 type MessageResponse = { ok: true; data?: unknown } | { ok: false; error: string }
 const activeTabKey = (tabId: number) => `crrt:active-tab:${tabId}`
@@ -60,6 +61,10 @@ export async function tabActivation(tabId: number, pageUrl?: string): Promise<Ac
     const key = activeTabKey(tabId)
     const stored = await browser.storage.session.get(key)
     const value = stored[key]
+    if (!await hasAcceptedDisclosure()) {
+      if (value !== undefined) await browser.storage.session.remove(key)
+      return null
+    }
     if (!activeTabState(value)) {
       if (value !== undefined) await browser.storage.session.remove(key)
       return null
@@ -112,6 +117,7 @@ async function clearNavigatedTab(tabId: number, pageUrl: string): Promise<void> 
 }
 
 export async function activateCurrentTab(): Promise<void> {
+  if (!await hasAcceptedDisclosure()) throw new Error('Review the CRRT privacy summary before commenting')
   const tab = await currentWebTab()
   const key = activeTabKey(tab.id)
   const activation = await withTabOperation(tab.id, async () => {

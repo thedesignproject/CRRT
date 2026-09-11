@@ -26,9 +26,11 @@ vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
 vi.mock('../lib/auth', () => ({ createExtensionSupabase: vi.fn(() => 'client'), handleAuthMessage: vi.fn(), isAuthMessage: vi.fn() }))
 vi.mock('../lib/hosted-auth', () => ({ startHostedSignIn: vi.fn() }))
+const hasAcceptedDisclosure = vi.hoisted(() => vi.fn())
+vi.mock('../lib/disclosure', () => ({ hasAcceptedDisclosure }))
 vi.mock('../lib/frame-channel', () => ({ relayFrameMessage: vi.fn() }))
 
-import background, { activateCurrentTab } from '../entrypoints/background'
+import background, { activateCurrentTab, tabActivation } from '../entrypoints/background'
 import { handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn } from '../lib/hosted-auth'
@@ -36,6 +38,7 @@ import { startHostedSignIn } from '../lib/hosted-auth'
 beforeEach(() => {
   vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.updated = undefined; state.session = {}
   browser.tabs.get.mockImplementation(async (tabId: number) => ({ id: tabId, url: 'https://example.com' }))
+  hasAcceptedDisclosure.mockResolvedValue(true)
 })
 
 function send(message: unknown, sender: unknown = {}) {
@@ -78,6 +81,17 @@ describe('extension background', () => {
       },
     })
     expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['comment.js'] })
+  })
+
+  it('blocks activation and clears stale state until disclosure is accepted', async () => {
+    hasAcceptedDisclosure.mockResolvedValue(false)
+    browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+    await expect(activateCurrentTab()).rejects.toThrow('privacy summary')
+    expect(browser.tabs.query).not.toHaveBeenCalled()
+    state.session['crrt:active-tab:7'] = { origin: 'https://example.com' }
+    await expect(tabActivation(7, 'https://example.com')).resolves.toBeNull()
+    expect(state.session).not.toHaveProperty('crrt:active-tab:7')
+    await expect(tabActivation(8, 'https://example.com')).resolves.toBeNull()
   })
 
   it('exposes activation only to the browser-provided tab and original page origin', async () => {
