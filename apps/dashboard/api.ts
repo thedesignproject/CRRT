@@ -194,6 +194,24 @@ function authHeaders(accessToken?: string) {
   return headers
 }
 
+export interface ExtensionAuthHandoffRequest {
+  state: string
+  codeChallenge: string
+  redirectUri: string
+}
+
+export function createExtensionAuthHandoff(
+  apiBase: string,
+  accessToken: string,
+  input: ExtensionAuthHandoffRequest,
+) {
+  return requestJson<{ redirectUrl: string }>(`${apiBase.replace(/\/$/, '')}/v1/extension/auth/handoff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(input),
+  })
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const text = await response.text()

@@ -16,7 +16,7 @@ export default defineConfig({
     name: 'CRRT',
     description: 'Drop visual feedback on any page and share it with your CRRT projects.',
     version: '0.1.0',
-    permissions: ['activeTab', 'scripting', 'storage'],
+    permissions: ['activeTab', 'identity', 'scripting', 'storage'],
     host_permissions: ['http://*/*', 'https://*/*'],
     web_accessible_resources: [{ resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] }],
     icons,
