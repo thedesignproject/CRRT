@@ -2,7 +2,27 @@ import { browser } from 'wxt/browser'
 import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script'
 import { connectPageHost } from '../lib/page-host'
 
-export function mountWidget(activate = false) {
+type ActivationData = { active: true; activationId: string }
+
+function activationData(value: unknown): value is ActivationData {
+  return Boolean(
+    value
+    && typeof value === 'object'
+    && (value as Partial<ActivationData>).active === true
+    && typeof (value as Partial<ActivationData>).activationId === 'string',
+  )
+}
+
+export async function mountWidgetIfActive(activate = false) {
+  try {
+    const response = await browser.runtime.sendMessage({ type: 'comment:is-active' }) as { ok?: boolean; data?: unknown }
+    if (response?.ok && activationData(response.data)) mountWidget(response.data.activationId, activate)
+  } catch {
+    // Navigation and extension restarts should leave an unauthorized document untouched.
+  }
+}
+
+export function mountWidget(activationId: string, activate = false) {
   if (document.querySelector('[data-crrt-extension]')) {
     if (activate) window.dispatchEvent(new CustomEvent('crrt:activate'))
     return
@@ -19,21 +39,29 @@ export function mountWidget(activate = false) {
   host.attachShadow({ mode: 'closed' }).append(frame)
   document.documentElement.append(host)
   let cleaned = false
+  let deactivating = false
   let disconnect = () => {}
   const cleanup = () => {
     if (cleaned) return
     cleaned = true
     disconnect()
     host.remove()
-    window.removeEventListener('crrt:deactivate', deactivate)
+    window.removeEventListener('pagehide', cleanup)
   }
-  const deactivate = () => {
-    cleanup()
-    void browser.runtime.sendMessage({ type: 'comment:deactivate' }).catch(() => {})
+  const deactivate = async () => {
+    if (cleaned || deactivating) return
+    deactivating = true
+    try {
+      const response = await browser.runtime.sendMessage({ type: 'comment:deactivate', activationId }) as { ok?: boolean; data?: unknown }
+      if (response?.ok && response.data === true) cleanup()
+    } catch {
+      // Keep the widget mounted so the user can retry instead of silently restoring it later.
+    } finally {
+      deactivating = false
+    }
   }
-  disconnect = connectPageHost(frame, activate, deactivate)
-  window.addEventListener('crrt:deactivate', deactivate)
+  disconnect = connectPageHost(frame, activate, () => { void deactivate() })
   window.addEventListener('pagehide', cleanup, { once: true })
 }
 
-export default defineUnlistedScript(() => mountWidget(true))
+export default defineUnlistedScript(() => mountWidgetIfActive(true))
