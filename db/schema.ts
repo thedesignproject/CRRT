@@ -122,6 +122,24 @@ export const projectInvites = pgTable(
 // Reference only: not exported, so Drizzle does not manage Supabase's auth table.
 const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
 
+// Server-managed allowlist for Chrome extension identities that may receive an
+// authentication handoff. Removing a client also revokes its outstanding grants.
+export const extensionAuthClients = pgTable(
+  'extension_auth_clients',
+  {
+    extensionId: text('extension_id').primaryKey(),
+    redirectUri: text('redirect_uri').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    extensionIdCheck: check('extension_auth_clients_extension_id_check', sql`${t.extensionId} ~ '^[a-p]{32}$'`),
+    redirectCheck: check(
+      'extension_auth_clients_redirect_uri_check',
+      sql`${t.redirectUri} = 'https://' || ${t.extensionId} || '.chromiumapp.org/crrt-auth'`,
+    ),
+  }),
+).enableRLS()
+
 // One-time, server-created authorization grants used to establish a separate
 // Supabase session inside the Chrome extension. Raw codes, state values, PKCE
 // verifiers, and sessions never enter this table.
@@ -133,7 +151,7 @@ export const extensionAuthHandoffs = pgTable(
     stateHash: text('state_hash').notNull(),
     pkceChallenge: text('pkce_challenge').notNull(),
     userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-    extensionId: text('extension_id').notNull(),
+    extensionId: text('extension_id').notNull().references(() => extensionAuthClients.extensionId, { onDelete: 'cascade' }),
     redirectUri: text('redirect_uri').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
@@ -152,6 +170,10 @@ export const extensionAuthHandoffs = pgTable(
       sql`${t.redirectUri} = 'https://' || ${t.extensionId} || '.chromiumapp.org/crrt-auth'`,
     ),
     expiryCheck: check('extension_auth_handoffs_expiry_check', sql`${t.expiresAt} > ${t.createdAt}`),
+    maxLifetimeCheck: check(
+      'extension_auth_handoffs_max_lifetime_check',
+      sql`${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`,
+    ),
     consumedCheck: check(
       'extension_auth_handoffs_consumed_at_check',
       sql`${t.consumedAt} is null or ${t.consumedAt} >= ${t.createdAt}`,

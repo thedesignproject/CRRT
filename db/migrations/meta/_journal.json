@@ -169,6 +169,13 @@
       "when": 1789075279886,
       "tag": "0023_damp_black_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789133475187,
+      "tag": "0024_silly_kulan_gath",
+      "breakpoints": true
     }
   ]
 }
