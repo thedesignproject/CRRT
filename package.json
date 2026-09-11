@@ -38,6 +38,7 @@
     "build": "tsc && vite build",
     "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
     "build:extension": "wxt build --config apps/extension/wxt.config.ts",
+    "package:extension": "bun scripts/package-extension.ts",
     "preview": "vite preview",
     "preview:dashboard": "vite preview --config apps/dashboard/vite.config.ts",
     "prepublishOnly": "npm run build",

@@ -1,8 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { resolve } from 'node:path'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
-import config, { extensionManifest } from '../wxt.config'
+import config, { extensionIcons, extensionManifest } from '../wxt.config'
 
 const production = {
   WXT_API_BASE: 'https://crrt.ai/api',
@@ -14,19 +13,18 @@ afterEach(() => vi.unstubAllEnvs())
 
 it('builds the extension with its canonical icon and declared permissions', () => {
   expect((config.vite as () => unknown)()).toEqual({ build: { assetsInlineLimit: Infinity } })
-  const files: { absoluteSrc: string; relativeDest: string }[] = []
-  const hooks = config.hooks as { 'build:publicAssets': (wxt: unknown, assets: typeof files) => void }
-  hooks['build:publicAssets']({ config: { root: resolve('apps/extension') } }, files)
-  expect(files[0].relativeDest).toBe('icon.png')
-  expect(readFileSync(files[0].absoluteSrc)).toEqual(readFileSync('branding/design-system-crrt/Frame 11.png'))
   const manifest = extensionManifest({ mode: 'production' }, production)
   for (const [name, value] of Object.entries(production)) vi.stubEnv(name, value)
   expect((config.manifest as (environment: { mode: string }) => unknown)({ mode: 'production' })).toEqual(manifest)
   expect(manifest).toMatchObject({
+    version: '1.0.0',
     permissions: ['activeTab', 'identity', 'scripting', 'storage'],
     host_permissions: ['https://crrt.ai/*', 'https://project-ref.supabase.co/*'],
-    action: { default_icon: { 16: 'icon.png' } },
+    icons: extensionIcons,
+    action: { default_icon: extensionIcons },
+    content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
   })
+  for (const path of Object.values(extensionIcons)) expect(existsSync(`apps/extension/public/${path}`)).toBe(true)
   expect(manifest.host_permissions).not.toContain('http://*/*')
   expect(manifest.host_permissions).not.toContain('https://*/*')
   expect(manifest.web_accessible_resources).toEqual([

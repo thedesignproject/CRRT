@@ -1,7 +1,12 @@
 import { defineConfig, type ConfigEnv, type UserManifest } from 'wxt'
-import { resolve } from 'node:path'
+import { readExtensionVersion } from './release'
 
-const icons = { 16: 'icon.png', 32: 'icon.png', 48: 'icon.png', 128: 'icon.png' }
+export const extensionIcons = {
+  16: 'icons/icon-16.png',
+  32: 'icons/icon-32.png',
+  48: 'icons/icon-48.png',
+  128: 'icons/icon-128.png',
+} as const
 type ServiceName = 'api' | 'dashboard' | 'supabase'
 type ExtensionBuildEnvironment = Partial<Record<'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL', string>>
 
@@ -59,14 +64,15 @@ export function extensionManifest(
   return {
     name: 'CRRT',
     description: 'Drop visual feedback on any page and share it with your CRRT projects.',
-    version: '0.1.0',
+    version: readExtensionVersion(),
     permissions: ['activeTab', 'identity', 'scripting', 'storage'],
     host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`])],
     // This only lets the explicitly injected, isolated iframe load on a chosen HTTP(S) page.
     // It does not grant CRRT persistent access to those pages.
     web_accessible_resources: [{ resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] }],
-    icons,
-    action: { default_title: 'CRRT', default_icon: icons },
+    content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
+    icons: extensionIcons,
+    action: { default_title: 'CRRT', default_icon: extensionIcons },
   }
 }
 
@@ -74,10 +80,5 @@ export default defineConfig({
   root: 'apps/extension',
   modules: ['@wxt-dev/module-react'],
   vite: () => ({ build: { assetsInlineLimit: Infinity } }),
-  hooks: {
-    'build:publicAssets': (wxt, files) => {
-      files.push({ absoluteSrc: resolve(wxt.config.root, '../../branding/design-system-crrt/Frame 11.png'), relativeDest: 'icon.png' })
-    },
-  },
   manifest: (environment) => extensionManifest(environment),
 })
