@@ -23,7 +23,7 @@ interface StateResponse {
     selector: string
     body: string
     reviewStatus: 'open' | 'accepted' | 'rejected'
-    implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
+    implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'ready_for_testing' | 'done'
     claimedByAgentId: string | null
     createdAt: string
     authorName?: string | null
@@ -320,14 +320,17 @@ export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: 
   }, [apiBase, session])
 
   const acceptedComments = shareState?.comments.filter((c) => c.reviewStatus === 'accepted') ?? []
+  const actionableComments = acceptedComments.filter(
+    (c) => c.implementationStatus !== 'ready_for_testing' && c.implementationStatus !== 'done',
+  )
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const seenIdsRef = useRef<Set<string>>(new Set())
-  const acceptedIds = acceptedComments.map((c) => c.id).join(',')
+  const actionableIds = actionableComments.map((c) => c.id).join(',')
   useEffect(() => {
     setSelectedIds(prev => {
       const next = new Set<string>()
-      for (const c of acceptedComments) {
+      for (const c of actionableComments) {
         // Previously seen → preserve user's explicit choice. New → default selected.
         if (seenIdsRef.current.has(c.id)) {
           if (prev.has(c.id)) next.add(c.id)
@@ -337,9 +340,9 @@ export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: 
       }
       return next
     })
-    seenIdsRef.current = new Set(acceptedComments.map((c) => c.id))
+    seenIdsRef.current = new Set(actionableComments.map((c) => c.id))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [acceptedIds])
+  }, [actionableIds])
   const toggleSelected = useCallback((id: string) => {
     setSelectedIds(prev => {
       const next = new Set(prev)
@@ -351,11 +354,12 @@ export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: 
   const buildPrompt = useCallback((target: Target) => {
     const original = prompts[target]
     if (!original) return ''
-    const selected = acceptedComments.filter((c) => selectedIds.has(c.id))
-    if (selected.length === 0 || selected.length === acceptedComments.length) return original
+    const selected = actionableComments.filter((c) => selectedIds.has(c.id))
+    const allAcceptedCommentsAreActionable = actionableComments.length === acceptedComments.length
+    if (selected.length === 0 || (selected.length === actionableComments.length && allAcceptedCommentsAreActionable)) return original
     const list = selected.map((c, i) => `${i + 1}. "${c.body}" — ${pagePath(c.pageUrl)}`).join('\n')
     return `ACT ONLY ON THESE FEEDBACK ITEMS (the rest of the prompt may list more — ignore those):\n${list}\n\n---\n\n${original}`
-  }, [prompts, acceptedComments, selectedIds])
+  }, [prompts, acceptedComments.length, actionableComments, selectedIds])
 
   const handleCopy = useCallback(async (target: Target) => {
     const text = buildPrompt(target)
@@ -417,7 +421,7 @@ export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: 
                 target={id}
                 label={label}
                 hint={hint}
-                ready={Boolean(prompts[id]) && (acceptedComments.length === 0 || selectedIds.size > 0)}
+                ready={Boolean(prompts[id]) && (actionableComments.length === 0 || selectedIds.size > 0)}
                 copied={copied === id}
                 selected={selected === id}
                 onCopy={handleCopy}
@@ -453,16 +457,16 @@ export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: 
           )}
 
           {shareState && (
-            <Section label={selectedIds.size === acceptedComments.length
-              ? `Ready for agent (${acceptedComments.length})`
-              : `Ready for agent (${selectedIds.size}/${acceptedComments.length} selected)`}>
-              {acceptedComments.length === 0 ? (
+            <Section label={selectedIds.size === actionableComments.length
+              ? `Ready for agent (${actionableComments.length})`
+              : `Ready for agent (${selectedIds.size}/${actionableComments.length} selected)`}>
+              {actionableComments.length === 0 ? (
                 <div style={{ background: 'var(--fw-contrast-03)', border: '1px dashed var(--fw-contrast-10)', borderRadius: 10, padding: 16, textAlign: 'center', color: 'var(--fw-foreground-muted)', fontSize: 13 }}>
-                  No accepted comments yet. They'll show up here the moment a reviewer accepts one.
+                  No feedback is ready for an agent.
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {acceptedComments.map((comment) => {
+                  {actionableComments.map((comment) => {
                     const author = comment.authorName ?? null
                     const isSelected = selectedIds.has(comment.id)
                     return (

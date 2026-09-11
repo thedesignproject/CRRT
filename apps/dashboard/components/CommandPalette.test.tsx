@@ -17,6 +17,7 @@ describe('<CommandPalette /> permissions', () => {
     )
 
     expect(screen.getByText('Filter: All')).toBeInTheDocument()
+    expect(screen.getByText('Filter: Ready for testing')).toBeInTheDocument()
     expect(screen.queryByText('Toggle Ready for Agent')).toBeNull()
     expect(screen.queryByText('Toggle Done')).toBeNull()
     expect(screen.queryByText('Toggle Reject')).toBeNull()

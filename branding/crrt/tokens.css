@@ -32,6 +32,10 @@
   --crrt-phosphor-green:  #33FF33;
   --crrt-forest:          #1F3A2F;
 
+  /* Workflow status */
+  --crrt-status-ready-for-testing:    var(--crrt-phosphor);
+  --crrt-status-ready-for-testing-bg: rgba(255, 176, 0, 0.12);
+
   /* Hairlines */
   --crrt-rule:            rgba(10, 10, 10, 0.10);
   --crrt-rule-strong:     rgba(10, 10, 10, 0.20);
@@ -142,6 +146,8 @@
  * 3. Semantic mapping — LIGHT (opt-in via [data-theme="light"]).
  * --------------------------------------------------------- */
 [data-theme='light'] {
+  --crrt-status-ready-for-testing:    var(--crrt-carrot-deep);
+  --crrt-status-ready-for-testing-bg: rgba(184, 95, 31, 0.10);
   --background:           var(--crrt-bg);
   --foreground:           var(--crrt-ink);
   --card:                 var(--crrt-bg-card);

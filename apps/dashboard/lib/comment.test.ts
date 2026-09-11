@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CommentRecord } from '../api'
-import { mapServerComment } from './comment'
+import { getDisplayStatus, isInactive, mapServerComment } from './comment'
+import type { Comment } from './types'
 
 describe('mapServerComment', () => {
   it('normalizes nullable legacy context for safe dashboard rendering', () => {
@@ -32,5 +33,19 @@ describe('mapServerComment', () => {
       author: 'Anonymous',
       externalWork: [expect.objectContaining({ provider: 'linear', externalKey: 'WEB-7' })],
     })
+  })
+
+  it('keeps agent-ready, testing, and done work in separate queues', () => {
+    const base = {
+      reviewStatus: 'accepted',
+      implementationStatus: 'unassigned',
+    } as Comment
+
+    expect(getDisplayStatus(base)).toBe('ready')
+    expect(getDisplayStatus({ ...base, implementationStatus: 'ready_for_testing' })).toBe('ready_for_testing')
+    const done = { ...base, implementationStatus: 'done' as const }
+    expect(getDisplayStatus(done)).toBe('done')
+    expect(isInactive(done)).toBe(true)
+    expect(isInactive({ ...base, implementationStatus: 'ready_for_testing' })).toBe(false)
   })
 })

@@ -15,6 +15,7 @@ const CMD_ACTIONS: CmdItem[] = [
   { id: 'filter-all', type: 'action', label: 'Filter: All', detail: '', icon: 'filter' },
   { id: 'filter-open', type: 'action', label: 'Filter: Open', detail: '', icon: 'filter' },
   { id: 'filter-ready', type: 'action', label: 'Filter: Ready for Agent', detail: '', icon: 'filter' },
+  { id: 'filter-ready-for-testing', type: 'action', label: 'Filter: Ready for testing', detail: '', icon: 'filter' },
   { id: 'filter-done', type: 'action', label: 'Filter: Done', detail: '', icon: 'filter' },
 ]
 

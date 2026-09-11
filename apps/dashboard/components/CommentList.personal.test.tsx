@@ -5,13 +5,16 @@ import { StatusBar } from './StatusBar'
 import type { Comment } from '../lib/types'
 
 const comment: Comment = { id: 'c1', projectId: 'p1', pageUrl: null, selector: '#target', x: 1, y: 2, body: 'Project feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null, createdAt: '', updatedAt: '', author: 'You', authorInitial: 'Y', authorColor: '#000', screenshotUrl: null, targetType: 'element_point', anchor: null, githubIssue: null }
-const counts = { all: 1, open: 1, ready: 0, done: 0, rejected: 0 }
+const counts = { all: 1, open: 1, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }
 
 describe('shared feedback controls', () => {
   it('preserves project filters, selection, and bulk status actions', () => {
     const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), applyBulkAction: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
     const view = render(<CommentList {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
+    expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).toHaveClass('grid', 'grid-cols-5')
+    expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).not.toHaveClass('overflow-x-auto')
+    expect(screen.getByRole('button', { name: 'Agent 0' })).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Open 1' })); expect(props.selectFilter).toHaveBeenCalledWith('open')
     fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.setSelectedCommentId).toHaveBeenCalledWith('c1')
     view.rerender(<CommentList {...props} filteredComments={[{ ...comment, visibility: 'internal' }]} />)
@@ -35,6 +38,36 @@ describe('shared feedback controls', () => {
     expect(screen.getByText('1 My Comments')).toBeInTheDocument()
     expect(screen.queryByText('Open')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull()
+  })
+
+  it('shows work waiting on the reviewer in its own testing filter', () => {
+    const testing = {
+      ...comment,
+      reviewStatus: 'accepted' as const,
+      implementationStatus: 'ready_for_testing' as const,
+    }
+    const selectFilter = vi.fn()
+    render(<CommentList
+      filteredComments={[testing]}
+      counts={{ ...counts, open: 0, ready_for_testing: 1 }}
+      statusFilter="ready_for_testing"
+      selectFilter={selectFilter}
+      bulkMode={false}
+      enterBulkMode={vi.fn()}
+      exitBulkMode={vi.fn()}
+      bulkSelectedIds={new Set()}
+      toggleSelectAllVisible={vi.fn()}
+      applyBulkAction={vi.fn()}
+      toggleBulkSelect={vi.fn()}
+      commentsLoading={false}
+      commentsError={null}
+      selectedCommentId=""
+      setSelectedCommentId={vi.fn()}
+    />)
+
+    expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
+    fireEvent.click(screen.getByRole('button', { name: 'Testing 1' }))
+    expect(selectFilter).toHaveBeenCalledWith('ready_for_testing')
   })
 
   it('advertises only personal navigation shortcuts in My Comments', () => {

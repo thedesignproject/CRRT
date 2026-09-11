@@ -25,8 +25,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
 
+    const patch = implementationStatus === 'unassigned'
+      ? { implementationStatus, claimedByAgentId: null }
+      : { implementationStatus }
     const [comment, activeShares] = await Promise.all([
-      updateImplementationStatus(commentId, { implementationStatus }),
+      updateImplementationStatus(commentId, patch),
       findActiveSharesForComment(commentId),
     ])
     await Promise.all(activeShares.map((share) => createFeedbackEvent({

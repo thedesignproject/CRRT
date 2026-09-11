@@ -39,6 +39,7 @@ import {
   reserveCommentActivityEmail,
   slugifyProjectKey,
   suggestAvailableProjectKey,
+  applyAgentFeedbackOperation,
 } from './store.js'
 
 type ProjectRow = {
@@ -1221,6 +1222,60 @@ describe('comment functions', () => {
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comment.targetType).toBe('text_range')
+  })
+
+  it('maps atomic agent operation results and propagates RPC failures', async () => {
+    const single = vi.fn()
+      .mockResolvedValueOnce({
+        data: { outcome: 'applied', event_id: 91, comment_row: TEXT_RANGE_ROW },
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        data: { outcome: 'duplicate', event_id: 91, comment_row: null },
+        error: null,
+      })
+      .mockResolvedValueOnce({ data: null, error: { message: 'operation failed' } })
+    const rpc = vi.fn(() => ({ single }))
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+
+    await expect(applyAgentFeedbackOperation({
+      shareId: 'share-1',
+      commentId: 'comment-1',
+      agentId: 'agent-1',
+      idempotencyKey: 'key-1',
+      operation: 'comment.complete',
+      eventType: 'comment.ready_for_testing',
+      payload: { idempotencyKey: 'key-1' },
+      implementationStatus: 'ready_for_testing',
+    })).resolves.toMatchObject({
+      outcome: 'applied', feedbackEventId: 91, comment: { targetType: 'text_range' },
+    })
+    expect(rpc).toHaveBeenCalledWith('apply_agent_feedback_operation', expect.objectContaining({
+      p_implementation_status: 'ready_for_testing',
+    }))
+
+    await expect(applyAgentFeedbackOperation({
+      shareId: 'share-1',
+      commentId: 'comment-1',
+      agentId: 'agent-1',
+      idempotencyKey: 'key-2',
+      operation: 'comment.note',
+      eventType: 'comment.noted',
+      payload: {},
+    })).resolves.toEqual({ outcome: 'duplicate', feedbackEventId: 91, comment: null })
+    expect(rpc).toHaveBeenLastCalledWith('apply_agent_feedback_operation', expect.objectContaining({
+      p_implementation_status: null,
+    }))
+
+    await expect(applyAgentFeedbackOperation({
+      shareId: 'share-1',
+      commentId: 'comment-1',
+      agentId: 'agent-1',
+      idempotencyKey: 'key-3',
+      operation: 'comment.start',
+      eventType: 'comment.started',
+      payload: {},
+    })).rejects.toThrow('operation failed')
   })
 
   it('accepted-comment queries select target metadata', async () => {

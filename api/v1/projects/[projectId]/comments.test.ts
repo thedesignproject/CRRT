@@ -79,6 +79,14 @@ describe('api/v1/projects/[projectId]/comments', () => {
       visibility: undefined, includeExternalWork: true,
     }))
 
+    vi.mocked(listProjectComments).mockResolvedValueOnce([{ id: 'testing' }] as never)
+    res = mockRes()
+    await call({ method: 'GET', query: { projectId: 'p', implementationStatus: 'ready_for_testing' }, headers: {} }, res)
+    expect(res.statusCode).toBe(200)
+    expect(listProjectComments).toHaveBeenLastCalledWith('p', expect.objectContaining({
+      implementationStatus: 'ready_for_testing',
+    }))
+
     vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'guest' })
     vi.mocked(listProjectComments).mockResolvedValueOnce([{ id: 'shared' }] as never)
     res = mockRes()

@@ -368,7 +368,7 @@ function ProjectListView({
 function ProjectTable({ projects }: { projects: AdminProject[] }) {
   if (projects.length === 0) return null
   return (
-    <table className="w-full min-w-[980px] border-separate border-spacing-0 text-left">
+    <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-left">
       <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur">
         <tr className="border-b border-border text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
           <th scope="col" className="border-b border-border px-4 py-2.5 font-semibold">Project</th>
@@ -377,6 +377,7 @@ function ProjectTable({ projects }: { projects: AdminProject[] }) {
           <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Pending</th>
           <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Ready</th>
           <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Rejected</th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Testing</th>
           <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Done</th>
           <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Shares</th>
           <th scope="col" className="border-b border-border px-4 py-2.5 text-right font-semibold">URLs</th>
@@ -415,6 +416,7 @@ function ProjectTableRow({ project }: { project: AdminProject }) {
       <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-muted-foreground tabular-nums">{count(project.commentStatusCounts.pending)}</td>
       <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-accepted tabular-nums">{count(project.commentStatusCounts.accepted)}</td>
       <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-rejected tabular-nums">{count(project.commentStatusCounts.rejected)}</td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-ready-for-testing tabular-nums">{count(project.implementationStatusCounts.readyForTesting)}</td>
       <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-done tabular-nums">{count(project.implementationStatusCounts.done)}</td>
       <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-agent-active tabular-nums">{count(project.feedbackShareCount)}</td>
       <td className="border-b border-border/50 px-4 py-3 text-right text-[12px] text-muted-foreground tabular-nums">{count(project.commentedUrlCount)}</td>

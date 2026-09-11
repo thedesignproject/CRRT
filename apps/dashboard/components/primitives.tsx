@@ -29,6 +29,7 @@ export function StatusBadge({ comment }: { comment: Comment }) {
     <span className={cn(
       'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold',
       ds === 'ready' && 'bg-status-accepted-bg text-status-accepted',
+      ds === 'ready_for_testing' && 'bg-status-ready-for-testing-bg text-status-ready-for-testing',
       ds === 'rejected' && 'bg-status-rejected-bg text-status-rejected',
       ds === 'open' && 'bg-status-open-bg text-status-open',
       ds === 'done' && 'bg-status-done-bg text-status-done',

@@ -25,12 +25,17 @@ function stateResponse(overrides: Record<string, unknown> = {}) {
       },
       {
         id: 'c2', pageUrl: 'https://x.example/two', selector: '#b', body: 'Second note',
-        reviewStatus: 'accepted', implementationStatus: 'unassigned',
+        reviewStatus: 'accepted', implementationStatus: 'ready_for_testing',
         claimedByAgentId: null, createdAt: now,
       },
       {
         id: 'c3', pageUrl: 'https://x.example/three', selector: '#c', body: 'Open one',
         reviewStatus: 'open', implementationStatus: 'unassigned',
+        claimedByAgentId: null, createdAt: now,
+      },
+      {
+        id: 'c4', pageUrl: 'https://x.example/four', selector: '#d', body: 'Finished note',
+        reviewStatus: 'accepted', implementationStatus: 'done',
         claimedByAgentId: null, createdAt: now,
       },
     ],
@@ -91,44 +96,42 @@ describe('<AgentBridgeModal />', () => {
     expect(document.body.textContent).toContain('fixing nav')
     expect(document.body.textContent).toContain('agent-9')
 
-    // Accepted comments: author + no-author, status pill; the open comment is excluded.
+    // Only accepted, agent-actionable comments appear. Reviewer-owned and open comments are excluded.
     expect(document.body.textContent).toContain('First note')
     expect(document.body.textContent).toContain('Dana')
-    expect(document.body.textContent).toContain('Second note')
     expect(document.body.textContent).toContain('In progress')
     const inProgress = Array.from(document.querySelectorAll<HTMLSpanElement>('span'))
       .find((element) => element.textContent === 'In progress')
     expect(inProgress?.style.color).toBe('var(--fw-info-label)')
+    expect(document.body.textContent).not.toContain('Second note')
+    expect(document.body.textContent).not.toContain('Finished note')
     expect(document.body.textContent).not.toContain('Open one')
     // The single open comment surfaces the "waiting on review" footer.
     expect(document.body.textContent).toContain('more comment')
 
-    // Nothing is selected yet → the target is not ready. Hover it in that state.
+    // Terminal comments never enter the selection; the actionable item starts unselected.
+    expect(document.body.textContent).toContain('0/1 selected')
     await act(async () => { fireEvent.mouseEnter(targetButton('Claude Code')) })
     await act(async () => { fireEvent.mouseLeave(targetButton('Claude Code')) })
 
-    // Select both accepted comments (covers the selected-comment styling + checkmark).
+    // Select the actionable comment (covers the selected-comment styling + checkmark).
     await act(async () => { fireEvent.click(commentButton('First note')) })
-    await act(async () => { fireEvent.click(commentButton('Second note')) })
     await waitFor(() => {
       if (!targetButton('Claude Code').textContent?.includes('Copy Claude Code')) {
-        throw new Error('target not ready after selecting all')
+        throw new Error('target not ready after selecting the actionable comment')
       }
     })
-    // Both selected → the full "Ready for agent (N)" label.
-    expect(document.body.textContent).toContain('Ready for agent (2)')
 
     // Hover the target while it is ready (hovered && ready arm).
     await act(async () => { fireEvent.mouseEnter(targetButton('Claude Code')) })
     await act(async () => { fireEvent.mouseLeave(targetButton('Claude Code')) })
 
-    // Deselect one → a subset is selected (partial label + custom-prompt path).
-    await act(async () => { fireEvent.click(commentButton('Second note')) })
-    expect(document.body.textContent).toContain('1/2 selected')
-
     await act(async () => { fireEvent.click(targetButton('Claude Code')) })
     await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
+    // A terminal accepted comment exists, so even "all" actionable items use an explicit scope.
     expect(writeText.mock.calls[0]![0]).toContain('ACT ONLY ON THESE FEEDBACK ITEMS')
+    expect(writeText.mock.calls[0]![0]).toContain('First note')
+    expect(writeText.mock.calls[0]![0]).not.toContain('Second note')
     expect(document.body.textContent).toContain('Copied ✓')
     const copiedLabel = Array.from(document.querySelectorAll<HTMLDivElement>('div'))
       .find((element) => element.childElementCount === 0 && element.textContent === 'Copied ✓')
@@ -150,7 +153,7 @@ describe('<AgentBridgeModal />', () => {
       if (!btn) throw new Error('prompts not ready')
       return btn
     })
-    expect(document.body.textContent).toContain('No accepted comments yet')
+    expect(document.body.textContent).toContain('No feedback is ready for an agent')
 
     // Close-button hover handlers.
     const close = document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')!
@@ -164,11 +167,16 @@ describe('<AgentBridgeModal />', () => {
   })
 
   it('does not copy when the onBeforeCopy gate denies access', async () => {
-    const { writeText } = mockApi(stateResponse({ comments: [], presence: [] }))
+    const actionableOnly = stateResponse().comments.slice(0, 1)
+    const { writeText } = mockApi(stateResponse({ comments: actionableOnly, presence: [] }))
     render(
       <AgentBridgeModal apiBase={API} projectId="proj" onClose={() => {}} onBeforeCopy={async () => false} />,
     )
 
+    await waitFor(() => {
+      if (!document.body.textContent?.includes('First note')) throw new Error('comments not loaded')
+    })
+    await act(async () => { fireEvent.click(commentButton('First note')) })
     const claude = await waitFor(() => {
       const btn = targetButton('Copy Claude Code')
       if (!btn) throw new Error('prompts not ready')
