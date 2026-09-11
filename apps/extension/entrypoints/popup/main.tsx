@@ -149,9 +149,9 @@ function Disclosure({ busy, error, onContinue }: { busy: boolean; error: string;
     <ul>
       <li>We read the current URL to find an authorized project.</li>
       <li>Page content and screenshots are captured only after your feedback action.</li>
-      <li>The microphone starts only when you press it and Chrome supports local speech input.</li>
+      <li>The microphone starts only when you press it and Chrome supports speech input.</li>
       <li>Project feedback is shared with project collaborators. Private feedback stays yours.</li>
-      <li>Tracker drafts are sent only after an authorized collaborator confirms them.</li>
+      <li>A requested tracker draft may use the configured model. No issue is sent until an authorized collaborator confirms it.</li>
     </ul>
     <button className="primary" disabled={busy} onClick={onContinue}>I understand — continue</button>
     <div className="row"><a href={publicCrrtUrl('/privacy')} target="_blank" rel="noopener noreferrer">Privacy</a><a href={publicCrrtUrl('/support')} target="_blank" rel="noopener noreferrer">Support</a></div>

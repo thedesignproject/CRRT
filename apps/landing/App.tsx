@@ -13,6 +13,8 @@ import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
 import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
+import { PrivacyPage } from './legal/PrivacyPage'
+import { SupportPage } from './legal/SupportPage'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
@@ -40,19 +42,29 @@ function getDemoProjectId(prefix: string) {
 
 export function App() {
   const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
-  const projectId = getDemoProjectId(
-    import.meta.env.VITE_PROJECT_KEY ?? import.meta.env.VITE_PROJECT_ID ?? 'crrt-landing-demo',
-  )
 
   // /docs/* shows the docs surface. Anything else renders the marketing site.
   // SSR-safe: location is read only after mount.
   const initialPath = typeof window === 'undefined' ? '/' : window.location.pathname
+  const publicPath = initialPath.replace(/\/+$/, '')
   const isDocs = initialPath.startsWith('/docs')
   const isAudit = initialPath.startsWith('/audit/')
   const stayOnMarketing = typeof window !== 'undefined'
     && new URLSearchParams(window.location.search).get('stay') === '1'
 
   useScrollProgress()
+
+  if (publicPath === '/privacy') {
+    return <PrivacyPage />
+  }
+
+  if (publicPath === '/support') {
+    return <SupportPage />
+  }
+
+  const projectId = getDemoProjectId(
+    import.meta.env.VITE_PROJECT_KEY ?? import.meta.env.VITE_PROJECT_ID ?? 'crrt-landing-demo',
+  )
 
   if (isDocs) {
     return (

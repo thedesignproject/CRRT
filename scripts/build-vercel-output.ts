@@ -136,6 +136,7 @@ workflowConfig.routes = [
   { handle: 'filesystem' },
   { src: '^/d/[^/]+/?$', dest: '/index.html' },
   { src: '^/docs(?:/.*)?$', dest: '/index.html' },
+  { src: '^/(?:privacy|support)/?$', dest: '/index.html' },
   { src: '^/dashboard(?:/.*)?$', dest: '/dashboard/index.html' },
   { src: '^/audit(?:/.*)?$', dest: '/index.html' },
 ]
