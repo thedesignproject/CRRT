@@ -2,6 +2,7 @@ import { browser } from 'wxt/browser'
 import { defineBackground } from 'wxt/utils/define-background'
 import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
+import { startHostedSignIn, type HostedAuthMessage } from '../lib/hosted-auth'
 
 type MessageResponse = { ok: true; data?: unknown } | { ok: false; error: string }
 const activeTabKey = (tabId: number) => `crrt:active-tab:${tabId}`
@@ -139,6 +140,9 @@ export default defineBackground(() => {
   async function handleMessage(message: unknown, sender: unknown): Promise<MessageResponse | undefined> {
     try {
       if ((message as { type?: string } | null)?.type === 'private:relay') return { ok: true, data: await relayFrameMessage(message, sender) }
+      if ((message as { type?: string } | null)?.type === 'auth:hosted-sign-in') {
+        return { ok: true, data: await startHostedSignIn(client, (message as HostedAuthMessage).intent) }
+      }
       if (isAuthMessage(message)) return { ok: true, data: await handleAuthMessage(client, message) }
       if ((message as { type?: unknown } | null)?.type === 'auth:open-popup') {
         await browser.action.openPopup()

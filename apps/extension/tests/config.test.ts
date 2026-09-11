@@ -11,5 +11,5 @@ it('builds the extension with its canonical icon and declared permissions', () =
   hooks['build:publicAssets']({ config: { root: resolve('apps/extension') } }, files)
   expect(files[0].relativeDest).toBe('icon.png')
   expect(readFileSync(files[0].absoluteSrc)).toEqual(readFileSync('branding/design-system-crrt/Frame 11.png'))
-  expect(config.manifest).toMatchObject({ permissions: ['activeTab', 'scripting', 'storage'], action: { default_icon: { 16: 'icon.png' } } })
+  expect(config.manifest).toMatchObject({ permissions: ['activeTab', 'identity', 'scripting', 'storage'], action: { default_icon: { 16: 'icon.png' } } })
 })

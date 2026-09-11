@@ -25,11 +25,13 @@ const browser = vi.hoisted(() => ({
 vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
 vi.mock('../lib/auth', () => ({ createExtensionSupabase: vi.fn(() => 'client'), handleAuthMessage: vi.fn(), isAuthMessage: vi.fn() }))
+vi.mock('../lib/hosted-auth', () => ({ startHostedSignIn: vi.fn() }))
 vi.mock('../lib/frame-channel', () => ({ relayFrameMessage: vi.fn() }))
 
 import background, { activateCurrentTab } from '../entrypoints/background'
 import { handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
+import { startHostedSignIn } from '../lib/hosted-auth'
 
 beforeEach(() => {
   vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.updated = undefined; state.session = {}
@@ -217,5 +219,14 @@ describe('extension background', () => {
     await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'down' })
     vi.mocked(isAuthMessage).mockImplementationOnce(() => { throw 'bad' })
     await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'Unexpected extension error' })
+  })
+
+  it('runs hosted authentication in the background', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(startHostedSignIn).mockResolvedValueOnce({ email: 'u@example.com', accessToken: 'token' })
+    await expect(send({ type: 'auth:hosted-sign-in', intent: 'signup' })).resolves.toEqual({
+      ok: true, data: { email: 'u@example.com', accessToken: 'token' },
+    })
+    expect(startHostedSignIn).toHaveBeenCalledWith('client', 'signup')
   })
 })

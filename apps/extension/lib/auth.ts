@@ -3,7 +3,6 @@ import { browser } from 'wxt/browser'
 
 export type AuthMessage =
   | { type: 'auth:get' }
-  | { type: 'auth:sign-in'; email: string; password: string }
   | { type: 'auth:sign-out' }
 
 export type SessionSummary = { accessToken: string; email: string }
@@ -33,17 +32,12 @@ export function createExtensionSupabase() {
 
 export function isAuthMessage(value: unknown): value is AuthMessage {
   if (!value || typeof value !== 'object') return false
-  return ['auth:get', 'auth:sign-in', 'auth:sign-out'].includes(String((value as { type?: unknown }).type))
+  return ['auth:get', 'auth:sign-out'].includes(String((value as { type?: unknown }).type))
 }
 
 export async function handleAuthMessage(client: SupabaseClient, message: AuthMessage) {
   if (message.type === 'auth:get') {
     const { data, error } = await client.auth.getSession()
-    if (error) throw error
-    return summarize(data.session)
-  }
-  if (message.type === 'auth:sign-in') {
-    const { data, error } = await client.auth.signInWithPassword({ email: message.email.trim(), password: message.password })
     if (error) throw error
     return summarize(data.session)
   }
