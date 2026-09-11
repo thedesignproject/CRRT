@@ -24,6 +24,7 @@ vi.mock('../../../src/lib/screenshotCapture', () => ({
 }))
 
 import script, { mountWidget } from '../entrypoints/comment'
+import { connectPageHost } from '../lib/page-host'
 import { ExtensionWidget, extensionComments, personalComments } from '../lib/personal-widget'
 import autoload from '../entrypoints/autoload.content'
 import config from '../wxt.config'
@@ -52,7 +53,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup(); target.remove()
-  window.dispatchEvent(new CustomEvent('crrt:deactivate'))
+  window.dispatchEvent(pageTransition('pagehide'))
   document.querySelector('[data-crrt-extension]')?.remove()
   vi.restoreAllMocks(); vi.useRealTimers()
 })
@@ -552,13 +553,25 @@ it('does not renew private images for the regular project widget', async () => {
   const view = render(<FeedbackWidget projectId="project" />)
   await act(async () => { fireEvent.focus(window) })
   expect(listPageComments).not.toHaveBeenCalled()
+  expect(view.queryByRole('button', { name: 'Hide CRRT on this tab' })).not.toBeInTheDocument()
   view.unmount()
 })
 
 it('uses host page geometry, targets, selectors and navigation in the isolated editor', async () => {
   const page: WidgetPage = { url: location.href.split('#')[0], width: 2000, height: 3000, scrollX: 10, scrollY: 20,
-    liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn() }
+    liveIds: ['c1'], capture: vi.fn(), selecting: vi.fn(), track: vi.fn(), highlight: vi.fn(), hide: vi.fn() }
   const view = setup(false, page); await act(async () => {})
+  const hide = view.ui.getByRole('button', { name: 'Hide CRRT on this tab' })
+  expect(hide).toHaveStyle({ opacity: '0', pointerEvents: 'none' })
+  fireEvent.mouseEnter(hide.parentElement!.parentElement!)
+  expect(hide).toHaveStyle({ opacity: '1', pointerEvents: 'auto' })
+  fireEvent.click(hide); expect(page.hide).toHaveBeenCalledOnce()
+  fireEvent.mouseLeave(hide.parentElement!.parentElement!)
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 140)) })
+  expect(hide).toHaveStyle({ opacity: '0' })
+  fireEvent.focus(hide); expect(hide).toHaveStyle({ opacity: '1' })
+  fireEvent.blur(hide); await act(async () => {})
+  expect(hide).toHaveStyle({ opacity: '0' })
   const pin = view.container.querySelector('[data-fw-pin]')!
   expect(pin).toHaveStyle({ left: '190px', top: '569px' })
   expect(page.track).toHaveBeenCalledWith([{ id: 'c1', selector: '#target', x: 10, y: 20 }])
@@ -737,13 +750,16 @@ it('autoloads only in an activated tab, restores from BFCache, and supports popu
     target.addEventListener(type, listener)
     listeners.push(() => target.removeEventListener(type, listener))
   } }
-  sendMessage.mockResolvedValueOnce({ ok: true, data: false })
+  sendMessage.mockResolvedValueOnce({ ok: true, data: null })
   await act(async () => { await autoload.main(context as never) })
   expect(document.querySelector('[data-crrt-extension]')).toBeNull()
   window.dispatchEvent(pageTransition('pageshow'))
   expect(sendMessage).toHaveBeenCalledOnce()
   expect(document.querySelector('[data-crrt-extension]')).toBeNull()
-  sendMessage.mockResolvedValueOnce({ ok: true, data: true })
+  sendMessage.mockResolvedValueOnce({ ok: true, data: null })
+  await act(async () => { await (script as unknown as () => Promise<void>)() })
+  expect(document.querySelector('[data-crrt-extension]')).toBeNull()
+  sendMessage.mockResolvedValueOnce({ ok: true, data: { active: true, activationId: 'activation-1' } })
   window.dispatchEvent(pageTransition('pageshow', true))
   await waitFor(() => expect(document.querySelector('[data-crrt-extension]')).not.toBeNull())
   const host = document.querySelector('[data-crrt-extension]')!
@@ -759,26 +775,50 @@ it('autoloads only in an activated tab, restores from BFCache, and supports popu
   expect(page.documentElement.style.background).toBe('transparent')
   expect(page.body.style.background).toBe('transparent')
   expect(host.shadowRoot).toBeNull()
-  mountWidget(); expect(document.querySelectorAll('[data-crrt-extension]')).toHaveLength(1)
+  mountWidget('activation-1'); expect(document.querySelectorAll('[data-crrt-extension]')).toHaveLength(1)
   expect(spy).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
-  await act(async () => { (script as unknown as () => void)() })
+  sendMessage.mockResolvedValueOnce({ ok: true, data: { active: true, activationId: 'activation-1' } })
+  await act(async () => { await (script as unknown as () => Promise<void>)() })
   expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
   window.dispatchEvent(pageTransition('pagehide', true))
   expect(host.isConnected).toBe(false)
-  sendMessage.mockResolvedValueOnce({ ok: true, data: true })
+  sendMessage.mockResolvedValueOnce({ ok: true, data: { active: true, activationId: 'activation-1' } })
   window.dispatchEvent(pageTransition('pageshow', true))
   await waitFor(() => expect(document.querySelector('[data-crrt-extension]')).not.toBeNull())
   listeners.forEach((remove) => remove())
 })
 
-it('cleans up a deactivated widget only once', () => {
-  mountWidget()
+it('deactivates only through the private frame and cleans up after acknowledgement', async () => {
+  mountWidget('activation-1')
   const host = document.querySelector('[data-crrt-extension]')!
   window.dispatchEvent(new CustomEvent('crrt:deactivate'))
+  expect(host.isConnected).toBe(true)
+  expect(sendMessage).not.toHaveBeenCalled()
+  sendMessage.mockResolvedValueOnce({ ok: true, data: true })
+  const calls = vi.mocked(connectPageHost).mock.calls
+  const deactivate = calls[calls.length - 1]![2]
+  deactivate(); deactivate()
+  await waitFor(() => expect(host.isConnected).toBe(false))
   expect(disconnectPageHost).toHaveBeenCalledOnce()
-  expect(host.isConnected).toBe(false)
+  expect(sendMessage).toHaveBeenCalledOnce()
+  expect(sendMessage).toHaveBeenCalledWith({ type: 'comment:deactivate', activationId: 'activation-1' })
   window.dispatchEvent(pageTransition('pagehide'))
   expect(disconnectPageHost).toHaveBeenCalledOnce()
+})
+
+it('keeps the widget mounted when deactivation fails so the user can retry', async () => {
+  sendMessage.mockRejectedValueOnce(new Error('worker restarted'))
+  mountWidget('activation-1')
+  const host = document.querySelector('[data-crrt-extension]')!
+  const calls = vi.mocked(connectPageHost).mock.calls
+  const deactivate = calls[calls.length - 1]![2]
+  deactivate()
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
+  expect(host.isConnected).toBe(true)
+  sendMessage.mockResolvedValueOnce({ ok: true, data: true })
+  deactivate()
+  await waitFor(() => expect(host.isConnected).toBe(false))
+  expect(sendMessage).toHaveBeenCalledTimes(2)
 })
 
 it('keeps private text, signed images, and mutation controls inaccessible to page DOM scripts', async () => {

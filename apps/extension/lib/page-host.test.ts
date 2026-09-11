@@ -7,14 +7,14 @@ vi.mock('../../../src/lib/textAnchor', () => ({ buildTextRangeAnchor: vi.fn() })
 import { captureViewport } from '../../../src/lib/screenshotCapture'
 import { buildTextRangeAnchor } from '../../../src/lib/textAnchor'
 import { connectPageHost } from './page-host'
-let frame: HTMLIFrameElement, element: HTMLElement, stop: () => void, receive: (message: any, from?: number) => Promise<any>
+let frame: HTMLIFrameElement, element: HTMLElement, stop: () => void, receive: (message: any, from?: number) => Promise<any>, deactivate: () => void
 beforeEach(() => {
   vi.clearAllMocks(); vi.useFakeTimers()
   channel.receive.mockReturnValue(channel.stop); channel.send.mockResolvedValue(undefined)
   frame = document.createElement('iframe'); element = document.createElement('article'); element.id = 'target'
   document.body.append(element)
   vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({ left: 10, top: 20, width: 100, height: 50 } as DOMRect)
-  stop = connectPageHost(frame, true)
+  deactivate = vi.fn(); stop = connectPageHost(frame, true, deactivate)
   receive = (message, from = 2) => channel.receive.mock.calls[0][0](message, from)
 })
 afterEach(() => { stop(); element.remove(); vi.restoreAllMocks(); vi.useRealTimers() })
@@ -41,6 +41,7 @@ it('handshakes, publishes normalized page geometry, validates frames, and uses o
   expect(activateEmbedded).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
   await receive({ kind: 'focus-embedded', projectId: 'project' })
   expect(activateEmbedded).toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
+  await receive({ kind: 'deactivate' }); expect(deactivate).toHaveBeenCalledOnce()
   await receive({ kind: 'selecting', value: false }); expect(document.body.style.cursor).not.toBe('crosshair')
   window.dispatchEvent(new Event('focus')); expect(channel.send).toHaveBeenLastCalledWith(2, { kind: 'focus' })
   channel.send.mockRejectedValueOnce(new Error('closed'))
