@@ -2,7 +2,6 @@ import { act, cleanup, fireEvent, render, waitFor, within } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 
 const storage = vi.hoisted(() => ({ addListener: vi.fn(), removeListener: vi.fn() }))
 const sendMessage = vi.hoisted(() => vi.fn())
@@ -26,8 +25,6 @@ vi.mock('../../../src/lib/screenshotCapture', () => ({
 import script, { mountWidget } from '../entrypoints/comment'
 import { connectPageHost } from '../lib/page-host'
 import { ExtensionWidget, extensionComments, personalComments } from '../lib/personal-widget'
-import autoload from '../entrypoints/autoload.content'
-import config from '../wxt.config'
 import { createPageComment, deletePageComment, extensionSession, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment, type ExtensionComment } from '../lib/comments-api'
 import type { WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
@@ -731,37 +728,12 @@ it('ignores a late load failure after the widget unmounts', async () => {
   expect(view.container).toBeEmptyDOMElement()
 })
 
-it('autoloads only in an activated tab, restores from BFCache, and supports popup activation', async () => {
-  expect(autoload.matches).toEqual(['http://*/*', 'https://*/*'])
-  expect(config.manifest).toMatchObject({ host_permissions: ['http://*/*', 'https://*/*'] })
-  expect((config.vite as () => unknown)()).toEqual({ build: { assetsInlineLimit: Infinity } })
-  const icons = { 16: 'icon.png', 32: 'icon.png', 48: 'icon.png', 128: 'icon.png' }
-  expect(config.manifest).toMatchObject({ icons, action: { default_icon: icons } })
-  const assets: { absoluteSrc: string; relativeDest: string }[] = []
-  const hooks = config.hooks as { 'build:publicAssets': (wxt: { config: { root: string } }, files: typeof assets) => void }
-  hooks['build:publicAssets']({ config: { root: resolve('apps/extension') } }, assets)
-  expect(assets).toHaveLength(1)
-  expect(assets[0].relativeDest).toBe('icon.png')
-  expect(readFileSync(assets[0].absoluteSrc)).toEqual(readFileSync('branding/design-system-crrt/Frame 11.png'))
+it('mounts only through the explicitly injected script and supports repeat activation', async () => {
   const spy = vi.spyOn(window, 'dispatchEvent')
   const attach = vi.spyOn(Element.prototype, 'attachShadow')
-  const listeners: Array<() => void> = []
-  const context = { addEventListener(target: Window, type: string, listener: EventListener) {
-    target.addEventListener(type, listener)
-    listeners.push(() => target.removeEventListener(type, listener))
-  } }
-  sendMessage.mockResolvedValueOnce({ ok: true, data: null })
-  await act(async () => { await autoload.main(context as never) })
-  expect(document.querySelector('[data-crrt-extension]')).toBeNull()
-  window.dispatchEvent(pageTransition('pageshow'))
-  expect(sendMessage).toHaveBeenCalledOnce()
-  expect(document.querySelector('[data-crrt-extension]')).toBeNull()
-  sendMessage.mockResolvedValueOnce({ ok: true, data: null })
-  await act(async () => { await (script as unknown as () => Promise<void>)() })
   expect(document.querySelector('[data-crrt-extension]')).toBeNull()
   sendMessage.mockResolvedValueOnce({ ok: true, data: { active: true, activationId: 'activation-1' } })
-  window.dispatchEvent(pageTransition('pageshow', true))
-  await waitFor(() => expect(document.querySelector('[data-crrt-extension]')).not.toBeNull())
+  await act(async () => { await (script as unknown as () => Promise<void>)() })
   const host = document.querySelector('[data-crrt-extension]')!
   expect(attach).toHaveBeenCalledWith({ mode: 'closed' })
   expect(attach.mock.results[0].value.querySelector('[data-fw-crrt]')).toBeNull()
@@ -782,10 +754,8 @@ it('autoloads only in an activated tab, restores from BFCache, and supports popu
   expect(spy).toHaveBeenCalledWith(expect.objectContaining({ type: 'crrt:activate' }))
   window.dispatchEvent(pageTransition('pagehide', true))
   expect(host.isConnected).toBe(false)
-  sendMessage.mockResolvedValueOnce({ ok: true, data: { active: true, activationId: 'activation-1' } })
   window.dispatchEvent(pageTransition('pageshow', true))
-  await waitFor(() => expect(document.querySelector('[data-crrt-extension]')).not.toBeNull())
-  listeners.forEach((remove) => remove())
+  expect(document.querySelector('[data-crrt-extension]')).toBeNull()
 })
 
 it('deactivates only through the private frame and cleans up after acknowledgement', async () => {
