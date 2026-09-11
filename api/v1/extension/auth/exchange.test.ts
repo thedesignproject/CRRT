@@ -69,6 +69,19 @@ describe('extension auth exchange endpoint', () => {
     res = response()
     await call(request({ method: 'OPTIONS' }), res)
     expect(res).toMatchObject({ statusCode: 500, body: { error: 'Extension authentication unavailable' } })
+
+    process.env.EXTENSION_ALLOWED_IDS = extensionId
+    res = response()
+    const originalSetHeader = res.setHeader
+    let headerCalls = 0
+    res.setHeader = vi.fn(function (this: typeof res, key: string, value: string) {
+      headerCalls += 1
+      if (headerCalls <= 2) return originalSetHeader.call(this, key, value)
+      res.setHeader = originalSetHeader
+      throw new Error(`could not set ${key} to ${value}`)
+    })
+    await call(request({ method: 'OPTIONS' }), res)
+    expect(res).toMatchObject({ statusCode: 500, body: { error: 'Extension authentication unavailable' } })
   })
 
   it('consumes the exact proof before minting an isolated session', async () => {
