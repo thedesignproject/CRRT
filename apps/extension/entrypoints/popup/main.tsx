@@ -1,7 +1,8 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { browser } from 'wxt/browser'
 import type { AuthMessage, SessionSummary } from '../../lib/auth'
+import type { HostedAuthMessage } from '../../lib/hosted-auth'
 import { listExtensionProjects } from '../../lib/comments-api'
 import {
   getCurrentTabUrl,
@@ -15,7 +16,7 @@ import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
 
-async function send(message: AuthMessage | { type: 'comment:activate' }) {
+async function send(message: AuthMessage | HostedAuthMessage | { type: 'comment:activate' }) {
   const response = await browser.runtime.sendMessage(message) as Response
   if (!response?.ok) throw new Error(response?.error || 'Extension background is unavailable')
   return response.data
@@ -23,8 +24,6 @@ async function send(message: AuthMessage | { type: 'comment:activate' }) {
 
 export function Popup() {
   const [session, setSession] = useState<SessionSummary | null>(null)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(true)
   const [projects, setProjects] = useState<ExtensionProject[]>([])
@@ -52,10 +51,10 @@ export function Popup() {
       .finally(() => setBusy(false))
   }, [])
 
-  async function signIn(event: FormEvent) {
-    event.preventDefault(); setBusy(true); setError('')
-    try { await loadWorkspace(await send({ type: 'auth:sign-in', email, password }) as SessionSummary) }
-    catch (e) { setError(e instanceof Error ? e.message : 'Sign in failed') }
+  async function signIn(intent: HostedAuthMessage['intent']) {
+    setBusy(true); setError('')
+    try { await loadWorkspace(await send({ type: 'auth:hosted-sign-in', intent }) as SessionSummary) }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not open CRRT sign-in') }
     finally { setBusy(false) }
   }
 
@@ -106,12 +105,11 @@ export function Popup() {
       </label>
       <button className="primary" disabled={busy} onClick={activate}>Start commenting</button>
       <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}?view=extension-comments`} target="_blank" rel="noopener noreferrer">Dashboard</a><button className="link" disabled={busy} onClick={signOut}>Sign out</button></div>
-    </> : <form onSubmit={signIn}>
-      <label>Email<input name="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-      <label>Password<input name="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-      <button className="primary" disabled={busy}>Sign in</button>
-      <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}signup`} target="_blank" rel="noopener noreferrer">Create account</a><a href={`${import.meta.env.WXT_DASHBOARD_URL}forgot-password`} target="_blank" rel="noopener noreferrer">Reset password</a></div>
-    </form>}
+    </> : <div className="auth-actions">
+      <p className="muted">Use your CRRT account in a secure browser window. Your password stays out of the extension.</p>
+      <button className="primary" disabled={busy} onClick={() => { void signIn('signin') }}>Sign in with CRRT</button>
+      <button className="secondary" disabled={busy} onClick={() => { void signIn('signup') }}>Create account</button>
+    </div>}
     {error && <p className="error" role="alert">{error}</p>}
   </main>
 }

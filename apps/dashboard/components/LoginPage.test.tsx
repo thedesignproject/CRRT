@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { renderToString } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { signInWithOtp, signInWithPassword, signUp } = vi.hoisted(() => ({ signInWithOtp: vi.fn(), signInWithPassword: vi.fn(), signUp: vi.fn() }))
+const { resetPasswordForEmail, signInWithOtp, signInWithPassword, signUp } = vi.hoisted(() => ({ resetPasswordForEmail: vi.fn(), signInWithOtp: vi.fn(), signInWithPassword: vi.fn(), signUp: vi.fn() }))
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -11,7 +11,7 @@ vi.mock('../lib/supabase', () => ({
       signInWithPassword,
       signInWithOtp,
       signUp,
-      resetPasswordForEmail: vi.fn(),
+      resetPasswordForEmail,
     },
   },
 }))
@@ -30,6 +30,7 @@ beforeEach(() => {
   signUp.mockReset()
   signInWithPassword.mockReset()
   signInWithOtp.mockReset()
+  resetPasswordForEmail.mockReset()
   window.history.replaceState({}, '', '/signup')
 })
 
@@ -74,6 +75,18 @@ describe('LoginPage invitation continuation', () => {
     expect(await screen.findByText(/email unavailable/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
     expect(await screen.findByText(/Could not send sign-in link/)).toBeInTheDocument()
+  })
+
+  it('sends regular password recovery back to the dashboard reset route', async () => {
+    window.history.replaceState({}, '', '/login')
+    resetPasswordForEmail.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'guest@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('guest@example.com', {
+      redirectTo: 'http://localhost:3000/reset-password',
+    }))
   })
 })
 
@@ -143,5 +156,43 @@ describe('LoginPage signup', () => {
 
     expect(await screen.findByText('✓ check your email')).toBeInTheDocument()
     expect(screen.queryByText('account already exists')).not.toBeInTheDocument()
+  })
+})
+
+describe('LoginPage extension continuation', () => {
+  const continuation = `/extension-auth?${new URLSearchParams({
+    state: 's'.repeat(43), code_challenge: 'p'.repeat(43),
+    redirect_uri: 'https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/crrt-auth',
+  })}`
+
+  it('keeps password and magic-link sign-in in the hosted extension flow', async () => {
+    window.history.replaceState({}, '', continuation)
+    signInWithPassword.mockResolvedValue({ error: null })
+    signInWithOtp.mockResolvedValue({ error: null })
+    render(<LoginPage continuationPath={continuation} />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'u@example.com' } })
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalled())
+    expect(window.location.pathname + window.location.search).toBe(continuation)
+    fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'u@example.com', options: { emailRedirectTo: `http://localhost:3000${continuation}` },
+    }))
+  })
+
+  it('switches modes without dropping the hosted flow and preserves it through recovery', async () => {
+    window.history.replaceState({}, '', continuation)
+    resetPasswordForEmail.mockResolvedValue({ error: null })
+    render(<LoginPage initialMode="signup" continuationPath={continuation} />)
+    expect(screen.getByText('create your crrt')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('link', { name: 'sign in →' }))
+    fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'u@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('u@example.com', {
+      redirectTo: `http://localhost:3000/reset-password?${new URLSearchParams({ continue: continuation })}`,
+    }))
+    expect(window.location.pathname + window.location.search).toBe(continuation)
   })
 })

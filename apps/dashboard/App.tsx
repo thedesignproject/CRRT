@@ -23,6 +23,7 @@ import { SuperAdminPanel } from './components/SuperAdminPanel'
 import { ExtensionCommentsPage } from './components/ExtensionCommentsPage'
 import { Spinner } from './components/primitives'
 import { ProductAuditPage } from './components/ProductAuditPage'
+import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -66,6 +67,10 @@ export function App() {
         <Spinner size={20} />
       </div>
     )
+  }
+
+  if (pathname === '/extension-auth') {
+    return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
   }
 
   if (!session || !user) return <LoginPage />

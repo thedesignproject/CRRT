@@ -37,23 +37,20 @@ describe('extension auth', () => {
 
   it('recognizes only supported auth messages', () => {
     expect(isAuthMessage({ type: 'auth:get' })).toBe(true)
-    expect(isAuthMessage({ type: 'auth:sign-in' })).toBe(true)
     expect(isAuthMessage({ type: 'auth:sign-out' })).toBe(true)
+    expect(isAuthMessage({ type: 'auth:sign-in' })).toBe(false)
     expect(isAuthMessage({ type: 'other' })).toBe(false)
     expect(isAuthMessage(null)).toBe(false)
     expect(isAuthMessage('auth:get')).toBe(false)
   })
 
-  it('gets, signs in, and signs out while returning safe session summaries', async () => {
+  it('gets and signs out while returning safe session summaries', async () => {
     const session = { access_token: 'token', user: { email: 'u@example.com' } }
     const client = { auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session }, error: null }),
-      signInWithPassword: vi.fn().mockResolvedValue({ data: { session }, error: null }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     } }
     await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
-    await expect(handleAuthMessage(client as never, { type: 'auth:sign-in', email: ' u@example.com ', password: 'pw' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
-    expect(client.auth.signInWithPassword).toHaveBeenCalledWith({ email: 'u@example.com', password: 'pw' })
     await expect(handleAuthMessage(client as never, { type: 'auth:sign-out' })).resolves.toBeNull()
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
     client.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null })
@@ -66,11 +63,9 @@ describe('extension auth', () => {
     const failure = { data: { session: null }, error: new Error('auth down') }
     const client = { auth: {
       getSession: vi.fn().mockResolvedValue(failure),
-      signInWithPassword: vi.fn().mockResolvedValue(failure),
       signOut: vi.fn().mockResolvedValue({ error: new Error('auth down') }),
     } }
     await expect(handleAuthMessage(client as never, { type: 'auth:get' })).rejects.toThrow('auth down')
-    await expect(handleAuthMessage(client as never, { type: 'auth:sign-in', email: 'a', password: 'b' })).rejects.toThrow('auth down')
     await expect(handleAuthMessage(client as never, { type: 'auth:sign-out' })).rejects.toThrow('auth down')
   })
 })
