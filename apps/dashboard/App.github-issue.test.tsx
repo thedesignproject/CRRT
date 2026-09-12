@@ -87,7 +87,8 @@ vi.mock('./components/CommentDetail', () => ({
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
-  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void }) => <>
+  CommentList: (props: { agentSelection?: { count: number; toggle: (id: string) => void; open: () => void }; statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void }) => <>
+    {props.agentSelection && <><button onClick={() => props.agentSelection!.toggle('comment-1')}>agent select</button><button onClick={props.agentSelection.open}>agent open</button><span data-testid="agent-count">{props.agentSelection.count}</span></>}
     <span data-testid="status-filter">{props.statusFilter}</span>
     <span data-testid="first-claim">{props.filteredComments[0]?.claimedByAgentId ?? 'none'}</span>
     <button onClick={() => props.selectFilter('all')}>show all</button>
@@ -96,7 +97,7 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.applyBulkAction('reject')}>bulk reject test</button>
   </>,
 }))
-vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: () => null }))
+vi.mock('./components/AgentDrawer', () => ({ AgentDrawer: (props: { comments: { id: string }[]; onClose: () => void; onRemove: (id: string) => void }) => <div data-testid="agent-drawer">{props.comments.map(c => <button key={c.id} onClick={() => props.onRemove(c.id)}>remove agent comment</button>)}<button onClick={props.onClose}>close drawer</button></div> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean; onShowSidebar: () => void }) => <button onClick={props.onShowSidebar}>{props.personal ? 'personal footer' : 'project footer'}</button> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
@@ -136,6 +137,33 @@ afterEach(() => {
 })
 
 describe('<App /> GitHub issue wiring', () => {
+  it('keeps agent selection separate from review, across filters but not projects', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', body: 'Feedback', reviewStatus: 'open',
+      implementationStatus: 'unassigned', targetType: 'element_point', authorName: 'Member',
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'agent select' }))
+    expect(screen.getByTestId('agent-count')).toHaveTextContent('1')
+    fireEvent.click(screen.getByRole('button', { name: 'show all' }))
+    expect(screen.getByTestId('agent-count')).toHaveTextContent('1')
+    fireEvent.click(screen.getByRole('button', { name: 'agent open' }))
+    expect(screen.getByTestId('agent-drawer')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'a' })
+    expect(fixtures.updateReview).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'remove agent comment' }))
+    expect(screen.getByTestId('agent-count')).toHaveTextContent('0')
+    fireEvent.click(screen.getByRole('button', { name: 'close drawer' }))
+    expect(screen.queryByTestId('agent-drawer')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'agent select' }))
+    fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
+    fireEvent.click(screen.getByRole('button', { name: 'project' }))
+    expect(screen.getByTestId('agent-count')).toHaveTextContent('0')
+    fireEvent.keyDown(screen.getByRole('button', { name: 'agent select' }), { key: ' ' })
+    expect(screen.getByTestId('agent-count')).toHaveTextContent('0')
+  })
+
   it('opens the feedback list on Open', async () => {
     render(<App />)
     expect(await screen.findByTestId('status-filter')).toHaveTextContent('open')
@@ -394,12 +422,19 @@ describe('<App /> GitHub issue wiring', () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Bulk reject'), expect.any(Array))
   })
 
-  it('passes a null agent project while an empty project key is selected', async () => {
+  it('does not request an automatic agent session for an empty project', async () => {
     fixtures.projects.splice(0, fixtures.projects.length, {
       publicKey: '', slug: '', name: 'Legacy project', allowedOrigins: [], createdAt: '', updatedAt: '',
     })
     render(<App />)
-    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith(null))
+    expect(fixtures.agentProject).not.toHaveBeenCalled()
+  })
+
+  it('opens the drawer using the project key when a legacy project has no name', async () => {
+    delete fixtures.projects[0].name
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'agent open' }))
+    expect(screen.getByTestId('agent-drawer')).toBeInTheDocument()
   })
 
   it('updates feedback visibility optimistically and restores it after failure', async () => {

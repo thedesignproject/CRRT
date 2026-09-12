@@ -2,6 +2,15 @@
 
 Estado: diseño y entrega en dos PRs apiladas aprobados; preparación final contra el `origin/trunk` vigente.
 
+## Ajuste aprobado — 12 de septiembre
+
+- Sustituir la columna de agente por un drawer modal a la derecha, sin cambiar el ancho del dashboard. Cerrar con botón, Escape o backdrop; foco contenido en el panel.
+- Checkboxes independientes para elegir comentarios de cualquier estado. Abrir el detalle no selecciona para el agente. Conservar selección entre filtros y limpiarla al cambiar proyecto o vista.
+- CTA contextual “Copy for agent · N” en la lista. Eliminar “Show agent panel” del pie.
+- Revisar y quitar comentarios, elegir agente y copiar instrucciones. La copia contiene exactamente los comentarios seleccionados, sin cambiar estados.
+- La API de sesión existente opera sobre aprobados y no representa esta selección arbitraria. Este flujo copia un snapshot local de los datos ya autorizados; no crea sesión, no inicia ejecución ni sincroniza estados. El usuario debe pegarlo en su agente. Advertir que incluye contexto y comentarios internos seleccionados.
+- Mantener controles de revisión existentes separados. No modificar extensión ni backend.
+
 ## Objetivo y referencia
 
 Llevar al dashboard la estructura A aprobada: navegación de proyectos a la izquierda, lista seleccionable y detalle de lectura. Figtree, superficies blancas, naranja puntual y detalles pixel. Referencia: `dashboard-figtree-v4.html`, conservada en la sesión local de brainstorming. El mockup es ilustrativo, no una especificación de APIs.

@@ -17,6 +17,7 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
 }
 
 interface CommentListProps {
+  agentSelection?: { ids: Set<string>; toggle: (id: string) => void; count: number; open: () => void }
   personal?: false
   readOnly?: boolean
   filteredComments: Comment[]
@@ -41,6 +42,7 @@ const EMPTY_SELECTION = new Set<string>()
 
 export function CommentList(props: CommentListProps | PersonalListProps) {
   const { filteredComments, counts, commentsLoading, commentsError, selectedCommentId, setSelectedCommentId } = props
+  const agent = props.personal ? undefined : props.agentSelection
   const controls = props.personal || props.readOnly ? null : props
   const bulkMode = controls?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
@@ -58,7 +60,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
+            <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Review multiple'}
           </button>}
         </div>
         {controls && <div className="grid grid-cols-5 gap-1 pb-1">
@@ -124,6 +126,10 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
+      {agent && <div className="px-4 py-3 border-b border-border">
+        {agent.count > 0 ? <button onClick={agent.open} className="w-full rounded-md bg-primary text-primary-foreground px-3 py-2.5 text-sm font-medium">Copy for agent · {agent.count}</button>
+          : <p className="text-xs text-muted-foreground">Select comments to copy for your agent.</p>}
+      </div>}
       <div className="flex-1 overflow-y-auto">
         {commentsLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
@@ -157,8 +163,9 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                 null
 
               return (
+                <div key={comment.id} className="relative flex">
+                  {agent && !bulkMode && <div className="pl-3 pt-4 bg-card"><input type="checkbox" className="w-4 h-4 accent-primary" aria-label={`Select for agent: ${comment.body}`} checked={agent.ids.has(comment.id)} onChange={() => agent.toggle(comment.id)} /></div>}
                 <button
-                  key={comment.id}
                   onClick={() => controls && bulkMode ? controls.toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
                   className={cn(
                     'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
@@ -241,6 +248,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     />
                   )}
                 </button>
+                </div>
               )
             })}
           </div>

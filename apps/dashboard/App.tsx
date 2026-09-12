@@ -4,17 +4,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptInvite as apiAcceptInvite, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
-import { useAgentSession } from './hooks/useAgentSession'
 import { useAuth } from './hooks/useAuth'
 import { useSuperAdmin } from './hooks/useSuperAdmin'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath } from './lib/routes'
-import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
+import { type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
-import { AgentSidebar } from './components/AgentSidebar'
+import { AgentDrawer } from './components/AgentDrawer'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
 import { LoginPage } from './components/LoginPage'
@@ -111,9 +110,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
-  const [selectedAgent, setSelectedAgent] = useState('claude-code')
-  const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
   const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
   // Fail closed while project access is loading. The fallback only keeps
   // backwards compatibility for project fixtures/API responses that predate
@@ -127,9 +123,19 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const canManageProject = activeProject
     ? activeProject.capabilities?.includes('project:manage') ?? true
     : false
-  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, canOperateAgent ? selectedProject || null : null)
-  const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
-  const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
+  const [agentIds, setAgentIds] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    setAgentIds(new Set())
+    setSidebarOpen(false)
+  }, [selectedProject, view, canOperateAgent])
+  const agentComments = commentsProjectId === selectedProject && canOperateAgent
+    ? comments.filter(c => agentIds.has(c.id)) : []
+  const toggleAgent = (id: string) => setAgentIds(previous => {
+    const next = new Set(previous)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
@@ -354,7 +360,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (view === 'extension-comments') return
+      if (view === 'extension-comments' || sidebarOpen) return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -373,7 +379,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       }
 
       const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
 
       if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
@@ -391,7 +397,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback])
+  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, sidebarOpen])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -415,20 +421,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
     setCmdOpen(false)
   }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback])
-
-  const handleCopySessionLink = useCallback(async () => {
-    if (!agentSession) return
-    setCopyStatus('copying')
-    try {
-      await copyPrompt(selectedAgentMeta.target)
-      setCopyStatus('copied')
-      window.setTimeout(() => setCopyStatus('idle'), 1600)
-    } catch (err) {
-      console.error('Copy prompt failed:', err)
-      setCopyStatus('error')
-      window.setTimeout(() => setCopyStatus('idle'), 1600)
-    }
-  }, [agentSession, copyPrompt, selectedAgentMeta])
 
   // Selecting a project always returns to the feedback view; settings is a
   // per-project overlay that shouldn't persist across project switches.
@@ -565,6 +557,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) : (
       <div className="dashboard-feedback">
         <CommentList
+          agentSelection={canOperateAgent ? { ids: agentIds, toggle: toggleAgent, count: agentComments.length, open: () => setSidebarOpen(true) } : undefined}
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
           counts={counts}
@@ -602,24 +595,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         />
 
         {sidebarOpen && canOperateAgent && (
-          <AgentSidebar
-            selectedProject={selectedProject}
-            projectComments={projectComments}
-            readyCount={counts.ready}
-            filtered={statusFilter === 'ready'}
-            selectedCommentId={selectedCommentId}
-            onSelectComment={setSelectedCommentId}
-            agentSession={agentSession}
-            agentEvents={agentEvents}
-            agentError={agentError}
-            agentConnected={agentConnected}
-            selectedAgent={selectedAgent}
-            setSelectedAgent={setSelectedAgent}
-            selectedAgentMeta={selectedAgentMeta}
-            agentDropdownOpen={agentDropdownOpen}
-            setAgentDropdownOpen={setAgentDropdownOpen}
-            copyStatus={copyStatus}
-            onCopySessionLink={handleCopySessionLink}
+          <AgentDrawer
+            project={activeProject?.name ?? selectedProject}
+            comments={agentComments}
+            onRemove={toggleAgent}
             onClose={() => setSidebarOpen(false)}
           />
         )}
@@ -627,7 +606,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       )}
 
       </main>
-      <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
+      <StatusBar personal={view === 'extension-comments'} />
 
       {cmdOpen && (
         <CommandPalette
