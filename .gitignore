@@ -10,6 +10,7 @@ coverage/
 .vercel
 *.tgz
 pr/
+/artifacts/
 AUDIT.md
 
 # Claude Code skill artifacts (local-only, per-developer)
