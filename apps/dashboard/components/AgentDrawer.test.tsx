@@ -14,10 +14,12 @@ beforeEach(() => {
 describe('selected agent drawer', () => {
   it('exports exactly selected feedback regardless of review state', async () => {
     const remove = vi.fn(), close = vi.fn()
-    const props = { project: 'Project', comments: [comment], onRemove: remove, onClose: close }
+    const props = { project: 'Project', comments: [comment], onRemove: remove, onClose: close, agent: 'Claude Code', onAgentChange: vi.fn() }
     const view = render(<AgentDrawer {...props} />)
     fireEvent.change(screen.getByLabelText('Your agent'), { target: { value: 'Codex' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Copy instructions' }))
+    expect(props.onAgentChange).toHaveBeenCalledWith('Codex')
+    view.rerender(<AgentDrawer {...props} agent="Codex" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompts' }))
     await screen.findByText('Copied. Paste into Codex to start.')
     expect(writeText).toHaveBeenCalledWith(buildSelectedPrompt('Project', [comment]))
     expect(comment.reviewStatus).toBe('open')
@@ -26,7 +28,7 @@ describe('selected agent drawer', () => {
     fireEvent.click(screen.getByText('Selected comments (1)'))
     expect(close).not.toHaveBeenCalled()
     view.rerender(<AgentDrawer {...props} comments={[]} />)
-    expect(screen.getByRole('button', { name: 'Copy instructions' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Copy prompts' })).toBeDisabled()
     expect(screen.getByRole('status')).toBeEmptyDOMElement()
     fireEvent(screen.getByRole('dialog'), new Event('cancel', { bubbles: true, cancelable: true }))
     fireEvent.click(screen.getByRole('button', { name: 'Close agent panel' }))
@@ -36,12 +38,12 @@ describe('selected agent drawer', () => {
   it('handles pending clipboard writes and retry after failure', async () => {
     let reject!: (error: Error) => void
     writeText.mockImplementationOnce(() => new Promise((_, r) => { reject = r }))
-    render(<AgentDrawer project="Project" comments={[comment]} onRemove={vi.fn()} onClose={vi.fn()} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Copy instructions' }))
+    render(<AgentDrawer agent="Claude Code" onAgentChange={vi.fn()} project="Project" comments={[comment]} onRemove={vi.fn()} onClose={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompts' }))
     expect(screen.getByRole('button', { name: 'Copying…' })).toBeDisabled()
     reject(new Error('denied'))
     await screen.findByText('Clipboard unavailable. Try copying again.')
-    fireEvent.click(screen.getByRole('button', { name: 'Copy instructions' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy prompts' }))
     await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Copied.'))
   })
 })

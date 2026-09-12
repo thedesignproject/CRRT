@@ -40,3 +40,5 @@ layout; drill-in navigation remains a separate product change.
 - Clipboard export contains exactly the selected, currently authorized comments and never mutates their statuses.
 - Tests cover successful copy, denied clipboard access, removal, Escape and backdrop dismissal.
 - The snapshot is local-only: it does not create a live session, start an agent or synchronize CRRT statuses.
+- Authorized feedback views expose Agents even with zero selected comments; the selected agent persists while the dashboard remains mounted.
+- Feedback rows stay flat and status-neutral; agent selection is represented only by its independent checkbox.

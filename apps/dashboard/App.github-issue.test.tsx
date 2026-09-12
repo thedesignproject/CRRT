@@ -148,7 +148,7 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByTestId('agent-count')).toHaveTextContent('1')
     fireEvent.click(screen.getByRole('button', { name: 'show all' }))
     expect(screen.getByTestId('agent-count')).toHaveTextContent('1')
-    fireEvent.click(screen.getByRole('button', { name: 'agent open' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Agents, 1 selected comments' }))
     expect(screen.getByTestId('agent-drawer')).toBeInTheDocument()
     fireEvent.keyDown(window, { key: 'a' })
     expect(fixtures.updateReview).not.toHaveBeenCalled()

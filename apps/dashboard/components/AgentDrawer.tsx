@@ -9,11 +9,11 @@ export function buildSelectedPrompt(project: string, comments: Comment[]) {
   })), null, 2)}`
 }
 
-export function AgentDrawer({ project, comments, onRemove, onClose }: {
+export function AgentDrawer({ project, comments, onRemove, onClose, agent, onAgentChange }: {
+  agent: string; onAgentChange: (agent: string) => void
   project: string; comments: Comment[]; onRemove: (id: string) => void; onClose: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [agent, setAgent] = useState('Claude Code')
   const [status, setStatus] = useState('idle')
   const prompt = buildSelectedPrompt(project, comments)
   const [copiedPrompt, setCopiedPrompt] = useState('')
@@ -32,20 +32,24 @@ export function AgentDrawer({ project, comments, onRemove, onClose }: {
       setStatus('error')
     }
   }
-  return <dialog ref={dialog} aria-labelledby="agent-drawer-title"
+  return <dialog ref={dialog} id="agent-drawer" aria-labelledby="agent-drawer-title"
     className="agent-drawer bg-card text-foreground border-l border-border"
     onCancel={e => { e.preventDefault(); onClose() }}
     onClick={e => { if (e.target === e.currentTarget) onClose() }}>
     <div className="flex flex-col h-full">
       <header className="p-6 border-b border-border flex items-start justify-between gap-4">
-        <div><h2 id="agent-drawer-title" className="text-xl font-semibold">Copy for agent</h2>
+        <div><h2 id="agent-drawer-title" className="text-xl font-semibold">Agents</h2>
           <p className="mt-1 text-sm text-muted-foreground">{project}</p></div>
         <button autoFocus onClick={onClose} aria-label="Close agent panel" className="rounded-md px-3 py-2 hover:bg-accent">✕</button>
       </header>
       <div className="flex-1 overflow-y-auto p-6">
-        <p className="text-sm text-muted-foreground mb-5">Choose the comments to work on. Their status stays unchanged.</p>
+        <label className="block text-sm font-medium mb-6">Your agent
+          <select value={agent} onChange={e => onAgentChange(e.target.value)} className="block mt-2 w-full rounded-md border border-border bg-card p-3">
+            {AGENTS.map(a => <option key={a.id}>{a.name}</option>)}
+          </select>
+        </label>
         <h3 className="text-sm font-medium mb-3">Selected comments ({comments.length})</h3>
-        {comments.length === 0 && <p className="text-sm text-muted-foreground">Close this panel and select comments from the list.</p>}
+        {comments.length === 0 && <p className="text-sm text-muted-foreground">Select comments using the checkboxes in the list. They will appear here.</p>}
         <ul>{comments.map(c => <li key={c.id} className="flex items-start gap-3 py-4 border-b border-border">
           <div className="flex-1 min-w-0"><p className="text-sm leading-relaxed break-words">{c.body}</p>
             <p className="text-xs text-muted-foreground mt-2">{c.author}</p></div>
@@ -53,14 +57,9 @@ export function AgentDrawer({ project, comments, onRemove, onClose }: {
         </li>)}</ul>
       </div>
       <footer className="p-6 border-t border-border space-y-4">
-        <label className="block text-sm font-medium">Your agent
-          <select value={agent} onChange={e => setAgent(e.target.value)} className="block mt-2 w-full rounded-md border border-border bg-card p-3">
-            {AGENTS.map(a => <option key={a.id}>{a.name}</option>)}
-          </select>
-        </label>
-        <p className="text-xs leading-relaxed text-muted-foreground">Copies comment text and page context, including any internal comments you selected. Paste into {agent} with your repository open. Nothing is sent automatically.</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">Paste into {agent} to start. Includes selected comments and page context, even internal comments. Nothing is sent automatically.</p>
         <button disabled={!comments.length || status === 'copying'} onClick={copy} className="w-full bg-primary text-primary-foreground rounded-md px-4 py-3 font-medium disabled:opacity-40">
-          {status === 'copying' ? 'Copying…' : 'Copy instructions'}
+          {status === 'copying' ? 'Copying…' : 'Copy prompts'}
         </button>
         <p role="status" className="text-sm">{status === 'error' ? 'Clipboard unavailable. Try copying again.' : status === 'copied' && copiedPrompt === prompt ? `Copied. Paste into ${agent} to start.` : ''}</p>
       </footer>

@@ -13,6 +13,7 @@ import { type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } f
 import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
+import { AgentLauncher } from './components/AgentLauncher'
 import { AgentDrawer } from './components/AgentDrawer'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
@@ -108,6 +109,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [comments, setComments] = useState<Comment[]>([])
   const reviewRequests = useRef(new Map<string, symbol>())
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [agent, setAgent] = useState('Claude Code')
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
@@ -594,8 +596,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           accessToken={accessToken}
         />
 
+        {canOperateAgent && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
         {sidebarOpen && canOperateAgent && (
           <AgentDrawer
+            agent={agent}
+            onAgentChange={setAgent}
             project={activeProject?.name ?? selectedProject}
             comments={agentComments}
             onRemove={toggleAgent}

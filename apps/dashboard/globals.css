@@ -464,3 +464,6 @@
   max-height: 100dvh;
 }
 .agent-drawer::backdrop { background: rgb(15 23 42 / 20%); }
+.agent-launcher { box-shadow: var(--crrt-shadow-sm); }
+.feedback-row { border-bottom: 1px solid var(--border); }
+.feedback-row:hover { background: var(--accent); }

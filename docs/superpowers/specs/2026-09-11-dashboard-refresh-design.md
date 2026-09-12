@@ -4,6 +4,10 @@ Estado: diseño y entrega en dos PRs apiladas aprobados; preparación final cont
 
 ## Ajuste aprobado — 12 de septiembre
 
+### Iteración posterior aprobada: acceso persistente y filas planas
+
+Esta iteración reemplaza el CTA contextual de la lista descrito abajo: widget flotante siempre visible en la vista de feedback autorizada, con robot, “Agents” y contador de selección (incluido cero). Abre el drawer aunque esté vacío. Selector de agente primero, comentarios después y CTA final “Copy prompts”. Recordar el agente mientras el dashboard permanece montado, incluso al cerrar/reabrir el panel. Mantener selección independiente de estados y advertencia de copia externa. Eliminar líneas laterales, resaltados naranjas de filas y efectos de tarjeta; hover y comentario abierto usan fondo neutro, selección para agente usa exclusivamente checkbox. Sin cambios de backend ni extensión. Validación local antes de PR.
+
 - Sustituir la columna de agente por un drawer modal a la derecha, sin cambiar el ancho del dashboard. Cerrar con botón, Escape o backdrop; foco contenido en el panel.
 - Checkboxes independientes para elegir comentarios de cualquier estado. Abrir el detalle no selecciona para el agente. Conservar selección entre filtros y limpiarla al cambiar proyecto o vista.
 - CTA contextual “Copy for agent · N” en la lista. Eliminar “Show agent panel” del pie.
