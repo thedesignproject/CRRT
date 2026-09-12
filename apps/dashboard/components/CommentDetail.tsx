@@ -279,16 +279,16 @@ export function CommentDetail({
   }
 
   return (
-    <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
+    <div className="dashboard-comment-detail flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
       {selectedComment ? (
         <>
-          <div className="flex items-center justify-between px-6 h-[44px] shrink-0 border-b border-border bg-card">
+          <div className="flex items-center justify-between px-6 min-h-12 py-3 shrink-0 border-b border-border bg-card">
             <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-mono font-medium">#{selectedComment.id}</span>
+              <span className="font-mono font-medium truncate max-w-32">#{selectedComment.id}</span>
               {selectedComment.pageUrl ? (
                 <>
                   <span>·</span>
-                  <span className="font-mono truncate" title={selectedComment.pageUrl}>{truncateUrl(selectedComment.pageUrl)}</span>
+                  <span className="truncate" title={selectedComment.pageUrl}>{truncateUrl(selectedComment.pageUrl)}</span>
                 </>
               ) : null}
               {!personal && <span>·</span>}
@@ -310,8 +310,38 @@ export function CommentDetail({
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
-            <div key={selectedComment.id} className="max-w-2xl mx-auto px-4 sm:px-8 py-8 detail-enter">
+          <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-border">
+              {!personal && !readOnly && <><ActionBtn
+                active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
+                variant="accept"
+                onClick={() => toggleReview!(selectedComment, 'accepted')}
+                shortcut="A"
+              >
+                <BotIcon size={14} /> Ready for Agent
+              </ActionBtn>
+              <ActionBtn
+                active={selectedComment.implementationStatus === 'done'}
+                variant="done"
+                onClick={() => handleToggleDone!(selectedComment.id)}
+                shortcut="M"
+              >
+                <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Done' : 'Mark Done'}
+              </ActionBtn>
+              <ActionBtn
+                active={selectedComment.reviewStatus === 'rejected'}
+                variant="reject"
+                onClick={() => toggleReview!(selectedComment, 'rejected')}
+                shortcut="D"
+              >
+                <XIcon size={14} /> Reject
+              </ActionBtn>
+
+
+              </>}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto">
+            <div key={selectedComment.id} className="dashboard-detail-content max-w-2xl mx-auto px-4 sm:px-8 py-8 detail-enter">
               {selectedComment.screenshotUrl ? (
                 <div className="rounded-xl border border-border overflow-hidden mb-6 bg-muted/40 flex items-center justify-center">
                   <a
@@ -348,7 +378,16 @@ export function CommentDetail({
                 </div>
               )}
 
-              <div className="flex items-start gap-3 mb-8">
+              <div className="flex justify-end mb-6">
+              {selectedComment.pageUrl && (
+                <ActionBtn variant="neutral" onClick={() => {
+                  window.open(selectedComment.pageUrl!, '_blank', 'noopener,noreferrer')
+                }}>
+                  <ExternalLinkIcon size={13} /> Open page
+                </ActionBtn>
+              )}
+              </div>
+              <div className="dashboard-comment-body flex items-start gap-3 mb-8">
                 <div
                   className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white"
                   style={{ background: selectedComment.authorColor }}
@@ -397,9 +436,8 @@ export function CommentDetail({
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="shrink-0 border-t border-border bg-card px-6 py-3">
+          <div className="dashboard-detail-actions border-t border-border bg-card">
             <div className="flex flex-wrap items-center gap-2 max-w-2xl mx-auto">
               {personalActions}
               {!personal && (
@@ -422,41 +460,9 @@ export function CommentDetail({
                   </label>
                 )
               )}
-              {!personal && !readOnly && <><ActionBtn
-                active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
-                variant="accept"
-                onClick={() => toggleReview!(selectedComment, 'accepted')}
-                shortcut="A"
-              >
-                <BotIcon size={14} /> Ready for Agent
-              </ActionBtn>
-              <ActionBtn
-                active={selectedComment.implementationStatus === 'done'}
-                variant="done"
-                onClick={() => handleToggleDone!(selectedComment.id)}
-                shortcut="M"
-              >
-                <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Done' : 'Mark Done'}
-              </ActionBtn>
-              <ActionBtn
-                active={selectedComment.reviewStatus === 'rejected'}
-                variant="reject"
-                onClick={() => toggleReview!(selectedComment, 'rejected')}
-                shortcut="D"
-              >
-                <XIcon size={14} /> Reject
-              </ActionBtn>
 
-              <div className="w-px h-5 bg-border mx-1" />
-              </>}
 
-              {selectedComment.pageUrl && (
-                <ActionBtn variant="neutral" onClick={() => {
-                  window.open(selectedComment.pageUrl!, '_blank', 'noopener,noreferrer')
-                }}>
-                  <ExternalLinkIcon size={13} /> Open page
-                </ActionBtn>
-              )}
+
 
               {linkedExternalWork.map((work) => (
                 <ActionBtn key={work.provider} variant="neutral" onClick={() => openExternalWork(work)}>
@@ -485,7 +491,7 @@ export function CommentDetail({
               )}
 
               {!personal && !readOnly && <span
-                className="relative inline-flex group"
+                className="relative inline-flex flex-wrap items-center gap-3 w-full pt-4 mt-2 border-t border-border group"
               >
                 <ActionBtn
                   variant="neutral"
@@ -497,8 +503,9 @@ export function CommentDetail({
                     ? 'Preparing issue…'
                     : selectedComment.reviewStatus === 'rejected'
                       ? 'Reopen to send'
-                      : 'Send to…'}
+                      : 'Integrations…'}
                 </ActionBtn>
+                <span className="text-xs text-muted-foreground">GitHub · Linear · Jira</span>
               </span>}
 
               {issueError && !externalWorkDraft && (
@@ -527,6 +534,7 @@ export function CommentDetail({
                 <ChevronRightIcon size={16} />
               </button>
             </div>
+          </div>
           </div>
         </>
       ) : personal && !commentsLoading && !commentsError && projectComments.length === 0 ? (

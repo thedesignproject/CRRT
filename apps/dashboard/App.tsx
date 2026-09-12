@@ -108,7 +108,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const reviewRequests = useRef(new Map<string, symbol>())
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
@@ -510,7 +510,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="dashboard-shell">
       <Header
         projects={projects}
         projectsLoading={projectsLoading}
@@ -546,6 +546,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
       />
 
+      <main className="dashboard-main">
       {accessReviewNotice}
       {view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
@@ -562,7 +563,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onProjectsChanged={refreshProjects}
         />
       ) : (
-      <div className="flex flex-1 overflow-hidden">
+      <div className="dashboard-feedback">
         <CommentList
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
@@ -625,6 +626,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       </div>
       )}
 
+      </main>
       <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
 
       {cmdOpen && (

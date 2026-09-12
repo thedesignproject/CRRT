@@ -80,7 +80,8 @@ export function Header({
   onOpenSuperAdmin,
 }: HeaderProps) {
   return (
-    <header className="flex items-center gap-3 px-5 h-[60px] shrink-0 border-b border-border bg-card">
+    <>
+    <aside className="dashboard-navigation" aria-label="Workspace navigation">
       <a
         href={landingRoute('?stay=1')}
         aria-label="CRRT marketing site"
@@ -106,10 +107,10 @@ export function Header({
         </span>
       </a>
 
-      <div className="w-px h-5 bg-border" />
+      <div className="dashboard-nav-label">Workspace</div>
 
-      <nav className="flex items-center gap-1 flex-1 overflow-auto">
-        <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>My comments</button>
+      <nav className="dashboard-projects" aria-label="Projects">
+        <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>My comments</button>
         {projectsLoading && projects.length === 0 ? (
           <span className="text-xs text-muted-foreground px-2">Loading projects…</span>
         ) : projectsError ? (
@@ -128,17 +129,17 @@ export function Header({
                 className={cn(
                   'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-accent text-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                 )}
               >
-                {p.name}
+                <span className="truncate" title={p.name}>{p.name}</span>
                 {isActive && commentsLoading ? (
                   <span className="ml-1.5 inline-flex items-center">
                     <Spinner size={11} strokeWidth={3} className="" />
                   </span>
                 ) : count !== null && count > 0 ? (
-                  <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary-foreground/20 text-primary-foreground">
+                  <span className="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
                     {count}
                   </span>
                 ) : null}
@@ -173,8 +174,11 @@ export function Header({
         )}
       </nav>
 
-      <div className="flex items-center gap-2 ml-auto">
-        <a href={route('/audits/new')} className="inline-flex px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
+    </aside>
+    <header className="dashboard-toolbar">
+      <h1 className="text-base font-medium tracking-tight">Workspace</h1>
+      <div className="dashboard-tools">
+        <a href={route('/audits/new')} className="inline-flex px-3 py-1.5 rounded-md border border-border text-muted-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
         <button
           type="button"
           onClick={onOpenCmd}
@@ -203,7 +207,7 @@ export function Header({
             aria-pressed={superAdminActive}
             className={cn(
               'w-7 h-7 rounded-md flex items-center justify-center transition-colors',
-              superAdminActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+              superAdminActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
             )}
           >
             <ShieldIcon size={15} />
@@ -233,5 +237,6 @@ export function Header({
         <UserMenu user={user} onSignOut={onSignOut} />
       </div>
     </header>
+    </>
   )
 }

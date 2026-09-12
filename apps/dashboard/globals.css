@@ -373,6 +373,71 @@
 }
 
 /* Button press */
+.dashboard-shell {
+  display: grid;
+  grid-template-columns: 192px minmax(0, 1fr);
+  grid-template-rows: 64px minmax(0, 1fr) auto;
+  height: 100dvh;
+  overflow: hidden;
+}
+.dashboard-navigation {
+  grid-row: 1 / -1;
+  background: var(--muted);
+  border-right: 1px solid var(--border);
+  padding: var(--crrt-space-7) var(--crrt-space-4);
+  min-height: 0;
+  overflow-y: auto;
+}
+.dashboard-nav-label { color: var(--muted-foreground); font-size: 12px; margin: var(--crrt-space-8) var(--crrt-space-3) var(--crrt-space-4); }
+.dashboard-projects { display: flex; flex-direction: column; align-items: stretch; gap: var(--crrt-space-2); }
+.dashboard-projects > button { display: flex; align-items: center; text-align: left; min-height: 36px; font-weight: 500; font-size: 13px; max-width: 100%; }
+.dashboard-projects > button[aria-label="Add project"] { width: 100%; gap: var(--crrt-space-3); justify-content: flex-start; padding-left: var(--crrt-space-4); }
+.dashboard-projects > button[aria-label="Add project"]::after { content: 'Create project'; }
+.dashboard-toolbar { min-width: 0; display: flex; align-items: center; gap: var(--crrt-space-5); justify-content: space-between; padding: var(--crrt-space-4) var(--crrt-space-7); border-bottom: 1px solid var(--border); }
+.dashboard-tools { display: flex; align-items: center; gap: var(--crrt-space-3); min-width: 0; }
+.dashboard-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.dashboard-feedback { display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+.dashboard-comment-list { width: 340px; min-height: 0; }
+.dashboard-comment-detail { min-height: 0; }
+.dashboard-detail-content { display: flex; flex-direction: column; width: 100%; }
+.dashboard-comment-body { order: -1; }
+.dashboard-comment-body > div > p { font-size: 17px; line-height: 1.65; }
+.dashboard-shell > footer { grid-column: 2; font-family: var(--crrt-dashboard-font); gap: var(--crrt-space-4); height: 36px; }
+.dashboard-shell :is(button, a, input, select, summary):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.dashboard-shell .card-hover:hover { transform: none; background: var(--accent); }
+.dashboard-shell .font-bold { font-weight: 600; }
+.dashboard-detail-actions { max-width: 672px; margin: 0 auto; padding: var(--crrt-space-5) var(--crrt-space-8); width: 100%; }
+.dashboard-detail-actions > div { gap: var(--crrt-space-3); }
+@media (max-width: 1100px) {
+  .dashboard-shell { grid-template-columns: 160px minmax(0,1fr); }
+  .dashboard-comment-list { width: 290px; }
+  .dashboard-toolbar { padding: var(--crrt-space-4) var(--crrt-space-5); }
+  .dashboard-toolbar h1 { display: none; }
+  .dashboard-tools { flex: 1; justify-content: flex-end; }
+}
+@media (max-width: 767px) {
+  .dashboard-shell { display: flex; flex-direction: column; }
+  .dashboard-navigation { display: flex; align-items: center; gap: var(--crrt-space-4); padding: var(--crrt-space-4); border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+  .dashboard-navigation > a { flex-shrink: 0; }
+  .dashboard-nav-label { display: none; }
+  .dashboard-projects { flex-direction: row; overflow-x: auto; min-width: 0; }
+  .dashboard-projects > button { flex-shrink: 0; max-width: 160px; }
+  .dashboard-projects > button[aria-label="Add project"] { width: 36px; }
+  .dashboard-projects > button[aria-label="Add project"]::after { content: none; }
+  .dashboard-toolbar { flex-shrink: 0; padding: var(--crrt-space-3) var(--crrt-space-4); }
+  .dashboard-tools { flex-wrap: wrap; }
+  .dashboard-main { flex: 1; overflow-y: auto; }
+  .dashboard-feedback { flex-direction: column; overflow-y: auto; }
+  .dashboard-comment-list { width: 100%; height: 34dvh; min-height: 180px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .dashboard-comment-detail { flex: 1 0 380px; overflow: visible; }
+  .dashboard-shell > footer { flex-wrap: wrap; height: auto; min-height: 36px; padding: var(--crrt-space-3); gap: var(--crrt-space-3); }
+  .dashboard-shell > footer > span { display: none; }
+  .dashboard-detail-actions { padding: var(--crrt-space-5); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-shell *, .dashboard-shell *::after { animation: none !important; transition: none !important; }
+}
+
 .btn-press:active:not(:disabled) {
   transform: scale(0.96);
   transition: transform 0.08s ease;

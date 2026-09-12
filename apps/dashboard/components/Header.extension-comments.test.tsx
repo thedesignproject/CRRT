@@ -9,11 +9,20 @@ const fn = vi.fn()
 const props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, addProjectOpen: false, setAddProjectOpen: fn, onAddProject: fn, onCheckAvailability: fn, addProjectBusy: false, addProjectError: null, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark' as const, toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn }
 
 describe('Header extension comments navigation', () => {
+  it('keeps administration and project navigation accessible in the new shell', () => {
+    const onOpenSuperAdmin = vi.fn()
+    const view = render(<Header {...props} superadmin superAdminActive onOpenSuperAdmin={onOpenSuperAdmin} />)
+    expect(screen.getByRole('navigation', { name: 'Projects' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Super admin' }))
+    expect(onOpenSuperAdmin).toHaveBeenCalledOnce()
+    view.rerender(<Header {...props} superadmin superAdminActive={false} />)
+    expect(screen.getByRole('button', { name: 'Super admin' })).toHaveAttribute('aria-pressed', 'false')
+  })
   it('opens and highlights the project-independent view', () => {
     const view = render(<Header {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'My comments' })); expect(fn).toHaveBeenCalled()
     view.rerender(<Header {...props} extensionCommentsActive />)
-    expect(screen.getByRole('button', { name: 'My comments' })).toHaveClass('bg-primary')
+    expect(screen.getByRole('button', { name: 'My comments' })).toHaveAttribute('aria-pressed', 'true')
   })
 
   it('never highlights a project or shows its settings alongside My comments', () => {
