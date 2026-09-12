@@ -559,6 +559,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) : (
       <div className="dashboard-feedback">
         <CommentList
+          headerAction={canOperateAgent && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
           agentSelection={canOperateAgent ? { ids: agentIds, toggle: toggleAgent, count: agentComments.length, open: () => setSidebarOpen(true) } : undefined}
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
@@ -596,7 +597,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           accessToken={accessToken}
         />
 
-        {canOperateAgent && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
         {sidebarOpen && canOperateAgent && (
           <AgentDrawer
             agent={agent}

@@ -6,6 +6,8 @@ Estado: diseño y entrega en dos PRs apiladas aprobados; preparación final cont
 
 ### Iteración posterior aprobada: acceso persistente y filas planas
 
+Actualización aprobada: Agents pasa a la cabecera de la lista (no flotante), siempre disponible con contador y transición breve que respeta movimiento reducido. Botones principales #202329 con blanco; naranja original solo en acentos; hover naranja tenue y comentario abierto gris estable incluso bajo hover. Selección mediante checkbox oscuro independiente de lectura; target 32×32 y foco de teclado visible. No modificar el panel lateral ni su flujo. Esta actualización sustituye la ubicación flotante y el hover gris de la iteración anterior.
+
 Esta iteración reemplaza el CTA contextual de la lista descrito abajo: widget flotante siempre visible en la vista de feedback autorizada, con robot, “Agents” y contador de selección (incluido cero). Abre el drawer aunque esté vacío. Selector de agente primero, comentarios después y CTA final “Copy prompts”. Recordar el agente mientras el dashboard permanece montado, incluso al cerrar/reabrir el panel. Mantener selección independiente de estados y advertencia de copia externa. Eliminar líneas laterales, resaltados naranjas de filas y efectos de tarjeta; hover y comentario abierto usan fondo neutro, selección para agente usa exclusivamente checkbox. Sin cambios de backend ni extensión. Validación local antes de PR.
 
 - Sustituir la columna de agente por un drawer modal a la derecha, sin cambiar el ancho del dashboard. Cerrar con botón, Escape o backdrop; foco contenido en el panel.

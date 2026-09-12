@@ -41,4 +41,6 @@ layout; drill-in navigation remains a separate product change.
 - Tests cover successful copy, denied clipboard access, removal, Escape and backdrop dismissal.
 - The snapshot is local-only: it does not create a live session, start an agent or synchronize CRRT statuses.
 - Authorized feedback views expose Agents even with zero selected comments; the selected agent persists while the dashboard remains mounted.
-- Feedback rows stay flat and status-neutral; agent selection is represented only by its independent checkbox.
+- Agents is anchored in the list header, with a short count animation that respects reduced-motion preferences.
+- The action palette uses ink for primary controls, orange for accents, a warm row hover and a neutral open-row state.
+- Feedback rows remain flat; agent selection uses an independent checkbox with a visible in-row focus treatment.
