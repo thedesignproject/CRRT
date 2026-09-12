@@ -8,6 +8,7 @@ import { useAgentSession } from './hooks/useAgentSession'
 import { useAuth } from './hooks/useAuth'
 import { useSuperAdmin } from './hooks/useSuperAdmin'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
+import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath } from './lib/routes'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
@@ -133,10 +134,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
   const [addProjectBusy, setAddProjectBusy] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'dark'
-    try { return (localStorage.getItem('dashboard-theme') as 'light' | 'dark') || 'dark' } catch { return 'dark' }
-  })
+  const [theme, setTheme] = useState(getDashboardTheme)
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -161,10 +159,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [accessToken, pendingInvite, refreshProjects])
 
   useEffect(() => {
-    const root = document.documentElement
-    if (theme === 'light') root.classList.add('light')
-    else root.classList.remove('light')
-    try { localStorage.setItem('dashboard-theme', theme) } catch {}
+    applyDashboardTheme(theme)
   }, [theme])
 
   useEffect(() => {

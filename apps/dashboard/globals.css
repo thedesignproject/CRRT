@@ -1,5 +1,30 @@
 @import "tailwindcss";
 
+/* Opt in here, never in shared widget/landing styles. */
+:root {
+  --crrt-font-sans: var(--crrt-dashboard-font);
+  --crrt-font-body: var(--crrt-dashboard-font);
+}
+:root[data-theme="light"] {
+  --background: var(--crrt-dashboard-white);
+  --foreground: var(--crrt-dashboard-ink);
+  --card: var(--crrt-dashboard-white);
+  --card-foreground: var(--crrt-dashboard-ink);
+  --popover: var(--crrt-dashboard-white);
+  --popover-foreground: var(--crrt-dashboard-ink);
+  --muted: var(--crrt-dashboard-sidebar);
+  --muted-foreground: var(--crrt-dashboard-muted);
+  --secondary: var(--crrt-dashboard-sidebar);
+  --secondary-foreground: var(--crrt-dashboard-ink);
+  --border: var(--crrt-dashboard-border);
+  --input: var(--crrt-dashboard-border);
+  --primary: var(--crrt-dashboard-orange);
+  --primary-foreground: var(--crrt-dashboard-white);
+  --ring: var(--crrt-dashboard-orange);
+  --accent: var(--crrt-dashboard-hover);
+  --accent-foreground: var(--crrt-dashboard-ink);
+}
+
 /* Light-mode override — mirrors tokens.css [data-theme="light"] selector */
 @custom-variant light (&:is([data-theme="light"] *));
 
@@ -150,7 +175,7 @@
    inputs). The mono and CRT fonts stay reserved for headings, labels,
    buttons, and terminal-flavor moments. */
 :root {
-  --crrt-font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --crrt-font-body: var(--crrt-dashboard-font);
 }
 
 /* Section marker — same grammar as the landing's "/ 01 hero" labels. */
