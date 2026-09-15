@@ -122,6 +122,65 @@ export const projectInvites = pgTable(
 // Reference only: not exported, so Drizzle does not manage Supabase's auth table.
 const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
 
+// Server-managed allowlist for Chrome extension identities that may receive an
+// authentication handoff. Removing a client also revokes its outstanding grants.
+export const extensionAuthClients = pgTable(
+  'extension_auth_clients',
+  {
+    extensionId: text('extension_id').primaryKey(),
+    redirectUri: text('redirect_uri').notNull().unique(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    extensionIdCheck: check('extension_auth_clients_extension_id_check', sql`${t.extensionId} ~ '^[a-p]{32}$'`),
+    redirectCheck: check(
+      'extension_auth_clients_redirect_uri_check',
+      sql`${t.redirectUri} = 'https://' || ${t.extensionId} || '.chromiumapp.org/crrt-auth'`,
+    ),
+  }),
+).enableRLS()
+
+// One-time, server-created authorization grants used to establish a separate
+// Supabase session inside the Chrome extension. Raw codes, state values, PKCE
+// verifiers, and sessions never enter this table.
+export const extensionAuthHandoffs = pgTable(
+  'extension_auth_handoffs',
+  {
+    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    codeHash: text('code_hash').notNull(),
+    stateHash: text('state_hash').notNull(),
+    pkceChallenge: text('pkce_challenge').notNull(),
+    userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+    extensionId: text('extension_id').notNull().references(() => extensionAuthClients.extensionId, { onDelete: 'cascade' }),
+    redirectUri: text('redirect_uri').notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    codeHashUnique: uniqueIndex('extension_auth_handoffs_code_hash_unique').on(t.codeHash),
+    expiresIdx: index('extension_auth_handoffs_expires_at_idx').on(t.expiresAt),
+    cleanupIdx: index('extension_auth_handoffs_cleanup_idx').on(t.consumedAt, t.expiresAt),
+    codeHashCheck: check('extension_auth_handoffs_code_hash_check', sql`${t.codeHash} ~ '^[0-9a-f]{64}$'`),
+    stateHashCheck: check('extension_auth_handoffs_state_hash_check', sql`${t.stateHash} ~ '^[0-9a-f]{64}$'`),
+    pkceChallengeCheck: check('extension_auth_handoffs_pkce_challenge_check', sql`${t.pkceChallenge} ~ '^[A-Za-z0-9_-]{43}$'`),
+    extensionIdCheck: check('extension_auth_handoffs_extension_id_check', sql`${t.extensionId} ~ '^[a-p]{32}$'`),
+    redirectCheck: check(
+      'extension_auth_handoffs_redirect_uri_check',
+      sql`${t.redirectUri} = 'https://' || ${t.extensionId} || '.chromiumapp.org/crrt-auth'`,
+    ),
+    expiryCheck: check('extension_auth_handoffs_expiry_check', sql`${t.expiresAt} > ${t.createdAt}`),
+    maxLifetimeCheck: check(
+      'extension_auth_handoffs_max_lifetime_check',
+      sql`${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`,
+    ),
+    consumedCheck: check(
+      'extension_auth_handoffs_consumed_at_check',
+      sql`${t.consumedAt} is null or ${t.consumedAt} >= ${t.createdAt}`,
+    ),
+  }),
+).enableRLS()
+
 export const projectRepoConfigs = pgTable('project_repo_configs', {
   projectKey: text('project_key')
     .primaryKey()
@@ -154,6 +213,7 @@ export const projectIntegrations = pgTable(
     accessTokenCiphertext: text('access_token_ciphertext').notNull(),
     refreshTokenCiphertext: text('refresh_token_ciphertext'),
     tokenExpiresAt: timestamp('token_expires_at', { withTimezone: true }),
+    grantedScopes: text('granted_scopes'),
     workspaceId: text('workspace_id').notNull(),
     workspaceName: text('workspace_name').notNull(),
     containerId: text('container_id'),
@@ -486,20 +546,47 @@ export const commentExternalWork = pgTable(
     commentId: uuid('comment_id').notNull().references(() => comments.id, { onDelete: 'cascade' }),
     provider: text('provider').notNull(),
     state: text('state').notNull().default('creating'),
+    workspaceId: text('workspace_id'),
+    containerId: text('container_id'),
     externalId: text('external_id'),
     externalKey: text('external_key'),
     externalUrl: text('external_url'),
     leaseToken: uuid('lease_token').notNull(),
     leaseExpiresAt: timestamp('lease_expires_at', { withTimezone: true }).notNull(),
     uncertainAt: timestamp('uncertain_at', { withTimezone: true }),
+    lifecycleStatus: text('lifecycle_status').notNull().default('active'),
+    syncLeaseToken: uuid('sync_lease_token'),
+    syncLeaseExpiresAt: timestamp('sync_lease_expires_at', { withTimezone: true }),
+    lastSyncError: text('last_sync_error'),
+    closedAt: timestamp('closed_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     commentProviderUnique: uniqueIndex('comment_external_work_comment_provider_unique').on(t.commentId, t.provider),
     projectCreatedIdx: index('comment_external_work_project_created_idx').on(t.projectId, t.createdAt.desc()),
-    providerCheck: check('comment_external_work_provider_check', sql`${t.provider} in ('linear', 'jira')`),
+    providerCheck: check('comment_external_work_provider_check', sql`${t.provider} in ('github', 'linear', 'jira')`),
     stateCheck: check('comment_external_work_state_check', sql`${t.state} in ('creating', 'created')`),
+    lifecycleCheck: check(
+      'comment_external_work_lifecycle_check',
+      sql`${t.lifecycleStatus} in ('active', 'closing', 'closed', 'failed', 'blocked')`,
+    ),
+    lifecycleLeaseCheck: check(
+      'comment_external_work_lifecycle_lease_check',
+      sql`(
+        (${t.lifecycleStatus} = 'closing' and ${t.syncLeaseToken} is not null and ${t.syncLeaseExpiresAt} is not null)
+        or
+        (${t.lifecycleStatus} <> 'closing' and ${t.syncLeaseToken} is null and ${t.syncLeaseExpiresAt} is null)
+      )`,
+    ),
+    creationLifecycleCheck: check(
+      'comment_external_work_creation_lifecycle_check',
+      sql`${t.state} = 'created' or ${t.lifecycleStatus} = 'active'`,
+    ),
+    closedAtCheck: check(
+      'comment_external_work_closed_at_check',
+      sql`(${t.lifecycleStatus} = 'closed') = (${t.closedAt} is not null)`,
+    ),
     resultCheck: check('comment_external_work_result_check', sql`(
       (${t.state} = 'creating' and ${t.externalId} is null and ${t.externalKey} is null and ${t.externalUrl} is null)
       or

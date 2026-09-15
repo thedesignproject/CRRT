@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { waitUntil } from '@vercel/functions'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createDefaultCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import { formatGithubIssueBody } from '../../../_lib/github-issues.js'
@@ -8,7 +9,9 @@ import { createJiraIssue, getJiraDestinations } from '../../../_lib/jira.js'
 import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
+import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 import {
+  acceptCommentIfOpen,
   claimCommentExternalWork,
   finalizeCommentExternalWork,
   getComment,
@@ -18,11 +21,18 @@ import {
   getProjectIntegration,
   markCommentExternalWorkUncertain,
   releaseCommentExternalWork,
-  updateReviewStatus,
 } from '../../../_lib/store.js'
 import githubIssueHandler from './github-issue.js'
 
 const METHODS = ['GET', 'POST', 'OPTIONS']
+
+async function acceptOpenOrCloseRejected(projectId: string, commentId: string) {
+  if (await acceptCommentIfOpen(projectId, commentId)) return
+  const current = await getComment(commentId)
+  if (current?.projectId === projectId && current.reviewStatus === 'rejected') {
+    waitUntil(closeLinkedExternalWork(projectId, commentId, current.updatedAt).catch(() => undefined))
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
@@ -63,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (comment.reviewStatus === 'rejected') return jsonError(req, res, 409, 'comment_rejected')
       if (existing?.state === 'created' && existing.externalUrl) {
-        if (comment.reviewStatus === 'open') await updateReviewStatus(publicComment.projectId, commentId, 'accepted')
+        await acceptOpenOrCloseRejected(publicComment.projectId, commentId)
         setCors(req, res, METHODS)
         return res.status(200).json({
           externalId: existing.externalId,
@@ -121,16 +131,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
                 description: body,
               })
             })()
-        const finalized = await finalizeCommentExternalWork({ id: claim.id, leaseToken, ...result })
+        const finalized = await finalizeCommentExternalWork({
+          id: claim.id,
+          leaseToken,
+          workspaceId: integration.workspaceId,
+          containerId: integration.containerId,
+          ...result,
+        })
         if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
-        await updateReviewStatus(publicComment.projectId, commentId, 'accepted')
+        await acceptOpenOrCloseRejected(publicComment.projectId, commentId)
         setCors(req, res, METHODS)
         return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
       } catch (error) {
-        if (error instanceof Error && [
-          'linear_request_failed', 'linear_issue_create_failed',
-          'jira_request_failed', 'jira_issue_create_failed', 'jira_issue_type_unavailable', 'jira_project_unavailable',
-        ].includes(error.message)) {
+        const code = error instanceof Error ? error.message : ''
+        const deterministicProviderFailure = (
+          (code.startsWith('linear_') && ![
+            'linear_result_indeterminate', 'linear_issue_persistence_failed', 'linear_issue_creation_in_progress',
+          ].includes(code))
+          || (code.startsWith('jira_') && ![
+            'jira_result_indeterminate', 'jira_issue_persistence_failed', 'jira_issue_creation_in_progress',
+          ].includes(code))
+        )
+        if (deterministicProviderFailure) {
           await releaseCommentExternalWork(claim.id, leaseToken)
         }
         throw error

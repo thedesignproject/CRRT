@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
+import type { Session } from '@supabase/supabase-js'
 import { Hero } from './sections/Hero'
+import { DASHBOARD_HREF } from './sections/Hero'
 import { HowItWorks } from './sections/HowItWorks'
 import { FakeDashboard } from './sections/FakeDashboard'
 import { Closing } from './sections/Closing'
@@ -12,6 +15,7 @@ import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
+import { supabase } from './lib/supabase'
 
 const DEMO_PROJECT_SESSION_KEY = 'crrt:landing-demo-project-id'
 let fallbackProjectId: string | null = null
@@ -45,6 +49,8 @@ export function App() {
   const initialPath = typeof window === 'undefined' ? '/' : window.location.pathname
   const isDocs = initialPath.startsWith('/docs')
   const isAudit = initialPath.startsWith('/audit/')
+  const stayOnMarketing = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('stay') === '1'
 
   useScrollProgress()
 
@@ -61,10 +67,36 @@ export function App() {
     return <ProductAuditWorkspace />
   }
 
+  return <MarketingSite apiBase={apiBase} projectId={projectId} stayOnMarketing={stayOnMarketing} />
+}
+
+function MarketingSite({
+  apiBase,
+  projectId,
+  stayOnMarketing,
+}: {
+  apiBase: string
+  projectId: string
+  stayOnMarketing: boolean
+}) {
+  const [session, setSession] = useState<Session | null>(null)
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession)
+    })
+    return () => subscription.subscription.unsubscribe()
+  }, [])
+
+  useEffect(() => {
+    if (session && !stayOnMarketing) window.location.replace(DASHBOARD_HREF)
+  }, [session, stayOnMarketing])
+
   return (
     <>
       <ScrollRuler />
-      <Hero />
+      <Hero authenticated={Boolean(session)} />
       <HowItWorks />
       <FakeDashboard />
       <ProductAudit />
