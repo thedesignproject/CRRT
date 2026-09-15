@@ -87,8 +87,9 @@ vi.mock('./components/CommentDetail', () => ({
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
-  CommentList: (props: { statusFilter: string; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void }) => <>
+  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
+    <span data-testid="first-claim">{props.filteredComments[0]?.claimedByAgentId ?? 'none'}</span>
     <button onClick={() => props.selectFilter('all')}>show all</button>
     <button onClick={() => props.toggleBulkSelect('comment-1')}>toggle test comment</button>
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
@@ -109,6 +110,7 @@ vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onActi
   <button onClick={() => props.onAction('accept')}>command accept</button>
   <button onClick={() => props.onAction('reject')}>command reject</button>
   <button onClick={() => props.onAction('done')}>command done</button>
+  <button onClick={() => props.onAction('filter-ready-for-testing')}>command testing filter</button>
 </div> }))
 
 import { App } from './App'
@@ -137,6 +139,13 @@ describe('<App /> GitHub issue wiring', () => {
   it('opens the feedback list on Open', async () => {
     render(<App />)
     expect(await screen.findByTestId('status-filter')).toHaveTextContent('open')
+  })
+
+  it('opens the reviewer testing queue from the command palette', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command testing filter' }))
+    expect(screen.getByTestId('status-filter')).toHaveTextContent('ready_for_testing')
   })
 
   it('returns to Open after creating a project', async () => {
@@ -220,6 +229,26 @@ describe('<App /> GitHub issue wiring', () => {
     }
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
     expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+  })
+
+  it('optimistically clears the previous agent when reopening Done', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
+      body: 'Completed feedback', reviewStatus: 'accepted', implementationStatus: 'done', claimedByAgentId: 'old-agent',
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
+    expect(screen.getByTestId('first-claim')).toHaveTextContent('old-agent')
+
+    fireEvent.keyDown(window, { key: 'm' })
+
+    await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'unassigned',
+    ))
+    expect(screen.getByTestId('first-claim')).toHaveTextContent('none')
   })
 
   it('refreshes issue lifecycle state after a successful bulk rejection', async () => {

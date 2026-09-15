@@ -772,7 +772,7 @@ export type AdminProject = {
   commentCount: number
   commentStatusCounts: { pending: number; accepted: number; rejected: number }
   implementationStatusCounts: {
-    unassigned: number; claimed: number; inProgress: number; blocked: number; done: number
+    unassigned: number; claimed: number; inProgress: number; blocked: number; readyForTesting: number; done: number
   }
   feedbackShareCount: number
   commentedUrlCount: number
@@ -838,6 +838,7 @@ export async function listProjectsWithComments(options: {
     claimed_comment_count: number
     in_progress_comment_count: number
     blocked_comment_count: number
+    ready_for_testing_comment_count: number
     done_comment_count: number
     feedback_share_count: number
     commented_url_count: number
@@ -857,7 +858,7 @@ export async function listProjectsWithComments(options: {
   }
   let query = supabase
     .from('admin_project_metrics')
-    .select('public_key, name, claimable, created_at, comment_count, pending_comment_count, accepted_comment_count, rejected_comment_count, unassigned_comment_count, claimed_comment_count, in_progress_comment_count, blocked_comment_count, done_comment_count, feedback_share_count, commented_url_count, first_comment_at, last_comment_at')
+    .select('public_key, name, claimable, created_at, comment_count, pending_comment_count, accepted_comment_count, rejected_comment_count, unassigned_comment_count, claimed_comment_count, in_progress_comment_count, blocked_comment_count, ready_for_testing_comment_count, done_comment_count, feedback_share_count, commented_url_count, first_comment_at, last_comment_at')
   if (cursor) {
     const operator = options.direction === 'asc' ? 'gt' : 'lt'
     query = query.or(
@@ -910,6 +911,7 @@ export async function listProjectsWithComments(options: {
         claimed: Number(row.claimed_comment_count),
         inProgress: Number(row.in_progress_comment_count),
         blocked: Number(row.blocked_comment_count),
+        readyForTesting: Number(row.ready_for_testing_comment_count),
         done: Number(row.done_comment_count),
       },
       feedbackShareCount: Number(row.feedback_share_count),
@@ -2130,6 +2132,50 @@ export async function updateImplementationStatus(commentId: string, patch: {
 
   if (error) throw new Error(error.message)
   return mapComment(data as CommentRow)
+}
+
+export type AgentFeedbackOperationOutcome =
+  | 'applied'
+  | 'duplicate'
+  | 'not_found'
+  | 'claimed_conflict'
+  | 'reviewer_owned'
+
+export async function applyAgentFeedbackOperation(input: {
+  shareId: string
+  commentId: string
+  agentId: string
+  idempotencyKey: string
+  operation: string
+  eventType: string
+  payload: Record<string, unknown>
+  implementationStatus?: ImplementationStatus
+}) {
+  type OperationRow = {
+    outcome: AgentFeedbackOperationOutcome
+    event_id: number | null
+    comment_row: CommentRow | null
+  }
+  const { data, error } = await getSupabase()
+    .rpc('apply_agent_feedback_operation', {
+      p_share_id: input.shareId,
+      p_comment_id: input.commentId,
+      p_agent_id: input.agentId,
+      p_idempotency_key: input.idempotencyKey,
+      p_operation: input.operation,
+      p_event_type: input.eventType,
+      p_payload: input.payload,
+      p_implementation_status: input.implementationStatus ?? null,
+    } as never)
+    .single()
+
+  if (error) throw new Error(error.message)
+  const row = data as OperationRow
+  return {
+    outcome: row.outcome,
+    feedbackEventId: row.event_id,
+    comment: row.comment_row ? mapComment(row.comment_row) : null,
+  }
 }
 
 export async function updateCommentVisibility(

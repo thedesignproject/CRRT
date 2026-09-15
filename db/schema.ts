@@ -769,6 +769,7 @@ export const adminProjectMetrics = pgView('admin_project_metrics', {
   claimedCommentCount: bigint('claimed_comment_count', { mode: 'number' }),
   inProgressCommentCount: bigint('in_progress_comment_count', { mode: 'number' }),
   blockedCommentCount: bigint('blocked_comment_count', { mode: 'number' }),
+  readyForTestingCommentCount: bigint('ready_for_testing_comment_count', { mode: 'number' }),
   doneCommentCount: bigint('done_comment_count', { mode: 'number' }),
   feedbackShareCount: bigint('feedback_share_count', { mode: 'number' }),
   commentedUrlCount: bigint('commented_url_count', { mode: 'number' }),
@@ -787,6 +788,7 @@ export const adminProjectMetrics = pgView('admin_project_metrics', {
         count(*) filter (where implementation_status = 'claimed')::bigint as claimed_comment_count,
         count(*) filter (where implementation_status = 'in_progress')::bigint as in_progress_comment_count,
         count(*) filter (where implementation_status = 'blocked')::bigint as blocked_comment_count,
+        count(*) filter (where implementation_status = 'ready_for_testing')::bigint as ready_for_testing_comment_count,
         count(*) filter (where implementation_status = 'done')::bigint as done_comment_count,
         count(distinct url)::bigint as commented_url_count,
         min(created_at) as first_comment_at,
@@ -802,7 +804,8 @@ export const adminProjectMetrics = pgView('admin_project_metrics', {
       cm.comment_count, cm.pending_comment_count, cm.accepted_comment_count,
       cm.rejected_comment_count, cm.unassigned_comment_count,
       cm.claimed_comment_count, cm.in_progress_comment_count,
-      cm.blocked_comment_count, cm.done_comment_count,
+      cm.blocked_comment_count, cm.ready_for_testing_comment_count,
+      cm.done_comment_count,
       coalesce(sm.feedback_share_count, 0)::bigint as feedback_share_count,
       cm.commented_url_count, cm.first_comment_at, cm.last_comment_at
     from ${projects} p

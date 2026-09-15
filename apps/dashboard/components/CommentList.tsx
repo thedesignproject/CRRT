@@ -6,7 +6,15 @@ import type { Comment, StatusFilter } from '../lib/types'
 import { ChatIcon, CheckboxIcon } from './icons'
 import { Spinner, StatusBadge } from './primitives'
 
-type Counts = { all: number; open: number; ready: number; done: number; rejected: number }
+type Counts = { all: number; open: number; ready: number; ready_for_testing: number; done: number; rejected: number }
+
+const FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'All',
+  open: 'Open',
+  ready: 'Agent',
+  ready_for_testing: 'Testing',
+  done: 'Done',
+}
 
 interface CommentListProps {
   personal?: false
@@ -53,24 +61,23 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
             <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
           </button>}
         </div>
-        {controls && <div className="flex gap-1">
-          {(['all', 'open', 'ready', 'done'] as StatusFilter[]).map((f) => {
+        {controls && <div className="grid grid-cols-5 gap-1 pb-1">
+          {(['all', 'open', 'ready', 'ready_for_testing', 'done'] as StatusFilter[]).map((f) => {
             const count = counts[f as keyof Counts] ?? 0
-            const label = f === 'all' ? 'All' : f === 'open' ? 'Open' : f === 'ready' ? 'Ready for Agent' : 'Done'
             return (
               <button
                 key={f}
                 onClick={() => controls.selectFilter(f)}
                 className={cn(
-                  'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all',
+                  'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
                   controls.statusFilter === f
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                 )}
               >
-                {label}
+                {FILTER_LABELS[f]}
                 <span className={cn(
-                  'ml-1.5 text-[10px] font-bold min-w-[18px] text-center py-0.5 px-1 rounded-full',
+                  'ml-1 text-[10px] font-bold min-w-[18px] text-center py-0.5 px-0.5 rounded-full',
                   controls.statusFilter === f
                     ? 'bg-primary-foreground/20 text-primary-foreground'
                     : 'bg-muted text-muted-foreground/60'
@@ -144,6 +151,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               const inactive = isInactive(comment)
               const statusBar =
                 comment.implementationStatus === 'done' ? 'bg-status-done' :
+                comment.implementationStatus === 'ready_for_testing' ? 'bg-status-ready-for-testing' :
                 comment.reviewStatus === 'accepted' ? 'bg-status-accepted' :
                 comment.reviewStatus === 'rejected' ? 'bg-status-rejected' :
                 null

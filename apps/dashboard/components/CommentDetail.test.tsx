@@ -550,6 +550,12 @@ describe('<CommentDetail /> GitHub issue action', () => {
     />)
     expect(screen.getByAltText('Feedback screenshot')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Done/ })).toBeInTheDocument()
+
+    rerender(<CommentDetail
+      {...props}
+      selectedComment={{ ...comment, implementationStatus: 'ready_for_testing' }}
+    />)
+    expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
     open.mockRestore()
   })
 
@@ -738,7 +744,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     const { unmount } = render(
       <CommentList
         filteredComments={[commentWithoutPageContext]}
-        counts={{ all: 1, open: 0, ready: 1, done: 0, rejected: 0 }}
+        counts={{ all: 1, open: 0, ready: 1, ready_for_testing: 0, done: 0, rejected: 0 }}
         statusFilter="all"
         selectFilter={vi.fn()}
         bulkMode={false}

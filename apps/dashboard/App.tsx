@@ -204,7 +204,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       acc[ds]++
       return acc
     },
-    { all: 0, open: 0, ready: 0, done: 0, rejected: 0 },
+    { all: 0, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 },
   ), [projectComments])
 
   const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
@@ -227,7 +227,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (!current) return
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
     setComments((prev) => prev.map((c) => c.id === id
-      ? { ...c, implementationStatus: nextStatus, updatedAt: new Date().toISOString() }
+      ? {
+          ...c,
+          implementationStatus: nextStatus,
+          claimedByAgentId: nextStatus === 'unassigned' ? null : c.claimedByAgentId,
+          updatedAt: new Date().toISOString(),
+        }
       : c))
     try {
       await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
@@ -390,6 +395,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (action === 'filter-all') selectFilter('all')
     if (action === 'filter-open') selectFilter('open')
     if (action === 'filter-ready') selectFilter('ready')
+    if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
     if (action === 'filter-done') selectFilter('done')
     if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
     if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
