@@ -68,4 +68,18 @@ describe('extension auth', () => {
     await expect(handleAuthMessage(client as never, { type: 'auth:get' })).rejects.toThrow('auth down')
     await expect(handleAuthMessage(client as never, { type: 'auth:sign-out' })).rejects.toThrow('auth down')
   })
+
+  it('allows concurrent widget session reads without reporting a competing sign-in', async () => {
+    let finishRead!: (value: unknown) => void
+    const session = { access_token: 'token', user: { email: 'u@example.com' } }
+    const result = { data: { session }, error: null }
+    const client = { auth: { getSession: vi.fn()
+      .mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve }))
+      .mockResolvedValue(result),
+    } }
+    const first = handleAuthMessage(client as never, { type: 'auth:get' })
+    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
+    finishRead(result)
+    await expect(first).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
+  })
 })

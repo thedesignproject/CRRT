@@ -9,10 +9,14 @@ export type SessionSummary = { accessToken: string; email: string }
 
 const activeAuthOperations = new WeakSet<SupabaseClient>()
 
-// The background owns one client across popup instances. Keep session reads,
-// sign-out, and the complete hosted flow exclusive, including failure cleanup.
-export async function withExclusiveAuth<T>(client: SupabaseClient, operation: () => Promise<T>): Promise<T> {
+function requireIdleAuth(client: SupabaseClient) {
   if (activeAuthOperations.has(client)) throw new Error('CRRT sign-in is in progress. Complete or close the sign-in window first.')
+}
+
+// The background owns one client across popup instances. Keep sign-out and the
+// complete hosted flow exclusive, including failure cleanup.
+export async function withExclusiveAuth<T>(client: SupabaseClient, operation: () => Promise<T>): Promise<T> {
+  requireIdleAuth(client)
   activeAuthOperations.add(client)
   try {
     return await operation()
@@ -50,16 +54,17 @@ export function isAuthMessage(value: unknown): value is AuthMessage {
 }
 
 export async function handleAuthMessage(client: SupabaseClient, message: AuthMessage) {
-  return withExclusiveAuth(client, () => handleExclusiveAuthMessage(client, message))
-}
-
-async function handleExclusiveAuthMessage(client: SupabaseClient, message: AuthMessage) {
   if (message.type === 'auth:get') {
+    // Widget initialization and navigation request the session concurrently.
+    // Reads may overlap one another, but must not expose a pending sign-in.
+    requireIdleAuth(client)
     const { data, error } = await client.auth.getSession()
     if (error) throw error
     return summarize(data.session)
   }
-  const { error } = await client.auth.signOut({ scope: 'local' })
-  if (error) throw error
-  return null
+  return withExclusiveAuth(client, async () => {
+    const { error } = await client.auth.signOut({ scope: 'local' })
+    if (error) throw error
+    return null
+  })
 }
