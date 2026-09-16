@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }))
@@ -9,6 +9,22 @@ const fn = vi.fn()
 const props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, addProjectOpen: false, setAddProjectOpen: fn, onAddProject: fn, onCheckAvailability: fn, addProjectBusy: false, addProjectError: null, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark' as const, toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn }
 
 describe('Header extension comments navigation', () => {
+  it('places settings and super admin only in the sidebar footer and preserves permissions', () => {
+    const onOpenSettings = vi.fn()
+    const view = render(<Header {...props} selectedProject="one" superadmin settingsActive onOpenSettings={onOpenSettings} />)
+    const footer = screen.getByRole('navigation', { name: 'Workspace administration' })
+    expect(footer.parentElement).toBe(screen.getByRole('complementary', { name: 'Workspace navigation' }))
+    expect(footer).toBe(footer.parentElement?.lastElementChild)
+    expect(within(footer).getByRole('button', { name: 'Super admin' })).toBeInTheDocument()
+    const settings = within(footer).getByRole('button', { name: 'Project settings' })
+    expect(settings).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(settings)
+    expect(onOpenSettings).toHaveBeenCalledOnce()
+    expect(within(screen.getByRole('banner')).queryByRole('button', { name: /Project settings|Super admin/ })).toBeNull()
+    view.rerender(<Header {...props} selectedProject="one" canManageProject={false} />)
+    expect(screen.queryByRole('button', { name: 'Project settings' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Super admin' })).toBeNull()
+  })
   it('keeps administration and project navigation accessible in the new shell', () => {
     const onOpenSuperAdmin = vi.fn()
     const view = render(<Header {...props} superadmin superAdminActive onOpenSuperAdmin={onOpenSuperAdmin} />)

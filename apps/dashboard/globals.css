@@ -381,6 +381,8 @@
   overflow: hidden;
 }
 .dashboard-navigation {
+  display: flex;
+  flex-direction: column;
   grid-row: 1 / -1;
   background: var(--muted);
   border-right: 1px solid var(--border);
@@ -388,6 +390,13 @@
   min-height: 0;
   overflow-y: auto;
 }
+.dashboard-navigation > a, .dashboard-nav-label { flex-shrink: 0; }
+.dashboard-navigation-footer { margin-top: auto; padding-top: var(--crrt-space-7); display: flex; flex-direction: column; gap: var(--crrt-space-2); flex-shrink: 0; }
+.dashboard-navigation-footer:empty { display: none; }
+.dashboard-navigation-action { display: flex; align-items: center; gap: var(--crrt-space-3); min-height: 36px; padding: var(--crrt-space-3) var(--crrt-space-4); border-radius: var(--crrt-radius-md); font-size: 13px; font-weight: 500; text-align: left; color: var(--muted-foreground); }
+.dashboard-navigation-action svg { flex-shrink: 0; }
+.dashboard-navigation-action:hover { background: var(--dashboard-row-hover); color: var(--foreground); }
+.dashboard-navigation-action[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
 .dashboard-nav-label { color: var(--muted-foreground); font-size: 12px; margin: var(--crrt-space-8) var(--crrt-space-3) var(--crrt-space-4); }
 .dashboard-projects { display: flex; flex-direction: column; align-items: stretch; gap: var(--crrt-space-2); }
 .dashboard-projects > button { display: flex; align-items: center; text-align: left; min-height: 36px; font-weight: 500; font-size: 13px; max-width: 100%; }
@@ -417,10 +426,11 @@
 }
 @media (max-width: 767px) {
   .dashboard-shell { display: flex; flex-direction: column; }
-  .dashboard-navigation { display: flex; align-items: center; gap: var(--crrt-space-4); padding: var(--crrt-space-4); border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+  .dashboard-navigation { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--crrt-space-4); padding: var(--crrt-space-4); border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
+  .dashboard-navigation-footer { flex-basis: 100%; flex-direction: row; margin-top: 0; padding-top: 0; }
   .dashboard-navigation > a { flex-shrink: 0; }
   .dashboard-nav-label { display: none; }
-  .dashboard-projects { flex-direction: row; overflow-x: auto; min-width: 0; }
+  .dashboard-projects { flex: 1; flex-direction: row; overflow-x: auto; min-width: 0; }
   .dashboard-projects > button { flex-shrink: 0; max-width: 160px; }
   .dashboard-projects > button[aria-label="Add project"] { width: 36px; }
   .dashboard-projects > button[aria-label="Add project"]::after { content: none; }

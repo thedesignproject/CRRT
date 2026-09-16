@@ -174,6 +174,20 @@ export function Header({
         )}
       </nav>
 
+      <nav className="dashboard-navigation-footer" aria-label="Workspace administration">
+        {!extensionCommentsActive && selectedProject && canManageProject && (
+          <button type="button" onClick={onOpenSettings} aria-label="Project settings" aria-pressed={settingsActive} className={cn('dashboard-navigation-action', settingsActive && 'bg-accent text-foreground')}>
+            <SettingsIcon size={16} />
+            <span>Project settings</span>
+          </button>
+        )}
+        {superadmin && (
+          <button type="button" onClick={onOpenSuperAdmin} aria-pressed={superAdminActive} className={cn('dashboard-navigation-action', superAdminActive && 'bg-accent text-foreground')}>
+            <ShieldIcon size={16} />
+            <span>Super admin</span>
+          </button>
+        )}
+      </nav>
     </aside>
     <header className="dashboard-toolbar">
       <h1 className="text-base font-medium tracking-tight">Workspace</h1>
@@ -199,34 +213,6 @@ export function Header({
           onProjectsChanged={onProjectsChanged}
           onOpenCommentActivity={onOpenCommentActivity}
         />
-        {superadmin && (
-          <button
-            onClick={onOpenSuperAdmin}
-            title="Super admin"
-            aria-label="Super admin"
-            aria-pressed={superAdminActive}
-            className={cn(
-              'w-7 h-7 rounded-md flex items-center justify-center transition-colors',
-              superAdminActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-            )}
-          >
-            <ShieldIcon size={15} />
-          </button>
-        )}
-        {!extensionCommentsActive && selectedProject && canManageProject && (
-          <button
-            onClick={onOpenSettings}
-            title="Project settings"
-            aria-label="Project settings"
-            aria-pressed={settingsActive}
-            className={cn(
-              'w-7 h-7 rounded-md flex items-center justify-center transition-colors',
-              settingsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent',
-            )}
-          >
-            <SettingsIcon size={15} />
-          </button>
-        )}
         <button
           onClick={toggleTheme}
           title={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}

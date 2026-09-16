@@ -41,3 +41,11 @@ all integration states, 200% zoom and complete accessibility validation are not 
 Mobile currently stacks a scrollable list and detail, rather than the final drill-in/back navigation.
 
 No push, PR, merge or deployment. User reviews this local design before any PR.
+
+## 2026-09-16: administración al pie de la navegación
+
+- Se aplica el cambio pedido y confirmado: Project settings y Super admin pasan de la navbar al pie de la barra lateral, con icono y texto. Sin cambios de permisos ni callbacks.
+- Footer empujado abajo mediante flex; en móvil aparece debajo de la navegación horizontal, sin posicionamiento absoluto ni superposición.
+- Se conservan los tokens, el hover naranja suave y el foco visible; no se modifican otros flujos, privacidad, migraciones ni backend.
+- Suite completa: 1387 pruebas pasan, 14 omitidas. Typecheck y build pasan. Diff-cover 100% y ramas sin pendientes contra origin/trunk; trunk local está desactualizado y arroja pendientes ajenos a este cambio.
+- Verificación visual pendiente del usuario: el navegador conectado no está disponible en esta sesión. Preview local con datos de prueba en http://127.0.0.1:4327/dashboard/. Sin push ni PR.
