@@ -506,6 +506,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   return (
     <div className="dashboard-shell">
       <Header
+        agentAction={view === 'feedback' && canOperateAgent && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
         projects={projects}
         projectsLoading={projectsLoading}
         projectsError={projectsError}
@@ -559,7 +560,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) : (
       <div className="dashboard-feedback">
         <CommentList
-          headerAction={canOperateAgent && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
           agentSelection={canOperateAgent ? { ids: agentIds, toggle: toggleAgent, count: agentComments.length, open: () => setSidebarOpen(true) } : undefined}
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
