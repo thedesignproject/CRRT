@@ -13,6 +13,12 @@
       "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/v1/extension/auth/cleanup",
+      "schedule": "17 3 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/d/:slug", "destination": "/index.html" },
     { "source": "/docs/:path*", "destination": "/index.html" },

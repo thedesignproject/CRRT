@@ -11,6 +11,20 @@ export function getSupabase(): SupabaseClient {
   return createClient(supabaseUrl, supabaseKey)
 }
 
+/** Public-key auth client for server-side token verification without shared session state. */
+export function getNonPersistentSupabase(): SupabaseClient {
+  const supabaseUrl = process.env.SUPABASE_URL
+  const supabaseKey = process.env.SUPABASE_KEY
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Server misconfigured: missing Supabase credentials')
+  }
+
+  return createClient(supabaseUrl, supabaseKey, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  })
+}
+
 /**
  * Service-role client. Bypasses RLS, so it's the client the backend uses for
  * all table access and storage writes — every public table has RLS enabled
@@ -30,4 +44,3 @@ export function getServiceSupabase(): SupabaseClient {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 }
-
