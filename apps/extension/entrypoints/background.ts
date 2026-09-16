@@ -142,14 +142,20 @@ export async function activateCurrentTab(): Promise<void> {
 }
 
 export default defineBackground(() => {
-  const client = createExtensionSupabase()
+  let client: ReturnType<typeof createExtensionSupabase> | undefined
+  async function authClient() {
+    // Constructing Supabase reads persisted account data and may refresh tokens.
+    // Defer even that initialization until this disclosure version is accepted.
+    if (!await hasAcceptedDisclosure()) throw new Error('Review the CRRT privacy summary before signing in')
+    return client ??= createExtensionSupabase()
+  }
   async function handleMessage(message: unknown, sender: unknown): Promise<MessageResponse | undefined> {
     try {
       if ((message as { type?: string } | null)?.type === 'private:relay') return { ok: true, data: await relayFrameMessage(message, sender) }
       if ((message as { type?: string } | null)?.type === 'auth:hosted-sign-in') {
-        return { ok: true, data: await startHostedSignIn(client, (message as HostedAuthMessage).intent) }
+        return { ok: true, data: await startHostedSignIn(await authClient(), (message as HostedAuthMessage).intent) }
       }
-      if (isAuthMessage(message)) return { ok: true, data: await handleAuthMessage(client, message) }
+      if (isAuthMessage(message)) return { ok: true, data: await handleAuthMessage(await authClient(), message) }
       if ((message as { type?: unknown } | null)?.type === 'auth:open-popup') {
         await browser.action.openPopup()
         return { ok: true }

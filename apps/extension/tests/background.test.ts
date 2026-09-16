@@ -31,7 +31,7 @@ vi.mock('../lib/disclosure', () => ({ hasAcceptedDisclosure }))
 vi.mock('../lib/frame-channel', () => ({ relayFrameMessage: vi.fn() }))
 
 import background, { activateCurrentTab, tabActivation } from '../entrypoints/background'
-import { handleAuthMessage, isAuthMessage } from '../lib/auth'
+import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn } from '../lib/hosted-auth'
 
@@ -55,6 +55,36 @@ const activation = (origin: string, activationId: string) => ({
 })
 
 describe('extension background', () => {
+  it('does not initialize persisted authentication before disclosure acceptance', async () => {
+    hasAcceptedDisclosure.mockResolvedValue(false)
+    ;(background as unknown as () => void)()
+    expect(createExtensionSupabase).not.toHaveBeenCalled()
+    vi.mocked(isAuthMessage).mockReturnValue(true)
+    for (const message of [{ type: 'auth:get' }, { type: 'auth:sign-out' }, { type: 'auth:hosted-sign-in', intent: 'signin' }]) {
+      await expect(send(message)).resolves.toEqual({ ok: false, error: 'Review the CRRT privacy summary before signing in' })
+    }
+    expect(createExtensionSupabase).not.toHaveBeenCalled()
+    expect(handleAuthMessage).not.toHaveBeenCalled()
+    expect(startHostedSignIn).not.toHaveBeenCalled()
+
+    hasAcceptedDisclosure.mockResolvedValue(true)
+    await Promise.all([send({ type: 'auth:get' }), send({ type: 'auth:get' })])
+    expect(createExtensionSupabase).toHaveBeenCalledOnce()
+    expect(handleAuthMessage).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when disclosure storage cannot be read and retries initialization safely', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(true)
+    hasAcceptedDisclosure.mockRejectedValueOnce(new Error('storage unavailable'))
+    await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'storage unavailable' })
+    expect(createExtensionSupabase).not.toHaveBeenCalled()
+    vi.mocked(createExtensionSupabase).mockImplementationOnce(() => { throw new Error('configuration unavailable') })
+    await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'configuration unavailable' })
+    await expect(send({ type: 'auth:get' })).resolves.toMatchObject({ ok: true })
+    expect(createExtensionSupabase).toHaveBeenCalledTimes(2)
+  })
+
   it('relays private frame messages with their browser-provided sender', async () => {
     ;(background as unknown as () => void)()
     vi.mocked(relayFrameMessage).mockResolvedValueOnce('reply')
