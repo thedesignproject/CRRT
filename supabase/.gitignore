@@ -1,2 +1,8 @@
-# Local CLI state created by `supabase link`. Not code.
+# Local Supabase CLI state. Not code.
 .temp/
+.branches/
+
+# dotenvx
+.env.keys
+.env.local
+.env.*.local

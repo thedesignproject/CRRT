@@ -3,6 +3,7 @@ import { asset } from '../lib/routes'
 interface WelcomeScreenProps {
   /** Called when the user clicks the "create your first project" CTA. */
   onCreateProject: () => void
+  onOpenExtensionComments: () => void
 }
 
 /**
@@ -11,7 +12,7 @@ interface WelcomeScreenProps {
  * no welcome tour — the rest of the introduction happens through the rich
  * empty state that follows (moment 2).
  */
-export function WelcomeScreen({ onCreateProject }: WelcomeScreenProps) {
+export function WelcomeScreen({ onCreateProject, onOpenExtensionComments }: WelcomeScreenProps) {
   return (
     <div
       className="scanlines"
@@ -154,6 +155,8 @@ export function WelcomeScreen({ onCreateProject }: WelcomeScreenProps) {
       >
         ▸ create your first project
       </button>
+
+      <button type="button" onClick={onOpenExtensionComments} style={{ marginTop: 14, border: 'none', background: 'transparent', color: 'var(--muted-foreground)', fontFamily: 'var(--crrt-font-body)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>view my extension comments →</button>
 
       {/* Secondary link to docs */}
       <a

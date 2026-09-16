@@ -12,15 +12,14 @@ bun install`
 
 const envSnippet = `cp .env.example .env
 
-# server (api + dashboard server-side):
+# Supabase (API + dashboard build):
 SUPABASE_URL=https://<your-project>.supabase.co
-SUPABASE_KEY=<service-role-key>
+SUPABASE_KEY=<anon-or-publishable-key>
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key> # server-only; never expose in client code
 REVIEWER_API_TOKEN=<long-random-string>
 SHARE_TOKEN_SECRET=<long-random-string>
 
-# client (dashboard + landing build-time):
-VITE_SUPABASE_URL=https://<your-project>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon-key>
+# client (landing build-time):
 VITE_API_BASE=https://<your-app-url>/api`
 
 const migrateSnippet = `bun run db:migrate`
@@ -94,14 +93,14 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
         <H2>2. Configure environment</H2>
         <P>
           Copy <InlineCode>.env.example</InlineCode> to <InlineCode>.env</InlineCode> and fill in the
-          required values. Two halves: server-side (used by the API routes and SSR-aware builds) and
-          client-side (the <InlineCode>VITE_</InlineCode>-prefixed ones, baked into the bundle at build
-          time).
+          required values. The dashboard includes the public <InlineCode>SUPABASE_KEY</InlineCode> in its
+          browser bundle at build time. Keep <InlineCode>SUPABASE_SERVICE_ROLE_KEY</InlineCode> server-only.
         </P>
         <CodeBlock language="bash" code={envSnippet} />
         <Callout tone="warn">
-          <Strong>REVIEWER_API_TOKEN</Strong> and <Strong>SHARE_TOKEN_SECRET</Strong> are sensitive — rotate
-          them periodically and never commit them. Both should be long random strings (32+ bytes).
+          <Strong>SUPABASE_SERVICE_ROLE_KEY</Strong>, <Strong>REVIEWER_API_TOKEN</Strong>, and{' '}
+          <Strong>SHARE_TOKEN_SECRET</Strong> are sensitive — rotate them periodically and never commit or
+          expose them to client code. The two application tokens should be long random strings (32+ bytes).
         </Callout>
       </Section>
 
@@ -113,7 +112,7 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
         </P>
         <CodeBlock language="bash" code={migrateSnippet} />
         <P>
-          <InlineCode>vercel-build</InlineCode> runs <InlineCode>db:migrate</InlineCode> automatically on
+          <InlineCode>deploy-build</InlineCode> runs <InlineCode>db:migrate</InlineCode> automatically on
           each deploy, so subsequent schema bumps apply themselves.
         </P>
       </Section>
@@ -125,8 +124,8 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
         <CodeBlock language="bash" code={deploySnippet} />
         <P>
           <InlineCode>vercel.json</InlineCode> sets <InlineCode>buildCommand</InlineCode> to{' '}
-          <InlineCode>bun run vercel-build</InlineCode>, which typechecks, builds the landing app, and
-          applies pending migrations.
+          <InlineCode>bun run deploy-build</InlineCode>, which typechecks, builds the landing app and
+          dashboard into one output, and applies pending migrations.
         </P>
 
         <H3>On another runtime</H3>
@@ -138,7 +137,7 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
             <InlineCode>apps/landing/dist/</InlineCode> — static landing page.
           </li>
           <li>
-            <InlineCode>apps/dashboard/dist/</InlineCode> — static dashboard SPA (build with{' '}
+            <InlineCode>apps/landing/dist/dashboard/</InlineCode> — static dashboard SPA (build with{' '}
             <InlineCode>bun run build:dashboard</InlineCode>).
           </li>
           <li>

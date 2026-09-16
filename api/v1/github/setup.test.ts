@@ -92,6 +92,7 @@ describe('api/v1/github/setup', () => {
     })
     expect(buildGitHubAuthorizeUrl).toHaveBeenCalledWith('setup-auth-state')
     expect(res.headers.Location).toBe('https://github.com/login/oauth/authorize?state=setup-auth-state')
+    expect(res.headers['Cache-Control']).toBe('no-store')
 
     res = mockRes()
     await call({ method: 'GET', query: { installationId: '99', installState: 'state' }, headers: {} }, res)

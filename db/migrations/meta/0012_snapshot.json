@@ -1,0 +1,1512 @@
+{
+  "id": "b9f78d67-7ab4-4b0b-b70e-d302c15200a8",
+  "prevId": "c714756e-ff20-411c-b54c-b1d9d4b85cf7",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.agent_presence": {
+      "name": "agent_presence",
+      "schema": "",
+      "columns": {
+        "share_id": {
+          "name": "share_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "summary": {
+          "name": "summary",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_seen_at": {
+          "name": "last_seen_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "agent_presence_share_seen_idx": {
+          "name": "agent_presence_share_seen_idx",
+          "columns": [
+            {
+              "expression": "share_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "last_seen_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "agent_presence_share_id_feedback_shares_id_fk": {
+          "name": "agent_presence_share_id_feedback_shares_id_fk",
+          "tableFrom": "agent_presence",
+          "tableTo": "feedback_shares",
+          "columnsFrom": [
+            "share_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "agent_presence_share_id_agent_id_pk": {
+          "name": "agent_presence_share_id_agent_id_pk",
+          "columns": [
+            "share_id",
+            "agent_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.comments": {
+      "name": "comments",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "url": {
+          "name": "url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "x": {
+          "name": "x",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "y": {
+          "name": "y",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "element": {
+          "name": "element",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "comment": {
+          "name": "comment",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'pending'"
+        },
+        "implementation_status": {
+          "name": "implementation_status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'unassigned'"
+        },
+        "claimed_by_agent_id": {
+          "name": "claimed_by_agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'public'"
+        },
+        "image_url": {
+          "name": "image_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "author_name": {
+          "name": "author_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "target_type": {
+          "name": "target_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'element_point'"
+        },
+        "anchor": {
+          "name": "anchor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "comments_project_created_idx": {
+          "name": "comments_project_created_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "comments_project_url_idx": {
+          "name": "comments_project_url_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "url",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "comments_project_status_idx": {
+          "name": "comments_project_status_idx",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "implementation_status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.feedback_events": {
+      "name": "feedback_events",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "feedback_events_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
+        },
+        "share_id": {
+          "name": "share_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment_id": {
+          "name": "comment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actor_type": {
+          "name": "actor_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "actor_id": {
+          "name": "actor_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "event_type": {
+          "name": "event_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "feedback_events_share_id_idx": {
+          "name": "feedback_events_share_id_idx",
+          "columns": [
+            {
+              "expression": "share_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "feedback_events_share_id_feedback_shares_id_fk": {
+          "name": "feedback_events_share_id_feedback_shares_id_fk",
+          "tableFrom": "feedback_events",
+          "tableTo": "feedback_shares",
+          "columnsFrom": [
+            "share_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "feedback_events_comment_id_comments_id_fk": {
+          "name": "feedback_events_comment_id_comments_id_fk",
+          "tableFrom": "feedback_events",
+          "tableTo": "comments",
+          "columnsFrom": [
+            "comment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.feedback_operation_keys": {
+      "name": "feedback_operation_keys",
+      "schema": "",
+      "columns": {
+        "share_id": {
+          "name": "share_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "idempotency_key": {
+          "name": "idempotency_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "feedback_event_id": {
+          "name": "feedback_event_id",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "feedback_operation_keys_share_id_feedback_shares_id_fk": {
+          "name": "feedback_operation_keys_share_id_feedback_shares_id_fk",
+          "tableFrom": "feedback_operation_keys",
+          "tableTo": "feedback_shares",
+          "columnsFrom": [
+            "share_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "feedback_operation_keys_feedback_event_id_feedback_events_id_fk": {
+          "name": "feedback_operation_keys_feedback_event_id_feedback_events_id_fk",
+          "tableFrom": "feedback_operation_keys",
+          "tableTo": "feedback_events",
+          "columnsFrom": [
+            "feedback_event_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "feedback_operation_keys_share_id_agent_id_idempotency_key_pk": {
+          "name": "feedback_operation_keys_share_id_agent_id_idempotency_key_pk",
+          "columns": [
+            "share_id",
+            "agent_id",
+            "idempotency_key"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.feedback_share_items": {
+      "name": "feedback_share_items",
+      "schema": "",
+      "columns": {
+        "share_id": {
+          "name": "share_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "comment_id": {
+          "name": "comment_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "feedback_share_items_share_id_feedback_shares_id_fk": {
+          "name": "feedback_share_items_share_id_feedback_shares_id_fk",
+          "tableFrom": "feedback_share_items",
+          "tableTo": "feedback_shares",
+          "columnsFrom": [
+            "share_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "feedback_share_items_comment_id_comments_id_fk": {
+          "name": "feedback_share_items_comment_id_comments_id_fk",
+          "tableFrom": "feedback_share_items",
+          "tableTo": "comments",
+          "columnsFrom": [
+            "comment_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "feedback_share_items_share_id_comment_id_pk": {
+          "name": "feedback_share_items_share_id_comment_id_pk",
+          "columns": [
+            "share_id",
+            "comment_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.feedback_shares": {
+      "name": "feedback_shares",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "project_id": {
+          "name": "project_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope_type": {
+          "name": "scope_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "scope_page_url": {
+          "name": "scope_page_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token_hash": {
+          "name": "access_token_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "access_token_ciphertext": {
+          "name": "access_token_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by": {
+          "name": "created_by",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expires_at": {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revoked_at": {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "feedback_shares_one_project_scope_per_project": {
+          "name": "feedback_shares_one_project_scope_per_project",
+          "columns": [
+            {
+              "expression": "project_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "scope_type = 'project' and revoked_at is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "feedback_shares_project_id_projects_public_key_fk": {
+          "name": "feedback_shares_project_id_projects_public_key_fk",
+          "tableFrom": "feedback_shares",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_id"
+          ],
+          "columnsTo": [
+            "public_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "feedback_shares_slug_unique": {
+          "name": "feedback_shares_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {
+        "feedback_shares_scope_type_check": {
+          "name": "feedback_shares_scope_type_check",
+          "value": "\"feedback_shares\".\"scope_type\" in ('page', 'selection', 'project')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.github_user_installations": {
+      "name": "github_user_installations",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "installation_id": {
+          "name": "installation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "github_account_id": {
+          "name": "github_account_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "github_account_login": {
+          "name": "github_account_login",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "github_account_type": {
+          "name": "github_account_type",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "last_verified_at": {
+          "name": "last_verified_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "github_user_installations_user_id_idx": {
+          "name": "github_user_installations_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "github_user_installations_user_installation_unique": {
+          "name": "github_user_installations_user_installation_unique",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "installation_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "github_user_installations_account_type_check": {
+          "name": "github_user_installations_account_type_check",
+          "value": "\"github_user_installations\".\"github_account_type\" in ('User', 'Organization')"
+        }
+      },
+      "isRLSEnabled": true
+    },
+    "public.notifications": {
+      "name": "notifications",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "read_at": {
+          "name": "read_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "notifications_user_created_idx": {
+          "name": "notifications_user_created_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": false,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "notifications_unread_comment_activity_project_idx": {
+          "name": "notifications_unread_comment_activity_project_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "((payload->>'projectKey'))",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"notifications\".\"kind\" = 'comment.activity' and \"notifications\".\"read_at\" is null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "notifications_kind_check": {
+          "name": "notifications_kind_check",
+          "value": "\"notifications\".\"kind\" in ('invite.received', 'invite.accepted', 'invite.declined', 'comment.activity') and (\"notifications\".\"kind\" <> 'comment.activity' or nullif(btrim(\"notifications\".\"payload\"->>'projectKey'), '') is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.project_comment_email_cooldowns": {
+      "name": "project_comment_email_cooldowns",
+      "schema": "",
+      "columns": {
+        "project_key": {
+          "name": "project_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "pending_count": {
+          "name": "pending_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cooldown_until": {
+          "name": "cooldown_until",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "project_comment_email_cooldowns_project_key_projects_public_key_fk": {
+          "name": "project_comment_email_cooldowns_project_key_projects_public_key_fk",
+          "tableFrom": "project_comment_email_cooldowns",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_key"
+          ],
+          "columnsTo": [
+            "public_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.project_invites": {
+      "name": "project_invites",
+      "schema": "",
+      "columns": {
+        "project_key": {
+          "name": "project_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'member'"
+        },
+        "invited_by": {
+          "name": "invited_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "project_invites_email_idx": {
+          "name": "project_invites_email_idx",
+          "columns": [
+            {
+              "expression": "email",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "project_invites_project_key_projects_public_key_fk": {
+          "name": "project_invites_project_key_projects_public_key_fk",
+          "tableFrom": "project_invites",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_key"
+          ],
+          "columnsTo": [
+            "public_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "project_invites_project_key_email_pk": {
+          "name": "project_invites_project_key_email_pk",
+          "columns": [
+            "project_key",
+            "email"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "project_invites_role_check": {
+          "name": "project_invites_role_check",
+          "value": "\"project_invites\".\"role\" in ('admin', 'member')"
+        },
+        "project_invites_email_lower_check": {
+          "name": "project_invites_email_lower_check",
+          "value": "\"project_invites\".\"email\" = lower(\"project_invites\".\"email\")"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.project_members": {
+      "name": "project_members",
+      "schema": "",
+      "columns": {
+        "project_key": {
+          "name": "project_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "role": {
+          "name": "role",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "project_members_user_id_idx": {
+          "name": "project_members_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "project_members_project_key_projects_public_key_fk": {
+          "name": "project_members_project_key_projects_public_key_fk",
+          "tableFrom": "project_members",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_key"
+          ],
+          "columnsTo": [
+            "public_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "project_members_project_key_user_id_pk": {
+          "name": "project_members_project_key_user_id_pk",
+          "columns": [
+            "project_key",
+            "user_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "project_members_role_check": {
+          "name": "project_members_role_check",
+          "value": "\"project_members\".\"role\" in ('admin', 'member')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.project_repo_configs": {
+      "name": "project_repo_configs",
+      "schema": "",
+      "columns": {
+        "project_key": {
+          "name": "project_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "repo_url": {
+          "name": "repo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "github_owner": {
+          "name": "github_owner",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "github_repo": {
+          "name": "github_repo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "github_installation_id": {
+          "name": "github_installation_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "github_connection_version": {
+          "name": "github_connection_version",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "local_path": {
+          "name": "local_path",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "default_branch": {
+          "name": "default_branch",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'main'"
+        },
+        "install_command": {
+          "name": "install_command",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "dev_command": {
+          "name": "dev_command",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "test_command": {
+          "name": "test_command",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "build_command": {
+          "name": "build_command",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "agent_instructions": {
+          "name": "agent_instructions",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "project_repo_configs_project_key_projects_public_key_fk": {
+          "name": "project_repo_configs_project_key_projects_public_key_fk",
+          "tableFrom": "project_repo_configs",
+          "tableTo": "projects",
+          "columnsFrom": [
+            "project_key"
+          ],
+          "columnsTo": [
+            "public_key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.projects": {
+      "name": "projects",
+      "schema": "",
+      "columns": {
+        "public_key": {
+          "name": "public_key",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "slug": {
+          "name": "slug",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "allowed_origins": {
+          "name": "allowed_origins",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'"
+        },
+        "claimable": {
+          "name": "claimable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "projects_slug_unique": {
+          "name": "projects_slug_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "slug"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.super_admins": {
+      "name": "super_admins",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {
+    "public.admin_project_metrics": {
+      "columns": {
+        "public_key": {
+          "name": "public_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimable": {
+          "name": "claimable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "comment_count": {
+          "name": "comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pending_comment_count": {
+          "name": "pending_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "accepted_comment_count": {
+          "name": "accepted_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "rejected_comment_count": {
+          "name": "rejected_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "unassigned_comment_count": {
+          "name": "unassigned_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "claimed_comment_count": {
+          "name": "claimed_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "in_progress_comment_count": {
+          "name": "in_progress_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "blocked_comment_count": {
+          "name": "blocked_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "done_comment_count": {
+          "name": "done_comment_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "feedback_share_count": {
+          "name": "feedback_share_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "commented_url_count": {
+          "name": "commented_url_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "first_comment_at": {
+          "name": "first_comment_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "last_comment_at": {
+          "name": "last_comment_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "definition": "\n    with comment_metrics as (\n      select project_id,\n        count(*)::bigint as comment_count,\n        count(*) filter (where status is null or status not in ('approved', 'accepted', 'rejected'))::bigint as pending_comment_count,\n        count(*) filter (where status in ('approved', 'accepted'))::bigint as accepted_comment_count,\n        count(*) filter (where status = 'rejected')::bigint as rejected_comment_count,\n        count(*) filter (where implementation_status is null or implementation_status = 'unassigned')::bigint as unassigned_comment_count,\n        count(*) filter (where implementation_status = 'claimed')::bigint as claimed_comment_count,\n        count(*) filter (where implementation_status = 'in_progress')::bigint as in_progress_comment_count,\n        count(*) filter (where implementation_status = 'blocked')::bigint as blocked_comment_count,\n        count(*) filter (where implementation_status = 'done')::bigint as done_comment_count,\n        count(distinct url)::bigint as commented_url_count,\n        min(created_at) as first_comment_at,\n        max(created_at) as last_comment_at\n      from \"comments\"\n      group by project_id\n    ), share_metrics as (\n      select project_id, count(*)::bigint as feedback_share_count\n      from \"feedback_shares\"\n      group by project_id\n    )\n    select p.public_key, p.name, p.claimable, p.created_at,\n      cm.comment_count, cm.pending_comment_count, cm.accepted_comment_count,\n      cm.rejected_comment_count, cm.unassigned_comment_count,\n      cm.claimed_comment_count, cm.in_progress_comment_count,\n      cm.blocked_comment_count, cm.done_comment_count,\n      coalesce(sm.feedback_share_count, 0)::bigint as feedback_share_count,\n      cm.commented_url_count, cm.first_comment_at, cm.last_comment_at\n    from \"projects\" p\n    join comment_metrics cm on cm.project_id = p.public_key\n    left join share_metrics sm on sm.project_id = p.public_key\n  ",
+      "name": "admin_project_metrics",
+      "schema": "public",
+      "isExisting": false,
+      "with": {
+        "securityInvoker": true
+      },
+      "materialized": false
+    },
+    "public.admin_user_metrics": {
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "admin_project_count": {
+          "name": "admin_project_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "member_project_count": {
+          "name": "member_project_count",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "super_admin": {
+          "name": "super_admin",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "definition": "\n    with user_ids as (\n      select user_id from \"project_members\"\n      union\n      select user_id from \"super_admins\"\n    )\n    select u.user_id,\n      count(pm.project_key) filter (where pm.role = 'admin')::bigint as admin_project_count,\n      count(pm.project_key) filter (where pm.role = 'member')::bigint as member_project_count,\n      (sa.user_id is not null) as super_admin\n    from user_ids u\n    left join \"project_members\" pm on pm.user_id = u.user_id\n    left join \"super_admins\" sa on sa.user_id = u.user_id\n    group by u.user_id, sa.user_id\n  ",
+      "name": "admin_user_metrics",
+      "schema": "public",
+      "isExisting": false,
+      "with": {
+        "securityInvoker": true
+      },
+      "materialized": false
+    }
+  },
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

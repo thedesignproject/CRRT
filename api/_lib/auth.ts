@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getBearerToken, getReviewerToken, jsonError } from './http.js'
-import { isProjectMember } from './store.js'
+import { getProjectMember } from './store.js'
 import { getServiceSupabase, getSupabase } from './supabase.js'
+import { canProject, effectiveProjectRole, type ProjectCapability, type ProjectRole } from './project-capabilities.js'
 
 export type AuthenticatedUser = { userId: string; email: string }
 
@@ -17,14 +18,55 @@ export async function requireProjectMembership(
   user: AuthenticatedUser,
   projectKey: string,
 ): Promise<boolean> {
+  return Boolean(await requireProjectCapability(req, res, user, projectKey, 'feedback:read'))
+}
+
+export async function requireProjectCapability(
+  req: VercelRequest,
+  res: VercelResponse,
+  user: AuthenticatedUser,
+  projectKey: string,
+  capability: ProjectCapability,
+): Promise<{ role: ProjectRole } | null> {
   try {
-    if (await isProjectMember(user.userId, projectKey)) return true
+    const membership = await getProjectMember(user.userId, projectKey)
+    if (membership) {
+      const role = effectiveProjectRole(membership.role, membership.isOwner)
+      if (canProject(role, capability)) return { role }
+    }
   } catch {
     jsonError(req, res, 500, 'Membership check failed')
-    return false
+    return null
   }
   jsonError(req, res, 403, 'Forbidden')
-  return false
+  return null
+}
+
+export async function requireProjectCommentCapability(
+  req: VercelRequest,
+  res: VercelResponse,
+  user: AuthenticatedUser,
+  comment: { projectId: string; visibility?: 'shared' | 'internal' },
+  capability: ProjectCapability,
+): Promise<{ role: ProjectRole } | null> {
+  try {
+    const membership = await getProjectMember(user.userId, comment.projectId)
+    if (!membership) {
+      jsonError(req, res, 403, 'Forbidden')
+      return null
+    }
+    const role = effectiveProjectRole(membership.role, membership.isOwner)
+    if (role === 'guest' && comment.visibility === 'internal') {
+      jsonError(req, res, 404, 'Comment not found')
+      return null
+    }
+    if (canProject(role, capability)) return { role }
+  } catch {
+    jsonError(req, res, 500, 'Membership check failed')
+    return null
+  }
+  jsonError(req, res, 403, 'Forbidden')
+  return null
 }
 
 export function requireReviewer(req: VercelRequest, res: VercelResponse) {

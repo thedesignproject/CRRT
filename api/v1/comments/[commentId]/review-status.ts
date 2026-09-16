@@ -1,8 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { waitUntil } from '@vercel/functions'
+import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createFeedbackEvent, findActiveSharesForComment, getComment, updateReviewStatus } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import type { ReviewStatus } from '../../../_lib/status.js'
+import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 
 const VALID_STATUSES = new Set<ReviewStatus>(['open', 'accepted', 'rejected'])
 
@@ -23,9 +25,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const existing = await getComment(commentId)
     if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
-    if (!(await requireProjectMembership(req, res, user, existing.projectId))) return
+    if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
 
-    const comment = await updateReviewStatus(commentId, reviewStatus)
+    const comment = await updateReviewStatus(existing.projectId, commentId, reviewStatus)
+    if (reviewStatus === 'rejected') {
+      waitUntil(closeLinkedExternalWork(existing.projectId, commentId, comment.updatedAt).catch(() => undefined))
+    }
     const activeShares = await findActiveSharesForComment(commentId)
     await Promise.all(activeShares.map((share) => createFeedbackEvent({
       shareId: share.id,
@@ -42,4 +47,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }
-

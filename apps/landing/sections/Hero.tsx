@@ -6,9 +6,9 @@ import { PIN_GRADIENT } from '@widget/components/FeedbackWidget/constants'
 
 // In dev the dashboard runs on its own Vite port; in prod we route /dashboard
 // from the landing deploy (see vercel.json rewrite — TODO when ready).
-const DASHBOARD_HREF = import.meta.env.DEV ? 'http://localhost:5173' : '/dashboard'
+export const DASHBOARD_HREF = import.meta.env.DEV ? 'http://localhost:5173' : '/dashboard'
 
-export function Hero() {
+export function Hero({ authenticated }: { authenticated: boolean }) {
   return (
     <section
       className="scanlines relative"
@@ -32,18 +32,19 @@ export function Hero() {
         }}
       >
         <Wordmark level="nav" />
-        <div className="flex items-center gap-6 text-[13px]" style={{ color: 'var(--crrt-ink-faint)' }}>
+        <div className="landing-nav-links flex items-center gap-6 text-[13px]" style={{ color: 'var(--crrt-ink-faint)' }}>
           <a
             href="https://github.com/thedesignproject/CRRT"
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-white transition-colors"
+            className="landing-nav-secondary hover:text-white transition-colors"
           >
             GitHub
           </a>
-          <a href="#install" className="hover:text-white transition-colors">Install</a>
+          <a href="#audit" className="hover:text-white transition-colors">Audit</a>
+          <a href="#install" className="landing-nav-secondary hover:text-white transition-colors">Install</a>
           <PillButton variant="carrot" size="sm" withCarrot={false} onClick={() => { window.location.href = DASHBOARD_HREF }}>
-            Sign up →
+            {authenticated ? 'Dashboard →' : 'Sign up →'}
           </PillButton>
         </div>
       </nav>

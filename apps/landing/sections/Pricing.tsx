@@ -20,7 +20,7 @@ export function Pricing() {
       <div ref={reveal.ref} className={`mx-auto ${reveal.className}`} style={{ maxWidth: 1120 }}>
         {/* Eyebrow */}
         <div className="flex items-center gap-3" style={{ marginBottom: 24 }}>
-          <span className="section-marker">/ 05 pricing</span>
+          <span className="section-marker">/ 06 pricing</span>
           <span style={{ width: 40, height: 1, background: 'var(--crrt-rule-dark)' }} />
           <span className="phosphor-eyebrow">no card. no signup.</span>
         </div>

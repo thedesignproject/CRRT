@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { getDisplayStatus, isInactive } from '../lib/comment'
 import { timeAgo } from '../lib/format'
@@ -5,9 +6,19 @@ import type { Comment, StatusFilter } from '../lib/types'
 import { ChatIcon, CheckboxIcon } from './icons'
 import { Spinner, StatusBadge } from './primitives'
 
-type Counts = { all: number; open: number; ready: number; done: number; rejected: number }
+type Counts = { all: number; open: number; ready: number; ready_for_testing: number; done: number; rejected: number }
+
+const FILTER_LABELS: Record<StatusFilter, string> = {
+  all: 'All',
+  open: 'Open',
+  ready: 'Agent',
+  ready_for_testing: 'Testing',
+  done: 'Done',
+}
 
 interface CommentListProps {
+  personal?: false
+  readOnly?: boolean
   filteredComments: Comment[]
   counts: Counts
   statusFilter: StatusFilter
@@ -25,72 +36,62 @@ interface CommentListProps {
   setSelectedCommentId: (id: string) => void
 }
 
-export function CommentList({
-  filteredComments,
-  counts,
-  statusFilter,
-  selectFilter,
-  bulkMode,
-  enterBulkMode,
-  exitBulkMode,
-  bulkSelectedIds,
-  toggleSelectAllVisible,
-  applyBulkAction,
-  toggleBulkSelect,
-  commentsLoading,
-  commentsError,
-  selectedCommentId,
-  setSelectedCommentId,
-}: CommentListProps) {
+type PersonalListProps = Pick<CommentListProps, 'filteredComments' | 'counts' | 'commentsLoading' | 'commentsError' | 'selectedCommentId' | 'setSelectedCommentId'> & { personal: true; footer?: ReactNode }
+const EMPTY_SELECTION = new Set<string>()
+
+export function CommentList(props: CommentListProps | PersonalListProps) {
+  const { filteredComments, counts, commentsLoading, commentsError, selectedCommentId, setSelectedCommentId } = props
+  const controls = props.personal || props.readOnly ? null : props
+  const bulkMode = controls?.bulkMode ?? false
+  const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   return (
-    <div className="w-[400px] shrink-0 flex flex-col border-r border-border bg-card">
+    <div className={cn('w-full md:w-[400px] shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
       <div className="px-4 pt-4 pb-2.5 border-b border-border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-bold text-foreground tracking-tight">
-            {counts.all} Feedback Items
+            {counts.all} {props.personal ? 'My Comments' : 'Feedback Items'}
           </h2>
-          <button
-            onClick={() => bulkMode ? exitBulkMode() : enterBulkMode()}
+          {controls && <button
+            onClick={() => bulkMode ? controls.exitBulkMode() : controls.enterBulkMode()}
             className={cn(
               'text-[11px] font-medium transition-colors flex items-center gap-1',
               bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
             <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
-          </button>
+          </button>}
         </div>
-        <div className="flex gap-1">
-          {(['all', 'open', 'ready', 'done'] as StatusFilter[]).map((f) => {
+        {controls && <div className="grid grid-cols-5 gap-1 pb-1">
+          {(['all', 'open', 'ready', 'ready_for_testing', 'done'] as StatusFilter[]).map((f) => {
             const count = counts[f as keyof Counts] ?? 0
-            const label = f === 'all' ? 'All' : f === 'open' ? 'Open' : f === 'ready' ? 'Ready for Agent' : 'Done'
             return (
               <button
                 key={f}
-                onClick={() => selectFilter(f)}
+                onClick={() => controls.selectFilter(f)}
                 className={cn(
-                  'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all',
-                  statusFilter === f
+                  'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
+                  controls.statusFilter === f
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                 )}
               >
-                {label}
+                {FILTER_LABELS[f]}
                 <span className={cn(
-                  'ml-1.5 text-[10px] font-bold min-w-[18px] text-center py-0.5 px-1 rounded-full',
-                  statusFilter === f
+                  'ml-1 text-[10px] font-bold min-w-[18px] text-center py-0.5 px-0.5 rounded-full',
+                  controls.statusFilter === f
                     ? 'bg-primary-foreground/20 text-primary-foreground'
                     : 'bg-muted text-muted-foreground/60'
                 )}>{count}</span>
               </button>
             )
           })}
-        </div>
+        </div>}
       </div>
 
-      {bulkMode && (
+      {controls && bulkMode && (
         <div className="px-4 py-2.5 border-b border-border border-l-2 border-l-primary/40 bg-card flex items-center gap-2 whitespace-nowrap">
           <button
-            onClick={toggleSelectAllVisible}
+            onClick={controls.toggleSelectAllVisible}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
           >
             {filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id)) ? 'Deselect all' : 'Select all'}
@@ -101,21 +102,21 @@ export function CommentList({
           <div className="flex-1" />
           <button
             disabled={bulkSelectedIds.size === 0}
-            onClick={() => applyBulkAction('ready')}
+            onClick={() => controls.applyBulkAction('ready')}
             className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-accepted-bg text-status-accepted hover:bg-status-accepted hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
           >
             Ready
           </button>
           <button
             disabled={bulkSelectedIds.size === 0}
-            onClick={() => applyBulkAction('done')}
+            onClick={() => controls.applyBulkAction('done')}
             className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-done-bg text-status-done hover:bg-status-done hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
           >
             Done
           </button>
           <button
             disabled={bulkSelectedIds.size === 0}
-            onClick={() => applyBulkAction('reject')}
+            onClick={() => controls.applyBulkAction('reject')}
             className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-rejected-bg text-status-rejected hover:bg-status-rejected hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
           >
             Reject
@@ -140,7 +141,7 @@ export function CommentList({
               <ChatIcon className="text-muted-foreground" />
             </div>
             <p className="text-sm font-semibold text-foreground mb-1">No comments</p>
-            <p className="text-xs text-muted-foreground">Nothing here yet for this filter.</p>
+            <p className="text-xs text-muted-foreground">{props.personal ? 'No extension comments yet.' : 'Nothing here yet for this filter.'}</p>
           </div>
         ) : (
           <div className="animate-stagger">
@@ -150,6 +151,7 @@ export function CommentList({
               const inactive = isInactive(comment)
               const statusBar =
                 comment.implementationStatus === 'done' ? 'bg-status-done' :
+                comment.implementationStatus === 'ready_for_testing' ? 'bg-status-ready-for-testing' :
                 comment.reviewStatus === 'accepted' ? 'bg-status-accepted' :
                 comment.reviewStatus === 'rejected' ? 'bg-status-rejected' :
                 null
@@ -157,7 +159,7 @@ export function CommentList({
               return (
                 <button
                   key={comment.id}
-                  onClick={() => bulkMode ? toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
+                  onClick={() => controls && bulkMode ? controls.toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
                   className={cn(
                     'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
                     isActive && !bulkMode ? 'border-l-primary bg-white/[0.04] ring-1 ring-inset ring-border' : 'border-l-transparent',
@@ -203,7 +205,18 @@ export function CommentList({
                   </p>
 
                   <div className="flex items-center gap-1.5 pl-[26px] flex-wrap">
-                    <StatusBadge comment={comment} />
+                    {!props.personal && <StatusBadge comment={comment} />}
+                    {!props.personal && (
+                      <span className={cn(
+                        'rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                        comment.visibility === 'internal'
+                          ? 'bg-muted text-muted-foreground'
+                          : 'bg-primary/10 text-primary',
+                      )}>
+                        {comment.visibility ?? 'shared'}
+                      </span>
+                    )}
+                    {props.personal && <span className="text-[10px] text-muted-foreground truncate" title={comment.pageUrl ?? ''}>{comment.pageUrl}</span>}
                     {comment.claimedByAgentId && (
                       <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-in-progress">
                         <span className="w-1.5 h-1.5 rounded-full bg-status-in-progress animate-pulse-dot" />
@@ -216,7 +229,7 @@ export function CommentList({
                       </span>
                     ) : (
                       <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto truncate max-w-[140px]">
-                        {comment.selector.split(' > ').pop()}
+                        {comment.selector?.split(' > ').pop() || 'No page context'}
                       </span>
                     )}
                   </div>
@@ -233,6 +246,7 @@ export function CommentList({
           </div>
         )}
       </div>
+      {props.personal && props.footer}
     </div>
   )
 }

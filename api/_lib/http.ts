@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-const DEFAULT_HEADERS = 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token'
+const DEFAULT_HEADERS = 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token'
 
 function safeSetHeader(res: VercelResponse, key: string, value: string) {
   if (typeof res.setHeader === 'function') {
@@ -34,7 +34,7 @@ export function methodNotAllowed(req: VercelRequest, res: VercelResponse, method
 }
 
 export function jsonError(req: VercelRequest, res: VercelResponse, status: number, error: string) {
-  setCors(req, res, ['GET', 'POST', 'PATCH', 'OPTIONS'])
+  setCors(req, res, ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
   return res.status(status).json({ error })
 }
 

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../_lib/auth.js', () => ({
   requireUser: vi.fn(),
-  requireProjectMembership: vi.fn(),
+  requireProjectCapability: vi.fn(),
 }))
 vi.mock('../../../_lib/store.js', () => ({
   getProject: vi.fn(),
@@ -19,7 +19,7 @@ vi.mock('../../../_lib/tokens.js', () => ({
 }))
 
 import handler from './prompt.js'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { getProject, getRepoConfig, getShareById, rotateShareToken } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
 import { decryptToken } from '../../../_lib/tokens.js'
@@ -42,7 +42,7 @@ const SHARE = { id: 's', projectId: 'p', slug: 'sl', scopePageUrl: null, accessT
 beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
   vi.mocked(requireUser).mockReset()
-  vi.mocked(requireProjectMembership).mockReset()
+  vi.mocked(requireProjectCapability).mockReset()
   vi.mocked(getShareById).mockReset()
   vi.mocked(getProject).mockReset()
   vi.mocked(getRepoConfig).mockReset()
@@ -73,16 +73,16 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     expect(res.statusCode).toBe(404)
 
     vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never)
-    vi.mocked(requireProjectMembership).mockImplementationOnce(async (_q, r) => {
+    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_q, r) => {
       r.status(403).json({ error: 'Forbidden' })
-      return false
+      return null
     })
     res = mockRes()
     await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
 
     vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never)
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
     vi.mocked(getProject).mockResolvedValueOnce(null)
     res = mockRes()
     await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
@@ -92,7 +92,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
   it('returns the prompt on success; 500 on store throw', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never)
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
     vi.mocked(getProject).mockResolvedValueOnce({ publicKey: 'p', name: 'P' } as never)
     vi.mocked(getRepoConfig).mockResolvedValueOnce(null)
 
@@ -114,7 +114,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
   it('self-heals a legacy share on decrypt failure: rotates and builds the prompt with the fresh token', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never)
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
     vi.mocked(getProject).mockResolvedValueOnce({ publicKey: 'p', name: 'P' } as never)
     vi.mocked(getRepoConfig).mockResolvedValueOnce(null)
     vi.mocked(decryptToken).mockImplementationOnce(() => {
@@ -147,7 +147,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     vi.mocked(getShareById)
       .mockResolvedValueOnce(SHARE as never)
       .mockResolvedValueOnce(winningShare as never)
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
     vi.mocked(getProject).mockResolvedValueOnce({ publicKey: 'p', name: 'P' } as never)
     vi.mocked(getRepoConfig).mockResolvedValueOnce(null)
     vi.mocked(decryptToken)
@@ -169,7 +169,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
   it('returns a clean 410 when rotation itself fails', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never)
-    vi.mocked(requireProjectMembership).mockResolvedValueOnce(true)
+    vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
     vi.mocked(getProject).mockResolvedValueOnce({ publicKey: 'p', name: 'P' } as never)
     vi.mocked(getRepoConfig).mockResolvedValueOnce(null)
     vi.mocked(decryptToken).mockImplementationOnce(() => {

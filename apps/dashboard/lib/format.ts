@@ -39,6 +39,8 @@ export function describeEvent(ev: FeedbackEvent): { kind: 'done' | 'claim' | 'fi
       return { kind: 'other', text: `${actor} note${note ? ` · ${note}` : ''}` }
     case 'comment.blocked':
       return { kind: 'other', text: `${actor} blocked${note ? ` · ${note}` : ''}` }
+    case 'comment.ready_for_testing':
+      return { kind: 'done', text: `${actor} ready for testing${summary ? ` · ${summary}` : ''}` }
     case 'comment.completed':
       return { kind: 'done', text: `${actor} done${summary ? ` · ${summary}` : ''}` }
     case 'comment.reopened':
@@ -84,6 +86,8 @@ The widget injects a floating pin tool. Reviewers click anywhere on the page to 
 Use these exact config values:
 - apiBase:   ${apiBase}
 - projectId: ${projectId}
+
+If the app already owns light/dark theme state, pass it to the optional theme prop. Use theme="system" only when the widget should follow the browser's preferred color scheme. Omit theme to preserve the default dark appearance.
 
 Follow the codebase's existing conventions (TypeScript, formatter, project structure). Don't refactor unrelated code.`
 }

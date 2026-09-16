@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_API_BASE?: string
   readonly VITE_PROJECT_KEY?: string
+  readonly VITE_PROJECT_ID?: string
 }
 
 interface ImportMeta {

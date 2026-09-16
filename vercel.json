@@ -1,16 +1,28 @@
 {
-  "buildCommand": "bun run vercel-build",
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "bunx bun@1.4.0 run deploy-build",
+  "installCommand": "bunx bun@1.4.0 install --frozen-lockfile",
   "devCommand": "vite --config apps/landing/vite.config.ts --port $PORT",
   "outputDirectory": "apps/landing/dist",
+  "git": {
+    "deploymentEnabled": false
+  },
   "functions": {
     "api/**/*.ts": {
       "memory": 128,
-      "maxDuration": 10
+      "maxDuration": 60
     }
   },
+  "crons": [
+    {
+      "path": "/api/v1/extension/auth/cleanup",
+      "schedule": "17 3 * * *"
+    }
+  ],
   "rewrites": [
     { "source": "/d/:slug", "destination": "/index.html" },
-    { "source": "/docs/:path*", "destination": "/index.html" },
+    { "source": "/privacy", "destination": "/index.html" },
+    { "source": "/support", "destination": "/index.html" },
     { "source": "/dashboard", "destination": "/dashboard/index.html" },
     { "source": "/dashboard/:path*", "destination": "/dashboard/index.html" }
   ],

@@ -1,10 +1,65 @@
 import type { TextRangeAnchor } from '../../lib/textAnchor'
+import type { ScreenshotFocusRect } from '../../lib/screenshotCapture'
 
 export interface FeedbackWidgetProps {
   projectId: string
   apiBase?: string
+  /** Visual theme. `system` follows the browser's preferred color scheme. */
+  theme?: 'light' | 'dark' | 'system'
   /** When true, the widget renders nothing and registers no listeners. */
   disabled?: boolean
+  /** Private, account-owned comments supplied by the browser extension. */
+  personalComments?: PersonalComments
+  /** Signed-in extension identity; never taken from the visited website. */
+  viewerEmail?: string
+  /** Page interaction supplied by an isolated browser-extension frame. */
+  page?: WidgetPage
+}
+
+export interface WidgetPage {
+  url: string
+  width: number
+  height: number
+  scrollX: number
+  scrollY: number
+  target?: ClickTarget
+  liveIds: string[]
+  embeddedProjectIds?: string[]
+  capture(focus: ScreenshotFocusRect | null): Promise<Blob | null>
+  selecting(value: boolean): void
+  track(comments: { id: string; selector: string; x: number; y: number }[]): void
+  highlight(selector: string): void
+  focusEmbedded?(projectId: string): void
+  /** Hide the browser-extension surface for the current tab. */
+  hide?(): void
+}
+
+export interface PersonalComments {
+  /** Sidebar label for this authenticated extension context. */
+  label?: string
+  /** Visible project audience. Guests receive a locked shared audience. */
+  audience?: {
+    value: 'shared' | 'internal'
+    canChoose: boolean
+    onChange?: (visibility: 'shared' | 'internal') => void
+  }
+  /** Optional project-wide list scope. Pins always remain scoped to the current page. */
+  scope?: {
+    value: 'page' | 'project'
+    onChange(value: 'page' | 'project'): void
+  }
+  /** Manual external-tracker handoff for authorized project members. */
+  externalWork?: {
+    providers: Array<'github' | 'linear' | 'jira'>
+    prepare(provider: 'github' | 'linear' | 'jira', commentId: string): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
+    send(provider: 'github' | 'linear' | 'jira', commentId: string, draft: { title: string; body: string }): Promise<{ issueUrl: string }>
+  }
+  /** Return false when the extension opens sign-in instead of the launcher. */
+  beforeOpen?(): Promise<boolean>
+  list(pageUrl: string): Promise<Comment[]>
+  create(payload: Record<string, unknown>): Promise<Comment>
+  update(id: string, body: string): Promise<unknown>
+  remove(id: string): Promise<void>
 }
 
 export type Mode = 'idle' | 'selecting' | 'commenting'
@@ -29,6 +84,9 @@ export interface Comment {
   selector: string
   body: string
   reviewStatus: ReviewStatus
+  visibility?: 'shared' | 'internal'
+  /** Authenticated adapters can mark feedback from other authors as read-only. */
+  editable?: boolean
   imageUrl?: string | null
   createdAt: string
   authorName?: string

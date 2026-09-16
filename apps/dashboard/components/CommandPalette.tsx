@@ -15,6 +15,7 @@ const CMD_ACTIONS: CmdItem[] = [
   { id: 'filter-all', type: 'action', label: 'Filter: All', detail: '', icon: 'filter' },
   { id: 'filter-open', type: 'action', label: 'Filter: Open', detail: '', icon: 'filter' },
   { id: 'filter-ready', type: 'action', label: 'Filter: Ready for Agent', detail: '', icon: 'filter' },
+  { id: 'filter-ready-for-testing', type: 'action', label: 'Filter: Ready for testing', detail: '', icon: 'filter' },
   { id: 'filter-done', type: 'action', label: 'Filter: Done', detail: '', icon: 'filter' },
 ]
 
@@ -24,9 +25,19 @@ interface CommandPaletteProps {
   onSelect: (commentId: string) => void
   onAction: (action: string) => void
   selectedCommentId: string
+  canManageFeedback?: boolean
+  canOperateAgent?: boolean
 }
 
-export function CommandPalette({ onClose, comments, onSelect, onAction, selectedCommentId }: CommandPaletteProps) {
+export function CommandPalette({
+  onClose,
+  comments,
+  onSelect,
+  onAction,
+  selectedCommentId,
+  canManageFeedback = true,
+  canOperateAgent = true,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -46,8 +57,8 @@ export function CommandPalette({ onClose, comments, onSelect, onAction, selected
         return (
           c.body.toLowerCase().includes(q) ||
           c.author.toLowerCase().includes(q) ||
-          c.selector.toLowerCase().includes(q) ||
-          c.pageUrl.toLowerCase().includes(q)
+          c.selector?.toLowerCase().includes(q) ||
+          c.pageUrl?.toLowerCase().includes(q)
         )
       })
       .slice(0, 8)
@@ -55,16 +66,21 @@ export function CommandPalette({ onClose, comments, onSelect, onAction, selected
         id: c.id,
         type: 'comment',
         label: c.body.length > 80 ? c.body.slice(0, 80) + '…' : c.body,
-        detail: `${c.author} · ${truncateUrl(c.pageUrl)}`,
+        detail: c.pageUrl ? `${c.author} · ${truncateUrl(c.pageUrl)}` : c.author,
         icon: 'comment',
       }))
 
+    const allowedActions = CMD_ACTIONS.filter((action) => {
+      if (['accept', 'done', 'reject'].includes(action.id)) return canManageFeedback
+      if (action.id === 'toggle-sidebar') return canOperateAgent
+      return true
+    })
     const matchedActions = q
-      ? CMD_ACTIONS.filter((a) => a.label.toLowerCase().includes(q))
-      : CMD_ACTIONS
+      ? allowedActions.filter((a) => a.label.toLowerCase().includes(q))
+      : allowedActions
 
     return q ? [...matchedComments, ...matchedActions] : [...matchedActions, ...matchedComments]
-  }, [query, comments])
+  }, [query, comments, canManageFeedback, canOperateAgent])
 
   useEffect(() => {
     const list = listRef.current

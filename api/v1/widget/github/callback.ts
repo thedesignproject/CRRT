@@ -3,9 +3,17 @@ import {
   assertGitHubUserInstallationAccess,
   createGitHubAppInstallationToken,
   listUserInstallationRepositories,
+  verifyGitHubAppReuseAuthState,
   verifyGitHubAppSetupAuthState,
 } from '../../../_lib/github-app.js'
-import { getRepoConfig } from '../../../_lib/store.js'
+import {
+  deleteGitHubUserInstallation,
+  getGithubConnectionVersion,
+  getGitHubUserInstallation,
+  getProjectMember,
+  getRepoConfig,
+  upsertGitHubUserInstallation,
+} from '../../../_lib/store.js'
 import {
   assertGitHubRepoAccess,
   createWidgetAuthToken,
@@ -18,21 +26,46 @@ import { getStringQuery, handleOptions, jsonError, methodNotAllowed } from '../.
 
 function html(res: VercelResponse, body: string) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
   return res.status(200).send(body)
 }
 
 async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, state: string) {
-  const verifiedState = verifyGitHubAppSetupAuthState(state)
+  const setupState = verifyGitHubAppSetupAuthState(state)
+  const reuseState = setupState ? null : verifyGitHubAppReuseAuthState(state)
+  const verifiedState = setupState ?? reuseState
   if (!verifiedState) return false
 
   try {
+    const membership = await getProjectMember(verifiedState.userId, verifiedState.projectKey)
+    if (membership?.role !== 'admin') throw new Error('github_app_install_forbidden')
+
+    const existing = reuseState
+      ? await getGitHubUserInstallation(reuseState.userId, reuseState.installationRef)
+      : null
+    const installationId = setupState?.installationId ?? existing?.installationId
+    if (!installationId) throw new Error('github_installation_inaccessible')
+
     const accessToken = await exchangeGitHubCode(code)
-    await assertGitHubUserInstallationAccess(accessToken, verifiedState.installationId)
-    const repositories = await listUserInstallationRepositories(accessToken, verifiedState.installationId)
+    const account = await assertGitHubUserInstallationAccess(accessToken, installationId)
+    await upsertGitHubUserInstallation({
+      userId: verifiedState.userId,
+      installationId,
+      githubAccountId: account.id,
+      githubAccountLogin: account.login,
+      githubAccountType: account.type,
+    })
+    const repositories = await listUserInstallationRepositories(accessToken, installationId)
+    const expectedConnectionVersion = await getGithubConnectionVersion(verifiedState.projectKey)
     const installationToken = createGitHubAppInstallationToken({
       projectKey: verifiedState.projectKey,
       userId: verifiedState.userId,
-      installationId: verifiedState.installationId,
+      installationId,
+      expectedConnectionVersion,
     })
 
     html(res, widgetCallbackHtml(verifiedState.origin, {
@@ -41,20 +74,34 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
       projectKey: verifiedState.projectKey,
       installationToken,
       repositories,
+      githubAccountLogin: account.login,
+      githubAccountType: account.type,
     }))
     return true
   } catch (error) {
+    if (
+      reuseState
+      && error instanceof Error
+      && error.message === 'github_installation_inaccessible'
+    ) {
+      try {
+        await deleteGitHubUserInstallation(reuseState.userId, reuseState.installationRef)
+      } catch {
+        console.error('GitHub installation cleanup failed')
+      }
+    }
     const known = error instanceof Error && [
       'github_code_exchange_failed',
       'github_user_installations_failed',
       'github_installation_inaccessible',
       'github_installation_repos_failed',
+      'github_app_install_forbidden',
     ].includes(error.message)
-    if (!known) console.error(error)
+    if (!known) console.error('GitHub App callback failed')
     html(res, widgetCallbackHtml(verifiedState.origin, {
       type: 'crrt:github-app-install',
       ok: false,
-      error: known && error instanceof Error ? error.message : 'github_app_install_failed',
+      error: 'github_app_install_failed',
     }))
     return true
   }
@@ -107,7 +154,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'github_repo_inaccessible',
       'github_repo_lookup_failed',
     ].includes(error.message)
-    if (!known) console.error(error)
+    if (!known) console.error('GitHub OAuth callback failed')
     return html(res, widgetCallbackHtml(verifiedState.origin, {
       type: 'crrt:github-auth',
       ok: false,

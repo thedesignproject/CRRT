@@ -1,15 +1,21 @@
 node_modules/
+.workflow-data/
 dist/
 coverage/
 .env
 .env.local
+.env.docker.local
 .DS_Store
 *.log
 .vercel
 *.tgz
 pr/
+/artifacts/
 AUDIT.md
 
 # Claude Code skill artifacts (local-only, per-developer)
 .superpowers/
 skills-lock.json
+.env.docker.local
+supabase/.branches/_current_branch
+/.swc
