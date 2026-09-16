@@ -21,7 +21,6 @@
   ],
   "rewrites": [
     { "source": "/d/:slug", "destination": "/index.html" },
-    { "source": "/docs/:path*", "destination": "/index.html" },
     { "source": "/privacy", "destination": "/index.html" },
     { "source": "/support", "destination": "/index.html" },
     { "source": "/dashboard", "destination": "/dashboard/index.html" },

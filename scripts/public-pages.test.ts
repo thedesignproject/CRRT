@@ -78,6 +78,14 @@ describe('routing boundaries', () => {
   it.each([['/privacy', '/app-shell.html'], ['/support/', '/app-shell.html'], ['/d/a', '/app-shell.html'], ['/dashboard', '/dashboard/index.html'], ['/dashboard/projects/a', '/dashboard/index.html'], ['/audit/a', '/app-shell.html'], ['/docs/missing', '/public-site?__public_path=$1']])('preserves the intended fallback for %s', (path, dest) => {
     expect(applicationFallbackRoutes.find(route => new RegExp(route.src).test(path))!.dest).toBe(dest)
   })
+  it('keeps legacy Vercel rewrites from swallowing unknown documentation URLs', () => {
+    const config = JSON.parse(readFileSync(resolve(root, 'vercel.json'), 'utf8'))
+    // Vercel applies these alongside generated output routes. A docs catchall
+    // would serve the homepage with 200 before the public handler can return 404.
+    expect(config.rewrites.some((rewrite: { source: string }) => rewrite.source.startsWith('/docs'))).toBe(false)
+    expect(applicationFallbackRoutes.find(route => new RegExp(route.src).test('/docs/missing'))!.dest)
+      .toBe('/public-site?__public_path=$1')
+  })
   it('wires public pages before filesystem and 404 after application routes in the deployment builder', () => {
     const source = readFileSync(resolve(root, 'scripts/build-vercel-output.ts'), 'utf8')
     expect(source.indexOf('...publicPageRoutes')).toBeLessThan(source.indexOf("{ handle: 'filesystem' }"))

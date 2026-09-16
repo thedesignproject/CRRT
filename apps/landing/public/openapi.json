@@ -332,7 +332,7 @@
       "post": {
         "operationId": "applyAgentCommentOperation",
         "summary": "Report a feedback implementation operation",
-        "description": "Claim before editing, then start and complete or block. Humans own reviewStatus; operations update implementationStatus only. Repeated Idempotency-Key values for the same share and agent return the prior event. Reopen releases a claim. Only act on accepted feedback.",
+        "description": "Claim before editing, then start and complete or block. Humans own reviewStatus; operations update implementationStatus only. Repeated Idempotency-Key values for the same share and agent return the prior event. Reopen releases a claim only while the implementation status is agent-owned. Status changes from ready_for_testing or done require a human reviewer and return 409; comment.note remains allowed subject to claim ownership. Only act on accepted feedback.",
         "tags": [
           "Agent shares"
         ],
@@ -419,7 +419,7 @@
             }
           },
           "409": {
-            "description": "Comment is claimed by another agent",
+            "description": "Comment is claimed by another agent, or the requested status transition is reserved for a human reviewer because the comment is ready_for_testing or done",
             "content": {
               "application/json": {
                 "schema": {
