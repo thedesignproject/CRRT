@@ -1,4 +1,5 @@
 node_modules/
+.workflow-data/
 dist/
 coverage/
 .env
@@ -9,6 +10,7 @@ coverage/
 .vercel
 *.tgz
 pr/
+/artifacts/
 AUDIT.md
 
 # Claude Code skill artifacts (local-only, per-developer)
@@ -16,3 +18,4 @@ AUDIT.md
 skills-lock.json
 .env.docker.local
 supabase/.branches/_current_branch
+/.swc

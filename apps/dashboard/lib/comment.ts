@@ -22,6 +22,7 @@ export function mapServerComment(record: CommentRecord): Comment {
     x: record.x,
     y: record.y,
     body: record.body,
+    visibility: record.visibility ?? 'shared',
     reviewStatus: record.reviewStatus,
     implementationStatus: record.implementationStatus,
     claimedByAgentId: record.claimedByAgentId,
@@ -34,6 +35,7 @@ export function mapServerComment(record: CommentRecord): Comment {
     targetType: record.targetType ?? 'element_point',
     anchor: record.anchor ?? null,
     githubIssue: record.githubIssue ?? null,
+    externalWork: record.externalWork ?? [],
   }
 }
 
@@ -44,6 +46,7 @@ export function isInactive(c: Comment) {
 export function getDisplayStatus(c: Comment): DisplayStatus {
   if (c.reviewStatus === 'rejected') return 'rejected'
   if (c.implementationStatus === 'done') return 'done'
+  if (c.implementationStatus === 'ready_for_testing') return 'ready_for_testing'
   if (c.reviewStatus === 'accepted') return 'ready'
   return 'open'
 }

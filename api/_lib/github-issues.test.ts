@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  closeGithubIssue,
   createCommentIssueMarker,
+  createCommentRejectionMarker,
   createGithubIssue,
   findGithubIssueByMarker,
+  formatEditableGithubIssueBody,
   formatGithubIssueBody,
 } from './github-issues.js'
 
@@ -60,6 +63,11 @@ describe('GitHub issue formatting', () => {
     ]) expect(body).toContain(value)
   })
 
+  it('creates a stable signed rejection marker', () => {
+    expect(createCommentRejectionMarker(comment.id)).toBe(createCommentRejectionMarker(comment.id))
+    expect(createCommentRejectionMarker(comment.id)).toContain(`crrt-rejection:${comment.id}:`)
+  })
+
   it('omits unavailable optional context', () => {
     const body = formatGithubIssueBody({
       ...comment,
@@ -101,9 +109,79 @@ describe('GitHub issue formatting', () => {
     expect(body).not.toContain('Prefix:')
     expect(body).not.toContain('Suffix:')
   })
+
+  it('sanitizes embedded markers in an editable draft and appends the signed marker once', () => {
+    const body = formatEditableGithubIssueBody('Custom body\n\n<!-- crrt-comment:copied:bad -->', '<!-- signed -->')
+    expect(body).toBe('Custom body\n\n<!-- signed -->')
+    expect(() => formatEditableGithubIssueBody('   ', '<!-- signed -->')).toThrow('github_issue_body_invalid')
+    expect(() => formatEditableGithubIssueBody('x'.repeat(65_536), '<!-- signed -->'))
+      .toThrow('github_issue_content_too_large')
+  })
 })
 
 describe('GitHub issue requests', () => {
+  it('closes an issue as not planned and posts one marked explanation', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 201 }))
+    await closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7,
+      comment: 'Rejected in CRRT.', marker: '<!-- rejection -->',
+    })
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ state: 'closed', state_reason: 'not_planned' })
+    expect(JSON.parse(fetchMock.mock.calls[2][1].body).body).toContain('<!-- rejection -->')
+
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ body: 'Already <!-- rejection -->' }]), { status: 200 }))
+    await closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7,
+      comment: 'Rejected in CRRT.', marker: '<!-- rejection -->',
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+  })
+
+  it('paginates comments and cancels before the provider mutation when rejection is stale', async () => {
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(Array.from({ length: 100 }, () => ({ body: 'old' }))), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{ body: 'Already <!-- rejection -->' }]), { status: 200 }))
+    await closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7,
+      comment: 'Rejected in CRRT.', marker: '<!-- rejection -->', beforeClose: async () => true,
+    })
+    expect(fetchMock.mock.calls[2][0]).toContain('page=2')
+
+    fetchMock.mockClear()
+    await expect(closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7,
+      comment: 'Rejected in CRRT.', marker: '<!-- rejection -->', beforeClose: async () => false,
+    })).rejects.toThrow('external_work_sync_cancelled')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('maps GitHub close and comment failures safely', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }))
+    await expect(closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7, comment: 'x', marker: 'm',
+    })).rejects.toThrow('github_issue_close_failed')
+
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+    await expect(closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7, comment: 'x', marker: 'm',
+    })).rejects.toThrow('github_issue_comments_failed')
+
+    fetchMock
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+      .mockResolvedValueOnce(new Response('[]', { status: 200 }))
+      .mockResolvedValueOnce(new Response('{}', { status: 500 }))
+    await expect(closeGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', issueNumber: 7, comment: 'x', marker: 'm',
+    })).rejects.toThrow('github_issue_comment_failed')
+  })
   it('recovers an exact marker match and returns null without one', async () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
       items: [{
@@ -140,6 +218,7 @@ describe('GitHub issue requests', () => {
   })
 
   it('creates an issue and validates GitHub responses', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
       number: 7,
       html_url: 'https://github.com/acme/site/issues/7',
@@ -150,10 +229,38 @@ describe('GitHub issue requests', () => {
     })).resolves.toMatchObject({ issueNumber: 7 })
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ title: 'Title here', body: 'Body' })
 
-    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 422 }))
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: 'Validation Failed' }), {
+      status: 422,
+      headers: { 'x-github-request-id': 'request-123' },
+    }))
     await expect(createGithubIssue({
       accessToken: 'secret', owner: 'acme', repo: 'site', title: 'Title', body: 'Body',
     })).rejects.toThrow('github_issue_create_failed')
+    expect(consoleError).toHaveBeenLastCalledWith('GitHub issue creation failed', {
+      status: 422,
+      providerMessage: 'Validation Failed',
+      requestId: 'request-123',
+    })
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ message: 422 }), { status: 422 }))
+    await expect(createGithubIssue({
+      accessToken: 'secret', owner: 'acme', repo: 'site', title: 'Title', body: 'Body',
+    })).rejects.toThrow('github_issue_create_failed')
+    expect(consoleError).toHaveBeenLastCalledWith('GitHub issue creation failed', {
+      status: 422,
+      providerMessage: null,
+      requestId: null,
+    })
+
+    fetchMock.mockResolvedValueOnce(new Response('not json', { status: 500 }))
+    await expect(createGithubIssue({
+      accessToken: 'secret', owner: 'acme', repo: 'site', title: 'Title', body: 'Body',
+    })).rejects.toThrow('github_issue_create_failed')
+    expect(consoleError).toHaveBeenLastCalledWith('GitHub issue creation failed', {
+      status: 500,
+      providerMessage: null,
+      requestId: null,
+    })
 
     await expect(createGithubIssue({
       accessToken: 'secret',
@@ -166,6 +273,16 @@ describe('GitHub issue requests', () => {
     await expect(createGithubIssue({
       accessToken: 'secret', owner: 'acme', repo: 'site', title: '   ', body: 'Body',
     })).rejects.toThrow('github_issue_title_invalid')
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      number: 7,
+      html_url: 'javascript:alert(1)',
+      created_at: '2026-07-23T12:00:00Z',
+    }), { status: 201 }))
+    await expect(createGithubIssue({
+      accessToken: 'token', owner: 'acme', repo: 'site', title: 'Title', body: 'Body',
+    })).rejects.toThrow('github_issue_result_indeterminate')
+    consoleError.mockRestore()
   })
 
   it('caps oversized titles without splitting Unicode characters', async () => {
@@ -225,5 +342,45 @@ describe('GitHub issue requests', () => {
     await expect(findGithubIssueByMarker({
       accessToken: 'token', owner: 'acme', repo: 'site', marker: 'marker',
     })).rejects.toThrow('github_issue_search_failed')
+
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+      items: [{
+        body: 'marker', number: 7, html_url: 'https://evil.example/issues/7',
+        created_at: '2026-07-23T12:00:00Z',
+      }],
+    }), { status: 200 }))
+    await expect(findGithubIssueByMarker({
+      accessToken: 'token', owner: 'acme', repo: 'site', marker: 'marker',
+    })).rejects.toThrow('github_issue_search_failed')
+
+    for (const htmlUrl of [
+      'not a URL',
+      'https://github.com/other/site/issues/7',
+      'https://github.com/acme/other/issues/7',
+      'https://github.com/acme/site/issues/8',
+    ]) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        items: [{ body: 'marker', number: 7, html_url: htmlUrl, created_at: '2026-07-23T12:00:00Z' }],
+      }), { status: 200 }))
+      await expect(findGithubIssueByMarker({
+        accessToken: 'token', owner: 'acme', repo: 'site', marker: 'marker',
+      })).rejects.toThrow('github_issue_search_failed')
+    }
+  })
+
+  it('rejects GitHub issue URLs whose repository identity does not match', async () => {
+    for (const html_url of [
+      'https://github.com/other/site/issues/7',
+      'https://github.com/acme/other/issues/7',
+      'https://github.com/acme/site/issues/8',
+      'https://github.com/%E0%A4%A/site/issues/7',
+    ]) {
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
+        number: 7, html_url, created_at: '2026-07-23T12:00:00Z',
+      }), { status: 201 }))
+      await expect(createGithubIssue({
+        accessToken: 'token', owner: 'acme', repo: 'site', title: 'Title', body: 'Body',
+      })).rejects.toThrow('github_issue_result_indeterminate')
+    }
   })
 })

@@ -1,6 +1,6 @@
 import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
-import { asset } from '../lib/routes'
+import { asset, landingRoute, route } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
 import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
@@ -27,7 +27,10 @@ interface HeaderProps {
   addProjectError: string | null
   onOpenCmd: () => void
   onOpenSettings: () => void
+  canManageProject?: boolean
   settingsActive: boolean
+  onOpenExtensionComments: () => void
+  extensionCommentsActive: boolean
   apiBase: string
   accessToken: string
   onProjectsChanged: () => void
@@ -59,7 +62,10 @@ export function Header({
   addProjectError,
   onOpenCmd,
   onOpenSettings,
+  canManageProject = true,
   settingsActive,
+  onOpenExtensionComments,
+  extensionCommentsActive,
   apiBase,
   accessToken,
   onProjectsChanged,
@@ -74,7 +80,11 @@ export function Header({
 }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 px-5 h-[60px] shrink-0 border-b border-border bg-card">
-      <div className="flex items-center gap-2 mr-2">
+      <a
+        href={landingRoute('?stay=1')}
+        aria-label="CRRT marketing site"
+        className="flex items-center gap-2 mr-2"
+      >
         <img
           src={asset('crrt-isologo.png')}
           alt="CRRT"
@@ -93,11 +103,12 @@ export function Header({
         >
           CRRT.
         </span>
-      </div>
+      </a>
 
       <div className="w-px h-5 bg-border" />
 
       <nav className="flex items-center gap-1 flex-1 overflow-auto">
+        <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>My comments</button>
         {projectsLoading && projects.length === 0 ? (
           <span className="text-xs text-muted-foreground px-2">Loading projects…</span>
         ) : projectsError ? (
@@ -106,14 +117,15 @@ export function Header({
           <span className="text-xs text-muted-foreground px-2">No projects yet</span>
         ) : (
           projects.map((p) => {
-            const isActive = selectedProject === p.publicKey
+            const isActive = !extensionCommentsActive && selectedProject === p.publicKey
             const count = isActive ? commentCount : null
             return (
               <button
                 key={p.publicKey}
-                onClick={() => { setSelectedProject(p.publicKey); setStatusFilter('all'); setSelectedCommentId('') }}
+                aria-pressed={isActive}
+                onClick={() => { setSelectedProject(p.publicKey); setStatusFilter('open'); setSelectedCommentId('') }}
                 className={cn(
-                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-all whitespace-nowrap',
+                  'px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap',
                   isActive
                     ? 'bg-primary text-primary-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
@@ -160,12 +172,16 @@ export function Header({
       </nav>
 
       <div className="flex items-center gap-2 ml-auto">
+        <a href={route('/audits/new')} className="inline-flex px-3 py-1.5 rounded-md bg-primary text-primary-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
         <button
+          type="button"
           onClick={onOpenCmd}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground text-xs w-52 hover:border-muted-foreground/30 hover:bg-accent transition-colors cursor-pointer"
+          aria-label="Search feedback"
+          disabled={extensionCommentsActive}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-background text-muted-foreground text-xs w-9 sm:w-52 hover:border-muted-foreground/30 hover:bg-accent transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
         >
           <SearchIcon />
-          <span className="flex-1 text-left">Search Feedback...</span>
+          <span className="hidden sm:block flex-1 text-left">Search Feedback…</span>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border bg-card text-[10px] font-mono text-muted-foreground">
             <span className="text-[11px]">⌘</span>K
           </kbd>
@@ -191,7 +207,7 @@ export function Header({
             <ShieldIcon size={15} />
           </button>
         )}
-        {selectedProject && (
+        {!extensionCommentsActive && selectedProject && canManageProject && (
           <button
             onClick={onOpenSettings}
             title="Project settings"

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../_lib/auth.js'
-import { getProjectMember, listProjectMembers } from '../../../_lib/store.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
+import { listProjectMembers } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -14,9 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
 
   try {
-    // Any member may view the roster; mutations elsewhere stay admin-only.
-    const membership = await getProjectMember(user.userId, projectKey)
-    if (!membership) return jsonError(req, res, 403, 'Forbidden')
+    if (!(await requireProjectCapability(req, res, user, projectKey, 'feedback:manage'))) return
 
     const members = await listProjectMembers(projectKey)
     setCors(req, res, ['GET', 'OPTIONS'])

@@ -1,6 +1,6 @@
 {
   "name": "@thedesignproject/crrt",
-  "version": "0.3.16",
+  "version": "0.3.20",
   "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
@@ -31,11 +31,15 @@
     "dev:landing": "vite --config apps/landing/vite.config.ts",
     "dev:dashboard": "bash -c 'trap \"kill 0\" EXIT INT TERM; bunx vercel dev --listen 3000 & vite --config apps/dashboard/vite.config.ts'",
     "dev:dashboard:ui-only": "vite --config apps/dashboard/vite.config.ts",
+    "dev:extension": "wxt --config apps/extension/wxt.config.ts",
     "typecheck": "tsc --project tsconfig.check.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:diff-coverage": "bash scripts/check-diff-coverage.sh",
     "build": "tsc && vite build",
     "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
+    "build:extension": "wxt build --config apps/extension/wxt.config.ts",
+    "package:extension": "bun scripts/package-extension.ts",
     "preview": "vite preview",
     "preview:dashboard": "vite preview --config apps/dashboard/vite.config.ts",
     "prepublishOnly": "npm run build",
@@ -51,7 +55,9 @@
     "db:studio": "drizzle-kit studio",
     "db:seed": "bun db/seed.ts",
     "db:baseline": "bun db/baseline.ts",
-    "deploy-build": "bun run typecheck && vite build --config apps/landing/vite.config.ts && vite build --config apps/dashboard/vite.config.ts && bun run db:migrate"
+    "deploy-build": "bun run typecheck && bun run build:landing && vite build --config apps/dashboard/vite.config.ts && bun scripts/build-vercel-output.ts && bun run db:migrate",
+    "build:landing": "node scripts/build-landing.ts",
+    "preview:landing": "bun scripts/preview-public-site.ts"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -59,22 +65,35 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.4",
+    "@vercel/sandbox": "^3.1.0",
     "framer-motion": "^12.38.0",
     "html2canvas": "^1.4.1",
-    "lucide-react": "^1.8.0"
+    "ipaddr.js": "1.9.1",
+    "lucide-react": "^1.8.0",
+    "nanoid": "5.1.16",
+    "negotiator": "^1.1.0",
+    "undici": "7.29.0",
+    "workflow": "^4.8.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@apidevtools/swagger-parser": "^13.0.0",
     "@tailwindcss/vite": "^4.2.4",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/react": "^16.3.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/negotiator": "^0.6.5",
     "@types/node": "^26.0.0",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@types/turndown": "^5.0.6",
+    "@typescript/typescript6": "^6.0.2",
+    "@vercel/build-utils": "13.19.1",
     "@vercel/functions": "^3.7.5",
     "@vercel/node": "^5.7.12",
     "@vitejs/plugin-react": "^6.0.1",
     "@vitest/coverage-v8": "^4.1.4",
+    "@wxt-dev/module-react": "^1.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-kit": "^0.31.10",
@@ -86,9 +105,21 @@
     "supabase": "^2.109.1",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",
+    "turndown": "^7.2.4",
     "typescript": "^7.0.2",
     "vite": "^8.0.9",
     "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "wxt": "^0.21.4"
+  },
+  "overrides": {
+    "nanoid@^5.0.0": "5.1.16",
+    "undici@^7.0.0": "7.29.0",
+    "ws": "8.21.3"
+  },
+  "patchedDependencies": {
+    "@workflow/core@4.8.5": "patches/@workflow%2Fcore@4.8.5.patch",
+    "@workflow/world-local@4.4.0": "patches/@workflow%2Fworld-local@4.4.0.patch",
+    "@workflow/world-vercel@4.7.1": "patches/@workflow%2Fworld-vercel@4.7.1.patch"
   }
 }

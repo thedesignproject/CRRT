@@ -17,7 +17,7 @@ export function TextRangeQuote({ text, style }: TextRangeQuoteProps) {
       borderLeft: '3px solid #E8853D',
       borderRadius: '0 8px 8px 0',
       background: 'rgba(232, 133, 61, 0.08)',
-      color: '#C9C4BC',
+      color: 'var(--fw-quote)',
       fontSize: 13,
       lineHeight: 1.5,
       fontStyle: 'italic',

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /api/
+Disallow: /audit/
+Disallow: /d/
+
+Sitemap: https://crrt.ai/sitemap.xml

@@ -1,16 +1,47 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../_lib/auth.js'
 import {
   createInvite,
   createNotification,
   deleteProjectInvite,
   findUserIdByEmail,
+  getProject,
   getProjectMember,
   listProjectInvites,
 } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
+import {
+  getProjectInviteDashboardUrl,
+  getProjectInviteEmailIdempotencyKey,
+  sendProjectInviteEmail,
+} from '../../../_lib/project-invite-email.js'
 
 const METHODS = ['GET', 'POST', 'DELETE', 'OPTIONS']
+
+async function sendProjectInviteEmailInBackground(input: {
+  email: string
+  inviterEmail: string
+  projectKey: string
+  role: 'admin' | 'member' | 'guest'
+  dashboardUrl: string
+  idempotencyKey: string
+}) {
+  try {
+    const project = await getProject(input.projectKey)
+    const result = await sendProjectInviteEmail({
+      recipient: input.email,
+      projectName: project?.name ?? input.projectKey,
+      inviterEmail: input.inviterEmail,
+      role: input.role,
+      dashboardUrl: input.dashboardUrl,
+      idempotencyKey: input.idempotencyKey,
+    })
+    if (result.skipped) console.warn('Project invite email skipped: email configuration is missing')
+  } catch (error) {
+    console.warn('Project invite email failed', error)
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
@@ -49,12 +80,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // POST: send an invite.
     const body = (req.body ?? {}) as { email?: unknown; role?: unknown }
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
-    const role = body.role === 'admin' ? 'admin' : 'member'
+    const role = body.role === undefined ? 'member' : body.role
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
       return jsonError(req, res, 400, 'Invalid email')
     }
+    if (role !== 'admin' && role !== 'member' && role !== 'guest') {
+      return jsonError(req, res, 400, 'Invalid role')
+    }
 
     const invite = await createInvite({ projectKey, email, role, invitedBy: user.userId })
+
+    try {
+      waitUntil(sendProjectInviteEmailInBackground({
+        email,
+        inviterEmail: user.email,
+        projectKey,
+        role,
+        dashboardUrl: getProjectInviteDashboardUrl(projectKey, email),
+        idempotencyKey: getProjectInviteEmailIdempotencyKey(projectKey, email),
+      }))
+    } catch (scheduleError) {
+      console.warn('Project invite email scheduling failed', scheduleError)
+    }
 
     // Notif emit is fire-and-forget: invite row is already persisted, and the
     // invitee will still see it on next GET /invites even if realtime fanout

@@ -100,11 +100,13 @@ Avoid these unless the existing product intentionally uses them:
 
 ## Before Reporting UI Work Complete
 
-Before reporting `comment.complete` for UI/design work:
+Before reporting `comment.complete` (which moves the item to **Ready for testing**) for UI/design work:
 
 1. Verify the accepted feedback is actually addressed.
 2. Verify nearby UI still matches the local design system.
 3. Run the smallest relevant check available: typecheck, unit test, build, or visual/manual verification.
 4. Report what changed and what was verified.
+
+The human reviewer owns the final **Done** decision. Do not reopen or otherwise change items that are already `ready_for_testing` or `done`.
 
 If you are blocked, call `comment.block` with a short summary and the specific decision or access you need.

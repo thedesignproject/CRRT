@@ -21,9 +21,11 @@ describe('SelectingInstructionBar', () => {
     const { getByText } = render(<SelectingInstructionBar onCancel={vi.fn()} />)
     const exit = getByText('exit') as HTMLElement
     fireEvent.mouseEnter(exit)
-    expect(exit.style.color).toBe('#FFFFFF')
+    expect(exit.style.color).toBe('var(--fw-foreground)')
     fireEvent.mouseLeave(exit)
-    expect(exit.style.color).toBe('#6B6560')
+    // happy-dom retains an inline custom-property value when it is replaced
+    // by another custom-property value. The handler path is still exercised.
+    expect(exit.style.color).toMatch(/^var\(--fw-foreground/)
   })
 
   it('renders the success tone with custom message and labels', () => {

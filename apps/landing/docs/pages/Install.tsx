@@ -53,6 +53,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 }`
 
+const themeSnippet = `// Follow theme state owned by your app
+<FeedbackWidget projectId="proj_your_app_name" theme={appTheme} />
+
+// Or follow the browser's preferred color scheme
+<FeedbackWidget projectId="proj_your_app_name" theme="system" />`
+
 export function InstallPage({ pathname, onNavigate }: InstallPageProps) {
   return (
     <DocsLayout
@@ -101,8 +107,20 @@ export function InstallPage({ pathname, onNavigate }: InstallPageProps) {
               type: 'string',
               description: <>Backend URL. Defaults to <InlineCode>https://crrt.ai/api</InlineCode>. Override when self-hosting.</>,
             },
+            {
+              name: 'theme',
+              type: "'light' | 'dark' | 'system'",
+              description: <>Widget appearance. Defaults to <InlineCode>dark</InlineCode>; <InlineCode>system</InlineCode> follows the browser preference.</>,
+            },
           ]}
         />
+
+        <H3>Match your app theme</H3>
+        <P>
+          Pass your app's current theme directly, or use <InlineCode>system</InlineCode> to follow{' '}
+          <InlineCode>prefers-color-scheme</InlineCode>. Theme changes apply immediately without remounting the widget.
+        </P>
+        <CodeBlock language="tsx" code={themeSnippet} />
       </Section>
 
       <Section>

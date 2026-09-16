@@ -8,9 +8,27 @@ const describeDatabase = databaseUrl ? describe : describe.skip
 describeDatabase('comment GitHub issue database fencing', () => {
   const sql = postgres(databaseUrl as string, { max: 6 })
   const projectKey = `github-issue-${randomUUID()}`
-  const commentIds = Array.from({ length: 5 }, () => randomUUID())
+  const commentIds = Array.from({ length: 6 }, () => randomUUID())
+  const actorUserId = randomUUID()
+  const targetUserId = randomUUID()
 
   beforeAll(async () => {
+    await sql`
+      insert into auth.users (id, email)
+      values
+        (${actorUserId}::uuid, ${`actor-${actorUserId}@example.com`}),
+        (${targetUserId}::uuid, ${`target-${targetUserId}@example.com`})
+    `
+    await sql`
+      insert into projects (public_key, slug, name, allowed_origins, claimable)
+      values (${projectKey}, ${projectKey}, 'GitHub issue fencing', '{}', false)
+    `
+    await sql`
+      insert into project_members (project_key, user_id, role, is_owner)
+      values
+        (${projectKey}, ${actorUserId}::uuid, 'admin', true),
+        (${projectKey}, ${targetUserId}::uuid, 'member', false)
+    `
     await sql`
       insert into comments (id, project_id, comment, status)
       values
@@ -18,12 +36,15 @@ describeDatabase('comment GitHub issue database fencing', () => {
         (${commentIds[1]}, ${projectKey}, 'second', 'approved'),
         (${commentIds[2]}, ${projectKey}, 'third', 'approved'),
         (${commentIds[3]}, ${projectKey}, 'fourth', 'approved'),
-        (${commentIds[4]}, ${projectKey}, 'fifth', 'approved')
+        (${commentIds[4]}, ${projectKey}, 'fifth', 'approved'),
+        (${commentIds[5]}, ${projectKey}, 'pending', 'pending')
     `
   })
 
   afterAll(async () => {
     await sql`delete from comments where project_id = ${projectKey}`
+    await sql`delete from projects where public_key = ${projectKey}`
+    await sql`delete from auth.users where id in (${actorUserId}::uuid, ${targetUserId}::uuid)`
     await sql.end()
   })
 
@@ -95,7 +116,11 @@ describeDatabase('comment GitHub issue database fencing', () => {
     `).rejects.toThrow('github_issue_creation_in_progress')
 
     await expect(sql`
-      select remove_project_member(${projectKey}, ${randomUUID()}::uuid)
+      select remove_project_member(
+        ${projectKey},
+        ${actorUserId}::uuid,
+        ${targetUserId}::uuid
+      )
     `).rejects.toThrow('github_issue_creation_in_progress')
 
     await sql`
@@ -171,6 +196,42 @@ describeDatabase('comment GitHub issue database fencing', () => {
     `
     expect(reset[0].reset).toBe(true)
     await expect(claim(commentIds[4], randomUUID())).resolves.toHaveLength(1)
+  })
+
+  it('allows pending feedback through the complete GitHub creation lifecycle', async () => {
+    const firstToken = randomUUID()
+    await expect(claim(commentIds[5], firstToken)).resolves.toHaveLength(1)
+    const marked = await sql`
+      select mark_comment_github_issue_uncertain(
+        ${commentIds[5]}::uuid,
+        ${projectKey},
+        ${firstToken}::uuid
+      ) as marked
+    `
+    expect(marked[0].marked).toBe(true)
+
+    const reset = await sql`
+      select reset_comment_github_issue_attempt(
+        ${commentIds[5]}::uuid,
+        ${projectKey},
+        ${firstToken}::uuid
+      ) as reset
+    `
+    expect(reset[0].reset).toBe(true)
+
+    const finalToken = randomUUID()
+    await expect(claim(commentIds[5], finalToken)).resolves.toHaveLength(1)
+    const finalized = await sql`
+      select finalize_comment_github_issue(
+        ${commentIds[5]}::uuid,
+        ${projectKey},
+        ${finalToken}::uuid,
+        23,
+        'https://github.com/acme/site/issues/23',
+        now()
+      ) as finalized
+    `
+    expect(finalized[0].finalized).toBe(true)
   })
 
   it('enforces all-or-none issue metadata and paired lease fields', async () => {

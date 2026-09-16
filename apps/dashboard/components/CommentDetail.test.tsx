@@ -2,17 +2,20 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../api', () => ({
-  createCommentGithubIssue: vi.fn(),
-  getProjectGitHubStatus: vi.fn(),
+  getExternalWorkDraft: vi.fn(),
+  retryExternalWorkSync: vi.fn(),
+  sendExternalWork: vi.fn(),
 }))
 
-import { createCommentGithubIssue, getProjectGitHubStatus } from '../api'
+import { getExternalWorkDraft, retryExternalWorkSync, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'
 import { mapServerComment } from '../lib/comment'
 import type { Comment } from '../lib/types'
 import { CommandPalette } from './CommandPalette'
 import { CommentDetail } from './CommentDetail'
 import { CommentList } from './CommentList'
+import { ExternalWorkDialog } from './ExternalWorkDialog'
+import { ExternalWorkProviderDialog } from './ExternalWorkProviderDialog'
 
 const issue = {
   issueNumber: 42,
@@ -81,79 +84,353 @@ const props = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(createCommentGithubIssue).mockResolvedValue({ ...issue, created: true })
-  vi.mocked(getProjectGitHubStatus).mockResolvedValue({ githubConnectionStatus: 'connected' })
+  vi.mocked(retryExternalWorkSync).mockResolvedValue({ externalWork: [] })
+  vi.mocked(sendExternalWork).mockResolvedValue({ ...issue, created: true })
+  vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'github', connected: true, destination: 'acme/site', existing: null, draft: { title: 'Improve contrast', body: 'Issue body' } })
+})
+
+async function openExternalWorkDraft() {
+  const button = screen.getByRole('button', { name: 'Send to…' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
+  fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+  const create = await screen.findByRole('button', { name: 'Create issue' })
+  await waitFor(() => expect(create).toBeEnabled())
+  return create
+}
+
+describe('<CommentDetail /> feedback audience', () => {
+  it('lets internal members change visibility and presents guests as shared-only', () => {
+    const onVisibilityChange = vi.fn()
+    const view = render(
+      <CommentDetail
+        {...props}
+        selectedComment={{ ...comment, visibility: 'internal' }}
+        onVisibilityChange={onVisibilityChange}
+      />,
+    )
+    const audience = screen.getByRole('combobox', { name: 'Feedback audience' })
+    expect(audience).toHaveValue('internal')
+    fireEvent.change(audience, { target: { value: 'shared' } })
+    expect(onVisibilityChange).toHaveBeenCalledWith('comment-1', 'shared')
+
+    view.rerender(
+      <CommentDetail
+        {...props}
+        selectedComment={{ ...comment, visibility: 'shared' }}
+        readOnly
+      />,
+    )
+    expect(screen.queryByRole('combobox', { name: 'Feedback audience' })).toBeNull()
+    expect(screen.getByText('Shared with project')).toBeInTheDocument()
+  })
 })
 
 describe('<CommentDetail /> GitHub issue action', () => {
   it('creates an issue for accepted feedback and updates local state', async () => {
     let resolveIssue!: (value: typeof issue & { created: boolean }) => void
-    vi.mocked(createCommentGithubIssue).mockReturnValueOnce(new Promise((resolve) => {
+    vi.mocked(sendExternalWork).mockReturnValueOnce(new Promise((resolve) => {
       resolveIssue = resolve
     }))
     render(<CommentDetail {...props} />)
-    const createButton = screen.getByRole('button', { name: 'Create GitHub Issue' })
-    await waitFor(() => expect(createButton).toBeEnabled())
+    const createButton = await openExternalWorkDraft()
+    fireEvent.change(screen.getByLabelText('External work title'), { target: { value: 'Customer-facing title' } })
     fireEvent.click(createButton)
-    expect(screen.getByRole('button', { name: 'Creating issue…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Sending…' })).toBeDisabled()
     resolveIssue({ ...issue, created: true })
-    await screen.findByRole('button', { name: 'Open GitHub Issue' })
-    expect(createCommentGithubIssue).toHaveBeenCalledWith('/api', 'session-token', 'comment-1')
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(sendExternalWork).toHaveBeenCalledWith('/api', 'session-token', 'comment-1', 'github', {
+      title: 'Customer-facing title', body: 'Issue body',
+    })
   })
 
-  it.each(['open', 'rejected'] as const)(
-    'requires acceptance when the comment is %s',
-    async (reviewStatus) => {
-      render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus }} />)
-      const button = screen.getByRole('button', { name: 'Accept to create issue' })
-      await waitFor(() => expect(getProjectGitHubStatus).toHaveBeenCalled())
-      expect(button).toBeDisabled()
-      fireEvent.click(button)
-      expect(createCommentGithubIssue).not.toHaveBeenCalled()
-    },
-  )
+  it('allows open feedback to be reviewed before sending', async () => {
+    render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'open' }} />)
+    await openExternalWorkDraft()
+    expect(screen.getByRole('dialog')).toHaveTextContent('Send to GitHub')
+  })
 
-  it('opens a persisted issue in a protected new tab regardless of later status', () => {
+  it('requires rejected feedback to be reopened before sending', async () => {
+    render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected' }} />)
+    expect(screen.getByRole('button', { name: 'Reopen to send' })).toBeDisabled()
+    expect(getExternalWorkDraft).not.toHaveBeenCalled()
+  })
+
+  it('opens a persisted issue in a protected new tab regardless of later status', async () => {
     const opened = { opener: 'parent' }
     const open = vi.spyOn(window, 'open').mockReturnValue(opened as never)
     render(<CommentDetail
       {...props}
       selectedComment={{ ...comment, reviewStatus: 'rejected', githubIssue: issue }}
     />)
-    fireEvent.click(screen.getByRole('button', { name: 'Open GitHub Issue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open GitHub #42' }))
     expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer')
     expect(opened.opener).toBeNull()
     open.mockRestore()
   })
 
-  it('handles browsers that block the new tab', () => {
+  it('handles browsers that block the new tab', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     render(<CommentDetail {...props} selectedComment={{ ...comment, githubIssue: issue }} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Open GitHub Issue' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Open GitHub #42' }))
     expect(open).toHaveBeenCalled()
     open.mockRestore()
   })
 
+  it('shows direct links and close lifecycle state for every provider', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [
+      { provider: 'github', externalId: '42', externalKey: '#42', externalUrl: issue.issueUrl, lifecycleStatus: 'closed', closedAt: 'later', createdAt: issue.createdAt, updatedAt: 'later' },
+      { provider: 'linear', externalId: 'linear', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7', lifecycleStatus: 'closing', closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt },
+      { provider: 'jira', externalId: 'jira', externalKey: 'WEB-8', externalUrl: 'https://acme.atlassian.net/browse/WEB-8', lifecycleStatus: 'blocked', closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt },
+    ] }} />)
+    expect(screen.getByRole('button', { name: 'Open GitHub #42 · Closed' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open Linear WEB-7 · Closing…' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Open Jira WEB-8 · Needs attention' }))
+    expect(open).toHaveBeenCalledWith('https://acme.atlassian.net/browse/WEB-8', '_blank', 'noopener,noreferrer')
+  })
+
+  it('retries failed close synchronization and refreshes the displayed state', async () => {
+    const failed = { provider: 'linear' as const, externalId: 'linear', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7', lifecycleStatus: 'failed' as const, closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt }
+    vi.mocked(retryExternalWorkSync).mockResolvedValueOnce({ externalWork: [{ ...failed, lifecycleStatus: 'closed', closedAt: 'later', updatedAt: 'later' }] })
+    const view = render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [failed] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry closing' }))
+    expect(screen.getByRole('button', { name: 'Retrying close…' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Open Linear WEB-7 · Closed' })).toBeInTheDocument()
+    expect(retryExternalWorkSync).toHaveBeenCalledWith('/api', 'session-token', 'comment-1')
+    view.rerender(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [{
+      ...failed, lifecycleStatus: 'active', updatedAt: 'server-active',
+    }] }} />)
+    expect(screen.getByRole('button', { name: 'Open Linear WEB-7 · Closed' })).toBeInTheDocument()
+  })
+
+  it('reports a safe close retry failure', async () => {
+    const failed = { provider: 'jira' as const, externalId: 'jira', externalKey: 'WEB-8', externalUrl: 'https://acme.atlassian.net/browse/WEB-8', lifecycleStatus: 'blocked' as const, syncAction: 'check_permissions' as const, closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt }
+    vi.mocked(retryExternalWorkSync).mockRejectedValueOnce(new Error('secret'))
+    render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [failed] }} />)
+    expect(screen.getByText('Grant Jira permission to update this issue, then retry.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Retry after fixing' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not retry closing the linked issues. Try again.')
+  })
+
+  it('lets fresher server lifecycle state replace a remembered active issue', async () => {
+    const view = render(<CommentDetail {...props} />)
+    fireEvent.click(await openExternalWorkDraft())
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Open GitHub #42' })).toBeInTheDocument()
+
+    view.rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'github', externalId: '42', externalKey: '#42', externalUrl: issue.issueUrl,
+      lifecycleStatus: 'closed', closedAt: 'closed', createdAt: issue.createdAt, updatedAt: 'closed',
+    }] }} />)
+    expect(screen.getByRole('button', { name: 'Open GitHub #42 · Closed' })).toBeInTheDocument()
+  })
+
+  it('blocks untrusted external-work URLs instead of executing them', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'linear', externalId: 'i', externalKey: 'WEB-7', externalUrl: 'javascript:alert(1)',
+      lifecycleStatus: 'active', closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt,
+    }] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Linear WEB-7' }))
+    expect(open).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent('link is invalid')
+  })
+
+  it('rejects malformed and cross-provider HTTPS issue links', () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    const { rerender } = render(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'github', externalId: '1', externalKey: '#1', externalUrl: 'https://evil.example/acme/site/issues/1',
+      lifecycleStatus: 'active', closedAt: null, createdAt: 'now', updatedAt: 'now',
+    }] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open GitHub #1' }))
+    rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'linear', externalId: '1', externalKey: 'WEB-1', externalUrl: 'https://evil.example/issue/WEB-1',
+      lifecycleStatus: 'active', closedAt: null, createdAt: 'now', updatedAt: 'now',
+    }] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Linear WEB-1' }))
+    rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'jira', externalId: '1', externalKey: 'WEB-1', externalUrl: 'https://acme.atlassian.net/not-browse/WEB-1',
+      lifecycleStatus: 'active', closedAt: null, createdAt: 'now', updatedAt: 'now',
+    }] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Jira WEB-1' }))
+    rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'jira', externalId: '1', externalKey: 'WEB-1', externalUrl: 'not a url',
+      lifecycleStatus: 'active', closedAt: null, createdAt: 'now', updatedAt: 'now',
+    }] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Open Jira WEB-1' }))
+    expect(open).not.toHaveBeenCalled()
+  })
+
+  it('explains each blocked-sync remediation without exposing provider errors', () => {
+    const view = render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [
+      { provider: 'github', externalId: '1', externalKey: '#1', externalUrl: issue.issueUrl, lifecycleStatus: 'blocked', syncAction: 'check_issue', closedAt: null, createdAt: 'now', updatedAt: 'now' },
+      { provider: 'linear', externalId: '2', externalKey: 'WEB-2', externalUrl: 'https://linear.app/issue/WEB-2', lifecycleStatus: 'blocked', syncAction: 'configure_workflow', closedAt: null, createdAt: 'now', updatedAt: 'now' },
+      { provider: 'jira', externalId: '3', externalKey: 'WEB-3', externalUrl: 'https://acme.atlassian.net/browse/WEB-3', lifecycleStatus: 'blocked', syncAction: 'reconnect', closedAt: null, createdAt: 'now', updatedAt: 'now' },
+    ] }} />)
+    expect(screen.getByText('Check that the GitHub issue still exists and matches this project.')).toBeInTheDocument()
+    expect(screen.getByText('Configure a usable rejected or canceled workflow state in Linear, then retry.')).toBeInTheDocument()
+    expect(screen.getByText('Reconnect Jira in Project Settings, then retry.')).toBeInTheDocument()
+    view.rerender(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [{
+      provider: 'github', externalId: '1', externalKey: '#1', externalUrl: issue.issueUrl,
+      lifecycleStatus: 'blocked', syncAction: null, closedAt: null, createdAt: 'now', updatedAt: 'now',
+    }] }} />)
+    expect(screen.getByText('Resolve the GitHub issue configuration, then retry.')).toBeInTheDocument()
+  })
+
+  it('uses update time to reconcile remembered and server-active work', async () => {
+    vi.mocked(sendExternalWork).mockResolvedValueOnce({ ...issue, createdAt: '2026-02-01', created: true })
+    const view = render(<CommentDetail {...props} />)
+    fireEvent.click(await openExternalWorkDraft())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    view.rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'github', externalId: '99', externalKey: '#99', externalUrl: 'https://github.com/acme/site/issues/99',
+      lifecycleStatus: 'active', closedAt: null, createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    }] }} />)
+    expect(screen.getByRole('button', { name: 'Open GitHub #42' })).toBeInTheDocument()
+    view.rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'github', externalId: '99', externalKey: '#99', externalUrl: 'https://github.com/acme/site/issues/99',
+      lifecycleStatus: 'active', closedAt: null, createdAt: '2026-03-01', updatedAt: '2026-03-01',
+    }] }} />)
+    expect(screen.getByRole('button', { name: 'Open GitHub #99' })).toBeInTheDocument()
+  })
+
+  it('falls back safely when active-work timestamps are malformed', async () => {
+    vi.mocked(sendExternalWork).mockResolvedValueOnce({ ...issue, createdAt: 'invalid-local', created: true })
+    const view = render(<CommentDetail {...props} />)
+    fireEvent.click(await openExternalWorkDraft())
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    view.rerender(<CommentDetail {...props} selectedComment={{ ...comment, externalWork: [{
+      provider: 'github', externalId: '99', externalKey: '#99', externalUrl: 'https://github.com/acme/site/issues/99',
+      lifecycleStatus: 'active', closedAt: null, createdAt: 'invalid-server', updatedAt: 'invalid-server',
+    }] }} />)
+    expect(screen.getByRole('button', { name: 'Open GitHub #42' })).toBeInTheDocument()
+  })
+
+  it('fences duplicate close retries before the busy render commits', async () => {
+    const failed = { provider: 'linear' as const, externalId: 'linear', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7', lifecycleStatus: 'failed' as const, closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt }
+    let resolveRetry!: (value: { externalWork: [] }) => void
+    vi.mocked(retryExternalWorkSync).mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve }))
+    render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [failed] }} />)
+    const retry = screen.getByRole('button', { name: 'Retry closing' })
+    act(() => { retry.click(); retry.click() })
+    expect(retryExternalWorkSync).toHaveBeenCalledTimes(1)
+    resolveRetry({ externalWork: [] })
+    await act(async () => {})
+  })
+
+  it('does not apply late close retry success or failure to another comment', async () => {
+    const failed = { provider: 'jira' as const, externalId: 'jira', externalKey: 'WEB-8', externalUrl: 'https://acme.atlassian.net/browse/WEB-8', lifecycleStatus: 'failed' as const, closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt }
+    const next = { ...comment, id: 'comment-2', body: 'Move the button' }
+    let resolveRetry!: (value: { externalWork: [] }) => void
+    vi.mocked(retryExternalWorkSync).mockReturnValueOnce(new Promise((resolve) => { resolveRetry = resolve }))
+    const first = render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [failed] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry closing' }))
+    first.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    resolveRetry({ externalWork: [] })
+    await act(async () => {})
+    expect(screen.getByText('Move the button')).toBeInTheDocument()
+    first.unmount()
+
+    let rejectRetry!: (reason: Error) => void
+    vi.mocked(retryExternalWorkSync).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectRetry = reject }))
+    const second = render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [failed] }} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Retry closing' }))
+    second.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    rejectRetry(new Error('late failure'))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
   it('shows a safe inline error and allows retry', async () => {
-    vi.mocked(createCommentGithubIssue)
+    vi.mocked(sendExternalWork)
       .mockRejectedValueOnce(new Error('response contained a secret'))
       .mockResolvedValueOnce({ ...issue, created: false })
     render(<CommentDetail {...props} />)
-    const createButton = screen.getByRole('button', { name: 'Create GitHub Issue' })
-    await waitFor(() => expect(createButton).toBeEnabled())
+    const createButton = await openExternalWorkDraft()
     fireEvent.click(createButton)
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not create the GitHub issue. Try again.',
+      'Could not create the external issue. Try again.',
     )
-    fireEvent.click(createButton)
-    await screen.findByRole('button', { name: 'Open GitHub Issue' })
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('shows safe preparation failures and handles disconnected preparation state', async () => {
+    vi.mocked(getExternalWorkDraft)
+      .mockRejectedValueOnce(new Error('response contained a secret'))
+      .mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'Title', body: 'Body' } })
+    render(<CommentDetail {...props} />)
+    const button = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Check Project Settings and try again.')
+    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the GitHub issue. Check Project Settings and try again.')
+  })
+
+  it('opens an issue discovered during preparation and protects its opener', async () => {
+    const opened = { opener: 'parent' }
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened as never)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'github', connected: true, destination: 'acme/site', existing: issue,
+      draft: { title: '', body: '' },
+    })
+    render(<CommentDetail {...props} />)
+    const button = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer'))
+    expect(opened.opener).toBeNull()
+  })
+
+  it('handles a blocked popup and a late preparation failure after selection changes', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'github', connected: true, destination: 'acme/site', existing: issue,
+      draft: { title: '', body: '' },
+    })
+    const first = render(<CommentDetail {...props} />)
+    const button = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    await waitFor(() => expect(open).toHaveBeenCalled())
+    first.unmount()
+
+    let rejectDraft!: (reason: Error) => void
+    vi.mocked(getExternalWorkDraft).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectDraft = reject }))
+    const view = render(<CommentDetail {...props} />)
+    const pending = screen.getByRole('button', { name: 'Send to…' })
+    await waitFor(() => expect(pending).toBeEnabled())
+    fireEvent.click(pending)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    const next = { ...comment, id: 'comment-2', body: 'Move the button' }
+    view.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    rejectDraft(new Error('late failure'))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('uses the default destination label and lets a prepared draft be cancelled', async () => {
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'github', connected: true, destination: null, existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    })
+    render(<CommentDetail {...props} />)
+    await openExternalWorkDraft()
+    expect(screen.getByRole('dialog')).toHaveTextContent('creating in GitHub')
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('clears transient state when selecting a different comment', async () => {
-    vi.mocked(createCommentGithubIssue).mockRejectedValueOnce(new Error('failure'))
+    vi.mocked(sendExternalWork).mockRejectedValueOnce(new Error('failure'))
     const { rerender } = render(<CommentDetail {...props} />)
-    const createButton = screen.getByRole('button', { name: 'Create GitHub Issue' })
-    await waitFor(() => expect(createButton).toBeEnabled())
+    const createButton = await openExternalWorkDraft()
     fireEvent.click(createButton)
     expect(await screen.findByRole('alert')).toBeInTheDocument()
     const next = { ...comment, id: 'comment-2', body: 'Move the button' }
@@ -166,16 +443,15 @@ describe('<CommentDetail /> GitHub issue action', () => {
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument())
   })
 
-  it('keeps a newer request busy when an older comment request finishes', async () => {
-    let rejectFirst!: (reason?: unknown) => void
-    let resolveSecond!: (value: typeof issue & { created: boolean }) => void
-    vi.mocked(createCommentGithubIssue)
-      .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectFirst = reject }))
-      .mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve }))
+  it('ignores a prepared draft for a previously selected comment', async () => {
+    let resolveFirst!: (value: Awaited<ReturnType<typeof getExternalWorkDraft>>) => void
+    vi.mocked(getExternalWorkDraft)
+      .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve }))
     const { rerender } = render(<CommentDetail {...props} />)
-    const firstButton = screen.getByRole('button', { name: 'Create GitHub Issue' })
+    const firstButton = screen.getByRole('button', { name: 'Send to…' })
     await waitFor(() => expect(firstButton).toBeEnabled())
     fireEvent.click(firstButton)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
 
     const next = { ...comment, id: 'comment-2', body: 'Move the button' }
     rerender(<CommentDetail
@@ -184,14 +460,10 @@ describe('<CommentDetail /> GitHub issue action', () => {
       projectComments={[next]}
       filteredComments={[next]}
     />)
-    const secondButton = screen.getByRole('button', { name: 'Create GitHub Issue' })
-    await waitFor(() => expect(secondButton).toBeEnabled())
-    fireEvent.click(secondButton)
-    rejectFirst(new Error('older request failed'))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Creating issue…' })).toBeDisabled())
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    resolveSecond({ ...issue, created: true })
-    await screen.findByRole('button', { name: 'Open GitHub Issue' })
+    resolveFirst({ provider: 'github', connected: true, destination: 'old/repo', existing: null, draft: { title: 'Old', body: 'Old' } })
+    await act(async () => {})
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByText('Move the button')).toBeInTheDocument()
   })
 
   it('renders feedback-only anonymous comments without invented page or DOM context', () => {
@@ -212,6 +484,46 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(screen.queryByText(/Pin placed at/)).not.toBeInTheDocument()
   })
 
+  it('hides selector context behind a toggle and resets it for the next comment', () => {
+    const view = render(<CommentDetail {...props} />)
+    const toggle = screen.getByRole('button', { name: 'Show selector' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('#hero')).not.toBeInTheDocument()
+
+    fireEvent.click(toggle)
+    expect(screen.getByText('#hero')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide selector' })).toHaveAttribute('aria-expanded', 'true')
+
+    const next = { ...comment, id: 'comment-2', selector: '#footer' }
+    view.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    expect(screen.getByRole('button', { name: 'Show selector' })).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('#footer')).not.toBeInTheDocument()
+  })
+
+  it('reveals text-range selector and character offsets on demand', () => {
+    const textRange = {
+      ...comment,
+      targetType: 'text_range' as const,
+      anchor: {
+        kind: 'text_range' as const,
+        prefix: 'Before ',
+        selectedText: 'selected',
+        normalizedText: 'selected',
+        suffix: ' after',
+        containerSelector: '#article > p',
+        startOffset: 7,
+        endOffset: 15,
+        createdFromUrl: 'https://example.com',
+      },
+    }
+    render(<CommentDetail {...props} selectedComment={textRange} projectComments={[textRange]} filteredComments={[textRange]} />)
+    expect(screen.getByText('selected')).toBeInTheDocument()
+    expect(screen.queryByText('#article > p')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show selector' }))
+    expect(screen.getByText('#article > p')).toBeInTheDocument()
+    expect(screen.getByText(/chars 7–15/)).toBeInTheDocument()
+  })
+
   it('renders screenshot and action variants and invokes nearby controls', () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     const { rerender } = render(<CommentDetail
@@ -225,7 +537,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     fireEvent.click(screen.getByRole('button', { name: /Open page/ }))
     expect(props.toggleReview).toHaveBeenCalledTimes(2)
     expect(props.handleToggleDone).toHaveBeenCalledWith('comment-1')
-    expect(open).toHaveBeenCalledWith('https://example.com', '_blank')
+    expect(open).toHaveBeenCalledWith('https://example.com', '_blank', 'noopener,noreferrer')
 
     rerender(<CommentDetail
       {...props}
@@ -238,97 +550,170 @@ describe('<CommentDetail /> GitHub issue action', () => {
     />)
     expect(screen.getByAltText('Feedback screenshot')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Done/ })).toBeInTheDocument()
+
+    rerender(<CommentDetail
+      {...props}
+      selectedComment={{ ...comment, implementationStatus: 'ready_for_testing' }}
+    />)
+    expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
     open.mockRestore()
   })
 
   it('does not dispatch a duplicate request before the busy render commits', async () => {
-    let resolveIssue!: (value: typeof issue & { created: boolean }) => void
-    vi.mocked(createCommentGithubIssue).mockReturnValueOnce(new Promise((resolve) => {
-      resolveIssue = resolve
+    let resolveDraft!: (value: Awaited<ReturnType<typeof getExternalWorkDraft>>) => void
+    vi.mocked(getExternalWorkDraft).mockReturnValueOnce(new Promise((resolve) => {
+      resolveDraft = resolve
     }))
     render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Create GitHub Issue' })
+    const button = screen.getByRole('button', { name: 'Send to…' })
     await waitFor(() => expect(button).toBeEnabled())
+    fireEvent.click(button)
+    const github = await screen.findByRole('button', { name: 'GitHub' })
+    act(() => { github.click(); github.click() })
+    expect(getExternalWorkDraft).toHaveBeenCalledTimes(1)
+    resolveDraft({ provider: 'github', connected: true, destination: 'acme/site', existing: null, draft: { title: 'Title', body: 'Body' } })
+    await screen.findByRole('dialog')
+  })
+
+  it('does not dispatch duplicate creates before the busy render commits', async () => {
+    let resolveIssue!: (value: typeof issue & { created: boolean }) => void
+    vi.mocked(sendExternalWork).mockReturnValueOnce(new Promise((resolve) => { resolveIssue = resolve }))
+    render(<CommentDetail {...props} />)
+    const create = await openExternalWorkDraft()
     act(() => {
-      button.click()
-      button.click()
+      create.click()
+      create.click()
     })
-    expect(createCommentGithubIssue).toHaveBeenCalledTimes(1)
+    expect(sendExternalWork).toHaveBeenCalledTimes(1)
     resolveIssue({ ...issue, created: true })
-    await screen.findByRole('button', { name: 'Open GitHub Issue' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('does not surface a late create failure after selection changes', async () => {
+    let rejectIssue!: (reason: Error) => void
+    vi.mocked(sendExternalWork).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectIssue = reject }))
+    const { rerender } = render(<CommentDetail {...props} />)
+    const create = await openExternalWorkDraft()
+    fireEvent.click(create)
+    const next = { ...comment, id: 'comment-2', body: 'Move the button' }
+    rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+    rejectIssue(new Error('late failure'))
+    await act(async () => {})
+    expect(screen.queryByRole('alert')).toBeNull()
   })
 
   it('renders the no-selection state safely', () => {
     render(<CommentDetail {...props} selectedComment={null} />)
     expect(screen.getByText('Select a comment')).toBeInTheDocument()
+    expect(screen.getByText('Pick a feedback item from the list to see the full context, screenshot, and actions.')).toBeInTheDocument()
+    expect(screen.queryByText('Select an extension comment')).toBeNull()
   })
 
-  it('disables creation and explains where to connect a repository', async () => {
-    vi.mocked(getProjectGitHubStatus).mockResolvedValueOnce({
-      githubConnectionStatus: 'disconnected',
-    })
+  it('explains when the selected provider is not connected', async () => {
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
     render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Create GitHub Issue' })
-    expect(button).toBeDisabled()
-    const tooltip = await screen.findByRole('tooltip')
-    expect(tooltip).toHaveTextContent('Connect a GitHub repository from Project Settings')
-    expect(tooltip.parentElement).toHaveAttribute('tabindex', '0')
+    const button = screen.getByRole('button', { name: 'Send to…' })
     fireEvent.click(button)
-    expect(createCommentGithubIssue).not.toHaveBeenCalled()
-  })
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Check Project Settings')
 
-  it('fails closed when connection status cannot be loaded', async () => {
-    vi.mocked(getProjectGitHubStatus).mockRejectedValueOnce(new Error('network failed'))
-    render(<CommentDetail {...props} />)
-    await waitFor(() => expect(getProjectGitHubStatus).toHaveBeenCalled())
-    expect(screen.getByRole('button', { name: 'Create GitHub Issue' })).toBeDisabled()
-  })
-
-  it('ignores a stale connection result after the selected project changes', async () => {
-    let resolveOld!: (value: { githubConnectionStatus: 'connected' }) => void
-    vi.mocked(getProjectGitHubStatus)
-      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve }))
-      .mockResolvedValueOnce({ githubConnectionStatus: 'disconnected' })
-    const { rerender } = render(<CommentDetail {...props} />)
-    rerender(<CommentDetail {...props} selectedProject="project-2" />)
-    await waitFor(() => expect(getProjectGitHubStatus).toHaveBeenCalledTimes(2))
-    resolveOld({ githubConnectionStatus: 'connected' })
-    await act(async () => {})
-    expect(screen.getByRole('button', { name: 'Create GitHub Issue' })).toBeDisabled()
-  })
-
-  it('ignores a stale connection failure after the selected project changes', async () => {
-    let rejectOld!: (reason?: unknown) => void
-    vi.mocked(getProjectGitHubStatus)
-      .mockReturnValueOnce(new Promise((_resolve, reject) => { rejectOld = reject }))
-      .mockResolvedValueOnce({ githubConnectionStatus: 'connected' })
-    const { rerender } = render(<CommentDetail {...props} />)
-    rerender(<CommentDetail {...props} selectedProject="project-2" />)
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Create GitHub Issue' })).toBeEnabled()
-    })
-    rejectOld(new Error('old project failed'))
-    await act(async () => {})
-    expect(screen.getByRole('button', { name: 'Create GitHub Issue' })).toBeEnabled()
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'jira', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
+    fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'Jira' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Jira issue')
   })
 
   it('does not request connection status when no project is selected', () => {
     render(<CommentDetail {...props} selectedProject="" />)
-    expect(getProjectGitHubStatus).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Create GitHub Issue' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Send to…' })).toBeDisabled()
   })
 
-  it('keeps a saved issue openable without a current repository connection', () => {
-    vi.mocked(getProjectGitHubStatus).mockResolvedValueOnce({
-      githubConnectionStatus: 'disconnected',
-    })
+  it('keeps a saved issue openable without a current repository connection', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     render(<CommentDetail {...props} selectedComment={{ ...comment, githubIssue: issue }} />)
-    const button = screen.getByRole('button', { name: 'Open GitHub Issue' })
+    const button = screen.getByRole('button', { name: 'Send to…' })
     expect(button).toBeEnabled()
     fireEvent.click(button)
+    fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
     expect(open).toHaveBeenCalledWith(issue.issueUrl, '_blank', 'noopener,noreferrer')
     open.mockRestore()
+  })
+
+  it('creates Linear issues and opens the result without an opener reference', async () => {
+    const opened = { opener: 'parent' }
+    const open = vi.spyOn(window, 'open').mockReturnValue(opened as never)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'linear', connected: true, destination: 'WEB · Web', existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    })
+    vi.mocked(sendExternalWork).mockResolvedValueOnce({ externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now', created: true })
+    render(<CommentDetail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(open).toHaveBeenCalledWith('https://linear.app/issue/WEB-1', '_blank', 'noopener,noreferrer'))
+    expect(opened.opener).toBeNull()
+  })
+
+  it('creates Jira issues through the selected provider', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({
+      provider: 'jira', connected: true, destination: 'WEB · Website', existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    })
+    vi.mocked(sendExternalWork).mockResolvedValueOnce({ externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://acme.atlassian.net/browse/WEB-1', createdAt: 'now', created: true })
+    render(<CommentDetail {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Jira' }))
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Send to Jira')
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(sendExternalWork).toHaveBeenCalledWith(
+      props.apiBase, props.accessToken, comment.id, 'jira', { title: 'Title', body: 'Body' },
+    ))
+    expect(open).toHaveBeenCalledWith('https://acme.atlassian.net/browse/WEB-1', '_blank', 'noopener,noreferrer')
+  })
+
+  it('surfaces missing result URLs and tolerates blocked Linear issue tabs', async () => {
+    vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: null, draft: { title: 'Title', body: 'Body' } })
+    vi.mocked(sendExternalWork)
+      .mockResolvedValueOnce({ created: true } as never)
+      .mockResolvedValueOnce({ externalUrl: 'https://linear.app/issue/WEB-2', createdAt: 'now', created: true } as never)
+      .mockResolvedValueOnce({
+        externalId: 'i', externalKey: 'WEB-2', externalUrl: 'https://linear.app/issue/WEB-2', createdAt: 'now', created: true,
+      })
+    vi.spyOn(window, 'open').mockReturnValue(null)
+    render(<CommentDetail {...props} />)
+    const send = screen.getByRole('button', { name: 'Send to…' })
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create the external issue')
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create the external issue')
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('handles incomplete existing work, blocked Linear tabs, and provider-picker cancellation', async () => {
+    const open = vi.spyOn(window, 'open').mockReturnValue(null)
+    vi.mocked(getExternalWorkDraft)
+      .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: 'i', externalKey: 'WEB-1', externalUrl: '', createdAt: 'now' }, draft: { title: '', body: '' } })
+      .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: '', externalKey: '', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now' }, draft: { title: '', body: '' } })
+      .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now' }, draft: { title: '', body: '' } })
+    render(<CommentDetail {...props} />)
+    const send = screen.getByRole('button', { name: 'Send to…' })
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Linear issue')
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Linear issue')
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
+    await waitFor(() => expect(open).toHaveBeenCalled())
+    fireEvent.click(send)
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByText('Choose a connected project integration.')).toBeNull()
   })
 
   it('preserves nullable page metadata and renders the feedback safely', () => {
@@ -359,7 +744,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     const { unmount } = render(
       <CommentList
         filteredComments={[commentWithoutPageContext]}
-        counts={{ all: 1, open: 0, ready: 1, done: 0, rejected: 0 }}
+        counts={{ all: 1, open: 0, ready: 1, ready_for_testing: 0, done: 0, rejected: 0 }}
         statusFilter="all"
         selectFilter={vi.fn()}
         bulkMode={false}
@@ -407,4 +792,82 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(screen.getByText('Ada · /settings')).toBeInTheDocument()
   })
 
+})
+
+describe('<ExternalWorkDialog />', () => {
+  it('only cancels through enabled controls or the backdrop', () => {
+    const onCancel = vi.fn()
+    const onSubmit = vi.fn()
+    const view = render(<ExternalWorkDialog
+      provider="github"
+      destination="acme/site"
+      initialDraft={{ title: ' Title ', body: ' Body ' }}
+      busy={false}
+      error={null}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    fireEvent.mouseDown(screen.getByRole('dialog'))
+    expect(onCancel).not.toHaveBeenCalled()
+    fireEvent.change(screen.getByRole('textbox', { name: 'External work description' }), { target: { value: ' Updated body ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
+    expect(onSubmit).toHaveBeenCalledWith({ title: 'Title', body: 'Updated body' })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onCancel).toHaveBeenCalledTimes(1)
+    fireEvent.mouseDown(screen.getByRole('presentation'))
+    expect(onCancel).toHaveBeenCalledTimes(2)
+
+    view.rerender(<ExternalWorkDialog
+      provider="github"
+      destination="acme/site"
+      initialDraft={{ title: 'Title', body: 'Body' }}
+      busy
+      error="Safe error"
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    fireEvent.mouseDown(screen.getByRole('presentation'))
+    expect(onCancel).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.getByRole('alert')).toHaveTextContent('Safe error')
+
+    view.rerender(<ExternalWorkDialog
+      provider="linear"
+      destination="WEB · Web"
+      initialDraft={{ title: 'Title', body: 'Body' }}
+      busy={false}
+      error={null}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Send to Linear')
+
+    view.rerender(<ExternalWorkDialog
+      provider="jira"
+      destination="WEB · Website"
+      initialDraft={{ title: 'Title', body: 'Body' }}
+      busy={false}
+      error={null}
+      onCancel={onCancel}
+      onSubmit={onSubmit}
+    />)
+    expect(screen.getByRole('dialog')).toHaveTextContent('Send to Jira')
+  })
+})
+
+describe('<ExternalWorkProviderDialog />', () => {
+  it('selects providers and only cancels from controls or the backdrop', () => {
+    const onCancel = vi.fn()
+    const onSelect = vi.fn()
+    render(<ExternalWorkProviderDialog onCancel={onCancel} onSelect={onSelect} />)
+    fireEvent.mouseDown(screen.getByRole('dialog'))
+    expect(onCancel).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'GitHub' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Linear' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Jira' }))
+    expect(onSelect.mock.calls).toEqual([['github'], ['linear'], ['jira']])
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    fireEvent.mouseDown(screen.getByRole('presentation'))
+    expect(onCancel).toHaveBeenCalledTimes(2)
+  })
 })
