@@ -1,6 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { browser } from 'wxt/browser'
-import type { SessionSummary } from './auth'
+import { withExclusiveAuth, type SessionSummary } from './auth'
 
 export type HostedAuthMessage = { type: 'auth:hosted-sign-in'; intent: 'signin' | 'signup' }
 export type AuthAttempt = { state: string; verifier: string; redirectUri: string }
@@ -81,6 +81,10 @@ export async function exchange(attempt: AuthAttempt, callbackUrl: string): Promi
 }
 
 export async function startHostedSignIn(client: SupabaseClient, intent: HostedAuthMessage['intent']): Promise<SessionSummary> {
+  return withExclusiveAuth(client, () => completeHostedSignIn(client, intent))
+}
+
+async function completeHostedSignIn(client: SupabaseClient, intent: HostedAuthMessage['intent']): Promise<SessionSummary> {
   const attempt: AuthAttempt = {
     state: randomProof(),
     verifier: randomProof(),
@@ -93,16 +97,22 @@ export async function startHostedSignIn(client: SupabaseClient, intent: HostedAu
     const callbackUrl = await browser.identity.launchWebAuthFlow({ url, interactive: true })
     if (!callbackUrl) throw new Error('CRRT sign-in was cancelled')
     const result = await exchange(attempt, callbackUrl)
-    const { data, error } = await client.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken })
-    if (error || data.session?.user.id !== result.user.id || data.session.user.email !== result.user.email) {
-      throw error ?? new Error('CRRT returned a different account')
-    }
-    const verified = await client.auth.getUser()
-    if (verified.error || verified.data.user?.id !== result.user.id) {
+    try {
+      const { data, error } = await client.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken })
+      if (error || data.session?.user.id !== result.user.id || data.session.user.email !== result.user.email) {
+        throw error ?? new Error('CRRT returned a different account')
+      }
+      const verified = await client.auth.getUser()
+      if (verified.error || verified.data.user?.id !== result.user.id) {
+        throw verified.error ?? new Error('Could not verify the CRRT account')
+      }
+      return { accessToken: data.session.access_token, email: result.user.email }
+    } catch (error) {
+      // setSession persists before returning, so every rejected post-save check
+      // must clear the session while this attempt still owns the client.
       await client.auth.signOut({ scope: 'local' })
-      throw verified.error ?? new Error('Could not verify the CRRT account')
+      throw error
     }
-    return { accessToken: data.session.access_token, email: result.user.email }
   } finally {
     await browser.storage.session.remove(ATTEMPT_KEY)
   }

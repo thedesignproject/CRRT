@@ -7,6 +7,7 @@ const browser = vi.hoisted(() => ({
 vi.mock('wxt/browser', () => ({ browser }))
 
 import { base64url, callbackValues, challengeFor, dashboardAuthUrl, exchange, randomProof, startHostedSignIn } from './hosted-auth'
+import { handleAuthMessage } from './auth'
 
 const state = 's'.repeat(43)
 const verifier = 'v'.repeat(43)
@@ -142,9 +143,11 @@ describe('hosted extension authentication flow', () => {
     }), { status: 200 }))
     const auth = client({ setSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'other', email: 'u@example.com' } } }, error: null }) })
     await expect(startHostedSignIn(auth as never, 'signin')).rejects.toThrow('different account')
+    expect(auth.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
 
     const wrongEmail = client({ setSession: vi.fn().mockResolvedValue({ data: { session: { user: { id: 'user-1', email: 'other@example.com' } } }, error: null }) })
     await expect(startHostedSignIn(wrongEmail as never, 'signin')).rejects.toThrow('different account')
+    expect(wrongEmail.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
   })
 
   it('surfaces session and verification failures and removes an unverified session', async () => {
@@ -154,6 +157,7 @@ describe('hosted extension authentication flow', () => {
     }), { status: 200 }))
     const setFailure = client({ setSession: vi.fn().mockResolvedValue({ data: { session: null }, error: new Error('session failed') }) })
     await expect(startHostedSignIn(setFailure as never, 'signin')).rejects.toThrow('session failed')
+    expect(setFailure.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
 
     const verifyFailure = client({ getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'other' } }, error: null }) })
     await expect(startHostedSignIn(verifyFailure as never, 'signin')).rejects.toThrow('Could not verify')
@@ -161,5 +165,47 @@ describe('hosted extension authentication flow', () => {
 
     const verifyError = client({ getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: new Error('verify failed') }) })
     await expect(startHostedSignIn(verifyError as never, 'signin')).rejects.toThrow('verify failed')
+  })
+
+  it('keeps the background client exclusive across popup lifetimes until cleanup finishes', async () => {
+    let finishBrowser!: (url: undefined) => void
+    let finishCleanup!: () => void
+    browser.identity.launchWebAuthFlow.mockImplementation(() => new Promise((resolve) => { finishBrowser = resolve }))
+    browser.storage.session.remove.mockImplementationOnce(() => new Promise<void>((resolve) => { finishCleanup = resolve }))
+    const auth = client()
+    const first = startHostedSignIn(auth as never, 'signin')
+    const firstResult = expect(first).rejects.toThrow('cancelled')
+    await vi.waitFor(() => expect(browser.identity.launchWebAuthFlow).toHaveBeenCalledOnce())
+    await expect(startHostedSignIn(auth as never, 'signup')).rejects.toThrow('in progress')
+    await expect(handleAuthMessage(auth as never, { type: 'auth:sign-out' })).rejects.toThrow('in progress')
+    await expect(handleAuthMessage(auth as never, { type: 'auth:get' })).rejects.toThrow('in progress')
+    expect(auth.auth.signOut).not.toHaveBeenCalled()
+    expect(browser.storage.session.set).toHaveBeenCalledOnce()
+    finishBrowser(undefined)
+    await vi.waitFor(() => expect(browser.storage.session.remove).toHaveBeenCalledOnce())
+    await expect(startHostedSignIn(auth as never, 'signin')).rejects.toThrow('in progress')
+    finishCleanup()
+    await firstResult
+    await expect(handleAuthMessage(auth as never, { type: 'auth:sign-out' })).resolves.toBeNull()
+  })
+
+  it.each(['missing session', 'wrong account', 'verification throws'])('does not leave a saved session after %s', async (failure) => {
+    browser.identity.launchWebAuthFlow.mockImplementation(async ({ url }: { url: string }) => `${redirectUri}?code=${code}&state=${new URL(url).searchParams.get('state')}`)
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify({
+      accessToken: 'access', refreshToken: 'refresh', user: { id: 'user-1', email: 'u@example.com' },
+    })))
+    let saved: unknown = null
+    const auth = client({
+      setSession: vi.fn(async () => {
+        saved = { access_token: 'access', user: { id: failure === 'wrong account' ? 'other' : 'user-1', email: 'u@example.com' } }
+        return { data: { session: failure === 'missing session' ? null : saved }, error: null }
+      }),
+      getUser: vi.fn().mockRejectedValue(new Error('connection lost')),
+      getSession: vi.fn(async () => ({ data: { session: saved }, error: null })),
+      signOut: vi.fn(async () => { saved = null; return { error: null } }),
+    })
+    await expect(startHostedSignIn(auth as never, 'signin')).rejects.toThrow()
+    await expect(handleAuthMessage(auth as never, { type: 'auth:get' })).resolves.toBeNull()
+    expect(browser.storage.session.remove).toHaveBeenCalledWith('crrt:extension-auth-attempt')
   })
 })

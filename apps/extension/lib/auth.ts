@@ -7,6 +7,20 @@ export type AuthMessage =
 
 export type SessionSummary = { accessToken: string; email: string }
 
+const activeAuthOperations = new WeakSet<SupabaseClient>()
+
+// The background owns one client across popup instances. Keep session reads,
+// sign-out, and the complete hosted flow exclusive, including failure cleanup.
+export async function withExclusiveAuth<T>(client: SupabaseClient, operation: () => Promise<T>): Promise<T> {
+  if (activeAuthOperations.has(client)) throw new Error('CRRT sign-in is in progress. Complete or close the sign-in window first.')
+  activeAuthOperations.add(client)
+  try {
+    return await operation()
+  } finally {
+    activeAuthOperations.delete(client)
+  }
+}
+
 const extensionStorage: SupportedStorage = {
   async getItem(key) {
     const values = await browser.storage.local.get(key)
@@ -36,6 +50,10 @@ export function isAuthMessage(value: unknown): value is AuthMessage {
 }
 
 export async function handleAuthMessage(client: SupabaseClient, message: AuthMessage) {
+  return withExclusiveAuth(client, () => handleExclusiveAuthMessage(client, message))
+}
+
+async function handleExclusiveAuthMessage(client: SupabaseClient, message: AuthMessage) {
   if (message.type === 'auth:get') {
     const { data, error } = await client.auth.getSession()
     if (error) throw error
