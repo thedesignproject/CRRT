@@ -18,6 +18,8 @@ vi.mock('./lib/supabase', () => ({
 }))
 vi.mock('./product-audit/ProductAuditWorkspace', () => ({ ProductAuditWorkspace: () => <div>Live audit workspace</div> }))
 vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing product audit</section> }))
+vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
+vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
 
@@ -35,6 +37,20 @@ it('routes durable audit IDs to the live workspace', () => {
   window.history.pushState({}, '', '/audit/11111111-1111-4111-8111-111111111111')
   render(<App />)
   expect(screen.getByText('Live audit workspace')).toBeInTheDocument()
+})
+
+it('routes direct privacy loads without mounting the marketing site', () => {
+  window.history.pushState({}, '', '/privacy/')
+  render(<App />)
+  expect(screen.getByText('Public privacy policy')).toBeInTheDocument()
+  expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
+})
+
+it('routes direct support loads without mounting the marketing site', () => {
+  window.history.pushState({}, '', '/support')
+  render(<App />)
+  expect(screen.getByText('Public support page')).toBeInTheDocument()
+  expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
 })
 
 it('keeps the landing page for non-audit routes', () => {
