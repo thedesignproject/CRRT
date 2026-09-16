@@ -13,9 +13,15 @@ function modeFromPath(pathname: string): Mode {
 
 type AuthPath = '/login' | '/signup' | '/forgot-password' | '/'
 
-export function LoginPage() {
+export function LoginPage({
+  initialMode,
+  continuationPath,
+}: {
+  initialMode?: Extract<Mode, 'signin' | 'signup'>
+  continuationPath?: string
+} = {}) {
   const [mode, setMode] = useState<Mode>(() =>
-    typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname)),
+    initialMode ?? (typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname))),
   )
   const [email, setEmail] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('email') ?? '')
   const [password, setPassword] = useState('')
@@ -27,6 +33,7 @@ export function LoginPage() {
   const [magicSent, setMagicSent] = useState(false)
 
   function continuationUrl() {
+    if (continuationPath) return `${window.location.origin}${continuationPath}`
     const invite = new URLSearchParams(window.location.search).get('invite')
     const base = `${window.location.origin}${route('/')}`
     return invite ? `${base}?${new URLSearchParams({ invite })}` : base
@@ -47,6 +54,15 @@ export function LoginPage() {
   }, [])
 
   function navigate(path: AuthPath) {
+    if (continuationPath) {
+      setMode(modeFromPath(path))
+      setError(null)
+      setSignupSent(false)
+      setAccountExists(false)
+      setResetSent(false)
+      setMagicSent(false)
+      return
+    }
     if (relPath(window.location.pathname) === path) return
     window.history.pushState({}, '', route(path))
     setMode(modeFromPath(path))
@@ -86,8 +102,10 @@ export function LoginPage() {
           setSignupSent(true)
         }
       } else {
+        const resetUrl = new URL(`${window.location.origin}${route('/reset-password')}`)
+        if (continuationPath) resetUrl.searchParams.set('continue', continuationPath)
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}${route('/reset-password')}`,
+          redirectTo: resetUrl.href,
         })
         if (resetError) throw resetError
         setResetSent(true)

@@ -27,22 +27,16 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
 describe('extension popup', () => {
-  it('signs in, activates commenting, and signs out', async () => {
+  it('signs in through CRRT, activates commenting, and signs out', async () => {
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
     const { unmount } = render(<Popup />)
     expect(screen.getByText('Loading…')).toBeInTheDocument()
     await screen.findByText('Sign in to CRRT')
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'u@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } })
-    expect(screen.getByLabelText('Email')).toHaveAttribute('name', 'email')
-    expect(screen.getByLabelText('Email')).toHaveAttribute('autocomplete', 'username')
-    expect(screen.getByLabelText('Password')).toHaveAttribute('name', 'password')
-    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'current-password')
-    expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute('rel', 'noopener noreferrer')
-    expect(screen.getByRole('link', { name: 'Reset password' })).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.getByText(/password stays out/)).toBeInTheDocument()
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }).closest('form')!)
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' }))
     await screen.findByText('Signed in as u@example.com')
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'auth:hosted-sign-in', intent: 'signin' })
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', 'http://127.0.0.1:5173/dashboard/?view=extension-comments')
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('rel', 'noopener noreferrer')
 
@@ -68,12 +62,10 @@ describe('extension popup', () => {
 
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
     view = render(<Popup />); await screen.findByText('Sign in to CRRT')
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'u@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } })
     sendMessage.mockResolvedValueOnce({ ok: false, error: 'wrong password' })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' })); await screen.findByText('wrong password')
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' })); await screen.findByText('wrong password')
     sendMessage.mockRejectedValueOnce('bad')
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' })); await screen.findByText('Sign in failed'); view.unmount()
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' })); await screen.findByText('Could not open CRRT sign-in'); view.unmount()
 
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
     view = render(<Popup />); await screen.findByText('Signed in as u@example.com')
