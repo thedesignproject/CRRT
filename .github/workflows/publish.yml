@@ -99,7 +99,7 @@ jobs:
       # setup-node is kept solely for the final `npm publish` step — Bun can
       # install and build, but `npm publish --provenance` with GitHub's OIDC
       # story is the reliable publish path.
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
           registry-url: 'https://registry.npmjs.org'
