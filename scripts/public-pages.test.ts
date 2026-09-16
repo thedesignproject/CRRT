@@ -44,13 +44,13 @@ describe('built public pages', () => {
     for (const script of window.document.querySelectorAll('script[src]')) expect(existsSync(resolve(dist, script.getAttribute('src')!.slice(1)))).toBe(true)
     window.happyDOM.abort()
   })
-  it('publishes a namespaced sitemap of public pages with real ISO source dates', () => {
+  it('publishes a namespaced sitemap without requiring Git history', () => {
     const window = new Window()
     const doc = new window.DOMParser().parseFromString(read('sitemap.xml'), 'application/xml')
     expect(doc.querySelector('parsererror')).toBeNull()
     expect(doc.documentElement.namespaceURI).toBe('http://www.sitemaps.org/schemas/sitemap/0.9')
     expect([...doc.querySelectorAll('loc')].map(node => node.textContent)).toEqual(publicPages.map(page => 'https://crrt.ai' + page.path))
-    for (const node of doc.querySelectorAll('lastmod')) expect(Number.isNaN(Date.parse(node.textContent!))).toBe(false)
+    expect(doc.querySelectorAll('lastmod')).toHaveLength(0)
     expect(read('robots.txt')).toContain('Sitemap: https://crrt.ai/sitemap.xml')
     window.happyDOM.abort()
   })
@@ -75,7 +75,7 @@ describe('routing boundaries', () => {
   it.each(['/api/v1/agent/shares/a/state', '/.well-known/workflow/v1/step', '/dashboard', '/dashboard/projects/a', '/audit/a', '/d/a', '/assets/app.js', '/docs/missing', '/docs-install'])('does not intercept %s', path => {
     expect(publicRoute.test(path)).toBe(false)
   })
-  it.each([['/d/a', '/app-shell.html'], ['/dashboard', '/dashboard/index.html'], ['/dashboard/projects/a', '/dashboard/index.html'], ['/audit/a', '/app-shell.html'], ['/docs/missing', '/public-site?__public_path=$1']])('preserves the intended fallback for %s', (path, dest) => {
+  it.each([['/privacy', '/app-shell.html'], ['/support/', '/app-shell.html'], ['/d/a', '/app-shell.html'], ['/dashboard', '/dashboard/index.html'], ['/dashboard/projects/a', '/dashboard/index.html'], ['/audit/a', '/app-shell.html'], ['/docs/missing', '/public-site?__public_path=$1']])('preserves the intended fallback for %s', (path, dest) => {
     expect(applicationFallbackRoutes.find(route => new RegExp(route.src).test(path))!.dest).toBe(dest)
   })
   it('wires public pages before filesystem and 404 after application routes in the deployment builder', () => {

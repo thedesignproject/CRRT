@@ -3,10 +3,27 @@ import { browser } from 'wxt/browser'
 
 export type AuthMessage =
   | { type: 'auth:get' }
-  | { type: 'auth:sign-in'; email: string; password: string }
   | { type: 'auth:sign-out' }
 
 export type SessionSummary = { accessToken: string; email: string }
+
+const activeAuthOperations = new WeakSet<SupabaseClient>()
+
+function requireIdleAuth(client: SupabaseClient) {
+  if (activeAuthOperations.has(client)) throw new Error('CRRT sign-in is in progress. Complete or close the sign-in window first.')
+}
+
+// The background owns one client across popup instances. Keep sign-out and the
+// complete hosted flow exclusive, including failure cleanup.
+export async function withExclusiveAuth<T>(client: SupabaseClient, operation: () => Promise<T>): Promise<T> {
+  requireIdleAuth(client)
+  activeAuthOperations.add(client)
+  try {
+    return await operation()
+  } finally {
+    activeAuthOperations.delete(client)
+  }
+}
 
 const extensionStorage: SupportedStorage = {
   async getItem(key) {
@@ -33,21 +50,21 @@ export function createExtensionSupabase() {
 
 export function isAuthMessage(value: unknown): value is AuthMessage {
   if (!value || typeof value !== 'object') return false
-  return ['auth:get', 'auth:sign-in', 'auth:sign-out'].includes(String((value as { type?: unknown }).type))
+  return ['auth:get', 'auth:sign-out'].includes(String((value as { type?: unknown }).type))
 }
 
 export async function handleAuthMessage(client: SupabaseClient, message: AuthMessage) {
   if (message.type === 'auth:get') {
+    // Widget initialization and navigation request the session concurrently.
+    // Reads may overlap one another, but must not expose a pending sign-in.
+    requireIdleAuth(client)
     const { data, error } = await client.auth.getSession()
     if (error) throw error
     return summarize(data.session)
   }
-  if (message.type === 'auth:sign-in') {
-    const { data, error } = await client.auth.signInWithPassword({ email: message.email.trim(), password: message.password })
+  return withExclusiveAuth(client, async () => {
+    const { error } = await client.auth.signOut({ scope: 'local' })
     if (error) throw error
-    return summarize(data.session)
-  }
-  const { error } = await client.auth.signOut({ scope: 'local' })
-  if (error) throw error
-  return null
+    return null
+  })
 }

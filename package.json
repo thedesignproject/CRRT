@@ -1,7 +1,7 @@
 {
   "name": "@thedesignproject/crrt",
-  "version": "0.3.19",
-  "description": "CRRT \ud83e\udd55 visual feedback capture for React apps",
+  "version": "0.3.20",
+  "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -35,9 +35,11 @@
     "typecheck": "tsc --project tsconfig.check.json",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "test:diff-coverage": "bash scripts/check-diff-coverage.sh",
     "build": "tsc && vite build",
     "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
     "build:extension": "wxt build --config apps/extension/wxt.config.ts",
+    "package:extension": "bun scripts/package-extension.ts",
     "preview": "vite preview",
     "preview:dashboard": "vite preview --config apps/dashboard/vite.config.ts",
     "prepublishOnly": "npm run build",

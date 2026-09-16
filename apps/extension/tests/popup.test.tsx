@@ -8,8 +8,16 @@ const getCurrentTabUrl = vi.hoisted(() => vi.fn())
 const resolveProjectForPage = vi.hoisted(() => vi.fn())
 const setActiveProject = vi.hoisted(() => vi.fn())
 const setProjectForPage = vi.hoisted(() => vi.fn())
+const matchingProjects = vi.hoisted(() => vi.fn())
 vi.mock('../lib/comments-api', () => ({ listExtensionProjects }))
-vi.mock('../lib/project-context', () => ({ getCurrentTabUrl, resolveProjectForPage, setActiveProject, setProjectForPage }))
+vi.mock('../lib/project-context', () => ({ getCurrentTabUrl, matchingProjects, resolveProjectForPage, setActiveProject, setProjectForPage }))
+const acceptDisclosure = vi.hoisted(() => vi.fn())
+const hasAcceptedDisclosure = vi.hoisted(() => vi.fn())
+vi.mock('../lib/disclosure', () => ({
+  acceptDisclosure,
+  hasAcceptedDisclosure,
+  publicCrrtUrl: (path: string) => `https://crrt.ai${path}`,
+}))
 
 document.body.innerHTML = '<div id="root"></div>'
 const { Popup } = await import('../entrypoints/popup/main')
@@ -21,28 +29,54 @@ beforeEach(() => {
   resolveProjectForPage.mockReset().mockResolvedValue(null)
   setActiveProject.mockReset().mockResolvedValue(undefined)
   setProjectForPage.mockReset().mockResolvedValue(undefined)
+  matchingProjects.mockReset().mockReturnValue([])
+  acceptDisclosure.mockReset().mockResolvedValue(undefined)
+  hasAcceptedDisclosure.mockReset().mockResolvedValue(true)
   document.body.innerHTML = ''
   vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5173/dashboard/')
 })
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
 describe('extension popup', () => {
-  it('signs in, activates commenting, and signs out', async () => {
+  it('requires versioned disclosure before reading auth or page context', async () => {
+    hasAcceptedDisclosure.mockReset().mockResolvedValue(false)
+    sendMessage.mockResolvedValueOnce({ ok: true, data: null })
+    const view = render(<Popup />)
+    expect(await screen.findByRole('heading', { name: 'Before you drop a carrot' })).toBeInTheDocument()
+    expect(screen.getByText(/screenshots are captured only/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', 'https://crrt.ai/privacy')
+    expect(screen.getByRole('link', { name: 'Support' })).toHaveAttribute('href', 'https://crrt.ai/support')
+    expect(sendMessage).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'I understand — continue' }))
+    await screen.findByText('Sign in to CRRT')
+    expect(acceptDisclosure).toHaveBeenCalledOnce()
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'auth:get' })
+    view.unmount()
+  })
+
+  it('reports disclosure persistence failures without starting authentication', async () => {
+    hasAcceptedDisclosure.mockReset().mockResolvedValue(false)
+    acceptDisclosure.mockRejectedValueOnce(new Error('Storage unavailable')).mockRejectedValueOnce('offline')
+    const view = render(<Popup />)
+    await screen.findByRole('heading', { name: 'Before you drop a carrot' })
+    fireEvent.click(screen.getByRole('button', { name: 'I understand — continue' }))
+    expect(await screen.findByText('Storage unavailable')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'I understand — continue' }))
+    expect(await screen.findByText('Could not save your choice')).toBeInTheDocument()
+    expect(sendMessage).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('signs in through CRRT, activates commenting, and signs out', async () => {
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
     const { unmount } = render(<Popup />)
     expect(screen.getByText('Loading…')).toBeInTheDocument()
     await screen.findByText('Sign in to CRRT')
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'u@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } })
-    expect(screen.getByLabelText('Email')).toHaveAttribute('name', 'email')
-    expect(screen.getByLabelText('Email')).toHaveAttribute('autocomplete', 'username')
-    expect(screen.getByLabelText('Password')).toHaveAttribute('name', 'password')
-    expect(screen.getByLabelText('Password')).toHaveAttribute('autocomplete', 'current-password')
-    expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute('rel', 'noopener noreferrer')
-    expect(screen.getByRole('link', { name: 'Reset password' })).toHaveAttribute('rel', 'noopener noreferrer')
+    expect(screen.getByText(/password stays out/)).toBeInTheDocument()
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign in' }).closest('form')!)
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' }))
     await screen.findByText('Signed in as u@example.com')
+    expect(sendMessage).toHaveBeenCalledWith({ type: 'auth:hosted-sign-in', intent: 'signin' })
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', 'http://127.0.0.1:5173/dashboard/?view=extension-comments')
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('rel', 'noopener noreferrer')
 
@@ -68,12 +102,10 @@ describe('extension popup', () => {
 
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
     view = render(<Popup />); await screen.findByText('Sign in to CRRT')
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'u@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'pw' } })
     sendMessage.mockResolvedValueOnce({ ok: false, error: 'wrong password' })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' })); await screen.findByText('wrong password')
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' })); await screen.findByText('wrong password')
     sendMessage.mockRejectedValueOnce('bad')
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in' })); await screen.findByText('Sign in failed'); view.unmount()
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' })); await screen.findByText('Could not open CRRT sign-in'); view.unmount()
 
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
     view = render(<Popup />); await screen.findByText('Signed in as u@example.com')
@@ -98,6 +130,8 @@ describe('extension popup', () => {
     const view = render(<Popup />)
     const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
     expect(destination).toHaveValue('p1')
+    expect(screen.getByText('store.example.com')).toBeInTheDocument()
+    expect(screen.getByText('Project collaborators')).toBeInTheDocument()
     expect(resolveProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', projects)
 
     fireEvent.change(destination, { target: { value: 'p2' } })
@@ -147,9 +181,30 @@ describe('extension popup', () => {
     listExtensionProjects.mockResolvedValueOnce([{ publicKey: 'store', name: 'Storefront', allowedOrigins: [] }])
     const view = render(<Popup />)
     const destination = await screen.findByRole('combobox', { name: 'Feedback destination' })
+    expect(screen.getByText('Open a regular website to start commenting.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Start commenting' })).toBeDisabled()
     fireEvent.change(destination, { target: { value: 'store' } })
     await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith({ publicKey: 'store', name: 'Storefront' }))
     expect(setProjectForPage).not.toHaveBeenCalled()
+    view.unmount()
+  })
+
+  it('explains empty and ambiguous project resolution without guessing', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    let view = render(<Popup />)
+    expect(await screen.findByText('No shared projects yet. You can still leave private feedback.')).toBeInTheDocument()
+    expect(screen.getByText('Only you')).toBeInTheDocument()
+    view.unmount()
+
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockResolvedValueOnce([
+      { publicKey: 'one', name: 'One', allowedOrigins: ['store.example.com'] },
+      { publicKey: 'two', name: 'Two', allowedOrigins: ['store.example.com'] },
+    ])
+    matchingProjects.mockReturnValueOnce([{ publicKey: 'one' }, { publicKey: 'two' }])
+    view = render(<Popup />)
+    expect(await screen.findByText('More than one project matches this page. Choose the destination.')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toHaveValue('')
     view.unmount()
   })
 })

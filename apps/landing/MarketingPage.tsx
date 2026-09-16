@@ -7,10 +7,10 @@ import { ProductAudit } from './sections/ProductAudit'
 import { Footer } from './sections/Footer'
 
 /** Shared by the interactive app and the build-time HTML renderer. */
-export function MarketingPage() {
+export function MarketingPage({ authenticated = false }: { authenticated?: boolean }) {
   return (
     <>
-      <Hero />
+      <Hero authenticated={authenticated} />
       <HowItWorks />
       <FakeDashboard />
       <ProductAudit />

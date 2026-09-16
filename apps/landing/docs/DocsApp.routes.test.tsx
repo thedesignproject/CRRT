@@ -6,7 +6,7 @@ it('keeps trailing-slash deep links and client navigation aligned with server do
   render(<DocsApp initialPath="/docs/agent-handoff/" />)
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hand off feedback')
   expect(document.title).toContain('CRRT Agent API')
-  fireEvent.click(screen.getAllByRole('link', { name: 'Self-host', exact: true })[0])
+  fireEvent.click(screen.getAllByRole('link', { name: 'Self-host' })[0])
   expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Run your own CRRT.')
   expect(document.title).toContain('Self-host CRRT')
   window.history.pushState({}, '', '/docs/')

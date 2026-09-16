@@ -9,6 +9,7 @@ export const publicPageRoutes = [
 ]
 
 export const applicationFallbackRoutes = [
+  { src: '^/(?:privacy|support)/?$', dest: '/app-shell.html' },
   { src: '^/d/[^/]+/?$', dest: '/app-shell.html' },
   { src: '^/dashboard(?:/.*)?$', dest: '/dashboard/index.html' },
   { src: '^/audit(?:/.*)?$', dest: '/app-shell.html' },

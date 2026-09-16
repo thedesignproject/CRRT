@@ -13,7 +13,7 @@ it('renders the shared marketing composition and existing documentation on the s
 })
 
 it('loads the canonical design tokens into HTML in development and production', () => {
-  const plugin = (config as any).plugins.find((plugin: any) => plugin.name === 'crrt-static-tokens')
+  const plugin = (config as any)({ mode: 'production', command: 'build' }).plugins.find((plugin: any) => plugin.name === 'crrt-static-tokens')
   const [style] = plugin.transformIndexHtml()
   expect(style).toMatchObject({ tag: 'style', attrs: { 'data-source': 'crrt-tokens' }, injectTo: 'head-prepend' })
   expect(style.children).toContain('--crrt-carrot:')

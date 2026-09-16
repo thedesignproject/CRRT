@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptInvite as apiAcceptInvite, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
@@ -23,6 +23,7 @@ import { SuperAdminPanel } from './components/SuperAdminPanel'
 import { ExtensionCommentsPage } from './components/ExtensionCommentsPage'
 import { Spinner } from './components/primitives'
 import { ProductAuditPage } from './components/ProductAuditPage'
+import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -68,6 +69,10 @@ export function App() {
     )
   }
 
+  if (pathname === '/extension-auth') {
+    return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
+  }
+
   if (!session || !user) return <LoginPage />
 
   const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
@@ -83,11 +88,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
   )
   const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite'))
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
   const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
+  const reviewRequests = useRef(new Map<string, symbol>())
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
@@ -203,25 +209,35 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       acc[ds]++
       return acc
     },
-    { all: 0, open: 0, ready: 0, done: 0, rejected: 0 },
+    { all: 0, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 },
   ), [projectComments])
 
   const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
+    const request = Symbol(id)
+    reviewRequests.current.set(id, request)
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
     try {
       await apiUpdateReview(API_BASE, accessToken, id, status)
+      if (reviewRequests.current.get(id) === request) await refreshComments()
     } catch (err) {
       console.error('Failed to update review status:', err)
-      refreshComments()
+      if (reviewRequests.current.get(id) === request) await refreshComments()
+    } finally {
+      if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
     }
-  }, [refreshComments])
+  }, [accessToken, refreshComments])
 
   const handleToggleDone = useCallback(async (id: string) => {
     const current = comments.find((c) => c.id === id)
     if (!current) return
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
     setComments((prev) => prev.map((c) => c.id === id
-      ? { ...c, implementationStatus: nextStatus, updatedAt: new Date().toISOString() }
+      ? {
+          ...c,
+          implementationStatus: nextStatus,
+          claimedByAgentId: nextStatus === 'unassigned' ? null : c.claimedByAgentId,
+          updatedAt: new Date().toISOString(),
+        }
       : c))
     try {
       await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
@@ -270,6 +286,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const ids = Array.from(bulkSelectedIds)
     if (ids.length === 0) return
     const idSet = new Set(ids)
+    const requests = new Map(ids.map((id) => {
+      const request = Symbol(id)
+      reviewRequests.current.set(id, request)
+      return [id, request] as const
+    }))
 
     setComments((prev) => prev.map((c) => {
       if (!idSet.has(c.id)) return c
@@ -291,11 +312,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     const results = await Promise.allSettled(calls)
     const failed = results.filter((r) => r.status === 'rejected')
+    const stillCurrent = ids.some((id) => reviewRequests.current.get(id) === requests.get(id))
     if (failed.length > 0) {
       console.error(`Bulk ${action}: ${failed.length}/${calls.length} calls failed`, failed)
-      refreshComments()
+      if (stillCurrent) await refreshComments()
+    } else if (stillCurrent) {
+      await refreshComments()
     }
-  }, [bulkSelectedIds, exitBulkMode, refreshComments])
+    for (const id of ids) {
+      if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
+    }
+  }, [accessToken, bulkSelectedIds, exitBulkMode, refreshComments])
 
   const toggleSelectAllVisible = useCallback(() => {
     const visibleIds = filteredComments.map((c) => c.id)
@@ -373,6 +400,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (action === 'filter-all') selectFilter('all')
     if (action === 'filter-open') selectFilter('open')
     if (action === 'filter-ready') selectFilter('ready')
+    if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
     if (action === 'filter-done') selectFilter('done')
     if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
     if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
@@ -417,7 +445,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       const project = await claimProject(projectKey, name)
       setSelectedProject(project.publicKey)
       setView('feedback')
-      setStatusFilter('all')
+      setStatusFilter('open')
       setSelectedCommentId('')
       setAddProjectOpen(false)
     } catch (err) {
@@ -430,7 +458,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const handleOpenCommentActivity = useCallback((payload: { projectKey: string; latestCommentId?: string }) => {
     setSelectedProject(payload.projectKey)
     setView('feedback')
-    setStatusFilter('all')
+    setStatusFilter('open')
     if (payload.latestCommentId) {
       setPendingCommentSelection({ projectKey: payload.projectKey, commentId: payload.latestCommentId })
       void refreshComments()

@@ -38,13 +38,14 @@ export interface CommentRecord {
   body: string
   visibility?: 'shared' | 'internal'
   reviewStatus: 'open' | 'accepted' | 'rejected'
-  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
+  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'ready_for_testing' | 'done'
   claimedByAgentId: string | null
   imageUrl: string | null
   authorName: string | null
   targetType?: CommentTargetType
   anchor?: TextRangeAnchorRecord | null
   githubIssue?: GitHubIssueRecord | null
+  externalWork?: ExternalWorkRecord[]
   createdAt: string
   updatedAt: string
 }
@@ -61,6 +62,18 @@ export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
 
 export type ExternalWorkProvider = 'github' | 'linear' | 'jira'
 
+export interface ExternalWorkRecord {
+  provider: ExternalWorkProvider
+  externalId: string
+  externalKey: string
+  externalUrl: string
+  lifecycleStatus: 'active' | 'closing' | 'closed' | 'failed' | 'blocked'
+  syncAction?: 'retry' | 'reconnect' | 'check_permissions' | 'check_issue' | 'configure_workflow' | null
+  closedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ExternalWorkDraft {
   provider: ExternalWorkProvider
   connected: boolean
@@ -75,6 +88,7 @@ export interface ProjectTrackerIntegration {
   workspace?: string
   selectedDestinationId?: string | null
   destinations: Array<{ id: string; name: string }>
+  reauthorizationRequired?: boolean
 }
 
 export interface ExtensionCommentRecord {
@@ -180,6 +194,24 @@ function authHeaders(accessToken?: string) {
   return headers
 }
 
+export interface ExtensionAuthHandoffRequest {
+  state: string
+  codeChallenge: string
+  redirectUri: string
+}
+
+export function createExtensionAuthHandoff(
+  apiBase: string,
+  accessToken: string,
+  input: ExtensionAuthHandoffRequest,
+) {
+  return requestJson<{ redirectUrl: string }>(`${apiBase.replace(/\/$/, '')}/v1/extension/auth/handoff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(input),
+  })
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const text = await response.text()
@@ -223,6 +255,7 @@ export interface AdminProject {
     claimed: number
     inProgress: number
     blocked: number
+    readyForTesting: number
     done: number
   }
   feedbackShareCount: number
@@ -689,6 +722,13 @@ export function sendExternalWork(
       headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
       body: JSON.stringify({ provider, draft }),
     },
+  )
+}
+
+export function retryExternalWorkSync(apiBase: string, accessToken: string, commentId: string) {
+  return requestJson<{ externalWork: ExternalWorkRecord[] }>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-sync`,
+    { method: 'POST', headers: { ...authHeaders(accessToken) } },
   )
 }
 

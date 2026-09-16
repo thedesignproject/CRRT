@@ -93,13 +93,38 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
     vi.mocked(findActiveSharesForComment).mockResolvedValueOnce([{ id: 's1' }] as never)
 
     let res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
+    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'ready_for_testing' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'comment.implementation_changed' }))
+    expect(updateImplementationStatus).toHaveBeenCalledWith('c', { implementationStatus: 'ready_for_testing' })
+    expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({
+      eventType: 'comment.implementation_changed',
+      payload: { implementationStatus: 'ready_for_testing' },
+    }))
 
     vi.mocked(updateImplementationStatus).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
+  })
+
+  it('clears the previous agent claim when a reviewer reopens an item', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(getComment).mockResolvedValue({
+      id: 'c', projectId: 'p', implementationStatus: 'done', claimedByAgentId: 'old-agent',
+    } as never)
+    vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
+    vi.mocked(updateImplementationStatus).mockResolvedValue({ id: 'c' } as never)
+    vi.mocked(findActiveSharesForComment).mockResolvedValue([])
+    const res = mockRes()
+
+    await call({
+      method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'unassigned' }, headers: {},
+    }, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(updateImplementationStatus).toHaveBeenCalledWith('c', {
+      implementationStatus: 'unassigned',
+      claimedByAgentId: null,
+    })
   })
 })

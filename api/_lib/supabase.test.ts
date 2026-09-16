@@ -5,7 +5,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }))
 
 import { createClient } from '@supabase/supabase-js'
-import { getServiceSupabase, getSupabase } from './supabase.js'
+import { getNonPersistentSupabase, getServiceSupabase, getSupabase } from './supabase.js'
 
 const origUrl = process.env.SUPABASE_URL
 const origKey = process.env.SUPABASE_KEY
@@ -59,5 +59,24 @@ describe('getServiceSupabase', () => {
   it('throws when SUPABASE_URL is missing', () => {
     delete process.env.SUPABASE_URL
     expect(() => getServiceSupabase()).toThrow(/missing Supabase credentials/)
+  })
+})
+
+describe('getNonPersistentSupabase', () => {
+  it('builds an isolated anon-key auth client', () => {
+    getNonPersistentSupabase()
+    expect(createClient).toHaveBeenCalledWith(
+      'https://supa.example',
+      'anon-key',
+      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
+    )
+  })
+
+  it('requires both public Supabase settings', () => {
+    delete process.env.SUPABASE_URL
+    expect(() => getNonPersistentSupabase()).toThrow(/missing Supabase credentials/)
+    process.env.SUPABASE_URL = 'https://supa.example'
+    delete process.env.SUPABASE_KEY
+    expect(() => getNonPersistentSupabase()).toThrow(/missing Supabase credentials/)
   })
 })

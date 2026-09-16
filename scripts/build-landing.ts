@@ -1,5 +1,4 @@
 import { build } from 'vite'
-import { execFileSync } from 'node:child_process'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { resolve, join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -67,8 +66,7 @@ for (const page of publicPages) {
 }
 await window.happyDOM.close()
 await writeFile(join(dist, 'public-pages.json'), JSON.stringify(pages))
-// Source history is an actual modification date, not the scan/build time.
-const lastmod = execFileSync('git', ['log', '-1', '--format=%cI', '--', 'apps/landing', 'branding/crrt/tokens.css', 'scripts/build-landing.ts', 'scripts/public-pages.ts'], { cwd: root, encoding: 'utf8' }).trim()
-await writeFile(join(dist, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + publicPages.map(page => `  <url><loc>https://crrt.ai${page.path}</loc><lastmod>${lastmod}</lastmod></url>`).join('\n') + '\n</urlset>\n')
+// Deployment source archives contain no Git history; omit the optional lastmod.
+await writeFile(join(dist, 'sitemap.xml'), '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + publicPages.map(page => `  <url><loc>https://crrt.ai${page.path}</loc></url>`).join('\n') + '\n</urlset>\n')
 await rm(join(dist, '.prerender'), { recursive: true, force: true })
 console.log(`Prerendered ${publicPages.length} CRRT pages as HTML and Markdown.`)
