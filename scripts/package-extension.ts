@@ -1,7 +1,7 @@
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { collectReleaseFiles, readExtensionVersion, relativeReleasePath, releaseMetadata, validateReleaseFiles } from '../apps/extension/release'
+import { collectReleaseFiles, readExtensionVersion, relativeReleasePath, releaseMetadata, validatePublicSupabaseKey, validateReleaseFiles } from '../apps/extension/release'
 
 const root = process.cwd()
 const extensionRoot = resolve(root, 'apps/extension')
@@ -12,6 +12,7 @@ const required = ['WXT_API_BASE', 'WXT_DASHBOARD_URL', 'WXT_SUPABASE_URL', 'WXT_
 for (const name of required) {
   if (!process.env[name]?.trim()) throw new Error(`${name} is required for a Store release`)
 }
+validatePublicSupabaseKey(process.env.WXT_SUPABASE_ANON_KEY!)
 
 const build = spawnSync('bunx', ['wxt', 'zip', '--config', 'apps/extension/wxt.config.ts'], {
   cwd: root,

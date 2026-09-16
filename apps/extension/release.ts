@@ -48,6 +48,22 @@ function sha256(value: Uint8Array): string {
   return createHash('sha256').update(value).digest('hex')
 }
 
+function jwtRole(payload: string): unknown {
+  try {
+    return JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'))?.role
+  } catch {
+    return undefined
+  }
+}
+
+// This is a key-type guard, not signature verification. Supabase verifies the
+// credential at runtime; packaging must never accept an elevated key type.
+export function validatePublicSupabaseKey(key: string): void {
+  if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return
+  const jwt = /^[A-Za-z0-9_-]+\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+$/.exec(key)
+  requireValue(jwt && jwtRole(jwt[1]!) === 'anon', 'WXT_SUPABASE_ANON_KEY must be a publishable key or an anon-role JWT')
+}
+
 export function readExtensionVersion(packageJson: string | URL = resolve(process.cwd(), 'apps/extension/package.json')): string {
   const parsed = jsonRecord(JSON.parse(readFileSync(packageJson, 'utf8')), 'Extension package')
   const version = parsed.version
@@ -94,6 +110,7 @@ function validateBundleText(path: string, bytes: Uint8Array): void {
   const forbidden: Array<[RegExp, string]> = [
     [/http:\/\/(?:localhost:3000|127\.0\.0\.1:5173|127\.0\.0\.1:54321)(?:\/|\b)/i, 'configured development URL'],
     [/SUPABASE_SERVICE_ROLE_KEY|service_role/i, 'service-role credential'],
+    [/\bsb_secret_[A-Za-z0-9_-]+/, 'Supabase secret key'],
     [/-----BEGIN [A-Z ]*PRIVATE KEY-----/, 'private key'],
     [/\b(?:gh[pousr]_|sk-(?:live-)?|re_)[A-Za-z0-9_-]{16,}/, 'provider secret'],
     [/<script[^>]+src=["']https?:/i, 'remote script'],
@@ -102,6 +119,9 @@ function validateBundleText(path: string, bytes: Uint8Array): void {
     [/(?:^|[^.\w])eval\s*\(/, 'eval'],
   ]
   for (const [pattern, label] of forbidden) requireValue(!pattern.test(text), `${path} contains a forbidden ${label}`)
+  for (const jwt of text.matchAll(/\b[A-Za-z0-9_-]+\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+\b/g)) {
+    requireValue(jwtRole(jwt[1]!) !== 'service_role', `${path} contains a forbidden service-role JWT`)
+  }
 }
 
 export function validateReleaseFiles(

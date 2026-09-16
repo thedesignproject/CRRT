@@ -3,7 +3,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { collectReleaseFiles, pngDimensions, readExtensionVersion, relativeReleasePath, releaseMetadata, STORE_CSP, STORE_ICON_SIZES, STORE_PERMISSIONS, validateReleaseFiles } from './release'
+import { collectReleaseFiles, pngDimensions, readExtensionVersion, relativeReleasePath, releaseMetadata, STORE_CSP, STORE_ICON_SIZES, STORE_PERMISSIONS, validatePublicSupabaseKey, validateReleaseFiles } from './release'
+
+// Synthetic JWTs: these carry no valid signature and cannot authenticate.
+function jwt(payload: unknown) {
+  return `${Buffer.from('{"alg":"HS256"}').toString('base64url')}.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.test_signature`
+}
 
 function png(width: number, height = width): Uint8Array {
   const bytes = new Uint8Array(24)
@@ -46,6 +51,27 @@ function releaseFiles(overrides: Record<string, Uint8Array | string> = {}) {
 const options = { version: '1.0.0', apiBase: 'https://crrt.ai/api', supabaseUrl: 'https://project.supabase.co' }
 
 describe('extension Store release', () => {
+  it('accepts only public Supabase key types', () => {
+    expect(() => validatePublicSupabaseKey('sb_publishable_ci_build_fixture')).not.toThrow()
+    expect(() => validatePublicSupabaseKey(jwt({ role: 'anon' }))).not.toThrow()
+    for (const key of [
+      '', 'public-ci-build-key', 'sb_publishable_', 'sb_publishable_bad key',
+      'sb_secret_ci_build_fixture', jwt({ role: 'service_role' }), jwt({ role: 'authenticated' }),
+      jwt({}), jwt(null), jwt('anon'), jwt({ role: 1 }), 'header.invalid.signature',
+      `${jwt({ role: 'anon' })}.extra`, ` ${jwt({ role: 'anon' })}`,
+    ]) {
+      expect(() => validatePublicSupabaseKey(key)).toThrow('must be a publishable key or an anon-role JWT')
+    }
+  })
+
+  it('detects encoded service-role JWTs and modern secret keys in built output', () => {
+    const elevated = jwt({ iss: 'supabase', role: 'service_role' })
+    expect(elevated).not.toContain('service_role')
+    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': `const key = "${elevated}"` }), options)).toThrow('service-role JWT')
+    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': 'const key = "sb_secret_ci_build_fixture"' }), options)).toThrow('Supabase secret key')
+    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': `const key = "${jwt({ role: 'anon' })}"; window.location.href` }), options)).not.toThrow()
+  })
+
   it('reads the single package version source and rejects invalid Chrome versions', () => {
     expect(readExtensionVersion()).toBe('1.0.0')
     const directory = mkdtempSync(join(tmpdir(), 'crrt-version-'))

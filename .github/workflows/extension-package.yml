@@ -22,7 +22,8 @@ jobs:
       WXT_API_BASE: https://crrt.ai/api
       WXT_DASHBOARD_URL: https://crrt.ai/dashboard
       WXT_SUPABASE_URL: ${{ github.event_name == 'pull_request' && 'https://ci-project.supabase.co' || vars.CRRT_SUPABASE_URL }}
-      WXT_SUPABASE_ANON_KEY: ${{ github.event_name == 'pull_request' && 'public-ci-build-key' || secrets.CRRT_SUPABASE_ANON_KEY }}
+      # Nonfunctional publishable-format fixture for PR build validation only.
+      WXT_SUPABASE_ANON_KEY: ${{ github.event_name == 'pull_request' && 'sb_publishable_ci_build_fixture_not_a_real_key' || secrets.CRRT_SUPABASE_ANON_KEY }}
     steps:
       - uses: actions/checkout@v7
         with:
