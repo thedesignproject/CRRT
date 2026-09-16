@@ -1,13 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { Hero } from './sections/Hero'
 import { DASHBOARD_HREF } from './sections/Hero'
-import { HowItWorks } from './sections/HowItWorks'
-import { FakeDashboard } from './sections/FakeDashboard'
-import { Closing } from './sections/Closing'
-import { Pricing } from './sections/Pricing'
-import { ProductAudit } from './sections/ProductAudit'
-import { Footer } from './sections/Footer'
+import { MarketingPage } from './MarketingPage'
 import { EasterEgg } from './components/EasterEgg'
 import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
@@ -108,13 +102,7 @@ function MarketingSite({
   return (
     <>
       <ScrollRuler />
-      <Hero authenticated={Boolean(session)} />
-      <HowItWorks />
-      <FakeDashboard />
-      <ProductAudit />
-      <Closing />
-      <Pricing />
-      <Footer />
+      <MarketingPage authenticated={Boolean(session)} />
       <FeedbackWidget apiBase={apiBase} projectId={projectId} />
       <EasterEgg />
     </>
