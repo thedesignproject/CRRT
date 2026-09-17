@@ -1,3 +1,4 @@
+import { SuggestedProjects } from './SuggestedProjects'
 import type { User } from '@supabase/supabase-js'
 import { cn } from '../lib/utils'
 import { asset, landingRoute, route } from '../lib/routes'
@@ -162,6 +163,7 @@ export function Header({
         </button>
         {addProjectOpen && (
           <AddProjectPopover
+            suggestedProjects={<SuggestedProjects apiBase={apiBase} accessToken={accessToken} onProjectsChanged={onProjectsChanged} />}
             onAdd={onAddProject}
             onClose={() => setAddProjectOpen(false)}
             checkAvailability={onCheckAvailability}
