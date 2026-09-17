@@ -33,6 +33,7 @@ beforeAll(async () => {
 })
 afterAll(async () => {
   if (!db) return
+  await db`delete from public.notifications where payload->>'projectKey' = ${project}`
   await db`delete from public.projects where public_key = ${project}`
   await db`delete from auth.users where id in (${admin}, ${user}, ${other})`
   await db.end()

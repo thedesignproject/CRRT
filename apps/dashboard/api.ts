@@ -571,7 +571,7 @@ export function cancelProjectInvite(apiBase: string, accessToken: string, projec
   )
 }
 
-export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity'
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity' | 'project.access_requested'
 
 export interface Notification {
   id: string

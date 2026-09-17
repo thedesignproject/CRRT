@@ -461,9 +461,12 @@ export const notifications = pgTable(
     unreadCommentActivityProjectIdx: uniqueIndex('notifications_unread_comment_activity_project_idx')
       .on(t.userId, sql`((payload->>'projectKey'))`)
       .where(sql`${t.kind} = 'comment.activity' and ${t.readAt} is null`),
+    accessRequestAttemptIdx: uniqueIndex('notifications_access_request_attempt_idx')
+      .on(t.userId, sql`((payload->>'requestId'))`, sql`((payload->>'attempt'))`)
+      .where(sql`${t.kind} = 'project.access_requested'`),
     kindCheck: check(
       'notifications_kind_check',
-      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined', 'comment.activity') and (${t.kind} <> 'comment.activity' or nullif(btrim(${t.payload}->>'projectKey'), '') is not null)`,
+      sql`${t.kind} in ('invite.received', 'invite.accepted', 'invite.declined', 'comment.activity', 'project.access_requested') and (${t.kind} not in ('comment.activity', 'project.access_requested') or nullif(btrim(${t.payload}->>'projectKey'), '') is not null)`,
     ),
   }),
 )
