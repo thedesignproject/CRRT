@@ -196,3 +196,36 @@ describe('LoginPage extension continuation', () => {
     expect(window.location.pathname + window.location.search).toBe(continuation)
   })
 })
+
+describe('company access review continuation', () => {
+  it('preserves the review project through login and auth navigation', async () => {
+    window.history.replaceState({}, '', '/login?accessProject=project%2Fone')
+    signInWithPassword.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'admin@company.com' } })
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
+    await waitFor(() => expect(window.location.search).toBe('?accessProject=project%2Fone'))
+  })
+  it('keeps the review destination when switching to signup and sending a magic link', async () => {
+    window.history.replaceState({}, '', '/login?accessProject=p')
+    signInWithOtp.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.click(screen.getByRole('link', { name: /create an account/i }))
+    expect(window.location.search).toBe('?accessProject=p')
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'admin@company.com' } })
+    // Return to sign in to use the email-link flow.
+    fireEvent.click(screen.getByRole('link', { name: /sign in/i }))
+    fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({ email: 'admin@company.com', options: { emailRedirectTo: 'http://localhost:3000/?accessProject=p' } }))
+  })
+  it('preserves review context through password recovery', async () => {
+    window.history.replaceState({}, '', '/login?accessProject=p')
+    resetPasswordForEmail.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'admin@company.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('admin@company.com', { redirectTo: 'http://localhost:3000/reset-password?accessProject=p' }))
+  })
+})
