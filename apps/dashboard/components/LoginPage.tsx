@@ -1,3 +1,4 @@
+import { dashboardAuthSearch } from '../lib/access-review-link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { asset, relPath, route } from '../lib/routes'
@@ -34,9 +35,8 @@ export function LoginPage({
 
   function continuationUrl() {
     if (continuationPath) return `${window.location.origin}${continuationPath}`
-    const invite = new URLSearchParams(window.location.search).get('invite')
     const base = `${window.location.origin}${route('/')}`
-    return invite ? `${base}?${new URLSearchParams({ invite })}` : base
+    return base + dashboardAuthSearch(window.location.search)
   }
 
   // Sync mode if the user uses browser back / forward.
@@ -64,7 +64,7 @@ export function LoginPage({
       return
     }
     if (relPath(window.location.pathname) === path) return
-    window.history.pushState({}, '', route(path))
+    window.history.pushState({}, '', route(path) + dashboardAuthSearch(window.location.search))
     setMode(modeFromPath(path))
     setError(null)
     setSignupSent(false)
@@ -104,6 +104,8 @@ export function LoginPage({
       } else {
         const resetUrl = new URL(`${window.location.origin}${route('/reset-password')}`)
         if (continuationPath) resetUrl.searchParams.set('continue', continuationPath)
+        const accessProject = new URLSearchParams(window.location.search).get('accessProject')
+        if (accessProject) resetUrl.searchParams.set('accessProject', accessProject)
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: resetUrl.href,
         })

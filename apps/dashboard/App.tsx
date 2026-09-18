@@ -1,3 +1,4 @@
+import { useAccessReviewLink } from './hooks/useAccessReviewLink'
 import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptInvite as apiAcceptInvite, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
@@ -93,6 +94,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments'>(() =>
     new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
   )
+  const openAccessReview = useCallback((project: string) => {
+    setSelectedProject(project)
+    setView('settings')
+  }, [])
+  const accessReviewError = useAccessReviewLink(projects, projectsLoading, projectsError, openAccessReview)
+  const accessReviewNotice = accessReviewError && <p role="alert" className="p-4 text-sm">{accessReviewError}</p>
   const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite'))
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
@@ -167,7 +174,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     if (view !== 'extension-comments' && !selectedProject && projects.length > 0) {
-      setSelectedProject(projects[0].publicKey)
+      setSelectedProject(current => current || projects[0].publicKey)
     }
   }, [projects, selectedProject, view])
 
@@ -483,6 +490,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   if (showWelcome) {
     return (
       <>
+        {accessReviewNotice}
         <WelcomeScreen
           suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
           onOpenExtensionComments={openExtensionComments}
@@ -543,6 +551,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
       />
 
+      {accessReviewNotice}
       {view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
       ) : view === 'super-admin' && superadmin ? (
