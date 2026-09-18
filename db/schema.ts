@@ -122,6 +122,38 @@ export const projectInvites = pgTable(
 // Reference only: not exported, so Drizzle does not manage Supabase's auth table.
 const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
 
+// Company email discovery is separate from widget origin restrictions.
+export const projectEmailDomains = pgTable('project_email_domains', {
+  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+  domain: text('domain').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  pk: primaryKey({ columns: [t.projectKey, t.domain] }),
+  domainIdx: index('project_email_domains_domain_idx').on(t.domain),
+  normalized: check('project_email_domains_normalized', sql`${t.domain} = lower(${t.domain}) and length(${t.domain}) <= 253 and ${t.domain} ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'`),
+})).enableRLS()
+
+export const projectAccessRequests = pgTable('project_access_requests', {
+  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  status: text('status').notNull().default('pending'),
+  attempt: integer('attempt').notNull().default(1),
+  requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+  reviewedBy: uuid('reviewed_by').references(() => authUsers.id, { onDelete: 'set null' }),
+  grantedRole: text('granted_role'),
+}, (t) => ({
+  userProject: uniqueIndex('project_access_requests_user_project_idx').on(t.projectKey, t.userId),
+  userIdx: index('project_access_requests_user_idx').on(t.userId),
+  statusCheck: check('project_access_requests_status_check', sql`${t.status} in ('pending', 'approved', 'declined')`),
+  roleCheck: check('project_access_requests_role_check', sql`${t.grantedRole} in ('admin', 'member', 'guest')`),
+  attemptCheck: check('project_access_requests_attempt_check', sql`${t.attempt} > 0`),
+  emailCheck: check('project_access_requests_email_check', sql`${t.email} = lower(${t.email})`),
+  reviewCheck: check('project_access_requests_review_check', sql`(${t.status} = 'pending' and ${t.reviewedAt} is null and ${t.grantedRole} is null) or (${t.status} = 'declined' and ${t.reviewedAt} is not null and ${t.grantedRole} is null) or (${t.status} = 'approved' and ${t.reviewedAt} is not null and ${t.grantedRole} is not null)`),
+})).enableRLS()
+
 // Server-managed allowlist for Chrome extension identities that may receive an
 // authentication handoff. Removing a client also revokes its outstanding grants.
 export const extensionAuthClients = pgTable(

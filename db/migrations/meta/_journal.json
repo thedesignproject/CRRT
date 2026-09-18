@@ -183,6 +183,13 @@
       "when": 1789138426802,
       "tag": "0025_familiar_master_mold",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1789646240040,
+      "tag": "0026_striped_ego",
+      "breakpoints": true
     }
   ]
 }
