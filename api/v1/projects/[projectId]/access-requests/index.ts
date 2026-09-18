@@ -3,6 +3,8 @@ import { requireProjectCapability, requireUser } from '../../../../_lib/auth.js'
 import { accessErrors, listAccessRequests, submitAccessRequest } from '../../../../_lib/project-access-requests.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 
+import { scheduleAccessRequestEmail } from '../../../../_lib/project-access-email.js'
+
 const METHODS = ['GET', 'POST', 'OPTIONS']
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
@@ -22,6 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const failure = accessErrors[result.outcome]
     if (failure) return jsonError(req, res, ...failure)
     if (!result.request) throw new Error('Missing access request')
+    if (result.outcome === 'created') scheduleAccessRequestEmail(result.request)
     setCors(req, res, METHODS)
     return res.status(result.outcome === 'created' ? 201 : 200).json(result.request)
   } catch (error) {

@@ -5,6 +5,8 @@ import { requireUser, requireProjectCapability } from '../../_lib/auth.js'
 import { accessErrors, listAccessRequests, reviewAccessRequest, submitAccessRequest } from '../../_lib/project-access-requests.js'
 vi.mock('../../_lib/auth.js', () => ({ requireUser: vi.fn(), requireProjectCapability: vi.fn() }))
 vi.mock('../../_lib/project-access-requests.js', async importOriginal => ({ ...await importOriginal<object>(), listAccessRequests: vi.fn(), reviewAccessRequest: vi.fn(), submitAccessRequest: vi.fn() }))
+vi.mock('../../_lib/project-access-email.js', () => ({ scheduleAccessRequestEmail: vi.fn() }))
+import { scheduleAccessRequestEmail } from '../../_lib/project-access-email.js'
 const requestId = '11111111-1111-4111-8111-111111111111'
 const row = { id: requestId, email: 'u@company.com', status: 'pending' } as never
 async function call(handler = requests, method = 'POST', query: object = { projectId: 'p', requestId }, body?: unknown) {
@@ -42,6 +44,7 @@ it('requires manage permission for listing and binds submissions to the current 
   expect(submitAccessRequest).toHaveBeenCalledWith('p', 'u')
   vi.mocked(submitAccessRequest).mockResolvedValueOnce({ outcome: 'existing', request: row })
   expect((await call()).statusCode).toBe(200)
+  expect(scheduleAccessRequestEmail).toHaveBeenCalledExactlyOnceWith(row)
 })
 it('validates review inputs and defaults to member without granting ownership', async () => {
   for (const body of [undefined, {}, { attempt: 1 }, { attempt: 1, decision: 'unknown' }, { attempt: 1, decision: 'approved', role: 'owner' }]) expect((await call(review, 'PATCH', { projectId: 'p', requestId }, body)).statusCode).toBe(400)
