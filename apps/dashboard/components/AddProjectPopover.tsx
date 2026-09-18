@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
 import type { ProjectKeyAvailability } from '../api'
 import { cn, isValidProjectKey, slugify } from '../lib/utils'
@@ -5,6 +6,7 @@ import { CheckIcon, XIcon } from './icons'
 import { Spinner } from './primitives'
 
 interface AddProjectPopoverProps {
+  suggestedProjects?: ReactNode
   onAdd: (projectKey: string, name: string) => void
   onClose: () => void
   checkAvailability: (key: string) => Promise<ProjectKeyAvailability>
@@ -14,7 +16,7 @@ interface AddProjectPopoverProps {
 
 type KeyStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken'
 
-export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, error }: AddProjectPopoverProps) {
+export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, error, suggestedProjects }: AddProjectPopoverProps) {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [keyEdited, setKeyEdited] = useState(false)
@@ -80,7 +82,8 @@ export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, err
         className="absolute inset-0 bg-background/70 backdrop-blur-sm cmd-backdrop-enter"
         onClick={onClose}
       />
-      <div className="relative w-full max-w-[440px] h-fit rounded-xl border border-border bg-card shadow-2xl shadow-black/60 overflow-hidden cmd-modal-enter">
+      <div className="relative w-full max-w-[440px] h-fit max-h-[75vh] overflow-y-auto rounded-xl border border-border bg-card shadow-2xl shadow-black/60 cmd-modal-enter">
+        <div className="px-5 pt-5">{suggestedProjects}</div>
         <div className="px-5 pt-5 pb-2">
           <h2 id="add-project-title" className="text-base font-bold text-foreground tracking-tight">
             Create a project

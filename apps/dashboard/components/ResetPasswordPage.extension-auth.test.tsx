@@ -19,7 +19,8 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 
 describe('password recovery continuation', () => {
-  it('finishes recovery through the safe destination resolver', async () => {
+  it.each(['', '?accessProject=project%2Fone'])('finishes recovery through the safe destination resolver %s', async search => {
+    window.history.replaceState({}, '', '/reset-password' + search)
     render(<ResetPasswordPage />)
     const password = screen.getByLabelText('new password')
     const confirm = screen.getByLabelText('confirm')
@@ -31,5 +32,6 @@ describe('password recovery continuation', () => {
     expect(auth.signOut).toHaveBeenCalledOnce()
     await vi.advanceTimersByTimeAsync(1400)
     expect(window.location.pathname).toBe('/login')
+    expect(window.location.search).toBe(search)
   })
 })

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Notification } from '../api'
 import { useNotifications } from '../hooks/useNotifications'
 import { cn } from '../lib/utils'
+import { route } from '../lib/routes'
 import { BellIcon } from './icons'
 import { Spinner } from './primitives'
 
@@ -20,6 +21,7 @@ function describe(n: Notification): string {
     case 'invite.received': return `You were invited to ${project}`
     case 'invite.accepted': return `${p.email ?? 'Someone'} joined ${project}`
     case 'invite.declined': return `${p.email ?? 'Someone'} declined your invite to ${project}`
+    case 'project.access_requested': return `${p.email ?? 'Someone'} requested access to ${p.projectName ?? project}`
     case 'comment.activity': {
       const name = p.projectName ?? project
       const count = typeof p.count === 'number' && p.count > 0 ? p.count : 1
@@ -30,7 +32,7 @@ function describe(n: Notification): string {
 }
 
 export function NotificationBell({ apiBase, accessToken, userId, onProjectsChanged, onOpenCommentActivity }: NotificationBellProps) {
-  const { notifications, invites, unreadCount, loading, markRead, markAllRead, accept, decline } =
+  const { notifications, invites, unreadCount, loading, refresh, markRead, markAllRead, accept, decline } =
     useNotifications(apiBase, accessToken, userId, onProjectsChanged)
   const [open, setOpen] = useState(false)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
@@ -52,6 +54,12 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
 
   async function openNotification(n: Notification) {
     if (!n.readAt) await markRead(n.id)
+    if (n.kind === 'project.access_requested') {
+      const projectKey = n.payload.projectKey
+      if (typeof projectKey === 'string' && projectKey) {
+        window.location.assign(`${route('/')}?${new URLSearchParams({ accessProject: projectKey })}`)
+      }
+    }
     if (n.kind === 'comment.activity') {
       const payload = n.payload as { projectKey?: string; latestCommentId?: string }
       if (payload.projectKey) {
@@ -67,7 +75,7 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => { if (!open) void refresh(); setOpen((v) => !v) }}
         title="Notifications"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         className={cn(
@@ -84,7 +92,7 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
       </button>
 
       {open && (
-        <div className="absolute right-0 top-9 w-80 rounded-lg border border-border bg-card shadow-2xl shadow-black/50 z-50 overflow-hidden">
+        <div className="fixed left-3 right-3 top-14 sm:absolute sm:left-auto sm:right-0 sm:top-9 sm:w-80 rounded-lg border border-border bg-card shadow-2xl shadow-black/50 z-50 overflow-hidden">
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <span className="text-xs font-semibold text-foreground">Notifications</span>
             {unreadCount > 0 && (
@@ -137,7 +145,7 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
                 >
                   <span className={cn('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', n.readAt ? 'bg-transparent' : 'bg-primary')} />
                   <span className="flex-1 min-w-0">
-                    <span className="block text-[12px] text-foreground">{describe(n)}</span>
+                    <span className="block break-words text-[12px] text-foreground">{describe(n)}</span>
                     <span className="block text-[10px] text-muted-foreground mt-0.5">
                       {new Date(n.createdAt).toLocaleString()}
                     </span>

@@ -2529,7 +2529,7 @@ export async function saveOperationKey(shareId: string, agentId: string, idempot
   if (error) throw new Error(error.message)
 }
 
-export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity'
+export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity' | 'project.access_requested'
 
 type NotificationRow = {
   id: string

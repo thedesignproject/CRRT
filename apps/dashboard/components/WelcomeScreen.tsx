@@ -1,6 +1,8 @@
+import type { ReactNode } from 'react'
 import { asset } from '../lib/routes'
 
 interface WelcomeScreenProps {
+  suggestedProjects?: ReactNode
   /** Called when the user clicks the "create your first project" CTA. */
   onCreateProject: () => void
   onOpenExtensionComments: () => void
@@ -12,7 +14,7 @@ interface WelcomeScreenProps {
  * no welcome tour — the rest of the introduction happens through the rich
  * empty state that follows (moment 2).
  */
-export function WelcomeScreen({ onCreateProject, onOpenExtensionComments }: WelcomeScreenProps) {
+export function WelcomeScreen({ onCreateProject, onOpenExtensionComments, suggestedProjects }: WelcomeScreenProps) {
   return (
     <div
       className="scanlines"
@@ -126,6 +128,8 @@ export function WelcomeScreen({ onCreateProject, onOpenExtensionComments }: Welc
       >
         drop visual feedback on any element of your product. triage. hand off to your AI agent. ship the fix.
       </p>
+
+      <div className="w-full max-w-[480px] mb-8">{suggestedProjects}</div>
 
       {/* Primary CTA */}
       <button

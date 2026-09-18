@@ -6,6 +6,7 @@ import { ChevronLeftIcon, TrashIcon } from './icons'
 import { GitHubRepositorySettings } from './GitHubRepositorySettings'
 import { LinearIntegrationSettings } from './LinearIntegrationSettings'
 import { JiraIntegrationSettings } from './JiraIntegrationSettings'
+import { ProjectDomainAccess } from './ProjectDomainAccess'
 import { Spinner } from './primitives'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
@@ -201,6 +202,8 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
         {error && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{error}</p>}
         {actionError && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{actionError}</p>}
+
+        {isAdmin && <ProjectDomainAccess key={project.publicKey} apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} onMembersChanged={settings.refresh} />}
 
         {/* Details */}
         <section className="mt-8">

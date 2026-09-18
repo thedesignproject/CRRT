@@ -102,7 +102,7 @@ vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
 vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenExtensionComments: () => void }) => <button onClick={props.onOpenExtensionComments}>welcome comments</button> }))
 vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null }))
-vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: () => null }))
+vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <div>extension page</div> }))
 vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void }) => <div>
@@ -502,4 +502,24 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'super admin' }))
     expect(screen.queryByTestId('detail')).not.toBeInTheDocument()
   })
+})
+
+it('refreshes memberships when the dashboard regains focus', () => {
+  render(<App />)
+  fixtures.fn.mockClear()
+  fireEvent(window, new Event('focus'))
+  expect(fixtures.fn).toHaveBeenCalledTimes(1)
+})
+
+it('opens project settings from an authorized email review link without accepting automatically', async () => {
+  fixtures.projects.push({ ...fixtures.projects[0], publicKey: 'review-target', capabilities: ['project:manage'] })
+  window.history.replaceState({}, '', '/?accessProject=review-target')
+  render(<App />)
+  expect(await screen.findByText('Settings for review-target')).toBeInTheDocument()
+  expect(fixtures.acceptInvite).not.toHaveBeenCalled()
+})
+it('shows a clear error when the review link targets an inaccessible project', async () => {
+  window.history.replaceState({}, '', '/?accessProject=missing')
+  render(<App />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('owner or admin')
 })
