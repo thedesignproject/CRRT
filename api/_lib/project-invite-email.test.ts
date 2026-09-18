@@ -74,9 +74,13 @@ describe('project invite email', () => {
   })
 
   it('builds dashboard links from trusted configuration', () => {
-    expect(getProjectInviteDashboardUrl({})).toBe('https://crrt.ai/dashboard')
-    expect(getProjectInviteDashboardUrl({ APP_URL: 'https://app.example/' }))
+    expect(getProjectInviteDashboardUrl(undefined, undefined, {})).toBe('https://crrt.ai/dashboard')
+    expect(getProjectInviteDashboardUrl(undefined, undefined, { APP_URL: 'https://app.example/' }))
       .toBe('https://app.example/dashboard')
+    expect(getProjectInviteDashboardUrl('project/a', undefined, { APP_URL: 'https://app.example/' }))
+      .toBe('https://app.example/dashboard/login?invite=project%2Fa')
+    expect(getProjectInviteDashboardUrl('project/a', 'Guest@Example.com', { APP_URL: 'https://app.example/' }))
+      .toBe('https://app.example/dashboard/login?invite=project%2Fa&email=guest%40example.com')
   })
 
   it('skips without configuration or a recipient', async () => {

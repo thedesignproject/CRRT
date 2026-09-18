@@ -222,7 +222,8 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = Array.from({ length: 34 }, (_
   const inProgress = Math.floor(accepted * 0.18)
   const claimed = Math.floor(accepted * 0.12)
   const blocked = i % 9 === 0 ? 1 : 0
-  const unassigned = Math.max(0, comments - done - inProgress - claimed - blocked)
+  const readyForTesting = Math.floor(accepted * 0.15)
+  const unassigned = Math.max(0, comments - done - inProgress - claimed - blocked - readyForTesting)
   const owner = MOCK_ADMIN_USERS[i % MOCK_ADMIN_USERS.length]
   const member = MOCK_ADMIN_USERS[(i + 7) % MOCK_ADMIN_USERS.length]
   return {
@@ -231,7 +232,7 @@ export const MOCK_ADMIN_PROJECTS: AdminProject[] = Array.from({ length: 34 }, (_
     createdAt: ago(60 * 24 * (i + 3)),
     commentCount: comments,
     commentStatusCounts: { pending, accepted, rejected },
-    implementationStatusCounts: { unassigned, claimed, inProgress, blocked, done },
+    implementationStatusCounts: { unassigned, claimed, inProgress, blocked, readyForTesting, done },
     feedbackShareCount: 1 + (i % 9),
     commentedUrlCount: 1 + (i % 12),
     firstCommentAt: ago(60 * 24 * (i + 12)),

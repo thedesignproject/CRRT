@@ -19,6 +19,7 @@ vi.mock('../api', () => ({
 import {
   changeProjectMemberRole,
   getProjectRepoConfig,
+  inviteProjectMember,
   listProjectInvites,
   listProjectMembers,
   updateProjectRepoConfig,
@@ -65,10 +66,22 @@ beforeEach(() => {
   vi.mocked(listProjectMembers).mockReset()
   vi.mocked(listProjectInvites).mockReset().mockResolvedValue([])
   vi.mocked(getProjectRepoConfig).mockReset()
+  vi.mocked(inviteProjectMember).mockReset().mockResolvedValue({} as never)
   vi.mocked(updateProjectRepoConfig).mockReset()
 })
 
 describe('useProjectSettings repo config', () => {
+  it('invites a guest and refreshes project access', async () => {
+    vi.mocked(listProjectMembers).mockResolvedValue([admin('a')])
+    vi.mocked(getProjectRepoConfig).mockResolvedValue(repoConfig('a', ''))
+    const { result } = renderHook(() => useProjectSettings('/api', 'token', 'a', 'admin-a'))
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    await act(() => result.current.invite('guest@example.com', 'guest'))
+    expect(inviteProjectMember).toHaveBeenCalledWith('/api', 'token', 'a', 'guest@example.com', 'guest')
+    expect(listProjectMembers).toHaveBeenCalledTimes(2)
+  })
+
   it('represents the current user as owner in mock mode', async () => {
     mockFlags.mocksEnabled = true
     const { result } = renderHook(() => useProjectSettings('/api', 'token', 'mock', 'mock-user'))

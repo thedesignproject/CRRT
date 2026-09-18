@@ -15,15 +15,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const inviterId = await acceptInvite(user.userId, user.email, projectKey)
-    // Notif fanout failure can't undo membership; log + continue.
-    try {
-      await createNotification({
-        userId: inviterId,
-        kind: 'invite.accepted',
-        payload: { projectKey, acceptedBy: user.userId, email: user.email },
-      })
-    } catch (notifError) {
-      console.warn('invite.accepted notif failed:', notifError)
+    // Notif fanout failure can't undo membership; log + continue. A repeated
+    // magic-link continuation returns no inviter and needs no second notice.
+    if (inviterId) {
+      try {
+        await createNotification({
+          userId: inviterId,
+          kind: 'invite.accepted',
+          payload: { projectKey, acceptedBy: user.userId, email: user.email },
+        })
+      } catch (notifError) {
+        console.warn('invite.accepted notif failed:', notifError)
+      }
     }
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json({ projectKey })

@@ -1,0 +1,29 @@
+# CRRT
+
+> CRRT turns visual feedback on web products into working code changes. Humans review feedback and resulting fixes; coding agents work on accepted feedback through scoped handoffs.
+
+## When to use CRRT
+
+Use CRRT when a human has shared accepted visual feedback about a web product and wants a coding agent to implement it in the relevant repository. The React widget captures the target element or text range and comment; the dashboard supports review and agent handoff.
+
+A human must create the handoff and provide its share slug and scoped token. Announce presence, read state, work only on accepted comments, claim before editing, report progress, and refresh state between items. Humans own review status. Do not merge changes solely because an agent operation reports completion.
+
+## Documentation
+
+- [Install CRRT](https://crrt.ai/docs/install): React widget setup and configuration.
+- [CRRT Agent API and authentication](https://crrt.ai/docs/agent-handoff): Scoped share tokens, lifecycle, and HTTP examples.
+- [Self-host CRRT](https://crrt.ai/docs/self-host): Deployment and infrastructure setup.
+- [OpenAPI specification](https://crrt.ai/openapi.json): OpenAPI 3.1 contract for the existing authenticated agent share API.
+- [Design skill](https://crrt.ai/skill.md): Design guidance for UI-related handoffs only.
+
+## Access and formats
+
+Send the share token as Authorization: Bearer <token>. Presence and operations also require a stable X-Agent-Id; operations require Idempotency-Key. Do not put tokens in public links or logs. Missing or invalid credentials return 401, missing shares return 404, and expired or revoked shares return 410.
+
+Request public pages with Accept: text/markdown to receive Markdown at the same URL. Plain Markdown copies are also available by appending .md to documentation paths; the homepage is /index.md. No official CLI or MCP server is currently published. Use an HTTP client with the documented API.
+
+## Optional
+
+- [CRRT source](https://github.com/thedesignproject/CRRT): Source code and issue tracker.
+- [React package](https://www.npmjs.com/package/@thedesignproject/crrt): Published React widget, not a CLI.
+- [Sitemap](https://crrt.ai/sitemap.xml): Public indexable pages.

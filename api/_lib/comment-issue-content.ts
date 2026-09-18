@@ -36,7 +36,7 @@ function cleanText(value: unknown, limit: number) {
   return typeof value === 'string' ? value.trim().slice(0, limit) : ''
 }
 
-function fallbackContent(comment: GithubIssueComment): GithubIssueContent {
+export function createDefaultCommentIssueContent(comment: GithubIssueComment): GithubIssueContent {
   const normalized = comment.body.trim().replace(/\s+/g, ' ')
   const short = normalized.slice(0, 72)
   return {
@@ -125,7 +125,7 @@ function parseContent(value: unknown): GithubIssueContent | null {
 }
 
 export async function generateCommentIssueContent(comment: GithubIssueComment) {
-  const fallback = fallbackContent(comment)
+  const fallback = createDefaultCommentIssueContent(comment)
   const apiKey = process.env.AI_API_KEY?.trim()
   const model = process.env.AI_MODEL?.trim()
   if (!apiKey || !model) return fallback

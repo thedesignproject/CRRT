@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const statusOnly = req.method === 'GET' && getStringQuery(req.query.view) === 'status'
     const membership = await getProjectMember(user.userId, projectKey)
-    if (!membership || (!statusOnly && membership.role !== 'admin')) {
+    if (!membership || membership.role === 'guest' || (!statusOnly && membership.role !== 'admin')) {
       return jsonError(req, res, 403, 'Admin role required')
     }
 

@@ -45,7 +45,7 @@ export function buildProjectRoleChangeEmail(input: ProjectRoleChangeEmailInput) 
   const subject = isOwnershipTransfer
     ? `You now own ${subjectProjectName} on CRRT`
     : `Your role changed on ${subjectProjectName}`
-  const headline = isOwnershipTransfer ? 'You’re the owner.' : `You’re now ${input.role === 'admin' ? 'an admin' : 'a member'}.`
+  const headline = isOwnershipTransfer ? 'You’re the owner.' : `You’re now ${input.role === 'admin' ? 'an admin' : input.role === 'guest' ? 'a guest' : 'a member'}.`
   const textActorEmail = sanitizeEmailHeader(input.actorEmail)
   const textProjectName = sanitizeEmailHeader(input.projectName)
   const textPreviousRole = sanitizeEmailHeader(input.previousRole)

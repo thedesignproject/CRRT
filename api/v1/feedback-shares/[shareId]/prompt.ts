@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireProjectMembership, requireUser } from '../../../_lib/auth.js'
+import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors, getStringQuery } from '../../../_lib/http.js'
 import { getProject, getRepoConfig, getShareById, rotateShareToken } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
@@ -18,7 +18,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const share = await getShareById(shareId)
     if (!share) return jsonError(req, res, 404, 'Share not found')
-    if (!(await requireProjectMembership(req, res, user, share.projectId))) return
+    if (!(await requireProjectCapability(req, res, user, share.projectId, 'agent:operate'))) return
 
     const project = await getProject(share.projectId)
     if (!project) return jsonError(req, res, 404, 'Project not found')

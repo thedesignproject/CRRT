@@ -13,17 +13,31 @@ function modeFromPath(pathname: string): Mode {
 
 type AuthPath = '/login' | '/signup' | '/forgot-password' | '/'
 
-export function LoginPage() {
+export function LoginPage({
+  initialMode,
+  continuationPath,
+}: {
+  initialMode?: Extract<Mode, 'signin' | 'signup'>
+  continuationPath?: string
+} = {}) {
   const [mode, setMode] = useState<Mode>(() =>
-    typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname)),
+    initialMode ?? (typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname))),
   )
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('email') ?? '')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [signupSent, setSignupSent] = useState(false)
   const [accountExists, setAccountExists] = useState(false)
   const [resetSent, setResetSent] = useState(false)
+  const [magicSent, setMagicSent] = useState(false)
+
+  function continuationUrl() {
+    if (continuationPath) return `${window.location.origin}${continuationPath}`
+    const invite = new URLSearchParams(window.location.search).get('invite')
+    const base = `${window.location.origin}${route('/')}`
+    return invite ? `${base}?${new URLSearchParams({ invite })}` : base
+  }
 
   // Sync mode if the user uses browser back / forward.
   useEffect(() => {
@@ -33,12 +47,22 @@ export function LoginPage() {
       setSignupSent(false)
       setAccountExists(false)
       setResetSent(false)
+      setMagicSent(false)
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
   function navigate(path: AuthPath) {
+    if (continuationPath) {
+      setMode(modeFromPath(path))
+      setError(null)
+      setSignupSent(false)
+      setAccountExists(false)
+      setResetSent(false)
+      setMagicSent(false)
+      return
+    }
     if (relPath(window.location.pathname) === path) return
     window.history.pushState({}, '', route(path))
     setMode(modeFromPath(path))
@@ -46,6 +70,7 @@ export function LoginPage() {
     setSignupSent(false)
     setAccountExists(false)
     setResetSent(false)
+    setMagicSent(false)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -56,12 +81,12 @@ export function LoginPage() {
       if (mode === 'signin') {
         const { error: signinError } = await supabase.auth.signInWithPassword({ email, password })
         if (signinError) throw signinError
-        navigate('/')
+        window.history.pushState({}, '', continuationUrl())
       } else if (mode === 'signup') {
         const { data, error: signupError } = await supabase.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: `${window.location.origin}${route('/')}` },
+          options: { emailRedirectTo: continuationUrl() },
         })
         if (
           signupError?.code === 'user_already_exists' ||
@@ -77,8 +102,10 @@ export function LoginPage() {
           setSignupSent(true)
         }
       } else {
+        const resetUrl = new URL(`${window.location.origin}${route('/reset-password')}`)
+        if (continuationPath) resetUrl.searchParams.set('continue', continuationPath)
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}${route('/reset-password')}`,
+          redirectTo: resetUrl.href,
         })
         if (resetError) throw resetError
         setResetSent(true)
@@ -90,9 +117,24 @@ export function LoginPage() {
     }
   }
 
+  async function sendMagicLink() {
+    setError(null); setBusy(true)
+    try {
+      const { error: magicError } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: continuationUrl() },
+      })
+      if (magicError) throw magicError
+      setMagicSent(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send sign-in link')
+    } finally { setBusy(false) }
+  }
+
   if (signupSent) return <CheckEmail email={email} variant="signup" onBackToSignIn={() => navigate('/login')} />
   if (accountExists) return <AccountExists onSignIn={() => navigate('/login')} />
   if (resetSent) return <CheckEmail email={email} variant="reset" onBackToSignIn={() => navigate('/login')} />
+  if (magicSent) return <CheckEmail email={email} variant="magic" onBackToSignIn={() => navigate('/login')} />
 
   const isSignup = mode === 'signup'
   const isForgot = mode === 'forgot'
@@ -330,6 +372,13 @@ export function LoginPage() {
         </button>
       </form>
 
+      {!isSignup && !isForgot && (
+        <button type="button" disabled={busy || !email} onClick={() => { void sendMagicLink() }}
+          style={{ marginTop: 14, border: 0, background: 'transparent', color: 'var(--crrt-carrot)', fontFamily: 'var(--crrt-font-body)', fontSize: 14, cursor: busy || !email ? 'not-allowed' : 'pointer', opacity: busy || !email ? 0.5 : 1 }}>
+          email me a sign-in link →
+        </button>
+      )}
+
       {/* Mode toggle */}
       <p
         style={{
@@ -454,7 +503,7 @@ function CheckEmail({
   onBackToSignIn,
 }: {
   email: string
-  variant: 'signup' | 'reset'
+  variant: 'signup' | 'reset' | 'magic'
   onBackToSignIn: () => void
 }) {
   const heading = variant === 'reset' ? '✓ check your inbox' : '✓ check your email'
@@ -463,6 +512,11 @@ function CheckEmail({
       <>
         we sent a password reset link to{' '}
         <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. open it to choose a new password.
+      </>
+    ) : variant === 'magic' ? (
+      <>
+        we sent a secure sign-in link to{' '}
+        <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. open it to continue to your project invitation.
       </>
     ) : (
       <>

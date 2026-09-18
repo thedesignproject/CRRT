@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { asset, route } from '../lib/routes'
+import { extensionAuthRecoveryDestination } from '../lib/extension-auth'
 import { Spinner } from './primitives'
 
 /**
@@ -66,7 +67,7 @@ export function ResetPasswordPage() {
       // password active.
       await supabase.auth.signOut()
       window.setTimeout(() => {
-        window.location.href = route('/login')
+        window.location.href = extensionAuthRecoveryDestination(window.location.search, window.location.origin) ?? route('/login')
       }, 1400)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update password')

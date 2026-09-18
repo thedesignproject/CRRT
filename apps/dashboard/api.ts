@@ -5,7 +5,11 @@ export interface Project {
   allowedOrigins: string[]
   createdAt: string
   updatedAt: string
+  role?: ProjectMemberRole
+  capabilities?: ProjectCapability[]
 }
+
+export type ProjectCapability = 'feedback:read' | 'feedback:create' | 'feedback:manage' | 'agent:operate' | 'integrations:send' | 'project:manage'
 
 export type CommentTargetType = 'element_point' | 'text_range'
 
@@ -32,14 +36,16 @@ export interface CommentRecord {
   x: number | null
   y: number | null
   body: string
+  visibility?: 'shared' | 'internal'
   reviewStatus: 'open' | 'accepted' | 'rejected'
-  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'done'
+  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'ready_for_testing' | 'done'
   claimedByAgentId: string | null
   imageUrl: string | null
   authorName: string | null
   targetType?: CommentTargetType
   anchor?: TextRangeAnchorRecord | null
   githubIssue?: GitHubIssueRecord | null
+  externalWork?: ExternalWorkRecord[]
   createdAt: string
   updatedAt: string
 }
@@ -52,6 +58,61 @@ export interface GitHubIssueRecord {
 
 export interface GitHubIssueCreationResponse extends GitHubIssueRecord {
   created: boolean
+}
+
+export type ExternalWorkProvider = 'github' | 'linear' | 'jira'
+
+export interface ExternalWorkRecord {
+  provider: ExternalWorkProvider
+  externalId: string
+  externalKey: string
+  externalUrl: string
+  lifecycleStatus: 'active' | 'closing' | 'closed' | 'failed' | 'blocked'
+  syncAction?: 'retry' | 'reconnect' | 'check_permissions' | 'check_issue' | 'configure_workflow' | null
+  closedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ExternalWorkDraft {
+  provider: ExternalWorkProvider
+  connected: boolean
+  destination: string | null
+  existing: (GitHubIssueRecord & { externalUrl?: string }) | { externalId: string; externalKey: string; externalUrl: string; createdAt: string } | null
+  draft: { title: string; body: string }
+}
+
+export interface ProjectTrackerIntegration {
+  provider: 'linear' | 'jira'
+  connected: boolean
+  workspace?: string
+  selectedDestinationId?: string | null
+  destinations: Array<{ id: string; name: string }>
+  reauthorizationRequired?: boolean
+}
+
+export interface ExtensionCommentRecord {
+  id: string
+  projectId: string | null
+  pageUrl: string
+  pageHostname: string
+  x: number
+  y: number
+  selector: string
+  body: string
+  screenshotUrl: string | null
+  authorName: string | null
+  createdAt: string
+  updatedAt: string
+  targetType?: CommentTargetType
+  anchor?: TextRangeAnchorRecord | null
+}
+
+export interface ExtensionCommentsPage {
+  items: ExtensionCommentRecord[]
+  page: number
+  limit: number
+  total: number
 }
 
 export interface ProjectSessionResponse {
@@ -133,6 +194,24 @@ function authHeaders(accessToken?: string) {
   return headers
 }
 
+export interface ExtensionAuthHandoffRequest {
+  state: string
+  codeChallenge: string
+  redirectUri: string
+}
+
+export function createExtensionAuthHandoff(
+  apiBase: string,
+  accessToken: string,
+  input: ExtensionAuthHandoffRequest,
+) {
+  return requestJson<{ redirectUrl: string }>(`${apiBase.replace(/\/$/, '')}/v1/extension/auth/handoff`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(input),
+  })
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const text = await response.text()
@@ -162,7 +241,7 @@ export interface AdminUser {
 
 export interface AdminProjectMember {
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
 }
 
 export interface AdminProject {
@@ -176,6 +255,7 @@ export interface AdminProject {
     claimed: number
     inProgress: number
     blocked: number
+    readyForTesting: number
     done: number
   }
   feedbackShareCount: number
@@ -291,7 +371,7 @@ export function claimProject(apiBase: string, accessToken: string, projectKey: s
   })
 }
 
-export type ProjectMemberRole = 'owner' | 'admin' | 'member'
+export type ProjectMemberRole = 'owner' | 'admin' | 'member' | 'guest'
 
 export interface ProjectMember {
   userId: string
@@ -311,7 +391,7 @@ export interface ProjectMemberRoleChange {
 export interface ProjectInvite {
   projectKey: string
   email: string
-  role: 'admin' | 'member'
+  role: 'admin' | 'member' | 'guest'
   invitedBy: string
   createdAt: string
 }
@@ -475,7 +555,7 @@ export function listProjectInvites(apiBase: string, accessToken: string, project
   })
 }
 
-export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' = 'member') {
+export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' | 'guest' = 'member') {
   return requestJson<ProjectInvite>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
@@ -557,6 +637,19 @@ export function listComments(apiBase: string, accessToken: string, projectId: st
   })
 }
 
+export function updateCommentVisibility(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  visibility: 'shared' | 'internal',
+) {
+  return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/visibility`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ visibility }),
+  })
+}
+
 export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus']) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
     method: 'PATCH',
@@ -579,13 +672,123 @@ export function updateImplementationStatus(apiBase: string, accessToken: string,
   })
 }
 
-export function createCommentGithubIssue(apiBase: string, accessToken: string, commentId: string) {
-  return requestJson<GitHubIssueCreationResponse>(
-    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/github-issue`,
+export function listExtensionComments(apiBase: string, accessToken: string, page = 1) {
+  return requestJson<ExtensionCommentsPage>(`${apiBase}/v1/extension/comments?page=${page}&limit=20`, {
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export function updateExtensionComment(apiBase: string, accessToken: string, commentId: string, body: string) {
+  return requestJson<ExtensionCommentRecord>(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ body }),
+  })
+}
+
+export function assignExtensionComment(apiBase: string, accessToken: string, commentId: string, projectId: string) {
+  return requestJson<ExtensionCommentRecord>(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectId }),
+  })
+}
+
+export async function deleteExtensionComment(apiBase: string, accessToken: string, commentId: string) {
+  const response = await fetch(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
+    method: 'DELETE', headers: { ...authHeaders(accessToken) },
+  })
+  if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
+}
+
+export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider = 'github') {
+  return requestJson<ExternalWorkDraft>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`,
+    { headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function sendExternalWork(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  provider: ExternalWorkProvider,
+  draft: { title: string; body: string },
+) {
+  return requestJson<{ issueNumber?: number; issueUrl?: string; externalId?: string; externalKey?: string; externalUrl?: string; createdAt: string; created: boolean }>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
     {
       method: 'POST',
-      headers: { ...authHeaders(accessToken) },
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ provider, draft }),
     },
+  )
+}
+
+export function retryExternalWorkSync(apiBase: string, accessToken: string, commentId: string) {
+  return requestJson<{ externalWork: ExternalWorkRecord[] }>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-sync`,
+    { method: 'POST', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function createCommentGithubIssue(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  draft?: { title: string; body: string },
+) {
+  return draft
+    ? sendExternalWork(apiBase, accessToken, commentId, 'github', draft) as Promise<GitHubIssueCreationResponse>
+    : requestJson<GitHubIssueCreationResponse>(
+        `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+          body: JSON.stringify({ provider: 'github' }),
+        },
+      )
+}
+
+export function getLinearIntegration(apiBase: string, accessToken: string, projectKey: string, authorize = false) {
+  return requestJson<ProjectTrackerIntegration & { authorizeUrl?: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear${authorize ? '?action=authorize' : ''}`,
+    { cache: 'no-store', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function selectLinearTeam(apiBase: string, accessToken: string, projectKey: string, containerId: string) {
+  return requestJson<ProjectTrackerIntegration>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) }, body: JSON.stringify({ containerId }) },
+  )
+}
+
+export function disconnectLinear(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<void>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function getJiraIntegration(apiBase: string, accessToken: string, projectKey: string, authorize = false) {
+  return requestJson<ProjectTrackerIntegration & { authorizeUrl?: string }>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira${authorize ? '?action=authorize' : ''}`,
+    { cache: 'no-store', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function selectJiraProject(apiBase: string, accessToken: string, projectKey: string, containerId: string) {
+  return requestJson<ProjectTrackerIntegration>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
+    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) }, body: JSON.stringify({ containerId }) },
+  )
+}
+
+export function disconnectJira(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<void>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
+    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
   )
 }
 

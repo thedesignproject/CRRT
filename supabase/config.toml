@@ -42,6 +42,11 @@ public = true
 file_size_limit = "5MiB"
 allowed_mime_types = ["image/png", "image/jpeg", "image/webp", "image/gif"]
 
+[storage.buckets.extension-feedback-images]
+public = false
+file_size_limit = "5MiB"
+allowed_mime_types = ["image/png", "image/jpeg", "image/webp"]
+
 [storage.s3_protocol]
 enabled = false
 

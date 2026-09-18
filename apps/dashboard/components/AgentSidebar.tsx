@@ -536,12 +536,14 @@ function stagePriority(c: Comment) {
   if (c.implementationStatus === 'in_progress') return 0
   if (c.implementationStatus === 'claimed') return 1
   if (c.implementationStatus === 'blocked') return 2
-  if (c.implementationStatus === 'done') return 4
+  if (c.implementationStatus === 'ready_for_testing') return 4
+  if (c.implementationStatus === 'done') return 5
   return 3
 }
 
 function stageLabel(c: Comment) {
   if (c.implementationStatus === 'done') return 'Done'
+  if (c.implementationStatus === 'ready_for_testing') return 'Ready for testing'
   if (c.implementationStatus === 'in_progress') return 'Working'
   if (c.implementationStatus === 'claimed') return 'Claimed'
   if (c.implementationStatus === 'blocked') return 'Blocked'
@@ -550,6 +552,7 @@ function stageLabel(c: Comment) {
 
 function stageDotClass(c: Comment) {
   if (c.implementationStatus === 'done') return 'bg-status-done'
+  if (c.implementationStatus === 'ready_for_testing') return 'bg-status-ready-for-testing'
   if (c.implementationStatus === 'in_progress') return 'bg-status-in-progress animate-pulse-dot'
   if (c.implementationStatus === 'claimed') return 'bg-status-claimed'
   if (c.implementationStatus === 'blocked') return 'bg-status-blocked'
@@ -558,6 +561,7 @@ function stageDotClass(c: Comment) {
 
 function stageTextClass(c: Comment) {
   if (c.implementationStatus === 'done') return 'text-status-done'
+  if (c.implementationStatus === 'ready_for_testing') return 'text-status-ready-for-testing'
   if (c.implementationStatus === 'in_progress') return 'text-status-in-progress'
   if (c.implementationStatus === 'claimed') return 'text-status-claimed'
   if (c.implementationStatus === 'blocked') return 'text-status-blocked'

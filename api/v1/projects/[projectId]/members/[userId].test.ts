@@ -167,6 +167,19 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
       recipient: 'member@example.com', projectName: 'Demo', actorEmail: 'a@b.c',
       previousRole: 'member', role: 'admin', dashboardUrl: 'https://crrt.ai/dashboard',
     })
+
+    const guestChange = { ...changed, previousRole: 'admin', role: 'guest' }
+    vi.mocked(changeProjectMemberRole).mockResolvedValueOnce(guestChange as never)
+    res = mockRes()
+    await call({
+      method: 'PATCH', query: { projectId: 'p', userId: TARGET_USER_ID }, body: { role: 'guest' }, headers: {},
+    }, res)
+    expect(res.statusCode).toBe(200)
+    expect(changeProjectMemberRole).toHaveBeenLastCalledWith({
+      projectKey: 'p', actorUserId: 'u', targetUserId: TARGET_USER_ID, role: 'guest',
+    })
+    await vi.mocked(waitUntil).mock.calls[1]?.[0]
+    expect(sendProjectRoleChangeEmail).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'guest' }))
   })
 
   it('does not email unchanged roles and skips members without a resolved email', async () => {

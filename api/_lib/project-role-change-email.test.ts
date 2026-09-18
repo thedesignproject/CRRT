@@ -44,6 +44,10 @@ describe('project role change email', () => {
     const member = buildProjectRoleChangeEmail(input({ previousRole: 'admin', role: 'member' }))
     expect(member.html).toContain('You’re now a member.')
 
+    const guest = buildProjectRoleChangeEmail(input({ previousRole: 'member', role: 'guest' }))
+    expect(guest.html).toContain('You’re now a guest.')
+    expect(guest.text).toContain('from member to guest')
+
     const injected = buildProjectRoleChangeEmail(input({ projectName: 'Demo\r\nBcc: victim@example.com' }))
     expect(injected.subject).toBe('Your role changed on Demo Bcc: victim@example.com')
     expect(injected.text).not.toContain('\r\nBcc:')

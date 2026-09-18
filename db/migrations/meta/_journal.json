@@ -106,6 +106,83 @@
       "when": 1785832986127,
       "tag": "0014_brown_jubilee",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787663889330,
+      "tag": "0015_amused_young_avengers",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788465040051,
+      "tag": "0016_burly_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788705877060,
+      "tag": "0017_extension-project-feedback",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788707819686,
+      "tag": "0018_whole_frank_castle",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788709817154,
+      "tag": "0019_remarkable_mantis",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788724459928,
+      "tag": "0020_sticky_talos",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788724501204,
+      "tag": "0021_steep_hobgoblin",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1789037696933,
+      "tag": "0022_minor_taskmaster",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1789075279886,
+      "tag": "0023_damp_black_tarantula",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1789133475187,
+      "tag": "0024_silly_kulan_gath",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1789138426802,
+      "tag": "0025_familiar_master_mold",
+      "breakpoints": true
     }
   ]
 }
