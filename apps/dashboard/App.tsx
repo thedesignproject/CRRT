@@ -1,3 +1,4 @@
+import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { acceptInvite as apiAcceptInvite, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
@@ -82,6 +83,11 @@ export function App() {
 
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
   const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
+  useEffect(() => {
+    const onFocus = () => { void refreshProjects() }
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refreshProjects])
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
   const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments'>(() =>
@@ -478,6 +484,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     return (
       <>
         <WelcomeScreen
+          suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
           onOpenExtensionComments={openExtensionComments}
           onCreateProject={() => {
             markOnboarded()
@@ -487,6 +494,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         />
         {addProjectOpen && (
           <AddProjectPopover
+            suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
             onAdd={handleAddProject}
             onClose={() => setAddProjectOpen(false)}
             checkAvailability={checkAvailability}

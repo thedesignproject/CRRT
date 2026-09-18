@@ -503,3 +503,10 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.queryByTestId('detail')).not.toBeInTheDocument()
   })
 })
+
+it('refreshes memberships when the dashboard regains focus', () => {
+  render(<App />)
+  fixtures.fn.mockClear()
+  fireEvent(window, new Event('focus'))
+  expect(fixtures.fn).toHaveBeenCalledTimes(1)
+})
