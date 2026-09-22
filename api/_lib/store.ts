@@ -1,4 +1,4 @@
-import { getServiceSupabase } from './supabase.js'
+import { getPrivilegedHeaders, getServiceSupabase } from './supabase.js'
 import {
   AdminQueryError,
   decodeAdminCursor,
@@ -8,10 +8,10 @@ import {
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
 import { effectiveProjectRole, projectCapabilities, type FeedbackVisibility, type ProjectRole, type StoredProjectRole } from './project-capabilities.js'
 
-// Every table/storage operation in this module goes through the service-role
+// Every table/storage operation in this module goes through the secret-key
 // client. Every public table has RLS enabled with no permissive policy
 // (migration 0004), so the anon key — which ships in the dashboard bundle —
-// can't reach them directly. The service-role client bypasses RLS; each
+// can't reach them directly. The secret-key client bypasses RLS; each
 // function below enforces its own scoping (project membership, user_id, project
 // key) and callers gate access via `requireUser` / `requireProjectMembership`
 // in `api/`.
@@ -643,7 +643,7 @@ export async function changeProjectMemberRole(input: {
 }
 
 /**
- * Resolve auth.users ids to emails via the service-role admin API. Mirrors
+ * Resolve auth.users ids to emails via the secret-key admin API. Mirrors
  * `findUserIdByEmail`'s graceful fallback: returns an empty map (all emails
  * null at the call site) when the service key / URL is missing or a lookup
  * fails, rather than throwing.
@@ -652,15 +652,15 @@ export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, 
   const result: Record<string, string | null> = {}
   const unique = Array.from(new Set(ids))
   if (unique.length === 0) return result
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const secretKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
   const url = process.env.SUPABASE_URL
-  if (!serviceKey || !url) return result
+  if (!secretKey || !url) return result
 
   await Promise.all(
     unique.map(async (id) => {
       try {
         const res = await fetch(`${url}/auth/v1/admin/users/${encodeURIComponent(id)}`, {
-          headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+          headers: getPrivilegedHeaders(secretKey),
         })
         if (!res.ok) return
         const body = (await res.json()) as { email?: string }
@@ -2818,19 +2818,19 @@ export async function declineInvite(email: string, projectKey: string): Promise<
 }
 
 /**
- * Look up the auth.users id for an email. Uses the service role admin API if
- * a SUPABASE_SERVICE_ROLE_KEY is configured; otherwise returns null. The null
+ * Look up the auth.users id for an email. Uses the secret-key admin API if
+ * a SUPABASE_SECRET_KEY is configured; otherwise returns null. The null
  * fallback is intentional — the invite still gets created, just no realtime
  * notif fires for the invitee (they'll see it on next login via GET /invites).
  */
 export async function findUserIdByEmail(email: string): Promise<string | null> {
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (!serviceKey) return null
+  const secretKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!secretKey) return null
   const url = process.env.SUPABASE_URL
   if (!url) return null
   try {
     const res = await fetch(`${url}/auth/v1/admin/users?email=${encodeURIComponent(email)}`, {
-      headers: { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
+      headers: getPrivilegedHeaders(secretKey),
     })
     if (!res.ok) return null
     const body = (await res.json()) as { users?: Array<{ id?: string; email?: string }> }

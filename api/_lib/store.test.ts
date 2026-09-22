@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
+vi.mock('./supabase.js', () => ({
+  getPrivilegedHeaders: vi.fn((key: string) => ({ apikey: key })),
+  getServiceSupabase: vi.fn(),
+}))
 
 import { getServiceSupabase } from './supabase.js'
 import {
@@ -960,22 +963,34 @@ describe('invite helpers', () => {
 describe('findUserIdByEmail', () => {
   const origFetch = globalThis.fetch
   const origUrl = process.env.SUPABASE_URL
-  const origKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const origKey = process.env.SUPABASE_SECRET_KEY
+  const origLegacyKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   beforeEach(() => {
     process.env.SUPABASE_URL = 'https://supa.example'
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-key'
+    process.env.SUPABASE_SECRET_KEY = 'sb_secret_test'
   })
 
   afterEach(() => {
     globalThis.fetch = origFetch
     process.env.SUPABASE_URL = origUrl
-    process.env.SUPABASE_SERVICE_ROLE_KEY = origKey
+    process.env.SUPABASE_SECRET_KEY = origKey
+    process.env.SUPABASE_SERVICE_ROLE_KEY = origLegacyKey
   })
 
-  it('returns null when service role key is missing', async () => {
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  it('returns null when secret key is missing', async () => {
+    delete process.env.SUPABASE_SECRET_KEY
     expect(await findUserIdByEmail('x@y.z')).toBeNull()
+  })
+
+  it('accepts the legacy service-role variable during cutover', async () => {
+    delete process.env.SUPABASE_SECRET_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'legacy-secret'
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      users: [{ id: 'u-legacy', email: 'x@y.z' }],
+    }), { status: 200 })) as never
+
+    expect(await findUserIdByEmail('x@y.z')).toBe('u-legacy')
   })
 
   it('returns null when SUPABASE_URL is missing', async () => {
@@ -989,10 +1004,15 @@ describe('findUserIdByEmail', () => {
   })
 
   it('returns the matching user id when found', async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
       users: [{ id: 'u-1', email: 'X@Y.Z' }],
     }), { status: 200, headers: { 'content-type': 'application/json' } })) as never
+    globalThis.fetch = fetchMock
     expect(await findUserIdByEmail('x@y.z')).toBe('u-1')
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://supa.example/auth/v1/admin/users?email=x%40y.z',
+      { headers: { apikey: 'sb_secret_test' } },
+    )
   })
 
   it('returns null when fetch throws', async () => {

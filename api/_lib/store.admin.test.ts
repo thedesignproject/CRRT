@@ -47,7 +47,7 @@ function buildClient(opts: { listUsers?: unknown; tables?: Tables; rpcs?: Rpcs }
 beforeEach(() => {
   vi.mocked(getServiceSupabase).mockReset()
   process.env.SUPABASE_URL = 'https://x.supabase.co'
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc'
+  process.env.SUPABASE_SECRET_KEY = 'secret'
 })
 
 afterEach(() => {
