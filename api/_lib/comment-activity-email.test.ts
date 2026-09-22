@@ -43,7 +43,10 @@ describe('comment activity email helpers', () => {
     process.env.RESEND_API_KEY = 'key'
     expect(hasCommentActivityEmailConfig()).toBe(false)
     process.env.SUPABASE_URL = 'https://supa.example'
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc'
+    process.env.SUPABASE_SECRET_KEY = 'secret'
+    expect(hasCommentActivityEmailConfig()).toBe(true)
+    delete process.env.SUPABASE_SECRET_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'legacy-secret'
     expect(hasCommentActivityEmailConfig()).toBe(true)
     expect(canSendCommentActivityEmail(['  '])).toBe(false)
     expect(canSendCommentActivityEmail(['a@example.com'])).toBe(true)

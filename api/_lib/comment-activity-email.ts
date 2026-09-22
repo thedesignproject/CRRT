@@ -45,7 +45,11 @@ export function canSendCommentActivityEmail(recipients: string[], env = process.
 }
 
 export function hasCommentActivityEmailConfig(env = process.env) {
-  return Boolean(env.RESEND_API_KEY && env.SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY)
+  return Boolean(
+    env.RESEND_API_KEY
+      && env.SUPABASE_URL
+      && (env.SUPABASE_SECRET_KEY ?? env.SUPABASE_SERVICE_ROLE_KEY),
+  )
 }
 
 export function buildCommentActivityEmail(input: CommentActivityEmailInput) {
