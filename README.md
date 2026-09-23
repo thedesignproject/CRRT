@@ -182,7 +182,7 @@ Required server variables:
 - `SUPABASE_URL`
 - `SUPABASE_KEY` — the anon/publishable key; the dashboard includes it in the browser bundle
 - `SUPABASE_SECRET_KEY` — the privileged server-only key; never expose it to client code
-- During the key cutover, `SUPABASE_SERVICE_ROLE_KEY` is accepted as a fallback; rename it to `SUPABASE_SECRET_KEY` before removing the legacy key
+- During the key cutover, `SUPABASE_SERVICE_ROLE_KEY` is accepted as a fallback. Set `SUPABASE_SECRET_KEY` to a newly generated Supabase `sb_secret_*` key in each environment, deploy, and verify privileged operations before removing the old environment variable. Renaming the variable while keeping its legacy JWT value does not migrate the credential. Before deactivating legacy keys in Supabase, verify that no other apps, scripts, or public anon-key consumers still depend on them.
 - `REVIEWER_API_TOKEN`
 - `SHARE_TOKEN_SECRET` - encrypts persisted share and native integration tokens
 - `WIDGET_AUTH_SECRET` - signs native integration OAuth state
