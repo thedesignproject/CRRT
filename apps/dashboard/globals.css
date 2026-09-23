@@ -469,6 +469,7 @@
   max-width: 100vw;
   height: 100dvh;
   max-height: 100dvh;
+  overscroll-behavior: contain;
 }
 .agent-drawer::backdrop { background: rgb(15 23 42 / 20%); }
 .agent-brand-icon { color: var(--crrt-dashboard-orange); }

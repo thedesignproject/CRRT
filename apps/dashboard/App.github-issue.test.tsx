@@ -109,6 +109,7 @@ vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <div>extension page</div> }))
 vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void }) => <div>
   command palette
+  <button onClick={() => props.onAction('toggle-sidebar')}>command agents</button>
   <button onClick={() => props.onAction('accept')}>command accept</button>
   <button onClick={() => props.onAction('reject')}>command reject</button>
   <button onClick={() => props.onAction('done')}>command done</button>
@@ -175,6 +176,30 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'search' }))
     fireEvent.click(screen.getByRole('button', { name: 'command testing filter' }))
     expect(screen.getByTestId('status-filter')).toHaveTextContent('ready_for_testing')
+  })
+
+  it('opens the agent panel from authorized keyboard and command actions', async () => {
+    render(<App />)
+    fireEvent.keyDown(window, { key: 's' })
+    expect(await screen.findByTestId('agent-drawer')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'close drawer' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command agents' }))
+    expect(screen.getByTestId('agent-drawer')).toBeInTheDocument()
+  })
+
+  it('does not create hidden agent-panel state without agent permission', async () => {
+    fixtures.projects.splice(0, fixtures.projects.length, {
+      publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '',
+      role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+    })
+    render(<App />)
+
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.queryByTestId('agent-drawer')).toBeNull()
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(await screen.findByText('command palette')).toBeInTheDocument()
   })
 
   it('returns to Open after creating a project', async () => {
@@ -537,6 +562,10 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(screen.getByRole('button', { name: 'super admin' }))
     expect(screen.queryByTestId('detail')).not.toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 's' })
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command agents' }))
+    expect(screen.queryByTestId('agent-drawer')).toBeNull()
   })
 })
 

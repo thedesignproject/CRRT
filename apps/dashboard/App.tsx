@@ -122,6 +122,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const canOperateAgent = activeProject
     ? activeProject.capabilities?.includes('agent:operate') ?? true
     : false
+  const canOpenAgentPanel = view === 'feedback' && canOperateAgent
   const canManageProject = activeProject
     ? activeProject.capabilities?.includes('project:manage') ?? true
     : false
@@ -394,12 +395,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         if (e.key === 'm') handleToggleDone(selectedComment.id)
       }
 
-      if (e.key === 's') setSidebarOpen((v) => !v)
+      if (e.key === 's' && canOpenAgentPanel) setSidebarOpen((v) => !v)
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, sidebarOpen])
+  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel, sidebarOpen])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -412,7 +413,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   const handleCmdAction = useCallback((action: string) => {
-    if (action === 'toggle-sidebar') setSidebarOpen((v) => !v)
+    if (action === 'toggle-sidebar' && canOpenAgentPanel) setSidebarOpen((v) => !v)
     if (action === 'filter-all') selectFilter('all')
     if (action === 'filter-open') selectFilter('open')
     if (action === 'filter-ready') selectFilter('ready')
@@ -422,7 +423,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
     if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
     setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback])
+  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
 
   // Selecting a project always returns to the feedback view; settings is a
   // per-project overlay that shouldn't persist across project switches.
@@ -506,7 +507,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   return (
     <div className="dashboard-shell">
       <Header
-        agentAction={view === 'feedback' && canOperateAgent && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
+        agentAction={canOpenAgentPanel && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
         projects={projects}
         projectsLoading={projectsLoading}
         projectsError={projectsError}
@@ -597,7 +598,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           accessToken={accessToken}
         />
 
-        {sidebarOpen && canOperateAgent && (
+        {sidebarOpen && canOpenAgentPanel && (
           <AgentDrawer
             agent={agent}
             onAgentChange={setAgent}
@@ -621,7 +622,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onAction={handleCmdAction}
           selectedCommentId={selectedCommentId}
           canManageFeedback={canManageFeedback}
-          canOperateAgent={canOperateAgent}
+          canOperateAgent={canOpenAgentPanel}
         />
       )}
     </div>
