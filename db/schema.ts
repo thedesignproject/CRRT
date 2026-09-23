@@ -847,3 +847,23 @@ export const adminProjectMetrics = pgView('admin_project_metrics', {
     join comment_metrics cm on cm.project_id = p.public_key
     left join share_metrics sm on sm.project_id = p.public_key
   `)
+
+// Server-only outbox. Each immutable body is a private Resend batch; never expose
+// recipient addresses or email content through an authenticated/anon RLS policy.
+export const commentEmailBatches = pgTable('comment_email_batches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  deliveryId: uuid('delivery_id').notNull(),
+  batchIndex: integer('batch_index').notNull(),
+  body: text('body').notNull(),
+  status: text('status').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  leaseToken: uuid('lease_token'),
+  lastError: text('last_error'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => ({
+  deliveryBatchUnique: uniqueIndex('comment_email_batches_delivery_batch_unique').on(t.deliveryId, t.batchIndex),
+  dueIdx: index('comment_email_batches_due_idx').on(t.status, t.nextAttemptAt),
+  statusCheck: check('comment_email_batches_status_check', sql`${t.status} in ('pending', 'sent', 'failed')`),
+})).enableRLS()
