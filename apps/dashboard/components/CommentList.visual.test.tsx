@@ -7,8 +7,10 @@ const comment: Comment = { id: 'one', projectId: 'project', body: 'A long commen
 describe('comment list visual refresh', () => {
   it('preserves opening and bulk review actions', () => {
     const open = vi.fn(), toggle = vi.fn()
-    const props = { filteredComments: [comment], counts: { all: 1, open: 1, ready: 0, done: 0, rejected: 0 }, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), applyBulkAction: vi.fn(), toggleBulkSelect: toggle, commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: open }
+    const props = { filteredComments: [comment], counts: { all: 1, open: 1, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), applyBulkAction: vi.fn(), toggleBulkSelect: toggle, commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: open }
     const view = render(<CommentList {...props} />)
+    fireEvent.click(screen.getByRole('button', { name: /Testing/ }))
+    expect(props.selectFilter).toHaveBeenCalledWith('ready_for_testing')
     fireEvent.click(screen.getByRole('button', { name: /A long comment/ }))
     expect(open).toHaveBeenCalledWith('one')
     view.rerender(<CommentList {...props} bulkMode />)

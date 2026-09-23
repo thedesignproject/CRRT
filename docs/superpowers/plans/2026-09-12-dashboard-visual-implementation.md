@@ -1,6 +1,6 @@
 # Dashboard visual implementation
 
-Approved scope: first visual slice from the September 11 design. Local review before any PR; commit coherent blocks, do not push or open a PR.
+Approved scope: first visual slice from the September 11 design, delivered as the base of a two-PR stack. Keep coherent commits and preserve current `trunk` behavior while resolving conflicts.
 
 1. Register dashboard-only tokens and self-host Figtree. Respect stored dark preference, default new users to light. Add tests for preference handling. Commit foundation.
 2. Move project navigation into a responsive sidebar while retaining search, notifications, settings, audit and personal comments. Restyle list and detail, make integration entry points explicit, keep existing API behavior. Commit layout.

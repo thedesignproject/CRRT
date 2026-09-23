@@ -1,12 +1,12 @@
 # Dashboard CRRT — estructura A y dirección visual
 
-Estado: diseño visual aprobado en conversación; contrato de implementación pendiente de revisión del usuario.
+Estado: diseño y entrega en dos PRs apiladas aprobados; preparación final contra el `origin/trunk` vigente.
 
 ## Objetivo y referencia
 
 Llevar al dashboard la estructura A aprobada: navegación de proyectos a la izquierda, lista seleccionable y detalle de lectura. Figtree, superficies blancas, naranja puntual y detalles pixel. Referencia: `dashboard-figtree-v4.html`, conservada en la sesión local de brainstorming. El mockup es ilustrativo, no una especificación de APIs.
 
-Trabajo aislado en `crrt-dashboard-refresh`, rama `design/dashboard-refresh`, base `origin/trunk` d617a1b. No modificar los worktrees existentes ni su trabajo pendiente.
+Entrega aislada en `design/dashboard-refresh-ui` y `design/dashboard-agent-handoff`, ambas reconstruidas desde el `origin/trunk` vigente. No modificar otros worktrees ni su trabajo pendiente.
 
 ## Alcance
 
