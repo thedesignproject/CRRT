@@ -13,23 +13,17 @@ import {
   getSupabase,
 } from './supabase.js'
 
-const origUrl = process.env.SUPABASE_URL
-const origKey = process.env.SUPABASE_KEY
-const origSecretKey = process.env.SUPABASE_SECRET_KEY
-const origLegacySecretKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-
 beforeEach(() => {
   vi.mocked(createClient).mockClear()
-  process.env.SUPABASE_URL = 'https://supa.example'
-  process.env.SUPABASE_KEY = 'anon-key'
-  process.env.SUPABASE_SECRET_KEY = 'secret-key'
+  vi.stubEnv('SUPABASE_URL', 'https://supa.example')
+  vi.stubEnv('SUPABASE_KEY', 'anon-key')
+  vi.stubEnv('SUPABASE_SECRET_KEY', 'sb_secret_test')
+  vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
 })
 
 afterEach(() => {
-  process.env.SUPABASE_URL = origUrl
-  process.env.SUPABASE_KEY = origKey
-  process.env.SUPABASE_SECRET_KEY = origSecretKey
-  process.env.SUPABASE_SERVICE_ROLE_KEY = origLegacySecretKey
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
 })
 
 describe('getSupabase', () => {
@@ -84,6 +78,31 @@ describe('getPrivilegedFetch', () => {
     }
   })
 
+  it('preserves Request headers and explicit user JWTs', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('ok'))
+    vi.stubGlobal('fetch', fetchMock)
+    const privilegedFetch = getPrivilegedFetch('sb_secret_test')!
+    const request = new Request('https://supa.example/auth/v1/user', {
+      headers: { apikey: 'sb_secret_test', Authorization: 'Bearer sb_secret_test', 'x-test': 'keep' },
+    })
+    await privilegedFetch(request)
+    let headers = fetchMock.mock.calls[0][1].headers as Headers
+    expect(headers.get('apikey')).toBe('sb_secret_test')
+    expect(headers.get('x-test')).toBe('keep')
+    expect(headers.has('Authorization')).toBe(false)
+    expect(request.headers.get('Authorization')).toBe('Bearer sb_secret_test')
+
+    await privilegedFetch(request, { headers: { Authorization: 'Bearer user.jwt.signature' } })
+    headers = fetchMock.mock.calls[1][1].headers as Headers
+    expect(headers.get('Authorization')).toBe('Bearer user.jwt.signature')
+    expect(headers.has('x-test')).toBe(false)
+
+    await privilegedFetch('https://supa.example/auth/v1/health')
+    expect([...fetchMock.mock.calls[2][1].headers]).toEqual([])
+    await privilegedFetch('https://supa.example/auth/v1/health', {})
+    expect([...fetchMock.mock.calls[3][1].headers]).toEqual([])
+  })
+
   it('leaves legacy JWT clients on supabase-js default fetch', () => {
     expect(getPrivilegedFetch('header.payload.signature')).toBeUndefined()
   })
@@ -92,7 +111,7 @@ describe('getPrivilegedFetch', () => {
 describe('getServiceSupabase', () => {
   it('builds a secret-key client with persistSession disabled', () => {
     getServiceSupabase()
-    expect(createClient).toHaveBeenCalledWith('https://supa.example', 'secret-key', expect.objectContaining({
+    expect(createClient).toHaveBeenCalledWith('https://supa.example', 'sb_secret_test', expect.objectContaining({
       auth: { persistSession: false, autoRefreshToken: false },
       global: { fetch: expect.any(Function) },
     }))
@@ -109,6 +128,17 @@ describe('getServiceSupabase', () => {
       'header.payload.signature',
       { auth: { persistSession: false, autoRefreshToken: false } },
     )
+  })
+
+  it('uses the legacy key when the new variable is empty, and prefers a configured new key', () => {
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'header.payload.signature'
+    getServiceSupabase()
+    expect(createClient).toHaveBeenLastCalledWith('https://supa.example', 'sb_secret_test', expect.any(Object))
+    process.env.SUPABASE_SECRET_KEY = ''
+    getServiceSupabase()
+    expect(createClient).toHaveBeenLastCalledWith('https://supa.example', 'header.payload.signature', {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
   })
 
   it('throws when both privileged key variables are missing', () => {

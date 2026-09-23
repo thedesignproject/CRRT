@@ -22,8 +22,10 @@ export function getPrivilegedFetch(secretKey: string): typeof fetch | undefined 
   if (isLegacyJwt(secretKey)) return undefined
 
   return async (input, init) => {
-    const headers = new Headers(init?.headers)
-    headers.delete('Authorization')
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    if (headers.get('Authorization') === `Bearer ${secretKey}`) {
+      headers.delete('Authorization')
+    }
     return fetch(input, { ...init, headers })
   }
 }
@@ -63,7 +65,7 @@ export function getNonPersistentSupabase(): SupabaseClient {
  */
 export function getServiceSupabase(): SupabaseClient {
   const supabaseUrl = process.env.SUPABASE_URL
-  const secretKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+  const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!supabaseUrl || !secretKey) {
     throw new Error('Server misconfigured: missing Supabase credentials')

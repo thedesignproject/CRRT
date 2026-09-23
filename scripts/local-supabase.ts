@@ -1,4 +1,5 @@
 import { unlink } from 'node:fs/promises'
+import { getPrivilegedHeaders } from '../api/_lib/supabase.js'
 
 const root = new URL('../', import.meta.url).pathname
 const managedStart = '# >>> CRRT LOCAL SUPABASE >>>'
@@ -48,7 +49,7 @@ function writeLocalEnv(status: Record<string, string>) {
     SUPABASE_KEY: status.ANON_KEY,
     // Newer local CLI versions expose an opaque secret key. Keep the legacy
     // service-role fallback for older CLI versions during the transition.
-    SUPABASE_SECRET_KEY: status.SECRET_KEY ?? status.SERVICE_ROLE_KEY,
+    SUPABASE_SECRET_KEY: status.SECRET_KEY || status.SERVICE_ROLE_KEY,
     DATABASE_URL: status.DB_URL,
     REVIEWER_API_TOKEN: 'local-reviewer-token-do-not-use-in-production',
     SHARE_TOKEN_SECRET: 'local-share-token-secret-do-not-use-in-production',
@@ -91,10 +92,8 @@ function applyLocalGrants() {
 }
 
 async function smoke(status: Record<string, string>) {
-  const key = status.SECRET_KEY ?? status.SERVICE_ROLE_KEY
-  const headers = status.SECRET_KEY
-    ? { apikey: key }
-    : { apikey: key, Authorization: `Bearer ${key}` }
+  const key = status.SECRET_KEY || status.SERVICE_ROLE_KEY
+  const headers = getPrivilegedHeaders(key)
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const [auth, project, bucket] = await Promise.all([

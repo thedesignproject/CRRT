@@ -652,7 +652,7 @@ export async function getUserEmailsByIds(ids: string[]): Promise<Record<string, 
   const result: Record<string, string | null> = {}
   const unique = Array.from(new Set(ids))
   if (unique.length === 0) return result
-  const secretKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+  const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
   const url = process.env.SUPABASE_URL
   if (!secretKey || !url) return result
 
@@ -2824,7 +2824,7 @@ export async function declineInvite(email: string, projectKey: string): Promise<
  * notif fires for the invitee (they'll see it on next login via GET /invites).
  */
 export async function findUserIdByEmail(email: string): Promise<string | null> {
-  const secretKey = process.env.SUPABASE_SECRET_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY
+  const secretKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!secretKey) return null
   const url = process.env.SUPABASE_URL
   if (!url) return null

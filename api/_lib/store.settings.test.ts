@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({
-  getPrivilegedHeaders: vi.fn((key: string) => ({ apikey: key })),
+vi.mock('./supabase.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./supabase.js')>(),
   getServiceSupabase: vi.fn(),
 }))
 
@@ -538,12 +538,14 @@ describe('listProjectMembers', () => {
   const origKey = process.env.SUPABASE_SECRET_KEY
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     if (origKey === undefined) delete process.env.SUPABASE_SECRET_KEY
     else process.env.SUPABASE_SECRET_KEY = origKey
   })
 
   it('maps rows with null emails when no secret key is configured', async () => {
     delete process.env.SUPABASE_SECRET_KEY
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_members: [{ data: [
         { user_id: 'u1', role: 'admin', is_owner: true, created_at: 't' },
@@ -663,18 +665,16 @@ describe('changeProjectMemberRole', () => {
 
 describe('getUserEmailsByIds', () => {
   const origFetch = globalThis.fetch
-  const origUrl = process.env.SUPABASE_URL
-  const origKey = process.env.SUPABASE_SECRET_KEY
 
   beforeEach(() => {
-    process.env.SUPABASE_URL = 'https://supa.example'
-    process.env.SUPABASE_SECRET_KEY = 'sb_secret_test'
+    vi.stubEnv('SUPABASE_URL', 'https://supa.example')
+    vi.stubEnv('SUPABASE_SECRET_KEY', 'sb_secret_test')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     globalThis.fetch = origFetch
-    process.env.SUPABASE_URL = origUrl
-    process.env.SUPABASE_SECRET_KEY = origKey
   })
 
   it('returns an empty map for no ids', async () => {
@@ -683,7 +683,18 @@ describe('getUserEmailsByIds', () => {
 
   it('returns an empty map when service config is missing', async () => {
     delete process.env.SUPABASE_SECRET_KEY
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
     expect(await getUserEmailsByIds(['u1'])).toEqual({})
+  })
+
+  it('uses the legacy JWT when the new key is empty', async () => {
+    process.env.SUPABASE_SECRET_KEY = ''
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'header.payload.signature')
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ email: 'a@b.c' })))
+    expect(await getUserEmailsByIds(['u1'])).toEqual({ u1: 'a@b.c' })
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: {
+      apikey: 'header.payload.signature', Authorization: 'Bearer header.payload.signature',
+    } })
   })
 
   it('resolves emails, dedupes ids, and skips failures', async () => {

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({
-  getPrivilegedHeaders: vi.fn((key: string) => ({ apikey: key })),
+vi.mock('./supabase.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./supabase.js')>(),
   getServiceSupabase: vi.fn(),
 }))
 
@@ -962,35 +962,37 @@ describe('invite helpers', () => {
 
 describe('findUserIdByEmail', () => {
   const origFetch = globalThis.fetch
-  const origUrl = process.env.SUPABASE_URL
-  const origKey = process.env.SUPABASE_SECRET_KEY
-  const origLegacyKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   beforeEach(() => {
-    process.env.SUPABASE_URL = 'https://supa.example'
-    process.env.SUPABASE_SECRET_KEY = 'sb_secret_test'
+    vi.stubEnv('SUPABASE_URL', 'https://supa.example')
+    vi.stubEnv('SUPABASE_SECRET_KEY', 'sb_secret_test')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     globalThis.fetch = origFetch
-    process.env.SUPABASE_URL = origUrl
-    process.env.SUPABASE_SECRET_KEY = origKey
-    process.env.SUPABASE_SERVICE_ROLE_KEY = origLegacyKey
   })
 
   it('returns null when secret key is missing', async () => {
     delete process.env.SUPABASE_SECRET_KEY
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
     expect(await findUserIdByEmail('x@y.z')).toBeNull()
   })
 
   it('accepts the legacy service-role variable during cutover', async () => {
     delete process.env.SUPABASE_SECRET_KEY
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'legacy-secret'
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
+    process.env.SUPABASE_SECRET_KEY = ''
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'header.payload.signature'
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
       users: [{ id: 'u-legacy', email: 'x@y.z' }],
     }), { status: 200 })) as never
 
     expect(await findUserIdByEmail('x@y.z')).toBe('u-legacy')
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: {
+      apikey: 'header.payload.signature', Authorization: 'Bearer header.payload.signature',
+    } })
   })
 
   it('returns null when SUPABASE_URL is missing', async () => {
