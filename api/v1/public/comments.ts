@@ -1,3 +1,4 @@
+import { CommentEmailEnqueueRejectedError } from '../../_lib/comment-email-outbox.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
 import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
@@ -12,6 +13,7 @@ const METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 const VALID_STATUSES = new Set(['open', 'accepted', 'approved', 'rejected', 'pending'])
 
 async function sendCommentActivityEmailInBackground(input: {
+  commentId: string
   projectKey: string
   projectName: string
   pageUrl: string
@@ -27,6 +29,7 @@ async function sendCommentActivityEmailInBackground(input: {
     )
     if (!reservation.shouldSend) return
 
+    let enqueueAttempted = false
     try {
       const members = await listProjectMembers(input.projectKey)
       const recipients = members.map((member) => member.email).filter((email): email is string => Boolean(email))
@@ -37,6 +40,7 @@ async function sendCommentActivityEmailInBackground(input: {
         return
       }
 
+      enqueueAttempted = true
       await sendCommentActivityEmail({
         recipients,
         projectName: input.projectName,
@@ -44,9 +48,11 @@ async function sendCommentActivityEmailInBackground(input: {
         authorName: input.authorName,
         activityCount: reservation.activityCount,
         dashboardUrl: getCommentActivityDashboardUrl(),
-      })
+      }, input.commentId)
     } catch (error) {
-      if (cooldownSeconds > 0) {
+      // Only restore activity when delivery definitely has not been queued.
+      // A lost enqueue response may still leave a durable job for the worker.
+      if ((!enqueueAttempted || error instanceof CommentEmailEnqueueRejectedError) && cooldownSeconds > 0) {
         await releaseCommentActivityEmailReservation(input.projectKey, reservation.activityCount)
       }
       throw error
@@ -303,6 +309,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     }))
 
     waitUntil(sendCommentActivityEmailInBackground({
+      commentId: comment.id,
       projectKey: resolvedProjectKey,
       projectName: project.name,
       pageUrl,

@@ -1,7 +1,9 @@
+import { enqueueCommentEmail, processCommentEmailQueue } from './comment-email-outbox.js'
+
 const DEFAULT_COOLDOWN_HOURS = 5
 const DEFAULT_FROM = 'CRRT <activity@mail.crrt.ai>'
 const DEFAULT_TIMEOUT_MS = 5_000
-const RESEND_ENDPOINT = 'https://api.resend.com/emails'
+const MAX_BATCH_SIZE = 100
 
 export type CommentActivityEmailInput = {
   recipients: string[]
@@ -10,11 +12,6 @@ export type CommentActivityEmailInput = {
   authorName: string | null
   activityCount: number
   dashboardUrl: string
-}
-
-function senderAddress(from: string) {
-  const match = from.match(/<([^>]+)>/)
-  return (match?.[1] ?? from).trim()
 }
 
 function escapeHtml(value: string) {
@@ -91,37 +88,26 @@ export function buildCommentActivityEmail(input: CommentActivityEmailInput) {
   }
 }
 
-export async function sendCommentActivityEmail(input: CommentActivityEmailInput) {
+export async function sendCommentActivityEmail(input: CommentActivityEmailInput, deliveryId: string) {
   const apiKey = process.env.RESEND_API_KEY
   const recipients = [...new Set(input.recipients.map((email) => email.trim()).filter(Boolean))]
   if (!apiKey || recipients.length === 0) return { skipped: true }
 
   const from = process.env.COMMENT_ACTIVITY_EMAIL_FROM || DEFAULT_FROM
   const message = buildCommentActivityEmail(input)
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), getCommentActivityEmailTimeoutMs())
-  let response: Response
-  try {
-    response = await fetch(RESEND_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        from,
-        to: senderAddress(from),
-        bcc: recipients,
-        subject: message.subject,
-        html: message.html,
-        text: message.text,
-      }),
-    })
-  } finally {
-    clearTimeout(timeout)
+  const bodies: string[] = []
+  for (let offset = 0; offset < recipients.length; offset += MAX_BATCH_SIZE) {
+    bodies.push(JSON.stringify(recipients.slice(offset, offset + MAX_BATCH_SIZE).map((recipient) => ({
+      from, to: [recipient], ...message,
+    }))))
   }
-
-  if (!response.ok) throw new Error(`Resend email failed with ${response.status}`)
+  await enqueueCommentEmail(deliveryId, bodies)
+  // Delivery now belongs to the durable queue. A transient worker failure must
+  // never reset the project's activity reservation or requeue successful batches.
+  try {
+    await processCommentEmailQueue(getCommentActivityEmailTimeoutMs())
+  } catch {
+    console.warn('Comment email delivery deferred to queue worker')
+  }
   return { skipped: false }
 }
