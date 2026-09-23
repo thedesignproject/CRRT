@@ -47,6 +47,7 @@ describe('comment activity email helpers', () => {
     expect(hasCommentActivityEmailConfig()).toBe(true)
     delete process.env.SUPABASE_SECRET_KEY
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'legacy-secret'
+    process.env.SUPABASE_SECRET_KEY = ''
     expect(hasCommentActivityEmailConfig()).toBe(true)
     expect(canSendCommentActivityEmail(['  '])).toBe(false)
     expect(canSendCommentActivityEmail(['a@example.com'])).toBe(true)
