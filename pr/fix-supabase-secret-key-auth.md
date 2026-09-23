@@ -4,6 +4,9 @@ Opaque `sb_secret_*` keys now travel in `apikey` without the SDK's duplicate Bea
 
 The fetch adapter preserves Request headers and explicit user JWTs. Local setup uses the same header helper as the API, and configuration examples document the server-only key.
 
+Vercel now bootstraps the pinned Bun 1.4.0 binary through `npx --yes` for install and build; the previous `bunx` bootstrap repeatedly exited before the dependency installer started. The frozen lockfile remains enforced.
+
 Validation:
 - Unit regressions cover key precedence, empty settings, JWT compatibility, Request headers, and direct Auth Admin headers.
 - `bun scripts/check-local-supabase-auth.ts` uses the running local Supabase stack's generated `sb_secret_*` key for database insert/read/update/delete, Auth Admin create/lookup/delete, and storage upload/download/cleanup. It also verifies legacy-key fallback and removes temporary resources.
+- Full suite: 1,680 tests passed; changed-line and changed-branch coverage are both 100%. Typecheck, SDK, landing-page, and dashboard builds passed. React 18 and React 19 CI passed.
