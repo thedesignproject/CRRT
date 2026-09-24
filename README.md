@@ -181,7 +181,8 @@ Required server variables:
 
 - `SUPABASE_URL`
 - `SUPABASE_KEY` — the anon/publishable key; the dashboard includes it in the browser bundle
-- `SUPABASE_SERVICE_ROLE_KEY` — the privileged server-only key; never expose it to client code
+- `SUPABASE_SECRET_KEY` — the privileged server-only key; never expose it to client code
+- During the key cutover, `SUPABASE_SERVICE_ROLE_KEY` is accepted as a fallback. Set `SUPABASE_SECRET_KEY` to a newly generated Supabase `sb_secret_*` key in each environment, deploy, and verify privileged operations before removing the old environment variable. Renaming the variable while keeping its legacy JWT value does not migrate the credential. Before deactivating legacy keys in Supabase, verify that no other apps, scripts, or public anon-key consumers still depend on them.
 - `REVIEWER_API_TOKEN`
 - `SHARE_TOKEN_SECRET` - encrypts persisted share and native integration tokens
 - `WIDGET_AUTH_SECRET` - signs native integration OAuth state
@@ -208,7 +209,7 @@ Optional server variables:
 - `JIRA_CLIENT_ID` and `JIRA_CLIENT_SECRET` - enable native Jira Cloud OAuth and issue creation
 - `JIRA_REDIRECT_URI` - optional fixed Jira callback URL; defaults to `APP_URL/v1/integrations/jira/callback`
 
-The service-role key also lets the API resolve project member emails from Supabase Auth for comment activity notifications. Without it, that email path stays disabled because there are no resolved recipients.
+The secret key also lets the API resolve project member emails from Supabase Auth for comment activity notifications. Without it, that email path stays disabled because there are no resolved recipients.
 
 Useful client variables:
 
@@ -339,7 +340,7 @@ cp .env.example .env
 Fill in the required variables (see [Environment variables](#environment-variables)):
 
 - `SUPABASE_URL`, `SUPABASE_KEY` — your Supabase URL and public anon/publishable key
-- `SUPABASE_SERVICE_ROLE_KEY` — your privileged server-only key; never expose it to client code
+- `SUPABASE_SECRET_KEY` — your privileged server-only key; never expose it to client code
 - `REVIEWER_API_TOKEN` — long random string; gates the reviewer API endpoints
 - `SHARE_TOKEN_SECRET` — long random string; signs per-share bearer tokens
 

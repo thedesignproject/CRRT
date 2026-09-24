@@ -1,4 +1,5 @@
 import { unlink } from 'node:fs/promises'
+import { getPrivilegedHeaders } from '../api/_lib/supabase.js'
 
 const root = new URL('../', import.meta.url).pathname
 const managedStart = '# >>> CRRT LOCAL SUPABASE >>>'
@@ -36,15 +37,19 @@ function ensureNetwork() {
 }
 
 function writeLocalEnv(status: Record<string, string>) {
-  const required = ['ANON_KEY', 'API_URL', 'DB_URL', 'SERVICE_ROLE_KEY']
-  if (required.some((key) => !status[key])) throw new Error('Supabase status is missing local credentials')
+  const required = ['ANON_KEY', 'API_URL', 'DB_URL']
+  if (required.some((key) => !status[key]) || (!status.SECRET_KEY && !status.SERVICE_ROLE_KEY)) {
+    throw new Error('Supabase status is missing local credentials')
+  }
 
   const values: Record<string, string> = {
     VITE_API_BASE: 'http://127.0.0.1:3001/api',
     VITE_PROJECT_ID: 'demo-project',
     SUPABASE_URL: status.API_URL,
     SUPABASE_KEY: status.ANON_KEY,
-    SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+    // Newer local CLI versions expose an opaque secret key. Keep the legacy
+    // service-role fallback for older CLI versions during the transition.
+    SUPABASE_SECRET_KEY: status.SECRET_KEY || status.SERVICE_ROLE_KEY,
     DATABASE_URL: status.DB_URL,
     REVIEWER_API_TOKEN: 'local-reviewer-token-do-not-use-in-production',
     SHARE_TOKEN_SECRET: 'local-share-token-secret-do-not-use-in-production',
@@ -87,10 +92,8 @@ function applyLocalGrants() {
 }
 
 async function smoke(status: Record<string, string>) {
-  const headers = {
-    apikey: status.SERVICE_ROLE_KEY,
-    Authorization: `Bearer ${status.SERVICE_ROLE_KEY}`,
-  }
+  const key = status.SECRET_KEY || status.SERVICE_ROLE_KEY
+  const headers = getPrivilegedHeaders(key)
 
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const [auth, project, bucket] = await Promise.all([

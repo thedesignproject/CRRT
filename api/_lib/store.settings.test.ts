@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
+vi.mock('./supabase.js', async (importOriginal) => ({
+  ...await importOriginal<typeof import('./supabase.js')>(),
+  getServiceSupabase: vi.fn(),
+}))
 
 import { getServiceSupabase } from './supabase.js'
 import {
@@ -532,15 +535,17 @@ describe('race-safe GitHub connection persistence', () => {
 })
 
 describe('listProjectMembers', () => {
-  const origKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const origKey = process.env.SUPABASE_SECRET_KEY
 
   afterEach(() => {
-    if (origKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY
-    else process.env.SUPABASE_SERVICE_ROLE_KEY = origKey
+    vi.unstubAllEnvs()
+    if (origKey === undefined) delete process.env.SUPABASE_SECRET_KEY
+    else process.env.SUPABASE_SECRET_KEY = origKey
   })
 
-  it('maps rows with null emails when no service key is configured', async () => {
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+  it('maps rows with null emails when no secret key is configured', async () => {
+    delete process.env.SUPABASE_SECRET_KEY
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
     vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
       project_members: [{ data: [
         { user_id: 'u1', role: 'admin', is_owner: true, created_at: 't' },
@@ -660,18 +665,16 @@ describe('changeProjectMemberRole', () => {
 
 describe('getUserEmailsByIds', () => {
   const origFetch = globalThis.fetch
-  const origUrl = process.env.SUPABASE_URL
-  const origKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   beforeEach(() => {
-    process.env.SUPABASE_URL = 'https://supa.example'
-    process.env.SUPABASE_SERVICE_ROLE_KEY = 'svc-key'
+    vi.stubEnv('SUPABASE_URL', 'https://supa.example')
+    vi.stubEnv('SUPABASE_SECRET_KEY', 'sb_secret_test')
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     globalThis.fetch = origFetch
-    process.env.SUPABASE_URL = origUrl
-    process.env.SUPABASE_SERVICE_ROLE_KEY = origKey
   })
 
   it('returns an empty map for no ids', async () => {
@@ -679,12 +682,23 @@ describe('getUserEmailsByIds', () => {
   })
 
   it('returns an empty map when service config is missing', async () => {
-    delete process.env.SUPABASE_SERVICE_ROLE_KEY
+    delete process.env.SUPABASE_SECRET_KEY
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
     expect(await getUserEmailsByIds(['u1'])).toEqual({})
   })
 
+  it('uses the legacy JWT when the new key is empty', async () => {
+    process.env.SUPABASE_SECRET_KEY = ''
+    vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'header.payload.signature')
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ email: 'a@b.c' })))
+    expect(await getUserEmailsByIds(['u1'])).toEqual({ u1: 'a@b.c' })
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: {
+      apikey: 'header.payload.signature', Authorization: 'Bearer header.payload.signature',
+    } })
+  })
+
   it('resolves emails, dedupes ids, and skips failures', async () => {
-    globalThis.fetch = vi.fn(async (url: string) => {
+    const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/ok')) {
         return new Response(JSON.stringify({ email: 'a@b.c' }), {
           status: 200, headers: { 'content-type': 'application/json' },
@@ -696,8 +710,13 @@ describe('getUserEmailsByIds', () => {
       if (url.endsWith('/boom')) throw new Error('net')
       return new Response('nope', { status: 500 }) // /bad
     }) as never
+    globalThis.fetch = fetchMock
     const out = await getUserEmailsByIds(['ok', 'ok', 'bad', 'noemail', 'boom'])
     expect(out).toEqual({ ok: 'a@b.c' })
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://supa.example/auth/v1/admin/users/ok',
+      { headers: { apikey: 'sb_secret_test' } },
+    )
   })
 })
 
