@@ -230,7 +230,7 @@ export function Header({
         >
           {theme === 'light' ? <MoonIcon /> : <SunIcon />}
         </button>
-        <UserMenu user={user} onSignOut={onSignOut} />
+        <UserMenu user={user} onSignOut={onSignOut} apiBase={apiBase} accessToken={accessToken} />
       </div>
     </header>
   )
