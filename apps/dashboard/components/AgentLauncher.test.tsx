@@ -18,3 +18,18 @@ it('is discoverable with zero selections and announces the current count', () =>
   view.rerender(<AgentLauncher count={0} open={false} onOpen={onOpen} />)
   expect(button.querySelector('.agent-count-badge')).toBeNull()
 })
+
+it('stays visible but prevents interaction when unavailable', () => {
+  render(<AgentLauncher
+    count={0}
+    open={false}
+    disabled
+    unavailableReason="Open project feedback to use Agents."
+  />)
+
+  const button = screen.getByRole('button', { name: 'Agents unavailable: Open project feedback to use Agents.' })
+  expect(button).toBeDisabled()
+  expect(button).toHaveAttribute('title', 'Open project feedback to use Agents.')
+  fireEvent.click(button)
+  expect(button).toHaveAttribute('aria-expanded', 'false')
+})

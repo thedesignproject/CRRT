@@ -123,6 +123,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     ? activeProject.capabilities?.includes('agent:operate') ?? true
     : false
   const canOpenAgentPanel = view === 'feedback' && canOperateAgent
+  const agentUnavailableReason = view !== 'feedback'
+    ? 'Open project feedback to use Agents.'
+    : !activeProject
+      ? 'Select a project to use Agents.'
+      : !canOperateAgent
+        ? 'Agents are unavailable for your project role.'
+        : null
   const canManageProject = activeProject
     ? activeProject.capabilities?.includes('project:manage') ?? true
     : false
@@ -507,7 +514,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   return (
     <div className="dashboard-shell">
       <Header
-        agentAction={canOpenAgentPanel && <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
+        agentAction={agentUnavailableReason
+          ? <AgentLauncher count={agentComments.length} open={false} disabled unavailableReason={agentUnavailableReason} />
+          : <AgentLauncher count={agentComments.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />}
         projects={projects}
         projectsLoading={projectsLoading}
         projectsError={projectsError}
