@@ -45,10 +45,10 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   const bulkMode = controls?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   return (
-    <div className={cn('w-full md:w-[400px] shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
+    <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
       <div className="px-4 pt-4 pb-2.5 border-b border-border">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-bold text-foreground tracking-tight">
+          <h2 className="text-base font-medium text-foreground tracking-tight">
             {counts.all} {props.personal ? 'My Comments' : 'Feedback Items'}
           </h2>
           {controls && <button
@@ -71,16 +71,16 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                 className={cn(
                   'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
                   controls.statusFilter === f
-                    ? 'bg-primary text-primary-foreground'
+                    ? 'bg-accent text-foreground'
                     : 'text-muted-foreground hover:text-foreground hover:bg-accent'
                 )}
               >
                 {FILTER_LABELS[f]}
                 <span className={cn(
-                  'ml-1 text-[10px] font-bold min-w-[18px] text-center py-0.5 px-0.5 rounded-full',
+                  'ml-1.5 text-[10px] font-medium min-w-[18px] text-center py-0.5 px-1 rounded-full',
                   controls.statusFilter === f
-                    ? 'bg-primary-foreground/20 text-primary-foreground'
-                    : 'bg-muted text-muted-foreground/60'
+                    ? 'bg-muted text-foreground'
+                    : 'bg-muted text-muted-foreground'
                 )}>{count}</span>
               </button>
             )
@@ -162,9 +162,9 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                   onClick={() => controls && bulkMode ? controls.toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
                   className={cn(
                     'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
-                    isActive && !bulkMode ? 'border-l-primary bg-white/[0.04] ring-1 ring-inset ring-border' : 'border-l-transparent',
+                    isActive && !bulkMode ? 'border-l-primary bg-accent' : 'border-l-transparent',
                     bulkMode && isChecked ? 'bg-primary/10' : !isActive && 'hover:bg-white/[0.02]',
-                    inactive && !isChecked && 'opacity-50'
+                    inactive && !isChecked && 'bg-muted/30'
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -182,21 +182,21 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                         </div>
                       ) : (
                         <div
-                          className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-bold text-white"
+                          className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
                           style={{ background: comment.authorColor }}
                         >
                           {comment.authorInitial}
                         </div>
                       )}
-                      <span className="text-[13px] font-bold text-foreground">{comment.author}</span>
+                      <span className="text-[13px] font-medium text-foreground">{comment.author}</span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground/60">{timeAgo(comment.createdAt)}</span>
+                    <span className="text-[10px] text-muted-foreground">{timeAgo(comment.createdAt)}</span>
                   </div>
 
                   <p className={cn(
-                    'text-[12px] leading-relaxed mb-2 line-clamp-2 pl-[26px]',
+                    'text-sm leading-relaxed mb-2 line-clamp-2 pl-[26px] break-words',
                     inactive
-                      ? 'text-muted-foreground/50 line-through'
+                      ? 'text-muted-foreground'
                       : isActive && !bulkMode
                         ? 'text-foreground/85'
                         : 'text-muted-foreground'
@@ -208,10 +208,10 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     {!props.personal && <StatusBadge comment={comment} />}
                     {!props.personal && (
                       <span className={cn(
-                        'rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
+                        'rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide',
                         comment.visibility === 'internal'
                           ? 'bg-muted text-muted-foreground'
-                          : 'bg-primary/10 text-primary',
+                          : 'bg-muted text-muted-foreground',
                       )}>
                         {comment.visibility ?? 'shared'}
                       </span>
@@ -224,11 +224,11 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                       </span>
                     )}
                     {comment.targetType === 'text_range' && comment.anchor ? (
-                      <span className="text-[10px] text-muted-foreground/60 italic ml-auto truncate max-w-[140px]">
+                      <span className="text-[10px] text-muted-foreground italic ml-auto truncate max-w-[140px]">
                         &ldquo;{comment.anchor.selectedText}&rdquo;
                       </span>
                     ) : (
-                      <span className="text-[10px] text-muted-foreground/40 font-mono ml-auto truncate max-w-[140px]">
+                      <span className="text-[10px] text-muted-foreground font-mono ml-auto truncate max-w-[140px]">
                         {comment.selector?.split(' > ').pop() || 'No page context'}
                       </span>
                     )}

@@ -11,6 +11,16 @@
  *    Components read the semantic mapping further down.
  * --------------------------------------------------------- */
 :root {
+  /* Dashboard-only palette. Consumers opt in; widget/landing stay unchanged. */
+  --crrt-dashboard-font: 'Figtree Variable', system-ui, sans-serif;
+  --crrt-dashboard-white: #ffffff;
+  --crrt-dashboard-sidebar: #f8f9fa;
+  --crrt-dashboard-ink: #202329;
+  --crrt-dashboard-muted: #646b75;
+  --crrt-dashboard-border: #e7e9ed;
+  --crrt-dashboard-hover: #eef0f3;
+  --crrt-dashboard-orange: #c24c12;
+  --crrt-dashboard-selection: #fff3eb;
   /* Backgrounds */
   --crrt-bg:              #F2EBE0;
   --crrt-bg-card:         #FFFCF6;

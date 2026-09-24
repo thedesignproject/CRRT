@@ -90,7 +90,7 @@ beforeEach(() => {
 })
 
 async function openExternalWorkDraft() {
-  const button = screen.getByRole('button', { name: 'Send to…' })
+  const button = screen.getByRole('button', { name: 'Integrations…' })
   await waitFor(() => expect(button).toBeEnabled())
   fireEvent.click(button)
   fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -361,7 +361,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       .mockRejectedValueOnce(new Error('response contained a secret'))
       .mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'Title', body: 'Body' } })
     render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Send to…' })
+    const button = screen.getByRole('button', { name: 'Integrations…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -379,7 +379,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       draft: { title: '', body: '' },
     })
     render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Send to…' })
+    const button = screen.getByRole('button', { name: 'Integrations…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -394,7 +394,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       draft: { title: '', body: '' },
     })
     const first = render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Send to…' })
+    const button = screen.getByRole('button', { name: 'Integrations…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -404,7 +404,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     let rejectDraft!: (reason: Error) => void
     vi.mocked(getExternalWorkDraft).mockReturnValueOnce(new Promise((_resolve, reject) => { rejectDraft = reject }))
     const view = render(<CommentDetail {...props} />)
-    const pending = screen.getByRole('button', { name: 'Send to…' })
+    const pending = screen.getByRole('button', { name: 'Integrations…' })
     await waitFor(() => expect(pending).toBeEnabled())
     fireEvent.click(pending)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -448,7 +448,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     vi.mocked(getExternalWorkDraft)
       .mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve }))
     const { rerender } = render(<CommentDetail {...props} />)
-    const firstButton = screen.getByRole('button', { name: 'Send to…' })
+    const firstButton = screen.getByRole('button', { name: 'Integrations…' })
     await waitFor(() => expect(firstButton).toBeEnabled())
     fireEvent.click(firstButton)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -565,7 +565,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       resolveDraft = resolve
     }))
     render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Send to…' })
+    const button = screen.getByRole('button', { name: 'Integrations…' })
     await waitFor(() => expect(button).toBeEnabled())
     fireEvent.click(button)
     const github = await screen.findByRole('button', { name: 'GitHub' })
@@ -612,7 +612,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
   it('explains when the selected provider is not connected', async () => {
     vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
     render(<CommentDetail {...props} />)
-    const button = screen.getByRole('button', { name: 'Send to…' })
+    const button = screen.getByRole('button', { name: 'Integrations…' })
     fireEvent.click(button)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Check Project Settings')
@@ -625,13 +625,13 @@ describe('<CommentDetail /> GitHub issue action', () => {
 
   it('does not request connection status when no project is selected', () => {
     render(<CommentDetail {...props} selectedProject="" />)
-    expect(screen.getByRole('button', { name: 'Send to…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Integrations…' })).toBeDisabled()
   })
 
   it('keeps a saved issue openable without a current repository connection', async () => {
     const open = vi.spyOn(window, 'open').mockReturnValue(null)
     render(<CommentDetail {...props} selectedComment={{ ...comment, githubIssue: issue }} />)
-    const button = screen.getByRole('button', { name: 'Send to…' })
+    const button = screen.getByRole('button', { name: 'Integrations…' })
     expect(button).toBeEnabled()
     fireEvent.click(button)
     fireEvent.click(await screen.findByRole('button', { name: 'GitHub' }))
@@ -648,7 +648,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     })
     vi.mocked(sendExternalWork).mockResolvedValueOnce({ externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now', created: true })
     render(<CommentDetail {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Integrations…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
     await waitFor(() => expect(open).toHaveBeenCalledWith('https://linear.app/issue/WEB-1', '_blank', 'noopener,noreferrer'))
@@ -663,7 +663,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
     })
     vi.mocked(sendExternalWork).mockResolvedValueOnce({ externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://acme.atlassian.net/browse/WEB-1', createdAt: 'now', created: true })
     render(<CommentDetail {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Send to…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Integrations…' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Jira' }))
     expect(await screen.findByRole('dialog')).toHaveTextContent('Send to Jira')
     fireEvent.click(screen.getByRole('button', { name: 'Create issue' }))
@@ -683,7 +683,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       })
     vi.spyOn(window, 'open').mockReturnValue(null)
     render(<CommentDetail {...props} />)
-    const send = screen.getByRole('button', { name: 'Send to…' })
+    const send = screen.getByRole('button', { name: 'Integrations…' })
     fireEvent.click(send)
     fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Create issue' }))
@@ -701,7 +701,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: '', externalKey: '', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now' }, draft: { title: '', body: '' } })
       .mockResolvedValueOnce({ provider: 'linear', connected: true, destination: 'WEB · Web', existing: { externalId: 'i', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1', createdAt: 'now' }, draft: { title: '', body: '' } })
     render(<CommentDetail {...props} />)
-    const send = screen.getByRole('button', { name: 'Send to…' })
+    const send = screen.getByRole('button', { name: 'Integrations…' })
     fireEvent.click(send)
     fireEvent.click(await screen.findByRole('button', { name: 'Linear' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not prepare the Linear issue')

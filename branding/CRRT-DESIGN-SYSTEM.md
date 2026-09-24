@@ -9,6 +9,14 @@
 
 ## 1. Concept
 
+### Dashboard exception — approved September 2026
+
+The dashboard uses self-hosted Figtree for UI/body, white surfaces, neutral grey navigation,
+and the `--crrt-dashboard-*` palette in tokens.css. New users default to light; saved dark
+preferences remain respected. Orange #c24c12 is the dashboard action color with white text;
+the canonical carrot asset retains its original orange. VT323 is limited to brand accents.
+This exception does not change widget or landing typography, palette, or theme defaults.
+
 CRRT.AI is a visual feedback widget. The brand operates as **pixel-CRT** — a pixel-art carrot rendered on a black ground, paired with a clean geometric sans wordmark.
 
 **Why pixel-art:** CRRT and CRT (cathode-ray tube) share an alphabet. The carrot in pixels is what the carrot looked like on the screens that invented the pixel.

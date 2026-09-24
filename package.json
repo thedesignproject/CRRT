@@ -31,6 +31,7 @@
     "dev:landing": "vite --config apps/landing/vite.config.ts",
     "dev:dashboard": "bash -c 'trap \"kill 0\" EXIT INT TERM; bunx vercel dev --listen 3000 & vite --config apps/dashboard/vite.config.ts'",
     "dev:dashboard:ui-only": "vite --config apps/dashboard/vite.config.ts",
+    "dev:dashboard:preview": "VITE_USE_MOCKS=1 VITE_API_BASE=http://127.0.0.1:54321/api SUPABASE_URL=http://127.0.0.1:54321 SUPABASE_KEY=local-preview-only vite --config apps/dashboard/vite.config.ts --host 127.0.0.1 --port 4327 --strictPort",
     "dev:extension": "wxt --config apps/extension/wxt.config.ts",
     "typecheck": "tsc --project tsconfig.check.json",
     "test": "vitest run",
@@ -64,6 +65,8 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
+    "@fontsource-variable/figtree": "^5.3.0",
+    "@fontsource/vt323": "^5.3.0",
     "@supabase/supabase-js": "^2.49.4",
     "@vercel/sandbox": "^3.1.0",
     "framer-motion": "^12.38.0",

@@ -2,6 +2,13 @@
 
 This package includes third-party font software.
 
+## Figtree
+
+Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+The license text is reproduced below.
+
 ## VT323
 
 Copyright 2011, The VT323 Project Authors (peter.hull@oikoi.com)

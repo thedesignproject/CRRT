@@ -8,6 +8,7 @@ import { useAgentSession } from './hooks/useAgentSession'
 import { useAuth } from './hooks/useAuth'
 import { useSuperAdmin } from './hooks/useSuperAdmin'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
+import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath } from './lib/routes'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { Header } from './components/Header'
@@ -107,7 +108,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const reviewRequests = useRef(new Map<string, symbol>())
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
@@ -133,10 +134,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
   const [addProjectBusy, setAddProjectBusy] = useState(false)
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    if (typeof window === 'undefined') return 'dark'
-    try { return (localStorage.getItem('dashboard-theme') as 'light' | 'dark') || 'dark' } catch { return 'dark' }
-  })
+  const [theme, setTheme] = useState(getDashboardTheme)
   const [, setTick] = useState(0)
 
   useEffect(() => {
@@ -161,10 +159,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [accessToken, pendingInvite, refreshProjects])
 
   useEffect(() => {
-    const root = document.documentElement
-    if (theme === 'light') root.classList.add('light')
-    else root.classList.remove('light')
-    try { localStorage.setItem('dashboard-theme', theme) } catch {}
+    applyDashboardTheme(theme)
   }, [theme])
 
   useEffect(() => {
@@ -515,7 +510,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="dashboard-shell">
       <Header
         projects={projects}
         projectsLoading={projectsLoading}
@@ -551,6 +546,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
       />
 
+      <main className="dashboard-main">
       {accessReviewNotice}
       {view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
@@ -567,7 +563,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onProjectsChanged={refreshProjects}
         />
       ) : (
-      <div className="flex flex-1 overflow-hidden">
+      <div className="dashboard-feedback">
         <CommentList
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
@@ -630,6 +626,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       </div>
       )}
 
+      </main>
       <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
 
       {cmdOpen && (
