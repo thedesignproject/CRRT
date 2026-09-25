@@ -11,6 +11,8 @@ import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath } from './lib/routes'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
+import { BillingPage } from './components/BillingPage'
+import { UserMenu } from './components/UserMenu'
 import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
@@ -77,6 +79,8 @@ export function App() {
   }
 
   if (!session || !user) return <LoginPage />
+
+  if (pathname === '/billing') return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} />
 
   const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
   if (auditMatch) return <ProductAuditPage apiBase={API_BASE} accessToken={session.access_token} auditId={decodeURIComponent(auditMatch[1])} />
@@ -486,6 +490,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     return (
       <>
         {accessReviewNotice}
+        <div className="absolute top-4 right-5 z-50"><UserMenu user={user} onSignOut={onSignOut} apiBase={API_BASE} accessToken={accessToken} /></div>
         <WelcomeScreen
           suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
           onOpenExtensionComments={openExtensionComments}

@@ -1,13 +1,27 @@
 import { useEffect, useRef, useState } from 'react'
+import { route } from '../lib/routes'
 import type { User } from '@supabase/supabase-js'
 
 interface UserMenuProps {
+  apiBase: string
+  accessToken: string
   user: User
   onSignOut: () => void
 }
 
-export function UserMenu({ user, onSignOut }: UserMenuProps) {
+export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProps) {
   const [open, setOpen] = useState(false)
+  const [billingEnabled, setBillingEnabled] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    let active = true
+    setBillingEnabled(false)
+    fetch(`${apiBase}/v1/billing?availability=1`, { headers: { Authorization: `Bearer ${accessToken}` } })
+      .then(async (response) => { if (!response.ok) throw new Error('Unavailable'); return response.json() })
+      .then((value: { enabled: boolean }) => { if (active) setBillingEnabled(value.enabled === true) })
+      .catch(() => { /* Hide billing when availability cannot be checked. */ })
+    return () => { active = false }
+  }, [open, apiBase, accessToken])
   const ref = useRef<HTMLDivElement | null>(null)
   const initials = (user.email ?? '??').slice(0, 2).toUpperCase()
 
@@ -35,6 +49,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
             <div className="text-[11px] text-muted-foreground">Signed in as</div>
             <div className="text-xs font-medium text-foreground truncate">{user.email}</div>
           </div>
+          {billingEnabled && <a href={route('/billing')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">Billing</a>}
           <button
             onClick={onSignOut}
             className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"
