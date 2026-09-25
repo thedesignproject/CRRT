@@ -1,3 +1,4 @@
+import { CommentEmailEnqueueRejectedError } from '../../_lib/comment-email-outbox.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/store.js', () => ({
@@ -371,7 +372,7 @@ describe('api/v1/public/comments', () => {
     })
   })
 
-  it('sends an activity email to project members by BCC when cooldown opens', async () => {
+  it('sends an activity email to project members when cooldown opens', async () => {
     vi.mocked(ensurePublicProject).mockResolvedValue({
       publicKey: 'demo-project',
       slug: 'demo-project',
@@ -435,7 +436,7 @@ describe('api/v1/public/comments', () => {
       authorName: 'Mira',
       activityCount: 2,
       dashboardUrl: 'https://crrt.ai/dashboard',
-    })
+    }, 'comment-1')
   })
 
   it('returns 201 without waiting for a hung activity email send', async () => {
@@ -745,7 +746,7 @@ describe('api/v1/public/comments', () => {
     warn.mockRestore()
   })
 
-  it('does not fail comment creation when activity email delivery fails', async () => {
+  it.each([false, true])('handles enqueue failure without failing comment creation (definitive: %s)', async (definitive) => {
     vi.mocked(ensurePublicProject).mockResolvedValue({
       publicKey: 'demo-project',
       slug: 'demo-project',
@@ -775,7 +776,7 @@ describe('api/v1/public/comments', () => {
     vi.mocked(hasCommentActivityEmailConfig).mockReturnValue(true)
     vi.mocked(reserveCommentActivityEmail).mockResolvedValue({ shouldSend: true, activityCount: 1 })
     vi.mocked(canSendCommentActivityEmail).mockReturnValue(true)
-    vi.mocked(sendCommentActivityEmail).mockRejectedValue(new Error('resend down'))
+    vi.mocked(sendCommentActivityEmail).mockRejectedValue(definitive ? new CommentEmailEnqueueRejectedError('rejected') : new Error('uncertain'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const res = mockRes()
@@ -792,7 +793,8 @@ describe('api/v1/public/comments', () => {
     await flushMicrotasks()
 
     expect(res.statusCode).toBe(201)
-    expect(releaseCommentActivityEmailReservation).toHaveBeenCalledWith('demo-project', 1)
+    if (definitive) expect(releaseCommentActivityEmailReservation).toHaveBeenCalledWith('demo-project', 1)
+    else expect(releaseCommentActivityEmailReservation).not.toHaveBeenCalled()
     expect(warn).toHaveBeenCalledWith('Comment activity email failed', expect.any(Error))
     warn.mockRestore()
   })

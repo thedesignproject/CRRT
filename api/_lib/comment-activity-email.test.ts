@@ -1,3 +1,7 @@
+import { enqueueCommentEmail, processCommentEmailQueue } from './comment-email-outbox.js'
+
+vi.mock('./comment-email-outbox.js', () => ({ enqueueCommentEmail: vi.fn(), processCommentEmailQueue: vi.fn() }))
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCommentActivityEmail,
@@ -13,6 +17,8 @@ const originalEnv = process.env
 
 beforeEach(() => {
   process.env = { ...originalEnv }
+  vi.mocked(enqueueCommentEmail).mockReset().mockResolvedValue(undefined)
+  vi.mocked(processCommentEmailQueue).mockReset().mockResolvedValue(undefined)
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }))
 })
 
@@ -83,89 +89,64 @@ describe('comment activity email helpers', () => {
     expect(batch.text).toContain('4 CRRTs were dropped')
   })
 
-  it('skips without config or recipients and sends BCC through Resend', async () => {
-    await expect(sendCommentActivityEmail({
-      recipients: ['a@example.com'],
-      projectName: 'Demo',
-      pageUrl: 'https://example.com',
-      authorName: null,
-      activityCount: 1,
-      dashboardUrl: 'https://crrt.ai/dashboard',
-    })).resolves.toEqual({ skipped: true })
+  const input = {
+    recipients: ['a@example.com', 'a@example.com', ' b@example.com '],
+    projectName: 'Demo', pageUrl: 'https://example.com', authorName: null,
+    activityCount: 1, dashboardUrl: 'https://crrt.ai/dashboard',
+  }
+
+  it('does not queue without a key or nonempty recipients', async () => {
+    delete process.env.RESEND_API_KEY
+    expect(await sendCommentActivityEmail(input, 'delivery')).toEqual({ skipped: true })
+    process.env.RESEND_API_KEY = 'key'
+    expect(await sendCommentActivityEmail({ ...input, recipients: [' ', ''] }, 'delivery')).toEqual({ skipped: true })
+    expect(enqueueCommentEmail).not.toHaveBeenCalled()
+    expect(processCommentEmailQueue).not.toHaveBeenCalled()
+  })
+
+  it('freezes private messages and queues every batch before running delivery', async () => {
+    process.env.RESEND_API_KEY = 'key'
+    delete process.env.COMMENT_ACTIVITY_EMAIL_FROM
+    expect(await sendCommentActivityEmail(input, 'delivery')).toEqual({ skipped: false })
+    const [id, bodies] = vi.mocked(enqueueCommentEmail).mock.calls[0]
+    expect(id).toBe('delivery')
+    expect(bodies).toHaveLength(1)
+    const messages = JSON.parse(bodies[0])
+    expect(messages.map((message: { to: string[] }) => message.to)).toEqual([['a@example.com'], ['b@example.com']])
+    for (const message of messages) {
+      expect(message.from).toBe('CRRT <activity@mail.crrt.ai>')
+      expect(message.subject).toBe('New CRRT on Demo')
+      expect(message).not.toHaveProperty('bcc')
+      expect(message).not.toHaveProperty('cc')
+    }
+    expect(vi.mocked(enqueueCommentEmail).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(processCommentEmailQueue).mock.invocationCallOrder[0])
     expect(fetch).not.toHaveBeenCalled()
-
-    process.env.RESEND_API_KEY = 'key'
-    process.env.COMMENT_ACTIVITY_EMAIL_FROM = 'CRRT <activity@mail.crrt.ai>'
-    await expect(sendCommentActivityEmail({
-      recipients: ['a@example.com', 'a@example.com', ' b@example.com '],
-      projectName: 'Demo',
-      pageUrl: 'https://example.com',
-      authorName: null,
-      activityCount: 1,
-      dashboardUrl: 'https://crrt.ai/dashboard',
-    })).resolves.toEqual({ skipped: false })
-
-    const [, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
-    expect(init.signal).toBeInstanceOf(AbortSignal)
-    expect(JSON.parse(String(init.body))).toMatchObject({
-      from: 'CRRT <activity@mail.crrt.ai>',
-      to: 'activity@mail.crrt.ai',
-      bcc: ['a@example.com', 'b@example.com'],
-      subject: 'New CRRT on Demo',
-    })
-
-    vi.mocked(fetch).mockClear()
-    process.env.COMMENT_ACTIVITY_EMAIL_FROM = 'activity@mail.crrt.ai'
-    await expect(sendCommentActivityEmail({
-      recipients: ['a@example.com'],
-      projectName: 'Demo',
-      pageUrl: 'https://example.com',
-      authorName: null,
-      activityCount: 1,
-      dashboardUrl: 'https://crrt.ai/dashboard',
-    })).resolves.toEqual({ skipped: false })
-
-    const [, bareInit] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
-    expect(JSON.parse(String(bareInit.body))).toMatchObject({
-      from: 'activity@mail.crrt.ai',
-      to: 'activity@mail.crrt.ai',
-    })
   })
 
-  it('throws when Resend rejects the request', async () => {
+  it('queues large lists in immutable batches using the configured sender', async () => {
     process.env.RESEND_API_KEY = 'key'
-    vi.mocked(fetch).mockResolvedValueOnce({ ok: false, status: 500 } as Response)
-
-    await expect(sendCommentActivityEmail({
-      recipients: ['a@example.com'],
-      projectName: 'Demo',
-      pageUrl: 'https://example.com',
-      authorName: null,
-      activityCount: 1,
-      dashboardUrl: 'https://crrt.ai/dashboard',
-    })).rejects.toThrow('Resend email failed with 500')
+    process.env.COMMENT_ACTIVITY_EMAIL_FROM = 'Team <other@example.com>'
+    const recipients = Array.from({ length: 201 }, (_, i) => `member${i}@example.com`)
+    await sendCommentActivityEmail({ ...input, recipients }, 'delivery')
+    const batches = vi.mocked(enqueueCommentEmail).mock.calls[0][1].map((body) => JSON.parse(body))
+    expect(batches.map((batch) => batch.length)).toEqual([100, 100, 1])
+    expect(batches.flat().map((message) => message.to)).toEqual(recipients.map((email) => [email]))
+    expect(batches.flat().every((message) => message.from === 'Team <other@example.com>')).toBe(true)
   })
 
-  it('aborts hung Resend requests after the configured timeout', async () => {
-    vi.useFakeTimers()
+  it('never sends when durable persistence fails', async () => {
     process.env.RESEND_API_KEY = 'key'
-    process.env.COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS = '10'
-    vi.mocked(fetch).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
-      const signal = init?.signal as AbortSignal | undefined
-      signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
-    }))
+    vi.mocked(enqueueCommentEmail).mockRejectedValueOnce(new Error('queue unavailable'))
+    await expect(sendCommentActivityEmail(input, 'delivery')).rejects.toThrow('queue unavailable')
+    expect(processCommentEmailQueue).not.toHaveBeenCalled()
+  })
 
-    const send = sendCommentActivityEmail({
-      recipients: ['a@example.com'],
-      projectName: 'Demo',
-      pageUrl: 'https://example.com',
-      authorName: null,
-      activityCount: 1,
-      dashboardUrl: 'https://crrt.ai/dashboard',
-    })
-    const expectation = expect(send).rejects.toThrow('Aborted')
-    await vi.advanceTimersByTimeAsync(10)
-    await expectation
-    vi.useRealTimers()
+  it('leaves retries to the queue without failing an already queued notification', async () => {
+    process.env.RESEND_API_KEY = 'key'
+    vi.mocked(processCommentEmailQueue).mockRejectedValueOnce(new Error('worker unavailable'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    expect(await sendCommentActivityEmail(input, 'delivery')).toEqual({ skipped: false })
+    expect(warn).toHaveBeenCalledWith('Comment email delivery deferred to queue worker')
+    warn.mockRestore()
   })
 })
