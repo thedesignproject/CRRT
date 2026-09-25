@@ -66,13 +66,15 @@ export default async function handler(req: any, res: any) {
 `
 }
 
-async function buildApiFunction() {
+async function buildApiFunction(webhook = false) {
   const temporary = await mkdtemp(join(tmpdir(), 'crrt-vercel-'))
   try {
-    const routes = (await apiFiles()).map(routeDefinition)
+    const routes = (await apiFiles()).filter((file) => file !== 'api/v1/billing/webhook.ts').map(routeDefinition)
       .sort((left, right) => left.names.length - right.names.length)
     const generated = join(temporary, '__vercel-router.ts')
-    await writeFile(generated, routerSource(routes))
+    await writeFile(generated, webhook
+      ? "export { default } from './v1/billing/webhook.js'\nexport const config = { helpers: false }\n"
+      : routerSource(routes))
     const files = await glob('**', {
       cwd: root, dot: true,
       ignore: ['.git/**', '.vercel/**', '.workflow-data/**', 'coverage/**', 'node_modules/**'],
@@ -86,7 +88,7 @@ async function buildApiFunction() {
       throw new Error('Vercel API builder did not return a Node function')
     }
     const lambda = result.output
-    const functionDirectory = join(output, 'functions/api-router.func')
+    const functionDirectory = join(output, webhook ? 'functions/stripe-webhook.func' : 'functions/api-router.func')
     for (const [path, file] of Object.entries(lambda.files)) {
       const destination = join(functionDirectory, path)
       await mkdir(dirname(destination), { recursive: true })
@@ -105,7 +107,7 @@ async function buildApiFunction() {
     await writeFile(join(functionDirectory, '.vc-config.json'), JSON.stringify({
       runtime: lambda.runtime, handler: lambda.handler, launcherType: 'Nodejs',
       architecture: lambda.architecture, memory: 128, maxDuration: 10,
-      shouldAddHelpers: true, shouldAddSourcemapSupport: true,
+      shouldAddHelpers: !webhook, shouldAddSourcemapSupport: true,
     }, null, 2))
   } finally {
     await rm(temporary, { recursive: true, force: true })
@@ -125,6 +127,7 @@ if (!workflowIds.includes(PRODUCT_AUDIT_WORKFLOW_ID)) {
 await rm(join(output, 'static'), { recursive: true, force: true })
 await cp(join(root, 'apps/landing/dist'), join(output, 'static'), { recursive: true })
 await buildApiFunction()
+await buildApiFunction(true)
 await buildPublicFunction(root, output)
 await rm(join(output, 'static/public-pages.json'))
 const workflowConfig = JSON.parse(await readFile(join(output, 'config.json'), 'utf8'))
@@ -135,6 +138,7 @@ workflowConfig.routes = [
     'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token',
     'Access-Control-Max-Age': '86400',
   }, continue: true },
+  { src: '^/api/v1/billing/webhook/?$', dest: '/stripe-webhook' },
   ...workflowConfig.routes,
   { src: '^(/api(?:/.*)?)$', dest: '/api-router?__audit_path=$1' },
   ...publicPageRoutes,
