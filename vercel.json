@@ -15,6 +15,10 @@
   },
   "crons": [
     {
+      "path": "/api/v1/internal/comment-email-deliveries",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/v1/extension/auth/cleanup",
       "schedule": "17 3 * * *"
     }
