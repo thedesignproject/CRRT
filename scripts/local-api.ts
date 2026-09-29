@@ -50,7 +50,8 @@ function addQueryValue(query: Record<string, QueryValue>, key: string, value: st
   query[key] = current === undefined ? value : Array.isArray(current) ? [...current, value] : [current, value]
 }
 
-async function parseBody(request: Request): Promise<unknown> {
+async function parseBody(request: Request, raw: boolean): Promise<unknown> {
+  if (raw) return Buffer.from(await request.arrayBuffer())
   if (request.method === 'GET' || request.method === 'HEAD') return undefined
   const body = await request.text()
   if (!body) return undefined
@@ -64,6 +65,8 @@ function createResponseAdapter() {
   const headers = new Headers()
 
   const response = {
+    get statusCode() { return statusCode },
+    set statusCode(value: number) { statusCode = value },
     status(code: number) {
       statusCode = code
       return response
@@ -116,7 +119,7 @@ Bun.serve({
         method: request.method,
         headers: Object.fromEntries(request.headers.entries()),
         query,
-        body: await parseBody(request),
+        body: await parseBody(request, route.file === 'api/v1/billing/webhook.ts'),
       }
       const localResponse = createResponseAdapter()
       const module = await import(new URL(`../${route.file}`, import.meta.url).href)

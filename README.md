@@ -175,6 +175,8 @@ bun db:migrate     # applies it
 
 ## Environment variables
 
+For the default-off, test-only Stripe integration, see [Stripe billing setup](docs/stripe-billing.md).
+
 Example values live in `.env.example`.
 
 Required server variables:
