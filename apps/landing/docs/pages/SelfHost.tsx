@@ -15,7 +15,7 @@ const envSnippet = `cp .env.example .env
 # Supabase (API + dashboard build):
 SUPABASE_URL=https://<your-project>.supabase.co
 SUPABASE_KEY=<anon-or-publishable-key>
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key> # server-only; never expose in client code
+SUPABASE_SECRET_KEY=<secret-key> # server-only; never expose in client code
 REVIEWER_API_TOKEN=<long-random-string>
 SHARE_TOKEN_SECRET=<long-random-string>
 
@@ -94,11 +94,11 @@ export function SelfHostPage({ pathname, onNavigate }: SelfHostPageProps) {
         <P>
           Copy <InlineCode>.env.example</InlineCode> to <InlineCode>.env</InlineCode> and fill in the
           required values. The dashboard includes the public <InlineCode>SUPABASE_KEY</InlineCode> in its
-          browser bundle at build time. Keep <InlineCode>SUPABASE_SERVICE_ROLE_KEY</InlineCode> server-only.
+          browser bundle at build time. Keep <InlineCode>SUPABASE_SECRET_KEY</InlineCode> server-only.
         </P>
         <CodeBlock language="bash" code={envSnippet} />
         <Callout tone="warn">
-          <Strong>SUPABASE_SERVICE_ROLE_KEY</Strong>, <Strong>REVIEWER_API_TOKEN</Strong>, and{' '}
+          <Strong>SUPABASE_SECRET_KEY</Strong>, <Strong>REVIEWER_API_TOKEN</Strong>, and{' '}
           <Strong>SHARE_TOKEN_SECRET</Strong> are sensitive — rotate them periodically and never commit or
           expose them to client code. The two application tokens should be long random strings (32+ bytes).
         </Callout>
