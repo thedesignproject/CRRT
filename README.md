@@ -216,6 +216,10 @@ Comment activity notifications are persisted in the server-only `comment_email_b
 
 The authenticated worker at `GET /api/v1/internal/comment-email-deliveries` runs every minute through Vercel Cron and requires `Authorization: Bearer <CRON_SECRET>`. Configure `CRON_SECRET` and use a Vercel plan supporting minute-level schedules. Self-hosted deployments must schedule the same authenticated request. Immediate delivery is attempted after enqueueing, but the scheduler is required for recovery after failures or process restarts. Apply the generated database migration before deploying this code.
 
+Comment activity notifications are persisted in the server-only `comment_email_batches` table before delivery. Each recipient gets a private message; the sender is never added as an extra recipient. Successful batches are checkpointed, and pending batches retry with the same frozen payload and Resend idempotency key. Retries stop after eight attempts or 20 hours, before Resend's 24-hour idempotency window ends; terminal failures retain a safe error code for inspection. The worker removes email content and recipient addresses older than seven days on successful runs.
+
+The authenticated worker at `GET /api/v1/internal/comment-email-deliveries` runs every minute through Vercel Cron and requires `Authorization: Bearer <CRON_SECRET>`. Configure `CRON_SECRET` and use a Vercel plan supporting minute-level schedules. Self-hosted deployments must schedule the same authenticated request. Immediate delivery is attempted after enqueueing, but the scheduler is required for recovery after failures or process restarts. Apply the generated database migration before deploying this code.
+
 Useful client variables:
 
 - `VITE_API_BASE`

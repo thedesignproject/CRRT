@@ -867,3 +867,26 @@ export const commentEmailBatches = pgTable('comment_email_batches', {
   dueIdx: index('comment_email_batches_due_idx').on(t.status, t.nextAttemptAt),
   statusCheck: check('comment_email_batches_status_check', sql`${t.status} in ('pending', 'sent', 'failed')`),
 })).enableRLS()
+
+// One billing account per authenticated owner; future limits resolve project
+// ownership at request time. No paid entitlement enforcement in billing v1.
+export const billingAccounts = pgTable('billing_accounts', {
+  userId: uuid('user_id').primaryKey().references(() => authUsers.id, { onDelete: 'restrict' }),
+  customerId: text('customer_id').unique(),
+  subscriptionId: text('subscription_id').unique(),
+  subscriptionStatus: text('subscription_status'),
+  priceId: text('price_id'),
+  periodEnd: timestamp('period_end', { withTimezone: true }),
+  cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
+  checkoutAttempt: uuid('checkout_attempt').notNull().default(sql`gen_random_uuid()`),
+  checkoutSessionId: text('checkout_session_id'),
+  lockToken: uuid('lock_token'),
+  lockExpiresAt: timestamp('lock_expires_at', { withTimezone: true }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS()
+
+export const billingWebhookEvents = pgTable('billing_webhook_events', {
+  eventId: text('event_id').primaryKey(),
+  eventType: text('event_type').notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS()
