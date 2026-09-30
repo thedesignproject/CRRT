@@ -2,14 +2,19 @@ import { WIDGET_PROOF } from './widgetAuthContract'
 import type { PersonalComments } from '../components/FeedbackWidget/types'
 
 export type WidgetLoginSession = { accessToken: string; displayName: string; expiresAt: string }
+export class WidgetRequestError extends Error {
+  constructor(public readonly status: number) {
+    super(status === 401 ? 'Session expired. Log in to CRRT again.' : 'Could not save or load feedback. Please try again.')
+  }
+}
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
 export async function widgetRequest(apiBase: string, path: string, session: WidgetLoginSession, init: RequestInit = {}) {
-  if (Date.parse(session.expiresAt) <= Date.now()) throw new Error('Session expired. Log in to CRRT again.')
+  if (Date.parse(session.expiresAt) <= Date.now()) throw new WidgetRequestError(401)
   const response = await fetch(`${apiBase}${path}`, {
     ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
   })
-  if (!response.ok) throw new Error(response.status === 401 ? 'Session expired. Log in to CRRT again.' : 'Could not save or load feedback. Please try again.')
+  if (!response.ok) throw new WidgetRequestError(response.status)
   return response
 }
 

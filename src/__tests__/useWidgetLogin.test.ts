@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-vi.mock('../lib/widgetLogin', () => ({ startWidgetLogin: vi.fn(), widgetComments: vi.fn(() => ({ label: 'mine' })), widgetRequest: vi.fn() }))
-import { startWidgetLogin, widgetRequest } from '../lib/widgetLogin'
+vi.mock('../lib/widgetLogin', async (importOriginal) => ({ ...await importOriginal<typeof import('../lib/widgetLogin')>(), startWidgetLogin: vi.fn(), widgetComments: vi.fn(() => ({ label: 'mine' })), widgetRequest: vi.fn() }))
+import { WidgetRequestError, startWidgetLogin, widgetRequest } from '../lib/widgetLogin'
 import { useWidgetLogin } from '../components/FeedbackWidget/useWidgetLogin'
 const session = { accessToken: 'token', displayName: 'Ada', expiresAt: '2099-01-01' }
 beforeEach(() => { vi.clearAllMocks(); vi.mocked(startWidgetLogin).mockResolvedValue(session); vi.mocked(widgetRequest).mockResolvedValue({} as never) })
@@ -35,4 +35,40 @@ it('aborts pending attempts on project changes and unmount, ignoring cancellatio
   let pending!: Promise<void>; act(() => { pending = result.current.login() })
   rerender({ project: 'b' }); await act(() => pending); expect(result.current.error).toBe(''); expect(result.current.busy).toBe(false)
   act(() => { pending = result.current.login() }); unmount(); await pending
+})
+
+it('recovers when revocation succeeded but its response was lost', async () => {
+  const { result } = renderHook(() => useWidgetLogin('api', 'p'))
+  await act(() => result.current.login())
+  vi.mocked(widgetRequest).mockRejectedValueOnce(new Error('offline'))
+  await act(() => result.current.logout())
+  expect(result.current.session).toEqual(session)
+  vi.mocked(widgetRequest).mockRejectedValueOnce(new WidgetRequestError(401))
+  await act(() => result.current.logout())
+  expect(result.current.session).toBeNull()
+  expect(result.current.error).toBe('')
+})
+it('retains the session when revocation is forbidden', async () => {
+  const { result } = renderHook(() => useWidgetLogin('api', 'p'))
+  await act(() => result.current.login())
+  vi.mocked(widgetRequest).mockRejectedValueOnce(new WidgetRequestError(403))
+  await act(() => result.current.logout())
+  expect(result.current.session).toEqual(session)
+  expect(result.current.error).toContain('Could not save')
+})
+it.each(['success', 'failure'] as const)('ignores a stale logout %s after switching projects and logging in', async (outcome) => {
+  let resolve!: (value: Response) => void
+  let reject!: (cause: Error) => void
+  vi.mocked(widgetRequest).mockImplementationOnce(() => new Promise((yes, no) => { resolve = yes; reject = no }))
+  const { result, rerender } = renderHook(({ project }) => useWidgetLogin('api', project), { initialProps: { project: 'a' } })
+  await act(() => result.current.login())
+  let pending!: Promise<void>
+  act(() => { pending = result.current.logout() })
+  rerender({ project: 'b' })
+  const next = { ...session, accessToken: 'new-token' }
+  vi.mocked(startWidgetLogin).mockResolvedValueOnce(next)
+  await act(() => result.current.login())
+  await act(async () => { if (outcome === 'success') resolve(new Response()); else reject(new Error('offline')); await pending })
+  expect(result.current.session).toEqual(next)
+  expect(result.current.error).toBe('')
 })
