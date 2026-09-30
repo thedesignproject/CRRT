@@ -213,6 +213,21 @@ export const extensionAuthHandoffs = pgTable(
   }),
 ).enableRLS()
 
+// Opaque widget credentials are hashed at rest. A conditional UPDATE consumes
+// each handoff once; the resulting session never grants dashboard access.
+export const widgetAuthSessions = pgTable('widget_auth_sessions', {
+  codeHash: text('code_hash').primaryKey(),
+  stateHash: text('state_hash').notNull(),
+  pkceChallenge: text('pkce_challenge').notNull(),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+  origin: text('origin').notNull(),
+  displayName: text('display_name').notNull(),
+  handoffExpiresAt: timestamp('handoff_expires_at', { withTimezone: true }).notNull(),
+  tokenHash: text('token_hash').unique(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}).enableRLS()
+
 export const projectRepoConfigs = pgTable('project_repo_configs', {
   projectKey: text('project_key')
     .primaryKey()

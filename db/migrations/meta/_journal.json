@@ -211,6 +211,13 @@
       "when": 1790241201172,
       "tag": "0029_parallel_lifeguard",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1790755685554,
+      "tag": "0030_aromatic_prism",
+      "breakpoints": true
     }
   ]
 }
