@@ -5,10 +5,15 @@ export interface NameModalProps {
   onChange: (v: string) => void
   onSubmit: () => void
   onCancel: () => void
+  onLogin?: () => void
+  onLogout?: () => void
+  busy?: boolean
+  error?: string
+  signedIn?: boolean
   existingName: string | null
 }
 
-export function NameModal({ value, onChange, onSubmit, onCancel, existingName }: NameModalProps) {
+export function NameModal({ value, onChange, onSubmit, onCancel, existingName, onLogin, onLogout, busy = false, error, signedIn = false }: NameModalProps) {
   const trimmed = value.trim()
   return (
     <div
@@ -25,9 +30,11 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName }:
       onClick={(e) => e.stopPropagation()}
     >
       <form
+        role="dialog" aria-modal="true" aria-label="Your feedback identity"
         onSubmit={(e) => { e.preventDefault(); onSubmit() }}
         style={{
-          width: 360, maxWidth: 'calc(100vw - 32px)',
+          width: 360, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box',
+          maxHeight: 'calc(100dvh - 32px)', overflowY: 'auto',
           background: 'var(--fw-surface)',
           border: '1px solid var(--fw-contrast-08)',
           borderRadius: 16, padding: 24,
@@ -37,7 +44,7 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName }:
           position: 'relative',
         }}
       >
-        {existingName && (
+        {(existingName || onLogin) && (
           <button
             type="button"
             onClick={onCancel}
@@ -66,13 +73,13 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName }:
         }} />
         <div>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--fw-foreground)', margin: 0, marginBottom: 6 }}>
-            {existingName ? 'Change your name' : "What's your name?"}
+            {signedIn ? `Signed in as ${existingName}` : existingName ? 'Change your name' : "What's your name?"}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--fw-foreground-muted)', margin: 0, lineHeight: 1.5 }}>
             Your name will appear on the comments you leave.
           </p>
         </div>
-        <div>
+        {!signedIn && <div>
           <label htmlFor="fw-crrt-name-input" style={{ display: 'none' }}>Your name</label>
           <input
             id="fw-crrt-name-input"
@@ -97,10 +104,10 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName }:
             onFocus={(e) => { e.currentTarget.style.borderColor = '#E8853D'; e.currentTarget.style.background = 'rgba(232, 133, 61, 0.06)' }}
             onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--fw-contrast-08)'; e.currentTarget.style.background = 'var(--fw-contrast-04)' }}
           />
-        </div>
-        <button
+        </div>}
+        {!signedIn && <button
           type="submit"
-          disabled={!trimmed}
+          disabled={!trimmed || busy}
           style={{
             width: '100%', padding: '11px 0', fontSize: 14, fontWeight: 600,
             color: trimmed ? '#FFFFFF' : 'var(--fw-foreground-faint)',
@@ -116,8 +123,13 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName }:
           onMouseEnter={(e) => { if (trimmed) e.currentTarget.style.background = '#B85F1F' }}
           onMouseLeave={(e) => { if (trimmed) e.currentTarget.style.background = '#E8853D' }}
         >
-          {existingName ? 'Save' : 'Continue'}
-        </button>
+          {onLogin ? 'Continue as guest' : existingName ? 'Save' : 'Continue'}
+        </button>}
+        {onLogin && <button type="button" disabled={busy} onClick={signedIn ? onLogout : onLogin}
+          style={{ padding: 12, borderRadius: 8, border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-contrast-04)', color: 'var(--fw-foreground)', font: 'inherit', cursor: 'pointer' }}>
+          {busy ? 'Connecting…' : signedIn ? 'Sign out of this widget' : 'Log in to CRRT'}
+        </button>}
+        {error && <p role="alert" style={{ margin: 0, color: 'var(--fw-foreground-muted)', fontSize: 13 }}>{error}</p>}
       </form>
     </div>
   )

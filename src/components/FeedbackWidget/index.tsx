@@ -1,3 +1,4 @@
+import { useWidgetLogin } from './useWidgetLogin'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, MessageCircle, PanelRightOpen, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
@@ -365,8 +366,8 @@ function FeedbackWidgetInner({
   projectId,
   apiBase = 'https://crrt.ai/api',
   theme = 'dark',
-  personalComments,
-  viewerEmail,
+  personalComments: suppliedPersonalComments,
+  viewerEmail: suppliedViewerEmail,
   page,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
   useEffect(() => {
@@ -382,6 +383,9 @@ function FeedbackWidgetInner({
   const [hovered, setHovered] = useState<Element | null>(null)
   const [apiError, setApiError] = useState('')
 
+  const widgetLogin = useWidgetLogin(apiBase, projectId)
+  const personalComments = suppliedPersonalComments ?? widgetLogin.comments
+  const viewerEmail = suppliedViewerEmail ?? widgetLogin.session?.displayName
   const [authorName, setAuthorName] = useState<string | null>(null)
   const authorNameRef = useRef<string | null>(null)
   const [showNameModal, setShowNameModal] = useState(false)
@@ -391,6 +395,7 @@ function FeedbackWidgetInner({
       const name = viewerEmail || 'You'
       authorNameRef.current = name; setAuthorName(name); return
     }
+    authorNameRef.current = null; setAuthorName(null)
     try {
       const stored = localStorage.getItem(AUTHOR_NAME_KEY)
       if (stored) {
@@ -409,7 +414,7 @@ function FeedbackWidgetInner({
   }
 
   function openNameEditor() {
-    if (personalComments) return
+    if (suppliedPersonalComments) return
     setNameInput(authorNameRef.current ?? '')
     setShowNameModal(true)
   }
@@ -418,6 +423,7 @@ function FeedbackWidgetInner({
 
   function handleNameSubmit() {
     if (!nameInput.trim()) return
+    widgetLogin.cancel()
     const wasCommenting = mode === 'commenting'
     saveAuthorName(nameInput)
     setShowNameModal(false)
@@ -431,6 +437,8 @@ function FeedbackWidgetInner({
   }
 
   function handleNameCancel() {
+    widgetLogin.cancel()
+    pendingSendAfterName.current = false
     setShowNameModal(false)
     setNameInput('')
   }
@@ -845,6 +853,15 @@ function FeedbackWidgetInner({
     }
   }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments])
 
+  useEffect(() => {
+    if (!widgetLogin.session) return
+    setShowNameModal(false)
+    if (pendingSendAfterName.current) {
+      pendingSendAfterName.current = false
+      void handleSend()
+    } else if (target) setMode('commenting')
+  }, [widgetLogin.session])
+
   // --- Keyboard shortcuts ---
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -854,8 +871,7 @@ function FeedbackWidgetInner({
 
       if (e.key === 'Escape') {
         if (showNameModal) {
-          setShowNameModal(false)
-          setNameInput('')
+          handleNameCancel()
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
@@ -2461,6 +2477,11 @@ function FeedbackWidgetInner({
           onSubmit={handleNameSubmit}
           onCancel={handleNameCancel}
           existingName={authorNameRef.current}
+          onLogin={widgetLogin.login}
+          onLogout={widgetLogin.logout}
+          signedIn={Boolean(widgetLogin.session)}
+          busy={widgetLogin.busy}
+          error={widgetLogin.error}
         />
       )}
     </div>

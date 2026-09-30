@@ -1,3 +1,4 @@
+import { widgetAuthRecoveryDestination } from '../lib/widget-auth'
 import { dashboardAuthSearch } from '../lib/access-review-link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -68,7 +69,7 @@ export function ResetPasswordPage() {
       // password active.
       await supabase.auth.signOut()
       window.setTimeout(() => {
-        window.location.href = extensionAuthRecoveryDestination(window.location.search, window.location.origin) ?? (route('/login') + dashboardAuthSearch(window.location.search))
+        window.location.href = extensionAuthRecoveryDestination(window.location.search, window.location.origin) ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin) ?? (route('/login') + dashboardAuthSearch(window.location.search))
       }, 1400)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update password')

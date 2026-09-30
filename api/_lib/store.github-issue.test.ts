@@ -255,3 +255,14 @@ describe('comment GitHub issue persistence', () => {
     await expect(deleteCommentById('comment-1', 'project-1')).resolves.toBe(false)
   })
 })
+
+it('scopes authenticated widget lists by account and source and protects owned comments from anonymous deletion', async () => {
+  let builder = mockResult({ data: [], error: null })
+  await listComments('p', { userId: 'u' })
+  expect(builder.eq).toHaveBeenCalledWith('created_by_user_id', 'u')
+  expect(builder.eq).toHaveBeenCalledWith('source', 'widget')
+  builder = mockResult({ data: [], error: null })
+  await deleteCommentById('c', 'p')
+  expect(builder.is).toHaveBeenCalledWith('created_by_user_id', null)
+  await listComments('p', { userId: '' })
+})

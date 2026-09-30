@@ -1113,6 +1113,7 @@ describe('comment functions', () => {
 
     const created = await createPublicComment({
       projectKey: 'pk',
+      userId: 'signed-in-user',
       pageUrl: 'https://example.com/pricing',
       x: 10,
       y: 20,
@@ -1128,6 +1129,7 @@ describe('comment functions', () => {
       selectedText: 'términos y condiciones',
     })
     expect((inserts[0] as Record<string, unknown>).visibility).toBe('shared')
+    expect((inserts[0] as Record<string, unknown>).created_by_user_id).toBe('signed-in-user')
     expect(selects[0]).toContain('target_type, anchor')
     expect(created.targetType).toBe('text_range')
     expect(created.anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })

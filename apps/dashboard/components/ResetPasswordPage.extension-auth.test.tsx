@@ -35,3 +35,17 @@ describe('password recovery continuation', () => {
     expect(window.location.search).toBe(search)
   })
 })
+
+it('returns to the widget handoff after recovery', async () => {
+  const continuation = `/widget-auth?${new URLSearchParams({ projectKey: 'p', origin: 'https://site.test', state: 'a'.repeat(43), codeChallenge: 'b'.repeat(43) })}`
+  window.history.replaceState({}, '', '/reset-password?continue=' + encodeURIComponent(continuation))
+  render(<ResetPasswordPage />)
+  const password = screen.getByLabelText('new password')
+  await waitFor(() => expect(password).not.toBeDisabled())
+  fireEvent.change(password, { target: { value: 'password' } })
+  fireEvent.change(screen.getByLabelText('confirm'), { target: { value: 'password' } })
+  fireEvent.click(screen.getByRole('button', { name: /update password/i }))
+  await screen.findByText(/password updated/)
+  await vi.advanceTimersByTimeAsync(1400)
+  expect(window.location.pathname + window.location.search).toBe(continuation)
+})
