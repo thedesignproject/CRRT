@@ -76,7 +76,7 @@
     "nanoid": "5.1.16",
     "negotiator": "^1.1.0",
     "stripe": "^22.6.2",
-    "undici": "7.29.0",
+    "undici": "7.29.1",
     "workflow": "^4.8.4",
     "zod": "^4.4.3"
   },
@@ -118,7 +118,7 @@
   },
   "overrides": {
     "nanoid@^5.0.0": "5.1.16",
-    "undici@^7.0.0": "7.29.0",
+    "undici@^7.0.0": "7.29.1",
     "ws": "8.21.3"
   },
   "patchedDependencies": {
