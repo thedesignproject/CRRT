@@ -32,3 +32,15 @@ This PR intentionally leaves selected-comment agent export to the stacked handof
 does not claim to focus a pin because no receiver contract exists yet. The fixture preview must not
 be treated as authenticated production acceptance. Mobile keeps the approved stacked list/detail
 layout; drill-in navigation remains a separate product change.
+
+## PR 2 scope: selected feedback handoff
+
+- Right-side modal drawer that does not resize the workspace.
+- Selection remains independent from review and implementation status, persists across filters and resets across projects or views.
+- Clipboard export contains exactly the selected, currently authorized comments and never mutates their statuses.
+- Tests cover successful copy, denied clipboard access, removal, Escape and backdrop dismissal.
+- The snapshot is local-only: it does not create a live session, start an agent or synchronize CRRT statuses.
+- Authorized feedback views expose Agents even with zero selected comments; the selected agent persists while the dashboard remains mounted.
+- Agents is anchored in the workspace toolbar before Run audit; its short count animation respects reduced-motion preferences.
+- The action palette uses ink for primary controls, orange for accents, a warm row hover and a neutral open-row state.
+- Feedback rows remain flat; agent selection uses an independent checkbox with a visible in-row focus treatment.

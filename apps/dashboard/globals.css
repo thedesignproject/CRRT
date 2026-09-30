@@ -4,6 +4,11 @@
 :root {
   --crrt-font-sans: var(--crrt-dashboard-font);
   --crrt-font-body: var(--crrt-dashboard-font);
+  --primary: var(--crrt-dashboard-ink);
+  --primary-foreground: var(--crrt-dashboard-white);
+  --ring: var(--crrt-dashboard-white);
+  --dashboard-row-hover: var(--crrt-dashboard-hover-warm-dark);
+  --dashboard-row-open: var(--crrt-bg-deep-soft);
 }
 :root[data-theme="light"] {
   --background: var(--crrt-dashboard-white);
@@ -18,9 +23,11 @@
   --secondary-foreground: var(--crrt-dashboard-ink);
   --border: var(--crrt-dashboard-border);
   --input: var(--crrt-dashboard-border);
-  --primary: var(--crrt-dashboard-orange);
+  --primary: var(--crrt-dashboard-ink);
   --primary-foreground: var(--crrt-dashboard-white);
-  --ring: var(--crrt-dashboard-orange);
+  --ring: var(--crrt-dashboard-ink);
+  --dashboard-row-hover: var(--crrt-dashboard-hover-warm);
+  --dashboard-row-open: var(--crrt-dashboard-hover);
   --accent: var(--crrt-dashboard-hover);
   --accent-foreground: var(--crrt-dashboard-ink);
 }
@@ -452,3 +459,32 @@
   transform: scale(0.96);
   transition: transform 0.08s ease;
 }
+/* Agent handoff is a modal layer: opening it never resizes the workspace. */
+.agent-drawer {
+  position: fixed;
+  inset: 0 0 0 auto;
+  margin: 0;
+  padding: 0;
+  width: min(440px, 100vw);
+  max-width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+  overscroll-behavior: contain;
+}
+.agent-drawer::backdrop { background: rgb(15 23 42 / 20%); }
+.agent-brand-icon { color: var(--crrt-dashboard-orange); }
+.agent-launcher:hover { background: var(--dashboard-row-hover); color: var(--foreground); }
+.agent-launcher[aria-expanded="true"] { background: var(--accent); color: var(--foreground); }
+.agent-count-badge { background: var(--crrt-dashboard-orange); color: var(--crrt-dashboard-ink); }
+.agent-count { animation: agent-count-change var(--crrt-duration-default) ease-out; }
+@keyframes agent-count-change { from { transform: scale(1.2); opacity: 0.6; } to { transform: scale(1); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .agent-count { animation: none; } }
+.feedback-row { border-bottom: 1px solid var(--border); }
+.feedback-row.feedback-row-open { background: var(--dashboard-row-open); }
+@media (hover: hover) {
+  .feedback-row:not(.feedback-row-open):hover { background: var(--dashboard-row-hover); }
+}
+.feedback-row .feedback-open:focus-visible { outline-offset: -3px; }
+.feedback-select:has(input:focus-visible) { outline: 2px solid var(--ring); outline-offset: -2px; }
+.feedback-select input { accent-color: var(--crrt-dashboard-ink); }
+.feedback-row .feedback-open:active { opacity: 0.85; }

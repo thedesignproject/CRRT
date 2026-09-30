@@ -11,7 +11,7 @@ describe('shared feedback controls', () => {
   it('preserves project filters, selection, and bulk status actions', () => {
     const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), applyBulkAction: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
     const view = render(<CommentList {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Review multiple' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).toHaveClass('grid', 'grid-cols-5')
     expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).not.toHaveClass('overflow-x-auto')
     expect(screen.getByRole('button', { name: 'Agent 0' })).toBeInTheDocument()
@@ -71,13 +71,12 @@ describe('shared feedback controls', () => {
   })
 
   it('advertises only personal navigation shortcuts in My Comments', () => {
-    const show = vi.fn()
-    const view = render(<StatusBar sidebarOpen={false} onShowSidebar={show} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Show agent panel' })); expect(show).toHaveBeenCalledOnce()
+    const view = render(<StatusBar />)
+    expect(screen.queryByRole('button', { name: 'Show agent panel' })).toBeNull()
     expect(screen.getByText('ready')).toBeInTheDocument()
-    view.rerender(<StatusBar sidebarOpen onShowSidebar={show} />)
+    view.rerender(<StatusBar />)
     expect(screen.queryByRole('button')).toBeNull()
-    view.rerender(<StatusBar personal sidebarOpen={false} onShowSidebar={show} />)
+    view.rerender(<StatusBar personal />)
     for (const label of ['ready', 'done', 'reject', 'sidebar', 'search']) expect(screen.queryByText(label)).toBeNull()
     expect(screen.getByText('Space')).toBeInTheDocument()
     expect(screen.getByText('J')).toBeInTheDocument()

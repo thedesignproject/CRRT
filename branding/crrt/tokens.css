@@ -19,7 +19,9 @@
   --crrt-dashboard-muted: #646b75;
   --crrt-dashboard-border: #e7e9ed;
   --crrt-dashboard-hover: #eef0f3;
-  --crrt-dashboard-orange: #c24c12;
+  --crrt-dashboard-orange: #E8853D;
+  --crrt-dashboard-hover-warm: #fff3eb;
+  --crrt-dashboard-hover-warm-dark: #34271e;
   --crrt-dashboard-selection: #fff3eb;
   /* Backgrounds */
   --crrt-bg:              #F2EBE0;

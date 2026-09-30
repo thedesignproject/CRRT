@@ -17,6 +17,8 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
 }
 
 interface CommentListProps {
+  agentSelection?: { ids: Set<string>; toggle: (id: string) => void; count: number; open: () => void }
+  headerAction?: ReactNode
   personal?: false
   readOnly?: boolean
   filteredComments: Comment[]
@@ -41,16 +43,20 @@ const EMPTY_SELECTION = new Set<string>()
 
 export function CommentList(props: CommentListProps | PersonalListProps) {
   const { filteredComments, counts, commentsLoading, commentsError, selectedCommentId, setSelectedCommentId } = props
+  const agent = props.personal ? undefined : props.agentSelection
   const controls = props.personal || props.readOnly ? null : props
   const bulkMode = controls?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   return (
     <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
       <div className="px-4 pt-4 pb-2.5 border-b border-border">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between gap-2 mb-3">
           <h2 className="text-base font-medium text-foreground tracking-tight">
             {counts.all} {props.personal ? 'My Comments' : 'Feedback Items'}
           </h2>
+          {!props.personal && props.headerAction}
+        </div>
+        <div className="flex justify-end mb-2">
           {controls && <button
             onClick={() => bulkMode ? controls.exitBulkMode() : controls.enterBulkMode()}
             className={cn(
@@ -58,7 +64,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             )}
           >
-            <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
+            <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Review multiple'}
           </button>}
         </div>
         {controls && <div className="grid grid-cols-5 gap-1 pb-1">
@@ -149,22 +155,15 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               const isActive = comment.id === selectedCommentId
               const isChecked = bulkSelectedIds.has(comment.id)
               const inactive = isInactive(comment)
-              const statusBar =
-                comment.implementationStatus === 'done' ? 'bg-status-done' :
-                comment.implementationStatus === 'ready_for_testing' ? 'bg-status-ready-for-testing' :
-                comment.reviewStatus === 'accepted' ? 'bg-status-accepted' :
-                comment.reviewStatus === 'rejected' ? 'bg-status-rejected' :
-                null
-
               return (
+                <div key={comment.id} className={cn("feedback-row relative flex", isActive && !bulkMode && "feedback-row-open")}>
+                  {agent && !bulkMode && <label className="feedback-select self-start ml-2 mt-2 flex h-8 w-8 shrink-0 items-center justify-center rounded cursor-pointer"><input type="checkbox" className="w-4 h-4 accent-primary" aria-label={`Select for agent: ${comment.body}`} checked={agent.ids.has(comment.id)} onChange={() => agent.toggle(comment.id)} /></label>}
                 <button
-                  key={comment.id}
+                  aria-current={isActive && !bulkMode ? true : undefined}
+                  aria-pressed={bulkMode ? isChecked : undefined}
                   onClick={() => controls && bulkMode ? controls.toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
                   className={cn(
-                    'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
-                    isActive && !bulkMode ? 'border-l-primary bg-accent' : 'border-l-transparent',
-                    bulkMode && isChecked ? 'bg-primary/10' : !isActive && 'hover:bg-white/[0.02]',
-                    inactive && !isChecked && 'bg-muted/30'
+                    'feedback-open relative w-full min-w-0 text-left px-3 py-3',
                   )}
                 >
                   <div className="flex items-center justify-between mb-1">
@@ -234,13 +233,8 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     )}
                   </div>
 
-                  {statusBar && (
-                    <span
-                      aria-hidden="true"
-                      className={cn('absolute top-2 bottom-2 right-0 w-[2px] rounded-l-sm', statusBar)}
-                    />
-                  )}
                 </button>
+                </div>
               )
             })}
           </div>

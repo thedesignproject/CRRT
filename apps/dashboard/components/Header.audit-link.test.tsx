@@ -4,15 +4,20 @@ vi.mock('./SuggestedProjects', () => ({ SuggestedProjects: () => <div>Suggested 
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }))
 import { Header } from './Header'
+import { AgentLauncher } from './AgentLauncher'
 describe('dashboard audit launcher link', () => {
   it('uses the dashboard base-aware audit route', () => {
     render(<Header
+      agentAction={<AgentLauncher count={0} open={false} onOpen={vi.fn()} />}
       projects={[]} projectsLoading={false} projectsError={null} commentsLoading={false} selectedProject="" commentCount={0} setSelectedProject={vi.fn()} setStatusFilter={vi.fn()} setSelectedCommentId={vi.fn()}
       addProjectOpen={true} setAddProjectOpen={vi.fn()} onAddProject={vi.fn()} onCheckAvailability={vi.fn()} addProjectBusy={false} addProjectError={null} onOpenCmd={vi.fn()} onOpenSettings={vi.fn()} settingsActive={false} onOpenExtensionComments={vi.fn()} extensionCommentsActive={false}
       apiBase="/api" accessToken="token" onProjectsChanged={vi.fn()} onOpenCommentActivity={vi.fn()} theme="dark" toggleTheme={vi.fn()} user={{ id: 'user' } as never} onSignOut={vi.fn()} superadmin={false} superAdminActive={false} onOpenSuperAdmin={vi.fn()}
     />)
     expect(screen.getByText('Suggested projects slot')).toBeInTheDocument()
     const link = screen.getByRole('link', { name: 'Run audit' })
+    const agents = screen.getByRole('button', { name: 'Agents, 0 selected comments' })
+    expect(agents.closest('header')).toBe(screen.getByRole('banner'))
+    expect(agents.nextElementSibling).toBe(link)
     expect(link).toHaveAttribute('href', '/audits/new'); expect(link).not.toHaveClass('hidden')
     expect(screen.getByRole('link', { name: 'CRRT marketing site' })).toHaveAttribute('href', '/?stay=1')
     expect(screen.getByRole('button', { name: 'Search feedback' })).toHaveAttribute('type', 'button')

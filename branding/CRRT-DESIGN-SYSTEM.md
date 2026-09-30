@@ -13,8 +13,10 @@
 
 The dashboard uses self-hosted Figtree for UI/body, white surfaces, neutral grey navigation,
 and the `--crrt-dashboard-*` palette in tokens.css. New users default to light; saved dark
-preferences remain respected. Orange #c24c12 is the dashboard action color with white text;
-the canonical carrot asset retains its original orange. VT323 is limited to brand accents.
+preferences remain respected. Primary actions use dashboard ink #202329 with white text.
+Original carrot orange #E8853D is reserved for accents; light orange #fff3eb is the light-theme
+row hover, with #34271e for dark-theme row hover. Open rows retain neutral grey, independent
+of the checkbox selection. The canonical carrot asset retains its original orange. VT323 is limited to brand accents.
 This exception does not change widget or landing typography, palette, or theme defaults.
 
 CRRT.AI is a visual feedback widget. The brand operates as **pixel-CRT** — a pixel-art carrot rendered on a black ground, paired with a clean geometric sans wordmark.
