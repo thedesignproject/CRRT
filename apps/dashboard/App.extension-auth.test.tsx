@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const auth = vi.hoisted(() => ({ session: null as null | { access_token: string }, user: null as null | { id: string }, loading: false, signOut: vi.fn() }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => auth }))
+vi.mock('./components/WidgetAuthPage', () => ({ WidgetAuthPage: ({ accessToken }: { accessToken: string | null }) => <div>widget auth {accessToken ?? 'anonymous'}</div> }))
 vi.mock('./components/ExtensionAuthPage', () => ({ ExtensionAuthPage: ({ accessToken }: { accessToken: string | null }) => <div>extension auth {accessToken ?? 'anonymous'}</div> }))
 vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./lib/supabase', () => ({ supabase: {} }))
@@ -25,4 +26,11 @@ describe('dashboard extension auth routing', () => {
     render(<App />)
     expect(screen.getByText('extension auth access')).toBeInTheDocument()
   })
+})
+
+it.each([null, { access_token: 'access' }])('routes widget auth before dashboard onboarding', (session) => {
+  auth.session = session; auth.user = null; auth.loading = false
+  window.history.replaceState({}, '', '/widget-auth')
+  render(<App />)
+  expect(screen.getByText(`widget auth ${session?.access_token ?? 'anonymous'}`)).toBeInTheDocument()
 })

@@ -132,3 +132,21 @@ describe('NameModal', () => {
     overlay.dispatchEvent(event)
   })
 })
+
+it('offers guest and CRRT login, preserving the name for guest submissions', () => {
+  const onLogin = vi.fn()
+  const props = makeProps({ value: 'Ada', onLogin })
+  const { getByText, getByLabelText } = render(<NameModal {...props} />)
+  expect(getByLabelText('Your name')).toHaveValue('Ada')
+  fireEvent.click(getByText('Continue as guest')); expect(props.onSubmit).toHaveBeenCalled()
+  fireEvent.click(getByText('Log in to CRRT')); expect(onLogin).toHaveBeenCalled()
+})
+it('shows login progress, errors and account sign-out', () => {
+  const props = makeProps({ onLogin: vi.fn(), onLogout: vi.fn(), existingName: 'Ada', signedIn: true })
+  const { getByText, queryByLabelText, rerender } = render(<NameModal {...props} />)
+  expect(queryByLabelText('Your name')).toBeNull()
+  expect(getByText('Signed in as Ada')).toBeInTheDocument()
+  fireEvent.click(getByText('Sign out of this widget')); expect(props.onLogout).toHaveBeenCalled()
+  rerender(<NameModal {...props} signedIn={false} busy error="Popup blocked" />)
+  expect(getByText('Connecting…')).toBeDisabled(); expect(getByText('Popup blocked')).toHaveAttribute('role', 'alert')
+})

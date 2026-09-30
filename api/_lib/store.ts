@@ -18,6 +18,7 @@ import { effectiveProjectRole, projectCapabilities, type FeedbackVisibility, typ
 const getSupabase = getServiceSupabase
 
 type CommentRow = {
+  created_by_user_id?: string | null
   id: string
   project_id: string
   url: string | null
@@ -49,7 +50,7 @@ type CommentRow = {
 // Single source of truth for comment selects — an omission here (or a
 // hand-rolled select list elsewhere) silently drops fields from responses.
 const COMMENT_COLUMNS =
-  'id, project_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, source, visibility, screenshot_storage_path, author_name, target_type, anchor, created_at, updated_at'
+  'id, project_id, created_by_user_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, source, visibility, screenshot_storage_path, author_name, target_type, anchor, created_at, updated_at'
 const COMMENT_GITHUB_ISSUE_COLUMNS =
   `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
 const COMMENT_PROJECT_EXTERNAL_WORK_COLUMNS =
@@ -278,6 +279,7 @@ type EventRow = {
 }
 
 export type StoredComment = {
+  createdByUserId?: string | null
   id: string
   projectId: string
   pageUrl: string | null
@@ -315,6 +317,7 @@ export type StoredComment = {
 
 function mapComment(row: CommentRow): StoredComment {
   return {
+    createdByUserId: row.created_by_user_id,
     id: row.id,
     projectId: row.project_id,
     pageUrl: row.url,
@@ -1767,6 +1770,7 @@ export async function updateRepoConfig(projectKey: string, patch: RepoConfigPatc
 }
 
 export async function createPublicComment(input: {
+  userId?: string
   projectKey: string
   pageUrl: string
   x: number
@@ -1792,6 +1796,7 @@ export async function createPublicComment(input: {
       status: 'pending',
       implementation_status: 'unassigned',
       created_by: 'public',
+      created_by_user_id: input.userId ?? null,
       image_url: input.imageUrl ?? null,
       author_name: input.authorName ?? null,
       target_type: input.targetType ?? 'element_point',
@@ -1844,6 +1849,7 @@ export async function releaseCommentActivityEmailReservation(projectKey: string,
 }
 
 export async function listComments(projectKey: string, filters: {
+  userId?: string
   pageUrl?: string
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
@@ -1855,6 +1861,7 @@ export async function listComments(projectKey: string, filters: {
     .eq('project_id', projectKey)
     .eq('visibility', 'shared')
 
+  if (filters.userId) query = query.eq('created_by_user_id', filters.userId).eq('source', 'widget')
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
   if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
   if (filters.implementationStatus) query = query.eq('implementation_status', filters.implementationStatus)
@@ -2047,7 +2054,7 @@ export async function deleteCommentsForProject(projectKey: string) {
 }
 
 /**
- * Delete a single comment scoped by project. The projectKey acts as a soft
+ * Delete a single anonymous comment scoped by project. The projectKey acts as a soft
  * authorization boundary — same security model as `createPublicComment`: a
  * caller who knows the project key can mutate within that project.
  *
@@ -2061,6 +2068,7 @@ export async function deleteCommentById(commentId: string, projectKey: string): 
     .eq('id', commentId)
     .eq('project_id', projectKey)
     .eq('visibility', 'shared')
+    .is('created_by_user_id', null)
     .select('id')
 
   if (error) throw new Error(error.message)

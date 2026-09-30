@@ -1,3 +1,4 @@
+import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
 import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -71,6 +72,8 @@ export function App() {
       </div>
     )
   }
+
+  if (pathname === '/widget-auth') return <WidgetAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
   if (pathname === '/extension-auth') {
     return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />

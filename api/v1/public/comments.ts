@@ -1,3 +1,4 @@
+import { requireWidgetSession, assertWidgetPage, WidgetSessionError } from '../../_lib/widget-session.js'
 import { CommentEmailEnqueueRejectedError } from '../../_lib/comment-email-outbox.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
@@ -184,7 +185,7 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
     }
 
     const existing = await getComment(id)
-    if (!existing?.projectId || existing.visibility === 'internal') {
+    if (!existing?.projectId || existing.visibility === 'internal' || existing.createdByUserId) {
       return jsonError(req, res, 404, 'Comment not found')
     }
     const comment = await updateReviewStatus(existing.projectId, id, nextStatus)
@@ -276,6 +277,11 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    const session = req.headers.authorization ? await requireWidgetSession(req) : null
+    if (session) {
+      assertWidgetPage(session, resolvedProjectKey, pageUrl)
+      resolvedAuthorName = session.display_name
+    }
     const project = await ensurePublicProject(resolvedProjectKey)
 
     if (!isHostnameAllowed(getRequestHostname(req), project.allowedOrigins)) {
@@ -289,6 +295,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
 
     const comment = await createPublicComment({
       projectKey: resolvedProjectKey,
+      userId: session?.user_id,
       pageUrl,
       selector,
       x,
@@ -319,6 +326,6 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(201).json(comment)
   } catch (error) {
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    return jsonError(req, res, error instanceof WidgetSessionError ? error.status : 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }
