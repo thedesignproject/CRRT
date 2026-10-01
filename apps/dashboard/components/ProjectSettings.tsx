@@ -1,3 +1,4 @@
+import { ProjectPrivacy } from './ProjectPrivacy'
 import { useEffect, useRef, useState } from 'react'
 import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
 import { useProjectSettings } from '../hooks/useProjectSettings'
@@ -248,6 +249,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           </div>
         </section>
 
+        <ProjectPrivacy key={project.publicKey} project={project} apiBase={apiBase} accessToken={accessToken} canEdit={isAdmin} onSaved={onProjectsChanged} />
         {/* Allowed domains */}
         <section className="mt-8">
           <h2 className={sectionTitle}>Allowed domains{domains.length > 0 && ` (${domains.length})`}</h2>

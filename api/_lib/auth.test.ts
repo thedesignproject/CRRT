@@ -278,3 +278,15 @@ describe('requireProjectMembership', () => {
     expect(res.statusCode).toBe(500)
   })
 })
+
+it('restricts aggregate feedback to admins while allowing commenters to create feedback', async () => {
+  const USER = { userId: 'member', email: 'member@test' }
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'member', feedbackAllowed: false })
+  expect(await requireProjectCapability(mockReq(), mockRes() as never, USER, 'p', 'feedback:read')).toBeNull()
+  expect(await requireProjectCapability(mockReq(), mockRes() as never, USER, 'p', 'feedback:create')).toEqual({ role: 'member' })
+  expect(await requireProjectCommentCapability(mockReq(), mockRes() as never, USER, { projectId: 'p' }, 'feedback:manage')).toBeNull()
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin', feedbackAllowed: false })
+  expect(await requireProjectCapability(mockReq(), mockRes() as never, USER, 'p', 'project:manage')).toEqual({ role: 'admin' })
+  expect(await requireProjectCommentCapability(mockReq(), mockRes() as never, USER, { projectId: 'p' }, 'project:manage')).toEqual({ role: 'admin' })
+  expect(await requireProjectCommentCapability(mockReq(), mockRes() as never, USER, { projectId: 'p' }, 'feedback:create')).toEqual({ role: 'admin' })
+})

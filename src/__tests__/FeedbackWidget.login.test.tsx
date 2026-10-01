@@ -69,3 +69,35 @@ it('can finish login after leaving selection without opening an empty composer',
   await act(async () => finish(session))
   expect(document.querySelector('textarea')).toBeNull()
 })
+
+it('requires login for private projects even when a guest name is saved', async () => {
+  window.localStorage.setItem('fw-crrt-author-name', 'Guest')
+  vi.stubGlobal('fetch', vi.fn(async (url) => new Response(JSON.stringify([]), { status: String(url).includes('/public/comments?') ? 401 : 200 })))
+  render(<FeedbackWidget projectId="p" />)
+  await waitFor(() => expect(fetch).toHaveBeenCalled())
+  await selectTarget()
+  expect(screen.getByText('Log in to leave feedback')).toBeInTheDocument()
+  expect(screen.queryByText('Continue as guest')).toBeNull()
+  expect(screen.queryByLabelText('Your name')).toBeNull()
+  await act(async () => fireEvent.click(screen.getByText('Log in to CRRT')))
+  expect(document.querySelector('textarea')).not.toBeNull()
+})
+
+it('ignores privacy responses from mount and focus requests after unmount', async () => {
+  const finishes: Array<(response: Response) => void> = []
+  vi.stubGlobal('fetch', vi.fn((url) => String(url).includes('/public/comments?')
+    ? new Promise<Response>((resolve) => finishes.push(resolve))
+    : Promise.resolve(new Response('{}'))))
+  const { unmount } = render(<FeedbackWidget projectId="p" />)
+  act(() => fireEvent.focus(window))
+  expect(finishes).toHaveLength(2)
+  unmount()
+  await act(async () => finishes.forEach((finish) => finish(new Response('[]', { status: 401 }))))
+})
+
+it('refreshes privacy when the window regains focus', async () => {
+  render(<FeedbackWidget projectId="p" />)
+  await act(async () => fireEvent.focus(window))
+  await selectTarget()
+  expect(screen.getByText('Continue as guest')).toBeInTheDocument()
+})

@@ -2,6 +2,7 @@ import { CommentEmailEnqueueRejectedError } from '../../_lib/comment-email-outbo
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/store.js', () => ({
+  getProject: vi.fn().mockResolvedValue(null),
   ensurePublicProject: vi.fn(),
   createPublicComment: vi.fn(),
   getComment: vi.fn(),
@@ -27,7 +28,7 @@ vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
 import { waitUntil } from '@vercel/functions'
 import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from '../../_lib/comment-activity-email.js'
-import { createPublicComment, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { getProject, createPublicComment, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
 import handler from './comments.js'
 
@@ -75,6 +76,7 @@ const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
+  vi.mocked(getProject).mockResolvedValue(null)
   vi.mocked(ensurePublicProject).mockReset()
   vi.mocked(createPublicComment).mockReset()
   vi.mocked(getComment).mockReset()
@@ -175,7 +177,7 @@ describe('api/v1/public/comments', () => {
     expect(res.statusCode).toBe(201)
   })
 
-  it('uploads an image via the service-role client and stores its public URL', async () => {
+  it('uploads an image into private storage and stores its path', async () => {
     const upload = vi.fn().mockResolvedValue({ error: null })
     const getPublicUrl = vi.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.example/img.png' } })
     vi.mocked(getServiceSupabase).mockReturnValue({
@@ -224,7 +226,7 @@ describe('api/v1/public/comments', () => {
 
     expect(upload).toHaveBeenCalledOnce()
     expect(res.statusCode).toBe(201)
-    expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].imageUrl).toBe('https://cdn.example/img.png')
+    expect(vi.mocked(createPublicComment).mock.calls[0]?.[0].screenshotStoragePath).toMatch(/^demo-project\//)
   })
 
   it('creates a public comment', async () => {
@@ -277,7 +279,7 @@ describe('api/v1/public/comments', () => {
       x: 10,
       y: 20,
       body: 'Hello',
-      imageUrl: null,
+      screenshotStoragePath: undefined,
       authorName: null,
       targetType: 'element_point',
       anchor: null,
@@ -424,7 +426,7 @@ describe('api/v1/public/comments', () => {
 
     expect(res.statusCode).toBe(201)
     expect(reserveCommentActivityEmail).toHaveBeenCalledWith('demo-project', 18_000)
-    expect(listProjectMembers).toHaveBeenCalledWith('demo-project')
+    expect(listProjectMembers).toHaveBeenCalledWith('demo-project', true)
     expect(vi.mocked(reserveCommentActivityEmail).mock.invocationCallOrder[0]).toBeLessThan(
       vi.mocked(listProjectMembers).mock.invocationCallOrder[0],
     )
@@ -1452,4 +1454,26 @@ describe('api/v1/public/comments', () => {
     expect(res.statusCode).toBe(404)
     expect(updateReviewStatus).not.toHaveBeenCalled()
   })
+})
+
+it('allows public projects through the anonymous read and delete privacy gates', async () => {
+  vi.mocked(getProject).mockResolvedValueOnce({ widgetPrivate: false } as any)
+  await call(mockReq({ method: 'GET', query: { projectKey: 'p' } }), mockRes())
+  vi.mocked(getProject).mockResolvedValueOnce({ widgetPrivate: false } as any)
+  await call(mockReq({ method: 'DELETE', query: { projectKey: 'p', id: 'c' } }), mockRes())
+})
+
+it('blocks anonymous reads and mutations for private projects', async () => {
+  vi.mocked(getProject).mockResolvedValue({ widgetPrivate: true } as never)
+  for (const method of ['GET', 'DELETE', 'PATCH']) {
+    vi.mocked(getComment).mockResolvedValue({ projectId: 'p', visibility: 'shared' } as never)
+    const res = mockRes()
+    await call(mockReq({ method, query: { projectKey: 'p', id: 'c' }, body: { id: 'c', reviewStatus: 'accepted' } }), res)
+    expect(res.statusCode).toBe(method === 'PATCH' ? 404 : 401)
+  }
+  vi.mocked(ensurePublicProject).mockResolvedValue({ widgetPrivate: true } as never)
+  const res = mockRes()
+  await call(mockReq({ body: { projectKey: 'p', pageUrl: 'https://site.test', selector: 'body', x: 1, y: 2, body: 'Feedback' } }), res)
+  expect(res.statusCode).toBe(401)
+  expect(createPublicComment).not.toHaveBeenCalled()
 })

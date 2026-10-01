@@ -175,3 +175,13 @@ describe('patchReviewStatus', () => {
     expect(console.warn).toHaveBeenCalled()
   })
 })
+
+it('reports private mode and requests login after an anonymous submit is rejected', async () => {
+  mockFetch(() => new Response('{}', { status: 401 }))
+  const privacy = vi.fn(), login = vi.fn()
+  expect(await fetchProjectComments(API, 'private', privacy)).toEqual([])
+  expect(privacy).toHaveBeenCalledWith(true)
+  expect(await postComment(API, {}, login)).toBeNull()
+  expect(login).toHaveBeenCalledOnce()
+  await postComment(API, {})
+})

@@ -2,7 +2,7 @@ import { requireWidgetSession, assertWidgetPage, WidgetSessionError } from '../.
 import { CommentEmailEnqueueRejectedError } from '../../_lib/comment-email-outbox.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
-import { createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
+import { getProject, createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listComments, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail, updateReviewStatus } from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import { parseCommentTarget } from '../../_lib/anchor.js'
@@ -32,7 +32,7 @@ async function sendCommentActivityEmailInBackground(input: {
 
     let enqueueAttempted = false
     try {
-      const members = await listProjectMembers(input.projectKey)
+      const members = await listProjectMembers(input.projectKey, true)
       const recipients = members.map((member) => member.email).filter((email): email is string => Boolean(email))
       if (!canSendCommentActivityEmail(recipients)) {
         if (cooldownSeconds > 0) {
@@ -122,6 +122,7 @@ async function handleDeleteOne(req: VercelRequest, res: VercelResponse, commentI
     const projectKey = getStringQuery(req.query.projectKey) ?? getStringQuery(req.query.projectId)
     if (!projectKey) return jsonError(req, res, 400, 'Missing projectKey')
 
+    if ((await getProject(projectKey))?.widgetPrivate) return jsonError(req, res, 401, 'Log in to leave or change private feedback')
     const deleted = await deleteCommentById(commentId, projectKey)
     if (!deleted) return jsonError(req, res, 404, 'Comment not found in project')
 
@@ -164,6 +165,8 @@ async function handleGet(req: VercelRequest, res: VercelResponse) {
     const projectKey = getStringQuery(req.query.projectKey)
     if (!projectKey) return jsonError(req, res, 400, 'Missing projectKey')
 
+    res.setHeader('Cache-Control', 'no-store')
+    if ((await getProject(projectKey))?.widgetPrivate) return jsonError(req, res, 401, 'Log in to view your feedback')
     const pageUrl = getStringQuery(req.query.pageUrl)
     const comments = await listComments(projectKey, pageUrl ? { pageUrl } : {})
 
@@ -188,6 +191,7 @@ async function handlePatch(req: VercelRequest, res: VercelResponse) {
     if (!existing?.projectId || existing.visibility === 'internal' || existing.createdByUserId) {
       return jsonError(req, res, 404, 'Comment not found')
     }
+    if ((await getProject(existing.projectId))?.widgetPrivate) return jsonError(req, res, 404, 'Comment not found')
     const comment = await updateReviewStatus(existing.projectId, id, nextStatus)
     setCors(req, res, METHODS)
     return res.status(200).json(comment)
@@ -211,13 +215,12 @@ async function uploadImage(projectKey: string, mimeType: string, base64Data: str
 
   const supabase = getServiceSupabase()
   const { error } = await supabase.storage
-    .from('feedback-images')
+    .from('extension-feedback-images')
     .upload(path, buffer, { contentType: mimeType, upsert: false })
 
   if (error) throw new Error(`Storage upload failed: ${error.message}`)
 
-  const { data } = supabase.storage.from('feedback-images').getPublicUrl(path)
-  return data.publicUrl
+  return path
 }
 
 async function handlePost(req: VercelRequest, res: VercelResponse) {
@@ -283,6 +286,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       resolvedAuthorName = session.display_name
     }
     const project = await ensurePublicProject(resolvedProjectKey)
+    if (project.widgetPrivate && !session) return jsonError(req, res, 401, 'Log in to leave private feedback')
 
     if (!isHostnameAllowed(getRequestHostname(req), project.allowedOrigins)) {
       return jsonError(req, res, 403, 'Origin is not in this project\'s domain allowlist')
@@ -301,7 +305,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       x,
       y,
       body,
-      imageUrl,
+      screenshotStoragePath: imageUrl ?? undefined,
       authorName: resolvedAuthorName,
       targetType: parsedTarget.targetType,
       anchor: parsedTarget.anchor,

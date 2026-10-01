@@ -2,6 +2,8 @@ export interface Project {
   publicKey: string
   slug: string
   name: string
+  widgetPrivate?: boolean
+  feedbackAccess?: 'team' | 'admins'
   allowedOrigins: string[]
   createdAt: string
   updatedAt: string

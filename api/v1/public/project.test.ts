@@ -160,3 +160,11 @@ describe('api/v1/public/project', () => {
     expect(errorSpy).toHaveBeenCalledWith('[public/project] session start failed', expect.objectContaining({ projectKey: 'proj' }))
   })
 })
+
+it('does not issue a project-wide agent token for a private project', async () => {
+  vi.mocked(getProject).mockResolvedValue({ widgetPrivate: true } as never)
+  const res = mockRes()
+  await call({ method: 'GET', headers: {}, query: { projectKey: 'p' } }, res)
+  expect(res.statusCode).toBe(403)
+  expect(getProjectShare).not.toHaveBeenCalled()
+})

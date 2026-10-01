@@ -6,7 +6,7 @@ import {
   type AdminPage,
 } from './admin-pagination.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
-import { effectiveProjectRole, projectCapabilities, type FeedbackVisibility, type ProjectRole, type StoredProjectRole } from './project-capabilities.js'
+import { effectiveProjectRole, projectCapabilities, projectFeedbackAllowed, type FeedbackVisibility, type ProjectRole, type StoredProjectRole } from './project-capabilities.js'
 
 // Every table/storage operation in this module goes through the secret-key
 // client. Every public table has RLS enabled with no permissive policy
@@ -60,12 +60,14 @@ type ProjectRow = {
   public_key: string
   slug: string
   name: string
+  widget_private?: boolean
+  feedback_access?: string
   allowed_origins: string[] | null
   created_at: string
   updated_at: string
 }
 
-const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, created_at, updated_at'
+const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, widget_private, feedback_access, created_at, updated_at'
 
 type ProjectMemberRow = {
   project_key: string
@@ -385,18 +387,20 @@ async function mapProjectCommentWithPrivateImage(
   includeExternalWork = true,
 ) {
   const comment = includeExternalWork ? mapProjectComment(row) : mapComment(row)
-  if (row.source !== 'extension' || !row.screenshot_storage_path) return comment
+  if (!row.screenshot_storage_path) return comment
   const { data, error } = await client.storage.from('extension-feedback-images').createSignedUrl(row.screenshot_storage_path, 300)
   if (error && error.message !== 'Object not found') throw new Error(`Screenshot signing failed: ${error.message}`)
   return { ...comment, imageUrl: data?.signedUrl ?? null }
 }
 
-function mapProject(row: ProjectRow) {
+function mapProject(row: ProjectRow): { publicKey: string; slug: string; name: string; allowedOrigins: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins'; createdAt: string; updatedAt: string } {
   return {
     publicKey: row.public_key,
     slug: row.slug,
     name: row.name,
     allowedOrigins: row.allowed_origins ?? [],
+    widgetPrivate: row.widget_private === true,
+    feedbackAccess: row.feedback_access === 'admins' ? 'admins' as const : 'team' as const,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -490,17 +494,18 @@ export async function listProjectsForUser(userId: string) {
   return (data || []).map((row) => ({
     ...mapProject(row as ProjectRow),
     ...accessByProject.get((row as ProjectRow).public_key),
+    capabilities: projectFeedbackAllowed(accessByProject.get((row as ProjectRow).public_key)!.role, (row as ProjectRow).widget_private, (row as ProjectRow).feedback_access) ? accessByProject.get((row as ProjectRow).public_key)!.capabilities : ['feedback:create'],
   }))
 }
 
 export async function getProjectMember(
   userId: string,
   projectKey: string,
-): Promise<{ role: StoredProjectRole; isOwner?: boolean } | null> {
+): Promise<{ role: StoredProjectRole; isOwner?: boolean; feedbackAllowed?: boolean } | null> {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('project_key, user_id, role, is_owner')
+    .select('project_key, user_id, role, is_owner, projects(widget_private,feedback_access)')
     .eq('user_id', userId)
     .eq('project_key', projectKey)
     .maybeSingle()
@@ -508,7 +513,8 @@ export async function getProjectMember(
   if (error) throw new Error(error.message)
   if (!data) return null
   const member = data as ProjectMemberRow
-  return { role: member.role, isOwner: member.is_owner }
+  const project = (data as unknown as { projects: { widget_private: boolean; feedback_access: string } }).projects
+  return { role: member.role, isOwner: member.is_owner, feedbackAllowed: projectFeedbackAllowed(effectiveProjectRole(member.role, member.is_owner), project?.widget_private, project?.feedback_access) }
 }
 
 export async function isProjectMember(userId: string, projectKey: string): Promise<boolean> {
@@ -527,16 +533,16 @@ type ProjectMemberDetailRow = {
  * only stores user ids; emails come from the auth admin API (see
  * `getUserEmailsByIds`), and degrade to null when the service key is absent.
  */
-export async function listProjectMembers(projectKey: string) {
+export async function listProjectMembers(projectKey: string, feedbackOnly = false) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('user_id, role, is_owner, created_at')
+    .select('user_id, role, is_owner, created_at, projects(widget_private,feedback_access)')
     .eq('project_key', projectKey)
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
-  const rows = (data || []) as ProjectMemberDetailRow[]
+  const rows = ((data || []) as unknown as Array<ProjectMemberDetailRow & { projects?: { widget_private: boolean; feedback_access: string } }>).filter((row) => !feedbackOnly || projectFeedbackAllowed(effectiveProjectRole(row.role, row.is_owner), row.projects?.widget_private, row.projects?.feedback_access))
   const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
   return rows.map((r) => ({
     userId: r.user_id,
@@ -550,11 +556,11 @@ export async function listProjectMemberIds(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('project_members')
-    .select('user_id')
+    .select('user_id, role, is_owner, projects(widget_private,feedback_access)')
     .eq('project_key', projectKey)
 
   if (error) throw new Error(error.message)
-  return ((data || []) as Array<{ user_id: string }>).map((row) => row.user_id)
+  return ((data || []) as unknown as Array<{ user_id: string; role: StoredProjectRole; is_owner: boolean; projects?: { widget_private: boolean; feedback_access: string } }>).filter((row) => projectFeedbackAllowed(effectiveProjectRole(row.role, row.is_owner), row.projects?.widget_private, row.projects?.feedback_access)).map((row) => row.user_id)
 }
 
 /**
@@ -1084,11 +1090,13 @@ export async function getProject(projectKey: string) {
  * public_key and slug are immutable). Returns the updated project, or null
  * when no project matched the key so the caller can map that to a 404.
  */
-export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[] }) {
+export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' }) {
   const supabase = getSupabase()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.name !== undefined) update.name = patch.name
   if (patch.allowedOrigins !== undefined) update.allowed_origins = patch.allowedOrigins
+  if (patch.widgetPrivate !== undefined) update.widget_private = patch.widgetPrivate
+  if (patch.feedbackAccess !== undefined) update.feedback_access = patch.feedbackAccess
 
   const { data, error } = await supabase
     .from('projects')
@@ -1778,6 +1786,7 @@ export async function createPublicComment(input: {
   selector: string
   body: string
   imageUrl?: string | null
+  screenshotStoragePath?: string
   authorName?: string | null
   targetType?: 'element_point' | 'text_range'
   anchor?: Record<string, unknown> | null
@@ -1798,6 +1807,7 @@ export async function createPublicComment(input: {
       created_by: 'public',
       created_by_user_id: input.userId ?? null,
       image_url: input.imageUrl ?? null,
+      screenshot_storage_path: input.screenshotStoragePath ?? null,
       author_name: input.authorName ?? null,
       target_type: input.targetType ?? 'element_point',
       anchor: input.anchor ?? null,
@@ -1807,7 +1817,7 @@ export async function createPublicComment(input: {
     .single()
 
   if (error) throw new Error(error.message)
-  return mapComment(data as CommentRow)
+  return mapProjectCommentWithPrivateImage(supabase, data as CommentRow, false)
 }
 
 export async function reserveCommentActivityEmail(projectKey: string, cooldownSeconds: number) {
@@ -1868,7 +1878,7 @@ export async function listComments(projectKey: string, filters: {
 
   const { data, error } = await query.order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
 }
 
 export async function listProjectComments(projectKey: string, filters: {
@@ -2024,7 +2034,7 @@ export async function listAcceptedCommentsForPage(projectKey: string, pageUrl: s
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
 }
 
 export async function listAcceptedCommentsByIds(projectKey: string, commentIds: string[]) {
@@ -2040,7 +2050,7 @@ export async function listAcceptedCommentsByIds(projectKey: string, commentIds: 
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
 }
 
 export async function deleteCommentsForProject(projectKey: string) {
@@ -2328,7 +2338,7 @@ export async function listCommentsForShare(share: {
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
 }
 
 export async function listAcceptedCommentsForProject(projectKey: string) {
@@ -2341,7 +2351,7 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapComment(row as CommentRow))
+  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
 }
 
 /**

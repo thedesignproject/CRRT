@@ -9,11 +9,12 @@ export interface NameModalProps {
   onLogout?: () => void
   busy?: boolean
   error?: string
+  loginRequired?: boolean
   signedIn?: boolean
   existingName: string | null
 }
 
-export function NameModal({ value, onChange, onSubmit, onCancel, existingName, onLogin, onLogout, busy = false, error, signedIn = false }: NameModalProps) {
+export function NameModal({ value, onChange, onSubmit, onCancel, existingName, onLogin, onLogout, busy = false, error, signedIn = false, loginRequired = false }: NameModalProps) {
   const trimmed = value.trim()
   return (
     <div
@@ -73,13 +74,13 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName, o
         }} />
         <div>
           <h2 style={{ fontSize: 17, fontWeight: 700, color: 'var(--fw-foreground)', margin: 0, marginBottom: 6 }}>
-            {signedIn ? `Signed in as ${existingName}` : existingName ? 'Change your name' : "What's your name?"}
+            {signedIn ? `Signed in as ${existingName}` : loginRequired ? 'Log in to leave feedback' : existingName ? 'Change your name' : "What's your name?"}
           </h2>
           <p style={{ fontSize: 13, color: 'var(--fw-foreground-muted)', margin: 0, lineHeight: 1.5 }}>
-            Your name will appear on the comments you leave.
+            {loginRequired ? 'This project is private. Log in to see and manage your own feedback.' : 'Your name will appear on the comments you leave.'}
           </p>
         </div>
-        {!signedIn && <div>
+        {!signedIn && !loginRequired && <div>
           <label htmlFor="fw-crrt-name-input" style={{ display: 'none' }}>Your name</label>
           <input
             id="fw-crrt-name-input"
@@ -105,7 +106,7 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName, o
             onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--fw-contrast-08)'; e.currentTarget.style.background = 'var(--fw-contrast-04)' }}
           />
         </div>}
-        {!signedIn && <button
+        {!signedIn && !loginRequired && <button
           type="submit"
           disabled={!trimmed || busy}
           style={{

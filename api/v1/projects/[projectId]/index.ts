@@ -1,7 +1,8 @@
+import { protectProjectScreenshots, removeRestrictedNotifications } from '../../../_lib/private-project.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../_lib/auth.js'
 import { normalizeAllowedDomain } from '../../../_lib/origins.js'
-import { getProjectMember, updateProject } from '../../../_lib/store.js'
+import { getProject, getProjectMember, updateProject } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const MAX_ALLOWED_ORIGINS = 50
@@ -30,9 +31,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const projectKey = getStringQuery(req.query.projectId)
   if (!projectKey) return jsonError(req, res, 400, 'Missing projectId')
 
-  const body = (req.body ?? {}) as { name?: unknown; allowedOrigins?: unknown }
-  const patch: { name?: string; allowedOrigins?: string[] } = {}
+  const body = (req.body ?? {}) as { name?: unknown; allowedOrigins?: unknown; widgetPrivate?: unknown; feedbackAccess?: unknown }
+  const patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' } = {}
 
+  if (body.widgetPrivate !== undefined) {
+    if (typeof body.widgetPrivate !== 'boolean') return jsonError(req, res, 400, 'widgetPrivate must be a boolean')
+    patch.widgetPrivate = body.widgetPrivate
+  }
+  if (body.feedbackAccess !== undefined) {
+    if (body.feedbackAccess !== 'team' && body.feedbackAccess !== 'admins') return jsonError(req, res, 400, 'Invalid feedback access')
+    patch.feedbackAccess = body.feedbackAccess
+  }
   if (body.allowedOrigins !== undefined) {
     const parsed = parseAllowedOrigins(body.allowedOrigins)
     if ('error' in parsed) return jsonError(req, res, 400, parsed.error)
@@ -42,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Name is required whenever it is present, and also when the request
   // carries no allowedOrigins — that case is a plain rename, preserving the
   // original PATCH contract.
-  if (body.name !== undefined || patch.allowedOrigins === undefined) {
+  if (body.name !== undefined || Object.keys(patch).length === 0) {
     const name = typeof body.name === 'string' ? body.name.trim() : ''
     if (!name) return jsonError(req, res, 400, 'Project name is required')
     if (name.length > 80) return jsonError(req, res, 400, 'Project name must be 80 characters or fewer')
@@ -54,6 +63,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!membership) return jsonError(req, res, 403, 'Forbidden')
     if (membership.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
 
+    if (patch.widgetPrivate) await protectProjectScreenshots(projectKey)
+    if (patch.feedbackAccess === 'admins' || patch.widgetPrivate) {
+      const existing = await getProject(projectKey)
+      if ((patch.widgetPrivate ?? existing?.widgetPrivate) && (patch.feedbackAccess ?? existing?.feedbackAccess) === 'admins') await removeRestrictedNotifications(projectKey)
+    }
     const project = await updateProject(projectKey, patch)
     if (!project) return jsonError(req, res, 404, 'Project not found')
 

@@ -8,9 +8,10 @@ export interface AgentEligibility {
   currentTier?: string | null
 }
 
-export async function fetchProjectComments(apiBase: string, projectId: string): Promise<Comment[]> {
+export async function fetchProjectComments(apiBase: string, projectId: string, onPrivacy?: (required: boolean) => void): Promise<Comment[]> {
   try {
     const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
+    onPrivacy?.(res.status === 401)
     if (!res.ok) return []
 
     const data: unknown = await res.json()
@@ -56,12 +57,14 @@ export async function fetchAgentEligibility(apiBase: string, projectId: string):
 export async function postComment(
   apiBase: string,
   payload: Record<string, unknown>,
+  onLoginRequired?: () => void,
 ): Promise<Partial<Comment> | null> {
   const res = await fetch(`${apiBase}/v1/public/comments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
+  if (res.status === 401) onLoginRequired?.()
   if (!res.ok) {
     console.warn('[FeedbackWidget] API returned', res.status)
     return null

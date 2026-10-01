@@ -15,6 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const project = await getProject(projectKey)
     if (!project) return jsonError(req, res, 404, 'Project not found')
 
+    if (project.widgetPrivate) return jsonError(req, res, 403, 'Use CRRT to share private project feedback')
     let share = await getProjectShare(projectKey)
     let token: string
 
