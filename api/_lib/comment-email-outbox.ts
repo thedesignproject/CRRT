@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { getServiceSupabase } from './supabase.js'
+import { getComment, listProjectMembers } from './store.js'
 
 const TABLE = 'comment_email_batches'
 // Resend remembers idempotency keys for 24h. Stop well before that boundary,
@@ -21,6 +22,15 @@ export type EmailBatch = {
 }
 
 export class CommentEmailEnqueueRejectedError extends Error {}
+
+async function deliveryStillAllowed(batch: EmailBatch) {
+  const comment = await getComment(batch.delivery_id)
+  if (!comment) return false
+  const members = await listProjectMembers(comment.projectId, true)
+  const allowed = new Set(members.map((member) => member.email))
+  const messages = JSON.parse(batch.body) as Array<{ to: string[] }>
+  return messages.every((message) => message.to.every((recipient) => allowed.has(recipient)))
+}
 
 export async function enqueueCommentEmail(deliveryId: string, bodies: string[]) {
   const expiresAt = new Date(Date.now() + RETRY_WINDOW_MS).toISOString()
@@ -88,22 +98,28 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), Math.max(1, Math.min(timeoutMs, deadline - Date.now())))
       try {
-        const response = await fetch('https://api.resend.com/emails/batch', {
-          method: 'POST', signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json',
-            'Idempotency-Key': `comment-activity/${batch.delivery_id}/${batch.batch_index}`,
-          },
-          body: batch.body,
-        })
-        if (response.ok) {
-          status = 'sent'
-          lastError = null
+        // Never rewrite a frozen body/idempotency key after an uncertain send.
+        // Cancel the entire batch if any recipient has since lost access.
+        if (!(await deliveryStillAllowed(batch))) {
+          lastError = 'recipient_access_revoked'
         } else {
-          lastError = `resend_${response.status}`
-          if ([408, 409, 429].includes(response.status) || response.status >= 500) {
-            status = 'pending'
-            delay = retryDelay(batch.attempts + 1, response.headers.get('retry-after'))
+          const response = await fetch('https://api.resend.com/emails/batch', {
+            method: 'POST', signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json',
+              'Idempotency-Key': `comment-activity/${batch.delivery_id}/${batch.batch_index}`,
+            },
+            body: batch.body,
+          })
+          if (response.ok) {
+            status = 'sent'
+            lastError = null
+          } else {
+            lastError = `resend_${response.status}`
+            if ([408, 409, 429].includes(response.status) || response.status >= 500) {
+              status = 'pending'
+              delay = retryDelay(batch.attempts + 1, response.headers.get('retry-after'))
+            }
           }
         }
       } catch {
@@ -122,7 +138,7 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
     const { error: updateError } = await db.from(TABLE).update({
       status, last_error: lastError, lease_token: null,
       next_attempt_at: new Date(Date.now() + delay).toISOString(),
-    }).eq('id', batch.id).eq('lease_token', token)
+    }).eq('id', batch.id).eq('lease_token', token).eq('status', 'pending')
     // On failure leave the lease to expire. Its replay uses the original key.
     if (updateError) throw new Error('Comment email queue checkpoint failed')
     if (status === 'failed') console.warn('Comment email delivery failed', { batchId: batch.id, reason: lastError })

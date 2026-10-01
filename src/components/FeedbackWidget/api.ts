@@ -9,24 +9,21 @@ export interface AgentEligibility {
 }
 
 export async function fetchProjectComments(apiBase: string, projectId: string, onPrivacy?: (required: boolean) => void): Promise<Comment[]> {
-  try {
-    const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
-    onPrivacy?.(res.status === 401)
-    if (!res.ok) return []
+  const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
+  if (!res.ok && res.status !== 401) throw new Error('Could not refresh feedback')
+  onPrivacy?.(res.status === 401)
+  if (res.status === 401) return []
 
-    const data: unknown = await res.json()
-    if (!Array.isArray(data)) return []
+  const data: unknown = await res.json()
+  if (!Array.isArray(data)) throw new Error('Invalid feedback response')
 
-    return data.map((comment) => {
-      const c = comment as Comment
-      return {
-        ...c,
-        reviewStatus: normalizeReviewStatus((comment as { reviewStatus?: unknown }).reviewStatus),
-      }
-    })
-  } catch {
-    return []
-  }
+  return data.map((comment) => {
+    const c = comment as Comment
+    return {
+      ...c,
+      reviewStatus: normalizeReviewStatus((comment as { reviewStatus?: unknown }).reviewStatus),
+    }
+  })
 }
 
 export async function fetchAgentEligibility(apiBase: string, projectId: string): Promise<AgentEligibility | null> {

@@ -1,5 +1,5 @@
-vi.mock('../../../_lib/private-project.js', () => ({ protectProjectScreenshots: vi.fn(), removeRestrictedNotifications: vi.fn() }))
-import { protectProjectScreenshots, removeRestrictedNotifications } from '../../../_lib/private-project.js'
+vi.mock('../../../_lib/private-project.js', () => ({ protectProjectScreenshots: vi.fn() }))
+import { protectProjectScreenshots } from '../../../_lib/private-project.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
@@ -204,7 +204,6 @@ it('validates privacy options and protects screenshots before enabling privacy',
   await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true, feedbackAccess: 'admins' } }, res)
   expect(res.statusCode).toBe(200)
   expect(protectProjectScreenshots).toHaveBeenCalledWith('p')
-  expect(removeRestrictedNotifications).toHaveBeenCalledWith('p')
   expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true, feedbackAccess: 'admins' })
   vi.mocked(protectProjectScreenshots).mockRejectedValueOnce(new Error('Storage failed'))
   const failed = mockRes(); await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true } }, failed)

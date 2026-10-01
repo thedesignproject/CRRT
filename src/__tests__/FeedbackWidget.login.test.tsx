@@ -101,3 +101,19 @@ it('refreshes privacy when the window regains focus', async () => {
   await selectTarget()
   expect(screen.getByText('Continue as guest')).toBeInTheDocument()
 })
+
+it('preserves loaded public feedback on failed refresh but clears it when privacy is enabled', async () => {
+  let status = 200
+  vi.stubGlobal('fetch', vi.fn(async (url) => String(url).includes('/public/comments?')
+    ? new Response(JSON.stringify([{ id: 'kept', body: 'Keep this feedback', authorName: 'Guest', pageUrl: window.location.href, selector: 'body', x: 20, y: 20, reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '2026-09-01T00:00:00Z' }]), { status })
+    : new Response('{}')))
+  render(<FeedbackWidget projectId="p" />)
+  await act(async () => fireEvent.keyDown(window, { key: 'f' }))
+  await waitFor(() => expect(screen.getByText('Keep this feedback')).toBeInTheDocument())
+  status = 503
+  await act(async () => fireEvent.focus(window))
+  expect(screen.getByText('Keep this feedback')).toBeInTheDocument()
+  status = 401
+  await act(async () => fireEvent.focus(window))
+  expect(screen.queryByText('Keep this feedback')).toBeNull()
+})

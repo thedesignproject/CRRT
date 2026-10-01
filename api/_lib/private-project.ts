@@ -33,13 +33,3 @@ export async function protectProjectScreenshots(projectKey: string) {
     if (!data || data.length < 100) break
   }
 }
-
-export async function removeRestrictedNotifications(projectKey: string) {
-  const db = getServiceSupabase()
-  const members = await db.from('project_members').select('user_id').eq('project_key', projectKey).neq('role', 'admin')
-  if (members.error) throw new Error('Could not load notification access')
-  const ids = (members.data ?? []).map((member) => member.user_id)
-  if (!ids.length) return
-  const removed = await db.from('notifications').delete().in('user_id', ids).eq('kind', 'comment.activity').eq('payload->>projectKey', projectKey)
-  if (removed.error) throw new Error('Could not protect existing notifications')
-}

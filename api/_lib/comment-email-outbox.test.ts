@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
+vi.mock('./store.js', () => ({ getComment: vi.fn(), listProjectMembers: vi.fn() }))
+import { getComment, listProjectMembers } from './store.js'
 import { getServiceSupabase } from './supabase.js'
 import { CommentEmailEnqueueRejectedError, enqueueCommentEmail, processCommentEmailQueue } from './comment-email-outbox.js'
 
@@ -51,6 +53,8 @@ function database() {
 }
 
 beforeEach(() => {
+  vi.mocked(getComment).mockResolvedValue({ projectId: 'project' } as never)
+  vi.mocked(listProjectMembers).mockResolvedValue([{ email: 'one@example.com' }, { email: 'two@example.com' }] as never)
   rows = []; failure = undefined; failureCode = ''
   vi.useFakeTimers(); vi.setSystemTime(start)
   vi.stubEnv('RESEND_API_KEY', 'test-key')
@@ -62,6 +66,32 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
 const queue = () => enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]', '[{"to":["two@example.com"]}]'])
 
 describe('durable comment email delivery', () => {
+  it('cancels a deferred batch if a recipient loses access without rewriting its body', async () => {
+    await queue()
+    vi.mocked(fetch).mockResolvedValue(new Response('', { status: 503 }))
+    await processCommentEmailQueue()
+    const body = rows[0].body
+    vi.mocked(listProjectMembers).mockResolvedValue([])
+    vi.setSystemTime(start + 60_000)
+    vi.mocked(fetch).mockClear()
+    await processCommentEmailQueue()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(rows[0]).toMatchObject({ status: 'failed', last_error: 'recipient_access_revoked', body })
+  })
+  it('cancels deliveries for deleted comments', async () => {
+    await queue()
+    vi.mocked(getComment).mockResolvedValue(null)
+    await processCommentEmailQueue()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(rows.every((row) => row.status === 'failed')).toBe(true)
+  })
+  it('fails closed and retries when current authorization cannot be checked', async () => {
+    await queue()
+    vi.mocked(listProjectMembers).mockRejectedValue(new Error('Offline'))
+    await processCommentEmailQueue()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(rows[0].status).toBe('pending')
+  })
   it('persists the entire immutable snapshot and ignores duplicate enqueue', async () => {
     await queue()
     vi.setSystemTime(start + 60_000)
@@ -160,14 +190,14 @@ describe('durable comment email delivery', () => {
   })
 
   it('does not double-claim under concurrent workers', async () => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     await Promise.all([processCommentEmailQueue(), processCommentEmailQueue()])
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(rows[0].status).toBe('sent')
   })
 
   it('replays the same key after acceptance when saving the checkpoint failed', async () => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     failure = 'checkpoint'
     await expect(processCommentEmailQueue()).rejects.toThrow('checkpoint')
     const first = vi.mocked(fetch).mock.calls[0][1]!
@@ -180,7 +210,7 @@ describe('durable comment email delivery', () => {
   })
 
   it.each([408, 409, 500, 503])('retries transient HTTP %s', async (status) => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status }))
     await processCommentEmailQueue()
     expect(rows[0]).toMatchObject({ status: 'pending', last_error: `resend_${status}` })
@@ -189,14 +219,14 @@ describe('durable comment email delivery', () => {
   it.each([
     ['Wed, 23 Sep 2026 00:02:00 GMT', 120_000], ['nonsense', 30_000], ['-1', 30_000],
   ])('handles Retry-After %s', async (header, delay) => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': header } }))
     await processCommentEmailQueue()
     expect(rows[0].next_attempt_at).toBe(new Date(start + delay).toISOString())
   })
 
   it('marks a permanent rejection as failed without exposing response contents', async () => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     vi.mocked(fetch).mockResolvedValueOnce(new Response('private details', { status: 422 }))
     await processCommentEmailQueue()
     expect(rows[0]).toMatchObject({ status: 'failed', last_error: 'resend_422' })
@@ -204,7 +234,7 @@ describe('durable comment email delivery', () => {
   })
 
   it.each(['expired', 'exhausted', 'last-attempt', 'late-retry'])('stops safely when %s', async (scenario) => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     if (scenario === 'expired') vi.setSystemTime(start + 20 * 3600_000)
     if (scenario === 'exhausted') rows[0].attempts = 8
     if (scenario === 'last-attempt') rows[0].attempts = 7
@@ -224,7 +254,7 @@ describe('durable comment email delivery', () => {
   })
 
   it('recovers timeouts with the same idempotency key and clears the timer', async () => {
-    await enqueueCommentEmail('delivery', ['body'])
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     vi.mocked(fetch).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
       init!.signal!.addEventListener('abort', () => reject(new Error('timeout')))
     }))

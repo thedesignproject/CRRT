@@ -72,6 +72,12 @@ function mockRpcResult(result: Result) {
 beforeEach(() => vi.mocked(getServiceSupabase).mockReset())
 
 describe('comment GitHub issue persistence', () => {
+  it('exports private widget screenshots with a durable capability instead of dropping them', async () => {
+    vi.stubEnv('WIDGET_AUTH_SECRET', 'test-secret')
+    mockResult({ data: { ...row, screenshot_storage_path: 'project-1/image.png' }, error: null })
+    expect((await getCommentForGithubIssue('project-1', 'comment-1'))?.imageUrl).toContain('/api/v1/comments/comment-1/issue-screenshot?token=')
+    vi.unstubAllEnvs()
+  })
   it('keeps issue metadata out of public comments and includes it for project comments', async () => {
     mockResult({ data: [row], error: null })
     expect((await listComments('project-1'))[0]).not.toHaveProperty('githubIssue')

@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from './supabase.js'
-import { getProject, getProjectMember, updateProject, listProjectsForUser, listProjectMembers, listProjectMemberIds, listComments, listAcceptedCommentsForPage, listAcceptedCommentsByIds, listAcceptedCommentsForProject, listCommentsForShare } from './store.js'
+import { getProject, getProjectMember, updateProject, listProjectsForUser, listProjectMembers, listProjectMemberIds, listComments, listAcceptedCommentsForPage, listAcceptedCommentsByIds, listAcceptedCommentsForProject, listCommentsForShare, listNotificationsForUser } from './store.js'
 import { projectFeedbackAllowed } from './project-capabilities.js'
 const project = { public_key: 'p', name: 'P', slug: 'p', widget_private: true, feedback_access: 'admins', created_at: '', updated_at: '' }
 const member = { project_key: 'p', user_id: 'u', role: 'member', is_owner: false, projects: project }
@@ -12,11 +12,22 @@ beforeEach(() => {
   vi.mocked(getServiceSupabase).mockReturnValue({
     from: (table: string) => {
       const q: any = { then: (yes: any) => Promise.resolve({ data: rows[table], error: null }).then(yes), maybeSingle: async () => ({ data: rows[table]?.[0], error: null }) }
-      for (const method of ['select', 'eq', 'in', 'order']) q[method] = () => q
+      for (const method of ['select', 'eq', 'in', 'order', 'limit']) q[method] = () => q
       q.update = (value: any) => { update(value); return q }
       return q
     },
   } as never)
+})
+it('reauthorizes stored notifications even if a stale producer bypassed cleanup', async () => {
+  rows.notifications = [
+    { id: 'n', kind: 'comment.activity', payload: { projectKey: 'p' }, user_id: 'u' },
+    { id: 'invite', kind: 'invite.received', payload: {}, user_id: 'u' },
+  ]
+  expect((await listNotificationsForUser('u')).map((n) => n.id)).toEqual(['invite'])
+  rows.project_members = [{ ...member, role: 'admin' }]
+  expect(await listNotificationsForUser('u')).toHaveLength(2)
+  rows.project_members = []
+  expect((await listNotificationsForUser('u')).map((n) => n.id)).toEqual(['invite'])
 })
 it('maps privacy settings, saves both choices, and removes aggregate capabilities for restricted members', async () => {
   expect((await getProject('p'))?.feedbackAccess).toBe('admins')

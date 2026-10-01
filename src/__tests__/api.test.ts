@@ -41,19 +41,19 @@ describe('fetchProjectComments', () => {
     expect(out.map((c) => c.reviewStatus)).toEqual(['accepted', 'open', 'open'])
   })
 
-  it('returns [] for non-OK responses', async () => {
+  it('rejects transient errors so refresh preserves loaded feedback', async () => {
     mockFetch(() => new Response('boom', { status: 500 }))
-    expect(await fetchProjectComments(API, 'p')).toEqual([])
+    await expect(fetchProjectComments(API, 'p')).rejects.toThrow('Could not refresh feedback')
   })
 
-  it('returns [] when body is not an array', async () => {
+  it('rejects malformed responses', async () => {
     mockFetch(() => jsonResponse({ items: [] }))
-    expect(await fetchProjectComments(API, 'p')).toEqual([])
+    await expect(fetchProjectComments(API, 'p')).rejects.toThrow('Invalid feedback response')
   })
 
-  it('returns [] when fetch throws', async () => {
+  it('propagates network errors', async () => {
     mockFetch(() => { throw new Error('offline') })
-    expect(await fetchProjectComments(API, 'p')).toEqual([])
+    await expect(fetchProjectComments(API, 'p')).rejects.toThrow('offline')
   })
 })
 

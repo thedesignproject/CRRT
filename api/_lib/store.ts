@@ -1,4 +1,5 @@
 import { getPrivilegedHeaders, getServiceSupabase } from './supabase.js'
+import { issueScreenshotUrl } from './issue-screenshot.js'
 import {
   AdminQueryError,
   decodeAdminCursor,
@@ -1924,6 +1925,7 @@ export async function getCommentForGithubIssue(projectKey: string, commentId: st
   const row = data as CommentRow
   return {
     ...mapProjectComment(row),
+    imageUrl: row.screenshot_storage_path ? issueScreenshotUrl(row.project_id, row.id, row.screenshot_storage_path) : row.image_url,
     githubIssueLeaseToken: row.github_issue_lease_token ?? null,
     githubIssueLeaseExpiresAt: row.github_issue_lease_expires_at ?? null,
     githubIssueUncertainAt: row.github_issue_uncertain_at ?? null,
@@ -2667,7 +2669,15 @@ export async function listNotificationsForUser(
   if (opts.unreadOnly) query = query.is('read_at', null)
   const { data, error } = await query
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapNotification(row as NotificationRow))
+  const notifications = await Promise.all((data || []).map(async (row) => {
+    const notification = mapNotification(row as NotificationRow)
+    if (notification.kind === 'comment.activity') {
+      const membership = await getProjectMember(userId, String(notification.payload.projectKey))
+      if (!membership || membership.feedbackAllowed === false) return null
+    }
+    return notification
+  }))
+  return notifications.filter((notification): notification is NonNullable<typeof notification> => notification !== null)
 }
 
 export async function markNotificationRead(notificationId: string, userId: string): Promise<boolean> {

@@ -330,6 +330,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(201).json(comment)
   } catch (error) {
+    if (error instanceof Error && error.message === 'private_feedback_login_required') return jsonError(req, res, 401, 'Log in to leave private feedback')
     return jsonError(req, res, error instanceof WidgetSessionError ? error.status : 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }

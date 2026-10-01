@@ -1456,6 +1456,14 @@ describe('api/v1/public/comments', () => {
   })
 })
 
+it('returns login required when privacy changes while a guest submission is in flight', async () => {
+  vi.mocked(ensurePublicProject).mockResolvedValue({ publicKey: 'p', allowedOrigins: [], widgetPrivate: false } as never)
+  vi.mocked(createPublicComment).mockRejectedValue(new Error('private_feedback_login_required'))
+  const res = mockRes()
+  await call(mockReq({ body: { projectKey: 'p', pageUrl: 'https://example.com', selector: '#hero', x: 10, y: 20, body: 'Race' } }), res)
+  expect(res.statusCode).toBe(401)
+})
+
 it('allows public projects through the anonymous read and delete privacy gates', async () => {
   vi.mocked(getProject).mockResolvedValueOnce({ widgetPrivate: false } as any)
   await call(mockReq({ method: 'GET', query: { projectKey: 'p' } }), mockRes())

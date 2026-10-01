@@ -1,8 +1,8 @@
-import { protectProjectScreenshots, removeRestrictedNotifications } from '../../../_lib/private-project.js'
+import { protectProjectScreenshots } from '../../../_lib/private-project.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../_lib/auth.js'
 import { normalizeAllowedDomain } from '../../../_lib/origins.js'
-import { getProject, getProjectMember, updateProject } from '../../../_lib/store.js'
+import { getProjectMember, updateProject } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const MAX_ALLOWED_ORIGINS = 50
@@ -64,10 +64,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (membership.role !== 'admin') return jsonError(req, res, 403, 'Admin role required')
 
     if (patch.widgetPrivate) await protectProjectScreenshots(projectKey)
-    if (patch.feedbackAccess === 'admins' || patch.widgetPrivate) {
-      const existing = await getProject(projectKey)
-      if ((patch.widgetPrivate ?? existing?.widgetPrivate) && (patch.feedbackAccess ?? existing?.feedbackAccess) === 'admins') await removeRestrictedNotifications(projectKey)
-    }
+    // Database triggers serialize privacy activation with comment/notification
+    // writes and clean restricted notifications in the same transaction.
     const project = await updateProject(projectKey, patch)
     if (!project) return jsonError(req, res, 404, 'Project not found')
 
