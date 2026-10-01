@@ -14,7 +14,12 @@ const start = new Date('2026-09-23T00:00:00Z').getTime()
 // Stateful PostgREST double exercises compare-and-swap and process restarts,
 // rather than merely checking which fluent methods were called.
 function database() {
-  return { from: () => {
+  return { rpc: async (_name: string, args: any) => {
+    if (failure === 'claim') { failure = undefined; return { data: null, error: new Error('claim failed') } }
+    const row = rows.find((row) => row.id === args.p_id && row.status === 'pending' && row.attempts === args.p_attempts && row.next_attempt_at === args.p_next_attempt)
+    if (row) Object.assign(row, { lease_token: args.p_token, attempts: row.attempts + 1, next_attempt_at: args.p_lease_until })
+    return { data: Boolean(row), error: null }
+  }, from: () => {
     let op = 'select'
     let values: any
     let single = false
@@ -66,6 +71,28 @@ afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals();
 const queue = () => enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]', '[{"to":["two@example.com"]}]'])
 
 describe('durable comment email delivery', () => {
+  it('holds its delivery fence throughout deferred recipient lookup and clears it after sending', async () => {
+    await queue()
+    let finish!: (members: any) => void
+    vi.mocked(listProjectMembers).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    const processing = processCommentEmailQueue()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(rows[0].lease_token).toBeTruthy()
+    expect(fetch).not.toHaveBeenCalled()
+    finish([{ email: 'one@example.com' }])
+    await processing
+    expect(rows[0]).toMatchObject({ status: 'sent', lease_token: null })
+  })
+  it('does not send when a paused lookup outlives its lease', async () => {
+    await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
+    vi.mocked(listProjectMembers).mockImplementationOnce(async () => {
+      vi.setSystemTime(start + 120_001)
+      return [{ email: 'one@example.com' }] as never
+    })
+    await processCommentEmailQueue()
+    expect(fetch).not.toHaveBeenCalled()
+    expect(rows[0].status).toBe('pending')
+  })
   it('cancels a deferred batch if a recipient loses access without rewriting its body', async () => {
     await queue()
     vi.mocked(fetch).mockResolvedValue(new Response('', { status: 503 }))

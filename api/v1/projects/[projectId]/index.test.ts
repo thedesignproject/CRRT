@@ -210,6 +210,16 @@ it('validates privacy options and protects screenshots before enabling privacy',
   expect(failed.statusCode).toBe(500)
 })
 
+it('asks the admin to retry if an email currently holds the delivery fence', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+  vi.mocked(updateProject).mockRejectedValueOnce(new Error('feedback_delivery_in_progress'))
+  const res = mockRes()
+  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { feedbackAccess: 'admins' } }, res)
+  expect(res.statusCode).toBe(409)
+  expect(res.body).toEqual({ error: expect.stringContaining('Retry') })
+})
+
 it.each([
   [{ feedbackAccess: 'admins' }, { widgetPrivate: true, feedbackAccess: 'team' }],
   [{ widgetPrivate: true }, { widgetPrivate: false, feedbackAccess: 'admins' }],

@@ -1859,6 +1859,21 @@ export async function releaseCommentActivityEmailReservation(projectKey: string,
   if (error) throw new Error(error.message)
 }
 
+export async function listPublicComments(projectKey: string, filters: { pageUrl?: string } = {}) {
+  const supabase = getSupabase()
+  const { data, error } = await supabase.rpc('read_public_comments', { p_project: projectKey, p_page_url: filters.pageUrl ?? null }).select(COMMENT_COLUMNS)
+  if (error) throw new Error(error.message)
+  return Promise.all(((data as CommentRow[] | null) ?? []).map((row: CommentRow) => mapProjectCommentWithPrivateImage(supabase, row, false)))
+}
+
+export async function updatePublicReviewStatus(projectKey: string, commentId: string, reviewStatus: ReviewStatus) {
+  const { data, error } = await getSupabase().rpc('mutate_public_comment', {
+    p_project: projectKey, p_comment: commentId, p_status: toLegacyStatus(reviewStatus), p_delete: false,
+  }).select(COMMENT_COLUMNS).maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapComment(data as CommentRow) : null
+}
+
 export async function listComments(projectKey: string, filters: {
   userId?: string
   pageUrl?: string
@@ -2075,12 +2090,7 @@ export async function deleteCommentsForProject(projectKey: string) {
 export async function deleteCommentById(commentId: string, projectKey: string): Promise<boolean> {
   const supabase = getSupabase()
   const { data, error } = await supabase
-    .from('comments')
-    .delete()
-    .eq('id', commentId)
-    .eq('project_id', projectKey)
-    .eq('visibility', 'shared')
-    .is('created_by_user_id', null)
+    .rpc('mutate_public_comment', { p_project: projectKey, p_comment: commentId, p_delete: true })
     .select('id')
 
   if (error) throw new Error(error.message)

@@ -83,11 +83,11 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
     const token = randomUUID()
     // Compare-and-swap: concurrent workers cannot claim the same revision.
     // A crashed worker's lease becomes eligible again after two minutes.
-    const { data: claimed, error: claimError } = await db.from(TABLE).update({
-      lease_token: token, attempts: batch.attempts + 1,
-      next_attempt_at: new Date(Date.now() + LEASE_MS).toISOString(),
-    }).eq('id', batch.id).eq('status', 'pending').eq('attempts', batch.attempts)
-      .eq('next_attempt_at', batch.next_attempt_at).select('id').maybeSingle()
+    const leaseUntil = Date.now() + LEASE_MS
+    const { data: claimed, error: claimError } = await db.rpc('claim_comment_email_batch', {
+      p_id: batch.id, p_token: token, p_attempts: batch.attempts,
+      p_next_attempt: batch.next_attempt_at, p_lease_until: new Date(leaseUntil).toISOString(),
+    })
     if (claimError) throw new Error('Comment email queue claim failed')
     if (!claimed) continue
 
@@ -103,6 +103,9 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
         if (!(await deliveryStillAllowed(batch))) {
           lastError = 'recipient_access_revoked'
         } else {
+          // A paused worker must not send after another worker reclaimed its
+          // fence. No await occurs between this deadline check and dispatch.
+          if (Date.now() >= leaseUntil) throw new Error('Delivery lease expired')
           const response = await fetch('https://api.resend.com/emails/batch', {
             method: 'POST', signal: controller.signal,
             headers: {

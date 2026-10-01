@@ -72,6 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['PATCH', 'OPTIONS'])
     return res.status(200).json(project)
   } catch (error) {
+    if (error instanceof Error && error.message === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry saving privacy shortly.')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')
   }

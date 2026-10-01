@@ -35,6 +35,14 @@ it('binds the capability to the project, comment and screenshot bytes location',
   expect(verifyIssueScreenshotToken('short', 'p', 'c', 'p/image.png')).toBe(false)
   expect((await request('GET', { commentId: 'c', token: 'x'.repeat(43) })).code).toBe(404)
 })
+it.each(['linear', 'jira'])('serves a screenshot exported only to %s and revokes it after unlinking', async (provider) => {
+  result.data = { ...row, github_issue_url: null, comment_external_work: [{ provider, state: 'created', external_url: 'https://tracker.test/issue' }] }
+  expect((await request()).code).toBe(302)
+  result.data.comment_external_work = []
+  expect((await request()).code).toBe(404)
+  result.data.comment_external_work = [{ state: 'creating', external_url: 'https://tracker.test/issue' }, { state: 'created', external_url: null }]
+  expect((await request()).code).toBe(404)
+})
 it.each([null, { ...row, screenshot_storage_path: null }, { ...row, github_issue_url: null }])('revokes access when the comment, screenshot or issue link is removed: %j', async (data) => {
   result.data = data
   expect((await request()).code).toBe(404)
