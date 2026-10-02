@@ -1,14 +1,17 @@
+vi.mock('../../../_lib/private-project.js', () => ({ protectProjectScreenshots: vi.fn() }))
+import { protectProjectScreenshots } from '../../../_lib/private-project.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../_lib/store.js', () => ({
+  getProject: vi.fn().mockResolvedValue(null),
   getProjectMember: vi.fn(),
   updateProject: vi.fn(),
 }))
 
 import handler from './index.js'
 import { requireUser } from '../../../_lib/auth.js'
-import { getProjectMember, updateProject } from '../../../_lib/store.js'
+import { getProject, getProjectMember, updateProject } from '../../../_lib/store.js'
 
 function mockRes() {
   return {
@@ -188,4 +191,45 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
       expect(updateProject).not.toHaveBeenCalled()
     })
   })
+})
+
+it('validates privacy options and protects screenshots before enabling privacy', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+  vi.mocked(updateProject).mockResolvedValue({ publicKey: 'p' } as never)
+  for (const body of [{ widgetPrivate: 'true' }, { feedbackAccess: 'everyone' }]) {
+    const res = mockRes(); await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body }, res); expect(res.statusCode).toBe(400)
+  }
+  const res = mockRes()
+  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true, feedbackAccess: 'admins' } }, res)
+  expect(res.statusCode).toBe(200)
+  expect(protectProjectScreenshots).toHaveBeenCalledWith('p')
+  expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true, feedbackAccess: 'admins' })
+  vi.mocked(protectProjectScreenshots).mockRejectedValueOnce(new Error('Storage failed'))
+  const failed = mockRes(); await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true } }, failed)
+  expect(failed.statusCode).toBe(500)
+})
+
+it('asks the admin to retry if an email currently holds the delivery fence', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+  vi.mocked(updateProject).mockRejectedValueOnce(new Error('feedback_delivery_in_progress'))
+  const res = mockRes()
+  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { feedbackAccess: 'admins' } }, res)
+  expect(res.statusCode).toBe(409)
+  expect(res.body).toEqual({ error: expect.stringContaining('Retry') })
+})
+
+it.each([
+  [{ feedbackAccess: 'admins' }, { widgetPrivate: true, feedbackAccess: 'team' }],
+  [{ widgetPrivate: true }, { widgetPrivate: false, feedbackAccess: 'admins' }],
+  [{ widgetPrivate: false, feedbackAccess: 'admins' }, null],
+])('uses current privacy settings for partial updates: %j', async (body, existing) => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+  vi.mocked(getProject).mockResolvedValue(existing as never)
+  vi.mocked(updateProject).mockResolvedValue({ publicKey: 'p' } as never)
+  const res = mockRes()
+  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body }, res)
+  expect(res.statusCode).toBe(200)
 })

@@ -32,7 +32,7 @@ export async function requireProjectCapability(
     const membership = await getProjectMember(user.userId, projectKey)
     if (membership) {
       const role = effectiveProjectRole(membership.role, membership.isOwner)
-      if (canProject(role, capability)) return { role }
+      if (canProject(role, capability) && (capability === 'project:manage' || capability === 'feedback:create' || membership.feedbackAllowed !== false)) return { role }
     }
   } catch {
     jsonError(req, res, 500, 'Membership check failed')
@@ -60,7 +60,7 @@ export async function requireProjectCommentCapability(
       jsonError(req, res, 404, 'Comment not found')
       return null
     }
-    if (canProject(role, capability)) return { role }
+    if (canProject(role, capability) && (capability === 'project:manage' || capability === 'feedback:create' || membership.feedbackAllowed !== false)) return { role }
   } catch {
     jsonError(req, res, 500, 'Membership check failed')
     return null

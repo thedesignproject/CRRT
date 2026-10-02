@@ -324,7 +324,7 @@ describe('membership helpers + claim', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberSingle: { data: { role: 'admin', is_owner: true }, error: null },
     }) as never)
-    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true })
+    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true, feedbackAllowed: true })
     expect(await isProjectMember('u', 'p')).toBe(true)
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
