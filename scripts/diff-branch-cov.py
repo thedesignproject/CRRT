@@ -20,12 +20,18 @@ from collections import defaultdict
 base = sys.argv[1] if len(sys.argv) > 1 else "trunk"
 coverage_file = sys.argv[2] if len(sys.argv) > 2 else "coverage/lcov.info"
 
+# Explicit glob magic makes **/ include zero directories, including api.ts
+# directly under apps/dashboard. Keep the scopes aligned with Vitest coverage.
 diff = subprocess.check_output(
     [
         "git", "diff", "--unified=0", f"{base}...HEAD", "--",
-        "src/**/*.ts", "src/**/*.tsx", "api/**/*.ts",
-        "apps/dashboard/**/*.ts", "apps/dashboard/**/*.tsx",
-        "apps/extension/**/*.ts", "apps/extension/**/*.tsx",
+        ":(glob)src/**/*.ts", ":(glob)src/**/*.tsx", ":(glob)api/**/*.ts",
+        ":(glob)apps/dashboard/**/*.ts", ":(glob)apps/dashboard/**/*.tsx",
+        ":(glob)apps/extension/**/*.ts", ":(glob)apps/extension/**/*.tsx",
+        ":(glob)apps/landing/**/*.ts", ":(glob)apps/landing/**/*.tsx",
+        ":(glob)shared/product-audit/**/*.ts", ":(glob)shared/product-audit/**/*.tsx",
+        ":(glob)workflows/**/*.ts", ":(glob)workflows/**/*.tsx",
+        ":(glob)server/**/*.ts", ":(glob)server/**/*.tsx",
     ],
     text=True,
 )
@@ -51,7 +57,7 @@ for rec in lcov.split("end_of_record"):
     sf = re.search(r"SF:(.+)", rec)
     if not sf:
         continue
-    path = os.path.relpath(sf.group(1).strip())
+    path = os.path.relpath(os.path.realpath(sf.group(1).strip()), os.path.realpath(os.getcwd()))
     if path not in changed:
         continue
     by_line = defaultdict(list)
