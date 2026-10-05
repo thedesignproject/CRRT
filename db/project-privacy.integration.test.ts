@@ -293,15 +293,16 @@ describeDatabase('project privacy database guards', () => {
       expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(0)
     } finally {await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}`}
   })
-  it.each(['state','operation','events','presence'])('fences %s against concurrent token rotation, revocation and privacy activation', async operation=>{
+  it.each(['state','operation','events','presence','duplicate'])('fences %s against concurrent token rotation, revocation and privacy activation', async operation=>{
     const share=randomUUID()
     await sql`update projects set widget_private=false where public_key=${project}`
     await sql`update comments set visibility='shared',status='approved' where id=${comment}`
     await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'project',${share},'h','c','system',now()+interval '1 hour')`
-    await sql`insert into feedback_events(share_id,actor_type,actor_id,event_type,payload) values (${share},'reviewer','user','private.event','{"body":"secret"}')`
+    await sql`insert into feedback_events(share_id,actor_type,actor_id,event_type,payload) values (${share},'reviewer','user','presence.updated','{"body":"secret"}')`
     const query=()=>operation==='state'?worker`select * from read_share_feedback(${share},'h')`
       :operation==='operation'?worker`select * from apply_agent_feedback_operation(${share},${comment},'agent',${randomUUID()},'comment.note','comment.note','{}'::jsonb,null,'h')`
       :operation==='events'?worker`select * from read_agent_events(${share},'h',0,100)`
+      :operation==='duplicate'?worker`select * from read_agent_operation_key(${share},'h','agent','key')`
       :worker`select write_agent_presence(${share},'h','agent','active','secret')`
     try {
       for(const restriction of ['token','revoke','private']) {
@@ -338,6 +339,70 @@ describeDatabase('project privacy database guards', () => {
     await sql`update projects set feedback_access='admins' where public_key=${project}`
     await expect(sql`select * from accept_actor_comment_if_open(${project},${member},${comment})`).rejects.toMatchObject({message:'forbidden'})
     expect((await sql`select status from comments where id=${comment}`)[0].status).toBe('pending')
+  })
+  it.each(['github','linear','jira'])('serializes %s dispatch with privacy, member revocation and deletion until checkpoint',async provider=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='pending' where id=${comment}`
+    const lease=randomUUID(),work=provider==='github'?null:randomUUID()
+    if(work) await sql`insert into comment_external_work(id,project_id,comment_id,provider,state,lease_token,lease_expires_at) values (${work},${project},${comment},${provider},'creating',${lease},now()+interval '2 minutes')`
+    else await sql`update comments set github_issue_lease_token=${lease},github_issue_lease_expires_at=now()+interval '2 minutes' where id=${comment}`
+    try {
+      // Revocation wins before dispatch: the durable marker must never be set.
+      await sql`update projects set feedback_access='admins' where public_key=${project}`
+      await expect(sql`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work})`).rejects.toMatchObject({message:'forbidden'})
+      expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
+      await sql`update projects set feedback_access='team' where public_key=${project}`
+      let dispatched!:Promise<any>
+      // A delayed sender must recheck the newly committed restriction.
+      await sql.begin(async tx=>{
+        await tx`update projects set feedback_access='admins' where public_key=${project}`
+        dispatched=worker`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work})`.then(rows=>rows,error=>error)
+        await waitForWorkerLock()
+      })
+      expect(await dispatched).toMatchObject({message:'forbidden'})
+      await sql`update projects set feedback_access='team' where public_key=${project}`
+      expect((await sql`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work}) as dispatched`)[0].dispatched).toBe(true)
+      // Dispatch wins: privacy/revocation/deletion cannot commit beneath it.
+      await expect(sql`update projects set feedback_access='admins' where public_key=${project}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      await expect(sql`update project_members set role='guest' where project_key=${project} and user_id=${member}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      await expect(sql`delete from auth.users where id=${member}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      await expect(sql`delete from comments where id=${comment}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      // Lease expiry alone must not allow a paused sender to lose its fence.
+      if(work) await sql`update comment_external_work set lease_expires_at=now()-interval '1 second' where id=${work}`
+      else await sql`update comments set github_issue_lease_expires_at=now()-interval '1 second' where id=${comment}`
+      await expect(sql`update projects set feedback_access='admins' where public_key=${project}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+    } finally {
+      if(work) await sql`delete from comment_external_work where id=${work}`
+      else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
+    }
+    await sql`update projects set feedback_access='admins' where public_key=${project}`
+    expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
+  })
+  it('filters and suppresses comment events after internal/rejected/removed/out-of-page changes',async()=>{
+    const share=randomUUID(),url='https://test.local/page'
+    await sql`update comments set status='approved',visibility='shared',url=${url} where id=${comment}`
+    await sql`insert into feedback_shares(id,project_id,scope_type,scope_page_url,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'page',${url},${share},'h','c','reviewer',now()+interval '1 hour')`
+    await sql`insert into feedback_share_items(share_id,comment_id) values (${share},${comment})`
+    const insert=()=>sql`insert into feedback_events(share_id,comment_id,actor_type,actor_id,event_type,payload) values (${share},${comment},'reviewer','owner','comment.implementation_changed','{"implementationStatus":"blocked"}') returning id`
+    try {
+      expect(await insert()).toHaveLength(1)
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(1)
+      for(const condition of ['internal','rejected','page','removed']){
+        await sql`update comments set visibility='shared',status='approved',url=${url} where id=${comment}`
+        if(condition==='internal')await sql`update comments set visibility='internal' where id=${comment}`
+        if(condition==='rejected')await sql`update comments set status='rejected' where id=${comment}`
+        if(condition==='page')await sql`update comments set url='https://test.local/other' where id=${comment}`
+        if(condition==='removed')await sql`delete from feedback_share_items where share_id=${share}`
+        expect(await insert()).toHaveLength(0)
+        expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(0)
+      }
+      expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(1)
+      // Orphaned historical comment events must not become public share events.
+      await sql`update feedback_events set comment_id=null where share_id=${share}`
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(0)
+      await sql`insert into feedback_events(share_id,actor_type,actor_id,event_type) values (${share},'agent','agent','presence.updated')`
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(1)
+    } finally { await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}` }
   })
   it('enforces current access in direct authenticated notification reads', async () => {
     await sql`update projects set feedback_access='team' where public_key=${project}`

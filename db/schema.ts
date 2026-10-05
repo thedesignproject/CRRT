@@ -1146,6 +1146,7 @@ BEGIN
   EXCEPTION WHEN lock_not_available THEN
     RAISE EXCEPTION 'project_membership_busy' USING ERRCODE = '55P03';
   END;
+  IF public.tracker_dispatch_pending(OLD.project_key) THEN RAISE EXCEPTION 'tracker_dispatch_in_progress'; END IF;
   IF EXISTS (SELECT 1 FROM public.comment_email_batches b JOIN public.comments c ON c.id = b.delivery_id
     WHERE c.project_id = OLD.project_key AND b.status = 'pending' AND b.lease_token IS NOT NULL
   ) THEN RAISE EXCEPTION 'feedback_delivery_in_progress'; END IF;
@@ -1370,9 +1371,15 @@ GRANT EXECUTE ON FUNCTION public.lock_feedback_actor(text,uuid,text), public.rea
 export const projectPrivacyAgentSql = `
 CREATE FUNCTION public.read_agent_events(p_share uuid,p_token_hash text,p_after bigint,p_limit integer)
 RETURNS SETOF public.feedback_events LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_share public.feedback_shares%ROWTYPE;
 BEGIN
-  PERFORM public.lock_agent_share(p_share,p_token_hash);
+  v_share := public.lock_agent_share(p_share,p_token_hash);
   RETURN QUERY SELECT e.* FROM public.feedback_events e WHERE e.share_id=p_share AND e.id>p_after
+    AND ((e.comment_id IS NULL AND e.event_type IN ('presence.updated','share.created')) OR EXISTS(
+      SELECT 1 FROM public.comments c WHERE c.id=e.comment_id AND c.project_id=v_share.project_id AND c.visibility='shared' AND c.status='approved'
+        AND (v_share.scope_type <> 'page' OR c.url=v_share.scope_page_url)
+        AND (v_share.scope_type='project' OR EXISTS(SELECT 1 FROM public.feedback_share_items i WHERE i.share_id=p_share AND i.comment_id=c.id))
+    ))
     ORDER BY e.id LIMIT greatest(1,least(100,p_limit));
 END;
 $$;
@@ -1397,4 +1404,96 @@ $$;
 REVOKE ALL ON FUNCTION public.read_agent_events(uuid,text,bigint,integer), public.write_agent_presence(uuid,text,text,text,text) FROM PUBLIC,anon,authenticated;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.read_agent_events(uuid,text,bigint,integer), public.write_agent_presence(uuid,text,text,text,text) TO service_role;
+`
+
+// A durable outbound fence survives timeouts and uncertain provider results.
+export const projectPrivacyDispatchSql = `
+CREATE FUNCTION public.tracker_dispatch_pending(p_project text)
+RETURNS boolean LANGUAGE sql SET search_path = '' AS $$
+  SELECT EXISTS(SELECT 1 FROM public.comments c WHERE c.project_id=p_project AND c.github_issue_number IS NULL AND c.github_issue_uncertain_at IS NOT NULL)
+    OR EXISTS(SELECT 1 FROM public.comment_external_work w WHERE w.project_id=p_project AND w.state='creating' AND w.uncertain_at IS NOT NULL);
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.fence_project_privacy_delivery()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF NEW.widget_private AND (NEW.widget_private IS DISTINCT FROM OLD.widget_private OR NEW.feedback_access IS DISTINCT FROM OLD.feedback_access)
+    AND public.tracker_dispatch_pending(NEW.public_key) THEN RAISE EXCEPTION 'tracker_dispatch_in_progress'; END IF;
+  IF NEW.widget_private AND NEW.feedback_access='admins' AND EXISTS(
+    SELECT 1 FROM public.comment_email_batches b JOIN public.comments c ON c.id=b.delivery_id
+    WHERE c.project_id=NEW.public_key AND b.status='pending' AND b.lease_token IS NOT NULL
+  ) THEN RAISE EXCEPTION 'feedback_delivery_in_progress'; END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.fence_comment_delivery_delete()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF (OLD.github_issue_number IS NULL AND OLD.github_issue_uncertain_at IS NOT NULL)
+    OR EXISTS(SELECT 1 FROM public.comment_external_work w WHERE w.comment_id=OLD.id AND w.state='creating' AND w.uncertain_at IS NOT NULL)
+    THEN RAISE EXCEPTION 'tracker_dispatch_in_progress'; END IF;
+  IF EXISTS(SELECT 1 FROM public.comment_email_batches b WHERE b.delivery_id=OLD.id AND b.status='pending' AND b.lease_token IS NOT NULL)
+    THEN RAISE EXCEPTION 'feedback_delivery_in_progress'; END IF;
+  RETURN OLD;
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.begin_actor_tracker_dispatch(p_project text,p_actor uuid,p_comment uuid,p_lease uuid,p_work uuid DEFAULT NULL)
+RETURNS boolean LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  PERFORM public.lock_feedback_actor(p_project,p_actor,'integrations:send');
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project,0));
+  PERFORM 1 FROM public.comments c WHERE c.id=p_comment AND c.project_id=p_project AND c.status IN ('pending','approved') FOR UPDATE;
+  IF NOT FOUND THEN RETURN false; END IF;
+  IF p_work IS NULL THEN
+    RETURN public.mark_comment_github_issue_uncertain(p_comment,p_project,p_lease);
+  END IF;
+  UPDATE public.comment_external_work w SET uncertain_at=now(),updated_at=now()
+    WHERE w.id=p_work AND w.comment_id=p_comment AND w.project_id=p_project AND w.state='creating'
+      AND w.lease_token=p_lease AND w.uncertain_at IS NULL AND w.lease_expires_at>clock_timestamp();
+  RETURN FOUND;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.tracker_dispatch_pending(text),public.begin_actor_tracker_dispatch(text,uuid,uuid,uuid,uuid) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.tracker_dispatch_pending(text),public.begin_actor_tracker_dispatch(text,uuid,uuid,uuid,uuid) TO service_role;
+`
+
+export const projectPrivacyEventSql = `
+CREATE FUNCTION public.guard_share_comment_event()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_share public.feedback_shares%ROWTYPE; v_project text; v_private boolean;
+BEGIN
+  IF NEW.comment_id IS NULL THEN RETURN NEW; END IF;
+  SELECT s.project_id INTO v_project FROM public.feedback_shares s WHERE s.id=NEW.share_id;
+  SELECT p.widget_private INTO v_private FROM public.projects p WHERE p.public_key=v_project FOR SHARE;
+  SELECT s.* INTO v_share FROM public.feedback_shares s WHERE s.id=NEW.share_id FOR SHARE;
+  IF NOT FOUND OR v_share.revoked_at IS NOT NULL OR v_share.expires_at<=clock_timestamp()
+    OR (v_share.created_by='system' AND v_private) THEN RETURN NULL; END IF;
+  PERFORM 1 FROM public.comments c WHERE c.id=NEW.comment_id AND c.project_id=v_project AND c.visibility='shared' AND c.status='approved'
+    AND (v_share.scope_type <> 'page' OR c.url=v_share.scope_page_url) FOR SHARE;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  IF v_share.scope_type <> 'project' THEN
+    PERFORM 1 FROM public.feedback_share_items i WHERE i.share_id=NEW.share_id AND i.comment_id=NEW.comment_id FOR SHARE;
+    IF NOT FOUND THEN RETURN NULL; END IF;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER guard_share_comment_event BEFORE INSERT ON public.feedback_events FOR EACH ROW EXECUTE FUNCTION public.guard_share_comment_event();
+--> statement-breakpoint
+CREATE FUNCTION public.read_agent_operation_key(p_share uuid,p_token_hash text,p_agent text,p_key text)
+RETURNS SETOF public.feedback_operation_keys LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  PERFORM public.lock_agent_share(p_share,p_token_hash);
+  RETURN QUERY SELECT k.* FROM public.feedback_operation_keys k WHERE k.share_id=p_share AND k.agent_id=p_agent AND k.idempotency_key=p_key;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.guard_share_comment_event(),public.read_agent_operation_key(uuid,text,text,text) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.read_agent_operation_key(uuid,text,text,text) TO service_role;
 `
