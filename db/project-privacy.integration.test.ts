@@ -417,6 +417,15 @@ describeDatabase('project privacy database guards', () => {
         await tx`select pg_advisory_xact_lock_shared(hashtextextended('crrt-tracker-dispatch:' || ${project},0))`
         await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_active'})
       })
+      // Even after the coordination backend disappears, an expired lease does
+      // not prove the paused sender stopped. This covers delayed onclose delivery.
+      if(work) await sql`update comment_external_work set lease_expires_at=now()-interval '1 hour' where id=${work}`
+      else await sql`update comments set github_issue_lease_expires_at=now()-interval '1 hour' where id=${comment}`
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      if(provider==='github') expect(await sql`select * from claim_comment_github_issue(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+      await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${randomUUID()},${work})`
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${lease},${work})`
       expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(true)
       expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
       await sql`update projects set feedback_access='admins' where public_key=${project}`
