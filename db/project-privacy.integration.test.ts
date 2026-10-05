@@ -404,6 +404,30 @@ describeDatabase('project privacy database guards', () => {
       expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(1)
     } finally { await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}` }
   })
+  it.each(['github','linear','jira'])('resolves abandoned %s dispatch only for admins and never under a live sender lock',async provider=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='pending' where id=${comment}`
+    const lease=randomUUID(),work=provider==='github'?null:randomUUID()
+    if(work) await sql`insert into comment_external_work(id,project_id,comment_id,provider,state,lease_token,lease_expires_at) values (${work},${project},${comment},${provider},'creating',${lease},now()+interval '2 minutes')`
+    else await sql`update comments set github_issue_lease_token=${lease},github_issue_lease_expires_at=now()+interval '2 minutes' where id=${comment}`
+    try{
+      await sql`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work})`
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${member},${comment},${provider})`).rejects.toMatchObject({message:'forbidden'})
+      await worker.begin(async tx=>{
+        await tx`select pg_advisory_xact_lock_shared(hashtextextended('crrt-tracker-dispatch:' || ${project},0))`
+        await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_active'})
+      })
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(true)
+      expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
+      await sql`update projects set feedback_access='admins' where public_key=${project}`
+      // A sender with the canceled lease cannot restart after resolution.
+      expect((await sql`select begin_actor_tracker_dispatch(${project},${owner},${comment},${lease},${work}) as dispatched`)[0].dispatched).toBe(false)
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(false)
+    }finally{
+      if(work)await sql`delete from comment_external_work where id=${work}`
+      else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
+    }
+  })
   it('enforces current access in direct authenticated notification reads', async () => {
     await sql`update projects set feedback_access='team' where public_key=${project}`
     await sql`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`
