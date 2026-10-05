@@ -117,6 +117,59 @@ describeDatabase('project privacy database guards', () => {
     }
     await expect(sql.begin(async tx=> {await tx`set local role authenticated`; await tx`select * from read_public_comments(${project})`})).rejects.toMatchObject({code:'42501'})
   })
+  it('rejects invalid settings and fails closed even for a corrupt stored value', async () => {
+    await expect(sql`update projects set feedback_access='unexpected' where public_key=${project}`).rejects.toMatchObject({ code: '23514' })
+    const rollback = new Error('rollback corrupt fixture')
+    await expect(sql.begin(async tx => {
+      await tx`alter table projects drop constraint projects_feedback_access_check`
+      await tx`update projects set widget_private=true, feedback_access='unexpected' where public_key=${project}`
+      await tx`set local role authenticated`
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: member, role: 'authenticated' })}, true)`
+      expect((await tx`select project_feedback_allowed(${project}) as allowed`)[0].allowed).toBe(false)
+      throw rollback
+    })).rejects.toBe(rollback)
+  })
+  it.each(['remove', 'demote'])('serializes %s with an email claim and fences it until checkpoint', async operation => {
+    await sql`update projects set widget_private=true, feedback_access='team' where public_key=${project}`
+    await sql`update project_members set role='admin' where project_key=${project} and user_id=${member}`
+    await sql`update comment_email_batches set status='pending', attempts=0, lease_token=null, next_attempt_at=date_trunc('milliseconds', now()) where delivery_id=${comment}`
+    const [batch] = await sql`select id, attempts, next_attempt_at::text as next from comment_email_batches where delivery_id=${comment}`
+    const token = randomUUID()
+    let mutation!: Promise<unknown>
+    await sql.begin(async tx => {
+      expect((await tx`select claim_comment_email_batch(${batch.id}, ${batch.attempts}, ${batch.next}, ${token}, now()+interval '2 minutes') as claimed`)[0].claimed).toBe(true)
+      mutation = (operation === 'remove'
+        ? worker`select remove_project_member(${project}, ${owner}, ${member})`
+        : worker`select change_project_member_role(${project}, ${owner}, ${member}, 'member')`
+      ).then(rows => rows, error => error)
+      await waitForWorkerLock()
+    })
+    expect(await mutation).toMatchObject({ message: 'feedback_delivery_in_progress' })
+    expect((await sql`select role from project_members where project_key=${project} and user_id=${member}`)[0].role).toBe('admin')
+    // Direct service-role writes must not bypass the fence either.
+    await expect(sql`delete from project_members where project_key=${project} and user_id=${member}`).rejects.toMatchObject({ message: 'feedback_delivery_in_progress' })
+    await sql`update comment_email_batches set status='sent', lease_token=null where id=${batch.id} and lease_token=${token}`
+    if (operation === 'remove') {
+      expect((await sql`select remove_project_member(${project}, ${owner}, ${member}) as result`)[0].result).toBe('removed')
+      await sql`insert into project_members(project_key, user_id, role) values (${project}, ${member}, 'member')`
+    } else {
+      expect((await sql`select change_project_member_role(${project}, ${owner}, ${member}, 'member') as result`)[0].result.status).toBe('updated')
+    }
+  })
+  it.each(['remove', 'demote'])('revalidates the settings actor after a concurrent %s', async operation => {
+    await sql`update project_members set role='admin' where project_key=${project} and user_id=${member}`
+    let update!: Promise<unknown>
+    await sql.begin(async tx => {
+      if (operation === 'remove') await tx`select remove_project_member(${project}, ${owner}, ${member})`
+      else await tx`select change_project_member_role(${project}, ${owner}, ${member}, 'member')`
+      update = worker`select * from update_project_settings(${project}, ${member}, '{"widget_private":false}'::jsonb)`.then(rows => rows, error => error)
+      await waitForWorkerLock()
+    })
+    expect(await update).toMatchObject({ message: 'forbidden' })
+    expect((await sql`select widget_private from projects where public_key=${project}`)[0].widget_private).toBe(true)
+    if (operation === 'remove') await sql`insert into project_members(project_key, user_id, role) values (${project}, ${member}, 'member')`
+    expect(await sql`select * from update_project_settings(${project}, ${owner}, '{"name":"Updated", "allowed_origins":["test.local"]}'::jsonb)`).toMatchObject([{ name: 'Updated', allowed_origins: ['test.local'] }])
+  })
   it('enforces current access in direct authenticated notification reads', async () => {
     await sql`update projects set feedback_access='team' where public_key=${project}`
     await sql`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`
