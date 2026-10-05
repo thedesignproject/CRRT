@@ -1176,3 +1176,37 @@ GRANT EXECUTE ON FUNCTION public.change_project_member_role(text, uuid, uuid, te
   public.change_project_member_role_unfenced(text, uuid, uuid, text), public.remove_project_member_unfenced(text, uuid, uuid),
   public.update_project_settings(text, uuid, jsonb) TO service_role;
 `
+
+// Atomic reads close the gap between an API access check and its query.
+export const projectPrivacyReadSql = `
+CREATE FUNCTION public.read_project_feedback(p_project text, p_actor uuid)
+RETURNS SETOF public.comments LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_private boolean; v_access text; v_role text; v_owner boolean;
+BEGIN
+  SELECT p.widget_private, p.feedback_access INTO v_private, v_access FROM public.projects p WHERE p.public_key=p_project FOR SHARE;
+  SELECT m.role, m.is_owner INTO v_role, v_owner FROM public.project_members m WHERE m.project_key=p_project AND m.user_id=p_actor FOR SHARE;
+  IF v_role IS NULL OR (v_private AND NOT (v_access='team' OR (v_access='admins' AND (v_role='admin' OR v_owner)))) THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+  RETURN QUERY SELECT c.* FROM public.comments c WHERE c.project_id=p_project AND (v_role <> 'guest' OR c.visibility='shared');
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.read_share_feedback(p_share uuid)
+RETURNS SETOF public.comments LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_share public.feedback_shares%ROWTYPE; v_project text; v_private boolean;
+BEGIN
+  SELECT s.project_id INTO v_project FROM public.feedback_shares s WHERE s.id=p_share;
+  SELECT p.widget_private INTO v_private FROM public.projects p WHERE p.public_key=v_project FOR SHARE;
+  SELECT s.* INTO v_share FROM public.feedback_shares s WHERE s.id=p_share FOR SHARE;
+  IF NOT FOUND OR v_share.revoked_at IS NOT NULL OR v_share.expires_at <= clock_timestamp()
+    OR (v_share.created_by='system' AND v_private) THEN RAISE EXCEPTION 'share_unavailable'; END IF;
+  RETURN QUERY SELECT c.* FROM public.comments c WHERE c.project_id=v_share.project_id AND c.visibility='shared' AND c.status='approved'
+    AND (v_share.scope_type='project' OR EXISTS (SELECT 1 FROM public.feedback_share_items i WHERE i.share_id=p_share AND i.comment_id=c.id));
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid) FROM PUBLIC, anon, authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid) TO service_role;
+`

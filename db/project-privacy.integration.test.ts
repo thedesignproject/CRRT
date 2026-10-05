@@ -170,6 +170,37 @@ describeDatabase('project privacy database guards', () => {
     if (operation === 'remove') await sql`insert into project_members(project_key, user_id, role) values (${project}, ${member}, 'member')`
     expect(await sql`select * from update_project_settings(${project}, ${owner}, '{"name":"Updated", "allowed_origins":["test.local"]}'::jsonb)`).toMatchObject([{ name: 'Updated', allowed_origins: ['test.local'] }])
   })
+  it('blocks a team read behind a privacy commit and rejects the stale authorization', async () => {
+    await sql`update projects set widget_private=true, feedback_access='team' where public_key=${project}`
+    expect((await sql`select * from read_project_feedback(${project}, ${member})`).length).toBeGreaterThan(0)
+    let read!: Promise<unknown>
+    await sql.begin(async tx => {
+      await tx`update projects set feedback_access='admins' where public_key=${project}`
+      read=worker`select * from read_project_feedback(${project}, ${member})`.then(rows=>rows,error=>error)
+      await waitForWorkerLock()
+    })
+    expect(await read).toMatchObject({ message:'forbidden' })
+    expect((await sql`select * from read_project_feedback(${project}, ${owner})`).length).toBeGreaterThan(0)
+  })
+  it('rejects an automatic share read after concurrent privacy activation but preserves explicit shares', async () => {
+    const share=randomUUID()
+    await sql`update projects set widget_private=false where public_key=${project}`
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'project',${share},'hash','cipher','system',now()+interval '1 hour')`
+    let read!: Promise<unknown>
+    try {
+      expect(await sql`select * from read_share_feedback(${share})`).toHaveLength(1)
+      await sql.begin(async tx => {
+        await tx`update projects set widget_private=true where public_key=${project}`
+        read=worker`select * from read_share_feedback(${share})`.then(rows=>rows,error=>error)
+        await waitForWorkerLock()
+      })
+      expect(await read).toMatchObject({ message:'share_unavailable' })
+      await sql`update feedback_shares set created_by=${owner} where id=${share}`
+      expect(await sql`select * from read_share_feedback(${share})`).toHaveLength(1)
+      await sql`update feedback_shares set revoked_at=now() where id=${share}`
+      await expect(sql`select * from read_share_feedback(${share})`).rejects.toMatchObject({ message:'share_unavailable' })
+    } finally { await sql`delete from feedback_shares where id=${share}` }
+  })
   it('enforces current access in direct authenticated notification reads', async () => {
     await sql`update projects set feedback_access='team' where public_key=${project}`
     await sql`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`
