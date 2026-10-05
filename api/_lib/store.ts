@@ -2446,10 +2446,10 @@ export async function createFeedbackEvent(input: {
       payload: input.payload || {},
     }] as never)
     .select('id, share_id, comment_id, actor_type, actor_id, event_type, payload, created_at')
-    .single()
+    .maybeSingle()
 
   if (error) throw new Error(error.message)
-  return mapEvent(data as EventRow)
+  return data ? mapEvent(data as EventRow) : null
 }
 
 export async function listFeedbackEvents(shareId: string, after: number, limit: number, tokenHash: string) {
@@ -2549,16 +2549,10 @@ export async function listLivePresence(shareId: string, cutoffIso: string) {
   return (data || []).map((row) => mapPresence(row as PresenceRow))
 }
 
-export async function getOperationKey(shareId: string, agentId: string, idempotencyKey: string) {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('feedback_operation_keys')
-    .select('share_id, agent_id, idempotency_key, feedback_event_id, created_at')
-    .eq('share_id', shareId)
-    .eq('agent_id', agentId)
-    .eq('idempotency_key', idempotencyKey)
-    .maybeSingle()
-
+export async function getOperationKey(shareId: string, agentId: string, idempotencyKey: string, tokenHash: string) {
+  const { data, error } = await getSupabase().rpc('read_agent_operation_key', {
+    p_share: shareId, p_token_hash: tokenHash, p_agent: agentId, p_key: idempotencyKey,
+  } as never).select('share_id, agent_id, idempotency_key, feedback_event_id, created_at').maybeSingle()
   if (error) throw new Error(error.message)
   return data as { share_id: string, agent_id: string, idempotency_key: string, feedback_event_id: number | null, created_at: string } | null
 }
@@ -2896,4 +2890,12 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+export async function beginTrackerDispatch(projectKey: string, commentId: string, actorUserId: string, leaseToken: string, workId: string | null) {
+  const { data, error } = await getSupabase().rpc('begin_actor_tracker_dispatch', {
+    p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_lease: leaseToken, p_work: workId,
+  } as never)
+  if (error) throw new Error(error.message)
+  return data === true
 }

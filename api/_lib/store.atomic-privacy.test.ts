@@ -59,3 +59,25 @@ it('binds event reads and atomic presence writes to the presented token hash',as
  await expect(listFeedbackEvents('s',0,100,'hash')).rejects.toThrow('share_unavailable')
  await expect(writeAgentPresence('s','hash','agent','active','summary')).rejects.toThrow('share_unavailable')
 })
+
+it('atomically checks the actor and records a durable tracker dispatch fence',async()=>{
+ const {beginTrackerDispatch}=await import('./store.js')
+ result={data:true,error:null};expect(await beginTrackerDispatch('p','c','u','lease','work')).toBe(true)
+ expect(rpc).toHaveBeenCalledWith('begin_actor_tracker_dispatch',{p_project:'p',p_actor:'u',p_comment:'c',p_lease:'lease',p_work:'work'})
+ result={data:false,error:null};expect(await beginTrackerDispatch('p','c','u','lease',null)).toBe(false)
+ result={data:null,error:{message:'forbidden'}};await expect(beginTrackerDispatch('p','c','u','lease',null)).rejects.toThrow('forbidden')
+})
+it('fences duplicate lookups with the presented token hash',async()=>{
+ const {getOperationKey}=await import('./store.js')
+ result={data:{feedback_event_id:5},error:null};expect(await getOperationKey('s','agent','key','hash')).toMatchObject({feedback_event_id:5})
+ expect(rpc).toHaveBeenCalledWith('read_agent_operation_key',{p_share:'s',p_token_hash:'hash',p_agent:'agent',p_key:'key'})
+ result={data:null,error:null};expect(await getOperationKey('s','agent','key','hash')).toBeNull()
+ result={data:null,error:{message:'share_unavailable'}};await expect(getOperationKey('s','agent','key','hash')).rejects.toThrow('share_unavailable')
+})
+it('handles comment events suppressed by the eligibility trigger',async()=>{
+ const {createFeedbackEvent}=await import('./store.js')
+ const input={shareId:'s',actorType:'reviewer',actorId:'u',eventType:'comment.implementation_changed'}
+ expect(await createFeedbackEvent(input)).toHaveProperty('id')
+ result={data:null,error:null};expect(await createFeedbackEvent({...input,commentId:'c',payload:{implementationStatus:'blocked'}})).toBeNull()
+ result={data:null,error:{message:'database down'}};await expect(createFeedbackEvent(input)).rejects.toThrow('database down')
+})

@@ -245,3 +245,11 @@ it('denies the commit when admin access is revoked during screenshot protection'
   expect(res.statusCode).toBe(403)
   expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true }, 'u')
 })
+
+it('reports a retryable conflict while an outbound tracker dispatch is unresolved',async()=>{
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+ vi.mocked(getProjectMember).mockResolvedValue({role:'admin'})
+ vi.mocked(updateProject).mockRejectedValueOnce(new Error('tracker_dispatch_in_progress'))
+ const res=mockRes();await call({method:'PATCH',query:{projectId:'p'},headers:{},body:{widgetPrivate:true}},res)
+ expect(res.statusCode).toBe(409);expect(res.body).toEqual({error:expect.stringContaining('tracker export')})
+})

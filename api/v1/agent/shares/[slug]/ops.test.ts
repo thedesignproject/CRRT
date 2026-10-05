@@ -218,3 +218,12 @@ it.each(['share_unavailable', 'database unavailable'])('denies an operation afte
   expect(res.statusCode).toBe(message === 'share_unavailable' ? 410 : 500)
   expect(res.body).not.toHaveProperty('comment')
 })
+
+it('denies duplicate acknowledgments when the atomic lookup sees revoked credentials',async()=>{
+ const {getOperationKey}=await import('../../../../_lib/store.js')
+ vi.mocked(getOperationKey).mockRejectedValueOnce(new Error('share_unavailable'))
+ const res=mockRes();await call(mockReq({body:{op:'comment.note',commentId:'comment-1'}}),res)
+ expect(res.statusCode).toBe(410);expect(res.body).not.toHaveProperty('feedbackEventId')
+ expect(getOperationKey).toHaveBeenLastCalledWith('share-1','codex-local','op-1',hashToken('token-123'))
+ expect(applyAgentFeedbackOperation).not.toHaveBeenCalled()
+})

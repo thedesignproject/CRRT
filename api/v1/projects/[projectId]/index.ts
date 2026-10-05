@@ -73,6 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(project)
   } catch (error) {
     if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Admin role required')
+    if (error instanceof Error && error.message === 'tracker_dispatch_in_progress') return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before changing privacy.')
     if (error instanceof Error && error.message === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry saving privacy shortly.')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')

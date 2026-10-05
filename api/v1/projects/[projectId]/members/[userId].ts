@@ -93,6 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ projectKey, userId: targetUserId })
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
+    if (msg === 'tracker_dispatch_in_progress') return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before changing membership.')
     if (msg === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry changing membership shortly.')
     if (msg === 'not_found') return jsonError(req, res, 404, 'Member not found')
     if (msg === 'forbidden') return jsonError(req, res, 403, 'Admin role required')

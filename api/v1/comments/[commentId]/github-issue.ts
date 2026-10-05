@@ -20,7 +20,7 @@ import {
   getComment,
   getCommentForGithubIssue,
   getGithubIssueConnection,
-  markCommentGithubIssueUncertain,
+  beginTrackerDispatch,
   releaseCommentGithubIssue,
   resetCommentGithubIssueAttempt,
 } from '../../../_lib/store.js'
@@ -201,7 +201,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return
     }
 
-    if (!(await markCommentGithubIssueUncertain(projectKey, commentId, leaseToken))) {
+    if (!(await beginTrackerDispatch(projectKey, commentId, user.userId, leaseToken, null))) {
       throw new Error('github_issue_creation_in_progress')
     }
     uncertain = true

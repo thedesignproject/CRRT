@@ -19,7 +19,7 @@ import {
   getCommentForGithubIssue,
   getGithubIssueConnection,
   getProjectIntegration,
-  markCommentExternalWorkUncertain,
+  beginTrackerDispatch,
   releaseCommentExternalWork,
 } from '../../../_lib/store.js'
 import githubIssueHandler from './github-issue.js'
@@ -110,31 +110,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!claim || claim.leaseToken !== leaseToken) {
         return jsonError(req, res, 409, claim?.uncertainAt ? `${provider}_issue_recovery_pending` : `${provider}_issue_creation_in_progress`)
       }
+      let dispatchStarted = false
       try {
         const accessToken = provider === 'linear'
           ? await getLinearAccessToken(integration)
           : await getJiraAccessToken(integration)
+        // Complete all provider preparation before making the atomic dispatch decision.
+        const destinations = provider === 'jira' ? await getJiraDestinations(accessToken) : null
+        const destination = destinations?.find((candidate) => (
+          candidate.cloudId === integration.workspaceId && candidate.projectId === integration.containerId
+        ))
+        if (provider === 'jira' && !destination) throw new Error('jira_project_unavailable')
         if (!(await requireProjectCapability(req, res, user, publicComment.projectId, 'integrations:send'))) {
           await releaseCommentExternalWork(claim.id, leaseToken)
           return
         }
-        if (!(await markCommentExternalWorkUncertain(claim.id, leaseToken))) throw new Error(`${provider}_issue_creation_in_progress`)
+        if (!(await beginTrackerDispatch(publicComment.projectId, commentId, user.userId, leaseToken, claim.id))) throw new Error(`${provider}_issue_creation_in_progress`)
+        dispatchStarted = true
         const result = provider === 'linear'
           ? await createLinearIssue(accessToken, { teamId: integration.containerId, title, description: body })
-          : await (async () => {
-              const destinations = await getJiraDestinations(accessToken)
-              const destination = destinations.find((candidate) => (
-                candidate.cloudId === integration.workspaceId && candidate.projectId === integration.containerId
-              ))
-              if (!destination) throw new Error('jira_project_unavailable')
-              return createJiraIssue(accessToken, {
-                cloudId: destination.cloudId,
-                siteUrl: destination.siteUrl,
-                projectId: destination.projectId,
-                title,
-                description: body,
-              })
-            })()
+          : await createJiraIssue(accessToken, {
+              cloudId: destination!.cloudId,
+              siteUrl: destination!.siteUrl,
+              projectId: destination!.projectId,
+              title,
+              description: body,
+            })
         const finalized = await finalizeCommentExternalWork({
           id: claim.id,
           leaseToken,
@@ -156,7 +157,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             'jira_result_indeterminate', 'jira_issue_persistence_failed', 'jira_issue_creation_in_progress',
           ].includes(code))
         )
-        if (deterministicProviderFailure) {
+        if (!dispatchStarted || deterministicProviderFailure) {
           await releaseCommentExternalWork(claim.id, leaseToken)
         }
         throw error

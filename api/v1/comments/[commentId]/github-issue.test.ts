@@ -24,7 +24,7 @@ vi.mock('../../../_lib/store.js', () => ({
   getComment: vi.fn(),
   getCommentForGithubIssue: vi.fn(),
   getGithubIssueConnection: vi.fn(),
-  markCommentGithubIssueUncertain: vi.fn(),
+  beginTrackerDispatch: vi.fn(),
   releaseCommentGithubIssue: vi.fn(),
   resetCommentGithubIssueAttempt: vi.fn(),
 }))
@@ -49,7 +49,7 @@ import {
   getComment,
   getCommentForGithubIssue,
   getGithubIssueConnection,
-  markCommentGithubIssueUncertain,
+  beginTrackerDispatch,
   releaseCommentGithubIssue,
   resetCommentGithubIssueAttempt,
 } from '../../../_lib/store.js'
@@ -131,7 +131,7 @@ beforeEach(() => {
   vi.mocked(formatEditableGithubIssueBody).mockReturnValue('edited issue body')
   vi.mocked(createGithubIssue).mockResolvedValue(issue)
   vi.mocked(finalizeCommentGithubIssue).mockResolvedValue(true)
-  vi.mocked(markCommentGithubIssueUncertain).mockResolvedValue(true)
+  vi.mocked(beginTrackerDispatch).mockResolvedValue(true)
   vi.mocked(releaseCommentGithubIssue).mockResolvedValue(true)
   vi.mocked(resetCommentGithubIssueAttempt).mockResolvedValue(true)
   vi.mocked(acceptCommentIfOpen).mockResolvedValue(comment as never)
@@ -352,7 +352,7 @@ describe('POST comment GitHub issue', () => {
   })
 
   it('does not post unless the database marks the attempt uncertain', async () => {
-    vi.mocked(markCommentGithubIssueUncertain).mockResolvedValueOnce(false)
+    vi.mocked(beginTrackerDispatch).mockResolvedValueOnce(false)
     const response = await call()
     expect(response.statusCode).toBe(409)
     expect(response.body).toEqual({ error: 'github_issue_creation_in_progress' })
@@ -396,4 +396,11 @@ it('denies an existing issue response and acceptance if actor authorization is r
  const res=await call();expect(res.statusCode).toBe(403);expect(res.body).toEqual({error:'Forbidden'})
  expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1','comment-1','user-1')
  expect(createGithubIssue).not.toHaveBeenCalled()
+})
+
+it('does not dispatch GitHub if access is revoked before the atomic send decision',async()=>{
+ vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
+ const res=await call();expect(res.statusCode).toBe(403);expect(createGithubIssue).not.toHaveBeenCalled()
+ expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null)
+ expect(releaseCommentGithubIssue).toHaveBeenCalled()
 })
