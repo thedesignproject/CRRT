@@ -36,7 +36,13 @@ $$;
 CREATE FUNCTION public.fence_project_member_delivery()
 RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
 BEGIN
-  PERFORM 1 FROM public.projects p WHERE p.public_key = OLD.project_key FOR UPDATE;
+  -- A direct/cascade write already holds a member row. Never wait here for a
+  -- project held by a member-management RPC: that RPC may need this same row.
+  BEGIN
+    PERFORM 1 FROM public.projects p WHERE p.public_key = OLD.project_key FOR UPDATE NOWAIT;
+  EXCEPTION WHEN lock_not_available THEN
+    RAISE EXCEPTION 'project_membership_busy' USING ERRCODE = '55P03';
+  END;
   IF EXISTS (SELECT 1 FROM public.comment_email_batches b JOIN public.comments c ON c.id = b.delivery_id
     WHERE c.project_id = OLD.project_key AND b.status = 'pending' AND b.lease_token IS NOT NULL
   ) THEN RAISE EXCEPTION 'feedback_delivery_in_progress'; END IF;
@@ -88,38 +94,45 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE FUNCTION public.read_share_feedback(p_share uuid)
-RETURNS SETOF public.comments LANGUAGE plpgsql SET search_path = '' AS $$
+CREATE FUNCTION public.lock_agent_share(p_share uuid, p_token_hash text)
+RETURNS public.feedback_shares LANGUAGE plpgsql SET search_path = '' AS $$
 DECLARE v_share public.feedback_shares%ROWTYPE; v_project text; v_private boolean;
 BEGIN
   SELECT s.project_id INTO v_project FROM public.feedback_shares s WHERE s.id=p_share;
   SELECT p.widget_private INTO v_private FROM public.projects p WHERE p.public_key=v_project FOR SHARE;
   SELECT s.* INTO v_share FROM public.feedback_shares s WHERE s.id=p_share FOR SHARE;
-  IF NOT FOUND OR v_share.revoked_at IS NOT NULL OR v_share.expires_at <= clock_timestamp()
+  IF NOT FOUND OR p_token_hash IS NULL OR v_share.access_token_hash IS DISTINCT FROM p_token_hash
+    OR v_share.revoked_at IS NOT NULL OR v_share.expires_at <= clock_timestamp()
     OR (v_share.created_by='system' AND v_private) THEN RAISE EXCEPTION 'share_unavailable'; END IF;
+  RETURN v_share;
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.read_share_feedback(p_share uuid, p_token_hash text DEFAULT NULL)
+RETURNS SETOF public.comments LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_share public.feedback_shares%ROWTYPE;
+BEGIN
+  v_share := public.lock_agent_share(p_share,p_token_hash);
   RETURN QUERY SELECT c.* FROM public.comments c WHERE c.project_id=v_share.project_id AND c.visibility='shared' AND c.status='approved'
     AND (v_share.scope_type='project' OR EXISTS (SELECT 1 FROM public.feedback_share_items i WHERE i.share_id=p_share AND i.comment_id=c.id));
 END;
 $$;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid,text), public.lock_agent_share(uuid,text) FROM PUBLIC, anon, authenticated;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid) TO service_role;
+GRANT EXECUTE ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid,text), public.lock_agent_share(uuid,text) TO service_role;
 
 --> statement-breakpoint
 
 ALTER FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text) RENAME TO apply_agent_feedback_operation_unchecked;
 --> statement-breakpoint
 CREATE FUNCTION public.apply_agent_feedback_operation(p_share_id uuid, p_comment_id uuid, p_agent_id text, p_idempotency_key text,
-  p_operation text, p_event_type text, p_payload jsonb, p_implementation_status text)
+  p_operation text, p_event_type text, p_payload jsonb, p_implementation_status text, p_token_hash text DEFAULT NULL)
 RETURNS TABLE(outcome text, event_id bigint, comment_row jsonb) LANGUAGE plpgsql SET search_path = '' AS $$
-DECLARE v_share public.feedback_shares%ROWTYPE; v_project text; v_private boolean;
+DECLARE v_share public.feedback_shares%ROWTYPE; v_project text;
 BEGIN
-  SELECT s.project_id INTO v_project FROM public.feedback_shares s WHERE s.id=p_share_id;
-  SELECT p.widget_private INTO v_private FROM public.projects p WHERE p.public_key=v_project FOR SHARE;
-  SELECT s.* INTO v_share FROM public.feedback_shares s WHERE s.id=p_share_id FOR SHARE;
-  IF NOT FOUND OR v_share.revoked_at IS NOT NULL OR v_share.expires_at <= clock_timestamp()
-    OR (v_share.created_by='system' AND v_private) THEN RAISE EXCEPTION 'share_unavailable'; END IF;
+  v_share := public.lock_agent_share(p_share_id,p_token_hash);
+  v_project := v_share.project_id;
   PERFORM 1 FROM public.comments c WHERE c.id=p_comment_id AND c.project_id=v_project AND c.visibility='shared' AND c.status='approved'
     AND (v_share.scope_type <> 'page' OR c.url=v_share.scope_page_url) FOR UPDATE;
   IF NOT FOUND THEN RETURN QUERY SELECT 'not_found'::text,NULL::bigint,NULL::jsonb; RETURN; END IF;
@@ -132,10 +145,10 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-REVOKE ALL ON FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text),
+REVOKE ALL ON FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text, text),
  public.apply_agent_feedback_operation_unchecked(uuid, uuid, text, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
 --> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text),
+GRANT EXECUTE ON FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text, text),
  public.apply_agent_feedback_operation_unchecked(uuid, uuid, text, text, text, text, jsonb, text) TO service_role;
 
 --> statement-breakpoint
@@ -185,6 +198,16 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
+CREATE FUNCTION public.accept_actor_comment_if_open(p_project text,p_actor uuid,p_comment uuid)
+RETURNS SETOF public.comments LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  PERFORM public.lock_feedback_actor(p_project,p_actor,'integrations:send');
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project,0));
+  RETURN QUERY UPDATE public.comments c SET status='approved',updated_at=now()
+    WHERE c.id=p_comment AND c.project_id=p_project AND c.status='pending' RETURNING c.*;
+END;
+$$;
+--> statement-breakpoint
 CREATE FUNCTION public.create_actor_share(p_project text, p_actor uuid, p_share jsonb, p_comments uuid[])
 RETURNS SETOF public.feedback_shares LANGUAGE plpgsql SET search_path = '' AS $$
 DECLARE v_ids uuid[]; v_share public.feedback_shares%ROWTYPE;
@@ -229,9 +252,41 @@ END;
 $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.lock_feedback_actor(text,uuid,text), public.read_actor_comment(text,uuid,uuid,text),
- public.mutate_actor_feedback(text,uuid,uuid,jsonb), public.create_actor_share(text,uuid,jsonb,uuid[]), public.read_actor_share(uuid,uuid),
+ public.accept_actor_comment_if_open(text,uuid,uuid), public.mutate_actor_feedback(text,uuid,uuid,jsonb), public.create_actor_share(text,uuid,jsonb,uuid[]), public.read_actor_share(uuid,uuid),
  public.rotate_actor_share(uuid,uuid,text,text,text,text) FROM PUBLIC, anon, authenticated;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.lock_feedback_actor(text,uuid,text), public.read_actor_comment(text,uuid,uuid,text),
- public.mutate_actor_feedback(text,uuid,uuid,jsonb), public.create_actor_share(text,uuid,jsonb,uuid[]), public.read_actor_share(uuid,uuid),
+ public.accept_actor_comment_if_open(text,uuid,uuid), public.mutate_actor_feedback(text,uuid,uuid,jsonb), public.create_actor_share(text,uuid,jsonb,uuid[]), public.read_actor_share(uuid,uuid),
  public.rotate_actor_share(uuid,uuid,text,text,text,text) TO service_role;
+
+--> statement-breakpoint
+
+CREATE FUNCTION public.read_agent_events(p_share uuid,p_token_hash text,p_after bigint,p_limit integer)
+RETURNS SETOF public.feedback_events LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  PERFORM public.lock_agent_share(p_share,p_token_hash);
+  RETURN QUERY SELECT e.* FROM public.feedback_events e WHERE e.share_id=p_share AND e.id>p_after
+    ORDER BY e.id LIMIT greatest(1,least(100,p_limit));
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.write_agent_presence(p_share uuid,p_token_hash text,p_agent text,p_status text,p_summary text)
+RETURNS void LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_previous public.agent_presence%ROWTYPE;
+BEGIN
+  PERFORM public.lock_agent_share(p_share,p_token_hash);
+  -- Serialize first insert as well as updates for this share/agent.
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-presence:' || p_share::text || ':' || p_agent,0));
+  SELECT a.* INTO v_previous FROM public.agent_presence a WHERE a.share_id=p_share AND a.agent_id=p_agent;
+  INSERT INTO public.agent_presence(share_id,agent_id,status,summary,last_seen_at) VALUES(p_share,p_agent,p_status,p_summary,now())
+    ON CONFLICT(share_id,agent_id) DO UPDATE SET status=EXCLUDED.status,summary=EXCLUDED.summary,last_seen_at=EXCLUDED.last_seen_at;
+  IF v_previous.agent_id IS NULL OR v_previous.status IS DISTINCT FROM p_status OR v_previous.summary IS DISTINCT FROM p_summary THEN
+    INSERT INTO public.feedback_events(share_id,actor_type,actor_id,event_type,payload)
+      VALUES(p_share,'agent',p_agent,'presence.updated',jsonb_build_object('status',p_status,'summary',p_summary));
+  END IF;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.read_agent_events(uuid,text,bigint,integer), public.write_agent_presence(uuid,text,text,text,text) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.read_agent_events(uuid,text,bigint,integer), public.write_agent_presence(uuid,text,text,text,text) TO service_role;
