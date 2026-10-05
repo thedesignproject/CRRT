@@ -104,3 +104,27 @@ $$;
 REVOKE ALL ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid) FROM PUBLIC, anon, authenticated;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.read_project_feedback(text, uuid), public.read_share_feedback(uuid) TO service_role;
+
+--> statement-breakpoint
+ALTER FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text) RENAME TO apply_agent_feedback_operation_unchecked;
+--> statement-breakpoint
+CREATE FUNCTION public.apply_agent_feedback_operation(p_share_id uuid, p_comment_id uuid, p_agent_id text, p_idempotency_key text,
+  p_operation text, p_event_type text, p_payload jsonb, p_implementation_status text)
+RETURNS TABLE(outcome text, event_id bigint, comment_row jsonb) LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_share public.feedback_shares%ROWTYPE; v_project text; v_private boolean;
+BEGIN
+  SELECT s.project_id INTO v_project FROM public.feedback_shares s WHERE s.id=p_share_id;
+  SELECT p.widget_private INTO v_private FROM public.projects p WHERE p.public_key=v_project FOR SHARE;
+  SELECT s.* INTO v_share FROM public.feedback_shares s WHERE s.id=p_share_id FOR SHARE;
+  IF NOT FOUND OR v_share.revoked_at IS NOT NULL OR v_share.expires_at <= clock_timestamp()
+    OR (v_share.created_by='system' AND v_private) THEN RAISE EXCEPTION 'share_unavailable'; END IF;
+  RETURN QUERY SELECT * FROM public.apply_agent_feedback_operation_unchecked(p_share_id, p_comment_id, p_agent_id,
+    p_idempotency_key, p_operation, p_event_type, p_payload, p_implementation_status);
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text),
+ public.apply_agent_feedback_operation_unchecked(uuid, uuid, text, text, text, text, jsonb, text) FROM PUBLIC, anon, authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.apply_agent_feedback_operation(uuid, uuid, text, text, text, text, jsonb, text),
+ public.apply_agent_feedback_operation_unchecked(uuid, uuid, text, text, text, text, jsonb, text) TO service_role;
