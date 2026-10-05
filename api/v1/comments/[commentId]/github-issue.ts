@@ -1,3 +1,4 @@
+import { withTrackerDispatchLock } from '../../../_lib/tracker-dispatch-lock.js'
 import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
@@ -129,22 +130,71 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       )
     }
 
-    const accessToken = await createInstallationAccessToken(connection.installationId)
-    const marker = createCommentIssueMarker(commentId)
-    const recovered = await findGithubIssueByMarker({
-      accessToken,
-      owner: connection.owner,
-      repo: connection.repo,
-      marker,
-    })
-    if (recovered) {
-      const recoveryState = await getCommentForGithubIssue(projectKey, commentId, user.userId)
-      const recoveryConnection = await getGithubIssueConnection(projectKey)
+    const dispatchProject = projectKey
+    const dispatchLease = leaseToken
+    return await withTrackerDispatchLock(dispatchProject, async signal => {
+      const projectKey = dispatchProject
+      let leaseToken: string | null = dispatchLease
+      const accessToken = await createInstallationAccessToken(connection.installationId)
+      const marker = createCommentIssueMarker(commentId)
+      const recovered = await findGithubIssueByMarker({
+        accessToken,
+        owner: connection.owner,
+        repo: connection.repo,
+        marker,
+      })
+      if (recovered) {
+        const recoveryState = await getCommentForGithubIssue(projectKey, commentId, user.userId)
+        const recoveryConnection = await getGithubIssueConnection(projectKey)
+        if (
+          !recoveryState
+          || recoveryState.reviewStatus === 'rejected'
+          || recoveryState.githubIssueLeaseToken !== leaseToken
+          || !sameConnection(connection, recoveryConnection)
+        ) {
+          await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
+          leaseToken = null
+          return jsonError(req, res, 409, 'github_repository_connection_changed')
+        }
+        if (!(await requireProjectCapability(req, res, user, projectKey, 'integrations:send'))) {
+          await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
+          leaseToken = null
+          return
+        }
+        if (!(await finalizeWithRetry(projectKey, commentId, leaseToken, recovered))) {
+          await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
+          leaseToken = null
+          throw new Error('github_issue_persistence_failed')
+        }
+        await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
+        setCors(req, res, METHODS)
+        return res.status(200).json(issueResponse(recovered, false))
+      }
+
+      if (recovery) {
+        await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
+        leaseToken = null
+        throw new Error('github_issue_recovery_pending')
+      }
+
+      const requestedDraft = req.body?.draft
+      const editableDraft = requestedDraft
+        && typeof requestedDraft.title === 'string'
+        && typeof requestedDraft.body === 'string'
+        ? { title: requestedDraft.title.trim(), body: requestedDraft.body.trim() }
+        : null
+      if (requestedDraft && (!editableDraft?.title || !editableDraft.body)) {
+        await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
+        leaseToken = null
+        return jsonError(req, res, 400, 'invalid_external_work_draft')
+      }
+      const current = await getCommentForGithubIssue(projectKey, commentId, user.userId)
+      const currentConnection = await getGithubIssueConnection(projectKey)
       if (
-        !recoveryState
-        || recoveryState.reviewStatus === 'rejected'
-        || recoveryState.githubIssueLeaseToken !== leaseToken
-        || !sameConnection(connection, recoveryConnection)
+        !current
+        || current.reviewStatus === 'rejected'
+        || current.githubIssueLeaseToken !== leaseToken
+        || !sameConnection(connection, currentConnection)
       ) {
         await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
         leaseToken = null
@@ -155,83 +205,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         leaseToken = null
         return
       }
-      if (!(await finalizeWithRetry(projectKey, commentId, leaseToken, recovered))) {
+
+      if (!(await beginTrackerDispatch(projectKey, commentId, user.userId, leaseToken, null))) {
+        throw new Error('github_issue_creation_in_progress')
+      }
+      uncertain = true
+      const content = editableDraft ? null : await generateCommentIssueContent(comment, signal)
+      let issue
+      try {
+        issue = await createGithubIssue({
+          accessToken,
+          signal,
+          owner: connection.owner,
+          repo: connection.repo,
+          title: editableDraft?.title ?? content!.title,
+          body: editableDraft
+            ? formatEditableGithubIssueBody(editableDraft.body, marker)
+            : formatGithubIssueBody(comment, content!, marker),
+        })
+      } catch (error) {
+        if (error instanceof Error && error.message !== 'github_issue_result_indeterminate') {
+          await resetCommentGithubIssueAttempt(projectKey, commentId, leaseToken)
+          leaseToken = null
+          uncertain = false
+        }
+        throw error
+      }
+      if (!(await finalizeWithRetry(projectKey, commentId, leaseToken, issue))) {
         await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
         leaseToken = null
         throw new Error('github_issue_persistence_failed')
       }
       await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
       setCors(req, res, METHODS)
-      return res.status(200).json(issueResponse(recovered, false))
-    }
-
-    if (recovery) {
-      await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
-      leaseToken = null
-      throw new Error('github_issue_recovery_pending')
-    }
-
-    const requestedDraft = req.body?.draft
-    const editableDraft = requestedDraft
-      && typeof requestedDraft.title === 'string'
-      && typeof requestedDraft.body === 'string'
-      ? { title: requestedDraft.title.trim(), body: requestedDraft.body.trim() }
-      : null
-    if (requestedDraft && (!editableDraft?.title || !editableDraft.body)) {
-      await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
-      leaseToken = null
-      return jsonError(req, res, 400, 'invalid_external_work_draft')
-    }
-    const content = editableDraft ? null : await generateCommentIssueContent(comment)
-    const current = await getCommentForGithubIssue(projectKey, commentId, user.userId)
-    const currentConnection = await getGithubIssueConnection(projectKey)
-    if (
-      !current
-      || current.reviewStatus === 'rejected'
-      || current.githubIssueLeaseToken !== leaseToken
-      || !sameConnection(connection, currentConnection)
-    ) {
-      await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
-      leaseToken = null
-      return jsonError(req, res, 409, 'github_repository_connection_changed')
-    }
-    if (!(await requireProjectCapability(req, res, user, projectKey, 'integrations:send'))) {
-      await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
-      leaseToken = null
-      return
-    }
-
-    if (!(await beginTrackerDispatch(projectKey, commentId, user.userId, leaseToken, null))) {
-      throw new Error('github_issue_creation_in_progress')
-    }
-    uncertain = true
-    let issue
-    try {
-      issue = await createGithubIssue({
-        accessToken,
-        owner: connection.owner,
-        repo: connection.repo,
-        title: editableDraft?.title ?? content!.title,
-        body: editableDraft
-          ? formatEditableGithubIssueBody(editableDraft.body, marker)
-          : formatGithubIssueBody(comment, content!, marker),
-      })
-    } catch (error) {
-      if (error instanceof Error && error.message !== 'github_issue_result_indeterminate') {
-        await resetCommentGithubIssueAttempt(projectKey, commentId, leaseToken)
-        leaseToken = null
-        uncertain = false
-      }
-      throw error
-    }
-    if (!(await finalizeWithRetry(projectKey, commentId, leaseToken, issue))) {
-      await releaseCommentGithubIssue(projectKey, commentId, leaseToken)
-      leaseToken = null
-      throw new Error('github_issue_persistence_failed')
-    }
-    await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
-    setCors(req, res, METHODS)
-    return res.status(201).json(issueResponse(issue, true))
+      return res.status(201).json(issueResponse(issue, true))
+    })
   } catch (error) {
     if (projectKey && leaseToken) {
       try {

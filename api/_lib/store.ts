@@ -2899,3 +2899,11 @@ export async function beginTrackerDispatch(projectKey: string, commentId: string
   if (error) throw new Error(error.message)
   return data === true
 }
+
+export async function resolveTrackerDispatch(projectKey: string, actorUserId: string, commentId: string, provider: 'github' | 'linear' | 'jira') {
+  const { data, error } = await getSupabase().rpc('resolve_actor_tracker_dispatch', {
+    p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_provider: provider,
+  } as never)
+  if (error) throw new Error(error.message)
+  return data === true
+}

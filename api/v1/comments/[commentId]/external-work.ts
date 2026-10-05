@@ -1,3 +1,4 @@
+import { withTrackerDispatchLock } from '../../../_lib/tracker-dispatch-lock.js'
 import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
@@ -110,58 +111,62 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!claim || claim.leaseToken !== leaseToken) {
         return jsonError(req, res, 409, claim?.uncertainAt ? `${provider}_issue_recovery_pending` : `${provider}_issue_creation_in_progress`)
       }
-      let dispatchStarted = false
-      try {
-        const accessToken = provider === 'linear'
-          ? await getLinearAccessToken(integration)
-          : await getJiraAccessToken(integration)
-        // Complete all provider preparation before making the atomic dispatch decision.
-        const destinations = provider === 'jira' ? await getJiraDestinations(accessToken) : null
-        const destination = destinations?.find((candidate) => (
-          candidate.cloudId === integration.workspaceId && candidate.projectId === integration.containerId
-        ))
-        if (provider === 'jira' && !destination) throw new Error('jira_project_unavailable')
-        if (!(await requireProjectCapability(req, res, user, publicComment.projectId, 'integrations:send'))) {
-          await releaseCommentExternalWork(claim.id, leaseToken)
-          return
+      const containerId = integration.containerId
+      return await withTrackerDispatchLock(publicComment.projectId, async signal => {
+        let dispatchStarted = false
+        try {
+          const accessToken = provider === 'linear'
+            ? await getLinearAccessToken(integration)
+            : await getJiraAccessToken(integration)
+          // Complete all provider preparation before making the atomic dispatch decision.
+          const destinations = provider === 'jira' ? await getJiraDestinations(accessToken) : null
+          const destination = destinations?.find((candidate) => (
+            candidate.cloudId === integration.workspaceId && candidate.projectId === containerId
+          ))
+          if (provider === 'jira' && !destination) throw new Error('jira_project_unavailable')
+          if (!(await requireProjectCapability(req, res, user, publicComment.projectId, 'integrations:send'))) {
+            await releaseCommentExternalWork(claim.id, leaseToken)
+            return
+          }
+          if (!(await beginTrackerDispatch(publicComment.projectId, commentId, user.userId, leaseToken, claim.id))) throw new Error(`${provider}_issue_creation_in_progress`)
+          dispatchStarted = true
+          const result = provider === 'linear'
+            ? await createLinearIssue(accessToken, { teamId: containerId, title, description: body, signal })
+            : await createJiraIssue(accessToken, {
+                signal,
+                cloudId: destination!.cloudId,
+                siteUrl: destination!.siteUrl,
+                projectId: destination!.projectId,
+                title,
+                description: body,
+              })
+          const finalized = await finalizeCommentExternalWork({
+            id: claim.id,
+            leaseToken,
+            workspaceId: integration.workspaceId,
+            containerId: containerId,
+            ...result,
+          })
+          if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
+          await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
+          setCors(req, res, METHODS)
+          return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
+        } catch (error) {
+          const code = error instanceof Error ? error.message : ''
+          const deterministicProviderFailure = (
+            (code.startsWith('linear_') && ![
+              'linear_result_indeterminate', 'linear_issue_persistence_failed', 'linear_issue_creation_in_progress',
+            ].includes(code))
+            || (code.startsWith('jira_') && ![
+              'jira_result_indeterminate', 'jira_issue_persistence_failed', 'jira_issue_creation_in_progress',
+            ].includes(code))
+          )
+          if (!dispatchStarted || deterministicProviderFailure) {
+            await releaseCommentExternalWork(claim.id, leaseToken)
+          }
+          throw error
         }
-        if (!(await beginTrackerDispatch(publicComment.projectId, commentId, user.userId, leaseToken, claim.id))) throw new Error(`${provider}_issue_creation_in_progress`)
-        dispatchStarted = true
-        const result = provider === 'linear'
-          ? await createLinearIssue(accessToken, { teamId: integration.containerId, title, description: body })
-          : await createJiraIssue(accessToken, {
-              cloudId: destination!.cloudId,
-              siteUrl: destination!.siteUrl,
-              projectId: destination!.projectId,
-              title,
-              description: body,
-            })
-        const finalized = await finalizeCommentExternalWork({
-          id: claim.id,
-          leaseToken,
-          workspaceId: integration.workspaceId,
-          containerId: integration.containerId,
-          ...result,
-        })
-        if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
-        await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
-        setCors(req, res, METHODS)
-        return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
-      } catch (error) {
-        const code = error instanceof Error ? error.message : ''
-        const deterministicProviderFailure = (
-          (code.startsWith('linear_') && ![
-            'linear_result_indeterminate', 'linear_issue_persistence_failed', 'linear_issue_creation_in_progress',
-          ].includes(code))
-          || (code.startsWith('jira_') && ![
-            'jira_result_indeterminate', 'jira_issue_persistence_failed', 'jira_issue_creation_in_progress',
-          ].includes(code))
-        )
-        if (!dispatchStarted || deterministicProviderFailure) {
-          await releaseCommentExternalWork(claim.id, leaseToken)
-        }
-        throw error
-      }
+      })
     }
 
     const connection = await getGithubIssueConnection(publicComment.projectId)

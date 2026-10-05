@@ -1,3 +1,4 @@
+vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>)=>work(new AbortController().signal))}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
@@ -403,4 +404,19 @@ it('does not dispatch GitHub if access is revoked before the atomic send decisio
  const res=await call();expect(res.statusCode).toBe(403);expect(createGithubIssue).not.toHaveBeenCalled()
  expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null)
  expect(releaseCommentGithubIssue).toHaveBeenCalled()
+})
+
+it('does not send feedback to AI after membership is revoked during marker lookup',async()=>{
+ vi.mocked(findGithubIssueByMarker).mockImplementationOnce(async()=>{
+  vi.mocked(getCommentForGithubIssue).mockRejectedValueOnce(new Error('forbidden'));return null
+ })
+ expect((await call()).statusCode).toBe(403)
+ expect(generateCommentIssueContent).not.toHaveBeenCalled();expect(createGithubIssue).not.toHaveBeenCalled()
+})
+it('checks dispatch authorization before AI preparation and passes its cancellation signal',async()=>{
+ vi.mocked(generateCommentIssueContent).mockImplementationOnce(async(_comment,signal)=>{
+  expect(beginTrackerDispatch).toHaveBeenCalled();expect(signal).toBeInstanceOf(AbortSignal)
+  return {title:'Title',summary:'Summary',implementationContext:'Context'}
+ })
+ expect((await call()).statusCode).toBe(201)
 })

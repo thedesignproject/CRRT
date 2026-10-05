@@ -284,3 +284,12 @@ describe('generateCommentIssueContent', () => {
     },
   )
 })
+
+it('uses the dispatch cancellation signal and sends nothing once it is aborted',async()=>{
+ const controller=new AbortController()
+ fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({choices:[{message:{content:JSON.stringify({title:'Title',summary:'Summary',implementationContext:'Context'})}}]}),{status:200}))
+ expect((await generateCommentIssueContent(comment,controller.signal)).title).toBe('Title')
+ expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false)
+ controller.abort();fetchMock.mockClear();await generateCommentIssueContent(comment,controller.signal)
+ expect(fetchMock).not.toHaveBeenCalled()
+})

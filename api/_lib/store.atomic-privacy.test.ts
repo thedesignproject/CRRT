@@ -81,3 +81,11 @@ it('handles comment events suppressed by the eligibility trigger',async()=>{
  result={data:null,error:null};expect(await createFeedbackEvent({...input,commentId:'c',payload:{implementationStatus:'blocked'}})).toBeNull()
  result={data:null,error:{message:'database down'}};await expect(createFeedbackEvent(input)).rejects.toThrow('database down')
 })
+
+it('routes tracker recovery through the current-admin database gate',async()=>{
+ const {resolveTrackerDispatch}=await import('./store.js')
+ result={data:true,error:null};expect(await resolveTrackerDispatch('p','u','c','linear')).toBe(true)
+ expect(rpc).toHaveBeenCalledWith('resolve_actor_tracker_dispatch',{p_project:'p',p_actor:'u',p_comment:'c',p_provider:'linear'})
+ result={data:false,error:null};expect(await resolveTrackerDispatch('p','u','c','github')).toBe(false)
+ result={data:null,error:{message:'tracker_dispatch_active'}};await expect(resolveTrackerDispatch('p','u','c','jira')).rejects.toThrow('tracker_dispatch_active')
+})

@@ -1,3 +1,4 @@
+vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>)=>work(new AbortController().signal))}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
@@ -150,7 +151,7 @@ describe('external work endpoint', () => {
     const created = response()
     await call({ method: 'POST', query: { commentId: 'c' }, body: { provider: 'linear', draft: { title: 'Edited', body: 'Details' } }, headers: {} }, created)
     expect(created.statusCode).toBe(201)
-    expect(createLinearIssue).toHaveBeenCalledWith('linear-token', { teamId: 'team', title: 'Edited', description: 'Details' })
+    expect(createLinearIssue).toHaveBeenCalledWith('linear-token', { teamId: 'team', title: 'Edited', description: 'Details', signal: expect.any(AbortSignal) })
     expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({
       externalKey: 'WEB-1', workspaceId: 'workspace', containerId: 'team',
     }))
@@ -267,7 +268,7 @@ describe('external work endpoint', () => {
     expect(getJiraDestinations).toHaveBeenCalledWith('jira-token')
     expect(createJiraIssue).toHaveBeenCalledWith('jira-token', {
       cloudId: 'cloud', siteUrl: 'https://acme.atlassian.net', projectId: '100',
-      title: 'Edited for Jira', description: 'Jira details',
+      title: 'Edited for Jira', description: 'Jira details', signal: expect.any(AbortSignal),
     })
     expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({
       externalKey: 'WEB-2', workspaceId: 'cloud', containerId: '100',

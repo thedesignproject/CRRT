@@ -856,3 +856,10 @@ export function getShareEvents(apiBase: string, slug: string, token: string, aft
     },
   )
 }
+
+export function resolvePendingExternalWork(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider) {
+  return requestJson<{resolved: boolean}>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-recovery`, {
+    method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders(accessToken)},
+    body: JSON.stringify({provider, confirmCheckedTracker: true}),
+  })
+}

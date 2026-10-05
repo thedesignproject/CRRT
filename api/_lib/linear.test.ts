@@ -254,3 +254,14 @@ describe('Linear integration client', () => {
     await expect(closeLinearIssue('token', { ...input, beforeClose: async () => true })).resolves.toBeUndefined()
   })
 })
+
+it('cancels issue exports after the live dispatch connection closes',async()=>{
+ const controller=new AbortController()
+ const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({data:{issueCreate:{success:true,issue:{id:'i',identifier:'WEB-1',url:'https://linear.app/issue/WEB-1'}}}}),{status:200}))
+ vi.stubGlobal('fetch',fetch)
+ await createLinearIssue('t',{teamId:'team',title:'Title',description:'Body',signal:controller.signal})
+ expect(fetch.mock.calls[0][1].signal.aborted).toBe(false)
+ controller.abort();fetch.mockClear()
+ await expect(createLinearIssue('t',{teamId:'team',title:'Title',description:'Body',signal:controller.signal})).rejects.toThrow()
+ expect(fetch).not.toHaveBeenCalled()
+})
