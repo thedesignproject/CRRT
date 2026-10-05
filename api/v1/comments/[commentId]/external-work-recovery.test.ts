@@ -23,7 +23,7 @@ it('resolves an admin request and handles missing comments or pending exports',a
  vi.mocked(getComment).mockResolvedValueOnce(null);const missing=response();await handler(req() as never,missing as never);expect(missing.statusCode).toBe(404)
  vi.mocked(resolveTrackerDispatch).mockResolvedValueOnce(false);const none=response();await handler(req() as never,none as never);expect(none.statusCode).toBe(404)
 })
-it.each([[new Error('forbidden'),403],[new Error('tracker_dispatch_active'),409],[new Error('database down'),500],['opaque',500]])('fails closed on recovery error %j',async(error,status)=>{
+it.each([[new Error('forbidden'),403],[new Error('tracker_dispatch_active'),409],[new Error('tracker_dispatch_unconfirmed'),409],[new Error('database down'),500],['opaque',500]])('fails closed on recovery error %j',async(error,status)=>{
  vi.mocked(resolveTrackerDispatch).mockRejectedValueOnce(error)
  const res=response();await handler(req() as never,res as never);expect(res.statusCode).toBe(status);expect(res.body).not.toHaveProperty('resolved')
 })

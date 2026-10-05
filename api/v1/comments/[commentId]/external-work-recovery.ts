@@ -24,6 +24,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
     if (code === 'forbidden') return jsonError(req, res, 403, 'Project admin required')
+    if (code === 'tracker_dispatch_unconfirmed') return jsonError(req, res, 409, 'The sender has not confirmed it stopped. An operator must confirm termination before recovery.')
     if (code === 'tracker_dispatch_active') return jsonError(req, res, 409, 'The export is still running. Wait for it to finish before resolving it.')
     return jsonError(req, res, 500, 'Could not resolve the pending export')
   }

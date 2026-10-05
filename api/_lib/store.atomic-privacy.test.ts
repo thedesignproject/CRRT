@@ -89,3 +89,10 @@ it('routes tracker recovery through the current-admin database gate',async()=>{
  result={data:false,error:null};expect(await resolveTrackerDispatch('p','u','c','github')).toBe(false)
  result={data:null,error:{message:'tracker_dispatch_active'}};await expect(resolveTrackerDispatch('p','u','c','jira')).rejects.toThrow('tracker_dispatch_active')
 })
+
+it('acknowledges only the exact sender lease after callback completion',async()=>{
+ const {acknowledgeTrackerDispatchStopped}=await import('./store.js')
+ result={data:null,error:null};await acknowledgeTrackerDispatchStopped('p','c','lease','work')
+ expect(rpc).toHaveBeenCalledWith('acknowledge_tracker_dispatch_stopped',{p_project:'p',p_comment:'c',p_lease:'lease',p_work:'work'})
+ result={data:null,error:{message:'database down'}};await expect(acknowledgeTrackerDispatchStopped('p','c','lease',null)).rejects.toThrow('database down')
+})

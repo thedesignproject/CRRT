@@ -22,6 +22,7 @@ import {
   getCommentForGithubIssue,
   getGithubIssueConnection,
   beginTrackerDispatch,
+  acknowledgeTrackerDispatchStopped,
   releaseCommentGithubIssue,
   resetCommentGithubIssueAttempt,
 } from '../../../_lib/store.js'
@@ -239,7 +240,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
       setCors(req, res, METHODS)
       return res.status(201).json(issueResponse(issue, true))
-    })
+    }, () => acknowledgeTrackerDispatchStopped(dispatchProject, commentId, dispatchLease, null))
   } catch (error) {
     if (projectKey && leaseToken) {
       try {

@@ -275,7 +275,7 @@ export function CommentDetail({
         setIssueError('Pending export resolved. Check for an existing issue before sending again.')
       }
     } catch {
-      if (selectedIdRef.current === commentId) setIssueError('Only project admins can resolve an inactive export. Wait for active exports to finish.')
+      if (selectedIdRef.current === commentId) setIssueError('Only project admins can resolve an export after its sender confirms it stopped. If it crashed, contact an operator to confirm termination.')
     } finally {
       if (selectedIdRef.current === commentId) setIssueBusy(false)
     }

@@ -21,6 +21,7 @@ import {
   getGithubIssueConnection,
   getProjectIntegration,
   beginTrackerDispatch,
+  acknowledgeTrackerDispatchStopped,
   releaseCommentExternalWork,
 } from '../../../_lib/store.js'
 import githubIssueHandler from './github-issue.js'
@@ -166,7 +167,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           }
           throw error
         }
-      })
+      }, () => acknowledgeTrackerDispatchStopped(publicComment.projectId, commentId, leaseToken, claim.id))
     }
 
     const connection = await getGithubIssueConnection(publicComment.projectId)

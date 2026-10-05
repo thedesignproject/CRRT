@@ -2907,3 +2907,10 @@ export async function resolveTrackerDispatch(projectKey: string, actorUserId: st
   if (error) throw new Error(error.message)
   return data === true
 }
+
+export async function acknowledgeTrackerDispatchStopped(projectKey: string, commentId: string, leaseToken: string, workId: string | null) {
+  const { error } = await getSupabase().rpc('acknowledge_tracker_dispatch_stopped', {
+    p_project: projectKey, p_comment: commentId, p_lease: leaseToken, p_work: workId,
+  } as never)
+  if (error) throw new Error(error.message)
+}

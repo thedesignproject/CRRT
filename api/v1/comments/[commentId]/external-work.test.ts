@@ -1,4 +1,4 @@
-vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>)=>work(new AbortController().signal))}))
+vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>,stopped:()=>Promise<void>)=>{try{return await work(new AbortController().signal)}finally{await stopped()}})}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
@@ -11,7 +11,7 @@ vi.mock('../../../_lib/jira.js', () => ({ createJiraIssue: vi.fn(), getJiraDesti
 vi.mock('../../../_lib/external-work-sync.js', () => ({ closeLinkedExternalWork: vi.fn() }))
 vi.mock('../../../_lib/store.js', () => ({
   acceptCommentIfOpen: vi.fn(), claimCommentExternalWork: vi.fn(), finalizeCommentExternalWork: vi.fn(), getComment: vi.fn(), getCommentExternalWork: vi.fn(),
-  getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(), beginTrackerDispatch: vi.fn(),
+  getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(), acknowledgeTrackerDispatchStopped: vi.fn().mockResolvedValue(undefined), beginTrackerDispatch: vi.fn(),
   releaseCommentExternalWork: vi.fn(),
 }))
 vi.mock('./github-issue.js', () => ({ default: vi.fn() }))

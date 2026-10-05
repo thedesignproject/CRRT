@@ -1,4 +1,4 @@
-vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>)=>work(new AbortController().signal))}))
+vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>,stopped:()=>Promise<void>)=>{try{return await work(new AbortController().signal)}finally{await stopped()}})}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
@@ -25,6 +25,7 @@ vi.mock('../../../_lib/store.js', () => ({
   getComment: vi.fn(),
   getCommentForGithubIssue: vi.fn(),
   getGithubIssueConnection: vi.fn(),
+  acknowledgeTrackerDispatchStopped: vi.fn().mockResolvedValue(undefined),
   beginTrackerDispatch: vi.fn(),
   releaseCommentGithubIssue: vi.fn(),
   resetCommentGithubIssueAttempt: vi.fn(),
