@@ -284,6 +284,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
   })
 
   it.each([
+    ['feedback_delivery_in_progress', 409],
     ['not_found', 404],
     ['forbidden', 403],
     ['owner_required', 403],

@@ -10,6 +10,7 @@ beforeEach(() => {
   rows = { projects: [project], project_members: [member], comments: null, feedback_share_items: [{ comment_id: 'c' }] }
   update = vi.fn()
   vi.mocked(getServiceSupabase).mockReturnValue({
+    rpc: (name: string, args: any) => { update(args.p_patch); const result = { data: name === 'update_project_settings' ? rows.projects : rows.comments, error: null }; return { select: () => ({ ...result, order: async () => result, then: (yes: any) => Promise.resolve(result).then(yes) }) } },
     from: (table: string) => {
       const q: any = { then: (yes: any) => Promise.resolve({ data: rows[table], error: null }).then(yes), maybeSingle: async () => ({ data: rows[table]?.[0], error: null }) }
       for (const method of ['select', 'eq', 'in', 'order', 'limit']) q[method] = () => q
@@ -31,7 +32,7 @@ it('reauthorizes stored notifications even if a stale producer bypassed cleanup'
 })
 it('maps privacy settings, saves both choices, and removes aggregate capabilities for restricted members', async () => {
   expect((await getProject('p'))?.feedbackAccess).toBe('admins')
-  await updateProject('p', { widgetPrivate: true, feedbackAccess: 'admins' })
+  await updateProject('p', { widgetPrivate: true, feedbackAccess: 'admins' }, 'u')
   expect(update).toHaveBeenCalledWith(expect.objectContaining({ widget_private: true, feedback_access: 'admins' }))
   expect((await listProjectsForUser('u'))[0].capabilities).toEqual(['feedback:create'])
   expect((await getProjectMember('u', 'p'))?.feedbackAllowed).toBe(false)
@@ -59,4 +60,8 @@ it('allows public/team projects and restricts private admin-only projects to own
   expect(projectFeedbackAllowed('member', true, 'admins')).toBe(false)
   expect(projectFeedbackAllowed('owner', true, 'admins')).toBe(true)
   expect(projectFeedbackAllowed('admin', true, 'admins')).toBe(true)
+})
+
+it.each(['unexpected', '', 'ADMIN'])('denies invalid private access setting %j for all roles', setting => {
+  for (const role of ['member', 'guest', 'admin', 'owner'] as const) expect(projectFeedbackAllowed(role, true, setting)).toBe(false)
 })

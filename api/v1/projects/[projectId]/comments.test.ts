@@ -102,3 +102,13 @@ describe('api/v1/projects/[projectId]/comments', () => {
     expect(res.statusCode).toBe(500)
   })
 })
+
+it('rejects a read if access is revoked between authorization and the database query', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(listProjectComments).mockRejectedValueOnce(new Error('forbidden'))
+  const res=mockRes()
+  await call({ method:'GET', query:{ projectId:'p' }, headers:{} },res)
+  expect(res.statusCode).toBe(403)
+  expect(listProjectComments).toHaveBeenCalledWith('p',expect.objectContaining({ actorUserId:'u' }))
+})

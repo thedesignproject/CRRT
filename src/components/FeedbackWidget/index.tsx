@@ -423,6 +423,7 @@ function FeedbackWidgetInner({
   }
 
   const pendingSendAfterName = useRef(false)
+  const resumeAfterLogin = useRef(false)
 
   function handleNameSubmit() {
     if (!nameInput.trim()) return
@@ -442,6 +443,7 @@ function FeedbackWidgetInner({
   function handleNameCancel() {
     widgetLogin.cancel()
     pendingSendAfterName.current = false
+    resumeAfterLogin.current = false
     setShowNameModal(false)
     setNameInput('')
   }
@@ -768,7 +770,7 @@ function FeedbackWidgetInner({
     if (!comment.trim() || !target || sendingRef.current || screenshotCapturing) return
     setSpeechStopSignal((signal) => signal + 1)
 
-    if (!authorNameRef.current) {
+    if (!authorNameRef.current || (privateProject && !personalComments)) {
       pendingSendAfterName.current = true
       setNameInput('')
       setShowNameModal(true)
@@ -853,16 +855,17 @@ function FeedbackWidgetInner({
       sendingRef.current = false
       setSending(false)
     }
-  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments])
+  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments, privateProject])
 
   useEffect(() => {
-    if (!widgetLogin.session) return
+    if (!widgetLogin.session || !resumeAfterLogin.current) return
+    resumeAfterLogin.current = false
     setShowNameModal(false)
     if (pendingSendAfterName.current) {
       pendingSendAfterName.current = false
       void handleSend()
     } else if (target) setMode('commenting')
-  }, [widgetLogin.session])
+  }, [widgetLogin.session, handleSend])
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
@@ -2480,7 +2483,7 @@ function FeedbackWidgetInner({
           onCancel={handleNameCancel}
           existingName={authorNameRef.current}
           loginRequired={privateProject}
-          onLogin={widgetLogin.login}
+          onLogin={() => { resumeAfterLogin.current = true; void widgetLogin.login() }}
           onLogout={widgetLogin.logout}
           signedIn={Boolean(widgetLogin.session)}
           busy={widgetLogin.busy}

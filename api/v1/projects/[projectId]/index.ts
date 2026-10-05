@@ -66,12 +66,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (patch.widgetPrivate) await protectProjectScreenshots(projectKey)
     // Database triggers serialize privacy activation with comment/notification
     // writes and clean restricted notifications in the same transaction.
-    const project = await updateProject(projectKey, patch)
+    const project = await updateProject(projectKey, patch, user.userId)
     if (!project) return jsonError(req, res, 404, 'Project not found')
 
     setCors(req, res, ['PATCH', 'OPTIONS'])
     return res.status(200).json(project)
   } catch (error) {
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Admin role required')
     if (error instanceof Error && error.message === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry saving privacy shortly.')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')

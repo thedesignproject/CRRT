@@ -1091,7 +1091,7 @@ export async function getProject(projectKey: string) {
  * public_key and slug are immutable). Returns the updated project, or null
  * when no project matched the key so the caller can map that to a 404.
  */
-export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' }) {
+export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' }, actorUserId: string) {
   const supabase = getSupabase()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.name !== undefined) update.name = patch.name
@@ -1099,15 +1099,14 @@ export async function updateProject(projectKey: string, patch: { name?: string; 
   if (patch.widgetPrivate !== undefined) update.widget_private = patch.widgetPrivate
   if (patch.feedbackAccess !== undefined) update.feedback_access = patch.feedbackAccess
 
-  const { data, error } = await supabase
-    .from('projects')
-    .update(update)
-    .eq('public_key', projectKey)
-    .select(PROJECT_COLUMNS)
+  const { data, error } = await supabase.rpc('update_project_settings', {
+    p_project: projectKey, p_actor: actorUserId, p_patch: update,
+  } as never).select(PROJECT_COLUMNS)
 
   if (error) throw new Error(error.message)
-  if (!data || data.length === 0) return null
-  return mapProject(data[0] as ProjectRow)
+  const rows = data as ProjectRow[] | null
+  if (!rows || rows.length === 0) return null
+  return mapProject(rows[0])
 }
 
 export async function ensurePublicProject(publicKey: string) {
@@ -1898,6 +1897,7 @@ export async function listComments(projectKey: string, filters: {
 }
 
 export async function listProjectComments(projectKey: string, filters: {
+  actorUserId?: string
   pageUrl?: string
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
@@ -1908,8 +1908,9 @@ export async function listProjectComments(projectKey: string, filters: {
   const columns: string = filters.includeExternalWork === false
     ? COMMENT_COLUMNS
     : COMMENT_PROJECT_EXTERNAL_WORK_COLUMNS
-  let query = supabase
-    .from('comments')
+  let query = (filters.actorUserId
+    ? supabase.rpc('read_project_feedback', { p_project: projectKey, p_actor: filters.actorUserId } as never)
+    : supabase.from('comments'))
     .select(columns)
     .eq('project_id', projectKey)
 
@@ -1920,7 +1921,7 @@ export async function listProjectComments(projectKey: string, filters: {
 
   const { data, error } = await query.order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(
+  return Promise.all(((data as unknown as CommentRow[] | null) || []).map((row) => mapProjectCommentWithPrivateImage(
     supabase,
     row as unknown as CommentRow,
     filters.includeExternalWork !== false,
@@ -2335,22 +2336,11 @@ export async function listCommentsForShare(share: {
   scopeType: 'page' | 'selection' | 'project'
   scopePageUrl: string | null
 }) {
-  if (share.scopeType === 'project') {
-    return listAcceptedCommentsForProject(share.projectId)
-  }
-
-  const commentIds = await listShareCommentIds(share.id)
-  if (commentIds.length === 0) return []
-
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('comments')
-    .select(COMMENT_COLUMNS)
-    .in('id', commentIds)
-    .order('created_at', { ascending: false })
-
+  const { data, error } = await supabase.rpc('read_share_feedback', { p_share: share.id } as never)
+    .select(COMMENT_COLUMNS).order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
+  return Promise.all(((data as CommentRow[] | null) || []).map(row => mapProjectCommentWithPrivateImage(supabase, row, false)))
 }
 
 export async function listAcceptedCommentsForProject(projectKey: string) {

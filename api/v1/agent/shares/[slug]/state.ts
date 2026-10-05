@@ -54,6 +54,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch (error) {
+    if (error instanceof Error && error.message === 'share_unavailable') return jsonError(req, res, 410, 'Share unavailable')
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }

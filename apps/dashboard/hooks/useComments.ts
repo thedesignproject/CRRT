@@ -44,6 +44,10 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
       setCommentsProjectId(projectId)
     } catch (err) {
       if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence) return
+      if (err instanceof Error && 'status' in err && (err.status === 401 || err.status === 403)) {
+        setComments([])
+        setCommentsProjectId(null)
+      }
       setError(err instanceof Error ? err.message : 'Failed to load comments')
     } finally {
       if (activeProjectRef.current === projectId && refreshSequence.current === sequence) setLoading(false)
@@ -62,6 +66,18 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
   useEffect(() => {
     refresh()
   }, [refresh])
+
+  // Returning to an open dashboard must recheck current membership/privacy.
+  useEffect(() => {
+    const onFocus = () => { void loadComments(true) }
+    const onVisibility = () => { if (document.visibilityState === 'visible') onFocus() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [loadComments])
 
   // Provider closure runs in the background after feedback is rejected. Poll
   // only while a link is transitional so the buttons settle without a reload.

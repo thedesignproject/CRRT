@@ -208,3 +208,11 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
     if (duplicate) expect(res.body).toEqual(expect.objectContaining({ duplicate: true, feedbackEventId: 91 }))
   })
 })
+
+it.each(['share_unavailable', 'database unavailable'])('denies an operation after a concurrent share access change: %s', async message => {
+  vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce(new Error(message))
+  const res=mockRes()
+  await call(mockReq({ body:{op:'comment.complete',commentId:'comment-1',payload:{}} }),res)
+  expect(res.statusCode).toBe(message === 'share_unavailable' ? 410 : 500)
+  expect(res.body).not.toHaveProperty('comment')
+})

@@ -219,7 +219,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(text || `Request failed with ${response.status}`)
+    throw Object.assign(new Error(text || `Request failed with ${response.status}`), { status: response.status })
   }
 
   try {

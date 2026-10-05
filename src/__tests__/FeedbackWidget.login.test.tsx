@@ -117,3 +117,32 @@ it('preserves loaded public feedback on failed refresh but clears it when privac
   await act(async () => fireEvent.focus(window))
   expect(screen.queryByText('Keep this feedback')).toBeNull()
 })
+
+it('closes private login and posts a pending draft exactly once after a delayed handoff', async () => {
+  window.localStorage.setItem('fw-crrt-author-name', 'Guest')
+  let restricted = false
+  let finish!: (value: typeof session) => void
+  vi.mocked(startWidgetLogin).mockImplementationOnce(() => new Promise(resolve => { finish = resolve }))
+  const request = vi.fn(async (_url, init) => {
+    if (init?.method === 'POST' && !init.headers.Authorization) return new Response('{}', { status: 401 })
+    return new Response(JSON.stringify(init?.method === 'POST' ? { id: 'posted', authorName: 'Ada' } : []), { status: restricted && !init?.headers?.Authorization ? 401 : 200 })
+  })
+  vi.stubGlobal('fetch', request)
+  const { rerender } = render(<FeedbackWidget projectId="p" />)
+  await selectTarget()
+  fireEvent.change(document.querySelector('textarea')!, { target: { value: 'Private pending draft' } })
+  restricted = true
+  await act(async () => fireEvent.click(screen.getByLabelText('Send')))
+  expect(screen.getByText('Log in to leave feedback')).toBeInTheDocument()
+  expect(screen.queryByText('Continue as guest')).toBeNull()
+  act(() => fireEvent.click(screen.getByText('Log in to CRRT')))
+  await act(async () => finish(session))
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  const posted = () => request.mock.calls.filter(([, init]) => init?.method === 'POST' && init?.headers?.Authorization)
+  await waitFor(() => expect(posted()).toHaveLength(1))
+  expect(posted()[0][1]).toMatchObject({ body: expect.stringContaining('Private pending draft'), headers: { Authorization: `Bearer ${session.accessToken}` } })
+  rerender(<FeedbackWidget projectId="p" />)
+  await act(async () => fireEvent.focus(window))
+  expect(posted()).toHaveLength(1)
+  expect(screen.queryByText('Log in to leave feedback')).toBeNull()
+})

@@ -133,3 +133,13 @@ describe('useComments refresh ordering', () => {
     expect(second.result.current.error).toBeNull()
   })
 })
+
+it('clears previously loaded private comments when focus revalidation denies access', async () => {
+  vi.mocked(listComments).mockResolvedValueOnce([comment('private')]).mockRejectedValueOnce(Object.assign(new Error('Forbidden'),{status:403}))
+  const {result}=renderHook(()=>useComments('/api','token','project'))
+  await waitFor(()=>expect(result.current.comments).toHaveLength(1))
+  await act(async()=>window.dispatchEvent(new Event('focus')))
+  await waitFor(()=>expect(result.current.comments).toEqual([]))
+  expect(result.current.commentsProjectId).toBeNull()
+  expect(result.current.error).toBe('Forbidden')
+})

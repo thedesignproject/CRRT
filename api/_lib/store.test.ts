@@ -1332,3 +1332,18 @@ describe('comment functions', () => {
     expect(comments[0].anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
   })
 })
+
+it('authorizes the acting user inside the project feedback read RPC', async () => {
+  const rpc = vi.fn(() => { const q: any = { select: () => q, eq: () => q, order: async () => ({ data: [], error: null }) }; return q })
+  vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+  expect(await listProjectComments('pk', { actorUserId: 'u' })).toEqual([])
+  expect(rpc).toHaveBeenCalledWith('read_project_feedback', { p_project: 'pk', p_actor: 'u' })
+})
+it('fails a share read on an atomic access rejection and handles missing rows', async () => {
+  const share = { id: 's', projectId: 'p', scopeType: 'project' as const, scopePageUrl: null }
+  for (const result of [{ data: null, error: { message: 'share_unavailable' } }, { data: null, error: null }]) {
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => ({ select: () => ({ order: async () => result }) }) } as never)
+    if (result.error) await expect(listCommentsForShare(share)).rejects.toThrow('share_unavailable')
+    else expect(await listCommentsForShare(share)).toEqual([])
+  }
+})

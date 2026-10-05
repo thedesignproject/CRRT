@@ -99,7 +99,7 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
     let res = mockRes()
     await call({ method: 'PATCH', query: { projectId: 'p' }, body: { name: '  New  ' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(updateProject).toHaveBeenCalledWith('p', { name: 'New' })
+    expect(updateProject).toHaveBeenCalledWith('p', { name: 'New' }, 'u')
     expect(res.body).toMatchObject({ name: 'New' })
 
     // not found
@@ -131,7 +131,7 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
         headers: {},
       }, res)
       expect(res.statusCode).toBe(200)
-      expect(updateProject).toHaveBeenCalledWith('p', { allowedOrigins: ['example.com', 'app.foo.io'] })
+      expect(updateProject).toHaveBeenCalledWith('p', { allowedOrigins: ['example.com', 'app.foo.io'] }, 'u')
     })
 
     it('accepts an empty array to disable the allowlist', async () => {
@@ -139,7 +139,7 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
       const res = mockRes()
       await call({ method: 'PATCH', query: { projectId: 'p' }, body: { allowedOrigins: [] }, headers: {} }, res)
       expect(res.statusCode).toBe(200)
-      expect(updateProject).toHaveBeenCalledWith('p', { allowedOrigins: [] })
+      expect(updateProject).toHaveBeenCalledWith('p', { allowedOrigins: [] }, 'u')
     })
 
     it('updates name and allowlist together', async () => {
@@ -152,7 +152,7 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
         headers: {},
       }, res)
       expect(res.statusCode).toBe(200)
-      expect(updateProject).toHaveBeenCalledWith('p', { name: 'New', allowedOrigins: ['example.com'] })
+      expect(updateProject).toHaveBeenCalledWith('p', { name: 'New', allowedOrigins: ['example.com'] }, 'u')
     })
 
     it('still validates the name when sent alongside allowedOrigins', async () => {
@@ -204,7 +204,7 @@ it('validates privacy options and protects screenshots before enabling privacy',
   await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true, feedbackAccess: 'admins' } }, res)
   expect(res.statusCode).toBe(200)
   expect(protectProjectScreenshots).toHaveBeenCalledWith('p')
-  expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true, feedbackAccess: 'admins' })
+  expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true, feedbackAccess: 'admins' }, 'u')
   vi.mocked(protectProjectScreenshots).mockRejectedValueOnce(new Error('Storage failed'))
   const failed = mockRes(); await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true } }, failed)
   expect(failed.statusCode).toBe(500)
@@ -232,4 +232,16 @@ it.each([
   const res = mockRes()
   await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body }, res)
   expect(res.statusCode).toBe(200)
+})
+
+it('denies the commit when admin access is revoked during screenshot protection', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+  vi.mocked(protectProjectScreenshots).mockImplementationOnce(async () => {
+    vi.mocked(updateProject).mockRejectedValueOnce(new Error('forbidden'))
+  })
+  const res = mockRes()
+  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true } }, res)
+  expect(res.statusCode).toBe(403)
+  expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true }, 'u')
 })
