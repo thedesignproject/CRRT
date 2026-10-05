@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from './supabase.js'
-import { createShare, getShareById, rotateShareToken, getCommentForGithubIssue, mutateProjectFeedback } from './store.js'
+import { createSystemShare, createShare, getShareById, rotateShareToken, getCommentForGithubIssue, mutateProjectFeedback } from './store.js'
 const row={ id:'c',project_id:'p',comment:'Private body',status:'approved',visibility:'shared',implementation_status:'unassigned',url:'https://test.local',x:1,y:1,element:'body',created_at:'now',updated_at:'now',scope_type:'selection',slug:'s',access_token_hash:'h',access_token_ciphertext:'cipher' }
 let result:any, rpc:ReturnType<typeof vi.fn>
 beforeEach(()=>{
@@ -31,4 +31,11 @@ it('gates prompt token retrieval and rotation against the current actor', async(
  await getShareById('s','u');expect(rpc).toHaveBeenCalledWith('read_actor_share',{p_share:'s',p_actor:'u'})
  await rotateShareToken('s',{accessTokenHash:'h',accessTokenCiphertext:'cipher'},{accessTokenHash:'new',accessTokenCiphertext:'new'},'u')
  expect(rpc).toHaveBeenCalledWith('rotate_actor_share',{p_share:'s',p_actor:'u',p_expected_hash:'h',p_expected_cipher:'cipher',p_hash:'new',p_cipher:'new'})
+})
+
+it('creates only automatic system credentials and propagates database privacy fences', async()=>{
+ const input={projectKey:'p',slug:'s',accessTokenHash:'h',accessTokenCiphertext:'cipher',expiresAt:'2099-01-01'}
+ expect((await createSystemShare(input)).slug).toBe('s')
+ result={data:null,error:{message:'private_project'}}
+ await expect(createSystemShare(input)).rejects.toThrow('private_project')
 })

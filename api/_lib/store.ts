@@ -2272,6 +2272,20 @@ export async function createShare(input: {
   return mapShare(data as ShareRow)
 }
 
+// Automatic project credentials remain unusable while the project is private.
+// Reviewer-created shares always use createShare with an authenticated actor.
+export async function createSystemShare(input: {
+  projectKey: string; slug: string; accessTokenHash: string; accessTokenCiphertext: string; expiresAt: string
+}) {
+  const { data, error } = await getSupabase().from('feedback_shares').insert({
+    project_id: input.projectKey, scope_type: 'project', scope_page_url: null,
+    slug: input.slug, access_token_hash: input.accessTokenHash,
+    access_token_ciphertext: input.accessTokenCiphertext, created_by: 'system', expires_at: input.expiresAt,
+  } as never).select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at').single()
+  if (error) throw new Error(error.message)
+  return mapShare(data as ShareRow)
+}
+
 export async function addShareItems(shareId: string, commentIds: string[]) {
   if (commentIds.length === 0) return
   const supabase = getSupabase()

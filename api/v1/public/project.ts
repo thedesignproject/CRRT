@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createShare, getProject, getProjectShare, rotateShareToken } from '../../_lib/store.js'
+import { createSystemShare, getProject, getProjectShare, rotateShareToken } from '../../_lib/store.js'
 import { encryptToken, generateAccessToken, generateSlug, hashToken } from '../../_lib/tokens.js'
 import { decryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
@@ -56,14 +56,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       token = generateAccessToken()
       const slug = generateSlug()
       const expiresAt = new Date(Date.now() + 10 * 365 * 24 * 60 * 60 * 1000).toISOString()
-      share = await createShare({
+      share = await createSystemShare({
         projectKey,
-        scopeType: 'project',
-        scopePageUrl: null,
         slug,
         accessTokenHash: hashToken(token),
         accessTokenCiphertext: encryptToken(token),
-        createdBy: 'system',
         expiresAt,
       })
     }
