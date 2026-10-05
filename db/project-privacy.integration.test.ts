@@ -195,6 +195,7 @@ describeDatabase('project privacy database guards', () => {
         await waitForWorkerLock()
       })
       expect(await read).toMatchObject({ message:'share_unavailable' })
+      await expect(sql`select * from apply_agent_feedback_operation(${share}, ${comment}, 'test-agent', 'test-key', 'comment.start', 'comment.started', '{}'::jsonb, 'in_progress')`).rejects.toMatchObject({ message:'share_unavailable' })
       await sql`update feedback_shares set created_by=${owner} where id=${share}`
       expect(await sql`select * from read_share_feedback(${share})`).toHaveLength(1)
       await sql`update feedback_shares set revoked_at=now() where id=${share}`
