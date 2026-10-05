@@ -52,7 +52,7 @@ it('handles null comment result sets across widget and agent read paths', async 
   expect(await listAcceptedCommentsForPage('p', 'url')).toEqual([])
   expect(await listAcceptedCommentsByIds('p', ['c'])).toEqual([])
   expect(await listAcceptedCommentsForProject('p')).toEqual([])
-  expect(await listCommentsForShare({ id: 's', projectId: 'p', scopeType: 'selection', scopePageUrl: null })).toEqual([])
+  expect(await listCommentsForShare({ id: 's', projectId: 'p', scopeType: 'selection', scopePageUrl: null },'hash')).toEqual([])
 })
 it('allows public/team projects and restricts private admin-only projects to owner/admin', () => {
   expect(projectFeedbackAllowed('member')).toBe(true)

@@ -1264,6 +1264,7 @@ describe('comment functions', () => {
 
     await expect(applyAgentFeedbackOperation({
       shareId: 'share-1',
+      tokenHash: 'hash',
       commentId: 'comment-1',
       agentId: 'agent-1',
       idempotencyKey: 'key-1',
@@ -1280,6 +1281,7 @@ describe('comment functions', () => {
 
     await expect(applyAgentFeedbackOperation({
       shareId: 'share-1',
+      tokenHash: 'hash',
       commentId: 'comment-1',
       agentId: 'agent-1',
       idempotencyKey: 'key-2',
@@ -1293,6 +1295,7 @@ describe('comment functions', () => {
 
     await expect(applyAgentFeedbackOperation({
       shareId: 'share-1',
+      tokenHash: 'hash',
       commentId: 'comment-1',
       agentId: 'agent-1',
       idempotencyKey: 'key-3',
@@ -1326,7 +1329,7 @@ describe('comment functions', () => {
       projectId: 'pk',
       scopeType: 'selection',
       scopePageUrl: null,
-    })
+    },'hash')
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comments[0].anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
@@ -1343,7 +1346,7 @@ it('fails a share read on an atomic access rejection and handles missing rows', 
   const share = { id: 's', projectId: 'p', scopeType: 'project' as const, scopePageUrl: null }
   for (const result of [{ data: null, error: { message: 'share_unavailable' } }, { data: null, error: null }]) {
     vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => ({ select: () => ({ order: async () => result }) }) } as never)
-    if (result.error) await expect(listCommentsForShare(share)).rejects.toThrow('share_unavailable')
-    else expect(await listCommentsForShare(share)).toEqual([])
+    if (result.error) await expect(listCommentsForShare(share,'hash')).rejects.toThrow('share_unavailable')
+    else expect(await listCommentsForShare(share,'hash')).toEqual([])
   }
 })

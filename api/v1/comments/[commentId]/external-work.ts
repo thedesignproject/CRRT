@@ -26,9 +26,9 @@ import githubIssueHandler from './github-issue.js'
 
 const METHODS = ['GET', 'POST', 'OPTIONS']
 
-async function acceptOpenOrCloseRejected(projectId: string, commentId: string) {
-  if (await acceptCommentIfOpen(projectId, commentId)) return
-  const current = await getComment(commentId)
+async function acceptOpenOrCloseRejected(projectId: string, commentId: string, actorUserId: string) {
+  if (await acceptCommentIfOpen(projectId, commentId, actorUserId)) return
+  const current = await getCommentForGithubIssue(projectId, commentId, actorUserId)
   if (current?.projectId === projectId && current.reviewStatus === 'rejected') {
     waitUntil(closeLinkedExternalWork(projectId, commentId, current.updatedAt).catch(() => undefined))
   }
@@ -76,7 +76,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       if (comment.reviewStatus === 'rejected') return jsonError(req, res, 409, 'comment_rejected')
       if (existing?.state === 'created' && existing.externalUrl) {
-        await acceptOpenOrCloseRejected(publicComment.projectId, commentId)
+        await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
         setCors(req, res, METHODS)
         return res.status(200).json({
           externalId: existing.externalId,
@@ -97,6 +97,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         projectId: publicComment.projectId, commentId, provider, leaseToken,
       })
       if (claim?.state === 'created' && claim.externalUrl) {
+        await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
         setCors(req, res, METHODS)
         return res.status(200).json({
           externalId: claim.externalId,
@@ -142,7 +143,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           ...result,
         })
         if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
-        await acceptOpenOrCloseRejected(publicComment.projectId, commentId)
+        await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
         setCors(req, res, METHODS)
         return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
       } catch (error) {

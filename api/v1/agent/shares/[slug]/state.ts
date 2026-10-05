@@ -1,3 +1,4 @@
+import { hashToken } from '../../../../_lib/tokens.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 import { getLatestShareRevision, getProject, getRepoConfig, listCommentsForShare, listLivePresence } from '../../../../_lib/store.js'
@@ -18,10 +19,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!project) return jsonError(req, res, 404, 'Project not found')
 
     const repoConfig = await getRepoConfig(project.publicKey)
-    const comments = await listCommentsForShare(authorized.share)
     const revision = await getLatestShareRevision(authorized.share.id)
     const cutoff = new Date(Date.now() - 90_000).toISOString()
     const presence = await listLivePresence(authorized.share.id, cutoff)
+    const comments = await listCommentsForShare(authorized.share, hashToken(authorized.token))
 
     setCors(req, res, ['GET', 'OPTIONS'])
     return res.status(200).json({

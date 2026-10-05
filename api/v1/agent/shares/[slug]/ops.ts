@@ -1,3 +1,4 @@
+import { hashToken } from '../../../../_lib/tokens.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAgentId, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 import { applyAgentFeedbackOperation, getComment, getOperationKey, shareContainsComment } from '../../../../_lib/store.js'
@@ -101,6 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const result = await applyAgentFeedbackOperation({
       shareId: authorized.share.id,
+      tokenHash: hashToken(authorized.token),
       commentId,
       agentId,
       idempotencyKey,

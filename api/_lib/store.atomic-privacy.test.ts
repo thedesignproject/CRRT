@@ -39,3 +39,23 @@ it('creates only automatic system credentials and propagates database privacy fe
  result={data:null,error:{message:'private_project'}}
  await expect(createSystemShare(input)).rejects.toThrow('private_project')
 })
+
+it('binds tracker acceptance to the current actor',async()=>{
+ const {acceptCommentIfOpen}=await import('./store.js')
+ expect((await acceptCommentIfOpen('p','c','u'))?.body).toBe('Private body')
+ expect(rpc).toHaveBeenCalledWith('accept_actor_comment_if_open',{p_project:'p',p_actor:'u',p_comment:'c'})
+ result={data:null,error:null};expect(await acceptCommentIfOpen('p','c','u')).toBeNull()
+ result={data:null,error:{message:'forbidden'}};await expect(acceptCommentIfOpen('p','c','u')).rejects.toThrow('forbidden')
+})
+it('binds event reads and atomic presence writes to the presented token hash',async()=>{
+ const {listFeedbackEvents,writeAgentPresence}=await import('./store.js')
+ result={data:[{id:1,share_id:'s',payload:{body:'secret'}}],error:null}
+ expect(await listFeedbackEvents('s',0,100,'hash')).toHaveLength(1)
+ expect(rpc).toHaveBeenCalledWith('read_agent_events',{p_share:'s',p_token_hash:'hash',p_after:0,p_limit:100})
+ await writeAgentPresence('s','hash','agent','active',null)
+ expect(rpc).toHaveBeenCalledWith('write_agent_presence',{p_share:'s',p_token_hash:'hash',p_agent:'agent',p_status:'active',p_summary:null})
+ result={data:null,error:null};expect(await listFeedbackEvents('s',0,100,'hash')).toEqual([])
+ result={data:null,error:{message:'share_unavailable'}}
+ await expect(listFeedbackEvents('s',0,100,'hash')).rejects.toThrow('share_unavailable')
+ await expect(writeAgentPresence('s','hash','agent','active','summary')).rejects.toThrow('share_unavailable')
+})

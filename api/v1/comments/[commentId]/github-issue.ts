@@ -44,6 +44,7 @@ function sameConnection(
 
 function safeErrorStatus(error: unknown) {
   const code = error instanceof Error ? error.message : ''
+  if (code === 'forbidden') return 403
   if (code === 'github_issue_persistence_failed') return 500
   if (code === 'github_issue_recovery_pending' || code === 'github_issue_creation_in_progress') return 409
   return code.startsWith('github_') ? 502 : 500
@@ -65,9 +66,9 @@ async function finalizeWithRetry(
   return false
 }
 
-async function acceptOpenOrCloseRejected(projectKey: string, commentId: string) {
-  if (await acceptCommentIfOpen(projectKey, commentId)) return
-  const current = await getComment(commentId)
+async function acceptOpenOrCloseRejected(projectKey: string, commentId: string, actorUserId: string) {
+  if (await acceptCommentIfOpen(projectKey, commentId, actorUserId)) return
+  const current = await getCommentForGithubIssue(projectKey, commentId, actorUserId)
   if (current?.projectId === projectKey && current.reviewStatus === 'rejected') {
     waitUntil(closeLinkedGithubIssue(projectKey, commentId, current.updatedAt).catch(() => undefined))
   }
@@ -91,10 +92,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     projectKey = publicComment.projectId
     if (!(await requireProjectCommentCapability(req, res, user, publicComment, 'integrations:send'))) return
 
-    const comment = await getCommentForGithubIssue(projectKey, commentId)
+    const comment = await getCommentForGithubIssue(projectKey, commentId, user.userId)
     if (!comment) return jsonError(req, res, 404, 'Comment not found')
     if (comment.githubIssue) {
-      await acceptOpenOrCloseRejected(projectKey, commentId)
+      await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
       setCors(req, res, METHODS)
       return res.status(200).json(issueResponse(comment.githubIssue, false))
     }
@@ -115,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       recovery,
     )
     if (!claimed) {
-      const current = await getCommentForGithubIssue(projectKey, commentId)
+      const current = await getCommentForGithubIssue(projectKey, commentId, user.userId)
       if (current?.githubIssue) {
         setCors(req, res, METHODS)
         return res.status(200).json(issueResponse(current.githubIssue, false))
@@ -137,7 +138,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       marker,
     })
     if (recovered) {
-      const recoveryState = await getCommentForGithubIssue(projectKey, commentId)
+      const recoveryState = await getCommentForGithubIssue(projectKey, commentId, user.userId)
       const recoveryConnection = await getGithubIssueConnection(projectKey)
       if (
         !recoveryState
@@ -159,7 +160,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         leaseToken = null
         throw new Error('github_issue_persistence_failed')
       }
-      await acceptOpenOrCloseRejected(projectKey, commentId)
+      await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
       setCors(req, res, METHODS)
       return res.status(200).json(issueResponse(recovered, false))
     }
@@ -182,7 +183,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return jsonError(req, res, 400, 'invalid_external_work_draft')
     }
     const content = editableDraft ? null : await generateCommentIssueContent(comment)
-    const current = await getCommentForGithubIssue(projectKey, commentId)
+    const current = await getCommentForGithubIssue(projectKey, commentId, user.userId)
     const currentConnection = await getGithubIssueConnection(projectKey)
     if (
       !current
@@ -228,7 +229,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       leaseToken = null
       throw new Error('github_issue_persistence_failed')
     }
-    await acceptOpenOrCloseRejected(projectKey, commentId)
+    await acceptOpenOrCloseRejected(projectKey, commentId, user.userId)
     setCors(req, res, METHODS)
     return res.status(201).json(issueResponse(issue, true))
   } catch (error) {
@@ -246,7 +247,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       req,
       res,
       status,
-      code === 'github_issue_creation_in_progress'
+      code === 'forbidden' ? 'Forbidden' : code === 'github_issue_creation_in_progress'
         ? 'github_issue_creation_in_progress'
         : status === 409
         ? 'github_issue_recovery_pending'

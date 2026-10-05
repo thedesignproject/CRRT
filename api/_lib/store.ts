@@ -2131,15 +2131,10 @@ export async function updateReviewStatus(
   return mapComment(data as CommentRow)
 }
 
-export async function acceptCommentIfOpen(projectKey: string, commentId: string) {
-  const { data, error } = await getSupabase()
-    .from('comments')
-    .update({ status: 'approved', updated_at: new Date().toISOString() } as never)
-    .eq('id', commentId)
-    .eq('project_id', projectKey)
-    .eq('status', 'pending')
-    .select(COMMENT_COLUMNS)
-    .maybeSingle()
+export async function acceptCommentIfOpen(projectKey: string, commentId: string, actorUserId: string) {
+  const { data, error } = await getSupabase().rpc('accept_actor_comment_if_open', {
+    p_project: projectKey, p_actor: actorUserId, p_comment: commentId,
+  } as never).select(COMMENT_COLUMNS).maybeSingle()
   if (error) throw new Error(error.message)
   return data ? mapComment(data as CommentRow) : null
 }
@@ -2195,6 +2190,7 @@ export type AgentFeedbackOperationOutcome =
 
 export async function applyAgentFeedbackOperation(input: {
   shareId: string
+  tokenHash: string
   commentId: string
   agentId: string
   idempotencyKey: string
@@ -2211,6 +2207,7 @@ export async function applyAgentFeedbackOperation(input: {
   const { data, error } = await getSupabase()
     .rpc('apply_agent_feedback_operation', {
       p_share_id: input.shareId,
+      p_token_hash: input.tokenHash,
       p_comment_id: input.commentId,
       p_agent_id: input.agentId,
       p_idempotency_key: input.idempotencyKey,
@@ -2363,9 +2360,9 @@ export async function listCommentsForShare(share: {
   projectId: string
   scopeType: 'page' | 'selection' | 'project'
   scopePageUrl: string | null
-}) {
+}, tokenHash: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase.rpc('read_share_feedback', { p_share: share.id } as never)
+  const { data, error } = await supabase.rpc('read_share_feedback', { p_share: share.id, p_token_hash: tokenHash } as never)
     .select(COMMENT_COLUMNS).order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
   return Promise.all(((data as CommentRow[] | null) || []).map(row => mapProjectCommentWithPrivateImage(supabase, row, false)))
@@ -2455,18 +2452,19 @@ export async function createFeedbackEvent(input: {
   return mapEvent(data as EventRow)
 }
 
-export async function listFeedbackEvents(shareId: string, after: number, limit: number) {
-  const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('feedback_events')
-    .select('id, share_id, comment_id, actor_type, actor_id, event_type, payload, created_at')
-    .eq('share_id', shareId)
-    .gt('id', after)
-    .order('id', { ascending: true })
-    .limit(limit)
-
+export async function listFeedbackEvents(shareId: string, after: number, limit: number, tokenHash: string) {
+  const { data, error } = await getSupabase().rpc('read_agent_events', {
+    p_share: shareId, p_token_hash: tokenHash, p_after: after, p_limit: limit,
+  } as never).select('id, share_id, comment_id, actor_type, actor_id, event_type, payload, created_at')
   if (error) throw new Error(error.message)
-  return (data || []).map((row) => mapEvent(row as EventRow))
+  return ((data as EventRow[] | null) || []).map((row) => mapEvent(row))
+}
+
+export async function writeAgentPresence(shareId: string, tokenHash: string, agentId: string, status: string, summary: string | null) {
+  const { error } = await getSupabase().rpc('write_agent_presence', {
+    p_share: shareId, p_token_hash: tokenHash, p_agent: agentId, p_status: status, p_summary: summary,
+  } as never)
+  if (error) throw new Error(error.message)
 }
 
 export async function getLatestShareRevision(shareId: string) {

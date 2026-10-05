@@ -298,10 +298,7 @@ describe('external work endpoint', () => {
   })
 
   it('preserves a concurrent rejection and schedules closure after creation is finalized', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected', updatedAt: 'rejected-version' } as never)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment,reviewStatus:'rejected',updatedAt:'rejected-version' } as never);return null})
     const res = response()
     await call(post(), res)
     expect(res.statusCode).toBe(201)
@@ -310,10 +307,7 @@ describe('external work endpoint', () => {
   })
 
   it('does not schedule closure when the comment disappears after creation', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce(null)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(null);return null})
     const res = response()
     await call(post(), res)
     expect(res.statusCode).toBe(201)
@@ -332,4 +326,18 @@ it.each(['github','linear'])('returns 404 if the %s draft comment disappears dur
   vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockResolvedValueOnce(null)
   const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
   expect(res.statusCode).toBe(404)
+})
+
+it.each(['linear','jira'])('denies existing %s issue links and acceptance after authorization is revoked',async provider=>{
+ vi.mocked(getCommentExternalWork).mockResolvedValueOnce({state:'created',externalUrl:'https://tracker.test/private'} as never)
+ vi.mocked(acceptCommentIfOpen).mockRejectedValueOnce(new Error('forbidden'))
+ const res=response();await call({...post(),body:{provider,draft:{title:'Title',body:'Body'}}},res)
+ expect(res.statusCode).toBe(403);expect(res.body).toEqual({error:'Forbidden'})
+ expect(createLinearIssue).not.toHaveBeenCalled();expect(createJiraIssue).not.toHaveBeenCalled()
+})
+it('denies a concurrent existing-issue claim after authorization is revoked',async()=>{
+ vi.mocked(claimCommentExternalWork).mockResolvedValueOnce({state:'created',externalUrl:'https://tracker.test/private'} as never)
+ vi.mocked(acceptCommentIfOpen).mockRejectedValueOnce(new Error('forbidden'))
+ const res=response();await call(post(),res);expect(res.statusCode).toBe(403)
+ expect(res.body).not.toHaveProperty('externalUrl')
 })

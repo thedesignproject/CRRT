@@ -1,3 +1,4 @@
+import { hashToken } from '../../../../_lib/tokens.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../_lib/shares.js', () => ({
@@ -119,6 +120,7 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
     expect(res.statusCode).toBe(200)
     expect(applyAgentFeedbackOperation).toHaveBeenCalledWith({
       shareId: 'share-1',
+      tokenHash: hashToken('token-123'),
       commentId: 'comment-1',
       agentId: 'codex-local',
       idempotencyKey: 'op-1',

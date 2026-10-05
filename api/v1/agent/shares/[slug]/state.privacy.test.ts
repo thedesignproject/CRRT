@@ -5,7 +5,7 @@ import { requireAgentShare } from '../../../../_lib/shares.js'
 import { getProject, getRepoConfig, listCommentsForShare, getLatestShareRevision, listLivePresence } from '../../../../_lib/store.js'
 import handler from './state.js'
 beforeEach(() => {
-  vi.mocked(requireAgentShare).mockResolvedValue({ share: { id:'s', projectId:'p' } } as never)
+  vi.mocked(requireAgentShare).mockResolvedValue({ share: { id:'s', projectId:'p' },token:'token' } as never)
   vi.mocked(getProject).mockResolvedValue({ publicKey:'p', name:'P' } as never)
   vi.mocked(getRepoConfig).mockResolvedValue(null)
   vi.mocked(getLatestShareRevision).mockResolvedValue(1)

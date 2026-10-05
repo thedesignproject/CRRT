@@ -172,7 +172,7 @@ describe('POST comment GitHub issue', () => {
 
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'open', githubIssue: issue } as never)
     expect((await call()).body).toEqual({ ...issue, created: false })
-    expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1', 'comment-1')
+    expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1', 'comment-1','user-1')
 
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected' } as never)
     expect((await call()).body).toEqual({ error: 'comment_rejected' })
@@ -374,10 +374,7 @@ describe('POST comment GitHub issue', () => {
   })
 
   it('does not overwrite a concurrent rejection and schedules closure after finalization', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected', updatedAt: 'rejected-version' } as never)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment,reviewStatus:'rejected',updatedAt:'rejected-version' } as never);return null})
 
     expect((await call()).statusCode).toBe(201)
     expect(closeLinkedGithubIssue).toHaveBeenCalledWith('project-1', 'comment-1', 'rejected-version')
@@ -385,13 +382,18 @@ describe('POST comment GitHub issue', () => {
   })
 
   it('does not schedule closure when the comment disappears after finalization', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce(null)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(null);return null})
 
     expect((await call()).statusCode).toBe(201)
     expect(closeLinkedGithubIssue).not.toHaveBeenCalled()
     expect(waitUntil).not.toHaveBeenCalled()
   })
+})
+
+it('denies an existing issue response and acceptance if actor authorization is revoked',async()=>{
+ vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({...comment,githubIssue:issue} as never)
+ vi.mocked(acceptCommentIfOpen).mockRejectedValueOnce(new Error('forbidden'))
+ const res=await call();expect(res.statusCode).toBe(403);expect(res.body).toEqual({error:'Forbidden'})
+ expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1','comment-1','user-1')
+ expect(createGithubIssue).not.toHaveBeenCalled()
 })
