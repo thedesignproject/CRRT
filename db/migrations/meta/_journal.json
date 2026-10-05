@@ -225,6 +225,13 @@
       "when": 1790858334861,
       "tag": "0031_mushy_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791189707913,
+      "tag": "0032_serious_victor_mancha",
+      "breakpoints": true
     }
   ]
 }
