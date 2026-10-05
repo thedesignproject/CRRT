@@ -388,3 +388,29 @@ $$;
 REVOKE ALL ON FUNCTION public.guard_share_comment_event(),public.read_agent_operation_key(uuid,text,text,text) FROM PUBLIC,anon,authenticated;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.read_agent_operation_key(uuid,text,text,text) TO service_role;
+
+--> statement-breakpoint
+
+CREATE FUNCTION public.resolve_actor_tracker_dispatch(p_project text,p_actor uuid,p_comment uuid,p_provider text)
+RETURNS boolean LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF NOT pg_try_advisory_xact_lock(hashtextextended('crrt-tracker-dispatch:' || p_project,0)) THEN RAISE EXCEPTION 'tracker_dispatch_active'; END IF;
+  IF public.lock_feedback_actor(p_project,p_actor,'integrations:send') <> 'admin' THEN RAISE EXCEPTION 'forbidden'; END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project,0));
+  PERFORM 1 FROM public.comments c WHERE c.id=p_comment AND c.project_id=p_project FOR UPDATE;
+  IF NOT FOUND THEN RETURN false; END IF;
+  IF p_provider='github' THEN
+    UPDATE public.comments c SET github_issue_uncertain_at=NULL,github_issue_lease_token=NULL,github_issue_lease_expires_at=NULL
+      WHERE c.id=p_comment AND c.project_id=p_project AND c.github_issue_number IS NULL AND c.github_issue_uncertain_at IS NOT NULL;
+    RETURN FOUND;
+  END IF;
+  IF p_provider NOT IN ('linear','jira') THEN RAISE EXCEPTION 'invalid_provider'; END IF;
+  DELETE FROM public.comment_external_work w WHERE w.project_id=p_project AND w.comment_id=p_comment AND w.provider=p_provider
+    AND w.state='creating' AND w.uncertain_at IS NOT NULL;
+  RETURN FOUND;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.resolve_actor_tracker_dispatch(text,uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.resolve_actor_tracker_dispatch(text,uuid,uuid,text) TO service_role;
