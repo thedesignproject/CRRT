@@ -1928,9 +1928,11 @@ export async function listProjectComments(projectKey: string, filters: {
   )))
 }
 
-export async function getCommentForGithubIssue(projectKey: string, commentId: string) {
-  const { data, error } = await getSupabase()
-    .from('comments')
+export async function getCommentForGithubIssue(projectKey: string, commentId: string, actorUserId?: string) {
+  const db = getSupabase()
+  const { data, error } = await (actorUserId
+    ? db.rpc('read_actor_comment', { p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_capability: 'integrations:send' } as never)
+    : db.from('comments'))
     .select(COMMENT_GITHUB_ISSUE_COLUMNS)
     .eq('id', commentId)
     .eq('project_id', projectKey)
@@ -2165,6 +2167,25 @@ export async function updateImplementationStatus(commentId: string, patch: {
   return mapComment(data as CommentRow)
 }
 
+// Human mutations check current capability under the database privacy fence.
+export async function mutateProjectFeedback(projectKey: string, actorUserId: string, commentId: string, patch: {
+  reviewStatus?: ReviewStatus
+  implementationStatus?: ImplementationStatus
+  claimedByAgentId?: string | null
+  visibility?: CommentVisibility
+}) {
+  const changes: Record<string, unknown> = {}
+  if (patch.reviewStatus !== undefined) changes.status = toLegacyStatus(patch.reviewStatus)
+  if (patch.implementationStatus !== undefined) changes.implementation_status = patch.implementationStatus
+  if (patch.claimedByAgentId !== undefined) changes.claimed_by_agent_id = patch.claimedByAgentId
+  if (patch.visibility !== undefined) changes.visibility = patch.visibility
+  const { data, error } = await getSupabase().rpc('mutate_actor_feedback', {
+    p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_patch: changes,
+  } as never).select(COMMENT_COLUMNS).maybeSingle()
+  if (error) throw new Error(error.message)
+  return data ? mapComment(data as CommentRow) : null
+}
+
 export type AgentFeedbackOperationOutcome =
   | 'applied'
   | 'duplicate'
@@ -2236,20 +2257,16 @@ export async function createShare(input: {
   accessTokenCiphertext: string
   createdBy: string
   expiresAt: string
-}) {
+}, authorization?: { actorUserId: string; commentIds: string[] }) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('feedback_shares')
-    .insert([{
-      project_id: input.projectKey,
-      scope_type: input.scopeType,
-      scope_page_url: input.scopePageUrl,
-      slug: input.slug,
-      access_token_hash: input.accessTokenHash,
-      access_token_ciphertext: input.accessTokenCiphertext,
-      created_by: input.createdBy,
-      expires_at: input.expiresAt,
-    }] as never)
+  const values = {
+    project_id: input.projectKey, scope_type: input.scopeType, scope_page_url: input.scopePageUrl,
+    slug: input.slug, access_token_hash: input.accessTokenHash, access_token_ciphertext: input.accessTokenCiphertext,
+    created_by: input.createdBy, expires_at: input.expiresAt,
+  }
+  const { data, error } = await (authorization
+    ? supabase.rpc('create_actor_share', { p_project: input.projectKey, p_actor: authorization.actorUserId, p_share: values, p_comments: authorization.commentIds } as never)
+    : supabase.from('feedback_shares').insert([values] as never))
     .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
     .single()
 
@@ -2272,10 +2289,11 @@ export async function addShareItems(shareId: string, commentIds: string[]) {
   if (error) throw new Error(error.message)
 }
 
-export async function getShareById(shareId: string) {
+export async function getShareById(shareId: string, actorUserId?: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('feedback_shares')
+  const { data, error } = await (actorUserId
+    ? supabase.rpc('read_actor_share', { p_share: shareId, p_actor: actorUserId } as never)
+    : supabase.from('feedback_shares'))
     .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
     .eq('id', shareId)
     .maybeSingle()
@@ -2367,9 +2385,11 @@ export async function rotateShareToken(shareId: string, expected: {
 }, input: {
   accessTokenHash: string
   accessTokenCiphertext: string
-}) {
+}, actorUserId?: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
+  const { data, error } = await (actorUserId
+    ? supabase.rpc('rotate_actor_share', { p_share: shareId, p_actor: actorUserId, p_expected_hash: expected.accessTokenHash, p_expected_cipher: expected.accessTokenCiphertext, p_hash: input.accessTokenHash, p_cipher: input.accessTokenCiphertext } as never)
+    : supabase
     .from('feedback_shares')
     .update({
       access_token_hash: input.accessTokenHash,
@@ -2377,7 +2397,7 @@ export async function rotateShareToken(shareId: string, expected: {
     } as never)
     .eq('id', shareId)
     .eq('access_token_hash', expected.accessTokenHash)
-    .eq('access_token_ciphertext', expected.accessTokenCiphertext)
+    .eq('access_token_ciphertext', expected.accessTokenCiphertext))
     .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
     .maybeSingle()
 

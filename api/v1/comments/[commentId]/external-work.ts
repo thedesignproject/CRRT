@@ -50,13 +50,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const publicComment = await getComment(commentId)
     if (!publicComment?.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectCommentCapability(req, res, user, publicComment, 'integrations:send'))) return
-    const comment = await getCommentForGithubIssue(publicComment.projectId, commentId)
+    const comment = await getCommentForGithubIssue(publicComment.projectId, commentId, user.userId)
     if (!comment) return jsonError(req, res, 404, 'Comment not found')
     const content = createDefaultCommentIssueContent(comment)
     if (provider === 'linear' || provider === 'jira') {
       const existing = await getCommentExternalWork(commentId, provider)
       const integration = await getProjectIntegration(publicComment.projectId, provider)
       if (req.method === 'GET') {
+        const current = await getCommentForGithubIssue(publicComment.projectId, commentId, user.userId)
+        if (!current) return jsonError(req, res, 404, 'Comment not found')
+        const currentContent = createDefaultCommentIssueContent(current)
         setCors(req, res, METHODS)
         return res.status(200).json({
           provider,
@@ -68,7 +71,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             externalUrl: existing.externalUrl,
             createdAt: existing.createdAt,
           } : null,
-          draft: { title: content.title, body: formatGithubIssueBody(comment, content, '').trim() },
+          draft: { title: currentContent.title, body: formatGithubIssueBody(current, currentContent, '').trim() },
         })
       }
       if (comment.reviewStatus === 'rejected') return jsonError(req, res, 409, 'comment_rejected')
@@ -160,19 +163,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const connection = await getGithubIssueConnection(publicComment.projectId)
+    const current = await getCommentForGithubIssue(publicComment.projectId, commentId, user.userId)
+    if (!current) return jsonError(req, res, 404, 'Comment not found')
+    const currentContent = createDefaultCommentIssueContent(current)
     setCors(req, res, METHODS)
     return res.status(200).json({
       provider: 'github',
       connected: Boolean(connection),
       destination: connection ? `${connection.owner}/${connection.repo}` : null,
-      existing: comment.githubIssue ?? null,
+      existing: current.githubIssue ?? null,
       draft: {
-        title: content.title,
-        body: formatGithubIssueBody(comment, content, '').trim(),
+        title: currentContent.title,
+        body: formatGithubIssueBody(current, currentContent, '').trim(),
       },
     })
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
+    if (code === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
     const status = code.includes('recovery_pending') || code.includes('creation_in_progress')
       ? 409
       : code.startsWith('linear_') || code.startsWith('jira_') ? 502 : 500

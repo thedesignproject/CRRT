@@ -129,7 +129,7 @@ describe('external work endpoint', () => {
   it('reports disconnected projects, existing issues, and safe preparation failures', async () => {
     const existing = { issueNumber: 7, issueUrl: 'https://github.com/acme/store/issues/7', createdAt: 'now' }
     vi.mocked(getGithubIssueConnection).mockResolvedValueOnce(null)
-    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never)
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never)
     let res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
     expect(res.body).toMatchObject({ connected: false, destination: null, existing })
@@ -320,4 +320,16 @@ describe('external work endpoint', () => {
     expect(closeLinkedExternalWork).not.toHaveBeenCalled()
     expect(waitUntil).not.toHaveBeenCalled()
   })
+})
+
+it.each(['github','linear','jira'])('denies a %s draft after access is revoked during metadata lookup',async provider=>{
+  vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockRejectedValueOnce(new Error('forbidden'))
+  const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
+  expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('draft')
+  expect(getCommentForGithubIssue).toHaveBeenCalledWith('p','c','u')
+})
+it.each(['github','linear'])('returns 404 if the %s draft comment disappears during metadata lookup',async provider=>{
+  vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockResolvedValueOnce(null)
+  const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
+  expect(res.statusCode).toBe(404)
 })

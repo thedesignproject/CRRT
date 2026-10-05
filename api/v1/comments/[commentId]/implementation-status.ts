@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
-import { createFeedbackEvent, findActiveSharesForComment, getComment, updateImplementationStatus } from '../../../_lib/store.js'
+import { createFeedbackEvent, findActiveSharesForComment, getComment, mutateProjectFeedback } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { IMPLEMENTATION_STATUSES, type ImplementationStatus } from '../../../_lib/status.js'
 
@@ -29,9 +29,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ? { implementationStatus, claimedByAgentId: null }
       : { implementationStatus }
     const [comment, activeShares] = await Promise.all([
-      updateImplementationStatus(commentId, patch),
+      mutateProjectFeedback(existing.projectId, user.userId, commentId, patch),
       findActiveSharesForComment(commentId),
     ])
+    if (!comment) return jsonError(req, res, 404, 'Comment not found')
     await Promise.all(activeShares.map((share) => createFeedbackEvent({
       shareId: share.id,
       commentId,
@@ -44,6 +45,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['PATCH', 'OPTIONS'])
     return res.status(200).json(comment)
   } catch (error) {
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }

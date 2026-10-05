@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
-import { getComment, removeGuestCommentActivityNotifications, updateCommentVisibility } from '../../../_lib/store.js'
+import { getComment, removeGuestCommentActivityNotifications, mutateProjectFeedback } from '../../../_lib/store.js'
 
 const METHODS = ['PATCH', 'OPTIONS']
 
@@ -21,7 +21,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const existing = await getComment(commentId)
     if (!existing?.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
-    const updated = await updateCommentVisibility(existing.projectId, commentId, visibility)
+    const updated = await mutateProjectFeedback(existing.projectId, user.userId, commentId, { visibility })
     if (!updated) return jsonError(req, res, 404, 'Comment not found')
     if (visibility === 'internal') {
       await removeGuestCommentActivityNotifications(existing.projectId, commentId)
@@ -29,6 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(200).json(updated)
   } catch (error) {
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')
   }

@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
-import { createFeedbackEvent, createShare, addShareItems, listAcceptedCommentsByIds, listAcceptedCommentsForPage } from '../../_lib/store.js'
+import { createShare, listAcceptedCommentsByIds, listAcceptedCommentsForPage } from '../../_lib/store.js'
 import { generateAccessToken, generateSlug, hashToken, encryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 
@@ -41,19 +41,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       accessTokenCiphertext: encryptToken(token),
       createdBy: 'reviewer',
       expiresAt,
-    })
-
-    await addShareItems(share.id, comments.map((comment) => comment.id))
-    await createFeedbackEvent({
-      shareId: share.id,
-      actorType: 'reviewer',
-      actorId: 'reviewer',
-      eventType: 'share.created',
-      payload: {
-        scopeType,
-        commentCount: comments.length,
-      },
-    })
+    }, { actorUserId: user.userId, commentIds: comments.map(comment => comment.id) })
 
     const tokenUrl = `${getAppUrl(req)}/api/v1/agent/shares/${share.slug}/state?token=${encodeURIComponent(token)}`
 
@@ -67,6 +55,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       commentCount: comments.length,
     })
   } catch (error) {
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
+    if (error instanceof Error && error.message === 'share_comments_changed') return jsonError(req, res, 409, 'Feedback changed. Retry creating the share.')
     // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
     console.error('[feedback-shares] share creation failed', {
       projectKey: typeof req.body?.projectId === 'string' ? req.body.projectId : undefined,

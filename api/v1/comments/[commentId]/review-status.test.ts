@@ -10,7 +10,7 @@ vi.mock('../../../_lib/store.js', () => ({
   createFeedbackEvent: vi.fn(),
   findActiveSharesForComment: vi.fn(),
   getComment: vi.fn(),
-  updateReviewStatus: vi.fn(),
+  mutateProjectFeedback: vi.fn(),
 }))
 vi.mock('../../../_lib/external-work-sync.js', () => ({ closeLinkedExternalWork: vi.fn() }))
 
@@ -21,7 +21,7 @@ import {
   createFeedbackEvent,
   findActiveSharesForComment,
   getComment,
-  updateReviewStatus,
+  mutateProjectFeedback,
 } from '../../../_lib/store.js'
 import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 
@@ -43,7 +43,7 @@ beforeEach(() => {
   vi.mocked(requireUser).mockReset()
   vi.mocked(requireProjectCommentCapability).mockReset()
   vi.mocked(getComment).mockReset()
-  vi.mocked(updateReviewStatus).mockReset()
+  vi.mocked(mutateProjectFeedback).mockReset()
   vi.mocked(findActiveSharesForComment).mockReset()
   vi.mocked(createFeedbackEvent).mockReset()
   vi.mocked(closeLinkedExternalWork).mockReset()
@@ -102,16 +102,16 @@ describe('api/v1/comments/[commentId]/review-status', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getComment).mockResolvedValue({ id: 'c', projectId: 'p' } as never)
     vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
-    vi.mocked(updateReviewStatus).mockResolvedValueOnce({ id: 'c' } as never)
+    vi.mocked(mutateProjectFeedback).mockResolvedValueOnce({ id: 'c' } as never)
     vi.mocked(findActiveSharesForComment).mockResolvedValueOnce([{ id: 's1' }] as never)
 
     let res = mockRes()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { reviewStatus: 'accepted' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(updateReviewStatus).toHaveBeenCalledWith('p', 'c', 'accepted')
+    expect(mutateProjectFeedback).toHaveBeenCalledWith('p', 'u', 'c', { reviewStatus: 'accepted' })
     expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'comment.reviewed' }))
 
-    vi.mocked(updateReviewStatus).mockRejectedValueOnce(new Error('boom'))
+    vi.mocked(mutateProjectFeedback).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { reviewStatus: 'accepted' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
@@ -121,7 +121,7 @@ describe('api/v1/comments/[commentId]/review-status', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
     vi.mocked(findActiveSharesForComment).mockResolvedValue([])
-    vi.mocked(updateReviewStatus).mockResolvedValue({ id: 'c', updatedAt: 'version-1' } as never)
+    vi.mocked(mutateProjectFeedback).mockResolvedValue({ id: 'c', updatedAt: 'version-1' } as never)
 
     vi.mocked(getComment).mockResolvedValueOnce({ id: 'c', projectId: 'p', reviewStatus: 'open' } as never)
     let res = mockRes()
@@ -134,4 +134,24 @@ describe('api/v1/comments/[commentId]/review-status', () => {
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { reviewStatus: 'rejected' }, headers: {} }, res)
     expect(closeLinkedExternalWork).toHaveBeenCalledTimes(2)
   })
+})
+
+it('rejects a human mutation when access is revoked after the initial precheck',async()=>{
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+  vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'member'})
+  vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+  vi.mocked(mutateProjectFeedback).mockRejectedValueOnce(new Error('forbidden'))
+  const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'rejected'},headers:{}},res)
+  expect(res.statusCode).toBe(403)
+  expect(res.body).not.toHaveProperty('body')
+})
+
+it('returns 404 if the comment is removed before the atomic mutation',async()=>{
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+  vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'member'})
+  vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+  vi.mocked(mutateProjectFeedback).mockResolvedValueOnce(null)
+  vi.mocked(findActiveSharesForComment).mockResolvedValue([])
+  const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'rejected'},headers:{}},res)
+  expect(res.statusCode).toBe(404)
 })
