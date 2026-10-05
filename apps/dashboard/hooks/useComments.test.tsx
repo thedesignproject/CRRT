@@ -148,7 +148,7 @@ it('revalidates on visible tabs, ignores hidden transitions, and removes listene
   vi.mocked(listComments).mockResolvedValue([comment('private')])
   const {result,unmount}=renderHook(()=>useComments('/api','token','project'))
   await waitFor(()=>expect(result.current.comments).toHaveLength(1))
-  const before=listComments.mock.calls.length
+  const before=vi.mocked(listComments).mock.calls.length
   const visibility=vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden')
   await act(async()=>document.dispatchEvent(new Event('visibilitychange')))
   expect(listComments).toHaveBeenCalledTimes(before)
@@ -157,7 +157,7 @@ it('revalidates on visible tabs, ignores hidden transitions, and removes listene
   await act(async()=>document.dispatchEvent(new Event('visibilitychange')))
   expect(result.current.comments).toEqual([])
   expect(result.current.error).toBe('Expired')
-  const after=listComments.mock.calls.length
+  const after=vi.mocked(listComments).mock.calls.length
   unmount()
   window.dispatchEvent(new Event('focus'))
   document.dispatchEvent(new Event('visibilitychange'))
