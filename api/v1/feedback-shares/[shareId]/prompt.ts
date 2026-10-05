@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const target = getStringQuery(req.query.target) || 'generic'
     if (!shareId) return jsonError(req, res, 400, 'Missing shareId')
 
-    const share = await getShareById(shareId)
+    const share = await getShareById(shareId, user.userId)
     if (!share) return jsonError(req, res, 404, 'Share not found')
     if (!(await requireProjectCapability(req, res, user, share.projectId, 'agent:operate'))) return
 

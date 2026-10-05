@@ -2257,16 +2257,14 @@ export async function createShare(input: {
   accessTokenCiphertext: string
   createdBy: string
   expiresAt: string
-}, authorization?: { actorUserId: string; commentIds: string[] }) {
+}, authorization: { actorUserId: string; commentIds: string[] }) {
   const supabase = getSupabase()
   const values = {
     project_id: input.projectKey, scope_type: input.scopeType, scope_page_url: input.scopePageUrl,
     slug: input.slug, access_token_hash: input.accessTokenHash, access_token_ciphertext: input.accessTokenCiphertext,
     created_by: input.createdBy, expires_at: input.expiresAt,
   }
-  const { data, error } = await (authorization
-    ? supabase.rpc('create_actor_share', { p_project: input.projectKey, p_actor: authorization.actorUserId, p_share: values, p_comments: authorization.commentIds } as never)
-    : supabase.from('feedback_shares').insert([values] as never))
+  const { data, error } = await supabase.rpc('create_actor_share', { p_project: input.projectKey, p_actor: authorization.actorUserId, p_share: values, p_comments: authorization.commentIds } as never)
     .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
     .single()
 
@@ -2289,11 +2287,9 @@ export async function addShareItems(shareId: string, commentIds: string[]) {
   if (error) throw new Error(error.message)
 }
 
-export async function getShareById(shareId: string, actorUserId?: string) {
+export async function getShareById(shareId: string, actorUserId: string) {
   const supabase = getSupabase()
-  const { data, error } = await (actorUserId
-    ? supabase.rpc('read_actor_share', { p_share: shareId, p_actor: actorUserId } as never)
-    : supabase.from('feedback_shares'))
+  const { data, error } = await supabase.rpc('read_actor_share', { p_share: shareId, p_actor: actorUserId } as never)
     .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
     .eq('id', shareId)
     .maybeSingle()
