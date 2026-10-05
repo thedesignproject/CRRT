@@ -1,16 +1,19 @@
 import postgres from 'postgres'
 
 // Supabase remains the data query layer. This connection only holds a live
-// coordination lock across outbound work, alongside a durable acknowledgment emitted only after the callback settles.
+// coordination lock across outbound work, alongside a durable acknowledgment emitted after callback settlement or confirmed failure to start.
 export async function withTrackerDispatchLock<T>(projectKey: string, work: (signal: AbortSignal) => Promise<T>, onStopped: () => Promise<void>): Promise<T> {
   const connection = process.env.DATABASE_URL
-  if (!connection) throw new Error('tracker_coordination_unavailable')
   const controller = new AbortController()
-  const sql = postgres(connection, { max: 1, max_lifetime: null, onclose: () => controller.abort() })
+  let started = false
+  let sql: ReturnType<typeof postgres> | undefined
   try {
+    if (!connection) throw new Error('tracker_coordination_unavailable')
+    sql = postgres(connection, { max: 1, max_lifetime: null, onclose: () => controller.abort() })
     return await sql.begin(async tx => {
       await tx`select pg_advisory_xact_lock_shared(hashtextextended('crrt-tracker-dispatch:' || ${projectKey},0))`
       controller.signal.throwIfAborted()
+      started = true
       try {
         return await work(controller.signal)
       } finally {
@@ -20,7 +23,11 @@ export async function withTrackerDispatchLock<T>(projectKey: string, work: (sign
       }
     }) as T
   } finally {
+    // Abort first: a delayed lock response must never start work after setup
+    // failure has acknowledged this lease. Once started, only the inner finally
+    // may acknowledge, even if begin() rejects before the callback settles.
     controller.abort()
-    await sql.end({ timeout: 5 })
+    if (!started) await onStopped().catch(() => {})
+    if (sql) await sql.end({ timeout: 5 })
   }
 }

@@ -2,7 +2,7 @@
 
 An uncertain GitHub, Linear, or Jira export blocks privacy restrictions and membership changes until its result is resolved. A timeout does not prove the provider received nothing.
 
-A project admin can retry sending to surface the pending-export message, check the tracker for an existing issue, acknowledge that check, and select **Resolve pending export**. Resolution releases the abandoned export without creating or deleting an external issue. Check for an existing issue before sending again. An active export returns a conflict and cannot be resolved. Recovery also requires a durable acknowledgment from the exact sender after its callback finishes. An expired lease or lost database session alone never permits recovery.
+A project admin can retry sending to surface the pending-export message, check the tracker for an existing issue, acknowledge that check, and select **Resolve pending export**. Resolution releases the abandoned export without creating or deleting an external issue. Check for an existing issue before sending again. An active export returns a conflict and cannot be resolved. Recovery also requires a durable acknowledgment from the exact sender after its callback finishes. An expired lease or lost database session alone never permits recovery. If coordination setup fails before the work callback starts, the helper aborts the callback and acknowledges that unused lease, preserving retry recovery.
 
 The equivalent authenticated API is `POST /api/v1/comments/:commentId/external-work-recovery` with `{ "provider": "github" | "linear" | "jira", "confirmCheckedTracker": true }`. It requires current project-admin access and returns 409 while any sender for that project is active. A canceled sender lease cannot be used to restart an export.
 

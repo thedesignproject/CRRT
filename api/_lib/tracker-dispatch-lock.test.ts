@@ -5,7 +5,7 @@ import {withTrackerDispatchLock} from './tracker-dispatch-lock.js'
 const stopped=vi.fn().mockResolvedValue(undefined)
 let onclose:()=>void, query:ReturnType<typeof vi.fn>, end:ReturnType<typeof vi.fn>
 beforeEach(()=>{
- stopped.mockClear()
+ stopped.mockReset().mockResolvedValue(undefined)
  vi.stubEnv('DATABASE_URL','postgres://test')
  query=vi.fn().mockResolvedValue([]);end=vi.fn().mockResolvedValue(undefined)
  vi.mocked(postgres).mockImplementation((_url:any,options:any)=>{
@@ -45,5 +45,37 @@ it('does not acknowledge termination when begin rejects before its callback sett
 it('leaves durable recovery blocked when acknowledgment fails',async()=>{
  stopped.mockRejectedValueOnce(Error('database down'))
  expect(await withTrackerDispatchLock('p',async()=>9,stopped)).toBe(9)
+ expect(stopped).toHaveBeenCalledOnce()
+})
+
+it('acknowledges setup failures without starting provider work',async()=>{
+ const work=vi.fn()
+ vi.mocked(postgres).mockImplementationOnce(()=>{throw Error('invalid connection')})
+ await expect(withTrackerDispatchLock('p',work,stopped)).rejects.toThrow('invalid connection')
+ expect(stopped).toHaveBeenCalledOnce();expect(work).not.toHaveBeenCalled()
+ stopped.mockClear()
+ vi.mocked(postgres).mockImplementationOnce(()=>({begin:vi.fn().mockRejectedValue(Error('connect failed')),end}) as never)
+ await expect(withTrackerDispatchLock('p',work,stopped)).rejects.toThrow('connect failed')
+ expect(stopped).toHaveBeenCalledOnce();expect(work).not.toHaveBeenCalled()
+ stopped.mockClear();query.mockRejectedValueOnce(Error('lock failed'))
+ await expect(withTrackerDispatchLock('p',work,stopped)).rejects.toThrow('lock failed')
+ expect(stopped).toHaveBeenCalledOnce();expect(work).not.toHaveBeenCalled()
+})
+it('prevents delayed lock acquisition from starting work after setup recovery',async()=>{
+ let unlock!:()=>void, lose!:()=>void
+ query.mockImplementationOnce(()=>new Promise(resolve=>{unlock=()=>resolve([])}))
+ vi.mocked(postgres).mockImplementationOnce(()=>({
+  begin:(callback:any)=>Promise.race([callback(query),new Promise((_,reject)=>{lose=()=>reject(Error('connection lost'))})]),end,
+ }) as never)
+ const work=vi.fn(),dispatch=withTrackerDispatchLock('p',work,stopped)
+ await vi.waitFor(()=>expect(unlock).toBeDefined())
+ lose();await expect(dispatch).rejects.toThrow('connection lost')
+ expect(stopped).toHaveBeenCalledOnce()
+ unlock();await Promise.resolve();await Promise.resolve()
+ expect(work).not.toHaveBeenCalled();expect(stopped).toHaveBeenCalledOnce()
+})
+it('preserves the setup error when acknowledgment also fails',async()=>{
+ vi.stubEnv('DATABASE_URL','');stopped.mockRejectedValueOnce(Error('ack failed'))
+ await expect(withTrackerDispatchLock('p',vi.fn(),stopped)).rejects.toThrow('tracker_coordination_unavailable')
  expect(stopped).toHaveBeenCalledOnce()
 })
