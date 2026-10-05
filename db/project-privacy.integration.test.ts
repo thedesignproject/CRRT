@@ -202,6 +202,91 @@ describeDatabase('project privacy database guards', () => {
       await expect(sql`select * from read_share_feedback(${share})`).rejects.toMatchObject({ message:'share_unavailable' })
     } finally { await sql`delete from feedback_shares where id=${share}` }
   })
+  it.each(['read', 'settings', 'cascade'])('does not deadlock direct membership writes with %s', async operation => {
+    const actor=operation==='cascade'?randomUUID():member
+    if(operation==='cascade') {
+      await sql`insert into auth.users(id,email) values (${actor},${`${actor}@test.local`})`
+      await sql`insert into project_members(project_key,user_id,role) values (${project},${actor},'admin')`
+    } else await sql`update project_members set role='admin' where project_key=${project} and user_id=${actor}`
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    let mutation!:Promise<any>
+    await sql.begin(async tx=>{
+      await tx`select public_key from projects where public_key=${project} for update`
+      mutation=(operation==='cascade'?worker`delete from auth.users where id=${actor}`:worker`update project_members set role='member' where project_key=${project} and user_id=${actor}`).then(rows=>rows)
+      await waitForWorkerLock()
+      if(operation==='settings') expect(await tx`select * from update_project_settings(${project},${actor},'{"name":"Before revocation"}'::jsonb)`).toHaveLength(1)
+      else expect((await tx`select * from read_project_feedback(${project},${actor})`).length).toBeGreaterThan(0)
+    })
+    await mutation
+    if(operation==='cascade') expect(await sql`select id from auth.users where id=${actor}`).toHaveLength(0)
+    else expect((await sql`select role from project_members where project_key=${project} and user_id=${actor}`)[0].role).toBe('member')
+  })
+  it.each(['create', 'credential', 'rotate', 'read', 'review', 'visibility', 'implementation'])('denies stale %s authorization after a concurrent privacy restriction', async operation=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='approved',visibility='shared' where id=${comment}`
+    const share=randomUUID()
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'selection',${share},'h','c','reviewer',now()+interval '1 hour')`
+    let result!:Promise<any>
+    try {
+      await sql.begin(async tx=>{
+        await tx`update projects set feedback_access='admins' where public_key=${project}`
+        const patch=operation==='review'?{status:'rejected'}:operation==='visibility'?{visibility:'internal'}:{implementation_status:'blocked'}
+        const query=operation==='create'?worker`select * from create_actor_share(${project},${member},${sql.json({scope_type:'selection',slug:randomUUID(),access_token_hash:'h',access_token_ciphertext:'c',expires_at:'2099-01-01'})},${[comment]}::uuid[])`
+          :operation==='credential'?worker`select * from read_actor_share(${share},${member})`
+          :operation==='rotate'?worker`select * from rotate_actor_share(${share},${member},'h','c','new','new')`
+          :operation==='read'?worker`select * from read_actor_comment(${project},${member},${comment},'integrations:send')`
+          :worker`select * from mutate_actor_feedback(${project},${member},${comment},${sql.json(patch)})`
+        result=query.then(rows=>rows,error=>error)
+        await waitForWorkerLock()
+      })
+      expect(await result).toMatchObject({message:'forbidden'})
+      expect((await sql`select status,visibility from comments where id=${comment}`)[0]).toMatchObject({status:'approved',visibility:'shared'})
+    } finally { await sql`delete from feedback_shares where id=${share}` }
+  })
+  it('creates a share atomically and rejects internal or changed targets without leaving a share', async ()=>{
+    await sql`update projects set feedback_access='team' where public_key=${project}`
+    const slug=randomUUID(), payload={scope_type:'selection',scope_page_url:null,slug,access_token_hash:'h',access_token_ciphertext:'c',expires_at:'2099-01-01'}
+    await sql`update comments set status='approved',visibility='shared' where id=${comment}`
+    const [share]=await sql`select * from create_actor_share(${project},${owner},${sql.json(payload)},${[comment]}::uuid[])`
+    expect(await sql`select * from feedback_share_items where share_id=${share.id}`).toHaveLength(1)
+    expect(await sql`select * from feedback_events where share_id=${share.id} and event_type='share.created'`).toHaveLength(1)
+    expect(await sql`select * from read_actor_share(${share.id},${owner})`).toHaveLength(1)
+    expect(await sql`select * from rotate_actor_share(${share.id},${owner},'h','c','new','new')`).toHaveLength(1)
+    expect(await sql`select * from rotate_actor_share(${share.id},${owner},'h','c','other','other')`).toHaveLength(0)
+    await sql`delete from feedback_shares where id=${share.id}`
+    await sql`update comments set visibility='internal' where id=${comment}`
+    await expect(sql`select * from create_actor_share(${project},${owner},${sql.json(payload)},${[comment]}::uuid[])`).rejects.toMatchObject({message:'share_comments_changed'})
+    expect(await sql`select id from feedback_shares where slug=${slug}`).toHaveLength(0)
+    await sql`update comments set visibility='shared' where id=${comment}`
+  })
+  it.each(['internal', 'rejected', 'removed', 'foreign'])('rejects agent operations on an ineligible %s comment', async condition=>{
+    await sql`update comments set visibility='shared',status='approved' where id=${comment}`
+    const share=randomUUID()
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'selection',${share},'h','c','reviewer',now()+interval '1 hour')`
+    await sql`insert into feedback_share_items(share_id,comment_id) values (${share},${comment})`
+    const target=condition==='foreign'?randomUUID():comment
+    try {
+      if(condition==='internal')await sql`update comments set visibility='internal' where id=${comment}`
+      if(condition==='rejected')await sql`update comments set status='rejected' where id=${comment}`
+      if(condition==='removed')await sql`delete from feedback_share_items where share_id=${share}`
+      expect((await sql`select * from apply_agent_feedback_operation(${share},${target},'agent',${randomUUID()},'comment.note','comment.note','{}'::jsonb,null)`)[0]).toMatchObject({outcome:'not_found',comment_row:null})
+      expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(0)
+    } finally { await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}` }
+  })
+  it('waits for a concurrent visibility change and cannot operate on its new private body', async ()=>{
+    const share=randomUUID()
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'project',${share},'h','c','reviewer',now()+interval '1 hour')`
+    let result!:Promise<any>
+    try {
+      await sql.begin(async tx=>{
+        await tx`update comments set visibility='internal',comment='New private content' where id=${comment}`
+        result=worker`select * from apply_agent_feedback_operation(${share},${comment},'agent',${randomUUID()},'comment.note','comment.note','{}'::jsonb,null)`.then(rows=>rows)
+        await waitForWorkerLock()
+      })
+      expect((await result)[0]).toMatchObject({outcome:'not_found',comment_row:null})
+      expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(0)
+    } finally {await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}`}
+  })
   it('enforces current access in direct authenticated notification reads', async () => {
     await sql`update projects set feedback_access='team' where public_key=${project}`
     await sql`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`
