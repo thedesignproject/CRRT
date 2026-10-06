@@ -15,7 +15,7 @@ it.skipIf(!connection)('keeps acknowledged GitHub recovery available when coordi
     await sql`insert into comments(id,project_id,comment,created_by,github_issue_lease_token,github_issue_lease_expires_at) values (${comment},${project},'Recovery regression','public',${originalLease},now()+interval '2 minutes')`
     expect((await sql`select begin_actor_tracker_dispatch(${project},${owner},${comment},${originalLease},NULL) as dispatched`)[0].dispatched).toBe(true)
     await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${originalLease},NULL)`
-    expect(await sql`select * from claim_comment_github_issue(${comment},${project},${recoveryLease},120,true)`).toHaveLength(1)
+    expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${recoveryLease},120,true)`).toHaveLength(1)
     await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},'github')`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
     vi.stubEnv('DATABASE_URL','')
     const work = vi.fn()

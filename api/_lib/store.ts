@@ -1961,7 +1961,7 @@ export async function claimCommentGithubIssue(
     ? Math.ceil(leaseMilliseconds / 1_000)
     : 5 * 60
   const { data, error } = await getSupabase()
-    .rpc('claim_comment_github_issue', {
+    .rpc('claim_comment_github_issue_v2', {
       p_comment_id: commentId,
       p_project_key: projectKey,
       p_lease_token: leaseToken,
@@ -2001,7 +2001,7 @@ export async function releaseCommentGithubIssue(
   leaseToken: string,
 ) {
   const { data, error } = await getSupabase()
-    .rpc('release_comment_github_issue', {
+    .rpc('release_comment_github_issue_v2', {
       p_comment_id: commentId,
       p_project_key: projectKey,
       p_lease_token: leaseToken,

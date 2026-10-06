@@ -173,7 +173,7 @@ describe('comment GitHub issue persistence', () => {
       true,
     )
     expect(claimed?.id).toBe('comment-1')
-    expect(rpc).toHaveBeenCalledWith('claim_comment_github_issue', {
+    expect(rpc).toHaveBeenCalledWith('claim_comment_github_issue_v2', {
       p_comment_id: 'comment-1',
       p_project_key: 'project-1',
       p_lease_token: 'new-lease',
@@ -198,8 +198,11 @@ describe('comment GitHub issue persistence', () => {
       p_lease_token: 'lease',
     }))
 
-    mockRpcResult({ data: false, error: null })
+    const release = mockRpcResult({ data: false, error: null })
     await expect(releaseCommentGithubIssue('project-1', 'comment-1', 'wrong')).resolves.toBe(false)
+    expect(release.rpc).toHaveBeenCalledWith('release_comment_github_issue_v2', {
+      p_project_key: 'project-1', p_comment_id: 'comment-1', p_lease_token: 'wrong',
+    })
 
     mockRpcResult({ data: true, error: null })
     await expect(markCommentGithubIssueUncertain('project-1', 'comment-1', 'lease'))
