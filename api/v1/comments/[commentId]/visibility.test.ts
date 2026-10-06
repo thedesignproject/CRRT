@@ -4,12 +4,12 @@ vi.mock('../../../_lib/auth.js', () => ({ requireProjectCommentCapability: vi.fn
 vi.mock('../../../_lib/store.js', () => ({
   getComment: vi.fn(),
   removeGuestCommentActivityNotifications: vi.fn(),
-  updateCommentVisibility: vi.fn(),
+  mutateProjectFeedback: vi.fn(),
 }))
 
 import handler from './visibility.js'
 import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
-import { getComment, removeGuestCommentActivityNotifications, updateCommentVisibility } from '../../../_lib/store.js'
+import { getComment, removeGuestCommentActivityNotifications, mutateProjectFeedback } from '../../../_lib/store.js'
 
 function response() {
   return {
@@ -30,7 +30,7 @@ beforeEach(() => {
   vi.mocked(requireUser).mockReset().mockResolvedValue({ userId: 'u', email: 'u@example.com' })
   vi.mocked(requireProjectCommentCapability).mockReset().mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockReset().mockResolvedValue({ id: 'c', projectId: 'p', visibility: 'shared' } as never)
-  vi.mocked(updateCommentVisibility).mockReset().mockResolvedValue({ id: 'c', projectId: 'p', visibility: 'internal' } as never)
+  vi.mocked(mutateProjectFeedback).mockReset().mockResolvedValue({ id: 'c', projectId: 'p', visibility: 'internal' } as never)
   vi.mocked(removeGuestCommentActivityNotifications).mockReset().mockResolvedValue(undefined)
 })
 
@@ -59,8 +59,8 @@ describe('comment visibility endpoint', () => {
       expect.anything(), res, expect.anything(), expect.objectContaining({ projectId: 'p' }), 'feedback:manage',
     )
     expect(removeGuestCommentActivityNotifications).toHaveBeenCalledWith('p', 'c')
-    expect(updateCommentVisibility).toHaveBeenCalledWith('p', 'c', 'internal')
-    expect(vi.mocked(updateCommentVisibility).mock.invocationCallOrder[0])
+    expect(mutateProjectFeedback).toHaveBeenCalledWith('p', 'u', 'c', { visibility: 'internal' })
+    expect(vi.mocked(mutateProjectFeedback).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(removeGuestCommentActivityNotifications).mock.invocationCallOrder[0])
   })
 
@@ -71,7 +71,7 @@ describe('comment visibility endpoint', () => {
     let res = response()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'internal' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)
-    expect(updateCommentVisibility).not.toHaveBeenCalled()
+    expect(mutateProjectFeedback).not.toHaveBeenCalled()
 
     res = response()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'private' }, headers: {} }, res)
@@ -84,13 +84,13 @@ describe('comment visibility endpoint', () => {
   })
 
   it('returns missing and internal failures without premature cleanup', async () => {
-    vi.mocked(updateCommentVisibility).mockResolvedValueOnce(null)
+    vi.mocked(mutateProjectFeedback).mockResolvedValueOnce(null)
     let res = response()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'internal' }, headers: {} }, res)
     expect(res.statusCode).toBe(404)
     expect(removeGuestCommentActivityNotifications).not.toHaveBeenCalled()
 
-    vi.mocked(updateCommentVisibility).mockResolvedValueOnce({ id: 'c', projectId: 'p', visibility: 'shared' } as never)
+    vi.mocked(mutateProjectFeedback).mockResolvedValueOnce({ id: 'c', projectId: 'p', visibility: 'shared' } as never)
     res = response()
     await call({ method: 'PATCH', query: { commentId: 'c' }, body: { visibility: 'shared' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
@@ -103,4 +103,14 @@ describe('comment visibility endpoint', () => {
     expect(res.statusCode).toBe(500)
     expect(error).toHaveBeenCalledWith(expect.any(Error))
   })
+})
+
+it('rejects a human mutation when access is revoked after the initial precheck',async()=>{
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+  vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'member'})
+  vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+  vi.mocked(mutateProjectFeedback).mockRejectedValueOnce(new Error('forbidden'))
+  const res=response();await call({method:'PATCH',query:{commentId:'c'},body:{visibility:'internal'},headers:{}},res)
+  expect(res.statusCode).toBe(403)
+  expect(res.body).not.toHaveProperty('body')
 })

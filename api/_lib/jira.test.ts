@@ -380,3 +380,14 @@ describe('Jira integration client', () => {
       .rejects.toThrow('jira_result_indeterminate')
   })
 })
+
+it('cancels the final issue POST when dispatch coordination is lost during preparation',async()=>{
+ const controller=new AbortController()
+ const types=()=>new Response(JSON.stringify({issueTypes:[{id:'task',name:'Task'}]}),{status:200})
+ const fetch=vi.fn().mockResolvedValueOnce(types()).mockResolvedValueOnce(new Response(JSON.stringify({id:'i',key:'WEB-1'}),{status:201}))
+ vi.stubGlobal('fetch',fetch)
+ const input={cloudId:'cloud',siteUrl:'https://acme.atlassian.net',projectId:'p',title:'Title',description:'Body',signal:controller.signal}
+ await createJiraIssue('t',input);expect(fetch.mock.calls[1][1].signal.aborted).toBe(false)
+ fetch.mockClear();fetch.mockImplementationOnce(async()=>{controller.abort();return types()})
+ await expect(createJiraIssue('t',input)).rejects.toThrow();expect(fetch).toHaveBeenCalledTimes(1)
+})

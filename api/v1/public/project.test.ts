@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../../_lib/store.js', () => ({
   getProject: vi.fn(),
   getProjectShare: vi.fn(),
-  createShare: vi.fn(),
+  createSystemShare: vi.fn(),
   rotateShareToken: vi.fn(),
 }))
 vi.mock('../../_lib/tokens.js', () => ({
@@ -15,7 +15,7 @@ vi.mock('../../_lib/tokens.js', () => ({
 }))
 
 import handler from './project.js'
-import { createShare, getProject, getProjectShare, rotateShareToken } from '../../_lib/store.js'
+import { createSystemShare, getProject, getProjectShare, rotateShareToken } from '../../_lib/store.js'
 import { decryptToken } from '../../_lib/tokens.js'
 
 function mockRes() {
@@ -48,7 +48,7 @@ beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
   vi.mocked(getProject).mockReset()
   vi.mocked(getProjectShare).mockReset()
-  vi.mocked(createShare).mockReset()
+  vi.mocked(createSystemShare).mockReset()
   vi.mocked(rotateShareToken).mockReset()
   warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
@@ -132,19 +132,17 @@ describe('api/v1/public/project', () => {
   it('creates a fresh system share when none exists', async () => {
     vi.mocked(getProject).mockResolvedValueOnce(PROJECT as never)
     vi.mocked(getProjectShare).mockResolvedValueOnce(null)
-    vi.mocked(createShare).mockResolvedValueOnce({ ...SHARE, slug: 'new-slug' } as never)
+    vi.mocked(createSystemShare).mockResolvedValueOnce({ ...SHARE, slug: 'new-slug' } as never)
 
     const res = mockRes()
     await call({ method: 'GET', query: { projectKey: 'proj' }, headers: {} }, res)
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ doc: { token: 'fresh-token', slug: 'new-slug' } })
-    expect(createShare).toHaveBeenCalledWith(expect.objectContaining({
+    expect(createSystemShare).toHaveBeenCalledWith(expect.objectContaining({
       projectKey: 'proj',
-      scopeType: 'project',
       accessTokenHash: 'hashed',
       accessTokenCiphertext: 'ciphertext',
-      createdBy: 'system',
     }))
   })
 
@@ -159,4 +157,12 @@ describe('api/v1/public/project', () => {
     expect(res.body).toEqual({ error: 'Session could not be started — please retry.' })
     expect(errorSpy).toHaveBeenCalledWith('[public/project] session start failed', expect.objectContaining({ projectKey: 'proj' }))
   })
+})
+
+it('does not issue a project-wide agent token for a private project', async () => {
+  vi.mocked(getProject).mockResolvedValue({ widgetPrivate: true } as never)
+  const res = mockRes()
+  await call({ method: 'GET', headers: {}, query: { projectKey: 'p' } }, res)
+  expect(res.statusCode).toBe(403)
+  expect(getProjectShare).not.toHaveBeenCalled()
 })

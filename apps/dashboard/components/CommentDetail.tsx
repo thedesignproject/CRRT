@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
-import { getExternalWorkDraft, retryExternalWorkSync, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
+import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { timeAgo, truncateUrl } from '../lib/format'
@@ -140,6 +140,7 @@ export function CommentDetail({
   const [issueError, setIssueError] = useState<string | null>(null)
   const [syncBusy, setSyncBusy] = useState(false)
   const [createdExternalWork, setCreatedExternalWork] = useState<Record<string, ExternalWorkRecord[]>>({})
+  const [pendingRecovery, setPendingRecovery] = useState(false)
   const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
   const [providerPickerOpen, setProviderPickerOpen] = useState(false)
   const [selectorOpen, setSelectorOpen] = useState(false)
@@ -230,6 +231,8 @@ export function CommentDetail({
     }
   }
 
+  useEffect(() => { setPendingRecovery(false) }, [selectedId])
+
   const handleExternalWorkSubmit = async (draft: { title: string; body: string }) => {
     if (!selectedComment || issueBusy || issueRequests.current.has(selectedComment.id)) return
     const commentId = selectedComment.id
@@ -249,12 +252,31 @@ export function CommentDetail({
       rememberExternalWork(commentId, remembered)
       setExternalWorkDraft(null)
       if (provider !== 'github') openExternalWork(remembered)
-    } catch {
+    } catch (error) {
       if (selectedIdRef.current === commentId) {
-        setIssueError('Could not create the external issue. Try again.')
+        const pending = error instanceof Error && error.message.includes('recovery_pending')
+        setPendingRecovery(pending)
+        setIssueError(pending ? 'The previous export needs to be resolved before retrying.' : 'Could not create the external issue. Try again.')
       }
     } finally {
       issueRequests.current.delete(commentId)
+      if (selectedIdRef.current === commentId) setIssueBusy(false)
+    }
+  }
+
+  const handleResolveExternalWork = async () => {
+    const commentId = selectedComment!.id
+    setIssueBusy(true)
+    try {
+      await resolvePendingExternalWork(apiBase, accessToken, commentId, externalWorkDraft!.provider)
+      if (selectedIdRef.current === commentId) {
+        setPendingRecovery(false)
+        setExternalWorkDraft(null)
+        setIssueError('Pending export resolved. Check for an existing issue before sending again.')
+      }
+    } catch {
+      if (selectedIdRef.current === commentId) setIssueError('Only project admins can resolve an export after its sender confirms it stopped. If it crashed, contact an operator to confirm termination.')
+    } finally {
       if (selectedIdRef.current === commentId) setIssueBusy(false)
     }
   }
@@ -577,8 +599,9 @@ export function CommentDetail({
         initialDraft={externalWorkDraft.draft}
         busy={issueBusy}
         error={issueError}
-        onCancel={() => { setExternalWorkDraft(null); setIssueError(null) }}
+        onCancel={() => { setExternalWorkDraft(null); setPendingRecovery(false); setIssueError(null) }}
         onSubmit={handleExternalWorkSubmit}
+        onResolve={pendingRecovery ? handleResolveExternalWork : undefined}
       />}
       {providerPickerOpen && <ExternalWorkProviderDialog
         onCancel={() => setProviderPickerOpen(false)}

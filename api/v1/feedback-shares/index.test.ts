@@ -129,7 +129,9 @@ describe('api/v1/feedback-shares', () => {
 
     expect(res.statusCode).toBe(201)
     expect(createShare).toHaveBeenCalled()
-    expect(addShareItems).toHaveBeenCalledWith('share-1', ['comment-1', 'comment-2'])
+    expect(createShare).toHaveBeenCalledWith(expect.anything(), { actorUserId: 'u-test', commentIds: ['comment-1', 'comment-2'] })
+    expect(addShareItems).not.toHaveBeenCalled()
+    expect(createFeedbackEvent).not.toHaveBeenCalled()
     expect(res.body).toMatchObject({
       shareId: 'share-1',
       slug: 'slug1234',
@@ -199,4 +201,12 @@ describe('api/v1/feedback-shares', () => {
     expect(errorSpy).toHaveBeenCalledWith('[feedback-shares] share creation failed', expect.objectContaining({ projectKey: undefined }))
     errorSpy.mockRestore()
   })
+})
+
+it.each([['forbidden',403],['share_comments_changed',409]])('rejects a share commit after access or comments change: %s',async(message,status)=>{
+  vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([{id:'c'}] as never)
+  vi.mocked(createShare).mockRejectedValueOnce(new Error(message as string))
+  const res=mockRes();await call(mockReq({body:{projectId:'p',scopeType:'page',pageUrl:'https://test.local'}}),res)
+  expect(res.statusCode).toBe(status);expect(res.body).not.toHaveProperty('token')
+  expect(addShareItems).not.toHaveBeenCalled();expect(createFeedbackEvent).not.toHaveBeenCalled()
 })

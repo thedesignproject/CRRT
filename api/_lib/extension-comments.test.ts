@@ -61,6 +61,7 @@ function client(responses: unknown[], storageOverrides: Record<string, unknown> 
         queries.push(query)
         return query
       }),
+      rpc: vi.fn(() => { const query = new Query(responses.shift()); queries.push(query); return query }),
       storage: { from: vi.fn(() => bucket) },
     },
   }
@@ -131,6 +132,7 @@ describe('extension comment persistence', () => {
         { id: 'widget', reviewStatus: 'accepted', editable: false, screenshotUrl: 'https://public/image.png' },
       ],
     })
+    expect(fake.value.rpc).toHaveBeenCalledWith('read_project_feedback', { p_project: 'project', p_actor: 'u1' })
     expect(fake.queries[0]?.calls).toContainEqual(['eq', 'project_id', 'project'])
     for (const column of ['url', 'element', 'x', 'y']) {
       expect(fake.queries[0]?.calls).toContainEqual(['not', column, 'is', null])
@@ -365,4 +367,10 @@ describe('extension comment persistence', () => {
     }
     expect(fake.queries[4].calls).toContainEqual(['delete'])
   })
+})
+
+it('denies an extension read when access changes after the API precheck', async () => {
+  const fake = client([{ data: null, error: { message: 'forbidden' }, count: null }])
+  vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+  await expect(listExtensionComments('u1', { projectId: 'project' })).rejects.toMatchObject({ status: 403 })
 })

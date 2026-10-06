@@ -1,3 +1,4 @@
+import { hashToken } from '../../../../_lib/tokens.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getAgentId, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
 import { applyAgentFeedbackOperation, getComment, getOperationKey, shareContainsComment } from '../../../../_lib/store.js'
@@ -71,7 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!op || !VALID_OPS.has(op)) return jsonError(req, res, 400, 'Invalid op')
     if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
 
-    const existingKey = await getOperationKey(authorized.share.id, agentId, idempotencyKey)
+    const existingKey = await getOperationKey(authorized.share.id, agentId, idempotencyKey, hashToken(authorized.token))
     if (existingKey) {
       setCors(req, res, ['POST', 'OPTIONS'])
       return res.status(200).json({
@@ -101,6 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     const result = await applyAgentFeedbackOperation({
       shareId: authorized.share.id,
+      tokenHash: hashToken(authorized.token),
       commentId,
       agentId,
       idempotencyKey,
@@ -134,6 +136,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       comment: result.comment,
     })
   } catch (error) {
+    if (error instanceof Error && error.message === 'share_unavailable') return jsonError(req, res, 410, 'Share unavailable')
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }

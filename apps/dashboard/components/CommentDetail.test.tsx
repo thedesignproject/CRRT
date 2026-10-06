@@ -5,9 +5,10 @@ vi.mock('../api', () => ({
   getExternalWorkDraft: vi.fn(),
   retryExternalWorkSync: vi.fn(),
   sendExternalWork: vi.fn(),
+  resolvePendingExternalWork: vi.fn(),
 }))
 
-import { getExternalWorkDraft, retryExternalWorkSync, sendExternalWork } from '../api'
+import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'
 import { mapServerComment } from '../lib/comment'
 import type { Comment } from '../lib/types'
@@ -84,6 +85,7 @@ const props = {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  vi.mocked(resolvePendingExternalWork).mockReset().mockResolvedValue({resolved:true})
   vi.mocked(retryExternalWorkSync).mockResolvedValue({ externalWork: [] })
   vi.mocked(sendExternalWork).mockResolvedValue({ ...issue, created: true })
   vi.mocked(getExternalWorkDraft).mockResolvedValue({ provider: 'github', connected: true, destination: 'acme/site', existing: null, draft: { title: 'Improve contrast', body: 'Issue body' } })
@@ -192,7 +194,8 @@ describe('<CommentDetail /> GitHub issue action', () => {
 
   it('retries failed close synchronization and refreshes the displayed state', async () => {
     const failed = { provider: 'linear' as const, externalId: 'linear', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7', lifecycleStatus: 'failed' as const, closedAt: null, createdAt: issue.createdAt, updatedAt: issue.createdAt }
-    vi.mocked(retryExternalWorkSync).mockResolvedValueOnce({ externalWork: [{ ...failed, lifecycleStatus: 'closed', closedAt: 'later', updatedAt: 'later' }] })
+    vi.mocked(resolvePendingExternalWork).mockReset().mockResolvedValue({resolved:true})
+  vi.mocked(retryExternalWorkSync).mockResolvedValueOnce({ externalWork: [{ ...failed, lifecycleStatus: 'closed', closedAt: 'later', updatedAt: 'later' }] })
     const view = render(<CommentDetail {...props} selectedComment={{ ...comment, reviewStatus: 'rejected', externalWork: [failed] }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Retry closing' }))
     expect(screen.getByRole('button', { name: 'Retrying close…' })).toBeDisabled()
@@ -870,4 +873,38 @@ describe('<ExternalWorkProviderDialog />', () => {
     fireEvent.mouseDown(screen.getByRole('presentation'))
     expect(onCancel).toHaveBeenCalledTimes(2)
   })
+})
+
+it('requires tracker acknowledgment before resolving a pending export',async()=>{
+ vi.mocked(sendExternalWork).mockRejectedValueOnce(new Error('github_issue_recovery_pending'))
+ render(<CommentDetail {...props} />)
+ fireEvent.click(await openExternalWorkDraft())
+ const resolve=await screen.findByRole('button',{name:'Resolve pending export'})
+ expect(resolve).toBeDisabled()
+ fireEvent.click(screen.getByRole('checkbox',{name:'I checked the tracker for an existing issue.'}))
+ fireEvent.click(resolve)
+ await waitFor(()=>expect(resolvePendingExternalWork).toHaveBeenCalledWith('/api','session-token','comment-1','github'))
+ await waitFor(()=>expect(screen.queryByRole('dialog')).toBeNull())
+ expect(screen.getByRole('alert')).toHaveTextContent('Pending export resolved')
+})
+it.each(['reject','success'])('does not apply a late recovery %s to the next comment',async outcome=>{
+ vi.mocked(sendExternalWork).mockRejectedValueOnce(new Error('github_issue_recovery_pending'))
+ let resolve!:(v:{resolved:boolean})=>void,reject!:(e:Error)=>void
+ vi.mocked(resolvePendingExternalWork).mockReturnValueOnce(new Promise((yes,no)=>{resolve=yes;reject=no}))
+ const view=render(<CommentDetail {...props} />);fireEvent.click(await openExternalWorkDraft())
+ fireEvent.click(await screen.findByRole('checkbox',{name:'I checked the tracker for an existing issue.'}))
+ fireEvent.click(screen.getByRole('button',{name:'Resolve pending export'}))
+ const next={...comment,id:'other',body:'Other'}
+ view.rerender(<CommentDetail {...props} selectedComment={next} projectComments={[next]} filteredComments={[next]} />)
+ await act(async()=>{if(outcome==='reject')reject(Error('failed'));else resolve({resolved:true})})
+ expect(screen.queryByRole('alert')).toBeNull()
+})
+it('keeps recovery available if the server reports an active export or non-admin caller',async()=>{
+ vi.mocked(sendExternalWork).mockRejectedValueOnce(new Error('github_issue_recovery_pending'))
+ vi.mocked(resolvePendingExternalWork).mockRejectedValueOnce(Error('tracker_dispatch_active'))
+ render(<CommentDetail {...props} />);fireEvent.click(await openExternalWorkDraft())
+ fireEvent.click(await screen.findByRole('checkbox',{name:'I checked the tracker for an existing issue.'}))
+ fireEvent.click(screen.getByRole('button',{name:'Resolve pending export'}))
+ await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Only project admins'))
+ expect(screen.getByRole('button',{name:'Resolve pending export'})).toBeEnabled()
 })

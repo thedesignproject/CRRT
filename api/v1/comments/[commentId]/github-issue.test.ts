@@ -1,3 +1,4 @@
+vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>,stopped:()=>Promise<void>)=>{try{return await work(new AbortController().signal)}finally{await stopped()}})}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
@@ -24,7 +25,8 @@ vi.mock('../../../_lib/store.js', () => ({
   getComment: vi.fn(),
   getCommentForGithubIssue: vi.fn(),
   getGithubIssueConnection: vi.fn(),
-  markCommentGithubIssueUncertain: vi.fn(),
+  acknowledgeTrackerDispatchStopped: vi.fn().mockResolvedValue(undefined),
+  beginTrackerDispatch: vi.fn(),
   releaseCommentGithubIssue: vi.fn(),
   resetCommentGithubIssueAttempt: vi.fn(),
 }))
@@ -49,7 +51,7 @@ import {
   getComment,
   getCommentForGithubIssue,
   getGithubIssueConnection,
-  markCommentGithubIssueUncertain,
+  beginTrackerDispatch,
   releaseCommentGithubIssue,
   resetCommentGithubIssueAttempt,
 } from '../../../_lib/store.js'
@@ -131,7 +133,7 @@ beforeEach(() => {
   vi.mocked(formatEditableGithubIssueBody).mockReturnValue('edited issue body')
   vi.mocked(createGithubIssue).mockResolvedValue(issue)
   vi.mocked(finalizeCommentGithubIssue).mockResolvedValue(true)
-  vi.mocked(markCommentGithubIssueUncertain).mockResolvedValue(true)
+  vi.mocked(beginTrackerDispatch).mockResolvedValue(true)
   vi.mocked(releaseCommentGithubIssue).mockResolvedValue(true)
   vi.mocked(resetCommentGithubIssueAttempt).mockResolvedValue(true)
   vi.mocked(acceptCommentIfOpen).mockResolvedValue(comment as never)
@@ -172,7 +174,7 @@ describe('POST comment GitHub issue', () => {
 
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'open', githubIssue: issue } as never)
     expect((await call()).body).toEqual({ ...issue, created: false })
-    expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1', 'comment-1')
+    expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1', 'comment-1','user-1')
 
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected' } as never)
     expect((await call()).body).toEqual({ error: 'comment_rejected' })
@@ -352,7 +354,7 @@ describe('POST comment GitHub issue', () => {
   })
 
   it('does not post unless the database marks the attempt uncertain', async () => {
-    vi.mocked(markCommentGithubIssueUncertain).mockResolvedValueOnce(false)
+    vi.mocked(beginTrackerDispatch).mockResolvedValueOnce(false)
     const response = await call()
     expect(response.statusCode).toBe(409)
     expect(response.body).toEqual({ error: 'github_issue_creation_in_progress' })
@@ -374,10 +376,7 @@ describe('POST comment GitHub issue', () => {
   })
 
   it('does not overwrite a concurrent rejection and schedules closure after finalization', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected', updatedAt: 'rejected-version' } as never)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment,reviewStatus:'rejected',updatedAt:'rejected-version' } as never);return null})
 
     expect((await call()).statusCode).toBe(201)
     expect(closeLinkedGithubIssue).toHaveBeenCalledWith('project-1', 'comment-1', 'rejected-version')
@@ -385,13 +384,40 @@ describe('POST comment GitHub issue', () => {
   })
 
   it('does not schedule closure when the comment disappears after finalization', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce(null)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(null);return null})
 
     expect((await call()).statusCode).toBe(201)
     expect(closeLinkedGithubIssue).not.toHaveBeenCalled()
     expect(waitUntil).not.toHaveBeenCalled()
   })
+})
+
+it('denies an existing issue response and acceptance if actor authorization is revoked',async()=>{
+ vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({...comment,githubIssue:issue} as never)
+ vi.mocked(acceptCommentIfOpen).mockRejectedValueOnce(new Error('forbidden'))
+ const res=await call();expect(res.statusCode).toBe(403);expect(res.body).toEqual({error:'Forbidden'})
+ expect(acceptCommentIfOpen).toHaveBeenCalledWith('project-1','comment-1','user-1')
+ expect(createGithubIssue).not.toHaveBeenCalled()
+})
+
+it('does not dispatch GitHub if access is revoked before the atomic send decision',async()=>{
+ vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
+ const res=await call();expect(res.statusCode).toBe(403);expect(createGithubIssue).not.toHaveBeenCalled()
+ expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null)
+ expect(releaseCommentGithubIssue).toHaveBeenCalled()
+})
+
+it('does not send feedback to AI after membership is revoked during marker lookup',async()=>{
+ vi.mocked(findGithubIssueByMarker).mockImplementationOnce(async()=>{
+  vi.mocked(getCommentForGithubIssue).mockRejectedValueOnce(new Error('forbidden'));return null
+ })
+ expect((await call()).statusCode).toBe(403)
+ expect(generateCommentIssueContent).not.toHaveBeenCalled();expect(createGithubIssue).not.toHaveBeenCalled()
+})
+it('checks dispatch authorization before AI preparation and passes its cancellation signal',async()=>{
+ vi.mocked(generateCommentIssueContent).mockImplementationOnce(async(_comment,signal)=>{
+  expect(beginTrackerDispatch).toHaveBeenCalled();expect(signal).toBeInstanceOf(AbortSignal)
+  return {title:'Title',summary:'Summary',implementationContext:'Context'}
+ })
+ expect((await call()).statusCode).toBe(201)
 })

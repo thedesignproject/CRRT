@@ -10,6 +10,8 @@ import {
   getCommentForGithubIssue,
   getGithubIssueConnection,
   listComments,
+  listPublicComments,
+  updatePublicReviewStatus,
   listProjectComments,
   markCommentGithubIssueUncertain,
   resetCommentGithubIssueAttempt,
@@ -72,6 +74,12 @@ function mockRpcResult(result: Result) {
 beforeEach(() => vi.mocked(getServiceSupabase).mockReset())
 
 describe('comment GitHub issue persistence', () => {
+  it('exports private widget screenshots with a durable capability instead of dropping them', async () => {
+    vi.stubEnv('WIDGET_AUTH_SECRET', 'test-secret')
+    mockResult({ data: { ...row, screenshot_storage_path: 'project-1/image.png' }, error: null })
+    expect((await getCommentForGithubIssue('project-1', 'comment-1'))?.imageUrl).toContain('/api/v1/comments/comment-1/issue-screenshot?token=')
+    vi.unstubAllEnvs()
+  })
   it('keeps issue metadata out of public comments and includes it for project comments', async () => {
     mockResult({ data: [row], error: null })
     expect((await listComments('project-1'))[0]).not.toHaveProperty('githubIssue')
@@ -165,7 +173,7 @@ describe('comment GitHub issue persistence', () => {
       true,
     )
     expect(claimed?.id).toBe('comment-1')
-    expect(rpc).toHaveBeenCalledWith('claim_comment_github_issue', {
+    expect(rpc).toHaveBeenCalledWith('claim_comment_github_issue_v2', {
       p_comment_id: 'comment-1',
       p_project_key: 'project-1',
       p_lease_token: 'new-lease',
@@ -190,8 +198,11 @@ describe('comment GitHub issue persistence', () => {
       p_lease_token: 'lease',
     }))
 
-    mockRpcResult({ data: false, error: null })
+    const release = mockRpcResult({ data: false, error: null })
     await expect(releaseCommentGithubIssue('project-1', 'comment-1', 'wrong')).resolves.toBe(false)
+    expect(release.rpc).toHaveBeenCalledWith('release_comment_github_issue_v2', {
+      p_project_key: 'project-1', p_comment_id: 'comment-1', p_lease_token: 'wrong',
+    })
 
     mockRpcResult({ data: true, error: null })
     await expect(markCommentGithubIssueUncertain('project-1', 'comment-1', 'lease'))
@@ -226,12 +237,14 @@ describe('comment GitHub issue persistence', () => {
       () => listProjectComments('project-1'),
       () => getCommentForGithubIssue('project-1', 'comment-1'),
       () => getGithubIssueConnection('project-1'),
-      () => deleteCommentById('comment-1', 'project-1'),
     ]) {
       mockResult(failure)
       await expect(operation()).rejects.toThrow('database unavailable')
     }
     for (const operation of [
+      () => deleteCommentById('comment-1', 'project-1'),
+      () => listPublicComments('project-1'),
+      () => updatePublicReviewStatus('project-1', 'comment-1', 'accepted'),
       () => claimCommentGithubIssue('project-1', 'comment-1', 'lease'),
       () => finalizeCommentGithubIssue('project-1', 'comment-1', 'lease', {
         issueNumber: 1,
@@ -248,10 +261,10 @@ describe('comment GitHub issue persistence', () => {
   })
 
   it('reports whether a project-scoped comment deletion matched a row', async () => {
-    mockResult({ data: [{ id: 'comment-1' }], error: null })
+    mockRpcResult({ data: [{ id: 'comment-1' }], error: null })
     await expect(deleteCommentById('comment-1', 'project-1')).resolves.toBe(true)
 
-    mockResult({ data: [], error: null })
+    mockRpcResult({ data: [], error: null })
     await expect(deleteCommentById('comment-1', 'project-1')).resolves.toBe(false)
   })
 })
@@ -261,8 +274,20 @@ it('scopes authenticated widget lists by account and source and protects owned c
   await listComments('p', { userId: 'u' })
   expect(builder.eq).toHaveBeenCalledWith('created_by_user_id', 'u')
   expect(builder.eq).toHaveBeenCalledWith('source', 'widget')
-  builder = mockResult({ data: [], error: null })
+  const { rpc } = mockRpcResult({ data: [], error: null })
   await deleteCommentById('c', 'p')
-  expect(builder.is).toHaveBeenCalledWith('created_by_user_id', null)
+  expect(rpc).toHaveBeenCalledWith('mutate_public_comment', { p_project: 'p', p_comment: 'c', p_delete: true })
+  mockResult({ data: [], error: null })
   await listComments('p', { userId: '' })
+})
+
+it('maps atomic public reads and updates, including empty results', async () => {
+  const { rpc } = mockRpcResult({ data: [row], error: null })
+  expect(await listPublicComments('project-1', { pageUrl: row.url })).toHaveLength(1)
+  expect(rpc).toHaveBeenCalledWith('read_public_comments', { p_project: 'project-1', p_page_url: row.url })
+  mockRpcResult({ data: null, error: null })
+  expect(await listPublicComments('project-1')).toEqual([])
+  expect(await updatePublicReviewStatus('project-1', 'comment-1', 'accepted')).toBeNull()
+  mockRpcResult({ data: row, error: null })
+  expect(await updatePublicReviewStatus('project-1', 'comment-1', 'accepted')).toMatchObject({ id: 'comment-1' })
 })

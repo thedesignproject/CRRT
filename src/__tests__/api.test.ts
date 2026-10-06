@@ -41,19 +41,19 @@ describe('fetchProjectComments', () => {
     expect(out.map((c) => c.reviewStatus)).toEqual(['accepted', 'open', 'open'])
   })
 
-  it('returns [] for non-OK responses', async () => {
+  it('rejects transient errors so refresh preserves loaded feedback', async () => {
     mockFetch(() => new Response('boom', { status: 500 }))
-    expect(await fetchProjectComments(API, 'p')).toEqual([])
+    await expect(fetchProjectComments(API, 'p')).rejects.toThrow('Could not refresh feedback')
   })
 
-  it('returns [] when body is not an array', async () => {
+  it('rejects malformed responses', async () => {
     mockFetch(() => jsonResponse({ items: [] }))
-    expect(await fetchProjectComments(API, 'p')).toEqual([])
+    await expect(fetchProjectComments(API, 'p')).rejects.toThrow('Invalid feedback response')
   })
 
-  it('returns [] when fetch throws', async () => {
+  it('propagates network errors', async () => {
     mockFetch(() => { throw new Error('offline') })
-    expect(await fetchProjectComments(API, 'p')).toEqual([])
+    await expect(fetchProjectComments(API, 'p')).rejects.toThrow('offline')
   })
 })
 
@@ -174,4 +174,14 @@ describe('patchReviewStatus', () => {
     await expect(patchReviewStatus(API, 'abc', 'accepted')).resolves.toBeUndefined()
     expect(console.warn).toHaveBeenCalled()
   })
+})
+
+it('reports private mode and requests login after an anonymous submit is rejected', async () => {
+  mockFetch(() => new Response('{}', { status: 401 }))
+  const privacy = vi.fn(), login = vi.fn()
+  expect(await fetchProjectComments(API, 'private', privacy)).toEqual([])
+  expect(privacy).toHaveBeenCalledWith(true)
+  expect(await postComment(API, {}, login)).toBeNull()
+  expect(login).toHaveBeenCalledOnce()
+  await postComment(API, {})
 })

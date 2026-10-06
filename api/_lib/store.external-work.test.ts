@@ -54,7 +54,7 @@ function queue(...results: Result[]) {
   for (const result of results) {
     const value = builder(result)
     builders.push(value)
-    vi.mocked(getServiceSupabase).mockReturnValueOnce({ from: vi.fn(() => value) } as never)
+    vi.mocked(getServiceSupabase).mockReturnValueOnce({ from: vi.fn(() => value), rpc: vi.fn(() => value) } as never)
   }
   return builders
 }
@@ -220,12 +220,10 @@ describe('external integration persistence', () => {
       { data: null, error: null },
       { data: null, error: { message: 'accept failed' } },
     )
-    await expect(acceptCommentIfOpen('project', 'comment')).resolves.toMatchObject({ reviewStatus: 'accepted' })
-    expect(operations[0].eq).toHaveBeenCalledWith('id', 'comment')
-    expect(operations[0].eq).toHaveBeenCalledWith('project_id', 'project')
-    expect(operations[0].eq).toHaveBeenCalledWith('status', 'pending')
-    await expect(acceptCommentIfOpen('project', 'comment')).resolves.toBeNull()
-    await expect(acceptCommentIfOpen('project', 'comment')).rejects.toThrow('accept failed')
+    await expect(acceptCommentIfOpen('project', 'comment','actor')).resolves.toMatchObject({ reviewStatus: 'accepted' })
+    expect(operations[0].eq).not.toHaveBeenCalled()
+    await expect(acceptCommentIfOpen('project', 'comment','actor')).resolves.toBeNull()
+    await expect(acceptCommentIfOpen('project', 'comment','actor')).rejects.toThrow('accept failed')
   })
 
   it('claims newly inserted work and rejects non-conflict insert failures', async () => {

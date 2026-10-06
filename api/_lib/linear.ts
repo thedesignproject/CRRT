@@ -138,7 +138,8 @@ export function hasLinearWriteScope(grantedScopes: string | null | undefined) {
   return Boolean(grantedScopes?.split(/[ ,]+/).includes('write'))
 }
 
-async function linearGraphql<T>(accessToken: string, query: string, variables?: Record<string, unknown>) {
+async function linearGraphql<T>(accessToken: string, query: string, variables?: Record<string, unknown>, signal?: AbortSignal) {
+  signal?.throwIfAborted()
   let response: Response
   try {
     response = await fetch(LINEAR_GRAPHQL_URL, {
@@ -146,7 +147,7 @@ async function linearGraphql<T>(accessToken: string, query: string, variables?: 
       headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, variables }),
       redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
     })
   } catch {
     throw new Error('linear_result_indeterminate')
@@ -172,12 +173,12 @@ export async function getLinearWorkspace(accessToken: string) {
   return { id: organization.id, name: organization.name, teams: teams.filter((team) => team.id && team.name && team.key) }
 }
 
-export async function createLinearIssue(accessToken: string, input: { teamId: string; title: string; description: string }) {
+export async function createLinearIssue(accessToken: string, input: { teamId: string; title: string; description: string; signal?: AbortSignal }) {
   const data = await linearGraphql<{
     issueCreate: { success: boolean; issue: { id: string; identifier: string; url: string } | null }
   }>(accessToken, 'mutation CRRTIssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }', {
     input: { teamId: input.teamId, title: input.title, description: input.description },
-  })
+  }, input.signal)
   const issue = data.issueCreate?.issue
   if (!data.issueCreate?.success || !issue?.id || !issue.identifier || !issue.url) throw new Error('linear_issue_create_failed')
   let externalUrl: string

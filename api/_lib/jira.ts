@@ -145,6 +145,7 @@ export function refreshJiraToken(refreshToken: string) {
 }
 
 async function jiraRequest<T>(accessToken: string, path: string, init: RequestInit = {}, indeterminate = false) {
+  init.signal?.throwIfAborted()
   let response: Response
   try {
     response = await fetch(`${ATLASSIAN_API_URL}${path}`, {
@@ -156,7 +157,7 @@ async function jiraRequest<T>(accessToken: string, path: string, init: RequestIn
         ...init.headers,
       },
       redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
+      signal: init.signal ? AbortSignal.any([init.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
     })
   } catch {
     throw new Error(indeterminate ? 'jira_result_indeterminate' : 'jira_request_failed')
@@ -234,6 +235,7 @@ function adf(text: string) {
 }
 
 export async function createJiraIssue(accessToken: string, input: {
+  signal?: AbortSignal
   cloudId: string
   siteUrl: string
   projectId: string
@@ -246,6 +248,7 @@ export async function createJiraIssue(accessToken: string, input: {
     `/ex/jira/${encodeURIComponent(input.cloudId)}/rest/api/3/issue`,
     {
       method: 'POST',
+      signal: input.signal,
       body: JSON.stringify({ fields: {
         project: { id: input.projectId },
         issuetype: { id: issueTypeId },

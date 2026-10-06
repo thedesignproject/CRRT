@@ -16,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const target = getStringQuery(req.query.target) || 'generic'
     if (!shareId) return jsonError(req, res, 400, 'Missing shareId')
 
-    const share = await getShareById(shareId)
+    const share = await getShareById(shareId, user.userId)
     if (!share) return jsonError(req, res, 404, 'Share not found')
     if (!(await requireProjectCapability(req, res, user, share.projectId, 'agent:operate'))) return
 
@@ -25,9 +25,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const repoConfig = await getRepoConfig(share.projectId)
 
+    const permitted = await getShareById(share.id, user.userId)
+    if (!permitted) return jsonError(req, res, 410, 'Share unavailable')
     let token: string
     try {
-      token = decryptToken(share.accessTokenCiphertext)
+      token = decryptToken(permitted.accessTokenCiphertext)
     } catch {
       // Legacy row encrypted under an old SHARE_TOKEN_SECRET. Self-heal by
       // reissuing the token under the current secret; if the rotation itself
@@ -37,13 +39,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const rotatedShare = await rotateShareToken(
           share.id,
           {
-            accessTokenHash: share.accessTokenHash,
-            accessTokenCiphertext: share.accessTokenCiphertext,
+            accessTokenHash: permitted.accessTokenHash,
+            accessTokenCiphertext: permitted.accessTokenCiphertext,
           },
           {
             accessTokenHash: hashToken(freshToken),
             accessTokenCiphertext: encryptToken(freshToken),
           },
+          user.userId,
         )
         if (rotatedShare) {
           token = freshToken
@@ -54,11 +57,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } else {
           // Another request won the rotation race. Use the winning token so
           // the generated prompt remains valid.
-          const currentShare = await getShareById(share.id)
+          const currentShare = await getShareById(share.id, user.userId)
           if (!currentShare) throw new Error('Share disappeared during token rotation')
           token = decryptToken(currentShare.accessTokenCiphertext)
         }
       } catch (rotationError) {
+        if (rotationError instanceof Error && rotationError.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
         console.error('[feedback-shares/prompt] share token rotation failed', {
           shareId: share.id,
           projectKey: share.projectId,
@@ -87,6 +91,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       tokenUrl: `${base}/api/v1/agent/shares/${share.slug}/state?token=${encodeURIComponent(token)}`,
     })
   } catch (error) {
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
     // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
     console.error('[feedback-shares/prompt] prompt generation failed', {
       shareId: getStringQuery(req.query.shareId),

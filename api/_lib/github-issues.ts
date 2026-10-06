@@ -192,12 +192,14 @@ export async function findGithubIssueByMarker(input: {
 }
 
 export async function createGithubIssue(input: {
+  signal?: AbortSignal
   accessToken: string
   owner: string
   repo: string
   title: string
   body: string
 }) {
+  input.signal?.throwIfAborted()
   if (Buffer.byteLength(input.body, 'utf8') > MAX_GITHUB_ISSUE_BODY_BYTES) {
     throw new Error('github_issue_content_too_large')
   }
@@ -210,7 +212,7 @@ export async function createGithubIssue(input: {
       body: JSON.stringify({ title, body: input.body }),
       headers: githubHeaders(input.accessToken),
       redirect: 'error',
-      signal: AbortSignal.timeout(10_000),
+      signal: input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
     })
   } catch {
     // The request may have reached GitHub even though no response arrived.

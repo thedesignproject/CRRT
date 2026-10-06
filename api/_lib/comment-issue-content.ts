@@ -124,7 +124,7 @@ function parseContent(value: unknown): GithubIssueContent | null {
   }
 }
 
-export async function generateCommentIssueContent(comment: GithubIssueComment) {
+export async function generateCommentIssueContent(comment: GithubIssueComment, signal?: AbortSignal) {
   const fallback = createDefaultCommentIssueContent(comment)
   const apiKey = process.env.AI_API_KEY?.trim()
   const model = process.env.AI_MODEL?.trim()
@@ -135,10 +135,11 @@ export async function generateCommentIssueContent(comment: GithubIssueComment) {
     const userContent = aiInput(comment)
     for (let attempt = 0; attempt < MAX_AI_ATTEMPTS; attempt += 1) {
       try {
+        signal?.throwIfAborted()
         const response = await fetch(endpoint, {
           method: 'POST',
           redirect: 'error',
-          signal: AbortSignal.timeout(8_000),
+          signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(8_000)]) : AbortSignal.timeout(8_000),
           headers: {
             Authorization: `Bearer ${apiKey}`,
             'Content-Type': 'application/json',

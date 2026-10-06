@@ -1,3 +1,4 @@
+import { hashToken } from '../../../../_lib/tokens.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../../../_lib/shares.js', () => ({
@@ -119,6 +120,7 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
     expect(res.statusCode).toBe(200)
     expect(applyAgentFeedbackOperation).toHaveBeenCalledWith({
       shareId: 'share-1',
+      tokenHash: hashToken('token-123'),
       commentId: 'comment-1',
       agentId: 'codex-local',
       idempotencyKey: 'op-1',
@@ -207,4 +209,21 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
     expect(res.statusCode).toBe(status)
     if (duplicate) expect(res.body).toEqual(expect.objectContaining({ duplicate: true, feedbackEventId: 91 }))
   })
+})
+
+it.each(['share_unavailable', 'database unavailable'])('denies an operation after a concurrent share access change: %s', async message => {
+  vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce(new Error(message))
+  const res=mockRes()
+  await call(mockReq({ body:{op:'comment.complete',commentId:'comment-1',payload:{}} }),res)
+  expect(res.statusCode).toBe(message === 'share_unavailable' ? 410 : 500)
+  expect(res.body).not.toHaveProperty('comment')
+})
+
+it('denies duplicate acknowledgments when the atomic lookup sees revoked credentials',async()=>{
+ const {getOperationKey}=await import('../../../../_lib/store.js')
+ vi.mocked(getOperationKey).mockRejectedValueOnce(new Error('share_unavailable'))
+ const res=mockRes();await call(mockReq({body:{op:'comment.note',commentId:'comment-1'}}),res)
+ expect(res.statusCode).toBe(410);expect(res.body).not.toHaveProperty('feedbackEventId')
+ expect(getOperationKey).toHaveBeenLastCalledWith('share-1','codex-local','op-1',hashToken('token-123'))
+ expect(applyAgentFeedbackOperation).not.toHaveBeenCalled()
 })

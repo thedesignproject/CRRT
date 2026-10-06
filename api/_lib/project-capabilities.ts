@@ -35,3 +35,7 @@ export function feedbackVisibilityForRole(
 ): FeedbackVisibility {
   return role === 'guest' ? 'shared' : requested
 }
+
+export function projectFeedbackAllowed(role: ProjectRole, privateProject = false, feedbackAccess = 'team') {
+  return !privateProject || feedbackAccess === 'team' || (feedbackAccess === 'admins' && (role === 'owner' || role === 'admin'))
+}

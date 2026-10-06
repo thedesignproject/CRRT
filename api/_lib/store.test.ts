@@ -324,7 +324,7 @@ describe('membership helpers + claim', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
       memberSingle: { data: { role: 'admin', is_owner: true }, error: null },
     }) as never)
-    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true })
+    expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true, feedbackAllowed: true })
     expect(await isProjectMember('u', 'p')).toBe(true)
 
     vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
@@ -1264,6 +1264,7 @@ describe('comment functions', () => {
 
     await expect(applyAgentFeedbackOperation({
       shareId: 'share-1',
+      tokenHash: 'hash',
       commentId: 'comment-1',
       agentId: 'agent-1',
       idempotencyKey: 'key-1',
@@ -1280,6 +1281,7 @@ describe('comment functions', () => {
 
     await expect(applyAgentFeedbackOperation({
       shareId: 'share-1',
+      tokenHash: 'hash',
       commentId: 'comment-1',
       agentId: 'agent-1',
       idempotencyKey: 'key-2',
@@ -1293,6 +1295,7 @@ describe('comment functions', () => {
 
     await expect(applyAgentFeedbackOperation({
       shareId: 'share-1',
+      tokenHash: 'hash',
       commentId: 'comment-1',
       agentId: 'agent-1',
       idempotencyKey: 'key-3',
@@ -1326,9 +1329,24 @@ describe('comment functions', () => {
       projectId: 'pk',
       scopeType: 'selection',
       scopePageUrl: null,
-    })
+    },'hash')
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comments[0].anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
   })
+})
+
+it('authorizes the acting user inside the project feedback read RPC', async () => {
+  const rpc = vi.fn(() => { const q: any = { select: () => q, eq: () => q, order: async () => ({ data: [], error: null }) }; return q })
+  vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
+  expect(await listProjectComments('pk', { actorUserId: 'u' })).toEqual([])
+  expect(rpc).toHaveBeenCalledWith('read_project_feedback', { p_project: 'pk', p_actor: 'u' })
+})
+it('fails a share read on an atomic access rejection and handles missing rows', async () => {
+  const share = { id: 's', projectId: 'p', scopeType: 'project' as const, scopePageUrl: null }
+  for (const result of [{ data: null, error: { message: 'share_unavailable' } }, { data: null, error: null }]) {
+    vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => ({ select: () => ({ order: async () => result }) }) } as never)
+    if (result.error) await expect(listCommentsForShare(share,'hash')).rejects.toThrow('share_unavailable')
+    else expect(await listCommentsForShare(share,'hash')).toEqual([])
+  }
 })

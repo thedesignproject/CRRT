@@ -2,6 +2,8 @@ export interface Project {
   publicKey: string
   slug: string
   name: string
+  widgetPrivate?: boolean
+  feedbackAccess?: 'team' | 'admins'
   allowedOrigins: string[]
   createdAt: string
   updatedAt: string
@@ -217,7 +219,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const text = await response.text()
 
   if (!response.ok) {
-    throw new Error(text || `Request failed with ${response.status}`)
+    throw Object.assign(new Error(text || `Request failed with ${response.status}`), { status: response.status })
   }
 
   try {
@@ -853,4 +855,11 @@ export function getShareEvents(apiBase: string, slug: string, token: string, aft
       },
     },
   )
+}
+
+export function resolvePendingExternalWork(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider) {
+  return requestJson<{resolved: boolean}>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-recovery`, {
+    method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders(accessToken)},
+    body: JSON.stringify({provider, confirmCheckedTracker: true}),
+  })
 }

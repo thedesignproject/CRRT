@@ -159,7 +159,9 @@ export async function listExtensionComments(
 ) {
   const client = getServiceSupabase()
   const { page, limit } = parseExtensionPagination(input)
-  let query = client.from('comments').select(SELECT, { count: 'exact' })
+  let query = (input.projectId
+    ? client.rpc('read_project_feedback', { p_project: input.projectId, p_actor: userId } as never)
+    : client.from('comments')).select(SELECT, { count: 'exact' })
   if (input.projectId) {
     query = query.eq('project_id', input.projectId)
       .not('url', 'is', null)
@@ -173,8 +175,11 @@ export async function listExtensionComments(
   query = query.order('created_at', { ascending: false }).range((page - 1) * limit, page * limit - 1)
   if (input.pageUrl !== undefined) query = query.eq('url', normalizeExtensionPageUrl(input.pageUrl).pageUrl)
   const { data, error, count } = await query
-  if (error) throw new Error(error.message)
-  const renderable = (data ?? []).filter(hasRenderableTarget)
+  if (error) {
+    if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Forbidden')
+    throw new Error(error.message)
+  }
+  const renderable = ((data as unknown as Parameters<typeof serialize>[1][] | null) ?? []).filter(hasRenderableTarget)
   return { items: await Promise.all(renderable.map((row) => serialize(client, row, userId))), page, limit, total: count ?? 0 }
 }
 

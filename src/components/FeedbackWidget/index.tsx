@@ -386,6 +386,8 @@ function FeedbackWidgetInner({
   const widgetLogin = useWidgetLogin(apiBase, projectId)
   const personalComments = suppliedPersonalComments ?? widgetLogin.comments
   const viewerEmail = suppliedViewerEmail ?? widgetLogin.session?.displayName
+  const [privateProject, setPrivateProject] = useState(false)
+  useEffect(() => { setPrivateProject(false) }, [apiBase, projectId])
   const [authorName, setAuthorName] = useState<string | null>(null)
   const authorNameRef = useRef<string | null>(null)
   const [showNameModal, setShowNameModal] = useState(false)
@@ -396,6 +398,7 @@ function FeedbackWidgetInner({
       authorNameRef.current = name; setAuthorName(name); return
     }
     authorNameRef.current = null; setAuthorName(null)
+    if (privateProject) return
     try {
       const stored = localStorage.getItem(AUTHOR_NAME_KEY)
       if (stored) {
@@ -403,7 +406,7 @@ function FeedbackWidgetInner({
         setAuthorName(stored)
       }
     } catch {}
-  }, [personalComments, viewerEmail])
+  }, [personalComments, viewerEmail, privateProject])
 
   function saveAuthorName(name: string) {
     const trimmed = name.trim()
@@ -420,6 +423,7 @@ function FeedbackWidgetInner({
   }
 
   const pendingSendAfterName = useRef(false)
+  const resumeAfterLogin = useRef(false)
 
   function handleNameSubmit() {
     if (!nameInput.trim()) return
@@ -439,6 +443,7 @@ function FeedbackWidgetInner({
   function handleNameCancel() {
     widgetLogin.cancel()
     pendingSendAfterName.current = false
+    resumeAfterLogin.current = false
     setShowNameModal(false)
     setNameInput('')
   }
@@ -592,19 +597,18 @@ function FeedbackWidgetInner({
   useEffect(() => {
     let cancelled = false
     let refreshVersion = 0
-    const request = personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId)
+    const request = personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) })
     request.then((nextComments) => {
       if (!cancelled) setComments(nextComments)
     }).catch((error) => { if (!cancelled) setApiError(String(error.message)) })
     const refresh = async () => {
-      if (!personalComments) return
       const version = ++refreshVersion
       try {
-        const fresh = await personalComments.list(currentUrl)
+        const fresh = await (personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) }))
         if (!cancelled && version === refreshVersion) setComments(fresh)
       } catch { /* Preserve drafts and loaded comments while offline. */ }
     }
-    const timer = personalComments ? window.setInterval(refresh, 240_000) : undefined
+    const timer = window.setInterval(refresh, 240_000)
     window.addEventListener('focus', refresh)
     return () => {
       cancelled = true
@@ -766,7 +770,7 @@ function FeedbackWidgetInner({
     if (!comment.trim() || !target || sendingRef.current || screenshotCapturing) return
     setSpeechStopSignal((signal) => signal + 1)
 
-    if (!authorNameRef.current) {
+    if (!authorNameRef.current || (privateProject && !personalComments)) {
       pendingSendAfterName.current = true
       setNameInput('')
       setShowNameModal(true)
@@ -807,7 +811,7 @@ function FeedbackWidgetInner({
         payload.imageMimeType = encoded.mimeType
       }
 
-      const data = await (personalComments ? personalComments.create(payload) : postComment(apiBase, payload))
+      const data = await (personalComments ? personalComments.create(payload) : postComment(apiBase, payload, () => { setPrivateProject(true); setShowNameModal(true); pendingSendAfterName.current = true }))
       if (!data) return
 
       const newComment: Comment = {
@@ -851,16 +855,17 @@ function FeedbackWidgetInner({
       sendingRef.current = false
       setSending(false)
     }
-  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments])
+  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments, privateProject])
 
   useEffect(() => {
-    if (!widgetLogin.session) return
+    if (!widgetLogin.session || !resumeAfterLogin.current) return
+    resumeAfterLogin.current = false
     setShowNameModal(false)
     if (pendingSendAfterName.current) {
       pendingSendAfterName.current = false
       void handleSend()
     } else if (target) setMode('commenting')
-  }, [widgetLogin.session])
+  }, [widgetLogin.session, handleSend])
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
@@ -2477,7 +2482,8 @@ function FeedbackWidgetInner({
           onSubmit={handleNameSubmit}
           onCancel={handleNameCancel}
           existingName={authorNameRef.current}
-          onLogin={widgetLogin.login}
+          loginRequired={privateProject}
+          onLogin={() => { resumeAfterLogin.current = true; void widgetLogin.login() }}
           onLogout={widgetLogin.logout}
           signedIn={Boolean(widgetLogin.session)}
           busy={widgetLogin.busy}

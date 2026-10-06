@@ -43,7 +43,7 @@ beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
   vi.mocked(requireUser).mockReset()
   vi.mocked(requireProjectCapability).mockReset()
-  vi.mocked(getShareById).mockReset()
+  vi.mocked(getShareById).mockReset().mockResolvedValue(SHARE as never)
   vi.mocked(getProject).mockReset()
   vi.mocked(getRepoConfig).mockReset()
   vi.mocked(rotateShareToken).mockReset()
@@ -132,6 +132,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
       's',
       { accessTokenHash: 'h', accessTokenCiphertext: 'c' },
       { accessTokenHash: 'hashed', accessTokenCiphertext: 'ciphertext' },
+      'u',
     )
     expect(vi.mocked(buildPrompt)).toHaveBeenCalledWith('generic', expect.objectContaining({ token: 'fresh-token' }))
     expect(warnSpy).toHaveBeenCalledWith(
@@ -145,6 +146,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     const winningShare = { ...SHARE, accessTokenHash: 'winning-hash', accessTokenCiphertext: 'winning-ciphertext' }
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getShareById)
+      .mockResolvedValueOnce(SHARE as never)
       .mockResolvedValueOnce(SHARE as never)
       .mockResolvedValueOnce(winningShare as never)
     vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'member' })
@@ -186,4 +188,36 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     expect(errorSpy).toHaveBeenCalled()
     errorSpy.mockRestore()
   })
+})
+
+it('does not release or rotate a credential after membership is revoked during prompt preparation', async () => {
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+  vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
+  vi.mocked(getProject).mockResolvedValue({publicKey:'p',name:'P'} as never)
+  vi.mocked(getRepoConfig).mockImplementationOnce(async()=>{vi.mocked(getShareById).mockRejectedValueOnce(new Error('forbidden'));return null})
+  const res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res)
+  expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('tokenUrl')
+  expect(rotateShareToken).not.toHaveBeenCalled()
+})
+it('does not rotate a legacy token after concurrent membership revocation', async()=>{
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+  vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
+  vi.mocked(getProject).mockResolvedValue({publicKey:'p',name:'P'} as never)
+  vi.mocked(getRepoConfig).mockResolvedValue(null)
+  vi.mocked(decryptToken).mockImplementationOnce(()=>{throw new Error('old key')})
+  vi.mocked(rotateShareToken).mockRejectedValueOnce(new Error('forbidden'))
+  const res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res)
+  expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('tokenUrl')
+})
+it('handles a share that expires or disappears during preparation and rotation', async()=>{
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+  vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
+  vi.mocked(getProject).mockResolvedValue({publicKey:'p',name:'P'} as never)
+  vi.mocked(getRepoConfig).mockResolvedValue(null)
+  vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never).mockResolvedValueOnce(null)
+  let res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res);expect(res.statusCode).toBe(410)
+  vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never).mockResolvedValueOnce(SHARE as never).mockResolvedValueOnce(null)
+  vi.mocked(decryptToken).mockImplementationOnce(()=>{throw new Error('old key')})
+  vi.mocked(rotateShareToken).mockResolvedValueOnce(null)
+  res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res);expect(res.statusCode).toBe(410)
 })

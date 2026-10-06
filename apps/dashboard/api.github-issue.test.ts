@@ -151,3 +151,20 @@ describe('createCommentGithubIssue', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ method: 'DELETE' }))
   })
 })
+
+it('posts explicit admin recovery confirmation to the encoded endpoint',async()=>{
+ const {resolvePendingExternalWork}=await import('./api')
+ const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({resolved:true}),{status:200}));vi.stubGlobal('fetch',fetch)
+ expect(await resolvePendingExternalWork('/api','token','comment/1','linear')).toEqual({resolved:true})
+ expect(fetch).toHaveBeenCalledWith('/api/v1/comments/comment%2F1/external-work-recovery',expect.objectContaining({method:'POST',body:JSON.stringify({provider:'linear',confirmCheckedTracker:true})}))
+})
+
+it.each([
+  ['', 503, 'Request failed with 503'],
+  ['Project admin required', 403, 'Project admin required'],
+])('retains HTTP status and a useful message when recovery fails: %s', async (body, status, message) => {
+  const { resolvePendingExternalWork } = await import('./api')
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status })))
+  await expect(resolvePendingExternalWork('/api', 'token', 'comment/1', 'github'))
+    .rejects.toMatchObject({ message, status })
+})

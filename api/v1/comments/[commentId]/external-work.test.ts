@@ -1,3 +1,4 @@
+vi.mock('../../../_lib/tracker-dispatch-lock.js',()=>({withTrackerDispatchLock:vi.fn(async(_project:string,work:(signal:AbortSignal)=>Promise<unknown>,stopped:()=>Promise<void>)=>{try{return await work(new AbortController().signal)}finally{await stopped()}})}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
@@ -10,7 +11,7 @@ vi.mock('../../../_lib/jira.js', () => ({ createJiraIssue: vi.fn(), getJiraDesti
 vi.mock('../../../_lib/external-work-sync.js', () => ({ closeLinkedExternalWork: vi.fn() }))
 vi.mock('../../../_lib/store.js', () => ({
   acceptCommentIfOpen: vi.fn(), claimCommentExternalWork: vi.fn(), finalizeCommentExternalWork: vi.fn(), getComment: vi.fn(), getCommentExternalWork: vi.fn(),
-  getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(), markCommentExternalWorkUncertain: vi.fn(),
+  getCommentForGithubIssue: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(), acknowledgeTrackerDispatchStopped: vi.fn().mockResolvedValue(undefined), beginTrackerDispatch: vi.fn(),
   releaseCommentExternalWork: vi.fn(),
 }))
 vi.mock('./github-issue.js', () => ({ default: vi.fn() }))
@@ -24,7 +25,7 @@ import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
 import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
 import { createJiraIssue, getJiraDestinations } from '../../../_lib/jira.js'
-import { acceptCommentIfOpen, claimCommentExternalWork, finalizeCommentExternalWork, getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration, markCommentExternalWorkUncertain, releaseCommentExternalWork } from '../../../_lib/store.js'
+import { acceptCommentIfOpen, claimCommentExternalWork, finalizeCommentExternalWork, getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration, beginTrackerDispatch, releaseCommentExternalWork } from '../../../_lib/store.js'
 
 function response() {
   return { statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
@@ -57,7 +58,7 @@ beforeEach(() => {
     projectId: '100', projectKey: 'WEB', projectName: 'Website',
   }])
   vi.mocked(claimCommentExternalWork).mockImplementation(async (input) => ({ id: 'work', state: 'creating', leaseToken: input.leaseToken } as never))
-  vi.mocked(markCommentExternalWorkUncertain).mockResolvedValue(true)
+  vi.mocked(beginTrackerDispatch).mockResolvedValue(true)
   vi.mocked(createLinearIssue).mockResolvedValue({ externalId: 'issue', externalKey: 'WEB-1', externalUrl: 'https://linear.app/issue/WEB-1' })
   vi.mocked(createJiraIssue).mockResolvedValue({ externalId: 'jira-issue', externalKey: 'WEB-2', externalUrl: 'https://acme.atlassian.net/browse/WEB-2' })
   vi.mocked(finalizeCommentExternalWork).mockResolvedValue({ createdAt: 'now' } as never)
@@ -129,7 +130,7 @@ describe('external work endpoint', () => {
   it('reports disconnected projects, existing issues, and safe preparation failures', async () => {
     const existing = { issueNumber: 7, issueUrl: 'https://github.com/acme/store/issues/7', createdAt: 'now' }
     vi.mocked(getGithubIssueConnection).mockResolvedValueOnce(null)
-    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never)
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never).mockResolvedValueOnce({ ...comment, githubIssue: existing } as never)
     let res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
     expect(res.body).toMatchObject({ connected: false, destination: null, existing })
@@ -150,7 +151,7 @@ describe('external work endpoint', () => {
     const created = response()
     await call({ method: 'POST', query: { commentId: 'c' }, body: { provider: 'linear', draft: { title: 'Edited', body: 'Details' } }, headers: {} }, created)
     expect(created.statusCode).toBe(201)
-    expect(createLinearIssue).toHaveBeenCalledWith('linear-token', { teamId: 'team', title: 'Edited', description: 'Details' })
+    expect(createLinearIssue).toHaveBeenCalledWith('linear-token', { teamId: 'team', title: 'Edited', description: 'Details', signal: expect.any(AbortSignal) })
     expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({
       externalKey: 'WEB-1', workspaceId: 'workspace', containerId: 'team',
     }))
@@ -223,7 +224,7 @@ describe('external work endpoint', () => {
     expect(releaseCommentExternalWork).toHaveBeenCalled()
     expect(createLinearIssue).not.toHaveBeenCalled()
 
-    vi.mocked(markCommentExternalWorkUncertain).mockResolvedValueOnce(false)
+    vi.mocked(beginTrackerDispatch).mockResolvedValueOnce(false)
     res = response()
     await call(post(), res)
     expect(res.statusCode).toBe(409)
@@ -267,7 +268,7 @@ describe('external work endpoint', () => {
     expect(getJiraDestinations).toHaveBeenCalledWith('jira-token')
     expect(createJiraIssue).toHaveBeenCalledWith('jira-token', {
       cloudId: 'cloud', siteUrl: 'https://acme.atlassian.net', projectId: '100',
-      title: 'Edited for Jira', description: 'Jira details',
+      title: 'Edited for Jira', description: 'Jira details', signal: expect.any(AbortSignal),
     })
     expect(finalizeCommentExternalWork).toHaveBeenCalledWith(expect.objectContaining({
       externalKey: 'WEB-2', workspaceId: 'cloud', containerId: '100',
@@ -298,10 +299,7 @@ describe('external work endpoint', () => {
   })
 
   it('preserves a concurrent rejection and schedules closure after creation is finalized', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce({ ...comment, reviewStatus: 'rejected', updatedAt: 'rejected-version' } as never)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ ...comment,reviewStatus:'rejected',updatedAt:'rejected-version' } as never);return null})
     const res = response()
     await call(post(), res)
     expect(res.statusCode).toBe(201)
@@ -310,14 +308,53 @@ describe('external work endpoint', () => {
   })
 
   it('does not schedule closure when the comment disappears after creation', async () => {
-    vi.mocked(acceptCommentIfOpen).mockResolvedValueOnce(null)
-    vi.mocked(getComment)
-      .mockResolvedValueOnce(comment as never)
-      .mockResolvedValueOnce(null)
+    vi.mocked(acceptCommentIfOpen).mockImplementationOnce(async()=>{vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(null);return null})
     const res = response()
     await call(post(), res)
     expect(res.statusCode).toBe(201)
     expect(closeLinkedExternalWork).not.toHaveBeenCalled()
     expect(waitUntil).not.toHaveBeenCalled()
   })
+})
+
+it.each(['github','linear','jira'])('denies a %s draft after access is revoked during metadata lookup',async provider=>{
+  vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockRejectedValueOnce(new Error('forbidden'))
+  const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
+  expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('draft')
+  expect(getCommentForGithubIssue).toHaveBeenCalledWith('p','c','u')
+})
+it.each(['github','linear'])('returns 404 if the %s draft comment disappears during metadata lookup',async provider=>{
+  vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockResolvedValueOnce(null)
+  const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
+  expect(res.statusCode).toBe(404)
+})
+
+it.each(['linear','jira'])('denies existing %s issue links and acceptance after authorization is revoked',async provider=>{
+ vi.mocked(getCommentExternalWork).mockResolvedValueOnce({state:'created',externalUrl:'https://tracker.test/private'} as never)
+ vi.mocked(acceptCommentIfOpen).mockRejectedValueOnce(new Error('forbidden'))
+ const res=response();await call({...post(),body:{provider,draft:{title:'Title',body:'Body'}}},res)
+ expect(res.statusCode).toBe(403);expect(res.body).toEqual({error:'Forbidden'})
+ expect(createLinearIssue).not.toHaveBeenCalled();expect(createJiraIssue).not.toHaveBeenCalled()
+})
+it('denies a concurrent existing-issue claim after authorization is revoked',async()=>{
+ vi.mocked(claimCommentExternalWork).mockResolvedValueOnce({state:'created',externalUrl:'https://tracker.test/private'} as never)
+ vi.mocked(acceptCommentIfOpen).mockRejectedValueOnce(new Error('forbidden'))
+ const res=response();await call(post(),res);expect(res.statusCode).toBe(403)
+ expect(res.body).not.toHaveProperty('externalUrl')
+})
+
+it('does not dispatch Jira when access is revoked during destination preparation',async()=>{
+ vi.mocked(getJiraDestinations).mockImplementationOnce(async()=>{
+  vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
+  return [{cloudId:'cloud',projectId:'100',siteUrl:'https://acme.atlassian.net'}] as never
+ })
+ const res=response();await call({...post(),body:{provider:'jira',draft:{title:'Title',body:'Body'}}},res)
+ expect(res.statusCode).toBe(403);expect(createJiraIssue).not.toHaveBeenCalled();expect(releaseCommentExternalWork).toHaveBeenCalled()
+ expect(beginTrackerDispatch).toHaveBeenCalledWith('p','c',expect.any(String),expect.any(String),'work')
+})
+it.each(['linear','jira'])('does not dispatch %s if the atomic actor check rejects the prepared request',async provider=>{
+ vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
+ const res=response();await call({...post(),body:{provider,draft:{title:'Title',body:'Body'}}},res)
+ expect(res.statusCode).toBe(403);expect(createLinearIssue).not.toHaveBeenCalled();expect(createJiraIssue).not.toHaveBeenCalled()
+ expect(releaseCommentExternalWork).toHaveBeenCalled()
 })

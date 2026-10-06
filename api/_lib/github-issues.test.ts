@@ -384,3 +384,13 @@ describe('GitHub issue requests', () => {
     }
   })
 })
+
+it('cancels outbound issue creation when its dispatch coordination is lost',async()=>{
+ const controller=new AbortController()
+ fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({number:7,html_url:'https://github.com/a/b/issues/7',created_at:'now'}),{status:201}))
+ await createGithubIssue({accessToken:'t',owner:'a',repo:'b',title:'Title',body:'Body',signal:controller.signal})
+ expect(fetchMock.mock.calls[0][1].signal.aborted).toBe(false)
+ controller.abort();fetchMock.mockClear()
+ await expect(createGithubIssue({accessToken:'t',owner:'a',repo:'b',title:'Title',body:'Body',signal:controller.signal})).rejects.toThrow()
+ expect(fetchMock).not.toHaveBeenCalled()
+})

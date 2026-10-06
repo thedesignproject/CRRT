@@ -133,3 +133,34 @@ describe('useComments refresh ordering', () => {
     expect(second.result.current.error).toBeNull()
   })
 })
+
+it('clears previously loaded private comments when focus revalidation denies access', async () => {
+  vi.mocked(listComments).mockResolvedValueOnce([comment('private')]).mockRejectedValueOnce(Object.assign(new Error('Forbidden'),{status:403}))
+  const {result}=renderHook(()=>useComments('/api','token','project'))
+  await waitFor(()=>expect(result.current.comments).toHaveLength(1))
+  await act(async()=>window.dispatchEvent(new Event('focus')))
+  await waitFor(()=>expect(result.current.comments).toEqual([]))
+  expect(result.current.commentsProjectId).toBeNull()
+  expect(result.current.error).toBe('Forbidden')
+})
+
+it('revalidates on visible tabs, ignores hidden transitions, and removes listeners on unmount', async () => {
+  vi.mocked(listComments).mockResolvedValue([comment('private')])
+  const {result,unmount}=renderHook(()=>useComments('/api','token','project'))
+  await waitFor(()=>expect(result.current.comments).toHaveLength(1))
+  const before=vi.mocked(listComments).mock.calls.length
+  const visibility=vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden')
+  await act(async()=>document.dispatchEvent(new Event('visibilitychange')))
+  expect(listComments).toHaveBeenCalledTimes(before)
+  visibility.mockReturnValue('visible')
+  vi.mocked(listComments).mockRejectedValueOnce(Object.assign(new Error('Expired'),{status:401}))
+  await act(async()=>document.dispatchEvent(new Event('visibilitychange')))
+  expect(result.current.comments).toEqual([])
+  expect(result.current.error).toBe('Expired')
+  const after=vi.mocked(listComments).mock.calls.length
+  unmount()
+  window.dispatchEvent(new Event('focus'))
+  document.dispatchEvent(new Event('visibilitychange'))
+  expect(listComments).toHaveBeenCalledTimes(after)
+  visibility.mockRestore()
+})
