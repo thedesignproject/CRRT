@@ -53,7 +53,7 @@ export function AgentSidebar({
   onClose,
 }: AgentSidebarProps) {
   return (
-    <aside className="w-[300px] shrink-0 flex flex-col border-l border-border bg-sidebar overflow-y-auto animate-slide-in">
+    <aside id="agent-sidebar" className="w-[300px] shrink-0 flex flex-col border-l border-border bg-sidebar overflow-y-auto animate-slide-in">
       <div className="px-4 py-4 border-b border-sidebar-border flex items-center justify-between">
         <h2 className="text-base font-bold text-foreground tracking-tight">Agent handoff</h2>
         <button
