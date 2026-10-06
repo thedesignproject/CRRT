@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import postgres from 'postgres'
+import { transitionLegacyTrackerExports } from './tracker-rollout.js'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
 const connection = process.env.DATABASE_URL
@@ -422,7 +423,7 @@ describeDatabase('project privacy database guards', () => {
       if(work) await sql`update comment_external_work set lease_expires_at=now()-interval '1 hour' where id=${work}`
       else await sql`update comments set github_issue_lease_expires_at=now()-interval '1 hour' where id=${comment}`
       await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
-      if(provider==='github') expect(await sql`select * from claim_comment_github_issue(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+      if(provider==='github') expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
       await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${randomUUID()},${work})`
       await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
       await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${lease},${work})`
@@ -434,6 +435,56 @@ describeDatabase('project privacy database guards', () => {
       expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(false)
     }finally{
       if(work)await sql`delete from comment_external_work where id=${work}`
+      else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
+    }
+  })
+  it('preserves legacy recovery while preventing old claimers from taking a new active export', async () => {
+    const first=randomUUID(), second=randomUUID(), third=randomUUID()
+    await sql`update comments set status='approved' where id=${comment}`
+    try {
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${first},120,false)`).toHaveLength(1)
+      await sql`select mark_comment_github_issue_uncertain(${comment},${project},${first})`
+      expect((await sql`select release_comment_github_issue(${comment},${project},${first}) as released`)[0].released).toBe(true)
+      // The old app can still recover a released indeterminate attempt.
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${second},120,true)`).toHaveLength(1)
+      await sql`select release_comment_github_issue(${comment},${project},${second})`
+      // The new app adopts a legacy release without requiring a nonexistent ack.
+      expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${third},120,true)`).toHaveLength(1)
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+      expect((await sql`select release_comment_github_issue_v2(${comment},${project},${third}) as released`)[0].released).toBe(false)
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},'github')`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${third},NULL)`
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},'github') as resolved`)[0].resolved).toBe(true)
+      // A normal new dispatch is also fenced from old claimers indefinitely.
+      expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${third},30,false)`).toHaveLength(1)
+      await sql`select begin_actor_tracker_dispatch(${project},${owner},${comment},${third},NULL)`
+      expect((await sql`select github_issue_lease_expires_at::text as expiry from comments where id=${comment}`)[0].expiry).toBe('infinity')
+      expect(await transitionLegacyTrackerExports(sql,project,true)).toHaveLength(0)
+      for(const role of ['anon','authenticated']) {
+        expect((await sql`select has_function_privilege(${role},'public.claim_comment_github_issue_v2(uuid,text,uuid,integer,boolean)','EXECUTE') as allowed`)[0].allowed).toBe(false)
+        expect((await sql`select has_function_privilege(${role},'public.release_comment_github_issue_v2(uuid,text,uuid)','EXECUTE') as allowed`)[0].allowed).toBe(false)
+      }
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+    } finally { await sql`select reset_comment_github_issue_attempt(${comment},${project},${third})` }
+  })
+  it.each(['github','linear','jira'])('transitions legacy %s only after explicit worker-drain confirmation', async provider => {
+    const lease=randomUUID(), work=provider==='github'?null:randomUUID()
+    if(work) await sql`insert into comment_external_work(id,project_id,comment_id,provider,state,lease_token,lease_expires_at,uncertain_at) values (${work},${project},${comment},${provider},'creating',${lease},now()-interval '1 hour',now())`
+    else await sql`update comments set github_issue_lease_token=${lease},github_issue_lease_expires_at=now()-interval '1 hour',github_issue_uncertain_at=now() where id=${comment}`
+    try {
+      expect(await transitionLegacyTrackerExports(sql,project)).toHaveLength(1)
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      await worker.begin(async tx => {
+        await tx`select pg_advisory_xact_lock_shared(hashtextextended('crrt-tracker-dispatch:' || ${project},0))`
+        await expect(transitionLegacyTrackerExports(sql,project,true)).rejects.toMatchObject({message:'tracker_dispatch_active'})
+      })
+      expect(await transitionLegacyTrackerExports(sql,project,true)).toHaveLength(1)
+      expect(await transitionLegacyTrackerExports(sql,project,true)).toHaveLength(0)
+      expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(true)
+      // Transition acknowledges completion; only an admin may resolve afterward.
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(true)
+    } finally {
+      if(work) await sql`delete from comment_external_work where id=${work}`
       else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
     }
   })
