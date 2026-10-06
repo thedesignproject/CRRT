@@ -339,12 +339,9 @@ BEGIN
   PERFORM 1 FROM public.comments c WHERE c.id=p_comment AND c.project_id=p_project AND c.status IN ('pending','approved') FOR UPDATE;
   IF NOT FOUND THEN RETURN false; END IF;
   IF p_work IS NULL THEN
-    IF NOT public.mark_comment_github_issue_uncertain(p_comment,p_project,p_lease) THEN RETURN false; END IF;
-    UPDATE public.comments SET github_issue_lease_expires_at='infinity'::timestamptz
-      WHERE id=p_comment AND project_id=p_project AND github_issue_lease_token=p_lease;
-    RETURN true;
+    RETURN public.mark_comment_github_issue_uncertain(p_comment,p_project,p_lease);
   END IF;
-  UPDATE public.comment_external_work w SET uncertain_at=now(),lease_expires_at='infinity'::timestamptz,updated_at=now()
+  UPDATE public.comment_external_work w SET uncertain_at=now(),updated_at=now()
     WHERE w.id=p_work AND w.comment_id=p_comment AND w.project_id=p_project AND w.state='creating'
       AND w.lease_token=p_lease AND w.uncertain_at IS NULL AND w.lease_expires_at>clock_timestamp();
   RETURN FOUND;
@@ -354,7 +351,9 @@ $$;
 REVOKE ALL ON FUNCTION public.tracker_dispatch_pending(text),public.begin_actor_tracker_dispatch(text,uuid,uuid,uuid,uuid) FROM PUBLIC,anon,authenticated;
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.tracker_dispatch_pending(text),public.begin_actor_tracker_dispatch(text,uuid,uuid,uuid,uuid) TO service_role;
+
 --> statement-breakpoint
+
 CREATE FUNCTION public.guard_share_comment_event()
 RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
 DECLARE v_share public.feedback_shares%ROWTYPE; v_project text; v_private boolean;
@@ -392,7 +391,7 @@ GRANT EXECUTE ON FUNCTION public.read_agent_operation_key(uuid,text,text,text) T
 
 --> statement-breakpoint
 
-CREATE FUNCTION public.claim_comment_github_issue_v2(
+CREATE OR REPLACE FUNCTION public.claim_comment_github_issue(
 	p_comment_id uuid,
 	p_project_key text,
 	p_lease_token uuid,
@@ -411,15 +410,15 @@ BEGIN
 	UPDATE public.comments AS comment
 	SET
 		github_issue_lease_token = p_lease_token,
-		github_issue_lease_expires_at = CASE WHEN p_recovery THEN 'infinity'::timestamptz ELSE now() + make_interval(
+		github_issue_lease_expires_at = now() + make_interval(
 			secs => least(greatest(p_lease_seconds, 30), 900)
-		) END
+		)
 	WHERE comment.id = p_comment_id
 		AND comment.project_id = p_project_key
 		AND comment.status IN ('pending', 'approved')
 		AND comment.github_issue_number IS NULL
 		AND (
-			(p_recovery AND comment.github_issue_uncertain_at IS NOT NULL AND (comment.github_issue_lease_token IS NULL OR comment.github_issue_lease_expires_at = '-infinity'::timestamptz))
+			(p_recovery AND comment.github_issue_uncertain_at IS NOT NULL AND comment.github_issue_lease_expires_at = '-infinity'::timestamptz)
 			OR
 			(NOT p_recovery AND comment.github_issue_uncertain_at IS NULL)
 		)
@@ -431,7 +430,7 @@ BEGIN
 END;
 $$;
 --> statement-breakpoint
-CREATE FUNCTION public.release_comment_github_issue_v2(
+CREATE OR REPLACE FUNCTION public.release_comment_github_issue(
 	p_comment_id uuid,
 	p_project_key text,
 	p_lease_token uuid
@@ -459,10 +458,6 @@ BEGIN
 	RETURN v_updated = 1;
 END;
 $$;
---> statement-breakpoint
-REVOKE ALL ON FUNCTION public.claim_comment_github_issue_v2(uuid,text,uuid,integer,boolean),public.release_comment_github_issue_v2(uuid,text,uuid) FROM PUBLIC,anon,authenticated;
---> statement-breakpoint
-GRANT EXECUTE ON FUNCTION public.claim_comment_github_issue_v2(uuid,text,uuid,integer,boolean),public.release_comment_github_issue_v2(uuid,text,uuid) TO service_role;
 --> statement-breakpoint
 -- Negative infinity is a durable acknowledgment that this exact sender callback settled.
 -- Expired leases and absent coordination sessions are deliberately not acknowledgments.
@@ -497,7 +492,7 @@ BEGIN
   PERFORM 1 FROM public.comments c WHERE c.id=p_comment AND c.project_id=p_project FOR UPDATE;
   IF NOT FOUND THEN RETURN false; END IF;
   IF p_provider='github' THEN
-    IF EXISTS(SELECT 1 FROM public.comments WHERE id=p_comment AND project_id=p_project AND github_issue_uncertain_at IS NOT NULL AND github_issue_lease_token IS NOT NULL AND github_issue_lease_expires_at IS DISTINCT FROM '-infinity'::timestamptz) THEN RAISE EXCEPTION 'tracker_dispatch_unconfirmed'; END IF;
+    IF EXISTS(SELECT 1 FROM public.comments WHERE id=p_comment AND project_id=p_project AND github_issue_uncertain_at IS NOT NULL AND github_issue_lease_expires_at IS DISTINCT FROM '-infinity'::timestamptz) THEN RAISE EXCEPTION 'tracker_dispatch_unconfirmed'; END IF;
     UPDATE public.comments c SET github_issue_uncertain_at=NULL,github_issue_lease_token=NULL,github_issue_lease_expires_at=NULL
       WHERE c.id=p_comment AND c.project_id=p_project AND c.github_issue_number IS NULL AND c.github_issue_uncertain_at IS NOT NULL;
     RETURN FOUND;

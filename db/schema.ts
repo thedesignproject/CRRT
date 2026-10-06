@@ -1626,3 +1626,74 @@ REVOKE ALL ON FUNCTION public.resolve_actor_tracker_dispatch(text,uuid,uuid,text
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.resolve_actor_tracker_dispatch(text,uuid,uuid,text) TO service_role;
 `
+
+// Restore the pre-0032 service RPC contract for already-migrated environments.
+export const projectPrivacyLegacyRecoverySql = `
+CREATE OR REPLACE FUNCTION public.claim_comment_github_issue(
+	p_comment_id uuid,
+	p_project_key text,
+	p_lease_token uuid,
+	p_lease_seconds integer,
+	p_recovery boolean DEFAULT false
+)
+RETURNS SETOF public.comments
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+	PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project_key, 0));
+
+	RETURN QUERY
+	UPDATE public.comments AS comment
+	SET
+		github_issue_lease_token = p_lease_token,
+		github_issue_lease_expires_at = now() + make_interval(
+			secs => least(greatest(p_lease_seconds, 30), 900)
+		)
+	WHERE comment.id = p_comment_id
+		AND comment.project_id = p_project_key
+		AND comment.status IN ('pending', 'approved')
+		AND comment.github_issue_number IS NULL
+		AND (
+			(p_recovery AND comment.github_issue_uncertain_at IS NOT NULL)
+			OR
+			(NOT p_recovery AND comment.github_issue_uncertain_at IS NULL)
+		)
+		AND (
+			comment.github_issue_lease_token IS NULL
+			OR comment.github_issue_lease_expires_at <= now()
+		)
+	RETURNING comment.*;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.release_comment_github_issue(
+	p_comment_id uuid,
+	p_project_key text,
+	p_lease_token uuid
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+	v_updated integer;
+BEGIN
+	PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project_key, 0));
+
+	UPDATE public.comments AS comment
+	SET
+		github_issue_lease_token = NULL,
+		github_issue_lease_expires_at = NULL
+	WHERE comment.id = p_comment_id
+		AND comment.project_id = p_project_key
+		AND comment.github_issue_lease_token = p_lease_token
+		AND comment.github_issue_number IS NULL;
+
+	GET DIAGNOSTICS v_updated = ROW_COUNT;
+	RETURN v_updated = 1;
+END;
+$$;
+`
