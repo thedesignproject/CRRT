@@ -1,6 +1,6 @@
 # Tracker recovery rollout
 
-0032 is an additive rollout for tracker recovery. It leaves the legacy GitHub claim/release RPCs unchanged and adds service-only v2 RPCs for the new app. An old app remains compatible if deployment fails after migration. New outbound dispatches use positive-infinity leases until their exact sender acknowledges completion with negative infinity; legacy claimers cannot steal an active new export after a timeout.
+0033 restores the pre-0032 legacy recovery contract and provides an additive rollout for tracker recovery. It leaves the legacy GitHub claim/release RPCs unchanged and adds service-only v2 RPCs for the new app. An old app remains compatible if deployment fails after migration. New outbound dispatches use positive-infinity leases until their exact sender acknowledges completion with negative infinity; legacy claimers cannot steal an active new export after a timeout.
 
 A GitHub uncertain row with no lease is a completed legacy release. The new app can claim it for marker lookup or an admin can resolve it after checking the tracker. New code never clears an uncertain lease through release, so an interrupted new sender cannot produce that legacy state. Finite uncertain leases are not automatically acknowledged: they may belong to an active old worker. The migration does not infer completion from lease expiry.
 
