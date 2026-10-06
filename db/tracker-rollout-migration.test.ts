@@ -15,8 +15,9 @@ describe('tracker recovery rollout migration', () => {
   })
   it('adds a forward-only journal entry without changing table shapes', () => {
     const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json','utf8'))
-    expect(journal.entries.at(-1)).toMatchObject({ idx: 33, tag: '0033_tracker_recovery_rollout' })
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when)
+    const entryIndex = journal.entries.findIndex((entry: { idx: number }) => entry.idx === 33)
+    expect(journal.entries[entryIndex]).toMatchObject({ idx: 33, tag: '0033_tracker_recovery_rollout' })
+    expect(journal.entries[entryIndex].when).toBeGreaterThan(journal.entries[entryIndex - 1].when)
     const previous = JSON.parse(readFileSync('db/migrations/meta/0032_snapshot.json','utf8'))
     const current = JSON.parse(readFileSync('db/migrations/meta/0033_snapshot.json','utf8'))
     expect(current.prevId).toBe(previous.id)

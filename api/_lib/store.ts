@@ -2269,6 +2269,40 @@ export async function createShare(input: {
   return mapShare(data as ShareRow)
 }
 
+export async function createWidgetAgentShare(input: {
+  projectKey: string
+  actorUserId: string
+  pageUrl: string
+  idempotencyKey: string
+  requestHash: string
+  allowedPriceIds: string[]
+  commentIds: string[]
+  slug: string
+  accessTokenHash: string
+  accessTokenCiphertext: string
+  expiresAt: string
+}) {
+  const share = {
+    slug: input.slug,
+    access_token_hash: input.accessTokenHash,
+    access_token_ciphertext: input.accessTokenCiphertext,
+    expires_at: input.expiresAt,
+  }
+  const { data, error } = await getServiceSupabase().rpc('create_widget_agent_share', {
+    p_project: input.projectKey,
+    p_actor: input.actorUserId,
+    p_page_url: input.pageUrl,
+    p_idempotency_key: input.idempotencyKey,
+    p_request_hash: input.requestHash,
+    p_allowed_prices: input.allowedPriceIds,
+    p_share: share,
+    p_comments: input.commentIds,
+  } as never).select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at').single()
+
+  if (error) throw new Error(error.message)
+  return mapShare(data as ShareRow)
+}
+
 // Automatic project credentials remain unusable while the project is private.
 // Reviewer-created shares always use createShare with an authenticated actor.
 export async function createSystemShare(input: {
