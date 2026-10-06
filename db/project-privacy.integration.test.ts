@@ -1,0 +1,503 @@
+import { randomUUID } from 'node:crypto'
+import postgres from 'postgres'
+import { transitionLegacyTrackerExports } from './tracker-rollout.js'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+
+const connection = process.env.DATABASE_URL
+const describeDatabase = connection ? describe : describe.skip
+
+describeDatabase('project privacy database guards', () => {
+  const sql = postgres(connection as string, { max: 6 })
+  const project = `privacy-${randomUUID()}`
+  const owner = randomUUID(), member = randomUUID(), comment = randomUUID()
+  const workerName = `privacy-worker-${randomUUID()}`
+  const worker = postgres(connection as string, { max: 1, connection: { application_name: workerName } })
+
+  beforeAll(async () => {
+    await sql`insert into auth.users(id, email) values (${owner}, ${`${owner}@test.local`}), (${member}, ${`${member}@test.local`})`
+    await sql`insert into projects(public_key, slug, name) values (${project}, ${project}, 'Privacy test')`
+    await sql`insert into project_members(project_key, user_id, role, is_owner) values (${project}, ${owner}, 'admin', true), (${project}, ${member}, 'member', false)`
+    await sql`insert into comments(id, project_id, comment, created_by) values (${comment}, ${project}, 'Activity', 'public')`
+  })
+  afterAll(async () => {
+    await sql`delete from comment_email_batches where delivery_id = ${comment}`
+    await sql`delete from notifications where payload->>'projectKey' = ${project}`
+    await sql`delete from projects where public_key = ${project}`
+    await sql`delete from auth.users where id in (${owner}, ${member})`
+    await worker.end(); await sql.end()
+  })
+  async function waitForWorkerLock() {
+    await vi.waitFor(async () => {
+      const [state] = await sql`select wait_event_type from pg_stat_activity where application_name = ${workerName}`
+      expect(state?.wait_event_type).toBe('Lock')
+    }, { timeout: 3000, interval: 10 })
+  }
+  it('blocks and then rejects a guest insertion that overlaps privacy activation', async () => {
+    let insertion!: Promise<unknown>
+    await sql.begin(async (tx) => {
+      await tx`update projects set widget_private=true where public_key=${project}`
+      insertion = worker`insert into comments(project_id, comment, created_by) values (${project}, 'Guest race', 'public')`.then(() => null, (error) => error)
+      await waitForWorkerLock()
+    })
+    expect(await insertion).toMatchObject({ message: 'private_feedback_login_required' })
+    await sql`insert into comments(project_id, comment, created_by, created_by_user_id) values (${project}, 'Authenticated', 'public', ${member})`
+  })
+  it('serializes delayed notifications with cleanup and cancels pending email snapshots', async () => {
+    await sql`update projects set feedback_access='team' where public_key=${project}`
+    await sql`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`
+    await sql`insert into comment_email_batches(delivery_id, batch_index, body, expires_at) values (${comment}, 0, '[]', now() + interval '1 hour')`
+    let notification!: Promise<unknown>
+    await sql.begin(async (tx) => {
+      await tx`update projects set feedback_access='admins' where public_key=${project}`
+      notification = worker`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`.then((rows) => rows)
+      await waitForWorkerLock()
+    })
+    expect(await notification).toHaveLength(0)
+    expect(await sql`select id from notifications where user_id=${member} and payload->>'projectKey'=${project}`).toHaveLength(0)
+    expect((await sql`select status from comment_email_batches where delivery_id=${comment}`)[0].status).toBe('failed')
+    expect(await sql`select * from create_or_increment_comment_activity_notification(${owner}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`).toHaveLength(1)
+  })
+  it.each(['read', 'update', 'delete'])('serializes public %s with privacy activation', async (operation) => {
+    await sql`update projects set widget_private=false, feedback_access='team' where public_key=${project}`
+    let result!: Promise<unknown>
+    await sql.begin(async tx => {
+      await tx`update projects set widget_private=true where public_key=${project}`
+      result = (operation === 'read'
+        ? worker`select * from read_public_comments(${project})`
+        : worker`select * from mutate_public_comment(${project}, ${comment}, 'approved', ${operation === 'delete'})`
+      ).then(rows => rows, error => error)
+      await waitForWorkerLock()
+    })
+    expect(await result).toMatchObject({ message: 'private_feedback_login_required' })
+    expect(await sql`select id from comments where id=${comment}`).toHaveLength(1)
+  })
+  it('allows public guest operations but protects authenticated and internal feedback', async () => {
+    await sql`update projects set widget_private=false where public_key=${project}`
+    expect(await sql`select * from read_public_comments(${project}, 'https://absent.test')`).toHaveLength(0)
+    expect((await sql`select * from read_public_comments(${project})`).length).toBeGreaterThan(0)
+    expect(await sql`select * from mutate_public_comment(${project}, ${comment}, 'approved')`).toHaveLength(1)
+    await expect(sql`select * from mutate_public_comment(${project}, ${comment})`).rejects.toMatchObject({ message: 'invalid_review_status' })
+    const [owned] = await sql`select id from comments where project_id=${project} and created_by_user_id=${member}`
+    expect(await sql`select * from mutate_public_comment(${project}, ${owned.id}, 'approved', true)`).toHaveLength(0)
+    const guest=randomUUID()
+    await sql`insert into comments(id, project_id, comment, created_by) values (${guest}, ${project}, 'Disposable', 'public')`
+    expect(await sql`select * from mutate_public_comment(${project}, ${guest}, null, true)`).toHaveLength(1)
+  })
+  it('fences privacy and deletion while a claimed email is in flight, then releases on checkpoint', async () => {
+    await sql`update projects set widget_private=true, feedback_access='team' where public_key=${project}`
+    await sql`update comment_email_batches set status='pending', attempts=0, next_attempt_at=date_trunc('milliseconds', now()), lease_token=null where delivery_id=${comment}`
+    const [batch]=await sql`select id, attempts, next_attempt_at::text as next from comment_email_batches where delivery_id=${comment}`
+    const token=randomUUID()
+    expect((await sql`select claim_comment_email_batch(${batch.id}, ${batch.attempts}, ${batch.next}, ${token}, now()+interval '2 minutes') as claimed`)[0].claimed).toBe(true)
+    await expect(sql`update projects set feedback_access='admins' where public_key=${project}`).rejects.toMatchObject({message:'feedback_delivery_in_progress'})
+    await expect(sql`delete from comments where id=${comment}`).rejects.toMatchObject({message:'feedback_delivery_in_progress'})
+    await sql`update comment_email_batches set status='sent', lease_token=null where id=${batch.id} and lease_token=${token}`
+    await sql`update projects set feedback_access='admins' where public_key=${project}`
+  })
+  it('cannot claim an email snapshot after a concurrent privacy change cancels it', async () => {
+    await sql`update projects set feedback_access='team' where public_key=${project}`
+    await sql`update comment_email_batches set status='pending', attempts=0, next_attempt_at=date_trunc('milliseconds', now()) where delivery_id=${comment}`
+    const [batch]=await sql`select id, attempts, next_attempt_at::text as next from comment_email_batches where delivery_id=${comment}`
+    let result!: Promise<any>
+    await sql.begin(async tx=> {
+      await tx`update projects set feedback_access='admins' where public_key=${project}`
+      result=worker`select claim_comment_email_batch(${batch.id}, ${batch.attempts}, ${batch.next}, ${randomUUID()}, now()+interval '2 minutes') as claimed`.then(rows=>rows)
+      await waitForWorkerLock()
+    })
+    expect((await result)[0].claimed).toBe(false)
+  })
+  it('binds the RLS helper to the authenticated caller and restricts service RPCs', async () => {
+    await sql`update projects set widget_private=true, feedback_access='admins' where public_key=${project}`
+    expect((await sql`select to_regprocedure('public.project_feedback_allowed(text,uuid)') as old`)[0].old).toBeNull()
+    for(const [user, allowed] of [[owner,true],[member,false]] as const) {
+      await sql.begin(async tx=> {
+        await tx`set local role authenticated`
+        await tx`select set_config('request.jwt.claims', ${JSON.stringify({sub:user,role:'authenticated'})}, true)`
+        expect((await tx`select project_feedback_allowed(${project}) as allowed`)[0].allowed).toBe(allowed)
+      })
+    }
+    await expect(sql.begin(async tx=> {await tx`set local role authenticated`; await tx`select * from read_public_comments(${project})`})).rejects.toMatchObject({code:'42501'})
+  })
+  it('rejects invalid settings and fails closed even for a corrupt stored value', async () => {
+    await expect(sql`update projects set feedback_access='unexpected' where public_key=${project}`).rejects.toMatchObject({ code: '23514' })
+    const rollback = new Error('rollback corrupt fixture')
+    await expect(sql.begin(async tx => {
+      await tx`alter table projects drop constraint projects_feedback_access_check`
+      await tx`update projects set widget_private=true, feedback_access='unexpected' where public_key=${project}`
+      await tx`set local role authenticated`
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: member, role: 'authenticated' })}, true)`
+      expect((await tx`select project_feedback_allowed(${project}) as allowed`)[0].allowed).toBe(false)
+      throw rollback
+    })).rejects.toBe(rollback)
+  })
+  it.each(['remove', 'demote'])('serializes %s with an email claim and fences it until checkpoint', async operation => {
+    await sql`update projects set widget_private=true, feedback_access='team' where public_key=${project}`
+    await sql`update project_members set role='admin' where project_key=${project} and user_id=${member}`
+    await sql`update comment_email_batches set status='pending', attempts=0, lease_token=null, next_attempt_at=date_trunc('milliseconds', now()) where delivery_id=${comment}`
+    const [batch] = await sql`select id, attempts, next_attempt_at::text as next from comment_email_batches where delivery_id=${comment}`
+    const token = randomUUID()
+    let mutation!: Promise<unknown>
+    await sql.begin(async tx => {
+      expect((await tx`select claim_comment_email_batch(${batch.id}, ${batch.attempts}, ${batch.next}, ${token}, now()+interval '2 minutes') as claimed`)[0].claimed).toBe(true)
+      mutation = (operation === 'remove'
+        ? worker`select remove_project_member(${project}, ${owner}, ${member})`
+        : worker`select change_project_member_role(${project}, ${owner}, ${member}, 'member')`
+      ).then(rows => rows, error => error)
+      await waitForWorkerLock()
+    })
+    expect(await mutation).toMatchObject({ message: 'feedback_delivery_in_progress' })
+    expect((await sql`select role from project_members where project_key=${project} and user_id=${member}`)[0].role).toBe('admin')
+    // Direct service-role writes must not bypass the fence either.
+    await expect(sql`delete from project_members where project_key=${project} and user_id=${member}`).rejects.toMatchObject({ message: 'feedback_delivery_in_progress' })
+    await sql`update comment_email_batches set status='sent', lease_token=null where id=${batch.id} and lease_token=${token}`
+    if (operation === 'remove') {
+      expect((await sql`select remove_project_member(${project}, ${owner}, ${member}) as result`)[0].result).toBe('removed')
+      await sql`insert into project_members(project_key, user_id, role) values (${project}, ${member}, 'member')`
+    } else {
+      expect((await sql`select change_project_member_role(${project}, ${owner}, ${member}, 'member') as result`)[0].result.status).toBe('updated')
+    }
+  })
+  it.each(['remove', 'demote'])('revalidates the settings actor after a concurrent %s', async operation => {
+    await sql`update project_members set role='admin' where project_key=${project} and user_id=${member}`
+    let update!: Promise<unknown>
+    await sql.begin(async tx => {
+      if (operation === 'remove') await tx`select remove_project_member(${project}, ${owner}, ${member})`
+      else await tx`select change_project_member_role(${project}, ${owner}, ${member}, 'member')`
+      update = worker`select * from update_project_settings(${project}, ${member}, '{"widget_private":false}'::jsonb)`.then(rows => rows, error => error)
+      await waitForWorkerLock()
+    })
+    expect(await update).toMatchObject({ message: 'forbidden' })
+    expect((await sql`select widget_private from projects where public_key=${project}`)[0].widget_private).toBe(true)
+    if (operation === 'remove') await sql`insert into project_members(project_key, user_id, role) values (${project}, ${member}, 'member')`
+    expect(await sql`select * from update_project_settings(${project}, ${owner}, '{"name":"Updated", "allowed_origins":["test.local"]}'::jsonb)`).toMatchObject([{ name: 'Updated', allowed_origins: ['test.local'] }])
+  })
+  it('blocks a team read behind a privacy commit and rejects the stale authorization', async () => {
+    await sql`update projects set widget_private=true, feedback_access='team' where public_key=${project}`
+    expect((await sql`select * from read_project_feedback(${project}, ${member})`).length).toBeGreaterThan(0)
+    let read!: Promise<unknown>
+    await sql.begin(async tx => {
+      await tx`update projects set feedback_access='admins' where public_key=${project}`
+      read=worker`select * from read_project_feedback(${project}, ${member})`.then(rows=>rows,error=>error)
+      await waitForWorkerLock()
+    })
+    expect(await read).toMatchObject({ message:'forbidden' })
+    expect((await sql`select * from read_project_feedback(${project}, ${owner})`).length).toBeGreaterThan(0)
+  })
+  it('rejects an automatic share read after concurrent privacy activation but preserves explicit shares', async () => {
+    const share=randomUUID()
+    await sql`update projects set widget_private=false where public_key=${project}`
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'project',${share},'hash','cipher','system',now()+interval '1 hour')`
+    let read!: Promise<unknown>
+    try {
+      expect(await sql`select * from read_share_feedback(${share},'hash')`).toHaveLength(1)
+      await sql.begin(async tx => {
+        await tx`update projects set widget_private=true where public_key=${project}`
+        read=worker`select * from read_share_feedback(${share},'hash')`.then(rows=>rows,error=>error)
+        await waitForWorkerLock()
+      })
+      expect(await read).toMatchObject({ message:'share_unavailable' })
+      await expect(sql`select * from apply_agent_feedback_operation(${share}, ${comment}, 'test-agent', 'test-key', 'comment.start', 'comment.started', '{}'::jsonb, 'in_progress','hash')`).rejects.toMatchObject({ message:'share_unavailable' })
+      await sql`update feedback_shares set created_by=${owner} where id=${share}`
+      expect(await sql`select * from read_share_feedback(${share},'hash')`).toHaveLength(1)
+      await sql`update feedback_shares set revoked_at=now() where id=${share}`
+      await expect(sql`select * from read_share_feedback(${share},'hash')`).rejects.toMatchObject({ message:'share_unavailable' })
+    } finally { await sql`delete from feedback_shares where id=${share}` }
+  })
+  it.each(['read','settings','role','remove'])('rejects and safely retries inverse-order direct/cascade writes alongside %s', async operation => {
+    const actor=randomUUID()
+    await sql`insert into auth.users(id,email) values (${actor},${`${actor}@test.local`})`
+    await sql`insert into project_members(project_key,user_id,role) values (${project},${actor},'admin')`
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    try {
+      await sql.begin(async tx=>{
+        await tx`select public_key from projects where public_key=${project} for update`
+        // Each direct/cascade path must release its member row instead of waiting.
+        for(const write of [()=>worker`update project_members set role='member' where project_key=${project} and user_id=${actor}`,
+          ()=>worker`delete from project_members where project_key=${project} and user_id=${actor}`,
+          ()=>worker`delete from auth.users where id=${actor}`]) {
+          await expect(write()).rejects.toMatchObject({code:'55P03',message:'project_membership_busy'})
+        }
+        if(operation==='settings') expect(await tx`select * from update_project_settings(${project},${actor},'{"name":"Before revocation"}'::jsonb)`).toHaveLength(1)
+        else if(operation==='role') expect((await tx`select change_project_member_role(${project},${owner},${actor},'member') as result`)[0].result.status).toBe('updated')
+        else if(operation==='remove') expect((await tx`select remove_project_member(${project},${owner},${actor}) as result`)[0].result).toBe('removed')
+        else expect((await tx`select * from read_project_feedback(${project},${actor})`).length).toBeGreaterThan(0)
+      })
+      // Account deletion succeeds once the project transaction commits.
+      await worker`delete from auth.users where id=${actor}`
+      expect(await sql`select * from project_members where user_id=${actor}`).toHaveLength(0)
+    } finally { await sql`delete from auth.users where id=${actor}` }
+  })
+  it.each(['create', 'credential', 'rotate', 'read', 'review', 'visibility', 'implementation', 'accept'])('denies stale %s authorization after a concurrent privacy restriction', async operation=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='approved',visibility='shared' where id=${comment}`
+    const share=randomUUID()
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'selection',${share},'h','c','reviewer',now()+interval '1 hour')`
+    let result!:Promise<any>
+    try {
+      await sql.begin(async tx=>{
+        await tx`update projects set feedback_access='admins' where public_key=${project}`
+        const patch=operation==='review'?{status:'rejected'}:operation==='visibility'?{visibility:'internal'}:{implementation_status:'blocked'}
+        const query=operation==='create'?worker`select * from create_actor_share(${project},${member},${sql.json({scope_type:'selection',slug:randomUUID(),access_token_hash:'h',access_token_ciphertext:'c',expires_at:'2099-01-01'})},${[comment]}::uuid[])`
+          :operation==='credential'?worker`select * from read_actor_share(${share},${member})`
+          :operation==='rotate'?worker`select * from rotate_actor_share(${share},${member},'h','c','new','new')`
+          :operation==='read'?worker`select * from read_actor_comment(${project},${member},${comment},'integrations:send')`
+          :operation==='accept'?worker`select * from accept_actor_comment_if_open(${project},${member},${comment})`
+          :worker`select * from mutate_actor_feedback(${project},${member},${comment},${sql.json(patch)})`
+        result=query.then(rows=>rows,error=>error)
+        await waitForWorkerLock()
+      })
+      expect(await result).toMatchObject({message:'forbidden'})
+      expect((await sql`select status,visibility from comments where id=${comment}`)[0]).toMatchObject({status:'approved',visibility:'shared'})
+    } finally { await sql`delete from feedback_shares where id=${share}` }
+  })
+  it('creates a share atomically and rejects internal or changed targets without leaving a share', async ()=>{
+    await sql`update projects set feedback_access='team' where public_key=${project}`
+    const slug=randomUUID(), payload={scope_type:'selection',scope_page_url:null,slug,access_token_hash:'h',access_token_ciphertext:'c',expires_at:'2099-01-01'}
+    await sql`update comments set status='approved',visibility='shared' where id=${comment}`
+    const [share]=await sql`select * from create_actor_share(${project},${owner},${sql.json(payload)},${[comment]}::uuid[])`
+    expect(await sql`select * from feedback_share_items where share_id=${share.id}`).toHaveLength(1)
+    expect(await sql`select * from feedback_events where share_id=${share.id} and event_type='share.created'`).toHaveLength(1)
+    expect(await sql`select * from read_actor_share(${share.id},${owner})`).toHaveLength(1)
+    expect(await sql`select * from rotate_actor_share(${share.id},${owner},'h','c','new','new')`).toHaveLength(1)
+    expect(await sql`select * from rotate_actor_share(${share.id},${owner},'h','c','other','other')`).toHaveLength(0)
+    await sql`delete from feedback_shares where id=${share.id}`
+    await sql`update comments set visibility='internal' where id=${comment}`
+    await expect(sql`select * from create_actor_share(${project},${owner},${sql.json(payload)},${[comment]}::uuid[])`).rejects.toMatchObject({message:'share_comments_changed'})
+    expect(await sql`select id from feedback_shares where slug=${slug}`).toHaveLength(0)
+    await sql`update comments set visibility='shared' where id=${comment}`
+  })
+  it.each(['internal', 'rejected', 'removed', 'foreign'])('rejects agent operations on an ineligible %s comment', async condition=>{
+    await sql`update comments set visibility='shared',status='approved' where id=${comment}`
+    const share=randomUUID()
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'selection',${share},'h','c','reviewer',now()+interval '1 hour')`
+    await sql`insert into feedback_share_items(share_id,comment_id) values (${share},${comment})`
+    const target=condition==='foreign'?randomUUID():comment
+    try {
+      if(condition==='internal')await sql`update comments set visibility='internal' where id=${comment}`
+      if(condition==='rejected')await sql`update comments set status='rejected' where id=${comment}`
+      if(condition==='removed')await sql`delete from feedback_share_items where share_id=${share}`
+      expect((await sql`select * from apply_agent_feedback_operation(${share},${target},'agent',${randomUUID()},'comment.note','comment.note','{}'::jsonb,null,'h')`)[0]).toMatchObject({outcome:'not_found',comment_row:null})
+      expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(0)
+    } finally { await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}` }
+  })
+  it('waits for a concurrent visibility change and cannot operate on its new private body', async ()=>{
+    const share=randomUUID()
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'project',${share},'h','c','reviewer',now()+interval '1 hour')`
+    let result!:Promise<any>
+    try {
+      await sql.begin(async tx=>{
+        await tx`update comments set visibility='internal',comment='New private content' where id=${comment}`
+        result=worker`select * from apply_agent_feedback_operation(${share},${comment},'agent',${randomUUID()},'comment.note','comment.note','{}'::jsonb,null,'h')`.then(rows=>rows)
+        await waitForWorkerLock()
+      })
+      expect((await result)[0]).toMatchObject({outcome:'not_found',comment_row:null})
+      expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(0)
+    } finally {await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}`}
+  })
+  it.each(['state','operation','events','presence','duplicate'])('fences %s against concurrent token rotation, revocation and privacy activation', async operation=>{
+    const share=randomUUID()
+    await sql`update projects set widget_private=false where public_key=${project}`
+    await sql`update comments set visibility='shared',status='approved' where id=${comment}`
+    await sql`insert into feedback_shares(id,project_id,scope_type,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'project',${share},'h','c','system',now()+interval '1 hour')`
+    await sql`insert into feedback_events(share_id,actor_type,actor_id,event_type,payload) values (${share},'reviewer','user','presence.updated','{"body":"secret"}')`
+    const query=()=>operation==='state'?worker`select * from read_share_feedback(${share},'h')`
+      :operation==='operation'?worker`select * from apply_agent_feedback_operation(${share},${comment},'agent',${randomUUID()},'comment.note','comment.note','{}'::jsonb,null,'h')`
+      :operation==='events'?worker`select * from read_agent_events(${share},'h',0,100)`
+      :operation==='duplicate'?worker`select * from read_agent_operation_key(${share},'h','agent','key')`
+      :worker`select write_agent_presence(${share},'h','agent','active','secret')`
+    try {
+      for(const restriction of ['token','revoke','private']) {
+        await sql`update projects set widget_private=false where public_key=${project}`
+        await sql`update feedback_shares set access_token_hash='h',revoked_at=null where id=${share}`
+        let result!:Promise<any>
+        await sql.begin(async tx=>{
+          if(restriction==='private') await tx`update projects set widget_private=true where public_key=${project}`
+          else if(restriction==='revoke') await tx`update feedback_shares set revoked_at=now() where id=${share}`
+          else await tx`update feedback_shares set access_token_hash='rotated' where id=${share}`
+          result=query().then(rows=>rows,error=>error);await waitForWorkerLock()
+        })
+        expect(await result).toMatchObject({message:'share_unavailable'})
+        expect(await sql`select * from agent_presence where share_id=${share}`).toHaveLength(0)
+        expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(1)
+      }
+      await sql`update projects set widget_private=false where public_key=${project}`
+      await sql`update feedback_shares set access_token_hash='h',revoked_at=null where id=${share}`
+      await sql`select write_agent_presence(${share},'h','agent','active','summary')`
+      await sql`select write_agent_presence(${share},'h','agent','active','summary')`
+      expect(await sql`select * from agent_presence where share_id=${share}`).toHaveLength(1)
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(2)
+      await expect(sql`select * from read_share_feedback(${share},NULL)`).rejects.toMatchObject({message:'share_unavailable'})
+    } finally {await sql`delete from feedback_shares where id=${share}`}
+  })
+  it('accepts only pending comments for a currently authorized tracker actor',async()=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='pending' where id=${comment}`
+    expect(await sql`select * from accept_actor_comment_if_open(${project},${member},${comment})`).toHaveLength(1)
+    expect(await sql`select * from accept_actor_comment_if_open(${project},${member},${comment})`).toHaveLength(0)
+    await sql`update comments set status='rejected' where id=${comment}`
+    expect(await sql`select * from accept_actor_comment_if_open(${project},${member},${comment})`).toHaveLength(0)
+    await sql`update comments set status='pending' where id=${comment}`
+    await sql`update projects set feedback_access='admins' where public_key=${project}`
+    await expect(sql`select * from accept_actor_comment_if_open(${project},${member},${comment})`).rejects.toMatchObject({message:'forbidden'})
+    expect((await sql`select status from comments where id=${comment}`)[0].status).toBe('pending')
+  })
+  it.each(['github','linear','jira'])('serializes %s dispatch with privacy, member revocation and deletion until checkpoint',async provider=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='pending' where id=${comment}`
+    const lease=randomUUID(),work=provider==='github'?null:randomUUID()
+    if(work) await sql`insert into comment_external_work(id,project_id,comment_id,provider,state,lease_token,lease_expires_at) values (${work},${project},${comment},${provider},'creating',${lease},now()+interval '2 minutes')`
+    else await sql`update comments set github_issue_lease_token=${lease},github_issue_lease_expires_at=now()+interval '2 minutes' where id=${comment}`
+    try {
+      // Revocation wins before dispatch: the durable marker must never be set.
+      await sql`update projects set feedback_access='admins' where public_key=${project}`
+      await expect(sql`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work})`).rejects.toMatchObject({message:'forbidden'})
+      expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
+      await sql`update projects set feedback_access='team' where public_key=${project}`
+      let dispatched!:Promise<any>
+      // A delayed sender must recheck the newly committed restriction.
+      await sql.begin(async tx=>{
+        await tx`update projects set feedback_access='admins' where public_key=${project}`
+        dispatched=worker`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work})`.then(rows=>rows,error=>error)
+        await waitForWorkerLock()
+      })
+      expect(await dispatched).toMatchObject({message:'forbidden'})
+      await sql`update projects set feedback_access='team' where public_key=${project}`
+      expect((await sql`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work}) as dispatched`)[0].dispatched).toBe(true)
+      // Dispatch wins: privacy/revocation/deletion cannot commit beneath it.
+      await expect(sql`update projects set feedback_access='admins' where public_key=${project}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      await expect(sql`update project_members set role='guest' where project_key=${project} and user_id=${member}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      await expect(sql`delete from auth.users where id=${member}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      await expect(sql`delete from comments where id=${comment}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+      // Lease expiry alone must not allow a paused sender to lose its fence.
+      if(work) await sql`update comment_external_work set lease_expires_at=now()-interval '1 second' where id=${work}`
+      else await sql`update comments set github_issue_lease_expires_at=now()-interval '1 second' where id=${comment}`
+      await expect(sql`update projects set feedback_access='admins' where public_key=${project}`).rejects.toMatchObject({message:'tracker_dispatch_in_progress'})
+    } finally {
+      if(work) await sql`delete from comment_external_work where id=${work}`
+      else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
+    }
+    await sql`update projects set feedback_access='admins' where public_key=${project}`
+    expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
+  })
+  it('filters and suppresses comment events after internal/rejected/removed/out-of-page changes',async()=>{
+    const share=randomUUID(),url='https://test.local/page'
+    await sql`update comments set status='approved',visibility='shared',url=${url} where id=${comment}`
+    await sql`insert into feedback_shares(id,project_id,scope_type,scope_page_url,slug,access_token_hash,access_token_ciphertext,created_by,expires_at) values (${share},${project},'page',${url},${share},'h','c','reviewer',now()+interval '1 hour')`
+    await sql`insert into feedback_share_items(share_id,comment_id) values (${share},${comment})`
+    const insert=()=>sql`insert into feedback_events(share_id,comment_id,actor_type,actor_id,event_type,payload) values (${share},${comment},'reviewer','owner','comment.implementation_changed','{"implementationStatus":"blocked"}') returning id`
+    try {
+      expect(await insert()).toHaveLength(1)
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(1)
+      for(const condition of ['internal','rejected','page','removed']){
+        await sql`update comments set visibility='shared',status='approved',url=${url} where id=${comment}`
+        if(condition==='internal')await sql`update comments set visibility='internal' where id=${comment}`
+        if(condition==='rejected')await sql`update comments set status='rejected' where id=${comment}`
+        if(condition==='page')await sql`update comments set url='https://test.local/other' where id=${comment}`
+        if(condition==='removed')await sql`delete from feedback_share_items where share_id=${share}`
+        expect(await insert()).toHaveLength(0)
+        expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(0)
+      }
+      expect(await sql`select * from feedback_events where share_id=${share}`).toHaveLength(1)
+      // Orphaned historical comment events must not become public share events.
+      await sql`update feedback_events set comment_id=null where share_id=${share}`
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(0)
+      await sql`insert into feedback_events(share_id,actor_type,actor_id,event_type) values (${share},'agent','agent','presence.updated')`
+      expect(await sql`select * from read_agent_events(${share},'h',0,100)`).toHaveLength(1)
+    } finally { await sql`delete from feedback_shares where id=${share}`;await sql`update comments set visibility='shared',status='approved' where id=${comment}` }
+  })
+  it.each(['github','linear','jira'])('resolves abandoned %s dispatch only for admins and never under a live sender lock',async provider=>{
+    await sql`update projects set widget_private=true,feedback_access='team' where public_key=${project}`
+    await sql`update comments set status='pending' where id=${comment}`
+    const lease=randomUUID(),work=provider==='github'?null:randomUUID()
+    if(work) await sql`insert into comment_external_work(id,project_id,comment_id,provider,state,lease_token,lease_expires_at) values (${work},${project},${comment},${provider},'creating',${lease},now()+interval '2 minutes')`
+    else await sql`update comments set github_issue_lease_token=${lease},github_issue_lease_expires_at=now()+interval '2 minutes' where id=${comment}`
+    try{
+      await sql`select begin_actor_tracker_dispatch(${project},${member},${comment},${lease},${work})`
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${member},${comment},${provider})`).rejects.toMatchObject({message:'forbidden'})
+      await worker.begin(async tx=>{
+        await tx`select pg_advisory_xact_lock_shared(hashtextextended('crrt-tracker-dispatch:' || ${project},0))`
+        await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_active'})
+      })
+      // Even after the coordination backend disappears, an expired lease does
+      // not prove the paused sender stopped. This covers delayed onclose delivery.
+      if(work) await sql`update comment_external_work set lease_expires_at=now()-interval '1 hour' where id=${work}`
+      else await sql`update comments set github_issue_lease_expires_at=now()-interval '1 hour' where id=${comment}`
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      if(provider==='github') expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+      await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${randomUUID()},${work})`
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${lease},${work})`
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(true)
+      expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(false)
+      await sql`update projects set feedback_access='admins' where public_key=${project}`
+      // A sender with the canceled lease cannot restart after resolution.
+      expect((await sql`select begin_actor_tracker_dispatch(${project},${owner},${comment},${lease},${work}) as dispatched`)[0].dispatched).toBe(false)
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(false)
+    }finally{
+      if(work)await sql`delete from comment_external_work where id=${work}`
+      else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
+    }
+  })
+  it('preserves legacy recovery while preventing old claimers from taking a new active export', async () => {
+    const first=randomUUID(), second=randomUUID(), third=randomUUID()
+    await sql`update comments set status='approved' where id=${comment}`
+    try {
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${first},120,false)`).toHaveLength(1)
+      await sql`select mark_comment_github_issue_uncertain(${comment},${project},${first})`
+      expect((await sql`select release_comment_github_issue(${comment},${project},${first}) as released`)[0].released).toBe(true)
+      // The old app can still recover a released indeterminate attempt.
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${second},120,true)`).toHaveLength(1)
+      await sql`select release_comment_github_issue(${comment},${project},${second})`
+      // The new app adopts a legacy release without requiring a nonexistent ack.
+      expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${third},120,true)`).toHaveLength(1)
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+      expect((await sql`select release_comment_github_issue_v2(${comment},${project},${third}) as released`)[0].released).toBe(false)
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},'github')`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      await sql`select acknowledge_tracker_dispatch_stopped(${project},${comment},${third},NULL)`
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},'github') as resolved`)[0].resolved).toBe(true)
+      // A normal new dispatch is also fenced from old claimers indefinitely.
+      expect(await sql`select * from claim_comment_github_issue_v2(${comment},${project},${third},30,false)`).toHaveLength(1)
+      await sql`select begin_actor_tracker_dispatch(${project},${owner},${comment},${third},NULL)`
+      expect((await sql`select github_issue_lease_expires_at::text as expiry from comments where id=${comment}`)[0].expiry).toBe('infinity')
+      expect(await transitionLegacyTrackerExports(sql,project,true)).toHaveLength(0)
+      for(const role of ['anon','authenticated']) {
+        expect((await sql`select has_function_privilege(${role},'public.claim_comment_github_issue_v2(uuid,text,uuid,integer,boolean)','EXECUTE') as allowed`)[0].allowed).toBe(false)
+        expect((await sql`select has_function_privilege(${role},'public.release_comment_github_issue_v2(uuid,text,uuid)','EXECUTE') as allowed`)[0].allowed).toBe(false)
+      }
+      expect(await sql`select * from claim_comment_github_issue(${comment},${project},${randomUUID()},120,true)`).toHaveLength(0)
+    } finally { await sql`select reset_comment_github_issue_attempt(${comment},${project},${third})` }
+  })
+  it.each(['github','linear','jira'])('transitions legacy %s only after explicit worker-drain confirmation', async provider => {
+    const lease=randomUUID(), work=provider==='github'?null:randomUUID()
+    if(work) await sql`insert into comment_external_work(id,project_id,comment_id,provider,state,lease_token,lease_expires_at,uncertain_at) values (${work},${project},${comment},${provider},'creating',${lease},now()-interval '1 hour',now())`
+    else await sql`update comments set github_issue_lease_token=${lease},github_issue_lease_expires_at=now()-interval '1 hour',github_issue_uncertain_at=now() where id=${comment}`
+    try {
+      expect(await transitionLegacyTrackerExports(sql,project)).toHaveLength(1)
+      await expect(sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider})`).rejects.toMatchObject({message:'tracker_dispatch_unconfirmed'})
+      await worker.begin(async tx => {
+        await tx`select pg_advisory_xact_lock_shared(hashtextextended('crrt-tracker-dispatch:' || ${project},0))`
+        await expect(transitionLegacyTrackerExports(sql,project,true)).rejects.toMatchObject({message:'tracker_dispatch_active'})
+      })
+      expect(await transitionLegacyTrackerExports(sql,project,true)).toHaveLength(1)
+      expect(await transitionLegacyTrackerExports(sql,project,true)).toHaveLength(0)
+      expect((await sql`select tracker_dispatch_pending(${project}) as pending`)[0].pending).toBe(true)
+      // Transition acknowledges completion; only an admin may resolve afterward.
+      expect((await sql`select resolve_actor_tracker_dispatch(${project},${owner},${comment},${provider}) as resolved`)[0].resolved).toBe(true)
+    } finally {
+      if(work) await sql`delete from comment_external_work where id=${work}`
+      else await sql`select reset_comment_github_issue_attempt(${comment},${project},${lease})`
+    }
+  })
+  it('enforces current access in direct authenticated notification reads', async () => {
+    await sql`update projects set feedback_access='team' where public_key=${project}`
+    await sql`select * from create_or_increment_comment_activity_notification(${member}, ${project}, 'Privacy test', ${comment}, 'Author', 'https://test.local/private')`
+    // Simulate a historical row surviving cleanup: the RLS read gate must still
+    // deny it after the user is removed, independent of API filtering.
+    await sql`delete from project_members where project_key=${project} and user_id=${member}`
+    await sql.begin(async (tx) => {
+      await tx`set local role authenticated`
+      await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: member, role: 'authenticated' })}, true)`
+      expect(await tx`select id from notifications where payload->>'projectKey'=${project}`).toHaveLength(0)
+    })
+  })
+})
