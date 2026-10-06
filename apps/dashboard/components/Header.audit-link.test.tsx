@@ -7,6 +7,7 @@ import { Header } from './Header'
 describe('dashboard audit launcher link', () => {
   it('uses the dashboard base-aware audit route', () => {
     render(<Header
+      agentAction={<button type="button">Agents</button>}
       projects={[]} projectsLoading={false} projectsError={null} commentsLoading={false} selectedProject="" commentCount={0} setSelectedProject={vi.fn()} setStatusFilter={vi.fn()} setSelectedCommentId={vi.fn()}
       addProjectOpen={true} setAddProjectOpen={vi.fn()} onAddProject={vi.fn()} onCheckAvailability={vi.fn()} addProjectBusy={false} addProjectError={null} onOpenCmd={vi.fn()} onOpenSettings={vi.fn()} settingsActive={false} onOpenExtensionComments={vi.fn()} extensionCommentsActive={false}
       apiBase="/api" accessToken="token" onProjectsChanged={vi.fn()} onOpenCommentActivity={vi.fn()} theme="dark" toggleTheme={vi.fn()} user={{ id: 'user' } as never} onSignOut={vi.fn()} superadmin={false} superAdminActive={false} onOpenSuperAdmin={vi.fn()}
@@ -14,6 +15,7 @@ describe('dashboard audit launcher link', () => {
     expect(screen.getByText('Suggested projects slot')).toBeInTheDocument()
     const link = screen.getByRole('link', { name: 'Run audit' })
     expect(link).toHaveAttribute('href', '/audits/new'); expect(link).not.toHaveClass('hidden')
+    expect(screen.getByRole('button', { name: 'Agents' }).compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('link', { name: 'CRRT marketing site' })).toHaveAttribute('href', '/?stay=1')
     expect(screen.getByRole('button', { name: 'Search feedback' })).toHaveAttribute('type', 'button')
     expect(screen.getByText('Search Feedback…')).toBeInTheDocument()

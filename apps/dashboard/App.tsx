@@ -16,6 +16,7 @@ import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
 import { AgentSidebar } from './components/AgentSidebar'
+import { AgentLauncher } from './components/AgentLauncher'
 import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
 import { LoginPage } from './components/LoginPage'
@@ -127,10 +128,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const canOperateAgent = activeProject
     ? activeProject.capabilities?.includes('agent:operate') ?? true
     : false
+  const canOpenAgentPanel = view === 'feedback' && Boolean(selectedProject) && activeProject !== null && canOperateAgent
+  const agentUnavailableReason = view !== 'feedback'
+    ? 'Open project feedback to use Agents.'
+    : !selectedProject || activeProject === null
+      ? 'Select a project to use Agents.'
+      : 'Agents are unavailable for your project role.'
   const canManageProject = activeProject
     ? activeProject.capabilities?.includes('project:manage') ?? true
     : false
-  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, canOperateAgent ? selectedProject || null : null)
+  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, copyPrompt } = useAgentSession(API_BASE, canOpenAgentPanel && selectedProject ? selectedProject : null)
   const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
@@ -139,6 +146,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [addProjectBusy, setAddProjectBusy] = useState(false)
   const [theme, setTheme] = useState(getDashboardTheme)
   const [, setTick] = useState(0)
+
+  useEffect(() => {
+    setSidebarOpen(false)
+  }, [selectedProject, view, canOperateAgent])
 
   useEffect(() => {
     if (!pendingInvite) return
@@ -389,12 +400,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         if (e.key === 'm') handleToggleDone(selectedComment.id)
       }
 
-      if (e.key === 's') setSidebarOpen((v) => !v)
+      if (e.key === 's' && canOpenAgentPanel) setSidebarOpen((v) => !v)
     }
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback])
+  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -407,7 +418,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   const handleCmdAction = useCallback((action: string) => {
-    if (action === 'toggle-sidebar') setSidebarOpen((v) => !v)
+    if (action === 'toggle-sidebar' && canOpenAgentPanel) setSidebarOpen((v) => !v)
     if (action === 'filter-all') selectFilter('all')
     if (action === 'filter-open') selectFilter('open')
     if (action === 'filter-ready') selectFilter('ready')
@@ -417,7 +428,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
     if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
     setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback])
+  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return
@@ -515,6 +526,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   return (
     <div className="dashboard-shell">
       <Header
+        agentAction={canOpenAgentPanel
+          ? <AgentLauncher readyCount={counts.ready} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />
+          : <AgentLauncher readyCount={counts.ready} open={false} disabled unavailableReason={agentUnavailableReason} />}
         projects={projects}
         projectsLoading={projectsLoading}
         projectsError={projectsError}
@@ -604,7 +618,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           accessToken={accessToken}
         />
 
-        {sidebarOpen && canOperateAgent && (
+        {sidebarOpen && canOpenAgentPanel && (
           <AgentSidebar
             selectedProject={selectedProject}
             projectComments={projectComments}
@@ -630,7 +644,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       )}
 
       </main>
-      <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} onShowSidebar={() => setSidebarOpen(true)} />
+      <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} agentAvailable={canOpenAgentPanel} onShowSidebar={() => setSidebarOpen(true)} />
 
       {cmdOpen && (
         <CommandPalette
@@ -640,7 +654,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onAction={handleCmdAction}
           selectedCommentId={selectedCommentId}
           canManageFeedback={canManageFeedback}
-          canOperateAgent={canOperateAgent}
+          canOperateAgent={canOpenAgentPanel}
         />
       )}
     </div>

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fixtures = vi.hoisted(() => ({
@@ -85,7 +86,7 @@ vi.mock('./components/CommentDetail', () => ({
     <button onClick={() => props.onVisibilityChange?.('missing-comment', 'internal')}>change missing audience</button>
   </div>,
 }))
-vi.mock('./components/Header', () => ({ Header: (props: { onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <><button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
+vi.mock('./components/Header', () => ({ Header: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
   CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
@@ -96,8 +97,8 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.applyBulkAction('reject')}>bulk reject test</button>
   </>,
 }))
-vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: () => null }))
-vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean; onShowSidebar: () => void }) => <button onClick={props.onShowSidebar}>{props.personal ? 'personal footer' : 'project footer'}</button> }))
+vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onClose: () => void }) => <aside data-testid="agent-sidebar"><button onClick={props.onClose}>close agent sidebar</button></aside> }))
+vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean; agentAvailable: boolean; onShowSidebar: () => void }) => <button disabled={!props.agentAvailable} onClick={props.onShowSidebar}>{props.personal ? 'personal footer' : 'project footer'}</button> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
 vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenExtensionComments: () => void }) => <button onClick={props.onOpenExtensionComments}>welcome comments</button> }))
@@ -105,12 +106,13 @@ vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <div>extension page</div> }))
-vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void }) => <div>
+vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; canOperateAgent: boolean }) => <div>
   command palette
   <button onClick={() => props.onAction('accept')}>command accept</button>
   <button onClick={() => props.onAction('reject')}>command reject</button>
   <button onClick={() => props.onAction('done')}>command done</button>
   <button onClick={() => props.onAction('filter-ready-for-testing')}>command testing filter</button>
+  {props.canOperateAgent && <button onClick={() => props.onAction('toggle-sidebar')}>command agent panel</button>}
 </div> }))
 
 import { App } from './App'
@@ -400,6 +402,57 @@ describe('<App /> GitHub issue wiring', () => {
     })
     render(<App />)
     await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith(null))
+  })
+
+  it('keeps the live Agent session behind every available launcher path', async () => {
+    render(<App />)
+    const launcher = await screen.findByRole('button', { name: 'Agents, 0 ready' })
+    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith('project-1'))
+
+    fireEvent.click(launcher)
+    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    expect(launcher).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'close agent sidebar' }))
+    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'project footer' }))
+    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'close agent sidebar' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'command agent panel' }))
+    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+  })
+
+  it('keeps Agents visible but closes and disables every opening path outside authorized feedback', async () => {
+    fixtures.projects.splice(0, fixtures.projects.length, {
+      publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '',
+      role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
+    })
+    render(<App />)
+    const launcher = await screen.findByRole('button', { name: 'Agents unavailable: Agents are unavailable for your project role.' })
+    expect(launcher).toBeDisabled()
+    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith(null))
+    fireEvent.keyDown(window, { key: 's' })
+    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    expect(screen.queryByRole('button', { name: 'command agent panel' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'project footer' })).toBeDisabled()
+  })
+
+  it('closes the Agent sidebar when leaving project feedback', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Agents, 0 ready' }))
+    expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
+    expect(screen.queryByTestId('agent-sidebar')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Agents unavailable: Open project feedback to use Agents.' })).toBeDisabled()
+    await waitFor(() => expect(fixtures.agentProject).toHaveBeenLastCalledWith(null))
   })
 
   it('updates feedback visibility optimistically and restores it after failure', async () => {

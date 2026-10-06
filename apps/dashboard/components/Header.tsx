@@ -1,5 +1,6 @@
 import { SuggestedProjects } from './SuggestedProjects'
 import type { User } from '@supabase/supabase-js'
+import type { ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { asset, landingRoute, route } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
@@ -11,6 +12,7 @@ import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
 
 interface HeaderProps {
+  agentAction?: ReactNode
   projects: Project[]
   projectsLoading: boolean
   projectsError: string | null
@@ -46,6 +48,7 @@ interface HeaderProps {
 }
 
 export function Header({
+  agentAction,
   projects,
   projectsLoading,
   projectsError,
@@ -192,6 +195,7 @@ export function Header({
     <header className="dashboard-toolbar">
       <h1 className="text-base font-medium tracking-tight">Workspace</h1>
       <div className="dashboard-tools">
+        {agentAction}
         <a href={route('/audits/new')} className="inline-flex px-3 py-1.5 rounded-md border border-border text-muted-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
         <button
           type="button"
