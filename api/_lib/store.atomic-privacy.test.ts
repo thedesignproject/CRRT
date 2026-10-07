@@ -26,6 +26,8 @@ it('creates a reviewer share and its items in one authorized RPC', async()=>{
  const input={projectKey:'p',scopeType:'selection' as const,scopePageUrl:null,slug:'s',accessTokenHash:'h',accessTokenCiphertext:'cipher',createdBy:'reviewer',expiresAt:'2099-01-01'}
  await createShare(input,{actorUserId:'u',commentIds:['c']})
  expect(rpc).toHaveBeenCalledWith('create_actor_share',expect.objectContaining({p_actor:'u',p_project:'p',p_comments:['c']}))
+ result={data:null,error:{message:'forbidden'}}
+ await expect(createShare(input,{actorUserId:'u',commentIds:['c']})).rejects.toThrow('forbidden')
 })
 it('creates a premium widget share through the transactional RPC', async()=>{
  const input={projectKey:'p',actorUserId:'u',pageUrl:'https://test.local',idempotencyKey:'abcdefghijklmnop',requestHash:'a'.repeat(64),allowedPriceIds:['price'],commentIds:['c'],slug:'s',accessTokenHash:'h',accessTokenCiphertext:'cipher',expiresAt:'2099-01-01'}
