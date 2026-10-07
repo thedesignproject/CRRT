@@ -21,9 +21,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-          # Codecov attributes PR uploads to the head SHA; coverage must use
-          # that same source tree, not GitHub's synthetic merge commit.
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -58,6 +55,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
+          # Attribute the upload without changing the merge revision tested above.
+          override_commit: ${{ github.event.pull_request.head.sha || github.sha }}
           fail_ci_if_error: false
       - run: bun run build
       - name: Enforce bundle size ceiling
