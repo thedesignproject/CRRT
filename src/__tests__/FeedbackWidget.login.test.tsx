@@ -35,6 +35,33 @@ it('offers guest/login, resumes the composer after handoff, submits with the lim
   expect(screen.getByText('Log in to CRRT')).toBeInTheDocument()
   expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/widget/auth/exchange', expect.objectContaining({ method: 'DELETE' }))
 })
+
+it('opens Agent in place after login and refreshes the authenticated feed after lifecycle changes', async () => {
+  const request = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input)
+    if (url.includes('/v1/widget/agent/eligibility')) return new Response(JSON.stringify({
+      state: 'ready',
+      comments: [{ id: 'agent-c1', pageUrl: window.location.href, selector: '#hero', body: 'Agent feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null, createdAt: '2026-10-07T00:00:00Z' }],
+    }))
+    if (url.endsWith('/v1/widget/feedback') && init?.method === 'POST') return new Response(JSON.stringify({ comments: [] }))
+    return new Response('[]')
+  })
+  vi.stubGlobal('fetch', request)
+  render(<FeedbackWidget projectId="p" />)
+
+  await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+  await act(async () => { fireEvent.click(screen.getByText('Log in to CRRT')) })
+  await waitFor(() => expect(screen.getByText('Agent feedback')).toBeInTheDocument())
+  const authenticatedListsBefore = request.mock.calls.filter(([input]) => String(input).endsWith('/v1/widget/comments')).length
+
+  await act(async () => { fireEvent.click(screen.getByText('Accept')) })
+  await waitFor(() => {
+    const authenticatedListsAfter = request.mock.calls.filter(([input]) => String(input).endsWith('/v1/widget/comments')).length
+    expect(authenticatedListsAfter).toBeGreaterThan(authenticatedListsBefore)
+  })
+  const mutation = request.mock.calls.find(([input]) => String(input).endsWith('/v1/widget/feedback'))
+  expect(mutation?.[1]).toMatchObject({ method: 'POST', headers: { Authorization: `Bearer ${session.accessToken}` } })
+})
 it('keeps a draft when sign-in fails and allows guest continuation', async () => {
   vi.mocked(startWidgetLogin).mockRejectedValueOnce(new Error('Allow popups'))
   render(<FeedbackWidget projectId="p" />); await selectTarget()

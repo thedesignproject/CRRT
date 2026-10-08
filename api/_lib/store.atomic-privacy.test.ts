@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from './supabase.js'
-import { createSystemShare, createShare, createWidgetAgentShare, getShareById, rotateShareToken, getCommentForGithubIssue, mutateProjectFeedback } from './store.js'
+import { createSystemShare, createShare, createWidgetAgentShare, getShareById, rotateShareToken, getCommentForGithubIssue, listWidgetAgentFeedback, mutateProjectFeedback, mutateWidgetFeedbackBatch } from './store.js'
 const row={ id:'c',project_id:'p',comment:'Private body',status:'approved',visibility:'shared',implementation_status:'unassigned',url:'https://test.local',x:1,y:1,element:'body',created_at:'now',updated_at:'now',scope_type:'selection',slug:'s',access_token_hash:'h',access_token_ciphertext:'cipher' }
 let result:any, rpc:ReturnType<typeof vi.fn>
 beforeEach(()=>{
@@ -35,6 +35,19 @@ it('creates a premium widget share through the transactional RPC', async()=>{
  expect(rpc).toHaveBeenCalledWith('create_widget_agent_share',{p_project:'p',p_actor:'u',p_page_url:'https://test.local',p_idempotency_key:'abcdefghijklmnop',p_request_hash:'a'.repeat(64),p_allowed_prices:['price'],p_share:{slug:'s',access_token_hash:'h',access_token_ciphertext:'cipher',expires_at:'2099-01-01'},p_comments:['c']})
  result={data:null,error:{message:'upgrade_required'}}
  await expect(createWidgetAgentShare(input)).rejects.toThrow('upgrade_required')
+})
+it('reads and mutates exact widget feedback through actor-bound RPCs', async()=>{
+  result={data:[row],error:null}
+  expect((await listWidgetAgentFeedback('p','u','https://test.local'))[0].body).toBe('Private body')
+  expect(rpc).toHaveBeenCalledWith('read_widget_agent_feedback',{p_project:'p',p_actor:'u',p_page_url:'https://test.local'})
+  expect((await mutateWidgetFeedbackBatch({projectKey:'p',actorUserId:'u',pageUrl:'https://test.local',commentIds:['c'],action:'resolve'}))[0].body).toBe('Private body')
+  expect(rpc).toHaveBeenCalledWith('mutate_widget_feedback_batch',{p_project:'p',p_actor:'u',p_page_url:'https://test.local',p_comments:['c'],p_action:'resolve'})
+  result={data:null,error:null}
+  expect(await listWidgetAgentFeedback('p','u','https://test.local')).toEqual([])
+  expect(await mutateWidgetFeedbackBatch({projectKey:'p',actorUserId:'u',pageUrl:'https://test.local',commentIds:['c'],action:'resolve'})).toEqual([])
+  result={data:null,error:{message:'forbidden'}}
+  await expect(listWidgetAgentFeedback('p','u','https://test.local')).rejects.toThrow('forbidden')
+  await expect(mutateWidgetFeedbackBatch({projectKey:'p',actorUserId:'u',pageUrl:'https://test.local',commentIds:['c'],action:'accept'})).rejects.toThrow('forbidden')
 })
 it('gates prompt token retrieval and rotation against the current actor', async()=>{
  await getShareById('s','u');expect(rpc).toHaveBeenCalledWith('read_actor_share',{p_share:'s',p_actor:'u'})

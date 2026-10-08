@@ -1,11 +1,91 @@
 import { normalizeReviewStatus } from './format'
 import type { Comment } from './types'
+import { widgetRequest, type WidgetLoginSession } from '../../lib/widgetLogin'
 
 export interface AgentEligibility {
   canRequest: boolean
   mustSignUp: boolean
   isProjectMember: boolean
   currentTier?: string | null
+}
+
+export type WidgetAgentAccessState =
+  | 'project_access_denied'
+  | 'forbidden'
+  | 'upgrade_required'
+  | 'owner_upgrade_required'
+  | 'seat_limit_reached'
+  | 'ready'
+
+export interface WidgetAgentComment {
+  id: string
+  pageUrl: string
+  selector: string
+  body: string
+  reviewStatus: 'open' | 'accepted' | 'rejected'
+  implementationStatus: 'unassigned' | 'claimed' | 'in_progress' | 'blocked' | 'ready_for_testing' | 'done'
+  claimedByAgentId: string | null
+  createdAt: string
+  authorName?: string | null
+}
+
+export interface WidgetAgentEligibility {
+  state: WidgetAgentAccessState
+  role?: string
+  collaboratorSeatLimit?: number
+  comments?: WidgetAgentComment[]
+}
+
+export interface WidgetAgentSessionResponse {
+  shareId: string
+  slug: string
+  token: string
+  tokenUrl: string
+  expiresAt: string
+  commentCount: number
+}
+
+export async function fetchWidgetAgentEligibility(
+  apiBase: string,
+  projectKey: string,
+  pageUrl: string,
+  session: WidgetLoginSession,
+): Promise<WidgetAgentEligibility> {
+  const query = new URLSearchParams({ projectKey, pageUrl })
+  return (await widgetRequest(apiBase, `/v1/widget/agent/eligibility?${query}`, session)).json()
+}
+
+export async function createWidgetAgentSession(
+  apiBase: string,
+  input: { projectKey: string; pageUrl: string; commentIds: string[]; idempotencyKey: string },
+  session: WidgetLoginSession,
+): Promise<WidgetAgentSessionResponse> {
+  return (await widgetRequest(apiBase, '/v1/widget/agent/session', session, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })).json()
+}
+
+export async function mutateWidgetFeedback(
+  apiBase: string,
+  input: { projectKey: string; pageUrl: string; commentIds: string[]; action: 'accept' | 'reject' | 'resolve' },
+  session: WidgetLoginSession,
+): Promise<{ comments: WidgetAgentComment[] }> {
+  return (await widgetRequest(apiBase, '/v1/widget/feedback', session, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })).json()
+}
+
+export async function startWidgetAgentUpgrade(
+  apiBase: string,
+  input: { projectKey: string; pageUrl: string },
+  session: WidgetLoginSession,
+): Promise<{ url: string }> {
+  return (await widgetRequest(apiBase, '/v1/widget/agent/upgrade', session, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })).json()
 }
 
 export async function fetchProjectComments(apiBase: string, projectId: string, onPrivacy?: (required: boolean) => void): Promise<Comment[]> {

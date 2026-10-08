@@ -72,6 +72,22 @@ it('surfaces expiry and API errors instead of falling back to anonymous mutation
   }
 })
 
+it('preserves structured API codes and safe error messages for in-widget recovery', async () => {
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ code: 'seat_limit_reached', error: 'No seats remain.' }), { status: 409 }))
+  await expect(widgetRequest(api, '/path', session)).rejects.toMatchObject({
+    status: 409,
+    code: 'seat_limit_reached',
+    message: 'No seats remain.',
+  })
+
+  vi.mocked(fetch).mockResolvedValue(new Response('not-json', { status: 500 }))
+  await expect(widgetRequest(api, '/path', session)).rejects.toMatchObject({
+    status: 500,
+    code: undefined,
+    message: 'Could not save or load feedback. Please try again.',
+  })
+})
+
 it('supports a relative apiBase on self-hosted sites', async () => {
   const pending = startWidgetLogin('/api', 'p', new AbortController().signal)
   await ready()

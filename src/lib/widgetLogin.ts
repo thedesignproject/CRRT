@@ -3,8 +3,8 @@ import type { PersonalComments } from '../components/FeedbackWidget/types'
 
 export type WidgetLoginSession = { accessToken: string; displayName: string; expiresAt: string }
 export class WidgetRequestError extends Error {
-  constructor(public readonly status: number) {
-    super(status === 401 ? 'Session expired. Log in to CRRT again.' : 'Could not save or load feedback. Please try again.')
+  constructor(public readonly status: number, public readonly code?: string, message?: string) {
+    super(message || (status === 401 ? 'Session expired. Log in to CRRT again.' : 'Could not save or load feedback. Please try again.'))
   }
 }
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -14,7 +14,14 @@ export async function widgetRequest(apiBase: string, path: string, session: Widg
   const response = await fetch(`${apiBase}${path}`, {
     ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
   })
-  if (!response.ok) throw new WidgetRequestError(response.status)
+  if (!response.ok) {
+    const failure = await response.clone().json().catch(() => null) as { code?: unknown; error?: unknown } | null
+    throw new WidgetRequestError(
+      response.status,
+      typeof failure?.code === 'string' ? failure.code : undefined,
+      typeof failure?.error === 'string' ? failure.error : undefined,
+    )
+  }
   return response
 }
 

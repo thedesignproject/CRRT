@@ -10,7 +10,7 @@ import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } fr
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
 import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
-import { deleteComment as apiDeleteComment, fetchAgentEligibility, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import { deleteComment as apiDeleteComment, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { ensureWidgetFonts } from './fonts'
 import { PinActionCluster, PinMarker } from './pin'
@@ -53,15 +53,6 @@ function isTextAtPoint(x: number, y: number): boolean {
     }
   }
   return false
-}
-
-function dashboardAuthUrl(apiBase: string, path: '/dashboard/login' | '/dashboard/signup') {
-  try {
-    const origin = new URL(apiBase, window.location.origin).origin
-    return new URL(path, origin).toString()
-  } catch {
-    return path
-  }
 }
 
 function getElementFixedPos(
@@ -534,7 +525,6 @@ function FeedbackWidgetInner({
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [badgeAnim, setBadgeAnim] = useState(false)
   const [agentOpen, setAgentOpen] = useState(false)
-  const [agentGateOpen, setAgentGateOpen] = useState(false)
   const [filterStatus, setFilterStatus] = useState<'all' | 'open' | 'approved'>('all')
   const [pinsVisible, setPinsVisible] = useState(true)
   const [externalWork, setExternalWork] = useState<{
@@ -556,8 +546,6 @@ function FeedbackWidgetInner({
 
   const [postSendHint, setPostSendHint] = useState(false)
   const [launcherBump, setLauncherBump] = useState(false)
-  const signUpUrl = useMemo(() => dashboardAuthUrl(apiBase, '/dashboard/signup'), [apiBase])
-  const loginUrl = useMemo(() => dashboardAuthUrl(apiBase, '/dashboard/login'), [apiBase])
 
   const {
     image,
@@ -586,12 +574,18 @@ function FeedbackWidgetInner({
   }, [page?.target])
   useEffect(() => {
     if (!page) return
-    setTarget(null); setComment(''); clearImage(); setMode('idle'); setSelectedPin(null)
+    setTarget(null); setComment(''); clearImage(); setMode('idle'); setSelectedPin(null); setAgentOpen(false)
   }, [page?.url])
 
   const pagePoint = (x: number, y: number) => page
     ? { fixedX: x / 100 * page.width - page.scrollX, fixedY: y / 100 * page.height - page.scrollY }
     : fromPagePercentFixed(x, y)
+
+  const feedbackContextGeneration = useRef(0)
+  useEffect(() => {
+    feedbackContextGeneration.current++
+    return () => { feedbackContextGeneration.current++ }
+  }, [apiBase, projectId, currentUrl, widgetLogin.session])
 
   // --- Fetch comments on mount ---
   useEffect(() => {
@@ -867,6 +861,17 @@ function FeedbackWidgetInner({
     } else if (target) setMode('commenting')
   }, [widgetLogin.session, handleSend])
 
+  const openAgentBridge = useCallback(() => {
+    if (suppliedPersonalComments) return
+    setLauncherOpen(false)
+    setSidebarOpen(false)
+    if (agentOpen) {
+      document.querySelector<HTMLElement>('[data-fw-agent-dialog]')?.focus()
+      return
+    }
+    setAgentOpen(true)
+  }, [agentOpen, suppliedPersonalComments])
+
   // --- Keyboard shortcuts ---
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -958,21 +963,6 @@ function FeedbackWidgetInner({
     exitFeedbackMode()
     setPostSendHint(false)
     setSidebarOpen(true)
-  }
-
-  function openAgentBridge() {
-    if (personalComments) return
-    setLauncherOpen(false)
-    setAgentGateOpen(false)
-    setSidebarOpen(false)
-    setAgentOpen(true)
-  }
-
-  async function ensureAgentAccess() {
-    const eligibility = await fetchAgentEligibility(apiBase, projectId)
-    if (eligibility?.canRequest && !eligibility.mustSignUp) return true
-    setAgentGateOpen(true)
-    return false
   }
 
   // Close the launcher menu on outside click.
@@ -1841,7 +1831,7 @@ function FeedbackWidgetInner({
         </div>
 
         {/* Agent CTA — visible path into agent flow, not only Shift+A. */}
-        {!personalComments && <div
+        {!suppliedPersonalComments && <div
           style={{
             padding: '14px 16px 12px',
             borderBottom: '1px solid var(--fw-contrast-04)',
@@ -2407,20 +2397,25 @@ function FeedbackWidgetInner({
       </div>
 
       {/* Agent bridge modal */}
-      {agentOpen && !agentGateOpen && (
+      {agentOpen && (
         <AgentBridgeModal
           apiBase={apiBase}
           projectId={projectId}
+          pageUrl={currentUrl}
+          widgetSession={widgetLogin.session}
+          loginBusy={widgetLogin.busy}
+          loginError={widgetLogin.error}
+          onLogin={widgetLogin.login}
           onClose={() => setAgentOpen(false)}
-          onBeforeCopy={ensureAgentAccess}
-        />
-      )}
-      {agentGateOpen && (
-        <AgentAuthGate
-          readyCount={readyForAgentCount}
-          signUpUrl={signUpUrl}
-          loginUrl={loginUrl}
-          onClose={() => setAgentGateOpen(false)}
+          onFeedbackChanged={() => {
+            // Agent can only reach this callback after the widget session has
+            // passed server-side eligibility. Never fall back to the anonymous
+            // project feed while reconciling private lifecycle changes.
+            const context = feedbackContextGeneration.current
+            void widgetLogin.comments!.list(currentUrl).then((fresh) => {
+              if (context === feedbackContextGeneration.current) setComments(fresh)
+            }).catch(() => {})
+          }}
         />
       )}
 

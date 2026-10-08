@@ -12,6 +12,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const projectKey = getStringQuery(req.query.projectKey)
     if (!projectKey) return jsonError(req, res, 400, 'Missing projectKey')
 
+    console.warn('[public/project] deprecated legacy widget Agent session requested', { projectKey })
+
     const project = await getProject(projectKey)
     if (!project) return jsonError(req, res, 404, 'Project not found')
 

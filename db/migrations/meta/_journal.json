@@ -255,6 +255,13 @@
       "breakpoints": true
     },
     {
+      "idx": 36,
+      "version": "7",
+      "when": 1791319036721,
+      "tag": "0036_widget_agent_workflow",
+      "breakpoints": true
+    },
+    {
       "idx": 37,
       "version": "7",
       "when": 1791464874637,
@@ -266,6 +273,13 @@
       "version": "7",
       "when": 1791464968793,
       "tag": "0038_agent_collaborator_seats_upgrade",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791465212082,
+      "tag": "0039_widget_agent_workflow_upgrade",
       "breakpoints": true
     }
   ]
