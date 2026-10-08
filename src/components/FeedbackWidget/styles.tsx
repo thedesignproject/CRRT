@@ -45,6 +45,9 @@ export function FeedbackWidgetStyles() {
           --fw-contrast-14: rgba(255, 255, 255, 0.14);
           --fw-contrast-15: rgba(255, 255, 255, 0.15);
           --fw-contrast-18: rgba(255, 255, 255, 0.18);
+          --crrt-selector-motion-duration: 250ms;
+          --crrt-selector-motion-easing: cubic-bezier(.22, 1.18, .36, 1);
+          --crrt-selector-opacity-duration: 120ms;
         }
         [data-fw-crrt][data-crrt-theme='light'] {
           color-scheme: light;
@@ -263,6 +266,9 @@ export function FeedbackWidgetStyles() {
           [data-fw-crrt] * {
             animation-duration: 0.01ms !important;
             transition-duration: 0.01ms !important;
+          }
+          [data-fw-crrt] .fw-selector-frame {
+            transition: none !important;
           }
           .fw-rec-dot { animation: none !important; }
         }

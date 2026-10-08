@@ -177,6 +177,11 @@ Three families. **Never mix them outside their roles.**
 | `--crrt-duration-default` | 220ms | `ease` | Panel expand / fade |
 | `--crrt-duration-slow` | 320ms | `ease` | Page-level transitions |
 | `--crrt-pulse-duration` | 2400ms | `ease-in-out` | Carrot dot pulse |
+| `--crrt-selector-motion-duration` | 250ms | `--crrt-selector-motion-easing` | Persistent feedback-selector frame travel and resize |
+| `--crrt-selector-motion-easing` | — | `cubic-bezier(.22, 1.18, .36, 1)` | Restrained friendly spring for selector-frame geometry |
+| `--crrt-selector-opacity-duration` | 120ms | `ease` | Selector-frame entry and exit |
+
+The feedback selector is one fixed, pointer-transparent frame. It moves and resizes between candidate rectangles instead of changing customer-page element styles. Pointer measurements are animation-frame coalesced, and scroll, resize, zoom, and observed reflow keep the frame aligned. Under `prefers-reduced-motion: reduce`, geometry updates are immediate and the visible outline remains intact.
 
 **Pulse keyframes** (carrot notification dot):
 

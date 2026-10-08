@@ -971,7 +971,7 @@ describe('<FeedbackWidget />', () => {
 
       const backdrop = Array.from(
         document.querySelectorAll<HTMLDivElement>('div[data-fw]'),
-      ).find((el) => el.style.zIndex === '2147483645')!
+      ).find((el) => el.style.zIndex === '2147483645' && !el.hasAttribute('data-fw-selector-frame'))!
       await act(async () => {
         fireEvent.click(backdrop)
       })
@@ -1255,6 +1255,7 @@ describe('<FeedbackWidget />', () => {
       return await waitFor(() => {
         const wrappers = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
         const tooltip = wrappers.find((el) =>
+          !el.hasAttribute('data-fw-selector-frame') &&
           /pointer-events:\s*none/.test(el.getAttribute('style') ?? '') &&
           /position:\s*fixed/.test(el.getAttribute('style') ?? ''),
         )
@@ -1742,8 +1743,8 @@ describe('<FeedbackWidget />', () => {
     })
   })
 
-  describe('hover outline during selecting mode (line 265)', () => {
-    it('applies an orange outline to hovered elements while in selecting mode', async () => {
+  describe('persistent selector frame', () => {
+    it('frames hovered elements without mutating customer-page styles', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -1765,9 +1766,11 @@ describe('<FeedbackWidget />', () => {
       })
 
       await waitFor(() => {
-        // After the hovered state lands, the outline should be applied.
-        expect(target.style.outline).toContain('rgba(232, 133, 61')
+        const frame = document.querySelector<HTMLElement>('[data-fw-selector-frame]')
+        expect(frame?.style.opacity).toBe('1')
+        expect(frame?.style.border).toContain('rgba(232, 133, 61')
       })
+      expect(target.style.outline).toBe('')
 
       target.remove()
     })
