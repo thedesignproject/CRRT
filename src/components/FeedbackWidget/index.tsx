@@ -19,40 +19,10 @@ import { SelectingInstructionBar } from './selecting'
 import { TextRangeQuote } from './quote'
 import { listenForWidgetEvent } from './events'
 import { SpeechInputButton } from './voice'
-
-type CaretPositionDocument = Document & {
-  caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node } | null
-  caretRangeFromPoint?: (x: number, y: number) => Range | null
-}
+import { SelectorFrame } from './SelectorFrame'
 
 function clearNativeSelection() {
   window.getSelection()?.removeAllRanges()
-}
-
-function textNodeAtPoint(x: number, y: number): Node | null {
-  const doc = document as CaretPositionDocument
-  if (typeof doc.caretPositionFromPoint === 'function') {
-    return doc.caretPositionFromPoint(x, y)?.offsetNode ?? null
-  }
-  if (typeof doc.caretRangeFromPoint === 'function') {
-    return doc.caretRangeFromPoint(x, y)?.startContainer ?? null
-  }
-  return null
-}
-
-function isTextAtPoint(x: number, y: number): boolean {
-  const node = textNodeAtPoint(x, y)
-  if (!node || node.nodeType !== Node.TEXT_NODE) return false
-  if (!(node.textContent ?? '').trim()) return false
-
-  const range = document.createRange()
-  range.selectNodeContents(node)
-  for (const rect of Array.from(range.getClientRects())) {
-    if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
-      return true
-    }
-  }
-  return false
 }
 
 function getElementFixedPos(
@@ -371,7 +341,6 @@ function FeedbackWidgetInner({
   const [comment, setComment] = useState('')
   const [sending, setSending] = useState(false)
   const [speechStopSignal, setSpeechStopSignal] = useState(0)
-  const [hovered, setHovered] = useState<Element | null>(null)
   const [apiError, setApiError] = useState('')
 
   const widgetLogin = useWidgetLogin(apiBase, projectId)
@@ -632,43 +601,6 @@ function FeedbackWidgetInner({
     }
   }, [mode, textHover])
 
-  // --- Highlight hovered element ---
-  useEffect(() => {
-    if (mode !== 'selecting' || page) {
-      setHovered(null)
-      setTextHover(false)
-      return
-    }
-
-    function onMove(e: MouseEvent) {
-      const el = e.target as HTMLElement
-      if (el && !el.closest?.(`[${WIDGET_ATTR}]`)) {
-        setHovered(el)
-        setTextHover(isTextAtPoint(e.clientX, e.clientY))
-      } else {
-        setHovered(null)
-        setTextHover(false)
-      }
-    }
-
-    window.addEventListener('mousemove', onMove)
-    return () => window.removeEventListener('mousemove', onMove)
-  }, [mode])
-
-  // --- Apply/remove highlight outline on hovered element ---
-  useEffect(() => {
-    if (!hovered) return
-    const el = hovered as HTMLElement
-    const prev = el.style.outline
-    const prevOffset = el.style.outlineOffset
-    el.style.outline = '2px solid rgba(232, 133, 61, 0.6)'
-    el.style.outlineOffset = '2px'
-    return () => {
-      el.style.outline = prev
-      el.style.outlineOffset = prevOffset
-    }
-  }, [hovered])
-
   // --- Handle element click / text selection in selecting mode ---
   useEffect(() => {
     if (mode !== 'selecting' || page) return
@@ -839,7 +771,6 @@ function FeedbackWidgetInner({
       setTarget(null)
       setComment('')
       clearImage()
-      setHovered(null)
       setMode('selecting')
       setSidebarOpen(false)
     } catch (err) {
@@ -944,7 +875,6 @@ function FeedbackWidgetInner({
     setComment('')
     clearImage()
     setSending(false)
-    setHovered(null)
     setSelectedPin(null)
   }
 
@@ -1181,19 +1111,7 @@ function FeedbackWidgetInner({
   return (
     <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-project': projectId, 'data-crrt-theme': theme }}>
       {apiError && <div role="alert" style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 2147483647, padding: 16, background: 'var(--fw-surface)', color: 'var(--fw-foreground)', borderRadius: 8 }}>{apiError}<button onClick={() => setApiError('')} aria-label="Dismiss error">×</button></div>}
-      {/* Overlay — purely visual, clicks pass through */}
-      {mode === 'selecting' && (
-        <div
-          {...{ [WIDGET_ATTR]: '' }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 2147483644,
-            pointerEvents: 'none',
-            background: 'transparent',
-          }}
-        />
-      )}
+      <SelectorFrame active={mode === 'selecting' && !page} onTextHover={setTextHover} />
 
       {/* Instruction tooltip */}
       {mode === 'selecting' && showSelectingHint && (

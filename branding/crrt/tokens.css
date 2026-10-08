@@ -119,6 +119,9 @@
   --crrt-easing-default:   ease;
   --crrt-easing-emphasis:  cubic-bezier(0.2, 0.8, 0.2, 1);
   --crrt-pulse-duration:   2400ms;
+  --crrt-selector-motion-duration: 250ms;
+  --crrt-selector-motion-easing: cubic-bezier(.22, 1.18, .36, 1);
+  --crrt-selector-opacity-duration: 120ms;
 
   /* Image rendering — pixel-art carrot must stay crisp */
   --crrt-image-rendering: pixelated;
