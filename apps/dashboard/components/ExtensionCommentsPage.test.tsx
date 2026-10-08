@@ -140,7 +140,10 @@ describe('ExtensionCommentsPage', () => {
   })
 
   it('navigates owned comments without status shortcuts or project requests', async () => {
-    render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+    // Flush the initial load and its keyboard-listener effect before shortcuts.
+    await act(async () => {
+      render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+    })
     await screen.findByText('First comment')
     fireEvent.keyDown(window, { key: 'k' })
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
