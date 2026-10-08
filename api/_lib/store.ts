@@ -2797,6 +2797,7 @@ export async function createInvite(input: {
     .single()
   if (error) {
     if (error.code === '23505') throw new Error('already_invited')
+    if (error.message.includes('agent_seat_limit_reached')) throw new Error('agent_seat_limit_reached')
     throw new Error(error.message)
   }
   return mapInvite(data as InviteRow)
@@ -2853,46 +2854,23 @@ async function claimInvite(email: string, projectKey: string) {
   return data ? mapInvite(data as InviteRow) : null
 }
 
-async function restoreInvite(invite: ReturnType<typeof mapInvite>) {
-  const supabase = getSupabase()
-  const { error } = await supabase
-    .from('project_invites')
-    .insert([{
-      project_key: invite.projectKey,
-      email: invite.email,
-      role: invite.role,
-      invited_by: invite.invitedBy,
-      created_at: invite.createdAt,
-    }] as never)
-  if (error && error.code !== '23505') throw new Error(error.message)
-}
-
 /**
- * Claim the invite with one DELETE ... RETURNING statement so accept, decline,
- * and cancellation have a single winner. Membership insertion is idempotent;
- * a failed insertion restores the claimed invite for retry.
+ * Convert a pending invitation into membership in one database transaction.
+ * The RPC holds the invitation row and the owner's seat lock through deletion
+ * and insertion, so reserved capacity cannot be stolen between those writes.
  */
 export async function acceptInvite(userId: string, email: string, projectKey: string): Promise<string | null> {
-  const invite = await claimInvite(email, projectKey)
-  if (!invite) {
-    if (await isProjectMember(userId, projectKey)) return null
-    throw new Error('not_found')
+  const { data, error } = await getSupabase().rpc('accept_project_invite_with_seat', {
+    p_user: userId,
+    p_email: email.toLowerCase().trim(),
+    p_project: projectKey,
+  } as never)
+  if (error) {
+    if (error.message.includes('agent_seat_limit_reached')) throw new Error('agent_seat_limit_reached')
+    if (error.message.includes('not_found')) throw new Error('not_found')
+    throw new Error(error.message)
   }
-
-  const supabase = getSupabase()
-  const { error: insertError } = await supabase
-    .from('project_members')
-    .insert([{ project_key: projectKey, user_id: userId, role: invite.role }] as never)
-  if (insertError && insertError.code !== '23505') {
-    try { await restoreInvite(invite) }
-    catch (restoreError) {
-      const message = String(restoreError)
-      throw new Error(`${insertError.message}; invite restore failed: ${message}`)
-    }
-    throw new Error(insertError.message)
-  }
-
-  return invite.invitedBy
+  return typeof data === 'string' ? data : null
 }
 
 export async function declineInvite(email: string, projectKey: string): Promise<string> {

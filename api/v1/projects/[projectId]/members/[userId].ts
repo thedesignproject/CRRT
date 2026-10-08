@@ -99,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (msg === 'forbidden') return jsonError(req, res, 403, 'Admin role required')
     if (msg === 'owner_required') return jsonError(req, res, 403, 'Only the owner can transfer ownership')
     if (msg === 'owner_protected') return jsonError(req, res, 409, 'Transfer ownership before changing the owner')
+    if (msg?.includes('agent_seat_limit_reached')) return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')
   }

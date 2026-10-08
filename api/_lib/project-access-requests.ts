@@ -23,6 +23,7 @@ export const accessErrors: Record<string, [number, string]> = {
   stale: [409, 'This request has changed; refresh before reviewing'],
   resolved: [409, 'This request has already been reviewed'],
   invalid: [400, 'Invalid access decision or role'],
+  agent_seat_limit_reached: [409, 'The project owner has no Agent collaborator seats available'],
 }
 
 export async function listAccessRequests(project: string): Promise<AccessRequest[]> {
@@ -40,6 +41,9 @@ export async function reviewAccessRequest(project: string, requestId: string, re
   const { data, error } = await getServiceSupabase().rpc('review_project_access_request', {
     p_project: project, p_request: requestId, p_reviewer: reviewer, p_attempt: attempt, p_decision: decision, p_role: role,
   })
-  if (error) throw new Error(error.message)
+  if (error) {
+    if (error.message.includes('agent_seat_limit_reached')) return { outcome: 'agent_seat_limit_reached' }
+    throw new Error(error.message)
+  }
   return data
 }

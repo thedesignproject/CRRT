@@ -290,6 +290,7 @@ describe('api/v1/projects/[projectId]/members/[userId]', () => {
     ['forbidden', 403],
     ['owner_required', 403],
     ['owner_protected', 409],
+    ['agent_seat_limit_reached detail', 409],
   ])('maps role change %s errors to %s', async (message, status) => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })

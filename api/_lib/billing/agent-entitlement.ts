@@ -72,8 +72,14 @@ export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: 
   }
 
   if (!actor.is_owner) {
-    // #302 replaces this safe rollout denial with transactional seat checks.
-    return { state: 'seat_limit_reached', role, ownerUserId: owner.user_id, collaboratorSeatLimit: AGENT_COLLABORATOR_SEAT_LIMIT }
+    const { data: hasSeat, error: seatError } = await db.rpc('agent_collaborator_has_seat', {
+      p_owner: owner.user_id,
+      p_actor: actorUserId,
+    } as never)
+    if (seatError) throw new Error('Agent collaborator seat lookup failed')
+    if (hasSeat !== true) {
+      return { state: 'seat_limit_reached', role, ownerUserId: owner.user_id, collaboratorSeatLimit: AGENT_COLLABORATOR_SEAT_LIMIT }
+    }
   }
 
   return { state: 'ready', role, ownerUserId: owner.user_id, collaboratorSeatLimit: AGENT_COLLABORATOR_SEAT_LIMIT }

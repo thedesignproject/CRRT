@@ -248,10 +248,24 @@
       "breakpoints": true
     },
     {
+      "idx": 35,
+      "version": "7",
+      "when": 1791317113030,
+      "tag": "0035_agent_collaborator_seats",
+      "breakpoints": true
+    },
+    {
       "idx": 37,
       "version": "7",
       "when": 1791464874637,
       "tag": "0037_widget_share_review_events",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791464968793,
+      "tag": "0038_agent_collaborator_seats_upgrade",
       "breakpoints": true
     }
   ]

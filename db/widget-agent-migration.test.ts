@@ -14,8 +14,9 @@ describe('premium widget Agent migration', () => {
 
   it('records a forward-only Drizzle snapshot', () => {
     const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-    expect(journal.entries.find((entry: { idx: number }) => entry.idx === 34)).toMatchObject({ idx: 34, tag: '0034_icy_fabian_cortez' })
-    expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when)
+    const entryIndex = journal.entries.findIndex((entry: { idx: number }) => entry.idx === 34)
+    expect(journal.entries[entryIndex]).toMatchObject({ idx: 34, tag: '0034_icy_fabian_cortez' })
+    expect(journal.entries[entryIndex].when).toBeGreaterThan(journal.entries[entryIndex - 1].when)
     const previous = JSON.parse(readFileSync('db/migrations/meta/0033_snapshot.json', 'utf8'))
     const current = JSON.parse(readFileSync('db/migrations/meta/0034_snapshot.json', 'utf8'))
     expect(current.prevId).toBe(previous.id)
