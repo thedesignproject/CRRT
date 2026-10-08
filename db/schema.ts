@@ -392,6 +392,11 @@ export const feedbackShares = pgTable(
     accessTokenHash: text('access_token_hash').notNull(),
     accessTokenCiphertext: text('access_token_ciphertext').notNull(),
     createdBy: text('created_by').notNull(),
+    // Widget-created shares carry a durable actor/idempotency tuple. Legacy
+    // dashboard and system shares leave these nullable during rollout.
+    actorUserId: uuid('actor_user_id').references(() => authUsers.id, { onDelete: 'restrict' }),
+    idempotencyKey: text('idempotency_key'),
+    requestHash: text('request_hash'),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -404,6 +409,16 @@ export const feedbackShares = pgTable(
     oneProjectScopePerProject: uniqueIndex('feedback_shares_one_project_scope_per_project')
       .on(t.projectId)
       .where(sql`scope_type = 'project' and revoked_at is null`),
+    widgetIdempotencyUnique: uniqueIndex('feedback_shares_widget_idempotency_unique')
+      .on(t.projectId, t.actorUserId, t.idempotencyKey)
+      .where(sql`${t.actorUserId} is not null and ${t.idempotencyKey} is not null`),
+    widgetIdempotencyShapeCheck: check(
+      'feedback_shares_widget_idempotency_shape_check',
+      sql`(${t.actorUserId} is null and ${t.idempotencyKey} is null and ${t.requestHash} is null)
+        or (${t.actorUserId} is not null and ${t.idempotencyKey} is not null and ${t.requestHash} is not null
+          and ${t.idempotencyKey} ~ '^[A-Za-z0-9_-]{16,128}$'
+          and ${t.requestHash} ~ '^[0-9a-f]{64}$')`,
+    ),
   }),
 )
 
@@ -1367,6 +1382,105 @@ GRANT EXECUTE ON FUNCTION public.lock_feedback_actor(text,uuid,text), public.rea
  public.rotate_actor_share(uuid,uuid,text,text,text,text) TO service_role;
 `
 
+// Premium widget handoff is owner-only until collaborator seat enforcement is
+// deployed. Authorization, billing, selection validation, acceptance, and
+// idempotent share creation deliberately live in one database transaction.
+export const widgetAgentShareSql = `
+CREATE FUNCTION public.create_widget_agent_share(
+  p_project text,
+  p_actor uuid,
+  p_page_url text,
+  p_idempotency_key text,
+  p_request_hash text,
+  p_allowed_prices text[],
+  p_share jsonb,
+  p_comments uuid[]
+)
+RETURNS SETOF public.feedback_shares LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE
+  v_is_owner boolean;
+  v_status text;
+  v_price text;
+  v_requested uuid[];
+  v_ids uuid[];
+  v_share public.feedback_shares%ROWTYPE;
+BEGIN
+  IF p_page_url IS NULL OR p_page_url = ''
+    OR p_idempotency_key !~ '^[A-Za-z0-9_-]{16,128}$'
+    OR p_request_hash !~ '^[0-9a-f]{64}$'
+    OR cardinality(p_comments) IS NULL OR cardinality(p_comments) < 1 OR cardinality(p_comments) > 100
+    OR cardinality(p_allowed_prices) IS NULL OR cardinality(p_allowed_prices) < 1 THEN
+    RAISE EXCEPTION 'invalid_widget_agent_request';
+  END IF;
+
+  SELECT array_agg(DISTINCT requested.id ORDER BY requested.id)
+    INTO v_requested FROM unnest(p_comments) requested(id);
+  IF cardinality(v_requested) <> cardinality(p_comments) THEN
+    RAISE EXCEPTION 'invalid_selection';
+  END IF;
+
+  -- Keep the lock order aligned with every membership-sensitive mutation.
+  PERFORM public.lock_feedback_actor(p_project,p_actor,'agent:operate');
+  SELECT m.is_owner INTO v_is_owner FROM public.project_members m
+    WHERE m.project_key=p_project AND m.user_id=p_actor;
+  IF v_is_owner IS DISTINCT FROM true THEN RAISE EXCEPTION 'seat_limit_reached'; END IF;
+
+  SELECT b.subscription_status,b.price_id INTO v_status,v_price
+    FROM public.billing_accounts b WHERE b.user_id=p_actor FOR SHARE;
+  IF v_status IS NULL OR v_status NOT IN ('active','trialing') OR v_price IS NULL OR NOT (v_price=ANY(p_allowed_prices)) THEN
+    RAISE EXCEPTION 'upgrade_required';
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended(
+    'crrt-widget-agent:' || p_project || ':' || p_actor::text || ':' || p_idempotency_key, 0
+  ));
+  SELECT s.* INTO v_share FROM public.feedback_shares s
+    WHERE s.project_id=p_project AND s.actor_user_id=p_actor AND s.idempotency_key=p_idempotency_key
+    FOR UPDATE;
+  IF v_share.id IS NOT NULL THEN
+    IF v_share.request_hash IS DISTINCT FROM p_request_hash THEN RAISE EXCEPTION 'idempotency_conflict'; END IF;
+    RETURN NEXT v_share;
+    RETURN;
+  END IF;
+
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-github-issue:' || p_project,0));
+  SELECT array_agg(eligible.id ORDER BY eligible.id) INTO v_ids FROM (
+    SELECT c.id FROM public.comments c
+      WHERE c.id=ANY(p_comments) AND c.project_id=p_project AND c.url=p_page_url
+        AND c.visibility='shared' AND c.status IN ('pending','approved')
+        AND coalesce(c.implementation_status,'unassigned') NOT IN ('done','ready_for_testing')
+      ORDER BY c.id FOR UPDATE
+  ) eligible;
+  IF cardinality(v_ids) IS NULL OR cardinality(v_ids) <> cardinality(p_comments) THEN
+    RAISE EXCEPTION 'invalid_selection';
+  END IF;
+
+  UPDATE public.comments c SET status='approved',updated_at=now()
+    WHERE c.id=ANY(v_ids) AND c.project_id=p_project AND c.status='pending';
+  INSERT INTO public.feedback_shares(
+    project_id,scope_type,scope_page_url,slug,access_token_hash,access_token_ciphertext,
+    created_by,actor_user_id,idempotency_key,request_hash,expires_at
+  ) VALUES(
+    p_project,'selection',p_page_url,p_share->>'slug',p_share->>'access_token_hash',
+    p_share->>'access_token_ciphertext','reviewer',p_actor,p_idempotency_key,p_request_hash,
+    (p_share->>'expires_at')::timestamptz
+  ) RETURNING * INTO v_share;
+  INSERT INTO public.feedback_share_items(share_id,comment_id)
+    SELECT v_share.id,unnest(v_ids);
+  INSERT INTO public.feedback_events(share_id,actor_type,actor_id,event_type,payload)
+    VALUES(v_share.id,'reviewer',p_actor::text,'share.created',
+      jsonb_build_object('scopeType','selection','commentCount',cardinality(v_ids),'source','widget'));
+  RETURN NEXT v_share;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.create_widget_agent_share(text,uuid,text,text,text,text[],jsonb,uuid[])
+  FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.create_widget_agent_share(text,uuid,text,text,text,text[],jsonb,uuid[])
+  TO service_role;
+`
+
 // Agent streams and presence use the same current-token boundary as comment ops.
 export const projectPrivacyAgentSql = `
 CREATE FUNCTION public.read_agent_events(p_share uuid,p_token_hash text,p_after bigint,p_limit integer)
@@ -1696,4 +1810,33 @@ BEGIN
 	RETURN v_updated = 1;
 END;
 $$;
+`
+
+// Publish acceptance to existing Agent streams in the handoff transaction.
+// Inserting the selection items happens only for a new idempotency key.
+export const widgetShareReviewEventsSql = `
+CREATE FUNCTION public.publish_widget_share_acceptance()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+DECLARE v_share public.feedback_shares%ROWTYPE;
+BEGIN
+  SELECT s.* INTO v_share FROM public.feedback_shares s WHERE s.id=NEW.share_id;
+  IF v_share.actor_user_id IS NULL OR v_share.created_by <> 'reviewer'
+    OR v_share.scope_type <> 'selection' THEN RETURN NEW; END IF;
+  INSERT INTO public.feedback_events(share_id,comment_id,actor_type,actor_id,event_type,payload)
+    SELECT s.id,NEW.comment_id,'reviewer',v_share.actor_user_id::text,'comment.reviewed',
+      jsonb_build_object('reviewStatus','accepted')
+    FROM public.feedback_shares s
+    WHERE s.project_id=v_share.project_id AND s.id<>NEW.share_id
+      AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp()
+      AND (s.scope_type='project' OR EXISTS (
+        SELECT 1 FROM public.feedback_share_items i WHERE i.share_id=s.id AND i.comment_id=NEW.comment_id
+      ));
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER publish_widget_share_acceptance AFTER INSERT ON public.feedback_share_items
+  FOR EACH ROW EXECUTE FUNCTION public.publish_widget_share_acceptance();
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.publish_widget_share_acceptance() FROM PUBLIC,anon,authenticated;
 `

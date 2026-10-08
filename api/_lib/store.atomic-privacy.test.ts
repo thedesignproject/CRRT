@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from './supabase.js'
-import { createSystemShare, createShare, getShareById, rotateShareToken, getCommentForGithubIssue, mutateProjectFeedback } from './store.js'
+import { createSystemShare, createShare, createWidgetAgentShare, getShareById, rotateShareToken, getCommentForGithubIssue, mutateProjectFeedback } from './store.js'
 const row={ id:'c',project_id:'p',comment:'Private body',status:'approved',visibility:'shared',implementation_status:'unassigned',url:'https://test.local',x:1,y:1,element:'body',created_at:'now',updated_at:'now',scope_type:'selection',slug:'s',access_token_hash:'h',access_token_ciphertext:'cipher' }
 let result:any, rpc:ReturnType<typeof vi.fn>
 beforeEach(()=>{
@@ -26,6 +26,15 @@ it('creates a reviewer share and its items in one authorized RPC', async()=>{
  const input={projectKey:'p',scopeType:'selection' as const,scopePageUrl:null,slug:'s',accessTokenHash:'h',accessTokenCiphertext:'cipher',createdBy:'reviewer',expiresAt:'2099-01-01'}
  await createShare(input,{actorUserId:'u',commentIds:['c']})
  expect(rpc).toHaveBeenCalledWith('create_actor_share',expect.objectContaining({p_actor:'u',p_project:'p',p_comments:['c']}))
+ result={data:null,error:{message:'forbidden'}}
+ await expect(createShare(input,{actorUserId:'u',commentIds:['c']})).rejects.toThrow('forbidden')
+})
+it('creates a premium widget share through the transactional RPC', async()=>{
+ const input={projectKey:'p',actorUserId:'u',pageUrl:'https://test.local',idempotencyKey:'abcdefghijklmnop',requestHash:'a'.repeat(64),allowedPriceIds:['price'],commentIds:['c'],slug:'s',accessTokenHash:'h',accessTokenCiphertext:'cipher',expiresAt:'2099-01-01'}
+ expect((await createWidgetAgentShare(input)).slug).toBe('s')
+ expect(rpc).toHaveBeenCalledWith('create_widget_agent_share',{p_project:'p',p_actor:'u',p_page_url:'https://test.local',p_idempotency_key:'abcdefghijklmnop',p_request_hash:'a'.repeat(64),p_allowed_prices:['price'],p_share:{slug:'s',access_token_hash:'h',access_token_ciphertext:'cipher',expires_at:'2099-01-01'},p_comments:['c']})
+ result={data:null,error:{message:'upgrade_required'}}
+ await expect(createWidgetAgentShare(input)).rejects.toThrow('upgrade_required')
 })
 it('gates prompt token retrieval and rotation against the current actor', async()=>{
  await getShareById('s','u');expect(rpc).toHaveBeenCalledWith('read_actor_share',{p_share:'s',p_actor:'u'})

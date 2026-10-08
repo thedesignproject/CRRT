@@ -239,6 +239,20 @@
       "when": 1791294898721,
       "tag": "0033_tracker_recovery_rollout",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791316570474,
+      "tag": "0034_icy_fabian_cortez",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791464874637,
+      "tag": "0037_widget_share_review_events",
+      "breakpoints": true
     }
   ]
 }

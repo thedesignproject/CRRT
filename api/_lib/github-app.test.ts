@@ -156,8 +156,9 @@ describe('github app install helpers', () => {
       expectedConnectionVersion: 3,
     })
     const encryptedBody = Buffer.from(token.split('.')[0], 'base64url').toString('utf8')
-    expect(encryptedBody).not.toContain('99')
-    expect(encryptedBody).not.toContain('installationId')
+    // Ciphertext can coincidentally contain short plaintext substrings.
+    // Base64 decoding must not expose the structured installation payload.
+    expect(() => JSON.parse(encryptedBody)).toThrow()
     expect(verifyGitHubAppInstallationToken(token, 1601)).toBeNull()
     expect(verifyGitHubAppInstallationToken('bad', 1000)).toBeNull()
 
