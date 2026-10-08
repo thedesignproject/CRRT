@@ -12,6 +12,7 @@ import {
 } from './agent-entitlement.js'
 
 let results: Array<{ data: unknown; error: unknown }>
+let seatResult: { data: unknown; error: unknown }
 beforeEach(() => {
   vi.resetAllMocks()
   results = []
@@ -21,7 +22,8 @@ beforeEach(() => {
     query.maybeSingle = vi.fn(async () => results.shift())
     return query
   })
-  vi.mocked(getServiceSupabase).mockReturnValue({ from } as never)
+  seatResult = { data: true, error: null }
+  vi.mocked(getServiceSupabase).mockReturnValue({ from, rpc: vi.fn(async () => seatResult) } as never)
   vi.mocked(getAccount).mockResolvedValue({ subscription_status: 'active', price_id: 'price_agent' } as never)
   vi.stubEnv('STRIPE_PRICE_ID', 'price_agent')
   vi.stubEnv('CRRT_AGENT_PRICE_IDS', '')
@@ -59,7 +61,7 @@ it('fails closed for missing memberships, guests, and lookup errors', async () =
   await expect(resolveWidgetAgentAccess('p', 'u')).resolves.toMatchObject({ state: 'project_access_denied', role: 'member' })
 })
 
-it('distinguishes owner upgrade, ask-owner, rollout seat denial, and ready owner', async () => {
+it('distinguishes owner upgrade, ask-owner, seat denial, and ready actors', async () => {
   vi.mocked(getAccount).mockResolvedValue(null)
   results = [{ data: { user_id: 'owner', role: 'admin', is_owner: true }, error: null }, { data: { user_id: 'owner' }, error: null }]
   await expect(resolveWidgetAgentAccess('p', 'owner')).resolves.toMatchObject({ state: 'upgrade_required', role: 'owner' })
@@ -68,9 +70,20 @@ it('distinguishes owner upgrade, ask-owner, rollout seat denial, and ready owner
   await expect(resolveWidgetAgentAccess('p', 'member')).resolves.toMatchObject({ state: 'owner_upgrade_required', ownerUserId: 'owner' })
 
   vi.mocked(getAccount).mockResolvedValue({ subscription_status: 'trialing', price_id: 'price_agent' } as never)
+  seatResult = { data: false, error: null }
   results = [{ data: { user_id: 'member', role: 'member', is_owner: false }, error: null }, { data: { user_id: 'owner' }, error: null }]
   await expect(resolveWidgetAgentAccess('p', 'member')).resolves.toMatchObject({ state: 'seat_limit_reached', collaboratorSeatLimit: AGENT_COLLABORATOR_SEAT_LIMIT })
 
+  seatResult = { data: true, error: null }
+  results = [{ data: { user_id: 'member', role: 'member', is_owner: false }, error: null }, { data: { user_id: 'owner' }, error: null }]
+  await expect(resolveWidgetAgentAccess('p', 'member')).resolves.toEqual({ state: 'ready', role: 'member', ownerUserId: 'owner', collaboratorSeatLimit: 5 })
+
   results = [{ data: { user_id: 'owner', role: 'admin', is_owner: true }, error: null }, { data: { user_id: 'owner' }, error: null }]
   await expect(resolveWidgetAgentAccess('p', 'owner')).resolves.toEqual({ state: 'ready', role: 'owner', ownerUserId: 'owner', collaboratorSeatLimit: 5 })
+})
+
+it('fails closed when collaborator seat lookup fails', async () => {
+  seatResult = { data: null, error: { message: 'db down' } }
+  results = [{ data: { user_id: 'member', role: 'member', is_owner: false }, error: null }, { data: { user_id: 'owner' }, error: null }]
+  await expect(resolveWidgetAgentAccess('p', 'member')).rejects.toThrow('seat lookup failed')
 })

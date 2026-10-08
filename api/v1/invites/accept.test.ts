@@ -69,6 +69,11 @@ describe('api/v1/invites/accept', () => {
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(404)
 
+    vi.mocked(acceptInvite).mockRejectedValueOnce(new Error('agent_seat_limit_reached'))
+    res = mockRes()
+    await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
+    expect(res.statusCode).toBe(409)
+
     vi.mocked(acceptInvite).mockResolvedValueOnce('inviter-1')
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)

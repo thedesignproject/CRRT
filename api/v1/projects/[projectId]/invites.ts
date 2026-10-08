@@ -124,6 +124,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
     if (msg === 'already_invited') return jsonError(req, res, 409, 'Already invited')
+    if (msg === 'agent_seat_limit_reached') return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available')
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error')
   }

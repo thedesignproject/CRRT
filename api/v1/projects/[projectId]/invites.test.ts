@@ -171,6 +171,11 @@ describe('api/v1/projects/[projectId]/invites', () => {
     await call({ method: 'POST', query: { projectId: 'p' }, body: { email: 'x@y.z' }, headers: {} }, res)
     expect(res.statusCode).toBe(409)
 
+    vi.mocked(createInvite).mockRejectedValueOnce(new Error('agent_seat_limit_reached'))
+    res = mockRes()
+    await call({ method: 'POST', query: { projectId: 'p' }, body: { email: 'seat@y.z' }, headers: {} }, res)
+    expect(res.statusCode).toBe(409)
+
     // happy path: invitee exists → notification fired
     vi.mocked(createInvite).mockResolvedValueOnce({ projectKey: 'p', email: 'x@y.z' } as never)
     vi.mocked(findUserIdByEmail).mockResolvedValueOnce('invitee-1')

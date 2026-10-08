@@ -24,3 +24,10 @@ it('propagates storage failures', async () => {
   result.error = { message: 'failed' }
   for (const operation of [() => listAccessRequests('p'), () => submitAccessRequest('p', 'u'), () => reviewAccessRequest('p', 'r', 'a', 1, 'declined', 'member')]) await expect(operation()).rejects.toThrow('failed')
 })
+
+it('turns the database seat guard into a stable review outcome', async () => {
+  result.error = { message: 'agent_seat_limit_reached' }
+  await expect(reviewAccessRequest('p', 'r', 'a', 1, 'approved', 'member')).resolves.toEqual({
+    outcome: 'agent_seat_limit_reached',
+  })
+})

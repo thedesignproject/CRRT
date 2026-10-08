@@ -789,6 +789,7 @@ type InviteMocks = {
   inviteRestoreRejection?: unknown
   memberInsertError?: { code?: string; message: string } | null
   memberSingle?: { data: { role: string; is_owner: boolean } | null; error: { message: string } | null }
+  acceptResult?: { data: unknown; error: { message: string } | null }
 }
 
 function inviteSupabase(m: InviteMocks = {}) {
@@ -820,6 +821,7 @@ function inviteSupabase(m: InviteMocks = {}) {
   return {
     inviteInsert,
     inviteDelete,
+    rpc: vi.fn(async () => m.acceptResult ?? { data: null, error: null }),
     from: vi.fn((table: string) => {
       if (table === 'project_invites') {
         return {
@@ -866,6 +868,11 @@ describe('invite helpers', () => {
       inviteInsertResult: { data: null, error: { code: '50000', message: 'boom' } },
     }) as never)
     await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('boom')
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
+      inviteInsertResult: { data: null, error: { code: 'P0001', message: 'agent_seat_limit_reached' } },
+    }) as never)
+    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('agent_seat_limit_reached')
   })
 
   it('listInvitesForEmail: success / null fallback / error', async () => {
@@ -886,40 +893,16 @@ describe('invite helpers', () => {
     await expect(listInvitesForEmail('x@y.z')).rejects.toThrow('boom')
   })
 
-  it('acceptInvite: not_found / happy / membership 23505 tolerated / other error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: null, error: null },
-      memberSingle: { data: { role: 'guest', is_owner: false }, error: null },
-    }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('not_found')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: null, error: null },
-      memberSingle: { data: { role: 'member', is_owner: false }, error: null },
-    }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
-    expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: INVITE, error: null },
-      memberInsertError: { code: '23505', message: 'dup' },
-    }) as never)
-    expect(await acceptInvite('u', 'x@y.z', 'p')).toBe('inviter-1')
-
-    const failed = inviteSupabase({
-      inviteSingle: { data: INVITE, error: null },
-      memberInsertError: { code: '50000', message: 'boom' },
+  it('acceptInvite delegates the atomic seat conversion and normalizes results', async () => {
+    const client = inviteSupabase({ acceptResult: { data: 'inviter-1', error: null } })
+    vi.mocked(getServiceSupabase).mockReturnValue(client as never)
+    await expect(acceptInvite('u', ' X@Y.Z ', 'p')).resolves.toBe('inviter-1')
+    expect(client.rpc).toHaveBeenCalledWith('accept_project_invite_with_seat', {
+      p_user: 'u', p_email: 'x@y.z', p_project: 'p',
     })
-    vi.mocked(getServiceSupabase).mockReturnValue(failed as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('boom')
-    expect(failed.inviteInsert).toHaveBeenCalledWith([{
-      project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'inviter-1', created_at: 't',
-    }])
+
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ acceptResult: { data: null, error: null } }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
   })
 
   it('declineInvite: not_found / happy', async () => {
@@ -930,33 +913,13 @@ describe('invite helpers', () => {
     expect(await declineInvite('x@y.z', 'p')).toBe('inviter-1')
   })
 
-  it('claim errors and failed invite restoration bubble through accept', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: null, error: null },
-      inviteDeleteError: { message: 'claim boom' },
-    }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('claim boom')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: INVITE, error: null },
-      memberInsertError: { code: '50000', message: 'member boom' },
-      inviteRestoreError: { code: '50000', message: 'restore boom' },
-    }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: Error: restore boom')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: INVITE, error: null },
-      memberInsertError: { code: '50000', message: 'member boom' },
-      inviteRestoreError: { code: '23505', message: 'restored concurrently' },
-    }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom')
-
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteSingle: { data: INVITE, error: null },
-      memberInsertError: { code: '50000', message: 'member boom' },
-      inviteRestoreRejection: 'restore unavailable',
-    }) as never)
-    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow('member boom; invite restore failed: restore unavailable')
+  it.each([
+    ['database says not_found', 'not_found detail', 'not_found'],
+    ['database denies the sixth seat', 'agent_seat_limit_reached detail', 'agent_seat_limit_reached'],
+    ['unknown database error', 'boom', 'boom'],
+  ])('acceptInvite maps %s', async (_label, message, expected) => {
+    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ acceptResult: { data: null, error: { message } } }) as never)
+    await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow(expected)
   })
 })
 
