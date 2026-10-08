@@ -1774,7 +1774,7 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('agent access gate', () => {
-    it('pressing Shift+A opens the AgentBridgeModal without showing the sign-in gate', async () => {
+    it('pressing Shift+A opens the in-widget Agent bridge at its login step', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
@@ -1786,10 +1786,11 @@ describe('<FeedbackWidget />', () => {
       })
 
       await waitFor(() => {
-        const modal = document.querySelector('[data-fw] [aria-label="Connect agent"]')
+        const modal = document.querySelector('[data-fw-agent-dialog="premium"]')
         if (!modal) throw new Error('agent modal not open')
       })
-      expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).toBeNull()
+      expect(document.body.textContent).toContain('Log in to continue')
+      expect(document.body.textContent).toContain('Log in to CRRT')
     })
 
     it('sidebar shows a visible agent CTA that opens the AgentBridgeModal', async () => {
@@ -1812,38 +1813,13 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(agentCta!) })
 
       await waitFor(() => {
-        const modal = document.querySelector('[data-fw] [aria-label="Connect agent"]')
+        const modal = document.querySelector('[data-fw-agent-dialog="premium"]')
         if (!modal) throw new Error('agent modal not open')
       })
     })
 
-    it('clicking a prompt opens the sign-in gate when agent eligibility is missing', async () => {
-      mockFetch(undefined, (url) => {
-        if (url?.includes('/v1/public/project')) {
-          return new Response(JSON.stringify({
-            projectKey: 'proj',
-            projectName: 'Project',
-            doc: { slug: 'share-1', token: 'token-1', docUrl: 'https://x.example/doc', promptUrl: 'https://x.example/prompt' },
-          }), { status: 200 })
-        }
-        if (url?.includes('/v1/shares/share-1/prompt')) {
-          return new Response(JSON.stringify({
-            slug: 'share-1',
-            target: 'claude-code',
-            prompt: 'Use this CRRT context',
-            docUrl: 'https://x.example/doc',
-          }), { status: 200 })
-        }
-        if (url?.includes('/v1/agent/shares/share-1/state')) {
-          return new Response(JSON.stringify({
-            share: { slug: 'share-1', scopeType: 'project', revision: 1 },
-            project: { publicKey: 'proj', name: 'Project', repoUrl: null },
-            comments: [],
-            presence: [],
-          }), { status: 200 })
-        }
-        return new Response('[]', { status: 200 })
-      })
+    it('does not load legacy project or prompt data before widget authentication', async () => {
+      const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
@@ -1853,50 +1829,14 @@ describe('<FeedbackWidget />', () => {
         fireEvent.keyDown(window, { key: 'A', shiftKey: true })
       })
 
-      const claude = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Copy Claude Code'))
-        if (!btn) throw new Error('Claude prompt not ready')
-        return btn
-      })
-      await act(async () => { fireEvent.click(claude) })
-
       await waitFor(() => {
-        const gate = document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')
-        if (!gate) throw new Error('agent auth gate not open')
+        if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
-      expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).toBeNull()
-      expect(document.body.textContent).toContain('Sign up')
-      expect(document.body.textContent).toContain('Log in')
+      expect(calls.some(({ url }) => url.includes('/v1/public/project') || url.includes('/v1/shares/'))).toBe(false)
     })
 
-    it('Escape closes the sign-in gate without closing the agent modal', async () => {
-      mockFetch(undefined, (url) => {
-        if (url?.includes('/v1/public/project')) {
-          return new Response(JSON.stringify({
-            projectKey: 'proj',
-            projectName: 'Project',
-            doc: { slug: 'share-1', token: 'token-1', docUrl: 'https://x.example/doc', promptUrl: 'https://x.example/prompt' },
-          }), { status: 200 })
-        }
-        if (url?.includes('/v1/shares/share-1/prompt')) {
-          return new Response(JSON.stringify({
-            slug: 'share-1',
-            target: 'claude-code',
-            prompt: 'Use this CRRT context',
-            docUrl: 'https://x.example/doc',
-          }), { status: 200 })
-        }
-        if (url?.includes('/v1/agent/shares/share-1/state')) {
-          return new Response(JSON.stringify({
-            share: { slug: 'share-1', scopeType: 'project', revision: 1 },
-            project: { publicKey: 'proj', name: 'Project', repoUrl: null },
-            comments: [],
-            presence: [],
-          }), { status: 200 })
-        }
-        return new Response('[]', { status: 200 })
-      })
+    it('Escape closes the Agent bridge from the login step', async () => {
+      mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
@@ -1905,16 +1845,8 @@ describe('<FeedbackWidget />', () => {
       await act(async () => {
         fireEvent.keyDown(window, { key: 'A', shiftKey: true })
       })
-      const claude = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Copy Claude Code'))
-        if (!btn) throw new Error('Claude prompt not ready')
-        return btn
-      })
-      await act(async () => { fireEvent.click(claude) })
       await waitFor(() => {
-        const gate = document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')
-        if (!gate) throw new Error('agent auth gate not open')
+        if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
 
       await act(async () => {
@@ -1922,9 +1854,8 @@ describe('<FeedbackWidget />', () => {
       })
 
       await waitFor(() => {
-        expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).toBeNull()
+        expect(document.querySelector('[data-fw-agent-dialog="premium"]')).toBeNull()
       })
-      expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).not.toBeNull()
     })
   })
 
@@ -3912,14 +3843,14 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(pillButton()) })
       await act(async () => { fireEvent.click(menuAction('Open agent')) })
       await waitFor(() => {
-        if (!document.querySelector('[data-fw] [aria-label="Connect agent"]')) throw new Error('agent modal not open')
+        if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
 
       // Closing the modal via its own Close button runs onClose.
-      const close = document.querySelector<HTMLButtonElement>('[data-fw] [aria-label="Connect agent"] button[aria-label="Close"]')!
+      const close = document.querySelector<HTMLButtonElement>('[data-fw-agent-dialog="premium"] button[aria-label="Close Agent Bridge"]')!
       await act(async () => { fireEvent.click(close) })
       await waitFor(() => {
-        expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).toBeNull()
+        expect(document.querySelector('[data-fw-agent-dialog="premium"]')).toBeNull()
       })
     })
 
@@ -3952,52 +3883,29 @@ describe('<FeedbackWidget />', () => {
       expect(cta.textContent).not.toContain('1 ready comments')
     })
 
-    it('an eligible user copies the prompt without seeing the sign-in gate', async () => {
-      const writeText = vi.fn().mockResolvedValue(undefined)
-      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
-      await mountWidget(agentGet({ eligibility: { can_request: true, must_sign_up: false } }))
-
+    it('the login step ignores non-Escape keys', async () => {
+      await mountWidget()
       await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
-      const claude = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Copy Claude Code'))
-        if (!btn) throw new Error('Claude prompt not ready')
-        return btn
-      })
-      await act(async () => { fireEvent.click(claude) })
-
-      await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1))
-      expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).toBeNull()
-      expect(document.querySelector('[data-fw] [aria-label="Connect agent"]')).not.toBeNull()
-    })
-
-    async function openGateWith(comments: unknown[]) {
-      await mountWidget(agentGet({ comments, eligibility: { can_request: false } }))
-      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
-      const claude = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Copy Claude Code'))
-        if (!btn) throw new Error('Claude prompt not ready')
-        return btn
-      })
-      await act(async () => { fireEvent.click(claude) })
       await waitFor(() => {
-        if (!document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')) throw new Error('gate not open')
+        if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
-    }
-
-    it('sign-in gate reports a singular ready count and ignores non-Escape keys', async () => {
-      await openGateWith([seedAccepted('c1')])
-      expect(document.body.textContent).toContain('1 approved comment ready')
-
-      // A non-Escape key must not close the gate.
       await act(async () => { fireEvent.keyDown(window, { key: 'a' }) })
-      expect(document.querySelector('[data-fw] [aria-label="Sign in to use agent"]')).not.toBeNull()
+      expect(document.querySelector('[data-fw-agent-dialog="premium"]')).not.toBeNull()
     })
 
-    it('sign-in gate reports a plural ready count', async () => {
-      await openGateWith([seedAccepted('c1'), seedAccepted('c2')])
-      expect(document.body.textContent).toContain('2 approved comments ready')
+    it('repeated Shift+A keeps a single Agent bridge open', async () => {
+      await mountWidget()
+      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
+      })
+      const dialog = document.querySelector<HTMLElement>('[data-fw-agent-dialog="premium"]')!
+      const focus = vi.spyOn(dialog, 'focus')
+      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      await waitFor(() => {
+        expect(document.querySelectorAll('[data-fw-agent-dialog="premium"]')).toHaveLength(1)
+      })
+      expect(focus).toHaveBeenCalled()
     })
 
     it('the post-send hint "review" action opens the sidebar', async () => {

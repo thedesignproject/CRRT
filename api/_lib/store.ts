@@ -2303,6 +2303,34 @@ export async function createWidgetAgentShare(input: {
   return mapShare(data as ShareRow)
 }
 
+export async function listWidgetAgentFeedback(projectKey: string, actorUserId: string, pageUrl: string) {
+  const { data, error } = await getServiceSupabase().rpc('read_widget_agent_feedback', {
+    p_project: projectKey,
+    p_actor: actorUserId,
+    p_page_url: pageUrl,
+  } as never).select(COMMENT_COLUMNS)
+  if (error) throw new Error(error.message)
+  return ((data as unknown as CommentRow[] | null) || []).map(mapComment)
+}
+
+export async function mutateWidgetFeedbackBatch(input: {
+  projectKey: string
+  actorUserId: string
+  pageUrl: string
+  commentIds: string[]
+  action: 'accept' | 'reject' | 'resolve'
+}) {
+  const { data, error } = await getServiceSupabase().rpc('mutate_widget_feedback_batch', {
+    p_project: input.projectKey,
+    p_actor: input.actorUserId,
+    p_page_url: input.pageUrl,
+    p_comments: input.commentIds,
+    p_action: input.action,
+  } as never).select(COMMENT_COLUMNS)
+  if (error) throw new Error(error.message)
+  return ((data as unknown as CommentRow[] | null) || []).map(mapComment)
+}
+
 // Automatic project credentials remain unusable while the project is private.
 // Reviewer-created shares always use createShare with an authenticated actor.
 export async function createSystemShare(input: {

@@ -126,7 +126,8 @@ describe('api/v1/public/project', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ doc: { token: 'winning-token', slug: 'sl' } })
     expect(decryptToken).toHaveBeenLastCalledWith('winning-ciphertext')
-    expect(warnSpy).not.toHaveBeenCalled()
+    expect(warnSpy).toHaveBeenCalledWith('[public/project] deprecated legacy widget Agent session requested', { projectKey: 'proj' })
+    expect(warnSpy).not.toHaveBeenCalledWith('[public/project] rotated undecryptable share token', expect.anything())
   })
 
   it('creates a fresh system share when none exists', async () => {

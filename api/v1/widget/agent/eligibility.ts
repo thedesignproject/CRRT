@@ -3,6 +3,7 @@ import { resolveWidgetAgentAccess } from '../../../_lib/billing/agent-entitlemen
 import { getStringQuery, handleOptions, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { assertWidgetPage, requireWidgetSession, WidgetSessionError } from '../../../_lib/widget-session.js'
 import { sendWidgetAgentError } from '../../../_lib/widget-agent.js'
+import { listWidgetAgentFeedback } from '../../../_lib/store.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
@@ -15,11 +16,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!projectKey || !pageUrl) return sendWidgetAgentError(req, res, 'project_access_denied')
     assertWidgetPage(session, projectKey, pageUrl)
     const access = await resolveWidgetAgentAccess(projectKey, session.user_id)
+    const comments = access.state === 'ready'
+      ? await listWidgetAgentFeedback(projectKey, session.user_id, pageUrl)
+      : undefined
     setCors(req, res, ['GET', 'OPTIONS'])
     return res.status(200).json({
       state: access.state,
       role: access.role,
       collaboratorSeatLimit: access.collaboratorSeatLimit,
+      comments: comments?.map((comment) => ({
+        id: comment.id,
+        pageUrl: comment.pageUrl,
+        selector: comment.selector,
+        body: comment.body,
+        reviewStatus: comment.reviewStatus,
+        implementationStatus: comment.implementationStatus,
+        claimedByAgentId: comment.claimedByAgentId,
+        createdAt: comment.createdAt,
+        authorName: comment.authorName,
+      })),
     })
   } catch (error) {
     if (error instanceof WidgetSessionError) {

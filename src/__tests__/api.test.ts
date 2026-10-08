@@ -1,7 +1,17 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { fetchAgentEligibility, fetchProjectComments, patchReviewStatus, postComment } from '../components/FeedbackWidget/api'
+import {
+  createWidgetAgentSession,
+  fetchAgentEligibility,
+  fetchProjectComments,
+  fetchWidgetAgentEligibility,
+  mutateWidgetFeedback,
+  patchReviewStatus,
+  postComment,
+  startWidgetAgentUpgrade,
+} from '../components/FeedbackWidget/api'
 
 const API = 'https://api.example.com'
+const widgetSession = { accessToken: `crrt_widget_${'a'.repeat(43)}`, displayName: 'Ada', expiresAt: '2099-01-01T00:00:00Z' }
 
 function mockFetch(impl: (url: string, init?: RequestInit) => Promise<Response> | Response) {
   const spy = vi.fn(impl)
@@ -121,6 +131,42 @@ describe('fetchAgentEligibility', () => {
   it('returns null when fetch throws', async () => {
     mockFetch(() => { throw new Error('offline') })
     expect(await fetchAgentEligibility(API, 'p')).toBeNull()
+  })
+})
+
+describe('premium widget Agent API', () => {
+  beforeEach(() => { vi.unstubAllGlobals() })
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('checks eligibility with encoded page scope and widget authorization', async () => {
+    const spy = mockFetch(() => jsonResponse({ state: 'ready', comments: [] }))
+    await fetchWidgetAgentEligibility(API, 'acme/internal', 'https://site.test/a b', widgetSession)
+    const [url, init] = spy.mock.calls[0]!
+    expect(url).toContain('/v1/widget/agent/eligibility?')
+    expect(new URL(url as string).searchParams.get('projectKey')).toBe('acme/internal')
+    expect(new URL(url as string).searchParams.get('pageUrl')).toBe('https://site.test/a b')
+    expect(init?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: `Bearer ${widgetSession.accessToken}` })
+  })
+
+  it('creates exact sessions and lifecycle mutations through authenticated widget endpoints', async () => {
+    const spy = mockFetch(() => jsonResponse({ slug: 's', token: 't' }))
+    const handoff = { projectKey: 'p', pageUrl: 'https://site.test', commentIds: ['c1'], idempotencyKey: 'idem' }
+    const lifecycle = { projectKey: 'p', pageUrl: 'https://site.test', commentIds: ['c1'], action: 'accept' as const }
+    await createWidgetAgentSession(API, handoff, widgetSession)
+    await mutateWidgetFeedback(API, lifecycle, widgetSession)
+    await startWidgetAgentUpgrade(API, { projectKey: 'p', pageUrl: 'https://site.test' }, widgetSession)
+
+    expect(spy.mock.calls.map(([url]) => url)).toEqual([
+      `${API}/v1/widget/agent/session`,
+      `${API}/v1/widget/feedback`,
+      `${API}/v1/widget/agent/upgrade`,
+    ])
+    expect(spy.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'POST', 'POST'])
+    expect(JSON.parse(spy.mock.calls[0]![1]!.body as string)).toEqual(handoff)
+    expect(JSON.parse(spy.mock.calls[1]![1]!.body as string)).toEqual(lifecycle)
+    for (const [, init] of spy.mock.calls) {
+      expect(init?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: `Bearer ${widgetSession.accessToken}` })
+    }
   })
 })
 

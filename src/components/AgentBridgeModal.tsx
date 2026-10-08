@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
+import type { WidgetLoginSession } from '../lib/widgetLogin'
+import { PremiumAgentBridge } from './PremiumAgentBridge'
 
 function pagePath(url: string): string {
   try { return new URL(url).pathname || '/' } catch { return url }
@@ -233,13 +235,40 @@ interface AgentBridgeModalProps {
   projectId: string
   onClose: () => void
   onBeforeCopy?: () => Promise<boolean>
+  pageUrl?: string
+  widgetSession?: WidgetLoginSession | null
+  loginBusy?: boolean
+  loginError?: string
+  onLogin?: () => Promise<void>
+  onFeedbackChanged?: () => void
 }
 
-export function AgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: AgentBridgeModalProps) {
+export function AgentBridgeModal(props: AgentBridgeModalProps) {
+  if (props.pageUrl && props.onLogin) {
+    return <PremiumAgentBridge
+      apiBase={props.apiBase}
+      projectId={props.projectId}
+      pageUrl={props.pageUrl}
+      widgetSession={props.widgetSession ?? null}
+      loginBusy={props.loginBusy}
+      loginError={props.loginError}
+      onLogin={props.onLogin}
+      onClose={props.onClose}
+      onFeedbackChanged={props.onFeedbackChanged}
+    />
+  }
+  return <LegacyAgentBridgeModal {...props} />
+}
+
+function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: AgentBridgeModalProps) {
   const initialSession = useMemo(readShareFromUrl, [])
   const [state, dispatch] = useReducer(reducer, initialSession, initState)
   const modalRef = useRef<HTMLDivElement | null>(null)
   const { session, prompts, shareState, copied, selected, error } = state
+
+  useEffect(() => {
+    console.warn('[AgentBridge] legacy public project-share workflow is deprecated')
+  }, [])
 
   // Tick every 10s to keep "N seconds ago" labels fresh.
   useEffect(() => {
