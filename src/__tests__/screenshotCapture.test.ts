@@ -1,14 +1,14 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import html2canvas from 'html2canvas'
+import html2canvas from 'html2canvas-pro'
 import {
   calculateCaptureRegion,
   captureViewport,
-  convertModernColorFunctions,
+  calculateCaptureScale,
   useScreenshotCapture,
 } from '../lib/screenshotCapture'
 
-vi.mock('html2canvas', () => ({
+vi.mock('html2canvas-pro', () => ({
   default: vi.fn(),
 }))
 
@@ -18,21 +18,16 @@ function canvasReturning(blob: Blob | null) {
   } as HTMLCanvasElement
 }
 
-describe('screenshot color conversion', () => {
+describe('screenshot capture', () => {
   afterEach(() => {
     vi.restoreAllMocks()
     vi.mocked(html2canvas).mockReset()
   })
 
-  it('converts oklab colors to rgb for html2canvas', () => {
-    expect(convertModernColorFunctions('oklab(1 0 0)')).toBe('rgb(255, 255, 255)')
-    expect(convertModernColorFunctions('oklab(0 0 0 / 50%)')).toBe('rgba(0, 0, 0, 0.5)')
-  })
-
-  it('converts oklch colors inside larger CSS values', () => {
-    expect(
-      convertModernColorFunctions('0 8px 24px oklch(0 0 0 / 25%)'),
-    ).toBe('0 8px 24px rgba(0, 0, 0, 0.25)')
+  it('shares the output cap without upscaling source pixels', () => {
+    expect(calculateCaptureScale(400, 200)).toBe(1)
+    expect(calculateCaptureScale(1440, 900, 2)).toBeCloseTo(1920 / 1440)
+    expect(calculateCaptureScale(900, 2400, 2)).toBe(0.8)
   })
 
   it('uses the full viewport when there is no focused element', () => {
@@ -119,6 +114,12 @@ describe('screenshot color conversion', () => {
       windowHeight: 900,
       scale: 2,
     }))
+    const options = vi.mocked(html2canvas).mock.calls[0][1]!
+    const overlay = document.createElement('div')
+    overlay.setAttribute('data-fw', '')
+    expect(options.ignoreElements!(overlay)).toBe(true)
+    expect(options.ignoreElements!(document.createElement('div'))).toBe(false)
+    expect(options.onclone).toBeUndefined()
   })
 
   it('returns null and warns when canvas encoding produces no blob', async () => {

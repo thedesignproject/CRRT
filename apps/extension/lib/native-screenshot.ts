@@ -1,5 +1,5 @@
 import { browser } from 'wxt/browser'
-import { calculateCaptureRegion, type ScreenshotFocusRect } from '../../../src/lib/screenshotCapture'
+import { calculateCaptureRegion, calculateCaptureScale, type ScreenshotFocusRect } from '../../../src/lib/screenshotCapture'
 
 export async function captureNativeScreenshot(focus: ScreenshotFocusRect | null): Promise<string> {
   const width = innerWidth, height = innerHeight, x = scrollX, y = scrollY
@@ -24,7 +24,7 @@ export async function captureNativeScreenshot(focus: ScreenshotFocusRect | null)
   const right = Math.min(image.naturalWidth, Math.ceil((region.left + region.width) * scaleX))
   const bottom = Math.min(image.naturalHeight, Math.ceil((region.top + region.height) * scaleY))
   const cropWidth = right - left, cropHeight = bottom - top
-  const scale = Math.min(1, 1920 / Math.max(cropWidth, cropHeight))
+  const scale = calculateCaptureScale(cropWidth, cropHeight)
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.round(cropWidth * scale))
   canvas.height = Math.max(1, Math.round(cropHeight * scale))
