@@ -55,6 +55,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
+          # Attribute the upload without changing the merge revision tested above.
+          override_commit: ${{ github.event.pull_request.head.sha || github.sha }}
           fail_ci_if_error: false
       - run: bun run build
       - name: Enforce bundle size ceiling
