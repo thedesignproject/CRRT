@@ -74,6 +74,11 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
         }
         const overlays = [frame, ...document.querySelectorAll<HTMLElement>('[data-fw-crrt]')]
         const styles = overlays.map((node) => ({ node, value: node.style.getPropertyValue('visibility'), priority: node.style.getPropertyPriority('visibility') }))
+        let viewportChanged = false
+        const invalidateViewport = () => { viewportChanged = true }
+        // Capture-phase listening includes nested overflow containers, whose scroll does not change window.scrollY.
+        window.addEventListener('scroll', invalidateViewport, true)
+        window.addEventListener('resize', invalidateViewport)
         const previousHighlight = highlighted
         capturing = true
         highlight(null)
@@ -85,8 +90,9 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
             for (const node of overlays) { node.style.setProperty('visibility', 'hidden', 'important'); node.style.setProperty('opacity', '0', 'important') }
             await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
             if (disconnected) throw new Error('Page disconnected')
-            if ([innerWidth, innerHeight, scrollX, scrollY].some((value, index) => value !== viewport[index])) throw new Error('Viewport changed during screenshot capture')
+            if (viewportChanged || [innerWidth, innerHeight, scrollX, scrollY].some((value, index) => value !== viewport[index])) throw new Error('Viewport changed during screenshot capture')
             const image = await captureNativeScreenshot(focus)
+            if (viewportChanged) throw new Error('Viewport changed during screenshot capture')
             if (disconnected) throw new Error('Page disconnected')
             return image
           } finally {
@@ -100,6 +106,8 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
             if (value) node.style.setProperty('visibility', value, priority)
             else node.style.removeProperty('visibility')
           }
+          window.removeEventListener('scroll', invalidateViewport, true)
+          window.removeEventListener('resize', invalidateViewport)
           capturing = false
           if (!disconnected && highlightRevision === restoreHighlightRevision) highlight(previousHighlight)
         }

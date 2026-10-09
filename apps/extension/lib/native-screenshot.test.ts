@@ -81,3 +81,12 @@ it('discards an image if scrolling changes while decoding', async () => {
   })
   await expect(captureNativeScreenshot(null)).rejects.toThrow('Viewport changed')
 })
+
+it('preserves issue #200 cropping on a scrolled page without adding document offsets to native pixels', async () => {
+  vi.stubGlobal('innerWidth', 1440); vi.stubGlobal('innerHeight', 900)
+  vi.stubGlobal('scrollX', 24); vi.stubGlobal('scrollY', 640)
+  dimensions = [2880, 1800]
+  await captureNativeScreenshot({ left: 620, top: 390, width: 200, height: 120 })
+  // The native screenshot already represents the visible viewport, unlike a DOM renderer.
+  expect(draw.mock.calls[0].slice(1)).toEqual([1220, 760, 440, 280, 0, 0, 440, 280])
+})

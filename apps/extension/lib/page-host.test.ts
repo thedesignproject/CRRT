@@ -237,3 +237,38 @@ it('does not resurrect a highlight that expires during a slow capture', async ()
   complete('image'); await capture
   expect(element.style.outline).toBe('')
 })
+
+it.each(['nested-scroll', 'scroll-away-and-back', 'resize-away-and-back'])('rejects %s during native capture and safely retries', async (change) => {
+  await receive({ kind: 'ready' }); await receive({ kind: 'selecting', value: true }); fireEvent.click(element)
+  const remove = vi.spyOn(window, 'removeEventListener')
+  vi.mocked(captureNativeScreenshot).mockImplementationOnce(async () => {
+    if (change === 'nested-scroll') element.dispatchEvent(new Event('scroll', { bubbles: false }))
+    else {
+      const property = change === 'scroll-away-and-back' ? 'scrollY' : 'innerHeight'
+      const original = window[property]
+      vi.stubGlobal(property, original + 100)
+      window.dispatchEvent(new Event(change === 'scroll-away-and-back' ? 'scroll' : 'resize'))
+      vi.stubGlobal(property, original)
+    }
+    return 'data:image/png;base64,eA=='
+  })
+  const capture = receive({ kind: 'capture' }), failure = expect(capture).rejects.toThrow('Viewport changed')
+  await vi.advanceTimersByTimeAsync(32); await failure
+  expect(frame.style.opacity).toBe('')
+  expect(frame.style.visibility).toBe('')
+  expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function), true)
+  expect(remove).toHaveBeenCalledWith('resize', expect.any(Function))
+  vi.mocked(captureNativeScreenshot).mockResolvedValueOnce('data:image/png;base64,eA==')
+  const retry = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(32)
+  await expect(retry).resolves.toContain('data:image/png')
+  vi.unstubAllGlobals()
+})
+it('rejects nested scrolling between measuring the target and requesting native pixels', async () => {
+  await receive({ kind: 'ready' })
+  const capture = receive({ kind: 'capture' }), failure = expect(capture).rejects.toThrow('Viewport changed')
+  await vi.advanceTimersByTimeAsync(16)
+  element.dispatchEvent(new Event('scroll', { bubbles: false }))
+  await vi.advanceTimersByTimeAsync(16); await failure
+  expect(captureNativeScreenshot).not.toHaveBeenCalled()
+  expect(frame.style.opacity).toBe('')
+})
