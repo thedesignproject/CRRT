@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const state = vi.hoisted(() => ({
   listener: undefined as ((message: unknown, sender: unknown, respond: (response: unknown) => void) => boolean) | undefined,
   removed: undefined as ((tabId: number) => void) | undefined,
-  updated: undefined as ((tabId: number, changeInfo: { url?: string }) => void) | undefined,
+  activated: undefined as ((info: { windowId: number }) => void) | undefined,
+  updated: undefined as ((tabId: number, changeInfo: { url?: string; status?: string }) => void) | undefined,
   session: {} as Record<string, unknown>,
 }))
 const browser = vi.hoisted(() => ({
@@ -11,6 +12,8 @@ const browser = vi.hoisted(() => ({
   tabs: {
     query: vi.fn(),
     get: vi.fn(),
+    captureVisibleTab: vi.fn(),
+    onActivated: { addListener: vi.fn((value) => { state.activated = value }) },
     onRemoved: { addListener: vi.fn((value) => { state.removed = value }) },
     onUpdated: { addListener: vi.fn((value) => { state.updated = value }) },
   },
@@ -20,7 +23,7 @@ const browser = vi.hoisted(() => ({
     remove: vi.fn(async (key: string) => { delete state.session[key] }),
   } },
   scripting: { executeScript: vi.fn() },
-  runtime: { onMessage: { addListener: vi.fn((value) => { state.listener = value }) } },
+  runtime: { id: 'extension-id', onMessage: { addListener: vi.fn((value) => { state.listener = value }) } },
 }))
 vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
@@ -287,4 +290,90 @@ describe('extension background', () => {
     })
     expect(startHostedSignIn).toHaveBeenCalledWith('client', 'signup')
   })
+})
+
+describe('native screenshots', () => {
+  const sender = { id: 'extension-id', frameId: 0, url: 'https://example.com', tab: { id: 7, windowId: 3 } }
+  beforeEach(() => {
+    ;(background as unknown as () => void)()
+    state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
+    browser.tabs.query.mockResolvedValue([{ id: 7, url: sender.url }])
+    browser.tabs.captureVisibleTab.mockResolvedValue('data:image/png;base64,eA==')
+  })
+  it('captures only the requesting active window as PNG', async () => {
+    await expect(send({ type: 'comment:capture' }, sender)).resolves.toEqual({ ok: true, data: 'data:image/png;base64,eA==' })
+    expect(browser.tabs.query).toHaveBeenCalledWith({ active: true, windowId: 3 })
+    expect(browser.tabs.captureVisibleTab).toHaveBeenCalledWith(3, { format: 'png' })
+  })
+  it.each([null, {}, { ...sender, id: 'foreign' }, { ...sender, frameId: 1 }, { ...sender, tab: {} }, { ...sender, tab: { id: 7 } }, { ...sender, url: 'chrome://settings' }])('rejects invalid senders %j', async (invalid) => {
+    await expect(send({ type: 'comment:capture' }, invalid)).resolves.toMatchObject({ ok: false, error: 'Invalid screenshot sender' })
+    expect(browser.tabs.captureVisibleTab).not.toHaveBeenCalled()
+  })
+  it('rejects missing activation', async () => {
+    state.session = {}
+    await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false, error: 'Screenshot activation unavailable' })
+  })
+  it.each([[], [{ id: 8, url: sender.url }], [{ id: 7, url: 'https://example.com/next' }]].map((tabs) => [tabs]))('rejects changed tabs before capture %j', async (tabs) => {
+    browser.tabs.query.mockResolvedValue(tabs)
+    await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false, error: 'Page changed during screenshot capture' })
+    expect(browser.tabs.captureVisibleTab).not.toHaveBeenCalled()
+  })
+  it('discards screenshots after tab, URL or activation changes', async () => {
+    for (const change of ['tab', 'url', 'activation']) {
+      ;(background as unknown as () => void)()
+      state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
+      browser.tabs.query.mockResolvedValue([{ id: 7, url: sender.url }])
+      browser.tabs.captureVisibleTab.mockImplementationOnce(async () => {
+        if (change === 'activation') state.session['crrt:active-tab:7'] = activation('https://example.com', 'new')
+        else browser.tabs.query.mockResolvedValue([{ id: change === 'tab' ? 8 : 7, url: change === 'url' ? 'https://example.com/next' : sender.url }])
+        return 'image'
+      })
+      await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false, error: 'Page changed during screenshot capture' })
+    }
+  })
+  it('serializes capture calls, spaces them by 550ms, and revalidates after waiting', async () => {
+    vi.useFakeTimers()
+    try {
+      const first = send({ type: 'comment:capture' }, sender)
+      await vi.advanceTimersByTimeAsync(0)
+      await expect(first).resolves.toMatchObject({ ok: true })
+      const second = send({ type: 'comment:capture' }, sender)
+      const third = send({ type: 'comment:capture' }, sender)
+      await vi.advanceTimersByTimeAsync(549)
+      expect(browser.tabs.captureVisibleTab).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+      await expect(second).resolves.toMatchObject({ ok: true })
+      expect(browser.tabs.captureVisibleTab).toHaveBeenCalledTimes(2)
+      browser.tabs.query.mockResolvedValue([{ id: 8, url: sender.url }])
+      await vi.advanceTimersByTimeAsync(550)
+      await expect(third).resolves.toMatchObject({ ok: false })
+      expect(browser.tabs.captureVisibleTab).toHaveBeenCalledTimes(2)
+    } finally { vi.useRealTimers() }
+  })
+  it('reports capture errors and releases the queue for retries', async () => {
+    vi.useFakeTimers()
+    try {
+      browser.tabs.captureVisibleTab.mockRejectedValueOnce(new Error('Permission revoked'))
+      await expect(send({ type: 'comment:capture' }, sender)).resolves.toEqual({ ok: false, error: 'Permission revoked' })
+      const retry = send({ type: 'comment:capture' }, sender)
+      await vi.advanceTimersByTimeAsync(550)
+      await expect(retry).resolves.toMatchObject({ ok: true })
+    } finally { vi.useRealTimers() }
+  })
+})
+
+it('discards native pixels when the tab switches away and back or reloads at the same URL', async () => {
+  const sender = { id: 'extension-id', frameId: 0, url: 'https://example.com', tab: { id: 7, windowId: 3 } }
+  for (const change of ['switch', 'reload', 'remove']) {
+    ;(background as unknown as () => void)()
+    state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
+    browser.tabs.query.mockResolvedValue([{ id: 7, url: sender.url }])
+    browser.tabs.captureVisibleTab.mockImplementationOnce(async () => {
+      if (change === 'switch') { state.activated!({ windowId: 3 }); state.activated!({ windowId: 3 }) }
+      else if (change === 'reload') { state.updated!(7, { status: 'loading' }); state.updated!(7, { status: 'loading' }) }
+      else state.removed!(7)
+      return 'image'
+    })
+    await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false })
+  }
 })
