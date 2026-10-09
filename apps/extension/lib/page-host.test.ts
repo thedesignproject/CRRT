@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent } from '@testing-library/react'
 const channel = vi.hoisted(() => ({ receive: vi.fn(), send: vi.fn(), stop: vi.fn() }))
 vi.mock('./frame-channel', () => ({ receiveFrameMessages: channel.receive, sendFrameMessage: channel.send }))
-vi.mock('../../../src/lib/screenshotCapture', () => ({ captureViewport: vi.fn() }))
+vi.mock('./native-screenshot', () => ({ captureNativeScreenshot: vi.fn() }))
 vi.mock('../../../src/lib/textAnchor', () => ({ buildTextRangeAnchor: vi.fn() }))
-import { captureViewport } from '../../../src/lib/screenshotCapture'
+import { captureNativeScreenshot } from './native-screenshot'
 import { buildTextRangeAnchor } from '../../../src/lib/textAnchor'
 import { connectPageHost } from './page-host'
 let frame: HTMLIFrameElement, element: HTMLElement, stop: () => void, receive: (message: any, from?: number) => Promise<any>, deactivate: () => void
@@ -13,7 +13,7 @@ beforeEach(() => {
   channel.receive.mockReturnValue(channel.stop); channel.send.mockResolvedValue(undefined)
   frame = document.createElement('iframe'); element = document.createElement('article'); element.id = 'target'
   document.body.append(element)
-  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({ left: 10, top: 20, width: 100, height: 50 } as DOMRect)
+  vi.spyOn(element, 'getBoundingClientRect').mockReturnValue({ left: 10, top: 20, width: 100, height: 50, right: 110, bottom: 70 } as DOMRect)
   deactivate = vi.fn(); stop = connectPageHost(frame, true, deactivate)
   receive = (message, from = 2) => channel.receive.mock.calls[0][0](message, from)
 })
@@ -118,26 +118,122 @@ it('uses shared text anchors and focused screenshot capture across the private c
   })
   fireEvent.click(element)
   expect(channel.send).toHaveBeenLastCalledWith(2, { kind: 'target', target: expect.objectContaining({ targetType: 'text_range', selector: '#quote' }) })
-  vi.mocked(captureViewport).mockResolvedValueOnce(null)
-  const empty = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(32)
-  expect(await empty).toBeNull()
-  vi.mocked(captureViewport).mockResolvedValue(new Blob(['image'], { type: 'image/png' }))
+  vi.mocked(captureNativeScreenshot).mockResolvedValue('data:image/png;base64,aW1hZ2U=')
   const capture = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(64)
   expect(await capture).toMatch(/^data:image\/png;base64,/)
-  expect(captureViewport).toHaveBeenCalledWith(expect.objectContaining({ left: 10, width: 100 }))
-  vi.spyOn(FileReader.prototype, 'readAsDataURL').mockImplementation(function (this: FileReader) { this.dispatchEvent(new Event('error')) })
+  expect(captureNativeScreenshot).toHaveBeenCalledWith(expect.objectContaining({ left: 10, width: 100 }))
+  vi.mocked(captureNativeScreenshot).mockRejectedValueOnce(new Error('Screenshot encoding failed'))
   const failed = expect(receive({ kind: 'capture' })).rejects.toThrow('encoding failed')
   await vi.advanceTimersByTimeAsync(32); await failed
   stop(); expect(channel.stop).toHaveBeenCalled()
 })
 it('allows a paint between pin placement and expensive screenshot rendering', async () => {
   await receive({ kind: 'ready' })
-  vi.mocked(captureViewport).mockResolvedValue(null)
+  vi.mocked(captureNativeScreenshot).mockResolvedValue('data:image/png;base64,eA==')
   const capture = receive({ kind: 'capture' })
-  expect(captureViewport).not.toHaveBeenCalled()
+  expect(captureNativeScreenshot).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(16)
-  expect(captureViewport).not.toHaveBeenCalled()
+  expect(captureNativeScreenshot).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(16)
   await capture
-  expect(captureViewport).toHaveBeenCalledOnce()
+  expect(captureNativeScreenshot).toHaveBeenCalledOnce()
+})
+
+it('hides overlay paint without layout changes and restores exact styles after success and failure', async () => {
+  await receive({ kind: 'ready' })
+  const embedded = document.createElement('div'); embedded.dataset.fwCrrt = ''
+  embedded.style.setProperty('visibility', 'visible', 'important'); embedded.style.opacity = '0.6'
+  document.body.append(embedded)
+  frame.style.visibility = 'collapse'; frame.style.setProperty('opacity', '0.8', 'important')
+  await receive({ kind: 'selecting', value: true }); fireEvent.mouseMove(element)
+  const outline = element.style.outline
+  for (const failure of [false, true]) {
+    vi.mocked(captureNativeScreenshot).mockImplementationOnce(async () => {
+      expect(frame.style.visibility).toBe('hidden'); expect(frame.style.opacity).toBe('0')
+      expect(embedded.style.visibility).toBe('hidden'); expect(embedded.style.opacity).toBe('0')
+      expect(element.style.outline).toBe('')
+      fireEvent.mouseMove(element); expect(element.style.outline).toBe('')
+      if (failure) throw new Error('native failed')
+      return 'data:image/png;base64,eA=='
+    })
+    const promise = receive({ kind: 'capture' })
+    const result = failure ? expect(promise).rejects.toThrow('native failed') : expect(promise).resolves.toContain('data:image/png')
+    await vi.advanceTimersByTimeAsync(32); await result
+    expect(frame.style.visibility).toBe('collapse'); expect(frame.style.opacity).toBe('0.8')
+    expect(frame.style.getPropertyPriority('opacity')).toBe('important')
+    expect(embedded.style.visibility).toBe('visible'); expect(embedded.style.opacity).toBe('0.6')
+    expect(embedded.style.getPropertyPriority('visibility')).toBe('important')
+    expect(element.style.outline).toBe(outline)
+  }
+  embedded.remove()
+})
+it('refreshes selected bounds on Retry and rejects detached or offscreen targets', async () => {
+  await receive({ kind: 'ready' }); await receive({ kind: 'selecting', value: true }); fireEvent.click(element)
+  vi.mocked(element.getBoundingClientRect).mockReturnValue({ left: 30, top: 40, width: 100, height: 50, right: 130, bottom: 90 } as DOMRect)
+  const capture = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(32); await capture
+  expect(captureNativeScreenshot).toHaveBeenLastCalledWith(expect.objectContaining({ left: 30, top: 40 }))
+  for (const rect of [{ right: 0 }, { bottom: 0 }, { left: innerWidth }, { top: innerHeight }]) {
+    vi.mocked(element.getBoundingClientRect).mockReturnValue({ left: 30, top: 40, right: 130, bottom: 90, ...rect } as DOMRect)
+    await expect(receive({ kind: 'capture' })).rejects.toThrow('outside viewport')
+  }
+  element.remove()
+  await expect(receive({ kind: 'capture' })).rejects.toThrow('target unavailable')
+})
+it('serializes overlay transactions and restores unset properties', async () => {
+  await receive({ kind: 'ready' })
+  let complete!: (value: string) => void
+  vi.mocked(captureNativeScreenshot).mockImplementationOnce(() => new Promise((resolve) => { complete = resolve }))
+  vi.mocked(captureNativeScreenshot).mockResolvedValueOnce('data:image/png;base64,eA==')
+  const first = receive({ kind: 'capture' }), second = receive({ kind: 'capture' })
+  await vi.advanceTimersByTimeAsync(32)
+  expect(captureNativeScreenshot).toHaveBeenCalledOnce()
+  complete('data:image/png;base64,eA=='); await first
+  await vi.advanceTimersByTimeAsync(32); await second
+  expect(frame.style.getPropertyValue('visibility')).toBe('')
+  expect(frame.style.getPropertyValue('opacity')).toBe('')
+})
+it('restores overlays when disconnected before or during native capture and rejects later requests', async () => {
+  await receive({ kind: 'ready' })
+  const before = receive({ kind: 'capture' })
+  const rejected = expect(before).rejects.toThrow('disconnected')
+  await vi.advanceTimersByTimeAsync(16); stop()
+  await vi.advanceTimersByTimeAsync(16); await rejected
+  expect(frame.style.visibility).toBe('')
+  await expect(receive({ kind: 'capture' })).rejects.toThrow('disconnected')
+  stop = connectPageHost(frame, true, deactivate)
+  receive = (message, from = 2) => channel.receive.mock.calls[1][0](message, from)
+  await receive({ kind: 'ready' })
+  vi.mocked(captureNativeScreenshot).mockImplementationOnce(async () => { stop(); return 'image' })
+  const during = receive({ kind: 'capture' })
+  const failed = expect(during).rejects.toThrow('disconnected')
+  await vi.advanceTimersByTimeAsync(32); await failed
+  expect(frame.style.visibility).toBe('')
+})
+it('rejects viewport changes while waiting for paint', async () => {
+  await receive({ kind: 'ready' })
+  const previous = window.innerWidth
+  const capture = receive({ kind: 'capture' }), failure = expect(capture).rejects.toThrow('Viewport changed')
+  await vi.advanceTimersByTimeAsync(16)
+  vi.stubGlobal('innerWidth', previous + 1)
+  await vi.advanceTimersByTimeAsync(16); await failure
+  vi.unstubAllGlobals()
+  expect(frame.style.opacity).toBe('')
+})
+it('does not add a highlight requested during capture', async () => {
+  await receive({ kind: 'ready' })
+  vi.mocked(captureNativeScreenshot).mockImplementationOnce(async () => {
+    await receive({ kind: 'highlight', selector: '#target' })
+    expect(element.style.outline).toBe('')
+    return 'image'
+  })
+  const capture = receive({ kind: 'capture' }); await vi.advanceTimersByTimeAsync(32); await capture
+})
+it('does not resurrect a highlight that expires during a slow capture', async () => {
+  await receive({ kind: 'ready' }); await receive({ kind: 'highlight', selector: '#target' })
+  let complete!: (image: string) => void
+  vi.mocked(captureNativeScreenshot).mockImplementationOnce(() => new Promise((resolve) => { complete = resolve }))
+  const capture = receive({ kind: 'capture' })
+  await vi.advanceTimersByTimeAsync(1500)
+  complete('image'); await capture
+  expect(element.style.outline).toBe('')
 })

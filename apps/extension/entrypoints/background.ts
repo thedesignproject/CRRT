@@ -142,6 +142,39 @@ export async function activateCurrentTab(): Promise<void> {
 }
 
 export default defineBackground(() => {
+  const captureRevisions = new Map<string, number>()
+  const invalidateCapture = (key: string) => captureRevisions.set(key, (captureRevisions.get(key) ?? 0) + 1)
+  browser.tabs.onActivated.addListener(({ windowId }) => { invalidateCapture(`window:${windowId}`) })
+  let captureTail = Promise.resolve()
+  let lastCapture = -Infinity
+  async function capture(sender: any): Promise<string> {
+    if (sender?.id !== browser.runtime.id || sender.frameId !== 0 || !Number.isInteger(sender.tab?.id)
+      || !Number.isInteger(sender.tab.windowId) || !webOrigin(sender.url)) throw new Error('Invalid screenshot sender')
+    const tabId = sender.tab.id, windowId = sender.tab.windowId, url = sender.url
+    const windowRevision = captureRevisions.get(`window:${windowId}`), tabRevision = captureRevisions.get(`tab:${tabId}`)
+    const initial = await tabActivation(tabId, url)
+    if (!initial) throw new Error('Screenshot activation unavailable')
+    async function validate() {
+      const [tab] = await browser.tabs.query({ active: true, windowId })
+      const activation = await tabActivation(tabId, url)
+      if (tab?.id !== tabId || tab.url !== url || activation?.activationId !== initial!.activationId
+        || captureRevisions.get(`window:${windowId}`) !== windowRevision || captureRevisions.get(`tab:${tabId}`) !== tabRevision) {
+        throw new Error('Page changed during screenshot capture')
+      }
+    }
+    const operation = captureTail.then(async () => {
+      await validate()
+      const wait = 550 - (Date.now() - lastCapture)
+      if (wait > 0) await new Promise((resolve) => setTimeout(resolve, wait))
+      await validate()
+      lastCapture = Date.now()
+      const image = await browser.tabs.captureVisibleTab(windowId, { format: 'png' })
+      await validate()
+      return image
+    })
+    captureTail = operation.then(() => {}, () => {})
+    return operation
+  }
   let client: ReturnType<typeof createExtensionSupabase> | undefined
   async function authClient() {
     // Constructing Supabase reads persisted account data and may refresh tokens.
@@ -151,6 +184,7 @@ export default defineBackground(() => {
   }
   async function handleMessage(message: unknown, sender: unknown): Promise<MessageResponse | undefined> {
     try {
+      if ((message as { type?: string } | null)?.type === 'comment:capture') return { ok: true, data: await capture(sender) }
       if ((message as { type?: string } | null)?.type === 'private:relay') return { ok: true, data: await relayFrameMessage(message, sender) }
       if ((message as { type?: string } | null)?.type === 'auth:hosted-sign-in') {
         return { ok: true, data: await startHostedSignIn(await authClient(), (message as HostedAuthMessage).intent) }
@@ -188,9 +222,11 @@ export default defineBackground(() => {
     return true
   })
   browser.tabs.onRemoved.addListener((tabId) => {
+    invalidateCapture(`tab:${tabId}`)
     void withTabOperation(tabId, () => browser.storage.session.remove(activeTabKey(tabId)))
   })
   browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.url || changeInfo.status === 'loading') invalidateCapture(`tab:${tabId}`)
     if (changeInfo.url) void clearNavigatedTab(tabId, changeInfo.url)
   })
 })
