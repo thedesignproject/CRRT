@@ -9,7 +9,7 @@ const counts = { all: 1, open: 1, ready: 0, ready_for_testing: 0, done: 0, rejec
 
 describe('shared feedback controls', () => {
   it('preserves project filters and a quiet bulk selection row', () => {
-    const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), applyBulkAction: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
+    const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
     const view = render(<CommentList {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).toHaveClass('grid', 'grid-cols-5')
@@ -56,7 +56,6 @@ describe('shared feedback controls', () => {
       exitBulkMode={vi.fn()}
       bulkSelectedIds={new Set()}
       toggleSelectAllVisible={vi.fn()}
-      applyBulkAction={vi.fn()}
       toggleBulkSelect={vi.fn()}
       commentsLoading={false}
       commentsError={null}

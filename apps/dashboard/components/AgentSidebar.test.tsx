@@ -38,7 +38,7 @@ describe('<AgentSidebar /> testing queue', () => {
       ]}
       readyCount={1}
       filtered={false}
-      selectedCommentId=""
+      selectedCommentId="ready"
       onSelectComment={vi.fn()}
       agentSession={{ shareId: 'share-id', slug: 'share', token: 'token', docUrl: 'https://example.com/share' }}
       agentEvents={[]}
@@ -64,6 +64,9 @@ describe('<AgentSidebar /> testing queue', () => {
       expect.stringContaining('Done'),
     ])
     expect(within(queue).getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
+    const active = within(queue).getByRole('button', { current: true })
+    expect(active).toHaveClass('bg-accent')
+    expect(active.className).not.toContain('border-l')
   })
 
   it('offers checkout only to an owner who can upgrade the project', () => {

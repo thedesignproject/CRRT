@@ -508,10 +508,10 @@ function LiveQueue({ projectComments, events, selectedCommentId, onSelectComment
                 onClick={() => onSelectComment(c.id)}
                 aria-current={isActive ? 'true' : undefined}
                 className={cn(
-                  'w-full text-left rounded-md border border-l-2 px-2.5 py-2 flex gap-2.5 transition-colors',
+                  'w-full text-left rounded-md border px-2.5 py-2 flex gap-2.5 transition-colors',
                   isActive
-                    ? 'border-l-primary border-border bg-white/[0.04]'
-                    : 'border-l-transparent border-border/60 bg-card/60 hover:bg-white/[0.02]',
+                    ? 'border-border bg-accent'
+                    : 'border-border/60 bg-card/60 hover:bg-accent/70',
                 )}
               >
                 <span

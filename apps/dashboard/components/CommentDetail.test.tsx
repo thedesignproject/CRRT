@@ -755,7 +755,6 @@ describe('<CommentDetail /> GitHub issue action', () => {
         exitBulkMode={vi.fn()}
         bulkSelectedIds={new Set()}
         toggleSelectAllVisible={vi.fn()}
-        applyBulkAction={vi.fn()}
         toggleBulkSelect={vi.fn()}
         commentsLoading={false}
         commentsError={null}

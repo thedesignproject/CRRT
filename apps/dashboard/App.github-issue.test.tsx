@@ -94,7 +94,7 @@ vi.mock('./components/CommentDetail', () => ({
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
-  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
+  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
     <span data-testid="first-claim">{props.filteredComments[0]?.claimedByAgentId ?? 'none'}</span>
     <span data-testid="bulk-state">{props.bulkMode ? `bulk:${[...props.bulkSelectedIds].join(',')}` : 'bulk:off'}</span>
@@ -103,7 +103,6 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={props.toggleSelectAllVisible}>select visible test comments</button>
     <button onClick={() => props.toggleBulkSelect('comment-1')}>toggle test comment</button>
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
-    <button onClick={() => props.applyBulkAction('reject')}>bulk reject test</button>
   </>,
 }))
 vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onClose: () => void }) => <aside data-testid="agent-sidebar"><button onClick={props.onClose}>close agent sidebar</button></aside> }))
@@ -274,8 +273,9 @@ describe('<App /> GitHub issue wiring', () => {
       createdAt: '2026-01-01', updatedAt: '2026-01-01',
     })
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'bulk reject test' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
     ))
@@ -446,8 +446,9 @@ describe('<App /> GitHub issue wiring', () => {
       .mockReturnValueOnce(new Promise<void>((resolve) => { resolveBulk = resolve }))
       .mockReturnValueOnce(new Promise<void>((resolve) => { resolveIndividual = resolve }))
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'bulk reject test' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
     fireEvent.keyDown(window, { key: 'a' })
@@ -473,8 +474,9 @@ describe('<App /> GitHub issue wiring', () => {
       .mockReturnValueOnce(new Promise<void>((_resolve, reject) => { rejectBulk = reject }))
       .mockReturnValueOnce(new Promise<void>((resolve) => { resolveIndividual = resolve }))
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('button', { name: 'bulk reject test' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
     fireEvent.keyDown(window, { key: 'a' })
@@ -502,8 +504,9 @@ describe('<App /> GitHub issue wiring', () => {
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalledTimes(1))
 
     fixtures.updateReview.mockRejectedValueOnce(new Error('bulk failed'))
+    fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getAllByRole('button', { name: 'toggle test comment' })[0])
-    fireEvent.click(screen.getByRole('button', { name: 'bulk reject test' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalledTimes(2))
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Bulk reject'), expect.any(Array))
   })

@@ -417,7 +417,8 @@
 .dashboard-shell .font-bold { font-weight: 600; }
 .dashboard-detail-actions { max-width: 672px; margin: 0 auto; padding: var(--crrt-space-5) var(--crrt-space-8); width: 100%; }
 .dashboard-detail-actions > div { gap: var(--crrt-space-3); }
-.dashboard-bulk-bar { position: absolute; z-index: 30; left: 50%; bottom: var(--crrt-space-5); transform: translateX(-50%); display: flex; align-items: center; gap: var(--crrt-space-3); width: max-content; max-width: calc(100% - var(--crrt-space-8)); min-height: 48px; padding: var(--crrt-space-3); padding-left: var(--crrt-space-5); border: 1px solid var(--border); border-radius: var(--crrt-radius-pill); background: var(--popover); color: var(--popover-foreground); box-shadow: var(--crrt-shadow-pill); }
+.dashboard-bulk-bar { --dashboard-bulk-x: -50%; position: absolute; z-index: 30; left: 50%; bottom: var(--crrt-space-5); transform: translateX(var(--dashboard-bulk-x)); display: flex; align-items: center; gap: var(--crrt-space-3); width: max-content; max-width: calc(100% - var(--crrt-space-8)); min-height: 48px; padding: var(--crrt-space-3); padding-left: var(--crrt-space-5); border: 1px solid var(--border); border-radius: var(--crrt-radius-pill); background: var(--popover); color: var(--popover-foreground); box-shadow: var(--crrt-shadow-pill); animation: dashboard-bulk-enter 180ms cubic-bezier(.2,.8,.2,1) both; }
+@keyframes dashboard-bulk-enter { from { opacity: 0; transform: translate(var(--dashboard-bulk-x), 8px) scale(.985); } to { opacity: 1; transform: translate(var(--dashboard-bulk-x), 0) scale(1); } }
 .dashboard-bulk-count { flex-shrink: 0; font-size: 13px; font-weight: 600; }
 .dashboard-bulk-divider { width: 1px; height: 24px; flex-shrink: 0; background: var(--border); }
 .dashboard-bulk-actions { display: flex; align-items: center; gap: var(--crrt-space-3); min-width: 0; }
@@ -463,8 +464,10 @@
   .dashboard-shell > footer { flex-wrap: wrap; height: auto; min-height: 36px; padding: var(--crrt-space-3); gap: var(--crrt-space-3); }
   .dashboard-shell > footer > span { display: none; }
   .dashboard-detail-actions { padding: var(--crrt-space-5); }
-  .dashboard-bulk-bar { position: fixed; right: var(--crrt-space-4); bottom: calc(52px + env(safe-area-inset-bottom)); left: var(--crrt-space-4); width: auto; max-width: none; transform: none; border-radius: var(--crrt-radius-2xl); }
-  .dashboard-bulk-actions { flex: 1; }
+  .dashboard-bulk-bar { --dashboard-bulk-x: 0; position: fixed; right: var(--crrt-space-4); bottom: calc(52px + env(safe-area-inset-bottom)); left: var(--crrt-space-4); width: auto; max-width: none; transform: none; border-radius: var(--crrt-radius-2xl); }
+  .dashboard-bulk-divider { display: none; }
+  .dashboard-bulk-actions { flex: 1; overflow-x: auto; scrollbar-width: none; }
+  .dashboard-bulk-actions::-webkit-scrollbar { display: none; }
   .dashboard-bulk-select { flex: 1; max-width: none; min-width: 0; }
 }
 @media (prefers-reduced-motion: reduce) {

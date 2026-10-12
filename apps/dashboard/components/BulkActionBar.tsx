@@ -8,8 +8,9 @@ export function BulkActionBar({ selectedCount, busy = false, onClose, children }
   children: ReactNode
 }) {
   if (selectedCount < 1) return null
+  const noun = selectedCount === 1 ? 'item' : 'items'
   return (
-    <div className="dashboard-bulk-bar" role="toolbar" aria-label={`Bulk actions for ${selectedCount} selected items`}>
+    <div className="dashboard-bulk-bar" role="toolbar" aria-label={`Bulk actions for ${selectedCount} selected ${noun}`}>
       <span className="dashboard-bulk-count" aria-live="polite">{selectedCount} selected</span>
       <span className="dashboard-bulk-divider" aria-hidden="true" />
       <div className="dashboard-bulk-actions">{children}</div>

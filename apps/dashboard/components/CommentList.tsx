@@ -28,7 +28,6 @@ interface CommentListProps {
   exitBulkMode: () => void
   bulkSelectedIds: Set<string>
   toggleSelectAllVisible: () => void
-  applyBulkAction: (action: 'ready' | 'done' | 'reject') => void
   toggleBulkSelect: (id: string) => void
   commentsLoading: boolean
   commentsError: string | null
@@ -72,6 +71,8 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
             {counts.all} {props.personal ? 'Inbox Items' : 'Feedback Items'}
           </h2>
           {(controls || personalBulk) && <button
+            type="button"
+            aria-pressed={bulkMode}
             onClick={() => bulkMode
               ? (controls?.exitBulkMode ?? personalBulk?.exitBulkMode)?.()
               : (controls?.enterBulkMode ?? personalBulk?.enterBulkMode)?.()}
@@ -88,7 +89,9 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
             const count = counts[f as keyof Counts] ?? 0
             return (
               <button
+                type="button"
                 key={f}
+                aria-pressed={controls.statusFilter === f}
                 onClick={() => controls.selectFilter(f)}
                 className={cn(
                   'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
@@ -113,6 +116,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
       {controls && bulkMode && (
         <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
           <button
+            type="button"
             onClick={controls.toggleSelectAllVisible}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
@@ -146,7 +150,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={cn('flex-1 overflow-y-auto', bulkMode && 'pb-24')}>
         {commentsLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
             <Spinner />
@@ -171,23 +175,19 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               const isActive = comment.id === selectedCommentId
               const isChecked = personalBulk?.isSelected(comment.id) ?? bulkSelectedIds.has(comment.id)
               const inactive = isInactive(comment)
-              const statusBar =
-                comment.implementationStatus === 'done' ? 'bg-status-done' :
-                comment.implementationStatus === 'ready_for_testing' ? 'bg-status-ready-for-testing' :
-                comment.reviewStatus === 'accepted' ? 'bg-status-accepted' :
-                comment.reviewStatus === 'rejected' ? 'bg-status-rejected' :
-                null
 
               return (
                 <button
+                  type="button"
                   key={comment.id}
+                  aria-pressed={bulkMode ? isChecked : isActive}
                   onClick={() => bulkMode
                     ? (controls?.toggleBulkSelect ?? personalBulk?.toggleBulkSelect)?.(comment.id)
                     : setSelectedCommentId(comment.id)}
                   className={cn(
-                    'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
-                    isActive && !bulkMode ? 'border-l-primary bg-accent' : 'border-l-transparent',
-                    bulkMode && isChecked ? 'bg-primary/10' : !isActive && 'hover:bg-white/[0.02]',
+                    'relative w-full text-left px-4 py-3 border-b border-border/50 card-hover transition-colors',
+                    isActive && !bulkMode && 'bg-accent',
+                    bulkMode && isChecked ? 'bg-muted' : !isActive && 'hover:bg-accent/70',
                     inactive && !isChecked && 'bg-muted/30'
                   )}
                 >
@@ -196,10 +196,10 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                       {bulkMode ? (
                         <div className={cn(
                           'w-[18px] h-[18px] rounded shrink-0 flex items-center justify-center border-2 transition-colors',
-                          isChecked ? 'bg-primary border-primary' : 'border-muted-foreground/40'
-                        )}>
+                          isChecked ? 'bg-foreground border-foreground text-background' : 'border-muted-foreground/40'
+                        )} aria-hidden="true">
                           {isChecked && (
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                           )}
@@ -208,6 +208,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                         <div
                           className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
                           style={{ background: comment.authorColor }}
+                          aria-hidden="true"
                         >
                           {comment.authorInitial}
                         </div>
@@ -257,13 +258,6 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                       </span>
                     )}
                   </div>
-
-                  {statusBar && (
-                    <span
-                      aria-hidden="true"
-                      className={cn('absolute top-2 bottom-2 right-0 w-[2px] rounded-l-sm', statusBar)}
-                    />
-                  )}
                 </button>
               )
             })}

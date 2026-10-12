@@ -12,6 +12,8 @@ describe('BulkActionBar', () => {
     expect(screen.getByText('3 selected')).toHaveAttribute('aria-live', 'polite')
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
     expect(close).toHaveBeenCalledOnce()
+    view.rerender(<BulkActionBar selectedCount={1} onClose={close}><button>Move</button></BulkActionBar>)
+    expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected item' })).toBeInTheDocument()
     view.rerender(<BulkActionBar selectedCount={3} busy onClose={close}><button>Move</button></BulkActionBar>)
     expect(screen.getByRole('button', { name: 'Clear selection' })).toBeDisabled()
   })
