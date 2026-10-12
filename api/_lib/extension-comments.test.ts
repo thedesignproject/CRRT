@@ -6,6 +6,8 @@ vi.mock('./extension-comment-limit.js', () => ({ reserveExtensionComment: vi.fn(
 import { getServiceSupabase } from './supabase.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
 import {
+  bulkAssignExtensionCommentsToProject,
+  bulkDeleteExtensionComments,
   createExtensionComment,
   deleteExtensionComment,
   ExtensionCommentError,
@@ -13,6 +15,7 @@ import {
   assignExtensionCommentToProject,
   listExtensionComments,
   normalizeExtensionPageUrl,
+  parseExtensionCommentBulkSelection,
   parseExtensionPagination,
   updateExtensionComment,
 } from './extension-comments.js'
@@ -30,6 +33,7 @@ class Query {
   select(...args: unknown[]) { this.calls.push(['select', ...args]); return this }
   eq(...args: unknown[]) { this.calls.push(['eq', ...args]); return this }
   is(...args: unknown[]) { this.calls.push(['is', ...args]); return this }
+  in(...args: unknown[]) { this.calls.push(['in', ...args]); return this }
   not(...args: unknown[]) { this.calls.push(['not', ...args]); return this }
   gte(...args: unknown[]) { this.calls.push(['gte', ...args]); return this }
   order(...args: unknown[]) { this.calls.push(['order', ...args]); return this }
@@ -89,6 +93,27 @@ describe('extension comment parsing', () => {
     for (const query of [
       { page: 'x' }, { page: 0 }, { limit: 'x' }, { limit: 0 }, { limit: 51 },
     ]) expect(() => parseExtensionPagination(query)).toThrow(/page must be positive/)
+  })
+
+  it('parses and deduplicates bounded bulk selections', () => {
+    const first = '00000000-0000-4000-8000-000000000001'
+    const second = '00000000-0000-4000-8000-000000000002'
+    expect(parseExtensionCommentBulkSelection({ mode: 'ids', ids: [first, first, second] }))
+      .toEqual({ mode: 'ids', ids: [first, second] })
+    expect(parseExtensionCommentBulkSelection({ mode: 'all' })).toEqual({ mode: 'all', excludedIds: [] })
+    expect(parseExtensionCommentBulkSelection({ mode: 'all', excludedIds: [second] }))
+      .toEqual({ mode: 'all', excludedIds: [second] })
+
+    for (const selection of [
+      null,
+      {},
+      { mode: 'other' },
+      { mode: 'ids', ids: [] },
+      { mode: 'ids', ids: ['not-a-uuid'] },
+      { mode: 'all', excludedIds: ['not-a-uuid'] },
+      { mode: 'ids', ids: Array.from({ length: 501 }, () => first) },
+      { mode: 'all', excludedIds: Array.from({ length: 501 }, () => second) },
+    ]) expect(() => parseExtensionCommentBulkSelection(selection)).toThrow(ExtensionCommentError)
   })
 })
 
@@ -366,6 +391,98 @@ describe('extension comment persistence', () => {
       ]))
     }
     expect(fake.queries[4].calls).toContainEqual(['delete'])
+  })
+
+  it('bulk assigns only owned Inbox rows and reports stale selections', async () => {
+    const first = '00000000-0000-4000-8000-000000000001'
+    const missing = '00000000-0000-4000-8000-000000000002'
+    const fake = client([
+      { data: [{ id: first, screenshot_storage_path: null }], error: null },
+      { data: [{ id: first }], error: null },
+    ])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkAssignExtensionCommentsToProject(
+      'u', { mode: 'ids', ids: [first, missing] }, 'project', 'internal',
+    )).resolves.toEqual({
+      processedIds: [first],
+      skipped: [{ id: missing, reason: 'not_in_inbox' }],
+      selectedTotal: 2,
+    })
+    expect(fake.queries[0].calls).toEqual(expect.arrayContaining([
+      ['eq', 'source', 'extension'], ['eq', 'created_by_user_id', 'u'], ['is', 'project_id', null], ['in', 'id', [first, missing]],
+    ]))
+    expect(fake.queries[1].calls).toEqual(expect.arrayContaining([
+      ['update', expect.objectContaining({ project_id: 'project', visibility: 'internal' })], ['in', 'id', [first]],
+    ]))
+  })
+
+  it('bulk assignment supports all-with-exclusions, empty sets, concurrency, and database failures', async () => {
+    const first = '00000000-0000-4000-8000-000000000001'
+    const second = '00000000-0000-4000-8000-000000000002'
+    let fake = client([
+      { data: [{ id: first, screenshot_storage_path: null }, { id: second, screenshot_storage_path: null }], error: null },
+      { data: [], error: null },
+    ])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkAssignExtensionCommentsToProject('u', { mode: 'all', excludedIds: [second] }, 'project'))
+      .resolves.toEqual({ processedIds: [], skipped: [{ id: first, reason: 'concurrent_change' }], selectedTotal: 1 })
+
+    fake = client([{ data: null, error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkAssignExtensionCommentsToProject('u', { mode: 'all', excludedIds: [] }, 'project'))
+      .resolves.toEqual({ processedIds: [], skipped: [], selectedTotal: 0 })
+
+    fake = client([{ data: null, error: { message: 'resolve down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkAssignExtensionCommentsToProject('u', { mode: 'ids', ids: [first] }, 'project')).rejects.toThrow('resolve down')
+
+    fake = client([{ data: [{ id: first, screenshot_storage_path: null }], error: null }, { data: null, error: { message: 'assign down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkAssignExtensionCommentsToProject('u', { mode: 'ids', ids: [first] }, 'project')).rejects.toThrow('assign down')
+  })
+
+  it('bulk deletes screenshots in bounded batches and reports storage and concurrent failures', async () => {
+    const first = '00000000-0000-4000-8000-000000000001'
+    const second = '00000000-0000-4000-8000-000000000002'
+    const missing = '00000000-0000-4000-8000-000000000003'
+    const fake = client([
+      { data: [{ id: first, screenshot_storage_path: null }, { id: second, screenshot_storage_path: 'u/two.png' }], error: null },
+      { data: [], error: null },
+    ], { remove: vi.fn().mockResolvedValue({ error: { message: 'storage down' } }) })
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkDeleteExtensionComments('u', { mode: 'ids', ids: [first, second, missing] })).resolves.toEqual({
+      processedIds: [],
+      skipped: [
+        { id: missing, reason: 'not_in_inbox' },
+        { id: second, reason: 'storage_delete_failed' },
+        { id: first, reason: 'concurrent_change' },
+      ],
+      selectedTotal: 3,
+    })
+    expect(fake.bucket.remove).toHaveBeenCalledWith(['u/two.png'])
+    expect(fake.queries[1].calls).toContainEqual(['in', 'id', [first]])
+  })
+
+  it('bulk deletion handles successful storage cleanup, empty selections, and delete failures', async () => {
+    const first = '00000000-0000-4000-8000-000000000001'
+    let fake = client([
+      { data: [{ id: first, screenshot_storage_path: 'u/one.png' }], error: null },
+      { data: [{ id: first }], error: null },
+    ])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkDeleteExtensionComments('u', { mode: 'all', excludedIds: [] })).resolves.toEqual({
+      processedIds: [first], skipped: [], selectedTotal: 1,
+    })
+
+    fake = client([{ data: [], error: null }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkDeleteExtensionComments('u', { mode: 'all', excludedIds: [] })).resolves.toEqual({
+      processedIds: [], skipped: [], selectedTotal: 0,
+    })
+
+    fake = client([{ data: [{ id: first, screenshot_storage_path: null }], error: null }, { data: null, error: { message: 'delete down' } }])
+    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(bulkDeleteExtensionComments('u', { mode: 'ids', ids: [first] })).rejects.toThrow('delete down')
   })
 })
 

@@ -10,7 +10,9 @@ const MAX_BODY = 8_000
 const MAX_SELECTOR = 1_000
 const MAX_URL = 2_048
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+const MAX_BULK_IDS = 500
 const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export class ExtensionCommentError extends Error {
   constructor(public status: number, message: string) {
@@ -58,6 +60,139 @@ export type ExtensionComment = {
   updatedAt: string
   targetType: string
   anchor: Record<string, unknown> | null
+}
+
+export type ExtensionCommentBulkSelection =
+  | { mode: 'ids'; ids: string[] }
+  | { mode: 'all'; excludedIds: string[] }
+
+export type ExtensionCommentBulkResult = {
+  processedIds: string[]
+  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' }>
+  selectedTotal: number
+}
+
+type InboxBulkRow = { id: string; screenshot_storage_path: string | null }
+
+function bulkIds(value: unknown, name: string, allowEmpty: boolean) {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || value.length > MAX_BULK_IDS) {
+    throw new ExtensionCommentError(400, `${name} must contain ${allowEmpty ? `at most ${MAX_BULK_IDS}` : `between 1 and ${MAX_BULK_IDS}`} comment ids`)
+  }
+  const ids = [...new Set(value)]
+  if (ids.some((id) => typeof id !== 'string' || !UUID_PATTERN.test(id))) {
+    throw new ExtensionCommentError(400, `${name} must contain valid comment ids`)
+  }
+  return ids as string[]
+}
+
+export function parseExtensionCommentBulkSelection(value: unknown): ExtensionCommentBulkSelection {
+  if (!value || typeof value !== 'object') throw new ExtensionCommentError(400, 'selection is required')
+  const selection = value as { mode?: unknown; ids?: unknown; excludedIds?: unknown }
+  if (selection.mode === 'ids') return { mode: 'ids', ids: bulkIds(selection.ids, 'selection.ids', false) }
+  if (selection.mode === 'all') return { mode: 'all', excludedIds: bulkIds(selection.excludedIds ?? [], 'selection.excludedIds', true) }
+  throw new ExtensionCommentError(400, 'selection.mode must be ids or all')
+}
+
+async function resolveInboxBulkRows(userId: string, selection: ExtensionCommentBulkSelection) {
+  const client = getServiceSupabase()
+  let query = client.from('comments')
+    .select('id,screenshot_storage_path')
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .is('project_id', null)
+  if (selection.mode === 'ids') query = query.in('id', selection.ids)
+  const { data, error } = await query
+  if (error) throw new Error(error.message)
+  const excluded = new Set(selection.mode === 'all' ? selection.excludedIds : [])
+  return ((data as InboxBulkRow[] | null) ?? []).filter((row) => !excluded.has(row.id))
+}
+
+function missingSelectionIds(selection: ExtensionCommentBulkSelection, rows: InboxBulkRow[]) {
+  if (selection.mode !== 'ids') return []
+  const found = new Set(rows.map((row) => row.id))
+  return selection.ids.filter((id) => !found.has(id))
+}
+
+export async function bulkAssignExtensionCommentsToProject(
+  userId: string,
+  selection: ExtensionCommentBulkSelection,
+  projectId: string,
+  visibility: 'shared' | 'internal' = 'shared',
+): Promise<ExtensionCommentBulkResult> {
+  const rows = await resolveInboxBulkRows(userId, selection)
+  const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows)
+    .map((id) => ({ id, reason: 'not_in_inbox' }))
+  if (rows.length === 0) return { processedIds: [], skipped, selectedTotal: selection.mode === 'ids' ? selection.ids.length : 0 }
+
+  const client = getServiceSupabase()
+  const { data, error } = await client.from('comments')
+    .update({ project_id: projectId, visibility, updated_at: new Date().toISOString() })
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .is('project_id', null)
+    .in('id', rows.map((row) => row.id))
+    .select('id')
+  if (error) throw new Error(error.message)
+  const processedIds = ((data as Array<{ id: string }> | null) ?? []).map((row) => row.id)
+  const processed = new Set(processedIds)
+  for (const row of rows) {
+    if (!processed.has(row.id)) skipped.push({ id: row.id, reason: 'concurrent_change' })
+  }
+  return {
+    processedIds,
+    skipped,
+    selectedTotal: selection.mode === 'ids' ? selection.ids.length : rows.length,
+  }
+}
+
+export async function bulkDeleteExtensionComments(
+  userId: string,
+  selection: ExtensionCommentBulkSelection,
+): Promise<ExtensionCommentBulkResult> {
+  const rows = await resolveInboxBulkRows(userId, selection)
+  const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows)
+    .map((id) => ({ id, reason: 'not_in_inbox' }))
+  const removableIds: string[] = []
+  const client = getServiceSupabase()
+
+  for (let offset = 0; offset < rows.length; offset += 20) {
+    const batch = rows.slice(offset, offset + 20)
+    const results = await Promise.all(batch.map(async (row) => {
+      if (!row.screenshot_storage_path) return true
+      const { error } = await client.storage.from(BUCKET).remove([row.screenshot_storage_path])
+      return !error
+    }))
+    results.forEach((removed, index) => {
+      const row = batch[index]
+      if (!row) return
+      if (removed) removableIds.push(row.id)
+      else skipped.push({ id: row.id, reason: 'storage_delete_failed' })
+    })
+  }
+
+  const processedIds: string[] = []
+  for (let offset = 0; offset < removableIds.length; offset += 100) {
+    const ids = removableIds.slice(offset, offset + 100)
+    const { data, error } = await client.from('comments')
+      .delete()
+      .eq('source', 'extension')
+      .eq('created_by_user_id', userId)
+      .is('project_id', null)
+      .in('id', ids)
+      .select('id')
+    if (error) throw new Error(error.message)
+    processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
+  }
+
+  const processed = new Set(processedIds)
+  for (const id of removableIds) {
+    if (!processed.has(id)) skipped.push({ id, reason: 'concurrent_change' })
+  }
+  return {
+    processedIds,
+    skipped,
+    selectedTotal: selection.mode === 'ids' ? selection.ids.length : rows.length,
+  }
 }
 
 export function normalizeExtensionPageUrl(raw: unknown) {

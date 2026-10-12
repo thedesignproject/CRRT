@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { assignExtensionComment, deleteExtensionComment, listExtensionComments, updateExtensionComment } from './api'
+import { assignExtensionComment, bulkAssignExtensionComments, bulkDeleteExtensionComments, deleteExtensionComment, listExtensionComments, updateExtensionComment } from './api'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -30,5 +30,23 @@ describe('extension comment dashboard API', () => {
     await expect(deleteExtensionComment('/api', 'token', 'c')).rejects.toThrow('Forbidden')
     await expect(deleteExtensionComment('/api', 'token', 'c')).rejects.toThrow('Request failed with 503')
     expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/extension/comments/c%2F1', { method: 'DELETE', headers: { Authorization: 'Bearer token' } })
+  })
+
+  it('assigns and deletes Inbox selections through the bulk endpoint', async () => {
+    const result = { processedIds: ['c1'], skipped: [], selectedTotal: 1 }
+    const fetch = vi.fn()
+      .mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify(result) })
+    vi.stubGlobal('fetch', fetch)
+    const selection = { mode: 'ids' as const, ids: ['c1'] }
+    await expect(bulkAssignExtensionComments('/api', 'token', selection, 'project')).resolves.toEqual(result)
+    await expect(bulkDeleteExtensionComments('/api', 'token', selection)).resolves.toEqual(result)
+    expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/extension/comments/bulk', expect.objectContaining({
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token' },
+      body: JSON.stringify({ operation: 'assign', selection, projectId: 'project' }),
+    }))
+    expect(fetch).toHaveBeenNthCalledWith(2, '/api/v1/extension/comments/bulk', expect.objectContaining({
+      body: JSON.stringify({ operation: 'delete', selection }),
+    }))
   })
 })

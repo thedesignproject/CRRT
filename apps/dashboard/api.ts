@@ -117,6 +117,16 @@ export interface ExtensionCommentsPage {
   total: number
 }
 
+export type ExtensionCommentBulkSelection =
+  | { mode: 'ids'; ids: string[] }
+  | { mode: 'all'; excludedIds: string[] }
+
+export interface ExtensionCommentBulkResult {
+  processedIds: string[]
+  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' }>
+  selectedTotal: number
+}
+
 export interface ProjectSessionResponse {
   projectKey: string
   projectName: string
@@ -701,6 +711,31 @@ export async function deleteExtensionComment(apiBase: string, accessToken: strin
     method: 'DELETE', headers: { ...authHeaders(accessToken) },
   })
   if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
+}
+
+export function bulkAssignExtensionComments(
+  apiBase: string,
+  accessToken: string,
+  selection: ExtensionCommentBulkSelection,
+  projectId: string,
+) {
+  return requestJson<ExtensionCommentBulkResult>(`${apiBase}/v1/extension/comments/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ operation: 'assign', selection, projectId }),
+  })
+}
+
+export function bulkDeleteExtensionComments(
+  apiBase: string,
+  accessToken: string,
+  selection: ExtensionCommentBulkSelection,
+) {
+  return requestJson<ExtensionCommentBulkResult>(`${apiBase}/v1/extension/comments/bulk`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ operation: 'delete', selection }),
+  })
 }
 
 export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider = 'github') {
