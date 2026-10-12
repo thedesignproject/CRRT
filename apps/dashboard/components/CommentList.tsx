@@ -36,23 +36,45 @@ interface CommentListProps {
   setSelectedCommentId: (id: string) => void
 }
 
-type PersonalListProps = Pick<CommentListProps, 'filteredComments' | 'counts' | 'commentsLoading' | 'commentsError' | 'selectedCommentId' | 'setSelectedCommentId'> & { personal: true; footer?: ReactNode }
+type PersonalBulkControls = {
+  bulkMode: boolean
+  enterBulkMode: () => void
+  exitBulkMode: () => void
+  selectedCount: number
+  isSelected: (id: string) => boolean
+  toggleBulkSelect: (id: string) => void
+  toggleSelectAllVisible: () => void
+  allVisibleSelected: boolean
+  allMatchingSelected: boolean
+  canSelectAllMatching: boolean
+  selectAllMatching: () => void
+  clearSelection: () => void
+}
+
+type PersonalListProps = Pick<CommentListProps, 'filteredComments' | 'counts' | 'commentsLoading' | 'commentsError' | 'selectedCommentId' | 'setSelectedCommentId'> & {
+  personal: true
+  footer?: ReactNode
+  bulkControls?: PersonalBulkControls
+}
 const EMPTY_SELECTION = new Set<string>()
 
 export function CommentList(props: CommentListProps | PersonalListProps) {
   const { filteredComments, counts, commentsLoading, commentsError, selectedCommentId, setSelectedCommentId } = props
   const controls = props.personal || props.readOnly ? null : props
-  const bulkMode = controls?.bulkMode ?? false
+  const personalBulk = props.personal ? props.bulkControls : null
+  const bulkMode = controls?.bulkMode ?? personalBulk?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   return (
     <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
       <div className="px-4 pt-4 pb-2.5 border-b border-border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-medium text-foreground tracking-tight">
-            {counts.all} {props.personal ? 'My Comments' : 'Feedback Items'}
+            {counts.all} {props.personal ? 'Inbox Items' : 'Feedback Items'}
           </h2>
-          {controls && <button
-            onClick={() => bulkMode ? controls.exitBulkMode() : controls.enterBulkMode()}
+          {(controls || personalBulk) && <button
+            onClick={() => bulkMode
+              ? (controls?.exitBulkMode ?? personalBulk?.exitBulkMode)?.()
+              : (controls?.enterBulkMode ?? personalBulk?.enterBulkMode)?.()}
             className={cn(
               'text-[11px] font-medium transition-colors flex items-center gap-1',
               bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
@@ -124,6 +146,28 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
+      {personalBulk && bulkMode && (
+        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
+          <button type="button" onClick={personalBulk.toggleSelectAllVisible}
+            className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground">
+            {personalBulk.allVisibleSelected ? 'Deselect page' : 'Select page'}
+          </button>
+          <span className="text-[11px] text-muted-foreground">{personalBulk.selectedCount} selected</span>
+        </div>
+      )}
+
+      {personalBulk && bulkMode && (personalBulk.canSelectAllMatching || personalBulk.allMatchingSelected) && (
+        <div className="border-b border-border bg-muted/35 px-4 py-2 text-center text-[11px] text-muted-foreground" role="status">
+          {personalBulk.allMatchingSelected ? <>
+            All {counts.all} Inbox items are selected.{' '}
+            <button type="button" onClick={personalBulk.clearSelection} className="font-semibold text-foreground hover:underline">Clear selection</button>
+          </> : <>
+            All {filteredComments.length} items on this page are selected.{' '}
+            <button type="button" onClick={personalBulk.selectAllMatching} className="font-semibold text-foreground hover:underline">Select all {counts.all} in Inbox</button>
+          </>}
+        </div>
+      )}
+
       <div className="flex-1 overflow-y-auto">
         {commentsLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
@@ -141,13 +185,13 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               <ChatIcon className="text-muted-foreground" />
             </div>
             <p className="text-sm font-semibold text-foreground mb-1">No comments</p>
-            <p className="text-xs text-muted-foreground">{props.personal ? 'No extension comments yet.' : 'Nothing here yet for this filter.'}</p>
+            <p className="text-xs text-muted-foreground">{props.personal ? 'Your Inbox is empty.' : 'Nothing here yet for this filter.'}</p>
           </div>
         ) : (
           <div className="animate-stagger">
             {filteredComments.map((comment) => {
               const isActive = comment.id === selectedCommentId
-              const isChecked = bulkSelectedIds.has(comment.id)
+              const isChecked = personalBulk?.isSelected(comment.id) ?? bulkSelectedIds.has(comment.id)
               const inactive = isInactive(comment)
               const statusBar =
                 comment.implementationStatus === 'done' ? 'bg-status-done' :
@@ -159,7 +203,9 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               return (
                 <button
                   key={comment.id}
-                  onClick={() => controls && bulkMode ? controls.toggleBulkSelect(comment.id) : setSelectedCommentId(comment.id)}
+                  onClick={() => bulkMode
+                    ? (controls?.toggleBulkSelect ?? personalBulk?.toggleBulkSelect)?.(comment.id)
+                    : setSelectedCommentId(comment.id)}
                   className={cn(
                     'relative w-full text-left px-4 py-3 border-b border-border/50 border-l-[3px] card-hover',
                     isActive && !bulkMode ? 'border-l-primary bg-accent' : 'border-l-transparent',

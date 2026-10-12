@@ -160,7 +160,7 @@ export function WelcomeScreen({ onCreateProject, onOpenExtensionComments, sugges
         ▸ create your first project
       </button>
 
-      <button type="button" onClick={onOpenExtensionComments} style={{ marginTop: 14, border: 'none', background: 'transparent', color: 'var(--muted-foreground)', fontFamily: 'var(--crrt-font-body)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>view my extension comments →</button>
+      <button type="button" onClick={onOpenExtensionComments} style={{ marginTop: 14, border: 'none', background: 'transparent', color: 'var(--muted-foreground)', fontFamily: 'var(--crrt-font-body)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>open Inbox →</button>
 
       {/* Secondary link to docs */}
       <a

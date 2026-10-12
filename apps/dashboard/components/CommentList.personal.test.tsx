@@ -35,7 +35,7 @@ describe('shared feedback controls', () => {
 
   it('has no status controls in personal mode, including missing page context', () => {
     render(<CommentList personal filteredComments={[comment]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()} />)
-    expect(screen.getByText('1 My Comments')).toBeInTheDocument()
+    expect(screen.getByText('1 Inbox Items')).toBeInTheDocument()
     expect(screen.queryByText('Open')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull()
   })

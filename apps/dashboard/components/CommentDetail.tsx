@@ -577,10 +577,10 @@ export function CommentDetail({
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
             <CursorIcon className="text-muted-foreground" />
           </div>
-          <p className="text-base font-semibold text-foreground mb-1">{personal ? 'Select an extension comment' : 'Select a comment'}</p>
+          <p className="text-base font-semibold text-foreground mb-1">{personal ? 'Select an Inbox item' : 'Select a comment'}</p>
           <p className="text-sm text-muted-foreground max-w-xs">
             {personal
-              ? 'Pick one of your extension comments from the list to see its page context and screenshot.'
+              ? 'Pick an Inbox item to see its page context and screenshot.'
               : 'Pick a feedback item from the list to see the full context, screenshot, and actions.'}
           </p>
           {!personal && <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">

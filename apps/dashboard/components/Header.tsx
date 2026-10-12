@@ -113,7 +113,7 @@ export function Header({
       <div className="dashboard-nav-label">Workspace</div>
 
       <nav className="dashboard-projects" aria-label="Projects">
-        <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>My comments</button>
+        <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>Inbox</button>
         {projectsLoading && projects.length === 0 ? (
           <span className="text-xs text-muted-foreground px-2">Loading projects…</span>
         ) : projectsError ? (

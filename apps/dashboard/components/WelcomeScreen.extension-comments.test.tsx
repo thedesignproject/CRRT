@@ -6,7 +6,7 @@ describe('WelcomeScreen extension access', () => {
   it('opens personal extension comments without creating a project', () => {
     const open = vi.fn()
     render(<WelcomeScreen onCreateProject={vi.fn()} onOpenExtensionComments={open} />)
-    fireEvent.click(screen.getByRole('button', { name: /view my extension comments/i }))
+    fireEvent.click(screen.getByRole('button', { name: /open inbox/i }))
     expect(open).toHaveBeenCalled()
   })
 })

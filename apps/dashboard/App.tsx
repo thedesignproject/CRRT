@@ -142,6 +142,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
+  const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
+  const [bulkTransitionNotice, setBulkTransitionNotice] = useState('')
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
   const [addProjectBusy, setAddProjectBusy] = useState(false)
   const [theme, setTheme] = useState(getDashboardTheme)
@@ -190,6 +192,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   useEffect(() => {
     const next = serverComments.map(mapServerComment)
     setComments(next)
+    if (
+      pendingBulkSelection &&
+      pendingBulkSelection.projectKey === selectedProject &&
+      commentsProjectId === selectedProject
+    ) {
+      const nextIds = new Set(next.map((comment) => comment.id))
+      const available = pendingBulkSelection.commentIds.filter((id) => nextIds.has(id))
+      setBulkSelectedIds(new Set(available))
+      setBulkMode(available.length > 0)
+      setPendingBulkSelection(null)
+    }
     setSelectedCommentId((current) => {
       if (
         pendingCommentSelection &&
@@ -210,7 +223,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     ) {
       setPendingCommentSelection(null)
     }
-  }, [serverComments, commentsProjectId, pendingCommentSelection, selectedProject])
+  }, [serverComments, commentsProjectId, pendingBulkSelection, pendingCommentSelection, selectedProject])
 
   const projectComments = comments
 
@@ -302,6 +315,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const exitBulkMode = useCallback(() => {
     setBulkMode(false)
     setBulkSelectedIds(new Set())
+    setBulkTransitionNotice('')
   }, [])
 
   const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject') => {
@@ -447,18 +461,34 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   // Selecting a project always returns to the feedback view; settings is a
   // per-project overlay that shouldn't persist across project switches.
   const selectProject = useCallback((key: string) => {
+    exitBulkMode()
+    setPendingBulkSelection(null)
+    setBulkTransitionNotice('')
     setSelectedProject(key)
     setView('feedback')
-  }, [])
+  }, [exitBulkMode])
 
   const openExtensionComments = useCallback(() => {
     setView('extension-comments')
     setSelectedProject('')
     setSelectedCommentId('')
     setPendingCommentSelection(null)
+    setPendingBulkSelection(null)
+    setBulkTransitionNotice('')
     setCmdOpen(false)
     exitBulkMode()
   }, [exitBulkMode])
+
+  const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number) => {
+    setSelectedProject(projectKey)
+    setView('feedback')
+    setStatusFilter('open')
+    setSelectedCommentId('')
+    setPendingBulkSelection({ projectKey, commentIds })
+    setBulkSelectedIds(new Set(commentIds))
+    setBulkMode(true)
+    setBulkTransitionNotice(`${commentIds.length} Inbox item${commentIds.length === 1 ? '' : 's'} moved${skippedCount ? `; ${skippedCount} skipped` : ''}.`)
+  }, [])
 
   const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
@@ -566,7 +596,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       <main className="dashboard-main">
       {accessReviewNotice}
       {view === 'extension-comments' ? (
-        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} />
+        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (
@@ -581,6 +611,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         />
       ) : (
       <div className="dashboard-feedback">
+        {bulkTransitionNotice && <div role="status" className="absolute left-4 right-4 top-3 z-20 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkTransitionNotice}</div>}
         <CommentList
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
