@@ -1,6 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
 import { createShare, listAcceptedCommentsByIds, listAcceptedCommentsForPage } from '../../_lib/store.js'
+import { resolveWidgetAgentAccess } from '../../_lib/billing/agent-entitlement.js'
+import { sendWidgetAgentError } from '../../_lib/widget-agent.js'
 import { generateAccessToken, generateSlug, hashToken, encryptToken } from '../../_lib/tokens.js'
 import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 
@@ -16,10 +18,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return jsonError(req, res, 400, 'scopeType must be page or selection')
     }
     if (!(await requireProjectCapability(req, res, user, projectId, 'agent:operate'))) return
+    const requestedCommentIds = Array.isArray(commentIds) && commentIds.every((id): id is string => typeof id === 'string' && id.length > 0)
+      ? [...new Set(commentIds)]
+      : []
+    if (scopeType === 'selection' && (!Array.isArray(commentIds) || requestedCommentIds.length === 0 || requestedCommentIds.length > 500 || requestedCommentIds.length !== commentIds.length)) {
+      return jsonError(req, res, 400, 'Select between 1 and 500 unique comments')
+    }
+    const agentAccess = await resolveWidgetAgentAccess(projectId, user.userId)
+    if (agentAccess.state !== 'ready') return sendWidgetAgentError(req, res, agentAccess.state)
 
     const comments = scopeType === 'page'
       ? await listAcceptedCommentsForPage(projectId, pageUrl)
-      : await listAcceptedCommentsByIds(projectId, Array.isArray(commentIds) ? commentIds : [])
+      : await listAcceptedCommentsByIds(projectId, requestedCommentIds)
 
     if (scopeType === 'page' && !pageUrl) {
       return jsonError(req, res, 400, 'pageUrl is required for page-scoped shares')
@@ -27,6 +37,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (comments.length === 0) {
       return jsonError(req, res, 400, 'No accepted comments matched this share request')
+    }
+    if (scopeType === 'selection' && comments.length !== requestedCommentIds.length) {
+      return jsonError(req, res, 409, 'Feedback changed. Review the selection and retry.')
     }
 
     const token = generateAccessToken()

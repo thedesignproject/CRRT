@@ -17,12 +17,14 @@ vi.mock('../../../_lib/tokens.js', () => ({
   generateAccessToken: vi.fn(() => 'fresh-token'),
   hashToken: vi.fn(() => 'hashed'),
 }))
+vi.mock('../../../_lib/billing/agent-entitlement.js', () => ({ resolveWidgetAgentAccess: vi.fn() }))
 
 import handler from './prompt.js'
 import { requireProjectCapability, requireUser } from '../../../_lib/auth.js'
 import { getProject, getRepoConfig, getShareById, rotateShareToken } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
 import { decryptToken } from '../../../_lib/tokens.js'
+import { resolveWidgetAgentAccess } from '../../../_lib/billing/agent-entitlement.js'
 
 function mockRes() {
   return {
@@ -47,6 +49,7 @@ beforeEach(() => {
   vi.mocked(getProject).mockReset()
   vi.mocked(getRepoConfig).mockReset()
   vi.mocked(rotateShareToken).mockReset()
+  vi.mocked(resolveWidgetAgentAccess).mockReset().mockResolvedValue({ state: 'ready', role: 'member' })
 })
 
 describe('api/v1/feedback-shares/[shareId]/prompt', () => {
@@ -87,6 +90,18 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     res = mockRes()
     await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
     expect(res.statusCode).toBe(404)
+  })
+
+  it('rechecks the paid Agent entitlement before releasing a prompt', async () => {
+    vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+    vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'owner' })
+    vi.mocked(resolveWidgetAgentAccess).mockResolvedValueOnce({ state: 'upgrade_required', role: 'owner' })
+    const res = mockRes()
+    await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
+    expect(res.statusCode).toBe(402)
+    expect(res.body).toEqual({ error: 'Upgrade the project plan to use Agent', code: 'upgrade_required' })
+    expect(getProject).not.toHaveBeenCalled()
+    expect(decryptToken).not.toHaveBeenCalled()
   })
 
   it('returns the prompt on success; 500 on store throw', async () => {

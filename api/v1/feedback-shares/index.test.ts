@@ -19,6 +19,7 @@ vi.mock('../../_lib/tokens.js', () => ({
   generateSlug: vi.fn(() => 'slug1234'),
   hashToken: vi.fn(() => 'hash123'),
 }))
+vi.mock('../../_lib/billing/agent-entitlement.js', () => ({ resolveWidgetAgentAccess: vi.fn() }))
 
 import handler from './index.js'
 import { requireProjectCapability, requireUser } from '../../_lib/auth.js'
@@ -29,6 +30,7 @@ import {
   listAcceptedCommentsByIds,
   listAcceptedCommentsForPage,
 } from '../../_lib/store.js'
+import { resolveWidgetAgentAccess } from '../../_lib/billing/agent-entitlement.js'
 
 interface MockRes {
   statusCode: number
@@ -80,6 +82,7 @@ beforeEach(() => {
   vi.mocked(createShare).mockReset()
   vi.mocked(addShareItems).mockReset()
   vi.mocked(createFeedbackEvent).mockReset()
+  vi.mocked(resolveWidgetAgentAccess).mockReset().mockResolvedValue({ state: 'ready', role: 'member' })
 })
 
 describe('api/v1/feedback-shares', () => {
@@ -105,6 +108,30 @@ describe('api/v1/feedback-shares', () => {
       body: { projectId: 'demo-project', scopeType: 'page', pageUrl: 'https://x' },
     }), res)
     expect(res.statusCode).toBe(403)
+  })
+
+  it('requires an entitled Agent seat before creating a share', async () => {
+    vi.mocked(resolveWidgetAgentAccess).mockResolvedValueOnce({ state: 'upgrade_required', role: 'owner' })
+    const res = mockRes()
+    await call(mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1'] } }), res)
+    expect(res.statusCode).toBe(402)
+    expect(res.body).toEqual({ error: 'Upgrade the project plan to use Agent', code: 'upgrade_required' })
+    expect(listAcceptedCommentsByIds).not.toHaveBeenCalled()
+    expect(createShare).not.toHaveBeenCalled()
+  })
+
+  it('rejects invalid or partially stale selections instead of silently omitting comments', async () => {
+    let res = mockRes()
+    await call(mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1', 'comment-1'] } }), res)
+    expect(res.statusCode).toBe(400)
+    expect(resolveWidgetAgentAccess).not.toHaveBeenCalled()
+
+    vi.mocked(listAcceptedCommentsByIds).mockResolvedValueOnce([{ id: 'comment-1' }] as never)
+    res = mockRes()
+    await call(mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1', 'comment-2'] } }), res)
+    expect(res.statusCode).toBe(409)
+    expect(res.body).toEqual({ error: 'Feedback changed. Review the selection and retry.' })
+    expect(createShare).not.toHaveBeenCalled()
   })
 
   it('creates a page-scoped share from accepted comments', async () => {

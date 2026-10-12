@@ -111,38 +111,16 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
       </div>
 
       {controls && bulkMode && (
-        <div className="px-4 py-2.5 border-b border-border border-l-2 border-l-primary/40 bg-card flex items-center gap-2 whitespace-nowrap">
+        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
           <button
             onClick={controls.toggleSelectAllVisible}
-            className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
             {filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id)) ? 'Deselect all' : 'Select all'}
           </button>
-          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+          <span className="text-[11px] text-muted-foreground">
             {bulkSelectedIds.size} selected
           </span>
-          <div className="flex-1" />
-          <button
-            disabled={bulkSelectedIds.size === 0}
-            onClick={() => controls.applyBulkAction('ready')}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-accepted-bg text-status-accepted hover:bg-status-accepted hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
-          >
-            Ready
-          </button>
-          <button
-            disabled={bulkSelectedIds.size === 0}
-            onClick={() => controls.applyBulkAction('done')}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-done-bg text-status-done hover:bg-status-done hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
-          >
-            Done
-          </button>
-          <button
-            disabled={bulkSelectedIds.size === 0}
-            onClick={() => controls.applyBulkAction('reject')}
-            className="text-[11px] font-semibold px-2.5 py-1 rounded-md bg-status-rejected-bg text-status-rejected hover:bg-status-rejected hover:text-white transition-colors disabled:opacity-30 disabled:pointer-events-none whitespace-nowrap"
-          >
-            Reject
-          </button>
         </div>
       )}
 

@@ -19,6 +19,7 @@ interface AgentSidebarProps {
   agentSession: AgentSession | null
   agentEvents: ShareEventsResponse['events']
   agentError: string | null
+  agentErrorCode: string | null
   agentConnected: boolean
   selectedAgent: string
   setSelectedAgent: (id: string) => void
@@ -27,6 +28,7 @@ interface AgentSidebarProps {
   setAgentDropdownOpen: (open: boolean | ((v: boolean) => boolean)) => void
   copyStatus: CopyStatus
   onCopySessionLink: () => void
+  onUpgrade: () => void
   onClose: () => void
 }
 
@@ -42,6 +44,7 @@ export function AgentSidebar({
   agentSession,
   agentEvents,
   agentError,
+  agentErrorCode,
   agentConnected,
   selectedAgent,
   setSelectedAgent,
@@ -50,6 +53,7 @@ export function AgentSidebar({
   setAgentDropdownOpen,
   copyStatus,
   onCopySessionLink,
+  onUpgrade,
   onClose,
 }: AgentSidebarProps) {
   return (
@@ -69,7 +73,7 @@ export function AgentSidebar({
       {!selectedProject ? (
         <EmptyNoProject />
       ) : agentError ? (
-        <ErrorState message={agentError} />
+        <ErrorState message={agentError} code={agentErrorCode} onUpgrade={onUpgrade} />
       ) : readyCount === 0 ? (
         <EmptyNoReady />
       ) : (
@@ -124,8 +128,14 @@ function EmptyNoReady() {
   )
 }
 
-function ErrorState({ message }: { message: string }) {
-  const friendly = message.toLowerCase().includes('project not found')
+function ErrorState({ message, code, onUpgrade }: { message: string; code: string | null; onUpgrade: () => void }) {
+  const friendly = code === 'upgrade_required'
+    ? 'Upgrade the project plan to use Agent.'
+    : code === 'owner_upgrade_required'
+      ? 'Ask the project owner to upgrade the plan.'
+      : code === 'seat_limit_reached'
+        ? 'No Agent seats are available for this project.'
+        : message.toLowerCase().includes('project not found')
     ? "Couldn't open a session for this project."
     : message.toLowerCase().includes('lost connection')
       ? 'Lost connection to the agent session.'
@@ -136,9 +146,13 @@ function ErrorState({ message }: { message: string }) {
         <XIcon size={16} />
       </div>
       <p className="text-[13px] text-foreground/90 mb-2">{friendly}</p>
-      <p className="text-[11px] text-muted-foreground/70 leading-relaxed max-w-[220px]">
-        Switch projects and come back to retry, or check the API server.
-      </p>
+      {code === 'upgrade_required' ? (
+        <button type="button" onClick={onUpgrade} className="mt-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">Upgrade plan</button>
+      ) : code ? null : (
+        <p className="text-[11px] text-muted-foreground/70 leading-relaxed max-w-[220px]">
+          Switch projects and come back to retry, or check the API server.
+        </p>
+      )}
     </div>
   )
 }

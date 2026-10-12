@@ -4,6 +4,8 @@ import { getAppUrl, handleOptions, jsonError, methodNotAllowed, setCors, getStri
 import { getProject, getRepoConfig, getShareById, rotateShareToken } from '../../../_lib/store.js'
 import { buildPrompt } from '../../../_lib/prompts.js'
 import { decryptToken, encryptToken, generateAccessToken, hashToken } from '../../../_lib/tokens.js'
+import { resolveWidgetAgentAccess } from '../../../_lib/billing/agent-entitlement.js'
+import { sendWidgetAgentError } from '../../../_lib/widget-agent.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['GET', 'OPTIONS'])) return
@@ -19,6 +21,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const share = await getShareById(shareId, user.userId)
     if (!share) return jsonError(req, res, 404, 'Share not found')
     if (!(await requireProjectCapability(req, res, user, share.projectId, 'agent:operate'))) return
+    const agentAccess = await resolveWidgetAgentAccess(share.projectId, user.userId)
+    if (agentAccess.state !== 'ready') return sendWidgetAgentError(req, res, agentAccess.state)
 
     const project = await getProject(share.projectId)
     if (!project) return jsonError(req, res, 404, 'Project not found')

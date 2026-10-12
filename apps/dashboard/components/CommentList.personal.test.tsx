@@ -8,7 +8,7 @@ const comment: Comment = { id: 'c1', projectId: 'p1', pageUrl: null, selector: '
 const counts = { all: 1, open: 1, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }
 
 describe('shared feedback controls', () => {
-  it('preserves project filters, selection, and bulk status actions', () => {
+  it('preserves project filters and a quiet bulk selection row', () => {
     const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), applyBulkAction: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
     const view = render(<CommentList {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
@@ -21,13 +21,12 @@ describe('shared feedback controls', () => {
     expect(screen.getByText('internal')).toHaveClass('bg-muted')
     view.rerender(<CommentList {...props} bulkMode />)
     fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.toggleBulkSelect).toHaveBeenCalledWith('c1')
-    expect(screen.getByRole('button', { name: 'Ready' })).toBeDisabled()
     fireEvent.click(screen.getByRole('button', { name: 'Select all' })); expect(props.toggleSelectAllVisible).toHaveBeenCalledOnce()
     view.rerender(<CommentList {...props} bulkMode bulkSelectedIds={new Set(['c1'])} />)
     expect(screen.getByRole('button', { name: 'Deselect all' })).toBeInTheDocument()
-    for (const [name, action] of [['Ready', 'ready'], ['Done', 'done'], ['Reject', 'reject']]) {
-      fireEvent.click(screen.getByRole('button', { name })); expect(props.applyBulkAction).toHaveBeenCalledWith(action)
-    }
+    expect(screen.queryByRole('button', { name: 'Ready' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); expect(props.exitBulkMode).toHaveBeenCalledOnce()
     view.rerender(<CommentList {...props} bulkMode filteredComments={[]} />)
     expect(screen.getByRole('button', { name: 'Select all' })).toBeInTheDocument()

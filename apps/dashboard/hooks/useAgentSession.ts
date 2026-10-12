@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  fetchProjectSession,
-  getPromptByShare,
+  createShare,
+  getPrompt,
   getShareEvents,
   getShareState,
-  type ProjectSessionResponse,
   type ShareEventsResponse,
   type ShareState,
 } from '../api'
@@ -13,6 +12,7 @@ import { mocksEnabled } from '../lib/mocks'
 export type PromptTarget = 'claude-code' | 'codex' | 'generic'
 
 export interface AgentSession {
+  shareId: string
   slug: string
   token: string
   docUrl: string
@@ -24,6 +24,7 @@ export interface UseAgentSessionResult {
   shareState: ShareState | null
   events: ShareEventsResponse['events']
   error: string | null
+  errorCode: string | null
   loading: boolean
   copyPrompt: (target: PromptTarget) => Promise<string>
 }
@@ -32,12 +33,14 @@ const POLL_INTERVAL_MS = 4000
 const EVENT_LIMIT = 100
 const POLL_FAIL_THRESHOLD = 3
 
-export function useAgentSession(apiBase: string, projectId: string | null): UseAgentSessionResult {
+export function useAgentSession(apiBase: string, accessToken: string, projectId: string | null, commentIds: string[]): UseAgentSessionResult {
+  const commentIdsKey = commentIds.join('\0')
   const [session, setSession] = useState<AgentSession | null>(null)
   const [projectName, setProjectName] = useState<string | null>(null)
   const [shareState, setShareState] = useState<ShareState | null>(null)
   const [events, setEvents] = useState<ShareEventsResponse['events']>([])
   const [error, setError] = useState<string | null>(null)
+  const [errorCode, setErrorCode] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const cursorRef = useRef<number>(0)
   const activeProjectRef = useRef<string | null>(null)
@@ -49,12 +52,14 @@ export function useAgentSession(apiBase: string, projectId: string | null): UseA
     setShareState(null)
     setEvents([])
     setError(null)
+    setErrorCode(null)
     cursorRef.current = 0
 
-    if (!projectId) return
+    if (!projectId || !commentIdsKey) return
+    const selectedCommentIds = commentIdsKey.split('\0')
 
     if (mocksEnabled) {
-      setSession({ slug: `mock-${projectId}`, token: 'mock-token', docUrl: `https://docs.example/${projectId}` })
+      setSession({ shareId: `mock-${projectId}`, slug: `mock-${projectId}`, token: 'mock-token', docUrl: `https://docs.example/${projectId}` })
       setProjectName(projectId)
       setLoading(false)
       return
@@ -63,15 +68,16 @@ export function useAgentSession(apiBase: string, projectId: string | null): UseA
     setLoading(true)
 
     let cancelled = false
-    fetchProjectSession(apiBase, projectId)
-      .then((res: ProjectSessionResponse) => {
+    createShare(apiBase, accessToken, { projectId, scopeType: 'selection', commentIds: selectedCommentIds })
+      .then((res) => {
         if (cancelled || activeProjectRef.current !== projectId) return
-        setSession({ slug: res.doc.slug, token: res.doc.token, docUrl: res.doc.docUrl })
-        setProjectName(res.projectName)
+        setSession({ shareId: res.shareId, slug: res.slug, token: res.token, docUrl: res.tokenUrl })
+        setProjectName(projectId)
       })
       .catch((err) => {
         if (cancelled || activeProjectRef.current !== projectId) return
         setError(err instanceof Error ? err.message : 'Could not start session')
+        setErrorCode(typeof err === 'object' && err && 'code' in err && typeof err.code === 'string' ? err.code : null)
       })
       .finally(() => {
         if (!cancelled && activeProjectRef.current === projectId) setLoading(false)
@@ -80,7 +86,7 @@ export function useAgentSession(apiBase: string, projectId: string | null): UseA
     return () => {
       cancelled = true
     }
-  }, [apiBase, projectId])
+  }, [apiBase, accessToken, projectId, commentIdsKey])
 
   useEffect(() => {
     if (!session) return
@@ -136,10 +142,10 @@ export function useAgentSession(apiBase: string, projectId: string | null): UseA
       await navigator.clipboard.writeText(prompt)
       return prompt
     }
-    const res = await getPromptByShare(apiBase, session.slug, session.token, target)
+    const res = await getPrompt(apiBase, accessToken, session.shareId, target)
     await navigator.clipboard.writeText(res.prompt)
     return res.prompt
-  }, [apiBase, session])
+  }, [apiBase, accessToken, session])
 
-  return { session, projectName, shareState, events, error, loading, copyPrompt }
+  return { session, projectName, shareState, events, error, errorCode, loading, copyPrompt }
 }

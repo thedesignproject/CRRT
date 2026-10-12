@@ -16,6 +16,9 @@ const fixtures = vi.hoisted(() => ({
   acceptInvite: vi.fn(),
   updateImpl: vi.fn(),
   updateReview: vi.fn(),
+  createShare: vi.fn(),
+  getPrompt: vi.fn(),
+  beginCheckout: vi.fn(),
   agentProject: vi.fn(),
   updateVisibility: vi.fn(),
   fn: vi.fn(),
@@ -28,6 +31,9 @@ vi.mock('./api', () => ({
   updateImplementationStatus: fixtures.updateImpl,
   updateReviewStatus: fixtures.updateReview,
   updateCommentVisibility: fixtures.updateVisibility,
+  createShare: fixtures.createShare,
+  getPrompt: fixtures.getPrompt,
+  beginBillingCheckout: fixtures.beginCheckout,
 }))
 
 vi.mock('./hooks/useAuth', () => ({
@@ -58,7 +64,7 @@ vi.mock('./hooks/useComments', () => ({
   }),
 }))
 vi.mock('./hooks/useAgentSession', () => ({
-  useAgentSession: (_apiBase: string, project: string | null) => {
+  useAgentSession: (_apiBase: string, _accessToken: string, project: string | null) => {
     fixtures.agentProject(project)
     return ({
     session: null,
@@ -88,11 +94,13 @@ vi.mock('./components/CommentDetail', () => ({
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
-  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; toggleBulkSelect: (id: string) => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
+  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; applyBulkAction: (action: 'reject') => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
     <span data-testid="first-claim">{props.filteredComments[0]?.claimedByAgentId ?? 'none'}</span>
     <span data-testid="bulk-state">{props.bulkMode ? `bulk:${[...props.bulkSelectedIds].join(',')}` : 'bulk:off'}</span>
     <button onClick={() => props.selectFilter('all')}>show all</button>
+    <button onClick={props.enterBulkMode}>enter bulk</button>
+    <button onClick={props.toggleSelectAllVisible}>select visible test comments</button>
     <button onClick={() => props.toggleBulkSelect('comment-1')}>toggle test comment</button>
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
     <button onClick={() => props.applyBulkAction('reject')}>bulk reject test</button>
@@ -125,9 +133,13 @@ beforeEach(() => {
   fixtures.claimProject.mockReset().mockResolvedValue({ publicKey: 'new-project' })
   fixtures.updateImpl.mockReset().mockResolvedValue(undefined)
   fixtures.updateReview.mockReset().mockResolvedValue(undefined)
+  fixtures.createShare.mockReset().mockResolvedValue({ shareId: 'share-1', commentCount: 1 })
+  fixtures.getPrompt.mockReset().mockResolvedValue({ prompt: 'Fix selected feedback' })
+  fixtures.beginCheckout.mockReset().mockResolvedValue({ url: 'https://checkout.example/session' })
   fixtures.fn.mockReset()
   fixtures.agentProject.mockReset()
   fixtures.updateVisibility.mockReset().mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
   fixtures.comments.splice(0)
   fixtures.projects.splice(0, fixtures.projects.length, { publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' })
   fixtures.superadmin = false
@@ -270,6 +282,105 @@ describe('<App /> GitHub issue wiring', () => {
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalled())
   })
 
+  it('keeps a bulk selection after marking it ready and hands off exactly those comments', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com/a', selector: 'body', x: 10, y: 20,
+      body: 'Ship this change', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    expect(screen.getByText('0 of 1 ready')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'accepted',
+    ))
+    expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Send to Claude Code' }))
+    await waitFor(() => expect(fixtures.createShare).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', {
+        projectId: 'project-1', scopeType: 'selection', commentIds: ['comment-1'],
+      },
+    ))
+    expect(fixtures.getPrompt).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'share-1', 'claude-code',
+    )
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Fix selected feedback')
+    expect(screen.getByRole('status')).toHaveTextContent('1 selected item copied for Claude Code.')
+  })
+
+  it('sends an unpaid owner to checkout without dropping the selected feedback', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com/a', selector: 'body', x: 10, y: 20,
+      body: 'Paid handoff', reviewStatus: 'accepted', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Owner', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    fixtures.createShare.mockRejectedValueOnce(Object.assign(new Error('Upgrade the project plan to use Agent'), {
+      status: 402, code: 'upgrade_required',
+    }))
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+
+    await waitFor(() => expect(fixtures.beginCheckout).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token'))
+    expect(assign).toHaveBeenCalledWith('https://checkout.example/session')
+    expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+  })
+
+  it('keeps the selection when a handoff changes or checkout cannot open', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com/a', selector: 'body', x: 10, y: 20,
+      body: 'Retry handoff', reviewStatus: 'accepted', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Owner', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    fixtures.createShare.mockResolvedValueOnce({ shareId: 'share-1', commentCount: 0 })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+    await screen.findByText('Feedback changed. Review the selection and retry.')
+    expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+
+    fixtures.createShare.mockRejectedValueOnce(Object.assign(new Error('Upgrade'), { code: 'upgrade_required' }))
+    fixtures.beginCheckout.mockRejectedValueOnce(new Error('Checkout unavailable'))
+    fireEvent.click(screen.getByRole('button', { name: 'Send to Claude Code' }))
+    await screen.findByText('Checkout unavailable')
+    expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+  })
+
+  it('keeps project status actions in the floating bulk menu', async () => {
+    fixtures.comments.push({
+      id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com/a', selector: 'body', x: 10, y: 20,
+      body: 'Lifecycle action', reviewStatus: 'accepted', implementationStatus: 'unassigned', claimedByAgentId: null,
+      imageUrl: null, authorName: 'Member', targetType: 'element_point', anchor: null, githubIssue: null,
+      createdAt: '2026-01-01', updatedAt: '2026-01-01',
+    })
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+    fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Mark done' }))
+    await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'done',
+    ))
+    await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
+    fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenLastCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
+    ))
+  })
+
   it('does not let an older rejection response refresh over a later review choice', async () => {
     fixtures.comments.push({
       id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
@@ -408,9 +519,10 @@ describe('<App /> GitHub issue wiring', () => {
   it('keeps the live Agent session behind every available launcher path', async () => {
     render(<App />)
     const launcher = await screen.findByRole('button', { name: 'Agents, 0 ready' })
-    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith('project-1'))
+    expect(fixtures.agentProject).toHaveBeenLastCalledWith(null)
 
     fireEvent.click(launcher)
+    await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith('project-1'))
     expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
     expect(launcher).toHaveAttribute('aria-expanded', 'true')
     fireEvent.click(screen.getByRole('button', { name: 'close agent sidebar' }))

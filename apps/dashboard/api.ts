@@ -229,7 +229,16 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const text = await response.text()
 
   if (!response.ok) {
-    throw Object.assign(new Error(text || `Request failed with ${response.status}`), { status: response.status })
+    let message = text || `Request failed with ${response.status}`
+    let code: string | undefined
+    try {
+      const payload = JSON.parse(text) as { error?: unknown; code?: unknown }
+      if (typeof payload.error === 'string') message = payload.error
+      if (typeof payload.code === 'string') code = payload.code
+    } catch {
+      // Plain-text API errors remain useful as-is.
+    }
+    throw Object.assign(new Error(message), { status: response.status, code })
   }
 
   try {
@@ -837,6 +846,14 @@ export function createShare(apiBase: string, accessToken: string, body: Record<s
       ...authHeaders(accessToken),
     },
     body: JSON.stringify(body),
+  })
+}
+
+export function beginBillingCheckout(apiBase: string, accessToken: string) {
+  return requestJson<{ url: string }>(`${apiBase}/v1/billing`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ action: 'checkout' }),
   })
 }
 
