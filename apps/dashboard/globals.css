@@ -404,10 +404,9 @@
 .dashboard-projects > button[aria-label="Add project"]::after { content: 'Create project'; }
 .dashboard-toolbar { min-width: 0; display: flex; align-items: center; gap: var(--crrt-space-5); justify-content: space-between; padding: var(--crrt-space-4) var(--crrt-space-7); border-bottom: 1px solid var(--border); }
 .dashboard-tools { display: flex; align-items: center; gap: var(--crrt-space-3); min-width: 0; }
-.dashboard-agent-launcher-ready { border-color: color-mix(in srgb, var(--primary) 32%, var(--border)); background: color-mix(in srgb, var(--primary) 9%, var(--background)); color: var(--primary); box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 7%, transparent); }
-.dashboard-agent-launcher-ready:hover, .dashboard-agent-launcher-open { border-color: color-mix(in srgb, var(--primary) 48%, var(--border)); background: color-mix(in srgb, var(--primary) 14%, var(--background)); color: var(--primary); }
-.dashboard-agent-ready-count { background: var(--primary); color: var(--primary-foreground); animation: dashboard-agent-ready-pulse var(--crrt-duration-slow) ease-out both; }
-@keyframes dashboard-agent-ready-pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--primary) 42%, transparent); } to { box-shadow: 0 0 0 7px transparent; } }
+.dashboard-agent-launcher-open { background: var(--accent); color: var(--foreground); }
+.dashboard-agent-ready-count { border: 1px solid color-mix(in srgb, var(--status-accepted) 24%, transparent); background: var(--status-accepted-bg); color: var(--status-accepted); animation: dashboard-agent-ready-pulse var(--crrt-duration-slow) ease-out both; }
+@keyframes dashboard-agent-ready-pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-accepted) 38%, transparent); } to { box-shadow: 0 0 0 6px transparent; } }
 .dashboard-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .dashboard-feedback { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
 .dashboard-comment-list { width: 340px; min-height: 0; }
