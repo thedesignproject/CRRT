@@ -1,124 +1,90 @@
-import { PillButton } from '../components/PillButton'
-import { activateCRRT } from '../lib/crrt'
-import { useReveal } from '../lib/useReveal'
+import { useState } from 'react'
+import { Check } from 'lucide-react'
+import { Button, SectionIntro, SegmentedControl } from '../../../src/design-system'
+import { cloudPlanStartUrl, startCloudCheckout, type BillingCycle, type CloudPlanKey } from '../lib/billing'
 
-/**
- * Pricing — a single Free card. Removes the silent "how much?" objection
- * before the visitor hits the install. When paid tiers exist, add columns
- * here; the dark-soft card surface scales horizontally.
- */
-export function Pricing() {
-  const reveal = useReveal<HTMLDivElement>()
+const plans = [
+  {
+    key: 'community', name: 'Self-hosted', monthly: 0, yearly: 0,
+    description: 'The complete product on infrastructure you operate.',
+    features: ['Unlimited projects and users', 'Unlimited comments and audits', 'Your infrastructure and data'],
+  },
+  {
+    key: 'pro', name: 'Pro', monthly: 19, yearly: 192, recommended: true,
+    description: 'For product teams that want CRRT running without infrastructure work.',
+    features: ['10 projects · 10 internal users', '2,000 comments each month', '5 Product Audits each month', 'Unlimited guests', 'Dashboard and Chrome included'],
+  },
+  {
+    key: 'studio', name: 'Studio', monthly: 49, yearly: 492,
+    description: 'For studios and teams running several active products.',
+    features: ['50 projects · 25 internal users', '10,000 comments each month', '30 Product Audits each month', 'Unlimited guests', 'Dashboard and Chrome included'],
+  },
+] as const
+
+export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }: { authenticated?: boolean; accessToken?: string; apiBase?: string }) {
+  const [cycle, setCycle] = useState<BillingCycle>('yearly')
+  const [busyPlan, setBusyPlan] = useState<CloudPlanKey | null>(null)
+  const [error, setError] = useState('')
+
+  async function checkout(plan: CloudPlanKey, token: string) {
+    setBusyPlan(plan)
+    setError('')
+    try {
+      window.location.assign(await startCloudCheckout(apiBase, token, plan, cycle))
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Cloud checkout is temporarily unavailable')
+      setBusyPlan(null)
+    }
+  }
+
   return (
-    <section
-      style={{
-        background: 'var(--crrt-bg-deep)',
-        padding: '120px 32px',
-        borderTop: '1px solid var(--crrt-rule-dark)',
-      }}
-    >
-      <div ref={reveal.ref} className={`mx-auto ${reveal.className}`} style={{ maxWidth: 1120 }}>
-        {/* Eyebrow */}
-        <div className="flex items-center gap-3" style={{ marginBottom: 24 }}>
-          <span className="section-marker">/ 06 pricing</span>
-          <span style={{ width: 40, height: 1, background: 'var(--crrt-rule-dark)' }} />
-          <span className="phosphor-eyebrow">no card. no signup.</span>
-        </div>
-
-        {/* Heading */}
-        <h2
-          style={{
-            fontFamily: 'var(--crrt-font-mono)',
-            fontWeight: 700,
-            fontSize: 'var(--crrt-text-h2)',
-            lineHeight: 'var(--crrt-leading-h2)',
-            letterSpacing: 'var(--crrt-tracking-h2)',
-            color: 'var(--crrt-white)',
-            margin: '0 0 56px',
-            maxWidth: 720,
-          }}
-        >
-          Free while it's<br />
-          <span style={{ color: 'var(--crrt-carrot)', fontStyle: 'italic' }}>growing.</span>
-        </h2>
-
-        {/* Single pricing card */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-          <article
-            className="hover-lift"
-            style={{
-              background: 'var(--crrt-bg-deep-soft)',
-              border: '1px solid var(--crrt-rule-dark)',
-              borderRadius: 'var(--crrt-radius-2xl)',
-              padding: '40px 36px',
-              maxWidth: 420,
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 24,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-              <span
-                style={{
-                  fontFamily: 'var(--crrt-font-mono)',
-                  fontSize: 48,
-                  fontWeight: 700,
-                  color: 'var(--crrt-white)',
-                  letterSpacing: '-0.02em',
-                  lineHeight: 1,
-                }}
-              >
-                $0
-              </span>
-              <span
-                style={{
-                  fontFamily: 'var(--crrt-font-crt)',
-                  fontSize: 14,
-                  color: 'var(--crrt-ink-faint)',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                forever, while in beta
-              </span>
-            </div>
-
-            <ul
-              style={{
-                margin: 0,
-                padding: 0,
-                listStyle: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                fontFamily: 'var(--crrt-font-sans)',
-                fontSize: 15,
-                lineHeight: 1.55,
-                color: 'var(--crrt-ink-faint)',
-              }}
-            >
-              {[
-                'Unlimited comments on any URL',
-                'Drop-in widget, no auth required',
-                'Approved pins → prompts for Claude / Codex',
-                'Self-hosted backend if you want it',
-              ].map((line) => (
-                <li key={line} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{ color: 'var(--crrt-carrot)', flexShrink: 0 }}>✓</span>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div style={{ marginTop: 8 }}>
-              <PillButton variant="carrot" size="lg" onClick={activateCRRT}>
-                Drop a CRRT →
-              </PillButton>
-            </div>
-          </article>
-        </div>
+    <section id="pricing" className="landing-section landing-pricing">
+      <SectionIntro
+        title="Choose how CRRT runs."
+        description="Self-host CRRT for free, or choose Cloud when you want it managed and ready for your team."
+        aside={<SegmentedControl label="Billing cycle" value={cycle} onChange={setCycle} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save 16%' }]} />}
+      />
+      <div className="landing-pricing-table">
+        {plans.map((plan) => {
+          const community = plan.key === 'community'
+          const annual = cycle === 'yearly'
+          const price = community ? '$0' : annual ? `$${plan.yearly / 12}` : `$${plan.monthly}`
+          const recommended = 'recommended' in plan && plan.recommended
+          const eyebrow = community ? 'Free forever' : plan.key === 'pro' ? 'For product teams' : 'For studios and agencies'
+          return (
+            <article key={plan.key} className={`landing-pricing-column ${recommended ? 'is-recommended' : ''}`}>
+              <div className={`landing-pricing-band ${recommended ? 'is-visible' : ''}`}>{recommended ? 'Recommended' : null}</div>
+              <div className="landing-pricing-heading">
+                <span>{eyebrow}</span>
+                <h3>{plan.name}</h3>
+                <p>{plan.description}</p>
+              </div>
+              <div className="landing-pricing-price">
+                <strong>{price}</strong>
+                <span>{community ? 'forever' : '/ month'}</span>
+              </div>
+              <p className="landing-pricing-billing">{community ? 'Run it on your own infrastructure.' : annual ? `$${plan.yearly} billed yearly · save 16%` : 'Billed monthly. Cancel anytime.'}</p>
+              <div className="landing-pricing-features">
+                <p>{community ? 'Self-hosted includes:' : plan.key === 'pro' ? 'Everything needed to ship:' : 'More capacity for every team:'}</p>
+                <ul>{plan.features.map((feature) => <li key={feature}><Check size={14} aria-hidden="true" />{feature}</li>)}</ul>
+              </div>
+              <div className="landing-pricing-action">
+                {community ? (
+                  <a className="ds-button ds-button-secondary ds-button-md landing-pricing-button" href="/docs/self-host">Read self-host guide</a>
+                ) : authenticated && accessToken ? (
+                  <Button tone={plan.key === 'pro' ? 'primary' : 'secondary'} className="landing-pricing-button" disabled={busyPlan !== null} onClick={() => { void checkout(plan.key, accessToken) }}>
+                    {busyPlan === plan.key ? 'Opening secure checkout…' : 'Start 14-day trial'}
+                  </Button>
+                ) : (
+                  <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
+                )}
+              </div>
+            </article>
+          )
+        })}
       </div>
+      <div className="landing-pricing-notes"><span>Cloud trials require a card. Cancel anytime.</span><span>Self-hosted is the only permanently free plan.</span></div>
+      {error ? <p className="landing-pricing-error" role="alert" aria-live="polite">{error} <button type="button" onClick={() => setError('')}>Dismiss</button></p> : null}
     </section>
   )
 }

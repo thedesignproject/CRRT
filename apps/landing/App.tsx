@@ -9,6 +9,7 @@ import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
+import { ThemeProvider } from '../../src/design-system'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
@@ -35,6 +36,10 @@ function getDemoProjectId(prefix: string) {
 }
 
 export function App() {
+  return <ThemeProvider><RoutedApp /></ThemeProvider>
+}
+
+function RoutedApp() {
   const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
 
   // /docs/* shows the docs surface. Anything else renders the marketing site.
@@ -88,8 +93,12 @@ function MarketingSite({
   const [session, setSession] = useState<Session | null>(null)
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const authClient = supabase
+    /* v8 ignore next -- production builds always configure Supabase */
+    if (!authClient) return
+
+    void authClient.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: subscription } = authClient.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
     })
     return () => subscription.subscription.unsubscribe()
@@ -102,7 +111,7 @@ function MarketingSite({
   return (
     <>
       <ScrollRuler />
-      <MarketingPage authenticated={Boolean(session)} />
+      <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
       <FeedbackWidget apiBase={apiBase} projectId={projectId} />
       <EasterEgg />
     </>

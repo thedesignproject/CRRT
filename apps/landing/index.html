@@ -5,22 +5,38 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="apple-touch-icon" href="/favicon.png" />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem('crrt-theme') || localStorage.getItem('dashboard-theme')
+          const theme = saved === 'light' || saved === 'dark'
+            ? saved
+            : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          document.documentElement.dataset.theme = theme
+          document.documentElement.style.colorScheme = theme
+          document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0a0a0a' : '#ffffff')
+        } catch {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <title>CRRT.>_ — Drop a CRRT on your product.</title>
-    <meta name="description" content="Visual feedback that points at the thing. Drop a CRRT, leave a comment, ship faster." />
+    <title>CRRT — Turn product feedback into shipped fixes</title>
+    <meta name="description" content="Pin visual feedback to any element. CRRT gives your coding agent the screenshot, context, and design rules to ship the fix." />
 
     <!-- Open Graph -->
-    <meta property="og:title" content="CRRT — visual feedback, freshly picked." />
-    <meta property="og:description" content="Drop a CRRT on any element. Your team marks what's off, you ship the fix. Free in beta." />
+    <meta property="og:title" content="CRRT — Turn product feedback into shipped fixes" />
+    <meta property="og:description" content="Mark the exact product problem, preserve its context, and hand it to the agent your team already uses." />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/favicon.png" />
 
     <!-- Twitter card -->
     <meta name="twitter:card" content="summary" />
-    <meta name="twitter:title" content="CRRT — visual feedback, freshly picked." />
-    <meta name="twitter:description" content="Drop a CRRT on any element. Your team marks what's off, you ship the fix. Free in beta." />
+    <meta name="twitter:title" content="CRRT — Turn product feedback into shipped fixes" />
+    <meta name="twitter:description" content="Mark the exact product problem, preserve its context, and hand it to the agent your team already uses." />
     <meta name="twitter:image" content="/favicon.png" />
   </head>
   <body>

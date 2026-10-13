@@ -8,7 +8,7 @@ export function PrivacyPage() {
       title="Privacy at CRRT"
       description="A plain-language account of what CRRT handles when you capture, review, and route visual feedback."
     >
-      <P>Effective September 11, 2026. CRRT is operated by The Design Project LLC.</P>
+      <P>Effective September 29, 2026. CRRT is operated by The Design Project LLC.</P>
 
       <Section>
         <H2>What this covers</H2>
@@ -40,6 +40,19 @@ export function PrivacyPage() {
           selected element or text anchor, viewport position and geometry, visibility, author, timestamps, review
           status, and an optional screenshot. Page content and screenshots are captured only after your explicit
           feedback action. CRRT does not use page data for unrelated advertising or sell user data.
+        </P>
+        <P>
+          When you use the extension without signing in, feedback and screenshot blobs stay in that browser's
+          extension storage. CRRT sends those records to a Cloud project only after you sign in, review the project,
+          item count, screenshot count, and quota impact, and confirm import. A verified import does not remove the
+          local copies unless you separately choose to delete them.
+        </P>
+
+        <H3>Billing</H3>
+        <P>
+          For managed Cloud plans, CRRT stores the selected plan, subscription state, billing period, usage totals,
+          and Stripe customer/subscription references. Stripe collects and processes payment-method, tax, invoice,
+          and transaction information under its own terms. CRRT does not receive or store full card numbers.
         </P>
 
         <H3>Speech input</H3>
@@ -73,6 +86,7 @@ export function PrivacyPage() {
         <Ul>
           <li><Strong>Supabase</Strong> for authentication, database records, and protected screenshot storage.</li>
           <li><Strong>Vercel</Strong> for application hosting and server execution.</li>
+          <li><Strong>Stripe</Strong> for Cloud Checkout, subscriptions, payment recovery, invoices, tax configuration, and the billing portal.</li>
           <li><Strong>Resend</Strong> for invitation and feedback-notification email.</li>
           <li><Strong>A configured model provider</Strong> for an editable tracker draft when an authorized collaborator requests one.</li>
           <li><Strong>GitHub, Linear, and Atlassian Jira</Strong> only when a project connects that provider and an authorized collaborator confirms a send.</li>
@@ -85,6 +99,7 @@ export function PrivacyPage() {
         <Ul>
           <li>Extension sign-in handoff codes expire after five minutes; hashed handoff metadata is scheduled for removal after 24 hours.</li>
           <li>Local session and preference data remains until it expires, you sign out, change the preference, clear extension data, or uninstall CRRT.</li>
+          <li>Signed-out local feedback remains in extension storage until you delete it, clear browser data, or uninstall CRRT, including after a successful import unless you confirm local cleanup.</li>
           <li>Feedback and protected screenshots remain until the feedback owner deletes them or an authorized deletion request is completed.</li>
           <li>Connected-provider records remain until an authorized project administrator disconnects the integration or an authorized deletion request is completed.</li>
         </Ul>

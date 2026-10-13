@@ -5,7 +5,9 @@ import config from './vite.config'
 it('renders the shared marketing composition and existing documentation on the server', () => {
   const home = render('/')
   expect(home).toContain('href="/docs"')
-  expect(home).toContain('Drop a CRRT on any element')
+  expect(home).toContain('Pin a comment. Your coding agent ships the fix.')
+  expect(home).toContain('How to install')
+  expect(home).toContain('Save 16%')
   const docs = render('/docs/agent-handoff')
   expect(docs).toContain('CRRT developer resources')
   expect(docs).toContain('href="/openapi.json"')

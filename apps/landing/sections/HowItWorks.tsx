@@ -1,121 +1,85 @@
-import { AgentIcon, TerminalIcon, WidgetCarrotIcon } from '../components/PixelIcons'
-import { useReveal } from '../lib/useReveal'
+import { useEffect, useRef, useState, type SyntheticEvent } from 'react'
+import { MousePointer2, ScanSearch, WandSparkles } from 'lucide-react'
+import { DemoFrame, SectionIntro } from '../../../src/design-system'
 
-/**
- * How it works — 3 steps with pixel-art "dock icon" identifiers. Editorial
- * card pattern: icon top, title, body. Reuses the dark-soft card surface
- * from Closing snippets for visual rhythm.
- */
-const STEPS: { Icon: () => React.ReactElement; title: string; body: string }[] = [
-  {
-    Icon: TerminalIcon,
-    title: 'Drop a Script',
-    body: 'Two lines in your app root. Live in any product, on any framework. No rewrites, no auth, no setup.',
-  },
-  {
-    Icon: WidgetCarrotIcon,
-    title: 'Leave a Comment',
-    body: 'Press C, click any element. Your team marks what is off — feedback lives on the pixel, not in a Slack thread.',
-  },
-  {
-    Icon: AgentIcon,
-    title: 'Use the Agent',
-    body: 'Approve a pin and it becomes a ready-to-ship prompt for Claude, Codex, or Cursor. Feedback compounds into shipped code.',
-  },
-]
+const steps = [
+  { number: '01', title: 'Spot it', body: 'Open the product and point at the exact thing that feels wrong.', Icon: ScanSearch },
+  { number: '02', title: 'Mark it', body: 'Leave the comment where it happened. CRRT keeps the visual and page context.', Icon: MousePointer2 },
+  { number: '03', title: 'Ship it', body: 'Hand the approved feedback to your agent. Review the proposed change before merge.', Icon: WandSparkles },
+] as const
 
 export function HowItWorks() {
-  const reveal = useReveal<HTMLDivElement>()
+  const sectionRef = useRef<HTMLElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [activeStep, setActiveStep] = useState(0)
+
+  useEffect(() => {
+    const section = sectionRef.current!
+    const video = videoRef.current!
+
+    const playFromStart = () => {
+      video.currentTime = 0
+      setActiveStep(0)
+      try {
+        const playback = video.play()
+        playback?.catch(() => undefined)
+      } catch {
+        // The poster remains visible when autoplay is unavailable.
+      }
+    }
+
+    if (typeof IntersectionObserver === 'undefined') {
+      playFromStart()
+      return
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) playFromStart()
+      else video.pause()
+    }, { threshold: 0.35 })
+    observer.observe(section)
+
+    return () => {
+      observer.disconnect()
+      video.pause()
+    }
+  }, [])
+
+  const syncActiveStep = (event: SyntheticEvent<HTMLVideoElement>) => {
+    const currentTime = event.currentTarget.currentTime
+    setActiveStep(currentTime < 1.1 ? 0 : currentTime < 5.15 ? 1 : 2)
+  }
+
   return (
-    <section
-      style={{
-        background: 'var(--crrt-bg-deep)',
-        padding: '120px 32px 96px',
-      }}
-    >
-      <div ref={reveal.ref} className={`mx-auto ${reveal.className}`} style={{ maxWidth: 1120 }}>
-        {/* Eyebrow */}
-        <div className="flex items-center gap-3" style={{ marginBottom: 24 }}>
-          <span className="section-marker">/ 02 how it works</span>
-          <span style={{ width: 40, height: 1, background: 'var(--crrt-rule-dark)' }} />
-          <span className="phosphor-eyebrow">three steps. no meetings.</span>
-        </div>
-
-        {/* Heading */}
-        <h2
-          style={{
-            fontFamily: 'var(--crrt-font-mono)',
-            fontWeight: 700,
-            fontSize: 'var(--crrt-text-h2)',
-            lineHeight: 'var(--crrt-leading-h2)',
-            letterSpacing: 'var(--crrt-tracking-h2)',
-            color: 'var(--crrt-white)',
-            margin: '0 0 56px',
-            maxWidth: 720,
-          }}
-        >
-          Visual feedback,<br />
-          <span style={{ color: 'var(--crrt-carrot)', fontStyle: 'italic' }}>freshly picked.</span>
-        </h2>
-
-        {/* Steps grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-            gap: 20,
-          }}
-        >
-          {STEPS.map(({ Icon, title, body }, i) => (
-            <article
-              key={title}
-              className="hover-lift"
-              style={{
-                background: 'var(--crrt-bg-deep-soft)',
-                border: '1px solid var(--crrt-rule-dark)',
-                borderRadius: 'var(--crrt-radius-2xl)',
-                padding: '28px 24px 32px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 18,
-              }}
-            >
-              {/* Icon "ignites" sequentially when the section reveals — drives
-                  the on/off CRT-style flicker via `crrt-icon-ignite`. */}
-              <span
-                className={`crrt-icon-cell ${reveal.revealed ? 'is-ignited' : ''}`}
-                style={{
-                  display: 'inline-block',
-                  animationDelay: `${300 + i * 220}ms`,
-                }}
-              >
-                <Icon />
-              </span>
-              <h3
-                style={{
-                  fontFamily: 'var(--crrt-font-mono)',
-                  fontSize: 20,
-                  fontWeight: 700,
-                  color: 'var(--crrt-white)',
-                  margin: 0,
-                  letterSpacing: '-0.01em',
-                }}
-              >
-                {title}
-              </h3>
-              <p
-                style={{
-                  fontFamily: 'var(--crrt-font-sans)',
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  color: 'var(--crrt-ink-faint)',
-                  margin: 0,
-                }}
-              >
-                {body}
-              </p>
-            </article>
-          ))}
+    <section ref={sectionRef} id="how-it-works" className="landing-section landing-story">
+      <div className="landing-story-sticky">
+        <SectionIntro title="Give your agent eyes on the product." description="Pin feedback to the exact element. CRRT carries the visual context into implementation, then brings the fix back for review." />
+        <div className="landing-story-grid">
+          <ol className="landing-story-steps">
+            {steps.map(({ number, title, body, Icon }, index) => (
+              <li key={title} className={index === activeStep ? 'is-active' : index < activeStep ? 'is-complete' : ''} aria-current={index === activeStep ? 'step' : undefined}>
+                <span className="landing-loop-number">{number}</span>
+                <Icon size={19} aria-hidden="true" />
+                <div><h3>{title}</h3><p>{body}</p></div>
+              </li>
+            ))}
+          </ol>
+          <DemoFrame title="CRRT in action" status={`${steps[activeStep].number} / 03 · ${steps[activeStep].title}`} className="landing-story-frame">
+            <div className="landing-story-scenes">
+              <video
+                ref={videoRef}
+                className="landing-story-video"
+                src="/crrt-workflow.mp4"
+                poster="/crrt-workflow-poster.jpg"
+                aria-label="CRRT turning visual product feedback into an agent-ready fix"
+                onTimeUpdate={syncActiveStep}
+                muted
+                loop
+                playsInline
+                preload="metadata"
+              />
+            </div>
+          </DemoFrame>
         </div>
       </div>
     </section>
