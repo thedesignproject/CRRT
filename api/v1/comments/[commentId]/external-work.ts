@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { requireCommentActor } from '../../../_lib/comment-actor.js'
 import { createDefaultCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import { formatGithubIssueBody } from '../../../_lib/github-issues.js'
 import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
@@ -42,15 +43,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const provider = req.method === 'GET' ? getStringQuery(req.query.provider) : req.body?.provider
   if (provider !== 'github' && provider !== 'linear' && provider !== 'jira') return jsonError(req, res, 400, 'unsupported_external_work_provider')
   if (req.method === 'POST' && provider === 'github') return githubIssueHandler(req, res)
+  const widgetRequest = typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer crrt_widget_')
+  const authenticatedUser = widgetRequest ? null : await requireUser(req, res)
+  if (!widgetRequest && !authenticatedUser) return
 
-  const user = await requireUser(req, res)
-  if (!user) return
   const commentId = getStringQuery(req.query.commentId)
   if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
 
   try {
     const publicComment = await getComment(commentId)
     if (!publicComment?.projectId) return jsonError(req, res, 404, 'Comment not found')
+    const user = authenticatedUser ?? await requireCommentActor(req, res, publicComment)
+    if (!user) return
     if (!(await requireProjectCommentCapability(req, res, user, publicComment, 'integrations:send'))) return
     const comment = await getCommentForGithubIssue(publicComment.projectId, commentId, user.userId)
     if (!comment) return jsonError(req, res, 404, 'Comment not found')

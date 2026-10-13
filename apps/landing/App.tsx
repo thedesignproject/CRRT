@@ -9,6 +9,7 @@ import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
+import { WidgetPreview } from './WidgetPreview'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
@@ -54,6 +55,10 @@ export function App() {
 
   if (publicPath === '/support') {
     return <SupportPage />
+  }
+
+  if (import.meta.env.DEV && publicPath === '/widget-preview') {
+    return <WidgetPreview />
   }
 
   const projectId = getDemoProjectId(

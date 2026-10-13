@@ -8,6 +8,7 @@ vi.mock('../../../_lib/auth.js', () => ({
   requireProjectCapability: vi.fn(),
   requireProjectCommentCapability: vi.fn(),
 }))
+vi.mock('../../../_lib/comment-actor.js', () => ({ requireCommentActor: vi.fn() }))
 vi.mock('../../../_lib/comment-issue-content.js', () => ({ generateCommentIssueContent: vi.fn() }))
 vi.mock('../../../_lib/github-app.js', () => ({ createInstallationAccessToken: vi.fn() }))
 vi.mock('../../../_lib/github-issues.js', () => ({
@@ -34,6 +35,7 @@ vi.mock('../../../_lib/store.js', () => ({
 import handler from './github-issue.js'
 import { waitUntil } from '@vercel/functions'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { requireCommentActor } from '../../../_lib/comment-actor.js'
 import { generateCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import { createInstallationAccessToken } from '../../../_lib/github-app.js'
 import { closeLinkedGithubIssue } from '../../../_lib/external-work-sync.js'
@@ -67,10 +69,10 @@ function mockRes() {
     setHeader(key: string, value: string) { this.headers[key] = value },
   }
 }
-const call = (method = 'POST', query: Record<string, unknown> = { commentId: 'comment-1' }, body: unknown = undefined) => {
+const call = (method = 'POST', query: Record<string, unknown> = { commentId: 'comment-1' }, body: unknown = undefined, headers: Record<string, string> = {}) => {
   const res = mockRes()
   return (handler as never as (req: unknown, res: ReturnType<typeof mockRes>) => Promise<unknown>)({
-    method, query, body, headers: {},
+    method, query, body, headers,
   }, res).then(() => res)
 }
 
@@ -112,6 +114,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(closeLinkedGithubIssue).mockResolvedValue(undefined)
   vi.mocked(requireUser).mockResolvedValue({ userId: 'user-1', email: 'a@b.c' })
+  vi.mocked(requireCommentActor).mockResolvedValue({ userId: 'user-1', email: '' })
   vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockResolvedValue(comment as never)
@@ -140,6 +143,20 @@ beforeEach(() => {
 })
 
 describe('POST comment GitHub issue', () => {
+  it('accepts an origin-bound widget actor without dashboard authentication', async () => {
+    const result = await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+    expect(result.statusCode).toBe(201)
+    expect(requireUser).not.toHaveBeenCalled()
+    expect(requireCommentActor).toHaveBeenCalledWith(expect.anything(), result, comment)
+  })
+
+  it('stops after a rejected widget actor', async () => {
+    vi.mocked(requireCommentActor).mockResolvedValueOnce(null)
+    const result = await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+    expect(result.body).toBeNull()
+    expect(getCommentForGithubIssue).not.toHaveBeenCalled()
+  })
+
   it('authenticates, validates the method and comment id', async () => {
     vi.mocked(requireUser).mockImplementationOnce(async (_req, res) => {
       res.status(401).json({ error: 'Unauthorized' })

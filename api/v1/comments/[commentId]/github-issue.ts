@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { requireCommentActor } from '../../../_lib/comment-actor.js'
 import { generateCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import {
   createCommentIssueMarker,
@@ -79,9 +80,9 @@ async function acceptOpenOrCloseRejected(projectKey: string, commentId: string, 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
   if (req.method !== 'POST') return methodNotAllowed(req, res, METHODS)
-  const user = await requireUser(req, res)
-  if (!user) return
-
+  const widgetRequest = typeof req.headers.authorization === 'string' && req.headers.authorization.startsWith('Bearer crrt_widget_')
+  const authenticatedUser = widgetRequest ? null : await requireUser(req, res)
+  if (!widgetRequest && !authenticatedUser) return
   const commentId = getStringQuery(req.query.commentId)
   if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
 
@@ -91,6 +92,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const publicComment = await getComment(commentId)
     if (!publicComment?.projectId) return jsonError(req, res, 404, 'Comment not found')
+    const user = authenticatedUser ?? await requireCommentActor(req, res, publicComment)
+    if (!user) return
     projectKey = publicComment.projectId
     if (!(await requireProjectCommentCapability(req, res, user, publicComment, 'integrations:send'))) return
 

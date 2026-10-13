@@ -20,6 +20,7 @@ vi.mock('./product-audit/ProductAuditWorkspace', () => ({ ProductAuditWorkspace:
 vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing product audit</section> }))
 vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
 vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
+vi.mock('./WidgetPreview', () => ({ WidgetPreview: () => <main>Local widget preview</main> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
 
@@ -50,6 +51,13 @@ it('routes direct support loads without mounting the marketing site', () => {
   window.history.pushState({}, '', '/support')
   render(<App />)
   expect(screen.getByText('Public support page')).toBeInTheDocument()
+  expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
+})
+
+it('routes local widget previews without mounting the marketing site', () => {
+  window.history.pushState({}, '', '/widget-preview')
+  render(<App />)
+  expect(screen.getByText('Local widget preview')).toBeInTheDocument()
   expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
 })
 

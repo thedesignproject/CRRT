@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import {
   createWidgetAgentSession,
+  createWidgetExternalWork,
+  fetchWidgetExternalWorkDraft,
   fetchAgentEligibility,
   fetchProjectComments,
   fetchWidgetAgentEligibility,
@@ -155,15 +157,20 @@ describe('premium widget Agent API', () => {
     await createWidgetAgentSession(API, handoff, widgetSession)
     await mutateWidgetFeedback(API, lifecycle, widgetSession)
     await startWidgetAgentUpgrade(API, { projectKey: 'p', pageUrl: 'https://site.test' }, widgetSession)
+    await fetchWidgetExternalWorkDraft(API, 'comment/1', 'linear', widgetSession)
+    await createWidgetExternalWork(API, 'comment/1', 'linear', { title: 'Title', body: 'Body' }, widgetSession)
 
     expect(spy.mock.calls.map(([url]) => url)).toEqual([
       `${API}/v1/widget/agent/session`,
       `${API}/v1/widget/feedback`,
       `${API}/v1/widget/agent/upgrade`,
+      `${API}/v1/comments/comment%2F1/external-work?provider=linear`,
+      `${API}/v1/comments/comment%2F1/external-work`,
     ])
-    expect(spy.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'POST', 'POST'])
+    expect(spy.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'POST', 'POST', undefined, 'POST'])
     expect(JSON.parse(spy.mock.calls[0]![1]!.body as string)).toEqual(handoff)
     expect(JSON.parse(spy.mock.calls[1]![1]!.body as string)).toEqual(lifecycle)
+    expect(JSON.parse(spy.mock.calls[4]![1]!.body as string)).toEqual({ provider: 'linear', draft: { title: 'Title', body: 'Body' } })
     for (const [, init] of spy.mock.calls) {
       expect(init?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: `Bearer ${widgetSession.accessToken}` })
     }

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
 vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireProjectCommentCapability: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../../../_lib/comment-actor.js', () => ({ requireCommentActor: vi.fn() }))
 vi.mock('../../../_lib/linear-connection.js', () => ({ getLinearAccessToken: vi.fn() }))
 vi.mock('../../../_lib/linear.js', () => ({ createLinearIssue: vi.fn() }))
 vi.mock('../../../_lib/jira-connection.js', () => ({ getJiraAccessToken: vi.fn() }))
@@ -21,6 +22,7 @@ import { waitUntil } from '@vercel/functions'
 import githubIssueHandler from './github-issue.js'
 import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { requireCommentActor } from '../../../_lib/comment-actor.js'
 import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
 import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
@@ -41,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(closeLinkedExternalWork).mockResolvedValue(undefined)
   vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
+  vi.mocked(requireCommentActor).mockResolvedValue({ userId: 'widget-user', email: '' })
   vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockResolvedValue(comment as never)
@@ -66,6 +69,13 @@ beforeEach(() => {
 })
 
 describe('external work endpoint', () => {
+  it('accepts an origin-bound widget actor without dashboard authentication', async () => {
+    const res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` } }, res)
+    expect(res.statusCode).toBe(200)
+    expect(requireUser).not.toHaveBeenCalled()
+    expect(requireCommentActor).toHaveBeenCalledWith(expect.anything(), res, comment)
+  })
   it('prepares a deterministic editable GitHub draft without exposing credentials', async () => {
     const res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
@@ -90,6 +100,13 @@ describe('external work endpoint', () => {
     const res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
     expect(res.body).toBeNull()
+    expect(getCommentForGithubIssue).not.toHaveBeenCalled()
+  })
+
+  it('stops after a rejected widget actor', async () => {
+    vi.mocked(requireCommentActor).mockResolvedValueOnce(null)
+    const res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` } }, res)
     expect(getCommentForGithubIssue).not.toHaveBeenCalled()
   })
 
