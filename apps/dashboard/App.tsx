@@ -779,7 +779,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       )}
 
       </main>
-      <StatusBar personal={view === 'extension-comments'} sidebarOpen={sidebarOpen} agentAvailable={canOpenAgentPanel} onShowSidebar={() => setSidebarOpen(true)} />
+      <StatusBar personal={view === 'extension-comments'} agentAvailable={canOpenAgentPanel} />
 
       {cmdOpen && (
         <CommandPalette

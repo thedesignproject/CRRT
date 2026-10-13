@@ -9,13 +9,15 @@ describe('<AgentLauncher />', () => {
     const launcher = screen.getByRole('button', { name: 'Agents, 3 ready' })
     expect(launcher).toHaveAttribute('aria-controls', 'agent-sidebar')
     expect(launcher).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(launcher).toHaveClass('dashboard-agent-launcher-ready')
+    expect(screen.getByText('3 ready')).toHaveClass('dashboard-agent-ready-count')
     fireEvent.click(launcher)
     expect(onOpen).toHaveBeenCalledOnce()
 
     view.rerender(<AgentLauncher readyCount={0} open onOpen={onOpen} />)
     expect(screen.getByRole('button', { name: 'Agents, 0 ready' })).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.queryByText('3')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Agents, 0 ready' })).toHaveClass('dashboard-agent-launcher-open')
+    expect(screen.queryByText('3 ready')).toBeNull()
   })
 
   it('stays visible but inert when Agents are unavailable', () => {
@@ -24,6 +26,7 @@ describe('<AgentLauncher />', () => {
     expect(launcher).toBeDisabled()
     expect(launcher).toHaveAttribute('title', 'Select a project to use Agents.')
     expect(launcher).toHaveAttribute('aria-expanded', 'false')
+    expect(launcher).not.toHaveClass('dashboard-agent-launcher-ready')
     fireEvent.click(launcher)
     expect(launcher).toBeDisabled()
   })
