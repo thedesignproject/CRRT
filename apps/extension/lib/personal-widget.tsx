@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { browser } from 'wxt/browser'
+import { localComments } from './local-feedback'
 import { FeedbackWidget } from '../../../src/components/FeedbackWidget'
 import type { Comment, PersonalComments, WidgetPage } from '../../../src/components/FeedbackWidget/types'
 import { createPageComment, deletePageComment, extensionSession, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment, type ExtensionComment } from '../lib/comments-api'
@@ -116,7 +117,7 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
     return () => { alive = false; browser.storage.onChanged.removeListener(refresh) }
   }, [page?.url])
   const comments = useMemo(
-    () => extensionComments(project, visibility, setVisibility, scope, setScope),
+    () => project ? extensionComments(project, visibility, setVisibility, scope, setScope) : localComments,
     [project, scope, visibility],
   )
   const embeddedWidget = Boolean(

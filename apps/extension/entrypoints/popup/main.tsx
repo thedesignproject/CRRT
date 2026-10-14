@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { browser } from 'wxt/browser'
 import type { AuthMessage, SessionSummary } from '../../lib/auth'
 import type { HostedAuthMessage } from '../../lib/hosted-auth'
+import { LocalWorkspacePanel } from '../../lib/local-workspace-panel'
 import { listExtensionProjects } from '../../lib/comments-api'
 import { acceptDisclosure, hasAcceptedDisclosure, publicCrrtUrl } from '../../lib/disclosure'
 import {
@@ -39,6 +40,7 @@ export function Popup() {
     if (!nextSession) {
       setProjects([])
       setActiveProjectState(null)
+      setPageUrl(await getCurrentTabUrl())
       return
     }
     const [available, currentPageUrl] = await Promise.all([listExtensionProjects(), getCurrentTabUrl()])
@@ -133,10 +135,12 @@ export function Popup() {
       <button className="primary" disabled={busy || !pageUrl} onClick={activate}>Start commenting</button>
       <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}?view=extension-comments`} target="_blank" rel="noopener noreferrer">Dashboard</a><button className="link" disabled={busy} onClick={signOut}>Sign out</button></div>
     </> : <div className="auth-actions">
-      <p className="muted">Use your CRRT account in a secure browser window. Your password stays out of the extension.</p>
+      <p className="muted">Try local feedback without an account, or sign in to connect Cloud or your self-hosted instance. Your password stays out of the extension.</p>
+      <button className="secondary" disabled={busy || !pageUrl} onClick={activate}>Try local feedback</button>
       <button className="primary" disabled={busy} onClick={() => { void signIn('signin') }}>Sign in with CRRT</button>
       <button className="secondary" disabled={busy} onClick={() => { void signIn('signup') }}>Create account</button>
     </div>}
+    <LocalWorkspacePanel sessionToken={session?.accessToken ?? null} billingUrl={`${import.meta.env.WXT_DASHBOARD_URL.replace(/\/+$/, '')}/billing`} />
     {error && <p className="error" role="alert">{error}</p>}
   </main>
 }

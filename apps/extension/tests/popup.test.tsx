@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('../lib/local-workspace-panel',()=>({LocalWorkspacePanel:({billingUrl}:{billingUrl:string})=><a href={billingUrl}>Local billing</a>}))
 const sendMessage = vi.fn()
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 const listExtensionProjects = vi.hoisted(() => vi.fn())
@@ -207,4 +208,22 @@ describe('extension popup', () => {
     expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toHaveValue('')
     view.unmount()
   })
+})
+
+it('starts the local widget without signing in',async()=>{
+ sendMessage.mockResolvedValue({ok:true,data:null})
+ render(<Popup />)
+ const button=await screen.findByRole('button',{name:'Try local feedback'})
+ await waitFor(()=>expect(button).not.toBeDisabled())
+ fireEvent.click(button)
+ await waitFor(()=>expect(sendMessage).toHaveBeenCalledWith({type:'comment:activate'}))
+})
+
+it.each(['https://crrt.ai/dashboard','https://crrt.ai/dashboard/'])('resolves billing beneath the configured dashboard base %s',async base=>{
+ vi.stubEnv('WXT_DASHBOARD_URL',base)
+ sendMessage.mockResolvedValue({ok:true,data:null})
+ const view=render(<Popup />)
+ await screen.findByText('Sign in to CRRT')
+ expect(screen.getByRole('link',{name:'Local billing'})).toHaveAttribute('href','https://crrt.ai/dashboard/billing')
+ view.unmount()
 })

@@ -249,7 +249,7 @@ function position(value: unknown, name: string) {
   return value
 }
 
-function parseScreenshot(input: unknown) {
+export function parseScreenshot(input: unknown) {
   if (input === undefined || input === null) return null
   const value = input as { base64?: unknown; mimeType?: unknown }
   if (typeof value.base64 !== 'string' || typeof value.mimeType !== 'string' || !IMAGE_TYPES.has(value.mimeType)) {

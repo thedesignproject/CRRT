@@ -3,6 +3,21 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useState } from 'react'
 import { readFileSync } from 'node:fs'
 
+// Reuse deterministic record fixtures across adapters; these mocked functions never make requests.
+vi.mock('../lib/local-feedback', async () => {
+  const api = await import('../lib/comments-api')
+  const map = (row: any) => ({ ...row, projectId: 'local', reviewStatus: row.reviewStatus ?? 'open', imageUrl: row.screenshotUrl, authorName: row.authorName ?? 'You' })
+  return { localComments: {
+    label: 'Local feedback · This browser only',
+    async list(pageUrl: string) {
+      const items: any[] = []; let page = 1; let total = 0
+      do { const result = await api.listPageComments(pageUrl, page++); items.push(...result.items.map(map)); total = result.total; if (!result.items.length) break } while (items.length < total)
+      return items
+    },
+    async create(payload: any) { return map(await api.createPageComment({ ...payload, screenshot: payload.imageBase64 ? { base64: payload.imageBase64, mimeType: payload.imageMimeType } : null })) },
+    update: api.updatePageComment, remove: api.deletePageComment,
+  } }
+})
 const storage = vi.hoisted(() => ({ addListener: vi.fn(), removeListener: vi.fn() }))
 const sendMessage = vi.hoisted(() => vi.fn())
 const disconnectPageHost = vi.hoisted(() => vi.fn())
@@ -616,42 +631,24 @@ it('renews private pin images without resetting edits and ignores offline or lat
   await act(async () => resolve({ items: [], total: 0 }))
 })
 
-it('opens extension sign-in from the logged-out carrot and restores the menu after login', async () => {
+it('opens the local carrot without requiring sign-in and preserves feedback across login', async () => {
   vi.mocked(extensionSession).mockResolvedValue(null)
-  const view = setup()
-  await act(async () => {})
-  expect(sendMessage).not.toHaveBeenCalled()
-  expect(listPageComments).not.toHaveBeenCalled()
+  const view = setup(); await act(async () => {})
   fireEvent.click(view.ui.getByRole('button', { name: 'Open CRRT menu' }))
-  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith({ type: 'auth:open-popup' }))
-  expect(view.ui.getByRole('button', { name: 'Open CRRT menu' })).toHaveAttribute('aria-expanded', 'false')
-  expect(view.ui.queryByRole('menuitem', { name: /Drop comment/ })).toBeNull()
-  expect(view.ui.queryByPlaceholderText('Leave your comment…')).toBeNull()
+  await view.ui.findByRole('menuitem', { name: /Drop comment/ })
+  expect(sendMessage).not.toHaveBeenCalled()
   vi.mocked(extensionSession).mockResolvedValue({ email: 'user@example.com', accessToken: 'token' })
   await act(async () => { storage.addListener.mock.calls[0][0]() })
-  fireEvent.click(view.ui.getByRole('button', { name: 'Open CRRT menu' }))
-  await view.ui.findByRole('button', { name: 'Close CRRT menu' })
-  expect(sendMessage).toHaveBeenCalledTimes(1)
+  await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
   expect(globalThis.fetch).not.toHaveBeenCalled()
 })
 
-it('keeps the launcher closed and shows retry guidance when popup or auth fails', async () => {
-  vi.mocked(extensionSession).mockResolvedValue(null)
-  const view = setup()
-  await act(async () => {})
-  for (const response of [{ ok: false, error: 'not supported' }, undefined]) {
-    sendMessage.mockResolvedValueOnce(response)
-    await act(async () => { fireEvent.click(view.ui.getByRole('button', { name: 'Open CRRT menu' })) })
-    expect(view.ui.getByRole('alert')).toHaveTextContent('Click CRRT in Chrome’s toolbar to sign in.')
-    fireEvent.click(view.ui.getByRole('button', { name: 'Dismiss error' }))
-  }
-  for (const reason of [new Error('Auth unavailable'), 'offline']) {
-    vi.mocked(extensionSession).mockRejectedValueOnce(reason)
-    await act(async () => { fireEvent.click(view.ui.getByRole('button', { name: 'Open CRRT menu' })) })
-    expect(view.ui.getByRole('alert')).toHaveTextContent(reason instanceof Error ? reason.message : 'Could not open CRRT')
-    fireEvent.click(view.ui.getByRole('button', { name: 'Dismiss error' }))
-  }
-  expect(view.ui.getByRole('button', { name: 'Open CRRT menu' })).toHaveAttribute('aria-expanded', 'false')
+it('keeps local feedback usable when account refresh fails', async () => {
+  vi.mocked(extensionSession).mockRejectedValueOnce(new Error('Auth unavailable'))
+  const view = setup(); await act(async () => {})
+  fireEvent.click(view.ui.getByRole('button', { name: 'Open CRRT menu' }))
+  await view.ui.findByRole('menuitem', { name: /Drop comment/ })
+  expect(sendMessage).not.toHaveBeenCalled()
 })
 
 it('persists edits/deletes and leaves failed mutations visible for retry', async () => {
@@ -699,7 +696,7 @@ it('shows load and submit errors; clearing auth removes private pins', async () 
   await waitFor(() => expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull())
   vi.mocked(extensionSession).mockResolvedValue(null)
   await act(async () => { storage.addListener.mock.calls[0][0]() })
-  expect(view.container.querySelector('[data-fw-pin]')).toBeNull()
+  expect(view.container.querySelector('[data-fw-pin]')).not.toBeNull()
   expect(view.ui.queryByRole('textbox')).toBeNull()
   view.unmount(); expect(storage.removeListener).toHaveBeenCalled()
 })

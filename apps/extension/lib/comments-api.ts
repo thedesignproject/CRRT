@@ -39,8 +39,9 @@ export async function extensionSession() {
   return response.data
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(path: string, init?: RequestInit, expectedAccessToken?: string): Promise<T> {
   const session = await extensionSession()
+  if(expectedAccessToken !== undefined && session?.accessToken !== expectedAccessToken)throw new Error('Sign-in changed; import stopped. Your local feedback is retained.')
   if (!session) throw new Error('Sign in to CRRT from the extension')
   const response = await fetch(`${import.meta.env.WXT_API_BASE.replace(/\/$/, '')}${path}`, {
     ...init,
@@ -89,4 +90,11 @@ export function sendExternalWork(commentId: string, provider: 'github' | 'linear
     `/v1/comments/${encodeURIComponent(commentId)}/external-work`,
     { method: 'POST', body: JSON.stringify({ provider, draft }) },
   )
+}
+
+// The API binds the import to the bearer owner, never a client-supplied owner id.
+export function importLocalProject(projectId: string, name: string, comments: Comment[], expectedAccessToken:string, signal?:AbortSignal) {
+  return request<{ projectId: string; imported: number }>('/v1/extension/import', {
+    method: 'POST', body: JSON.stringify({ projectId, name, comments }),signal,
+  },expectedAccessToken)
 }

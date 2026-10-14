@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 
-import { createPageComment, deletePageComment, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment } from './comments-api'
+import { importLocalProject, createPageComment, deletePageComment, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment } from './comments-api'
 
 const comment = { id: 'a/b', projectId: null, pageUrl: 'https://example.com', pageHostname: 'example.com', x: 1, y: 2, selector: '#x', body: 'Hi', screenshotUrl: null, authorName: 'u@example.com', createdAt: 'now', updatedAt: 'now' }
 
@@ -80,4 +80,23 @@ describe('extension comments API client', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('not json', { status: 503 }))
     await expect(listPageComments('https://example.com')).rejects.toThrow('CRRT request failed (503)')
   })
+})
+
+it('imports local data only after an explicit authenticated request',async()=>{
+ const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({projectId:'chosen',imported:0}),{status:200}))
+ expect(await importLocalProject('chosen','Local',[],'token')).toEqual({projectId:'chosen',imported:0})
+ expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/import',expect.objectContaining({method:'POST',body:JSON.stringify({projectId:'chosen',name:'Local',comments:[]})}))
+})
+
+it.each([{accessToken:'other',email:'other@example.com'},null])('never sends import data under a changed background session (%j)',async session=>{
+ sendMessage.mockResolvedValue({ok:true,data:session})
+ const fetch=vi.spyOn(globalThis,'fetch')
+ await expect(importLocalProject('chosen','Local',[],'token')).rejects.toThrow('Sign-in changed; import stopped')
+ expect(fetch).not.toHaveBeenCalled()
+})
+it('pins import authorization to the initiating session and forwards cancellation',async()=>{
+ const controller=new AbortController()
+ const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({projectId:'chosen',imported:1}),{status:200}))
+ await importLocalProject('chosen','Local',[],'token',controller.signal)
+ expect(fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({headers:expect.objectContaining({Authorization:'Bearer token'}),signal:controller.signal}))
 })

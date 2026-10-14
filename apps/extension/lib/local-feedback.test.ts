@@ -1,0 +1,46 @@
+import {afterEach,beforeEach,expect,it,vi}from'vitest'
+const state=vi.hoisted(()=>({value:{}as Record<string,unknown>}))
+vi.mock('wxt/browser',()=>({browser:{storage:{local:{get:vi.fn(async()=>structuredClone(state.value)),set:vi.fn(async value=>{state.value=structuredClone(value)})}}}}))
+import {LOCAL_FEEDBACK_KEY,createLocalComment,deleteLocalComment,exportLocalFeedback,localComments,readLocalWorkspace,resolveLocalComment,updateLocalComment}from'./local-feedback'
+const payload={pageUrl:'https://example.com/#hash',selector:'body',body:' Feedback ',x:1,y:2}
+beforeEach(()=>{state.value={};let queue=Promise.resolve();vi.stubGlobal('navigator',{locks:{request:(_key:string,op:()=>Promise<unknown>)=>{const result=queue.then(op);queue=result.then(()=>{},()=>{});return result}}})})
+afterEach(()=>vi.unstubAllGlobals())
+it('stores one private local workspace without authentication or network access',async()=>{
+ expect(await readLocalWorkspace()).toEqual({version:1,name:'Local feedback',comments:[]})
+ const first=await localComments.create(payload)
+ expect(first).toMatchObject({projectId:'local',pageUrl:'https://example.com/',body:'Feedback',authorName:'You',imageUrl:null})
+ expect(await localComments.list('https://example.com/#other')).toHaveLength(1)
+ expect(await localComments.list('https://other.example/')).toHaveLength(0)
+ await localComments.update(first.id,'Changed');await resolveLocalComment(first.id,true)
+ expect((await readLocalWorkspace()).comments[0]).toMatchObject({body:'Changed',reviewStatus:'accepted'})
+ await resolveLocalComment(first.id,false);expect((await readLocalWorkspace()).comments[0].reviewStatus).toBe('open')
+ expect(JSON.parse(await exportLocalFeedback()).comments).toHaveLength(1)
+ await localComments.remove(first.id);expect((await readLocalWorkspace()).comments).toHaveLength(0)
+})
+it('serializes multiple tabs at the last local comment slot and frees stored slots on deletion',async()=>{
+ for(let i=0;i<49;i++)await createLocalComment(payload)
+ const results=await Promise.allSettled([createLocalComment(payload),createLocalComment(payload)])
+ expect(results.filter(result=>result.status==='fulfilled')).toHaveLength(1)
+ const workspace=await readLocalWorkspace();expect(workspace.comments).toHaveLength(50)
+ await deleteLocalComment(workspace.comments[0].id);await createLocalComment(payload)
+ expect((await readLocalWorkspace()).comments).toHaveLength(50)
+})
+it('exports local screenshots and fails without replacing data when storage is exhausted',async()=>{
+ await createLocalComment({...payload,imageBase64:'aGk=',imageMimeType:'image/png'})
+ expect(JSON.parse(await exportLocalFeedback()).comments[0].imageUrl).toBe('data:image/png;base64,aGk=')
+ // Near the aggregate allowance, each valid individual screenshot is still bounded.
+ for(let i=0;i<2;i++)await createLocalComment({...payload,imageBase64:'A'.repeat(2_900_000),imageMimeType:'image/png'})
+ await expect(createLocalComment({...payload,imageBase64:'A'.repeat(2_900_000),imageMimeType:'image/png'})).rejects.toThrow('storage allowance')
+ expect((await readLocalWorkspace()).comments).toHaveLength(3)
+})
+it('validates text, positions, pages and screenshot types',async()=>{
+ for(const patch of [{body:''},{body:'x'.repeat(5001)},{selector:null},{selector:''},{pageUrl:null},{x:null},{x:NaN},{y:null},{y:Infinity}])await expect(createLocalComment({...payload,...patch})).rejects.toThrow('Invalid local')
+ await expect(createLocalComment({...payload,pageUrl:'chrome://extensions'})).rejects.toThrow('regular website')
+ await createLocalComment({...payload,pageUrl:'http://example.com/'})
+ for(const patch of [{imageBase64:'aGk=',imageMimeType:'image/gif'},{imageBase64:'A'.repeat(3_000_000),imageMimeType:'image/png'}])await expect(createLocalComment({...payload,...patch})).rejects.toThrow('screenshot')
+ await expect(updateLocalComment('missing','')).rejects.toThrow('Enter feedback')
+ await expect(updateLocalComment('missing','x'.repeat(5001))).rejects.toThrow('Enter feedback')
+ await expect(updateLocalComment('missing','Valid')).rejects.toThrow('not found')
+ await expect(resolveLocalComment('missing',true)).rejects.toThrow('not found')
+ expect(state.value[LOCAL_FEEDBACK_KEY]).toBeDefined()
+})

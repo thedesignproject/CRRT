@@ -1,3 +1,4 @@
+@import "../../../../branding/crrt/tokens.css";
 :root { color-scheme: dark; font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0a0a0a; color: #fff }
 * { box-sizing: border-box }
 body { margin: 0; min-width: 320px }
@@ -25,3 +26,28 @@ ul { display: grid; gap: 8px; margin: 0; padding-left: 20px; color: #a8a29a; fon
 .context p { display: flex; justify-content: space-between; gap: 16px; color: #fff; font-size: 12px; overflow-wrap: anywhere; text-align: right }
 .context span { color: #a8a29a }
 .notice { color: #ffb000; font-size: 12px; line-height: 1.45 }
+
+.local-workspace { display: grid; gap: var(--crrt-space-4); border-top: 1px solid var(--crrt-rule-dark); padding-top: var(--crrt-space-5); min-width: 0 }
+.local-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--crrt-space-3) }
+.local-heading h2 { margin: 0; font-size: var(--crrt-text-body); font-weight: 600 }
+.local-count, .local-status { font-size: var(--crrt-text-caption); color: var(--crrt-ink-faint) }
+.local-workspace .muted { line-height: 1.55 }
+.local-export, .local-action { display: inline-flex; align-items: center; justify-content: center; gap: var(--crrt-space-3) }
+.local-export { justify-self: start }
+.local-comments { min-width: 0 }
+.local-comment { display: flex; align-items: flex-start; gap: var(--crrt-space-3); padding: var(--crrt-space-4) 0; border-bottom: 1px solid var(--crrt-rule-dark) }
+.local-comment-body { flex: 1; min-width: 0 }
+.local-comment-body p { text-align: left; overflow-wrap: anywhere; font-size: var(--crrt-text-caption); line-height: 1.55; margin-bottom: var(--crrt-space-2) }
+.local-comment-actions { display: flex; flex-shrink: 0; align-items: center; gap: var(--crrt-space-2) }
+.local-action { background: transparent; color: var(--crrt-ink-faint); font-size: 12px; min-height: 32px; padding: var(--crrt-space-2); border-radius: var(--crrt-radius-md) }
+.local-action:hover { background: var(--crrt-bg-deep-soft); color: var(--crrt-white) }
+.local-delete:hover { color: var(--crrt-carrot) }
+.local-action:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 2px }
+.local-import { display: grid; gap: var(--crrt-space-4); padding-top: var(--crrt-space-2) }
+
+.local-list-controls { display: flex; justify-content: space-between; gap: var(--crrt-space-4) }
+
+.local-shortcuts { display: flex; align-items: center; justify-content: space-between; gap: var(--crrt-space-3) }
+.local-shortcut { display: inline-flex; align-items: center; gap: var(--crrt-space-2); text-decoration: none; font-size: var(--crrt-text-caption) }
+.local-shortcut:hover { color: var(--crrt-white) }
+.local-details { display: grid; gap: var(--crrt-space-4); min-width: 0 }
