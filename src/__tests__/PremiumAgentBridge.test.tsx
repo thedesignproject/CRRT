@@ -542,3 +542,32 @@ it('keeps a completed handoff visible after an upgrade, focus, and polling inter
   await act(async () => { fireEvent.click(button('Codex')) })
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT codex')
 })
+
+it('closes the tracker menu during creation and creates later work in the newly chosen tracker', async () => {
+ let finish!: (value: any) => void
+ apiMocks.createExternal.mockReturnValueOnce(new Promise(resolve => {finish=resolve}))
+ renderBridge()
+ await waitFor(() => expect(document.body.textContent).toContain('1 of 2 selected'))
+ fireEvent.click(document.querySelector('button[aria-label="Choose issue tracker"]')!)
+ expect(document.querySelector('[role="menuitemradio"]')).not.toBeNull()
+ fireEvent.click(button('Create 1 in Linear'))
+ await waitFor(() => expect(apiMocks.createExternal).toHaveBeenCalled())
+ expect(document.querySelector('[role="menu"]')).toBeNull()
+ expect(document.querySelector('button[aria-label="Choose issue tracker"]')).toBeDisabled()
+ await act(async () => finish({externalUrl:'https://linear.example/one',created:true}))
+ fireEvent.click(document.querySelector('button[aria-label="Choose issue tracker"]')!)
+ fireEvent.click(button('GitHub'))
+ await act(async () => fireEvent.click(button('Create 1 in GitHub')))
+ expect(apiMocks.createExternal).toHaveBeenLastCalledWith(API,'c1','github',expect.any(Object),session)
+ expect(document.body.textContent).toContain('1 GitHub issue ready.')
+})
+it('disables an open provider menu while an agent prompt is being prepared', async () => {
+ let finish!: (value: any) => void
+ apiMocks.createSession.mockReturnValueOnce(new Promise(resolve => {finish=resolve}))
+ renderBridge()
+ await waitFor(() => expect(document.body.textContent).toContain('1 of 2 selected'))
+ fireEvent.click(document.querySelector('button[aria-label="Choose issue tracker"]')!)
+ fireEvent.click(button('Copy for agent'))
+ for(const item of document.querySelectorAll('[role="menuitemradio"]')) expect(item).toBeDisabled()
+ await act(async () => finish({slug:'share',token:'token'}))
+})

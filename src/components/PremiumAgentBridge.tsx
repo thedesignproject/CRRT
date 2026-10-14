@@ -309,26 +309,27 @@ export function PremiumAgentBridge({
   async function createExternalWork() {
     const session = widgetSession!
     const context = contextGeneration.current
-    const ids = [...selectedIds].filter((id) => externalWork[id]?.state !== 'created')
+    const ids = [...selectedIds].filter((id) => externalWork[`${provider}:${id}`]?.state !== 'created')
     if (ids.length === 0) return
     setBusy(true)
+    setProviderMenuOpen(false)
     setMessage('')
     let failures = 0
     for (const id of ids) {
-      setExternalWork((current) => ({ ...current, [id]: { state: 'creating' } }))
+      setExternalWork((current) => ({ ...current, [`${provider}:${id}`]: { state: 'creating' } }))
       try {
         const prepared = await services.fetchExternalDraft(apiBase, id, provider, session)
         if (context !== contextGeneration.current) break
         const existingUrl = prepared.existing?.externalUrl ?? prepared.existing?.issueUrl
         if (existingUrl) {
-          setExternalWork((current) => ({ ...current, [id]: { state: 'created', url: existingUrl } }))
+          setExternalWork((current) => ({ ...current, [`${provider}:${id}`]: { state: 'created', url: existingUrl } }))
           continue
         }
         if (!prepared.connected) throw new Error(`${PROVIDER_LABELS[prepared.provider]} is not connected to this project.`)
         const result = await services.createExternal(apiBase, id, provider, prepared.draft, session)
         /* v8 ignore next -- stale async responses are intentionally discarded */
         if (context !== contextGeneration.current) break
-        setExternalWork((current) => ({ ...current, [id]: { state: 'created', url: result.externalUrl ?? result.issueUrl } }))
+        setExternalWork((current) => ({ ...current, [`${provider}:${id}`]: { state: 'created', url: result.externalUrl ?? result.issueUrl } }))
       } catch (error) {
         /* v8 ignore next -- stale async failures are intentionally discarded */
         if (context !== contextGeneration.current) break
@@ -336,7 +337,7 @@ export function PremiumAgentBridge({
         if (error instanceof WidgetRequestError && error.status === 401) setView('authentication_required')
         setExternalWork((current) => ({
           ...current,
-          [id]: { state: 'failed', message: error instanceof Error ? error.message : 'Could not create this issue.' },
+          [`${provider}:${id}`]: { state: 'failed', message: error instanceof Error ? error.message : 'Could not create this issue.' },
         }))
       }
     }
@@ -422,7 +423,7 @@ export function PremiumAgentBridge({
               <div role="group" aria-label="Feedback to send" style={{ borderTop: '1px solid var(--fw-contrast-08)' }}>
                 {approvedComments.map((comment) => {
                   const selectable = canSelect(comment)
-                  const workState = externalWork[comment.id]
+                  const workState = externalWork[`${provider}:${comment.id}`]
                   return <div key={comment.id} style={{ padding: '15px 0 14px', borderBottom: '1px solid var(--fw-contrast-08)' }}>
                     <label style={{ display: 'grid', gridTemplateColumns: '20px minmax(0, 1fr) auto', gap: 11, alignItems: 'start', cursor: selectable ? 'pointer' : 'default' }}>
                       <input type="checkbox" checked={selectedIds.has(comment.id)} disabled={!selectable || busy} onChange={() => setSelectedIds((current) => {
@@ -466,7 +467,7 @@ export function PremiumAgentBridge({
           </button>
           <div style={{ position: 'relative', display: 'flex', minWidth: 0 }}>
             {providerMenuOpen && <div role="menu" aria-label="Choose issue tracker" style={providerMenuStyle}>
-              {PROVIDERS.map((item) => <button key={item.id} type="button" role="menuitemradio" aria-checked={provider === item.id} onClick={() => chooseProvider(item.id)} style={providerMenuItemStyle}>
+              {PROVIDERS.map((item) => <button key={item.id} type="button" role="menuitemradio" disabled={busy} aria-checked={provider === item.id} onClick={() => chooseProvider(item.id)} style={providerMenuItemStyle}>
                 <ProviderMark provider={item.id} size={18} /> <span>{item.label}</span>{provider === item.id && <Check size={14} aria-hidden="true" />}
               </button>)}
             </div>}
