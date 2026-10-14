@@ -3,9 +3,12 @@ import type { AdminPage, AdminProject, AdminProjectSort, AdminStats, AdminUser, 
 // VITE_USE_MOCKS:
 //   '1'     → populated fixtures (default mock mode)
 //   'empty' → empty account, useful for previewing the onboarding flow
+//   'onboarding' → existing project with no feedback, useful for the install demo
 //   unset   → real API
-export const mocksEnabled = import.meta.env.VITE_USE_MOCKS === '1' || import.meta.env.VITE_USE_MOCKS === 'empty'
-export const mocksEmpty = import.meta.env.VITE_USE_MOCKS === 'empty'
+const mockMode = import.meta.env.VITE_USE_MOCKS
+export const mocksEnabled = mockMode === '1' || mockMode === 'empty' || mockMode === 'onboarding'
+export const mocksEmpty = mockMode === 'empty'
+export const mocksOnboarding = mockMode === 'onboarding'
 
 const now = Date.now()
 const ago = (mins: number) => new Date(now - mins * 60_000).toISOString()
@@ -182,7 +185,7 @@ export function getMockProjects(): Project[] {
 }
 
 export function getMockComments(projectId: string): CommentRecord[] {
-  if (mocksEmpty) return []
+  if (mocksEmpty || mocksOnboarding) return []
   return PROJECT_COMMENTS[projectId] ?? []
 }
 
