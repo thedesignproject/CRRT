@@ -50,11 +50,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json({ comments })
   } catch (error) {
-    if (error instanceof WidgetSessionError) return jsonError(req, res, error.status, error.message)
+    if (error instanceof WidgetSessionError) return jsonError(req, res, error.status, error.message, error)
     const message = error instanceof Error ? error.message : ''
-    if (message.includes('invalid_selection')) return jsonError(req, res, 409, 'Feedback changed. Refresh and retry.')
-    if (message.includes('forbidden')) return jsonError(req, res, 403, 'Agent is unavailable for this project')
+    if (message.includes('invalid_selection')) return jsonError(req, res, 409, 'Feedback changed. Refresh and retry.', error)
+    if (message.includes('forbidden')) return jsonError(req, res, 403, 'Agent is unavailable for this project', error)
     console.error('[widget/feedback] mutation failed', { projectKey: getStringQuery(req.query.projectKey), error })
-    return jsonError(req, res, 500, 'Could not update feedback')
+    return jsonError(req, res, 500, 'Could not update feedback', error)
   }
 }

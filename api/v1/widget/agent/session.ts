@@ -68,6 +68,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const code = error instanceof Error ? databaseFailureCode(error.message) : null
     if (code) return sendWidgetAgentError(req, res, code)
     console.error('[widget-agent/session] creation failed', { projectKey, error })
-    return sendWidgetAgentError(req, res, 'error')
+    return sendWidgetAgentError(req, res, 'error', error)
   }
 }

@@ -1,3 +1,4 @@
+vi.mock('../../_lib/extension-screenshot-cleanup.js',()=>({cleanupDeletedExtensionScreenshots:vi.fn().mockResolvedValue(undefined)}))
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/extension-image-cleanup.js', () => ({ processExtensionImageCleanup: vi.fn() }))

@@ -93,14 +93,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ projectKey, userId: targetUserId })
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
-    if (msg === 'tracker_dispatch_in_progress') return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before changing membership.')
-    if (msg === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry changing membership shortly.')
-    if (msg === 'not_found') return jsonError(req, res, 404, 'Member not found')
-    if (msg === 'forbidden') return jsonError(req, res, 403, 'Admin role required')
-    if (msg === 'owner_required') return jsonError(req, res, 403, 'Only the owner can transfer ownership')
-    if (msg === 'owner_protected') return jsonError(req, res, 409, 'Transfer ownership before changing the owner')
-    if (msg?.includes('agent_seat_limit_reached')) return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available')
+    if (msg === 'tracker_dispatch_in_progress') return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before changing membership.', error)
+    if (msg === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry changing membership shortly.', error)
+    if (msg === 'not_found') return jsonError(req, res, 404, 'Member not found', error)
+    if (msg === 'forbidden') return jsonError(req, res, 403, 'Admin role required', error)
+    if (msg === 'owner_required') return jsonError(req, res, 403, 'Only the owner can transfer ownership', error)
+    if (msg === 'owner_protected') return jsonError(req, res, 409, 'Transfer ownership before changing the owner', error)
+    if (msg?.includes('agent_seat_limit_reached')) return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available', error)
     console.error(error)
-    return jsonError(req, res, 500, 'Internal server error')
+    return jsonError(req, res, 500, 'Internal server error', error)
   }
 }

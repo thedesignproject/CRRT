@@ -27,6 +27,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(result.request)
   } catch (error) {
     console.error('Access review failed', error)
-    return jsonError(req, res, 500, 'Unable to review access request')
+    return jsonError(req, res, 500, 'Unable to review access request', error)
   }
 }

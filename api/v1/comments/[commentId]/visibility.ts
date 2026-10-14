@@ -29,8 +29,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(200).json(updated)
   } catch (error) {
-    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden', error)
     console.error(error)
-    return jsonError(req, res, 500, 'Internal server error')
+    return jsonError(req, res, 500, 'Internal server error', error)
   }
 }

@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import {cleanupDeletedExtensionScreenshots} from '../../_lib/extension-screenshot-cleanup.js'
 import { processExtensionImageCleanup } from '../../_lib/extension-image-cleanup.js'
 import { firstHeaderValue } from '../../_lib/http.js'
 
@@ -10,6 +11,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (firstHeaderValue(req.headers.authorization) !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' })
   try {
     await processExtensionImageCleanup()
+    await cleanupDeletedExtensionScreenshots()
     return res.status(204).end()
   } catch {
     return res.status(503).json({ error: 'Cleanup failed' })

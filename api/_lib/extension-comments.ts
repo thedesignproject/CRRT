@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabase } from './supabase.js'
 import { parseCommentTarget } from './anchor.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
+import { uploadExtensionScreenshot } from './extension-screenshot-upload.js'
 import { processExtensionImageCleanup } from './extension-image-cleanup.js'
 import { fromLegacyStatus } from './status.js'
 
@@ -364,14 +365,14 @@ export async function createExtensionComment(
   }).select(SELECT).single()
   if (error) throw new Error(error.message)
   // Persist the cleanup reference before writing an object. If upload and its
-  // rollback both fail, the owned row remains visible and DELETE is retryable.
+  // rollback both fail, durable deletion receipts remain eligible for cleanup.
   if (screenshot && screenshotStoragePath) {
-    const { error: uploadError } = await client.storage.from(BUCKET).upload(screenshotStoragePath, screenshot.buffer, {
-      contentType: screenshot.mimeType, upsert: false,
-    })
+    let uploadError:{message:string}|null
+    try { ({error:uploadError}=await uploadExtensionScreenshot(client,userId,data.id,screenshotStoragePath,screenshot.buffer,screenshot.mimeType)) }
+    catch(error){uploadError={message:error instanceof Error ? error.message : 'Upload unavailable'}}
     if (uploadError) {
       try { await deleteExtensionComment(userId, data.id) }
-      catch { throw new Error('Screenshot upload failed; comment retained for cleanup. Reload your comments before retrying.') }
+      catch { throw new Error('Screenshot upload failed; cleanup reference retained. Reload your comments before retrying.') }
       throw new Error(`Screenshot upload failed: ${uploadError.message}`)
     }
   }
@@ -410,16 +411,13 @@ export async function assignExtensionCommentToProject(
   visibility: 'shared' | 'internal' = 'shared',
 ) {
   const client = getServiceSupabase()
-  const { data, error } = await client.from('comments')
-    .update({ project_id: projectId, visibility, updated_at: new Date().toISOString() })
-    .eq('id', commentId)
-    .eq('source', 'extension')
-    .eq('created_by_user_id', userId)
-    .is('project_id', null)
-    .select(SELECT)
-    .maybeSingle()
-  if (error) throw new Error(error.message)
-  if (data) return serialize(client, data as CommentRow, userId)
+  const { error } = await client.rpc('assign_actor_inbox_feedback', {
+    p_actor: userId, p_project: projectId, p_ids: [commentId], p_visibility: visibility,
+  })
+  if (error) {
+    if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
+    throw new Error(error.message)
+  }
 
   const { data: current, error: currentError } = await client.from('comments')
     .select(SELECT)
@@ -435,20 +433,15 @@ export async function assignExtensionCommentToProject(
   return serialize(client, current as CommentRow, userId)
 }
 
-export async function deleteExtensionComment(userId: string, commentId: string) {
+export async function deleteExtensionComment(userId: string, commentId: string, cleanupOnly = false) {
   const client = getServiceSupabase()
-  const { data, error } = await client.from('comments')
-    .select('screenshot_storage_path')
-    .eq('id', commentId).eq('source', 'extension').eq('created_by_user_id', userId)
-    .maybeSingle()
+  // Delete + durable cleanup receipt commit atomically. An owned tombstone lets
+  // a retry recover even when the first response or storage removal was lost.
+  const { data, error } = await client.rpc(cleanupOnly ? 'get_deleted_extension_feedback' : 'delete_actor_extension_feedback', { p_actor: userId, p_id: commentId })
   if (error) throw new Error(error.message)
   if (!data) throw new ExtensionCommentError(404, 'Comment not found')
-  if (data.screenshot_storage_path) {
-    const { error: storageError } = await client.storage.from(BUCKET).remove([data.screenshot_storage_path])
+  if (data.path) {
+    const { error: storageError } = await client.storage.from(BUCKET).remove([data.path])
     if (storageError) throw new Error(`Screenshot deletion failed: ${storageError.message}`)
   }
-  // Retain the row/path on storage failure so a later DELETE can retry cleanup.
-  const { error: deleteError } = await client.from('comments').delete()
-    .eq('id', commentId).eq('source', 'extension').eq('created_by_user_id', userId)
-  if (deleteError) throw new Error(deleteError.message)
 }

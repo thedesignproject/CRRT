@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { parsePlanFailure, PLAN_MESSAGES } from './billing/plan-errors.js'
 
 const DEFAULT_HEADERS = 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token'
 
@@ -33,8 +34,13 @@ export function methodNotAllowed(req: VercelRequest, res: VercelResponse, method
   return res.status(405).json({ error: 'Method not allowed' })
 }
 
-export function jsonError(req: VercelRequest, res: VercelResponse, status: number, error: string) {
+export function jsonError(req: VercelRequest, res: VercelResponse, status: number, error: string, cause?: unknown) {
   setCors(req, res, ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
+  const planFailure = parsePlanFailure(cause ?? error)
+  if (planFailure) return res.status(planFailure.resource === 'subscription' ? 402 : 409).json({
+    error: planFailure.resource === 'subscription' ? PLAN_MESSAGES.subscription
+      : `${PLAN_MESSAGES[planFailure.resource]} Usage: ${planFailure.usage}/${planFailure.limit}. Reset: ${planFailure.resetAt ?? 'not applicable'}.`, ...planFailure,
+  })
   return res.status(status).json({ error })
 }
 

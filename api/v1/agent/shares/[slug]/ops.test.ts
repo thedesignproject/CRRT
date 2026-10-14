@@ -227,3 +227,9 @@ it('denies duplicate acknowledgments when the atomic lookup sees revoked credent
  expect(getOperationKey).toHaveBeenLastCalledWith('share-1','codex-local','op-1',hashToken('token-123'))
  expect(applyAgentFeedbackOperation).not.toHaveBeenCalled()
 })
+
+it('returns a stable fallback for non-Error failures without acknowledging an operation',async()=>{
+ vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce('opaque failure')
+ const res=mockRes();await call(mockReq({body:{op:'comment.start',commentId:'comment-1'}}),res)
+ expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
+})

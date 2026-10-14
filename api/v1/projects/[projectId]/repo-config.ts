@@ -138,21 +138,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(config)
   } catch (error) {
     if (error instanceof Error && error.message === 'invalid_github_repo') {
-      return jsonError(req, res, 400, 'repoUrl must point to a GitHub repository')
+      return jsonError(req, res, 400, 'repoUrl must point to a GitHub repository', error)
     }
     if (error instanceof Error && error.message === 'stale_connection_attempt') {
-      return jsonError(req, res, 409, 'GitHub connection attempt is stale')
+      return jsonError(req, res, 409, 'GitHub connection attempt is stale', error)
     }
     if (error instanceof Error && error.message === 'github_installation_repo_inaccessible') {
-      return jsonError(req, res, 403, 'GitHub connection could not be verified')
+      return jsonError(req, res, 403, 'GitHub connection could not be verified', error)
     }
     if (error instanceof Error && [
       'github_installation_token_failed',
       'github_installation_repo_lookup_failed',
     ].includes(error.message)) {
-      return jsonError(req, res, 502, 'GitHub connection verification failed')
+      return jsonError(req, res, 502, 'GitHub connection verification failed', error)
     }
     console.error('GitHub repository configuration failed')
-    return jsonError(req, res, 500, 'Internal server error')
+    return jsonError(req, res, 500, 'Internal server error', error)
   }
 }

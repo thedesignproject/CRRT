@@ -68,13 +68,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       commentCount: comments.length,
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
-    if (error instanceof Error && error.message === 'share_comments_changed') return jsonError(req, res, 409, 'Feedback changed. Retry creating the share.')
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden', error)
+    if (error instanceof Error && error.message === 'share_comments_changed') return jsonError(req, res, 409, 'Feedback changed. Retry creating the share.', error)
     // Never leak internal errors (e.g. raw OpenSSL messages) to the client.
     console.error('[feedback-shares] share creation failed', {
       projectKey: typeof req.body?.projectId === 'string' ? req.body.projectId : undefined,
       error,
     })
-    return jsonError(req, res, 500, 'Share could not be created — please retry.')
+    return jsonError(req, res, 500, 'Share could not be created — please retry.', error)
   }
 }

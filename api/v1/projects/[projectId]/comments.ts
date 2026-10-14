@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['GET', 'OPTIONS'])
     return res.status(200).json(comments)
   } catch (error) {
-    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
-    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
+    if (error instanceof Error && error.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden', error)
+    return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error', error)
   }
 }

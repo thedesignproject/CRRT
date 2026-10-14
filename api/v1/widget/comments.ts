@@ -38,6 +38,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(204).end()
   } catch (error) {
     return jsonError(req, res, error instanceof WidgetSessionError ? error.status : 500,
-      error instanceof WidgetSessionError ? error.message : 'Could not load or update feedback')
+      error instanceof WidgetSessionError ? error.message : 'Could not load or update feedback', error)
   }
 }

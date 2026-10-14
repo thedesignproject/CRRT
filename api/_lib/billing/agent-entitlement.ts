@@ -1,8 +1,9 @@
 import { canProject, effectiveProjectRole, type ProjectRole } from '../project-capabilities.js'
 import { getServiceSupabase } from '../supabase.js'
 import { getAccount } from './store.js'
+import { CLOUD_PLANS, cloudPriceCatalog, isCloud, planForPrice, subscriptionCanWrite, type CloudSubscription } from './plans.js'
 
-export const AGENT_COLLABORATOR_SEAT_LIMIT = 5
+export const AGENT_COLLABORATOR_SEAT_LIMIT = CLOUD_PLANS.pro.internal_users - 1
 export const AGENT_ELIGIBLE_SUBSCRIPTION_STATUSES = ['active', 'trialing'] as const
 
 export type WidgetAgentAccessState =
@@ -22,13 +23,12 @@ export type WidgetAgentAccess = {
 
 /** Server-only catalog keyed by trusted Stripe price ids. */
 export function agentPlanCatalog(env: Record<string, string | undefined> = process.env) {
-  const configured = env.CRRT_AGENT_PRICE_IDS || env.STRIPE_PRICE_ID || ''
-  return new Map(
-    configured.split(',').map((value) => value.trim()).filter(Boolean).map((priceId) => [
-      priceId,
-      { agent: true as const, collaboratorSeats: AGENT_COLLABORATOR_SEAT_LIMIT },
-    ]),
-  )
+  if (!isCloud(env)) return new Map([['community', { agent: true as const, collaboratorSeats: Number.MAX_SAFE_INTEGER }]])
+  const prices = cloudPriceCatalog(env)
+  return new Map([
+    [prices.pro, { agent: true as const, collaboratorSeats: CLOUD_PLANS.pro.internal_users - 1 }],
+    [prices.studio, { agent: true as const, collaboratorSeats: CLOUD_PLANS.studio.internal_users - 1 }],
+  ])
 }
 
 export function eligibleAgentPriceIds(env: Record<string, string | undefined> = process.env) {
@@ -36,15 +36,11 @@ export function eligibleAgentPriceIds(env: Record<string, string | undefined> = 
 }
 
 export function hasAgentEntitlement(
-  account: { subscription_status: string | null; price_id: string | null } | null,
+  account: (CloudSubscription & { price_id: string | null }) | null,
   env: Record<string, string | undefined> = process.env,
 ) {
-  return Boolean(
-    account
-      && account.price_id
-      && AGENT_ELIGIBLE_SUBSCRIPTION_STATUSES.includes(account.subscription_status as typeof AGENT_ELIGIBLE_SUBSCRIPTION_STATUSES[number])
-      && agentPlanCatalog(env).has(account.price_id),
-  )
+  if (!isCloud(env)) return true
+  return Boolean(account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan)
 }
 
 export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: string): Promise<WidgetAgentAccess> {
@@ -62,6 +58,7 @@ export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: 
   if (ownerError) throw new Error('Agent owner lookup failed')
   if (!owner) return { state: 'project_access_denied', role }
 
+  if (!isCloud()) return { state: 'ready', role, ownerUserId: owner.user_id }
   const account = await getAccount(owner.user_id)
   if (!hasAgentEntitlement(account)) {
     return {
@@ -71,16 +68,7 @@ export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: 
     }
   }
 
-  if (!actor.is_owner) {
-    const { data: hasSeat, error: seatError } = await db.rpc('agent_collaborator_has_seat', {
-      p_owner: owner.user_id,
-      p_actor: actorUserId,
-    } as never)
-    if (seatError) throw new Error('Agent collaborator seat lookup failed')
-    if (hasSeat !== true) {
-      return { state: 'seat_limit_reached', role, ownerUserId: owner.user_id, collaboratorSeatLimit: AGENT_COLLABORATOR_SEAT_LIMIT }
-    }
-  }
-
-  return { state: 'ready', role, ownerUserId: owner.user_id, collaboratorSeatLimit: AGENT_COLLABORATOR_SEAT_LIMIT }
+  // Membership remains usable after a downgrade; capacity blocks additions only.
+  return { state: 'ready', role, ownerUserId: owner.user_id,
+    collaboratorSeatLimit: CLOUD_PLANS[account!.plan as 'pro' | 'studio'].internal_users - 1 }
 }

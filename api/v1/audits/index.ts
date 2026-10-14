@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(result.status === 'created' ? 202 : 200).json(response)
   } catch (error) {
-    if (error instanceof UnsafeAuditUrlError) return jsonError(req, res, 400, `Unsafe audit URL: ${error.code}`)
-    return jsonError(req, res, 500, 'Audit creation failed')
+    if (error instanceof UnsafeAuditUrlError) return jsonError(req, res, 400, `Unsafe audit URL: ${error.code}`, error)
+    return jsonError(req, res, 500, 'Audit creation failed', error)
   }
 }

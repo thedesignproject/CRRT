@@ -112,3 +112,11 @@ it('rejects a read if access is revoked between authorization and the database q
   expect(res.statusCode).toBe(403)
   expect(listProjectComments).toHaveBeenCalledWith('p',expect.objectContaining({ actorUserId:'u' }))
 })
+
+it('handles non-Error read failures without leaking the thrown value',async()=>{
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+ vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
+ vi.mocked(listProjectComments).mockRejectedValueOnce('opaque failure')
+ const res=mockRes();await call({method:'GET',query:{projectId:'p'},headers:{}},res)
+ expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
+})

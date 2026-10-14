@@ -58,9 +58,10 @@ describe('extension comment item endpoint', () => {
   it('hides comments outside the caller ownership scope', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
     vi.mocked(getOwnedExtensionCommentScope).mockResolvedValue(null)
+    vi.mocked(deleteExtensionComment).mockRejectedValueOnce(new ExtensionCommentError(404,'Comment not found'))
     const response = res(); await call({ method: 'DELETE', query: { commentId: 'c' }, headers: {} }, response)
     expect(response.statusCode).toBe(404)
-    expect(deleteExtensionComment).not.toHaveBeenCalled()
+    expect(deleteExtensionComment).toHaveBeenCalledWith('u','c',true)
   })
   it('assigns an owned private comment after checking project membership', async () => {
     const user = { userId: 'u', email: 'u@example.com' }
@@ -104,4 +105,14 @@ describe('extension comment item endpoint', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     response = res(); await call({ method: 'PATCH', query: { commentId: 'c' }, body: {}, headers: {} }, response); expect(response.statusCode).toBe(500); spy.mockRestore()
   })
+})
+
+it('lets DELETE recover an owned tombstone without reopening project mutations',async()=>{
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@example.com'})
+ vi.mocked(getOwnedExtensionCommentScope).mockResolvedValue(null)
+ let response=res();await call({method:'DELETE',query:{commentId:'c'},headers:{}},response)
+ expect(response.statusCode).toBe(204);expect(deleteExtensionComment).toHaveBeenCalledWith('u','c',true)
+ expect(requireProjectCommentCapability).not.toHaveBeenCalled()
+ response=res();await call({method:'PATCH',query:{commentId:'c'},body:{body:'edit'},headers:{}},response)
+ expect(response.statusCode).toBe(404);expect(updateExtensionComment).not.toHaveBeenCalled()
 })

@@ -187,11 +187,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
-    if (code === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
+    if (code === 'forbidden') return jsonError(req, res, 403, 'Forbidden', error)
     const status = code.includes('recovery_pending') || code.includes('creation_in_progress')
       ? 409
       : code.startsWith('linear_') || code.startsWith('jira_') ? 502 : 500
     if (status === 500) console.error(error)
-    return jsonError(req, res, status, req.method === 'POST' ? 'External issue creation failed' : 'Could not prepare external work')
+    return jsonError(req, res, status, req.method === 'POST' ? 'External issue creation failed' : 'Could not prepare external work', error)
   }
 }

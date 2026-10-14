@@ -40,5 +40,5 @@ it.each([
   const res = { setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn() }
   sendWidgetAgentError({ headers: {} } as never, res as never, code)
   expect(res.status).toHaveBeenCalledWith(status)
-  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code, error: expect.any(String) }))
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining(code === 'error' ? { error: expect.any(String) } : { code, error: expect.any(String) }))
 })

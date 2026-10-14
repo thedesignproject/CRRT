@@ -148,3 +148,10 @@ it('returns 404 if the comment is removed before the atomic mutation',async()=>{
   const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{implementationStatus:'blocked'},headers:{}},res)
   expect(res.statusCode).toBe(404)
 })
+
+it('handles a non-Error storage failure without exposing the thrown value',async()=>{
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
+ vi.mocked(getComment).mockRejectedValueOnce('opaque failure')
+ const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{implementationStatus:'blocked'},headers:{}},res)
+ expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
+})

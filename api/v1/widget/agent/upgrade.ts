@@ -23,8 +23,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json(result)
   } catch (error) {
-    if (error instanceof WidgetSessionError) return jsonError(req, res, error.status, error.message)
+    if (error instanceof WidgetSessionError) return jsonError(req, res, error.status, error.message, error)
     console.error('[widget-agent/upgrade] checkout failed', { error })
-    return jsonError(req, res, 503, 'Billing is temporarily unavailable')
+    return jsonError(req, res, 503, 'Billing is temporarily unavailable', error)
   }
 }

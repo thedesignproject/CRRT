@@ -83,6 +83,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const known = error instanceof Error && ['missing_linear_oauth_credentials', 'linear_reauthorization_required'].includes(error.message)
     if (!known) console.error('Linear project integration failed')
-    return jsonError(req, res, known ? 409 : 502, known && error instanceof Error ? error.message : 'Linear integration request failed')
+    return jsonError(req, res, known ? 409 : 502, known && error instanceof Error ? error.message : 'Linear integration request failed', error)
   }
 }

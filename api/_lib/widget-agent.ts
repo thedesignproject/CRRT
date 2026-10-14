@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { setCors } from './http.js'
+import { jsonError, setCors } from './http.js'
 import type { WidgetAgentAccessState } from './billing/agent-entitlement.js'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
@@ -42,12 +42,13 @@ export function sendWidgetAgentError(
   req: VercelRequest,
   res: VercelResponse,
   code: Exclude<WidgetAgentAccessState, 'ready'> | 'authentication_required' | 'invalid_selection' | 'idempotency_conflict' | 'error',
+  cause?: unknown,
 ) {
   setCors(req, res, ['GET', 'POST', 'OPTIONS'])
   if (code === 'authentication_required') return res.status(401).json({ error: 'Sign in to CRRT again', code })
   if (code === 'invalid_selection') return res.status(409).json({ error: 'Feedback changed. Review the selection and retry.', code })
   if (code === 'idempotency_conflict') return res.status(409).json({ error: 'This Agent request key was already used for another selection.', code })
-  if (code === 'error') return res.status(500).json({ error: 'Agent is temporarily unavailable', code })
+  if (code === 'error') return jsonError(req, res, 500, 'Agent is temporarily unavailable', cause)
   const failure = ACCESS_ERRORS[code]
   return res.status(failure.status).json({ error: failure.message, code })
 }

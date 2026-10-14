@@ -260,7 +260,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? 'github_issue_creation_in_progress'
         : status === 409
         ? 'github_issue_recovery_pending'
-        : status === 502 ? 'GitHub issue creation failed' : 'Issue creation failed',
+        : status === 502 ? 'GitHub issue creation failed' : 'Issue creation failed', error,
     )
   }
 }

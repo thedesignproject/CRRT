@@ -1,11 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('./extension-image-cleanup.js', () => ({ processExtensionImageCleanup: vi.fn() }))
-
+vi.mock('./extension-image-cleanup.js',()=>({processExtensionImageCleanup:vi.fn()}))
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 vi.mock('./extension-comment-limit.js', () => ({ reserveExtensionComment: vi.fn() }))
 
-import { processExtensionImageCleanup } from './extension-image-cleanup.js'
+import {processExtensionImageCleanup} from './extension-image-cleanup.js'
 import { getServiceSupabase } from './supabase.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
 import {
@@ -57,6 +56,8 @@ function client(responses: unknown[], storageOverrides: Record<string, unknown> 
   const queries: Query[] = []
   const bucket = {
     createSignedUrl: vi.fn().mockResolvedValue({ data: { signedUrl: 'https://signed' }, error: null }),
+    createSignedUploadUrl:vi.fn().mockResolvedValue({data:{token:'h.'+Buffer.from(JSON.stringify({exp:Math.floor(Date.now()/1000)+7200})).toString('base64url')+'.s'},error:null}),
+    uploadToSignedUrl:(path:string,_token:string,body:Buffer,options:unknown)=>bucket.upload(path,body,options),
     upload: vi.fn().mockResolvedValue({ error: null }),
     remove: vi.fn().mockResolvedValue({ error: null }),
     ...storageOverrides,
@@ -70,7 +71,7 @@ function client(responses: unknown[], storageOverrides: Record<string, unknown> 
         queries.push(query)
         return query
       }),
-      rpc: vi.fn(() => { const query = new Query(responses.shift()); queries.push(query); return query }),
+      rpc: vi.fn((name:string) => { if(name==='register_extension_screenshot_upload')return Promise.resolve({error:null});const query = new Query(responses.shift()); queries.push(query); return query }),
       storage: { from: vi.fn(() => bucket) },
     },
   }
@@ -198,13 +199,13 @@ describe('extension comment persistence', () => {
   })
 
   it('retains an owned cleanup reference if both upload and compensation fail', async () => {
-    const fake = client([{ data: row, error: null }, { data: { screenshot_storage_path: 'u/a.png' }, error: null }], {
+    const fake = client([{ data: row, error: null }, { data: { path: 'u/a.png' }, error: null }], {
       upload: vi.fn().mockResolvedValue({ error: { message: 'upload interrupted' } }),
       remove: vi.fn().mockResolvedValue({ error: { message: 'storage unavailable' } }),
     })
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(createExtensionComment('u', { pageUrl: row.url, body: 'draft', selector: '#target', x: 1, y: 2,
-      screenshot: { base64: 'eA==', mimeType: 'image/png' } })).rejects.toThrow('comment retained for cleanup')
+      screenshot: { base64: 'eA==', mimeType: 'image/png' } })).rejects.toThrow('cleanup reference retained')
     expect(fake.queries[0].calls).toContainEqual(['insert', expect.objectContaining({ created_by_user_id: 'u', screenshot_storage_path: expect.stringMatching(/^u\//) })])
     expect(fake.queries).toHaveLength(2)
   })
@@ -328,14 +329,10 @@ describe('extension comment persistence', () => {
   })
 
   it('promotes an owned private comment in place and retries idempotently', async () => {
-    let fake = client([{ data: { ...row, project_id: 'project' }, error: null }])
+    let fake = client([{ data: [{id:'c1'}], error: null }, { data: { ...row, project_id: 'project' }, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(assignExtensionCommentToProject('u', 'c1', 'project')).resolves.toMatchObject({ id: 'c1', projectId: 'project' })
-    expect(fake.queries[0].calls).toEqual(expect.arrayContaining([
-      ['update', expect.objectContaining({ project_id: 'project' })],
-      ['eq', 'created_by_user_id', 'u'],
-      ['is', 'project_id', null],
-    ]))
+    expect(fake.value.rpc).toHaveBeenCalledWith('assign_actor_inbox_feedback', {p_actor:'u',p_project:'project',p_ids:['c1'],p_visibility:'shared'})
 
     fake = client([{ data: null, error: null }, { data: { ...row, project_id: 'project' }, error: null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
@@ -349,6 +346,9 @@ describe('extension comment persistence', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(assignExtensionCommentToProject('u', 'missing', 'project')).rejects.toMatchObject({ status: 404 })
 
+    fake = client([{data:null,error:{message:'forbidden'}}]);vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(assignExtensionCommentToProject('u','c1','project')).rejects.toMatchObject({status:403})
+
     fake = client([{ data: null, error: { message: 'assign down' } }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
     await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toThrow('assign down')
@@ -358,45 +358,25 @@ describe('extension comment persistence', () => {
     await expect(assignExtensionCommentToProject('u', 'c1', 'project')).rejects.toThrow('lookup down')
   })
 
-  it('deletes owned comments and their private screenshots', async () => {
-    let fake = client([{ data: { screenshot_storage_path: null }, error: null }, { error: null }])
+  it('atomically deletes owned comments before removing their screenshots and retries from durable receipts', async () => {
+    let fake = client([{ data: {path:null}, error:null }])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await deleteExtensionComment('u', 'c1')
+    await deleteExtensionComment('u','c1')
     expect(fake.bucket.remove).not.toHaveBeenCalled()
-
-    fake = client([{ data: { screenshot_storage_path: 'u/a.png' }, error: null }, { error: null }])
-    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await deleteExtensionComment('u', 'c1')
-    expect(fake.bucket.remove).toHaveBeenCalledWith(['u/a.png'])
-
-    fake = client([{ data: null, error: null }]); vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await expect(deleteExtensionComment('u', 'x')).rejects.toMatchObject({ status: 404 })
-    fake = client([{ data: null, error: { message: 'delete down' } }]); vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await expect(deleteExtensionComment('u', 'x')).rejects.toThrow('delete down')
-    fake = client([{ data: { screenshot_storage_path: 'x' }, error: null }], { remove: vi.fn().mockResolvedValue({ error: { message: 'storage down' } }) })
-    vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await expect(deleteExtensionComment('u', 'x')).rejects.toThrow('Screenshot deletion failed')
-    expect(fake.queries).toHaveLength(1)
-    expect(fake.queries[0].calls).not.toContainEqual(['delete'])
-  })
-
-  it('retries storage cleanup before deleting the owned row, including after a database failure', async () => {
-    const owned = { data: { screenshot_storage_path: 'u/a.png' }, error: null }
-    const fake = client([owned, owned, { error: { message: 'database down' } }, owned, { error: null }], {
-      remove: vi.fn().mockResolvedValueOnce({ error: { message: 'storage down' } }).mockResolvedValue({ error: null }),
+    expect(fake.value.rpc).toHaveBeenCalledWith('delete_actor_extension_feedback',{p_actor:'u',p_id:'c1'})
+    fake = client([{data:{path:'u/a.png'},error:null},{data:{path:'u/a.png'},error:null}],{
+      remove:vi.fn().mockResolvedValueOnce({error:{message:'storage down'}}).mockResolvedValueOnce({error:null}),
     })
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-    await expect(deleteExtensionComment('u', 'c1')).rejects.toThrow('Screenshot deletion failed')
-    expect(fake.value.from).toHaveBeenCalledTimes(1)
-    await expect(deleteExtensionComment('u', 'c1')).rejects.toThrow('database down')
-    await expect(deleteExtensionComment('u', 'c1')).resolves.toBeUndefined()
-    expect(fake.bucket.remove).toHaveBeenCalledTimes(3)
-    for (const query of fake.queries) {
-      expect(query.calls).toEqual(expect.arrayContaining([
-        ['eq', 'id', 'c1'], ['eq', 'source', 'extension'], ['eq', 'created_by_user_id', 'u'],
-      ]))
-    }
-    expect(fake.queries[4].calls).toContainEqual(['delete'])
+    await expect(deleteExtensionComment('u','c1')).rejects.toThrow('Screenshot deletion failed')
+    await expect(deleteExtensionComment('u','c1')).resolves.toBeUndefined()
+    expect(fake.bucket.remove).toHaveBeenCalledTimes(2)
+    expect(fake.value.rpc.mock.invocationCallOrder[0]).toBeLessThan(fake.bucket.remove.mock.invocationCallOrder[0])
+    fake=client([{data:null,error:null}]);vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(deleteExtensionComment('u','missing')).rejects.toMatchObject({status:404})
+    fake=client([{data:null,error:{message:'database down'}}]);vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    await expect(deleteExtensionComment('u','c1')).rejects.toThrow('database down')
+    expect(fake.bucket.remove).not.toHaveBeenCalled()
   })
 
   it('bulk assigns only owned Inbox rows and reports stale selections', async () => {
@@ -562,4 +542,20 @@ it.each(['forbidden', 'database down'])('returns committed moves when a later ba
     { id: 'c499', reason: 'concurrent_change' },
   ])
   expect(result.selectedTotal).toBe(501)
+})
+
+it('recovers only the owned tombstone when scope lookup has no live row',async()=>{
+ const fake=client([{data:{path:'u/a.png'},error:null}]);vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+ await deleteExtensionComment('u','c1',true)
+ expect(fake.value.rpc).toHaveBeenCalledWith('get_deleted_extension_feedback',{p_actor:'u',p_id:'c1'})
+ expect(fake.bucket.remove).toHaveBeenCalledWith(['u/a.png'])
+})
+
+it.each([new Error('signing unavailable'),'offline'])('rolls back an ordinary capture when upload preparation throws (%s)',async error=>{
+ const fake=client([{data:row,error:null},{data:{path:'u/a.png'},error:null}])
+ fake.bucket.createSignedUploadUrl.mockRejectedValue(error)
+ vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+ await expect(createExtensionComment('u',{pageUrl:row.url,body:'capture',selector:'body',x:1,y:2,screenshot:{base64:'eA==',mimeType:'image/png'}})).rejects.toThrow('Screenshot upload failed')
+ expect(fake.value.rpc).toHaveBeenCalledWith('delete_actor_extension_feedback',{p_actor:'u',p_id:row.id})
+ expect(fake.bucket.remove).toHaveBeenCalledWith(['u/a.png']);expect(fake.bucket.upload).not.toHaveBeenCalled()
 })

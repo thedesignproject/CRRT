@@ -36,8 +36,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(req.method === 'POST' ? 201 : 200).json(result)
   } catch (error) {
-    if (error instanceof ExtensionCommentError) return jsonError(req, res, error.status, error.message)
+    if (error instanceof ExtensionCommentError) return jsonError(req, res, error.status, error.message, error)
     console.error(error)
-    return jsonError(req, res, 500, 'Internal server error')
+    return jsonError(req, res, 500, 'Internal server error', error)
   }
 }

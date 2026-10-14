@@ -89,6 +89,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const known = error instanceof Error && ['missing_jira_oauth_credentials', 'jira_reauthorization_required'].includes(error.message)
     if (!known) console.error('Jira project integration failed')
-    return jsonError(req, res, known ? 409 : 502, known && error instanceof Error ? error.message : 'Jira integration request failed')
+    return jsonError(req, res, known ? 409 : 502, known && error instanceof Error ? error.message : 'Jira integration request failed', error)
   }
 }

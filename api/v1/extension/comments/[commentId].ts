@@ -15,7 +15,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
   try {
     const scope = await getOwnedExtensionCommentScope(user.userId, commentId)
-    if (!scope) return jsonError(req, res, 404, 'Comment not found')
+    if (!scope) {
+      if (req.method !== 'DELETE') return jsonError(req, res, 404, 'Comment not found')
+      // Recovery reads only an actor-owned tombstone; it cannot delete a live
+      // row that appeared after the scope lookup or bypass project access.
+      await deleteExtensionComment(user.userId, commentId, true)
+      setCors(req, res, METHODS)
+      return res.status(204).end()
+    }
     if (scope.projectId && !(await requireProjectCommentCapability(
       req,
       res,
@@ -53,8 +60,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, METHODS)
     return res.status(200).json(result)
   } catch (error) {
-    if (error instanceof ExtensionCommentError) return jsonError(req, res, error.status, error.message)
+    if (error instanceof ExtensionCommentError) return jsonError(req, res, error.status, error.message, error)
     console.error(error)
-    return jsonError(req, res, 500, 'Internal server error')
+    return jsonError(req, res, 500, 'Internal server error', error)
   }
 }
