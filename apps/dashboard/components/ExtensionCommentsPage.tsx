@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   assignExtensionComment,
   bulkAssignExtensionComments,
@@ -30,6 +30,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   projects?: Project[]
   onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number) => void
 }) {
+  const mutationContext = useRef(0)
   const [items, setItems] = useState<ExtensionCommentRecord[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -152,7 +153,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   useEffect(() => {
-    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject('')
+    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject(''); setBusy(false)
+    return () => { mutationContext.current += 1 }
   }, [apiBase, accessToken])
 
   useEffect(() => {
@@ -217,9 +219,11 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   async function moveSelected() {
+    const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
       const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, targetProject)
+      if (context !== mutationContext.current) return
       if (result.processedIds.length === 0) {
         setError('No Inbox items were moved. Refresh and try again.')
         return
@@ -233,19 +237,22 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       setTotal((value) => Math.max(0, value - result.processedIds.length))
       setNotice(`${result.processedIds.length} moved${result.skipped.length ? `; ${result.skipped.length} skipped` : ''}.`)
       exitBulkMode(); setReload((value) => value + 1)
-    } catch (reason) { setError(errorText(reason, 'Could not move selected Inbox items')) }
-    finally { setBusy(false) }
+    } catch (reason) {
+      if (context === mutationContext.current) setError(errorText(reason, 'Could not move selected Inbox items'))
+    } finally { if (context === mutationContext.current) setBusy(false) }
   }
 
   async function deleteSelected() {
     if (selectedCount === 0) return
+    const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
       const result = await bulkDeleteExtensionComments(apiBase, accessToken, bulkDescriptor)
+      if (context !== mutationContext.current) return
       const deleted = new Set(result.processedIds)
       setItems((current) => current.filter((item) => !deleted.has(item.id)))
       setTotal((value) => Math.max(0, value - result.processedIds.length))
-      const retryIds = result.skipped.filter((item) => item.reason === 'storage_delete_failed').map((item) => item.id)
+      const retryIds = result.skipped.filter((item) => ['storage_delete_failed', 'mutation_failed'].includes(item.reason)).map((item) => item.id)
       if (retryIds.length > 0) {
         setBulkSelection({ mode: 'ids', ids: new Set(retryIds.slice(0, MAX_SELECTION_IDS)) })
         setNotice(retryIds.length > MAX_SELECTION_IDS
@@ -257,8 +264,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       }
       setPage((current) => Math.min(current, Math.max(1, Math.ceil((total - result.processedIds.length) / 20))))
       setReload((value) => value + 1)
-    } catch (reason) { setError(errorText(reason, 'Could not delete selected Inbox items')) }
-    finally { setBusy(false); setConfirmBulkDelete(false) }
+    } catch (reason) { if (context === mutationContext.current) setError(errorText(reason, 'Could not delete selected Inbox items')) }
+    finally { if (context === mutationContext.current) { setBusy(false); setConfirmBulkDelete(false) } }
   }
 
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
