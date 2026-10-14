@@ -1,7 +1,9 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+vi.mock('../../_lib/billing/cloud-summary.js',()=>({cloudBillingSummary:vi.fn()}))
 vi.mock('../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../_lib/billing/config.js', () => ({ stripeEnabled: vi.fn(), billingConfig: vi.fn() }))
 vi.mock('../../_lib/billing/service.js', () => ({ billingSummary: vi.fn(), checkout: vi.fn(), portal: vi.fn() }))
+import { cloudBillingSummary } from '../../_lib/billing/cloud-summary.js'
 import { requireUser } from '../../_lib/auth.js'
 import { stripeEnabled, billingConfig } from '../../_lib/billing/config.js'
 import { billingSummary, checkout, portal } from '../../_lib/billing/service.js'
@@ -14,7 +16,9 @@ function res() {
 async function call(method: string, body?: unknown, headers: Record<string, string | undefined> = { authorization: 'Bearer session' }) {
   const response = res(); await handler({ method, body, headers, query: {} } as never, response as never); return response
 }
+afterEach(()=>vi.unstubAllEnvs())
 beforeEach(() => {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','community')
   vi.resetAllMocks(); vi.mocked(stripeEnabled).mockReturnValue(true); vi.mocked(requireUser).mockResolvedValue(user)
 })
 it('serves preflight and rejects unsupported methods', async () => {
@@ -64,4 +68,15 @@ it('checks navigation availability without touching configuration or account sta
   expect(response.body).toEqual({ enabled: true })
   expect(billingConfig).not.toHaveBeenCalled()
   expect(billingSummary).not.toHaveBeenCalled()
+})
+
+it('uses Cloud summary and restricts checkout to trusted plan identifiers',async()=>{
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
+  vi.mocked(cloudBillingSummary).mockResolvedValue({plans:[]} as never)
+  expect((await call('GET')).body).toEqual({plans:[]})
+  expect(cloudBillingSummary).toHaveBeenCalledWith(user.userId)
+  expect((await call('POST',{action:'checkout',plan:'cheap'})).statusCode).toBe(400)
+  vi.mocked(checkout).mockResolvedValue({url:'checkout'})
+  expect((await call('POST',{action:'checkout',plan:'studio',priceId:'cheap'})).body).toEqual({url:'checkout'})
+  expect(checkout).toHaveBeenCalledWith(user,'studio')
 })

@@ -1,12 +1,14 @@
 import Stripe from 'stripe'
+import { cloudPriceCatalog, isCloud } from './plans.js'
 
 export function stripeEnabled() {
-  return process.env.STRIPE_ENABLED === 'true'
+  return isCloud() && process.env.STRIPE_ENABLED === 'true'
 }
 
 export function billingConfig() {
+  if (process.env.STRIPE_MODE && !['test','live'].includes(process.env.STRIPE_MODE)) throw new Error('STRIPE_MODE must be test or live')
   const secret = process.env.STRIPE_SECRET_KEY
-  const price = process.env.STRIPE_PRICE_ID
+  const price = isCloud() ? cloudPriceCatalog().pro : process.env.STRIPE_PRICE_ID
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
   const returnUrl = process.env.STRIPE_RETURN_URL
   if (!secret || !price || !webhookSecret || !returnUrl) throw new Error('Billing is not configured')
@@ -15,7 +17,9 @@ export function billingConfig() {
     throw new Error('Invalid billing return URL')
   }
   // v1 is deliberately test-only until pricing and entitlement enforcement ship.
-  if (!secret.startsWith('sk_test_')) throw new Error('Billing v1 requires a Stripe test key')
+  if (process.env.STRIPE_MODE === 'live') {
+    if (!isCloud() || !secret.startsWith('sk_live_')) throw new Error('Live Cloud billing requires a live key')
+  } else if (!secret.startsWith('sk_test_')) throw new Error('Billing requires a Stripe test key')
   return { secret, price, webhookSecret, returnUrl: url.href }
 }
 

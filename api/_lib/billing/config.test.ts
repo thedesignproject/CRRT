@@ -1,13 +1,17 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { billingConfig, stripeClient, stripeEnabled } from './config.js'
 beforeEach(() => {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'community')
+  vi.stubEnv('STRIPE_MODE', 'test')
   vi.stubEnv('STRIPE_SECRET_KEY', 'sk_test_example')
   vi.stubEnv('STRIPE_PRICE_ID', 'price_example')
   vi.stubEnv('STRIPE_WEBHOOK_SECRET', 'whsec_example')
   vi.stubEnv('STRIPE_RETURN_URL', 'https://preview.example/dashboard/')
 })
 afterEach(() => vi.unstubAllEnvs())
-it('is default-off and requires exactly true', () => {
+it('is default-off and requires Cloud mode and exactly true', () => {
+  vi.stubEnv('STRIPE_ENABLED','true');expect(stripeEnabled()).toBe(false)
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
   for (const value of [undefined, 'false', 'TRUE', '1']) {
     vi.stubEnv('STRIPE_ENABLED', value); expect(stripeEnabled()).toBe(false)
   }
@@ -29,3 +33,15 @@ it.each(['http://evil.example', 'javascript:alert(1)', 'garbage'])('rejects unsa
 it('rejects live keys', () => {
   vi.stubEnv('STRIPE_SECRET_KEY', 'sk_live_example'); expect(billingConfig).toThrow('test key')
 })
+
+it('requires distinct Cloud prices and an explicitly selected live environment', () => {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+  expect(billingConfig().price).toBe('price_pro')
+  vi.stubEnv('STRIPE_MODE','live')
+  expect(billingConfig).toThrow('live key')
+  vi.stubEnv('STRIPE_SECRET_KEY','sk_live_example');expect(billingConfig().secret).toBe('sk_live_example')
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','community');expect(billingConfig).toThrow('Live Cloud')
+})
+
+it('rejects an ambiguous Stripe environment',()=>{vi.stubEnv('STRIPE_MODE','typo');expect(billingConfig).toThrow('test or live')})

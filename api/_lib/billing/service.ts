@@ -1,20 +1,37 @@
 import { randomUUID } from 'node:crypto'
 import type Stripe from 'stripe'
 import type { AuthenticatedUser } from '../auth.js'
+import { assertCloudPrice } from './cloud-prices.js'
 import { billingConfig, stripeClient } from './config.js'
 import { accountForCustomer, getAccount, recordEvent, withAccount, type BillingAccount } from './store.js'
+
+import { cloudPriceCatalog, isCloud, planForPrice, type CloudPlan } from './plans.js'
 
 const terminal = new Set(['canceled', 'incomplete_expired'])
 type Save = (values: Partial<BillingAccount>) => Promise<void>
 
 async function synchronize(stripe: Stripe, account: BillingAccount, save: Save) {
   if (!account.customer_id) return null
-  const subscriptions = await stripe.subscriptions.list({ customer: account.customer_id, status: 'all', limit: 100 })
-  const current = subscriptions.data.find((item) => !terminal.has(item.status)) ?? subscriptions.data[0]
+  let page = await stripe.subscriptions.list({ customer: account.customer_id, status: 'all', limit: 100 })
+  const history = [...page.data]
+  while (page.has_more) {
+    const last = page.data[page.data.length-1]
+    if (!last) throw new Error('Invalid subscription pagination')
+    page = await stripe.subscriptions.list({customer:account.customer_id,status:'all',limit:100,starting_after:last.id})
+    history.push(...page.data)
+  }
+  const current = history.find((item) => !terminal.has(item.status)) ?? history[0]
   const item = current?.items.data[0]
   await save({
     subscription_id: current?.id ?? null, subscription_status: current?.status ?? null,
     price_id: item?.price.id ?? null,
+    ...(isCloud() ? {
+      plan: planForPrice(item?.price.id ?? null),
+      period_start: item ? new Date(item.current_period_start * 1000).toISOString() : null,
+      trial_used: Boolean(account.trial_used || history.some(subscription => subscription.trial_start != null)),
+      // No implicit client-timed grace; an explicit server policy may set grace_until.
+      ...(current?.status !== 'past_due' ? { grace_until: null } : {}),
+    } : {}),
     period_end: item ? new Date(item.current_period_end * 1000).toISOString() : null,
     cancel_at_period_end: current?.cancel_at_period_end ?? false,
   })
@@ -41,9 +58,12 @@ export async function billingSummary(userId: string) {
   }
 }
 
-export async function checkout(user: AuthenticatedUser) {
+export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro') {
   const config = billingConfig()
   const stripe = stripeClient()
+  const cloud = isCloud()
+  const price = cloud ? cloudPriceCatalog()[plan] : config.price
+  if (cloud) assertCloudPrice(plan, await stripe.prices.retrieve(price))
   return withAccount(user.userId, async (account, save) => {
     let customerId = account.customer_id
     if (!customerId) {
@@ -59,9 +79,18 @@ export async function checkout(user: AuthenticatedUser) {
     // Inspect the saved session directly. An open session can complete on Stripe
     // at any time, so never infer expiry from its absence in an open-session list.
     // Include completed sessions when recovering a create whose DB save failed.
+    // A persisted create whose result is unknown must retain its exact payload
+    // and key across lease recovery. An unrelated older expired session is not
+    // evidence that the pending attempt finished.
+    let pending = account.checkout_payload
+    if (pending && !account.checkout_session_id && pending.expires_at! <= Math.floor(Date.now()/1000)) {
+      // A stale worker cannot create a payable session with this past expiry.
+      await save({checkout_attempt:randomUUID(),checkout_payload:null})
+      pending=null
+    }
     const previous = account.checkout_session_id
       ? await stripe.checkout.sessions.retrieve(account.checkout_session_id, { expand: ['line_items'] })
-      : (await stripe.checkout.sessions.list({ customer: customerId, limit: 1, expand: ['data.line_items'] })).data[0]
+      : pending ? undefined : (await stripe.checkout.sessions.list({ customer: customerId, limit: 1, expand: ['data.line_items'] })).data[0]
     let attempt = account.checkout_attempt
     if (previous) {
       await save({ checkout_session_id: previous.id })
@@ -70,7 +99,7 @@ export async function checkout(user: AuthenticatedUser) {
       }
       if (previous.status === 'open') {
         const items = previous.line_items
-        if (previous.url && items && !items.has_more && items.data.length === 1 && items.data[0].price?.id === config.price && items.data[0].quantity === 1) {
+        if (previous.url && items && !items.has_more && items.data.length === 1 && items.data[0].price?.id === price && items.data[0].quantity === 1) {
           return { url: previous.url }
         }
         // Stripe atomically refuses expiry if payment won the race. On failure,
@@ -81,17 +110,30 @@ export async function checkout(user: AuthenticatedUser) {
         throw new Error('Checkout is updating; please retry')
       }
       attempt = randomUUID()
-      await save({ checkout_attempt: attempt, checkout_session_id: null })
+      await save({ checkout_attempt: attempt, checkout_session_id: null, checkout_payload:null })
+      pending=null
     }
-    const session = await stripe.checkout.sessions.create({
-      // Keep this integration on standard Checkout even when the sandbox defaults to Managed Payments.
+    const payload: Stripe.Checkout.SessionCreateParams = pending ?? {
       managed_payments: { enabled: false },
-      customer: customerId, mode: 'subscription', line_items: [{ price: config.price, quantity: 1 }],
-      client_reference_id: user.userId, subscription_data: { metadata: { crrt_user_id: user.userId } },
+      customer: customerId, mode: 'subscription', line_items: [{ price, quantity: 1 }],
+      client_reference_id: user.userId, subscription_data: { metadata: { crrt_user_id: user.userId },
+        ...(cloud && !account.trial_used ? { trial_period_days: 14 } : {}),
+      },
+      ...(cloud ? { payment_method_collection: 'always' as const, automatic_tax: { enabled: true },
+        billing_address_collection: 'required' as const, customer_update: { address: 'auto' as const },
+      } : {}),
       success_url: config.returnUrl, cancel_url: config.returnUrl,
-    }, { idempotencyKey: `crrt-checkout-${attempt}` })
+      // Fixed on admission, never recomputed by a recovering worker. Thirty-five
+      // minutes leaves room for Stripe's minimum thirty-minute creation window.
+      expires_at: Math.floor(Date.now()/1000)+35*60,
+    }
+    if (!pending) await save({checkout_payload:payload})
+    // Preserve even definitive failures until expiry. Immediate key rotation can
+    // let a paused worker create a competing Checkout after configuration changes.
+    const session = await stripe.checkout.sessions.create(payload, { idempotencyKey: `crrt-checkout-${attempt}` })
     await save({ checkout_session_id: session.id })
     if (!session.url || session.status !== 'open') throw new Error('Checkout is not available; please retry')
+    if (payload.line_items?.[0]?.price !== price) throw new Error('Checkout recovered; retry to select the requested plan')
     return { url: session.url }
   })
 }
@@ -104,7 +146,7 @@ export async function portal(userId: string) {
 }
 
 export async function processBillingEvent(event: Stripe.Event) {
-  if (event.livemode) throw new Error('Live events are not accepted by billing v1')
+  if (event.livemode !== (process.env.STRIPE_MODE === 'live')) throw new Error('Stripe event environment does not match billing')
   const supported = ['checkout.session.completed', 'customer.subscription.created', 'customer.subscription.updated', 'customer.subscription.deleted', 'invoice.paid', 'invoice.payment_failed']
   if (!supported.includes(event.type)) return
   const object = event.data.object as { customer: string | { id: string } | null }

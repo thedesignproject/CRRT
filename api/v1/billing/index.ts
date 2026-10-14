@@ -3,6 +3,8 @@ import { requireUser } from '../../_lib/auth.js'
 import { handleOptions, jsonError, methodNotAllowed } from '../../_lib/http.js'
 import { stripeEnabled, billingConfig } from '../../_lib/billing/config.js'
 import { billingSummary, checkout, portal } from '../../_lib/billing/service.js'
+import { cloudBillingSummary } from '../../_lib/billing/cloud-summary.js'
+import { isCloud, parseCloudPlan } from '../../_lib/billing/plans.js'
 import { BillingBusyError } from '../../_lib/billing/store.js'
 
 const METHODS = ['GET', 'POST', 'OPTIONS']
@@ -22,8 +24,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET' && req.query.availability === '1') return res.status(200).json({ enabled: true })
   try {
     billingConfig()
-    if (req.method === 'GET') return res.status(200).json(await billingSummary(user.userId))
-    if (req.body?.action === 'checkout') return res.status(200).json(await checkout(user))
+    if (req.method === 'GET') return res.status(200).json(await (isCloud() ? cloudBillingSummary(user.userId) : billingSummary(user.userId)))
+    if (req.body?.action === 'checkout') {
+      if (!isCloud()) return res.status(200).json(await checkout(user))
+      let plan
+      try { plan = parseCloudPlan(req.body.plan) }
+      catch { return jsonError(req, res, 400, 'Choose Cloud Pro or Cloud Studio') }
+      return res.status(200).json(await checkout(user, plan))
+    }
     if (req.body?.action === 'portal') {
       const result = await portal(user.userId)
       if (!result) return jsonError(req, res, 409, 'Start a subscription before managing billing')

@@ -1,3 +1,4 @@
+import type Stripe from 'stripe'
 import { randomUUID } from 'node:crypto'
 import { getServiceSupabase } from '../supabase.js'
 
@@ -7,10 +8,15 @@ export interface BillingAccount {
   subscription_id: string | null
   subscription_status: string | null
   price_id: string | null
+  plan?: 'pro' | 'studio' | null
+  trial_used?: boolean
+  period_start?: string | null
+  grace_until?: string | null
   period_end: string | null
   cancel_at_period_end: boolean
   checkout_attempt: string
   checkout_session_id: string | null
+  checkout_payload?: Stripe.Checkout.SessionCreateParams | null
   lock_token: string | null
 }
 
@@ -42,6 +48,7 @@ export async function withAccount<T>(userId: string, operation: (account: Billin
     const { data: saved, error: saveError } = await db.from('billing_accounts').update({ ...values, updated_at: new Date().toISOString() })
       .eq('user_id', userId).eq('lock_token', token).select('user_id').maybeSingle()
     if (saveError || !saved) throw new Error('Billing update failed')
+    Object.assign(data, values)
   }
   try {
     return await operation(data, save)

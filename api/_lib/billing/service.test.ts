@@ -1,5 +1,5 @@
-import type Stripe from 'stripe'
-import { beforeEach, expect, it, vi } from 'vitest'
+import Stripe from 'stripe'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./config.js', () => ({ billingConfig: vi.fn(), stripeClient: vi.fn() }))
 vi.mock('./store.js', () => ({ getAccount: vi.fn(), accountForCustomer: vi.fn(), recordEvent: vi.fn(), withAccount: vi.fn() }))
 import { billingConfig, stripeClient } from './config.js'
@@ -10,12 +10,15 @@ const save = vi.fn()
 const sdk = { prices: { retrieve: vi.fn() }, customers: { create: vi.fn() }, subscriptions: { list: vi.fn() }, checkout: { sessions: { list: vi.fn(), create: vi.fn(), retrieve: vi.fn(), expire: vi.fn() } }, billingPortal: { sessions: { create: vi.fn() } } }
 let account: BillingAccount
 function sub(status = 'active', id = 'sub') {
-  return { id, status, items: { data: [{ price: { id: 'price_old' }, current_period_end: 1800000000 }] }, cancel_at_period_end: false }
+  return { id, status, items: { data: [{ price: { id: 'price_old' }, current_period_start: 1700000000, current_period_end: 1800000000 }] }, cancel_at_period_end: false }
 }
 function event(type = 'customer.subscription.updated', customer: unknown = 'cus') {
   return { id: 'evt', type, livemode: false, data: { object: { customer, status: 'canceled' } } } as Stripe.Event
 }
+afterEach(()=>vi.unstubAllEnvs())
 beforeEach(() => {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','community')
+  vi.stubEnv('STRIPE_MODE','test')
   vi.resetAllMocks()
   account = { user_id: user.userId, customer_id: null, checkout_attempt: 'attempt', checkout_session_id: null, subscription_id: null, subscription_status: null, price_id: null, period_end: null, cancel_at_period_end: false, lock_token: null }
   vi.mocked(billingConfig).mockReturnValue({ secret: 'sk_test', price: 'price_configured', webhookSecret: 'whsec', returnUrl: 'https://preview.example/dashboard/' })
@@ -85,6 +88,23 @@ it('keeps a recoverable attempt after Stripe errors', async () => {
   await expect(checkout(user)).rejects.toThrow('timeout')
   expect(save).not.toHaveBeenCalledWith(expect.objectContaining({ checkout_attempt: expect.anything() }))
 })
+it('preserves rejected attempts until fixed expiry so delayed workers cannot compete', async () => {
+  save.mockImplementation(async values => { Object.assign(account, values) })
+  const rejected = new Stripe.errors.StripeInvalidRequestError({ message: 'Tax configuration missing', statusCode: 400 })
+  sdk.checkout.sessions.create.mockRejectedValueOnce(rejected)
+  await expect(checkout(user)).rejects.toBe(rejected)
+  expect(account.checkout_attempt).toBe('attempt')
+  const payload=account.checkout_payload
+  await checkout(user)
+  expect(sdk.checkout.sessions.create.mock.calls[1]).toEqual([payload,{idempotencyKey:'crrt-checkout-attempt'}])
+})
+
+it('preserves the key for a conflicting request that may still be creating checkout', async () => {
+  const conflict = new Stripe.errors.StripeInvalidRequestError({ message: 'Request in progress', statusCode: 409 })
+  sdk.checkout.sessions.create.mockRejectedValueOnce(conflict)
+  await expect(checkout(user)).rejects.toBe(conflict)
+  expect(save).not.toHaveBeenCalledWith(expect.objectContaining({ checkout_attempt: expect.anything() }))
+})
 it('opens the portal only for the user’s stored customer', async () => {
   vi.mocked(getAccount).mockResolvedValueOnce(null)
   expect(await portal('u')).toBeNull(); expect(await portal('u')).toBeNull()
@@ -95,7 +115,7 @@ it('ignores unrelated events and customers but rejects live and malformed events
   await processBillingEvent(event('payment_intent.created'))
   expect(accountForCustomer).not.toHaveBeenCalled()
   await processBillingEvent(event()); expect(withAccount).not.toHaveBeenCalled()
-  await expect(processBillingEvent({ ...event(), livemode: true })).rejects.toThrow('Live events')
+  await expect(processBillingEvent({ ...event(), livemode: true })).rejects.toThrow('environment')
   await expect(processBillingEvent(event('invoice.paid', null))).rejects.toThrow('Missing billing customer')
 })
 it('reconciles current state for duplicate and out-of-order events, including expanded customers', async () => {
@@ -190,4 +210,92 @@ it('fails closed if expiry is unconfirmed or session state is unknown', async ()
   sdk.checkout.sessions.list.mockResolvedValue({ data: [{ id: 'cs', status: null }] })
   await expect(checkout(user)).rejects.toThrow('Checkout is updating')
   expect(sdk.checkout.sessions.create).not.toHaveBeenCalled()
+})
+
+it('persists trusted Cloud plans, windows and irrevocable trial history during reconciliation',async()=>{
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+  account.customer_id='cus'
+  vi.mocked(accountForCustomer).mockResolvedValue(account)
+  sdk.subscriptions.list.mockResolvedValue({data:[{...sub('trialing'),trial_start:1700000000,items:{data:[{price:{id:'price_pro'},current_period_start:1700000000,current_period_end:1800000000}]}}]})
+  await processBillingEvent(event())
+  expect(save).toHaveBeenCalledWith(expect.objectContaining({plan:'pro',trial_used:true,period_start:new Date(1700000000000).toISOString(),grace_until:null}))
+  account.trial_used=true
+  sdk.subscriptions.list.mockResolvedValue({data:[]});await processBillingEvent(event())
+  expect(save).toHaveBeenLastCalledWith(expect.objectContaining({plan:null,trial_used:true,period_start:null}))
+  account.trial_used=false
+  sdk.subscriptions.list.mockResolvedValue({data:[{...sub('past_due'),items:{data:[{price:{id:'price_studio'},current_period_start:1700000000,current_period_end:1800000000}]}}]})
+  await processBillingEvent(event());expect(save).toHaveBeenLastCalledWith(expect.objectContaining({plan:'studio',trial_used:false}))
+  expect(save.mock.lastCall![0]).not.toHaveProperty('grace_until')
+})
+it('accepts live events only for an explicitly configured live deployment',async()=>{
+  vi.stubEnv('STRIPE_MODE','live')
+  await expect(processBillingEvent(event())).rejects.toThrow('environment')
+  vi.mocked(accountForCustomer).mockResolvedValue(null)
+  await processBillingEvent({...event(),livemode:true})
+})
+
+it.each(['pro','studio'] as const)('starts a payment-method-backed %s trial and never repeats it',async plan=>{
+  sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?4900:1900,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+  await checkout(user,plan)
+  expect(sdk.checkout.sessions.create).toHaveBeenLastCalledWith(expect.objectContaining({
+    line_items:[{price:'price_'+plan,quantity:1}],payment_method_collection:'always',automatic_tax:{enabled:true},billing_address_collection:'required',customer_update:{address:'auto'},
+    subscription_data:{metadata:{crrt_user_id:'user-a'},trial_period_days:14},
+  }),expect.anything())
+  account.trial_used=true;account.checkout_payload=null;account.checkout_session_id=null
+  await checkout(user,plan)
+  expect(sdk.checkout.sessions.create.mock.lastCall![0].subscription_data).not.toHaveProperty('trial_period_days')
+})
+
+it('validates Cloud pricing before creating a customer or accepting a direct checkout request',async()=>{
+ vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud');vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+ sdk.prices.retrieve.mockResolvedValue({active:true,currency:'usd',unit_amount:100,recurring:{interval:'year',interval_count:1}})
+ await expect(checkout(user,'pro')).rejects.toThrow('approved monthly catalog')
+ expect(sdk.customers.create).not.toHaveBeenCalled();expect(withAccount).not.toHaveBeenCalled()
+})
+
+it('paginates subscription history before granting a first trial',async()=>{
+ account.customer_id='cus'
+ vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud');vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+ vi.mocked(accountForCustomer).mockResolvedValue(account)
+ sdk.subscriptions.list.mockResolvedValueOnce({data:[sub('canceled','newest')],has_more:true}).mockResolvedValueOnce({data:[{...sub('canceled','old-trial'),trial_start:1}],has_more:false})
+ await processBillingEvent(event())
+ expect(sdk.subscriptions.list).toHaveBeenLastCalledWith({customer:'cus',status:'all',limit:100,starting_after:'newest'})
+ expect(save).toHaveBeenCalledWith(expect.objectContaining({trial_used:true}))
+ sdk.subscriptions.list.mockResolvedValue({data:[],has_more:true})
+ await expect(processBillingEvent(event())).rejects.toThrow('pagination')
+})
+it('recovers pending Checkout with identical parameters/key despite an older expired session and different plan',async()=>{
+ save.mockImplementation(async values=>Object.assign(account,values))
+ account.customer_id='cus'
+ sdk.checkout.sessions.create.mockRejectedValueOnce(new Error('lost response'))
+ await expect(checkout(user)).rejects.toThrow('lost response')
+ const first=sdk.checkout.sessions.create.mock.calls[0]
+ sdk.checkout.sessions.list.mockResolvedValue({data:[{id:'older',status:'expired'}]})
+ // A recovering worker sees new configuration, but must finish the admitted request.
+ vi.mocked(billingConfig).mockReturnValue({secret:'sk_test',price:'other',webhookSecret:'whsec',returnUrl:'https://new.example/dashboard/'})
+ await expect(checkout(user)).rejects.toThrow('Checkout recovered')
+ expect(sdk.checkout.sessions.create.mock.calls[1]).toEqual(first)
+ expect(sdk.checkout.sessions.list).toHaveBeenCalledTimes(1)
+ expect(sdk.checkout.sessions.expire).not.toHaveBeenCalled()
+})
+it('only rotates an unknown pending attempt after its immutable expiry',async()=>{
+ save.mockImplementation(async values=>Object.assign(account,values))
+ account.customer_id='cus'
+ account.checkout_payload={mode:'subscription',expires_at:Math.floor(Date.now()/1000)-1,line_items:[{price:'price_configured',quantity:1}]}
+ await checkout(user)
+ expect(account.checkout_attempt).not.toBe('attempt')
+ expect(sdk.checkout.sessions.create.mock.lastCall![0].expires_at).toBeGreaterThan(Math.floor(Date.now()/1000)+1800)
+})
+
+it('preserves the same attempt when delayed first creation is below Stripe minimum expiry',async()=>{
+ account.customer_id='cus'
+ account.checkout_payload={mode:'subscription',expires_at:Math.floor(Date.now()/1000)+1200,line_items:[{price:'price_configured',quantity:1}]}
+ const pending=account.checkout_payload
+ sdk.checkout.sessions.create.mockRejectedValue(new Stripe.errors.StripeInvalidRequestError({message:'Expiry must be at least thirty minutes',statusCode:400}))
+ await expect(checkout(user)).rejects.toThrow('Expiry')
+ expect(sdk.checkout.sessions.create).toHaveBeenCalledWith(pending,{idempotencyKey:'crrt-checkout-attempt'})
+ expect(save).not.toHaveBeenCalledWith(expect.objectContaining({checkout_attempt:expect.anything()}))
 })
