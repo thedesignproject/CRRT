@@ -21,6 +21,7 @@ type InboxSelection =
   | { mode: 'all'; excludedIds: Set<string> }
 
 function errorText(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback }
+const MAX_SELECTION_IDS = 500
 function emptySelection(): InboxSelection { return { mode: 'ids', ids: new Set() } }
 
 export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onMovedToProject }: {
@@ -97,6 +98,20 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
     setTargetProject('')
   }
 
+  function cancelBulkMode() {
+    if (!busy) exitBulkMode()
+  }
+
+  function setBoundedSelection(next: InboxSelection) {
+    const count = next.mode === 'ids' ? next.ids.size : next.excludedIds.size
+    if (count > MAX_SELECTION_IDS) {
+      setError('Select at most 500 individual items or exclude at most 500 items. Use Select all in Inbox for larger selections.')
+      return
+    }
+    setError('')
+    setBulkSelection(next)
+  }
+
   function select(id: string) {
     if (busy) return
     setSelectedId(id); setEditing(false); setTargetProject(''); setError(''); setNotice('')
@@ -108,32 +123,32 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   function toggleBulkSelect(id: string) {
-    setBulkSelection((current) => {
-      if (current.mode === 'all') {
-        const excludedIds = new Set(current.excludedIds)
-        if (excludedIds.has(id)) excludedIds.delete(id); else excludedIds.add(id)
-        return { mode: 'all', excludedIds }
-      }
-      const ids = new Set(current.ids)
+    if (busy) return
+    if (bulkSelection.mode === 'all') {
+      const excludedIds = new Set(bulkSelection.excludedIds)
+      if (excludedIds.has(id)) excludedIds.delete(id); else excludedIds.add(id)
+      setBoundedSelection({ mode: 'all', excludedIds })
+    } else {
+      const ids = new Set(bulkSelection.ids)
       if (ids.has(id)) ids.delete(id); else ids.add(id)
-      return { mode: 'ids', ids }
-    })
+      setBoundedSelection({ mode: 'ids', ids })
+    }
   }
 
   function toggleSelectAllVisible() {
+    if (busy) return
     const visibleIds = comments.map((comment) => comment.id)
-    setBulkSelection((current) => {
-      if (current.mode === 'all') {
-        const excludedIds = new Set(current.excludedIds)
-        const selected = visibleIds.every((id) => !excludedIds.has(id))
-        for (const id of visibleIds) selected ? excludedIds.add(id) : excludedIds.delete(id)
-        return { mode: 'all', excludedIds }
-      }
-      const ids = new Set(current.ids)
+    if (bulkSelection.mode === 'all') {
+      const excludedIds = new Set(bulkSelection.excludedIds)
+      const selected = visibleIds.every((id) => !excludedIds.has(id))
+      for (const id of visibleIds) selected ? excludedIds.add(id) : excludedIds.delete(id)
+      setBoundedSelection({ mode: 'all', excludedIds })
+    } else {
+      const ids = new Set(bulkSelection.ids)
       const selected = visibleIds.every((id) => ids.has(id))
       for (const id of visibleIds) selected ? ids.delete(id) : ids.add(id)
-      return { mode: 'ids', ids }
-    })
+      setBoundedSelection({ mode: 'ids', ids })
+    }
   }
 
   useEffect(() => {
@@ -156,6 +171,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]') || event.metaKey || event.ctrlKey || event.altKey) return
+      if (busy) return
       if (event.key === 'Escape' && bulkMode) {
         event.preventDefault(); exitBulkMode(); return
       }
@@ -201,7 +217,6 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   async function moveSelected() {
-    if (!targetProject || selectedCount === 0) return
     setBusy(true); setError(''); setNotice('')
     try {
       const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, targetProject)
@@ -232,8 +247,10 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       setTotal((value) => Math.max(0, value - result.processedIds.length))
       const retryIds = result.skipped.filter((item) => item.reason === 'storage_delete_failed').map((item) => item.id)
       if (retryIds.length > 0) {
-        setBulkSelection({ mode: 'ids', ids: new Set(retryIds) })
-        setNotice(`${result.processedIds.length} deleted; ${retryIds.length} could not be deleted and remain selected.`)
+        setBulkSelection({ mode: 'ids', ids: new Set(retryIds.slice(0, MAX_SELECTION_IDS)) })
+        setNotice(retryIds.length > MAX_SELECTION_IDS
+          ? `${result.processedIds.length} deleted; ${retryIds.length} could not be deleted. The first 500 remain selected; retry the remaining Inbox items afterward.`
+          : `${result.processedIds.length} deleted; ${retryIds.length} could not be deleted and remain selected.`)
       } else {
         exitBulkMode()
         setNotice(`${result.processedIds.length} deleted.`)
@@ -253,7 +270,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
         bulkControls={{
           bulkMode,
           enterBulkMode: () => { setBulkMode(true); setSelectedId(''); setEditing(false); setError(''); setNotice('') },
-          exitBulkMode,
+          exitBulkMode: cancelBulkMode,
           selectedCount,
           isSelected: isBulkSelected,
           toggleBulkSelect,
@@ -261,8 +278,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
           allVisibleSelected,
           allMatchingSelected: bulkSelection.mode === 'all' && bulkSelection.excludedIds.size === 0,
           canSelectAllMatching: allVisibleSelected && selectedCount < total,
-          selectAllMatching: () => setBulkSelection({ mode: 'all', excludedIds: new Set() }),
-          clearSelection: () => setBulkSelection(emptySelection()),
+          selectAllMatching: () => { if (!busy) { setError(''); setBulkSelection({ mode: 'all', excludedIds: new Set() }) } },
+          clearSelection: () => { if (!busy) setBulkSelection(emptySelection()) },
         }}
         footer={pages > 1 && <div className="flex items-center justify-center gap-3 border-t border-border px-4 py-3">
           <ActionBtn variant="neutral" disabled={loading || busy || page === 1} onClick={() => setPage((value) => value - 1)}>Previous</ActionBtn>
@@ -288,7 +305,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
           <ActionBtn variant="neutral" disabled={busy} onClick={remove}>Delete</ActionBtn>
         </>} />
     </main>
-    <BulkActionBar selectedCount={selectedCount} busy={busy} onClose={exitBulkMode}>
+    <BulkActionBar selectedCount={selectedCount} busy={busy} onClose={cancelBulkMode}>
       <select aria-label="Project for selected Inbox items" value={targetProject} disabled={busy || eligibleProjects.length === 0}
         onChange={(event) => setTargetProject(event.target.value)} className="dashboard-bulk-select">
         <option value="">{eligibleProjects.length > 0 ? 'Move to project…' : 'No available projects'}</option>
