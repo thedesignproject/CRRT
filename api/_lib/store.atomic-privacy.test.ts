@@ -118,3 +118,15 @@ it('acknowledges only the exact sender lease after callback completion',async()=
  expect(rpc).toHaveBeenCalledWith('acknowledge_tracker_dispatch_stopped',{p_project:'p',p_comment:'c',p_lease:'lease',p_work:'work'})
  result={data:null,error:{message:'database down'}};await expect(acknowledgeTrackerDispatchStopped('p','c','lease',null)).rejects.toThrow('database down')
 })
+
+it('routes widget reads, dispatch, and reused shares through approved-only atomic RPCs', async () => {
+  await getCommentForGithubIssue('p', 'c', 'u', true)
+  expect(rpc).toHaveBeenCalledWith('read_approved_widget_comment', expect.objectContaining({ p_actor: 'u', p_comment: 'c' }))
+  const { beginTrackerDispatch } = await import('./store.js')
+  result = { data: true, error: null }
+  await beginTrackerDispatch('p', 'c', 'u', 'lease', null, true)
+  expect(rpc).toHaveBeenCalledWith('begin_approved_widget_tracker_dispatch', expect.objectContaining({ p_actor: 'u', p_comment: 'c', p_lease: 'lease' }))
+  result = { data: row, error: null }
+  await createWidgetAgentShare({ approvedOnly: true, projectKey: 'p', actorUserId: 'u', pageUrl: 'https://test.local', idempotencyKey: 'abcdefghijklmnop', requestHash: 'a'.repeat(64), allowedPriceIds: ['price'], commentIds: ['c'], slug: 's', accessTokenHash: 'h', accessTokenCiphertext: 'cipher', expiresAt: '2099-01-01' })
+  expect(rpc).toHaveBeenCalledWith('create_approved_widget_agent_share', expect.objectContaining({ p_actor: 'u', p_comments: ['c'] }))
+})

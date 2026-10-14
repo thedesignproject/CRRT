@@ -420,7 +420,7 @@ it('denies an existing issue response and acceptance if actor authorization is r
 it('does not dispatch GitHub if access is revoked before the atomic send decision',async()=>{
  vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
  const res=await call();expect(res.statusCode).toBe(403);expect(createGithubIssue).not.toHaveBeenCalled()
- expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null)
+ expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null,false)
  expect(releaseCommentGithubIssue).toHaveBeenCalled()
 })
 
@@ -437,4 +437,17 @@ it('checks dispatch authorization before AI preparation and passes its cancellat
   return {title:'Title',summary:'Summary',implementationContext:'Context'}
  })
  expect((await call()).statusCode).toBe(201)
+})
+
+it('blocks widget dispatch when approval changes and never reapproves widget work', async () => {
+  vi.mocked(beginTrackerDispatch).mockResolvedValueOnce(false)
+  await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+  expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1', 'comment-1', 'user-1', expect.any(String), null, true)
+  expect(createGithubIssue).not.toHaveBeenCalled()
+  expect(acceptCommentIfOpen).not.toHaveBeenCalled()
+})
+it('keeps widget approval unchanged after successful GitHub creation', async () => {
+  const res = await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+  expect(res.statusCode).toBe(201)
+  expect(acceptCommentIfOpen).not.toHaveBeenCalled()
 })

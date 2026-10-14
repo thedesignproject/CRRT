@@ -1928,10 +1928,10 @@ export async function listProjectComments(projectKey: string, filters: {
   )))
 }
 
-export async function getCommentForGithubIssue(projectKey: string, commentId: string, actorUserId?: string) {
+export async function getCommentForGithubIssue(projectKey: string, commentId: string, actorUserId?: string, approvedOnly = false) {
   const db = getSupabase()
   const { data, error } = await (actorUserId
-    ? db.rpc('read_actor_comment', { p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_capability: 'integrations:send' } as never)
+    ? db.rpc(approvedOnly ? 'read_approved_widget_comment' : 'read_actor_comment', { p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_capability: 'integrations:send' } as never)
     : db.from('comments'))
     .select(COMMENT_GITHUB_ISSUE_COLUMNS)
     .eq('id', commentId)
@@ -2270,6 +2270,7 @@ export async function createShare(input: {
 }
 
 export async function createWidgetAgentShare(input: {
+  approvedOnly?: boolean
   projectKey: string
   actorUserId: string
   pageUrl: string
@@ -2288,7 +2289,7 @@ export async function createWidgetAgentShare(input: {
     access_token_ciphertext: input.accessTokenCiphertext,
     expires_at: input.expiresAt,
   }
-  const { data, error } = await getServiceSupabase().rpc('create_widget_agent_share', {
+  const { data, error } = await getServiceSupabase().rpc(input.approvedOnly ? 'create_approved_widget_agent_share' : 'create_widget_agent_share', {
     p_project: input.projectKey,
     p_actor: input.actorUserId,
     p_page_url: input.pageUrl,
@@ -2932,8 +2933,8 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
   }
 }
 
-export async function beginTrackerDispatch(projectKey: string, commentId: string, actorUserId: string, leaseToken: string, workId: string | null) {
-  const { data, error } = await getSupabase().rpc('begin_actor_tracker_dispatch', {
+export async function beginTrackerDispatch(projectKey: string, commentId: string, actorUserId: string, leaseToken: string, workId: string | null, approvedOnly = false) {
+  const { data, error } = await getSupabase().rpc(approvedOnly ? 'begin_approved_widget_tracker_dispatch' : 'begin_actor_tracker_dispatch', {
     p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_lease: leaseToken, p_work: workId,
   } as never)
   if (error) throw new Error(error.message)
