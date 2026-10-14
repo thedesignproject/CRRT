@@ -887,3 +887,17 @@ it('reports a complete multi-item Inbox move without a skipped notice', async ()
   fireEvent.click(screen.getByRole('button', { name: 'continue two moved Inbox' }))
   expect(screen.getByRole('status')).toHaveTextContent('2 Inbox items moved.')
 })
+
+it.each(['success','failure'])('handles a two-comment prompt %s without silent omissions', async step => {
+ fixtures.comments = [readyFeedback('comment-1'),readyFeedback('comment-2')]
+ fixtures.createShare.mockResolvedValueOnce({shareId:'share-1',commentCount:2})
+ if(step==='failure') fixtures.getPrompt.mockRejectedValueOnce(new Error(''))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
+ if(step==='success') await screen.findByText('2 selected items copied for Claude Code.')
+ else await screen.findByText('Could not send the selected feedback to Agent.')
+ expect(fixtures.createShare).toHaveBeenCalledWith('https://crrt.ai/api','session-token',{projectId:'project-1',scopeType:'selection',commentIds:['comment-1','comment-2']})
+})

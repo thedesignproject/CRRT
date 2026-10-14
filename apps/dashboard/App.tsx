@@ -353,7 +353,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject') => {
     const ids = Array.from(bulkSelectedIds)
-    if (ids.length === 0 || bulkActionBusy) return
     const generation = bulkGeneration.current
     setBulkActionBusy(true)
     setBulkActionError('')
