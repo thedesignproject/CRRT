@@ -1,68 +1,199 @@
-import {act,cleanup,fireEvent,render,screen,waitFor}from'@testing-library/react'
-import {afterEach,beforeEach,expect,it,vi}from'vitest'
-import {BillingSettings}from'./BillingSettings'
-const fetchMock=vi.fn()
-const summary={enabled:true,testMode:true,canManage:false,entitlements:{mode:'cloud',plan:null,status:'none',canWrite:false,trialUsed:false,resetAt:'2026-11-01',usage:{projects:2,internal_users:4,comments:123,product_audits:1},limits:{projects:10,internal_users:10,comments:2000,product_audits:5}},plans:[{id:'pro',name:'Cloud Pro',amount:'$19',interval:'month',projects:10,internal_users:10,comments:2000,product_audits:5},{id:'studio',name:'Cloud Studio',amount:'$49',interval:'month',projects:50,internal_users:25,comments:10000,product_audits:30}]}
-const props={apiBase:'/api',accessToken:'owner'}
-function response(value:unknown,ok=true){return{ok,json:async()=>value}}
-beforeEach(()=>{vi.stubGlobal('fetch',fetchMock);fetchMock.mockReset().mockResolvedValue(response(summary));vi.spyOn(window.location,'assign').mockImplementation(()=>{})})
-afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.restoreAllMocks()})
-it('compares only the approved Cloud plans and explains usage, trial and retained data',async()=>{
- render(<BillingSettings {...props}/>);expect(screen.getByRole('status')).toHaveTextContent('Loading')
- await screen.findByRole('heading',{name:'Cloud Pro'})
- expect(screen.getByRole('heading',{name:'Cloud Studio'})).toBeInTheDocument();expect(screen.getByText('$19')).toBeInTheDocument();expect(screen.getByText('$49')).toBeInTheDocument()
- expect(screen.getByText(/14-day trial/)).toBeInTheDocument();expect(screen.getByText(/remains readable and exportable/)).toBeInTheDocument()
- expect(screen.getByRole('table')).toHaveTextContent('123');expect(screen.queryByText('Free')).toBeNull()
- fetchMock.mockResolvedValueOnce(response({url:'https://checkout.stripe.com/selected'}));fireEvent.click(screen.getByRole('button',{name:'Start Cloud Studio trial'}))
- await waitFor(()=>expect(window.location.assign).toHaveBeenCalledWith('https://checkout.stripe.com/selected'))
- expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({action:'checkout',plan:'studio'})
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+vi.mock('../api', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../api')>(),
+  getBillingSummary: vi.fn(),
+  runBillingAction: vi.fn(),
+}))
+import { getBillingSummary, runBillingAction, type BillingSummary } from '../api'
+import { BillingSettings } from './BillingSettings'
+
+const props = { apiBase: '/api', accessToken: 'token' }
+const plans = [
+  { key: 'pro', name: 'Pro', hosting: 'cloud', monthlyPriceUsd: 19, trialDays: 14, limits: { projects: 10, internalUsers: 10, commentsPerMonth: 2_000, auditsPerMonth: 5, guests: null } },
+  { key: 'studio', name: 'Studio', hosting: 'cloud', monthlyPriceUsd: 49, trialDays: 14, limits: { projects: 50, internalUsers: 25, commentsPerMonth: 10_000, auditsPerMonth: 30, guests: null } },
+] as BillingSummary['plans']
+
+function summary(overrides: Partial<BillingSummary> = {}): BillingSummary {
+  return {
+    enabled: true, testMode: true, deployment: 'cloud', plan: null, lifecycle: 'none',
+    cancelAtPeriodEnd: false, canManageSubscription: false, allowed: { manageBilling: true }, plans,
+    planPrices: { pro: { amount: '$19', interval: 'month' }, studio: { amount: '$49', interval: 'month' } },
+    usage: {
+      projects: { used: 1, limit: 10, resetAt: null }, internalUsers: { used: 2, limit: 10, resetAt: null },
+      comments: { used: 300, limit: 2_000, resetAt: '2026-11-01T00:00:00Z' }, productAudits: { used: 1, limit: 5, resetAt: '2026-11-01T00:00:00Z' },
+    },
+    ...overrides,
+  }
+}
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(getBillingSummary).mockResolvedValue(summary())
+  vi.mocked(runBillingAction).mockResolvedValue({ status: 'updated', plan: 'studio' })
 })
-it('manages an existing plan and uses portal changes instead of duplicate subscriptions',async()=>{
- fetchMock.mockResolvedValue(response({...summary,testMode:false,canManage:true,entitlements:{...summary.entitlements,plan:'pro',status:'active',canWrite:true,trialUsed:true,resetAt:null}}))
- render(<BillingSettings {...props}/>);await screen.findByText('Current plan');expect(screen.getByRole('button',{name:'Current plan'})).toBeDisabled()
- expect(screen.queryByText(/Sandbox/)).toBeNull();expect(screen.getByText(/Monthly billing/)).toBeInTheDocument()
- fetchMock.mockResolvedValue(response({url:'https://billing.stripe.com/portal'}));fireEvent.click(screen.getByRole('button',{name:'Change plan'}))
- await waitFor(()=>expect(window.location.assign).toHaveBeenCalled())
- expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({action:'portal'})
- fireEvent.click(screen.getByRole('button',{name:'Manage billing'}));await waitFor(()=>expect(fetchMock).toHaveBeenCalledTimes(3))
-})
-it('offers paid resubscription after a used trial and handles missing limits',async()=>{
- fetchMock.mockResolvedValue(response({...summary,canManage:true,entitlements:{...summary.entitlements,status:'canceled',trialUsed:true,limits:{projects:null,internal_users:null,comments:null,product_audits:null}}}))
- render(<BillingSettings {...props}/>);await screen.findByRole('button',{name:'Subscribe to Cloud Pro'})
- expect(screen.getAllByText('Choose a plan')).toHaveLength(4)
-})
-it('hides disabled billing and supports retry after failed reads',async()=>{
- fetchMock.mockResolvedValueOnce(response({},false));render(<BillingSettings {...props}/>);await screen.findByRole('alert')
- fetchMock.mockResolvedValueOnce(response({enabled:false}));fireEvent.click(screen.getByRole('button',{name:'Retry'}));await screen.findByText('Billing is not enabled in this environment.')
-})
-it.each(['http','scheme','host','network'])('rejects failed or unsafe %s checkout responses',async kind=>{
- render(<BillingSettings {...props}/>);await screen.findByRole('heading',{name:'Cloud Pro'})
- if(kind==='network')fetchMock.mockRejectedValueOnce(new Error('offline'))
- else fetchMock.mockResolvedValueOnce(response({url:kind==='scheme'?'http://checkout.stripe.com/path':'https://evil.example/'},kind!=='http'))
- fireEvent.click(screen.getByRole('button',{name:'Start Cloud Pro trial'}));await screen.findByRole('alert');expect(window.location.assign).not.toHaveBeenCalled()
- fetchMock.mockResolvedValueOnce(response(summary));fireEvent.click(screen.getByRole('button',{name:'Refresh billing status'}));await screen.findByRole('heading',{name:'Cloud Pro'})
-})
-it('ignores stale summary and checkout responses after account changes or unmount',async()=>{
- let resolve!:(value:unknown)=>void
- fetchMock.mockReturnValueOnce(new Promise(done=>{resolve=done}));const view=render(<BillingSettings {...props}/>);view.unmount()
- await act(async()=>resolve(response(summary)));expect(screen.queryByText('Cloud Pro')).toBeNull()
- fetchMock.mockResolvedValue(response(summary));const next=render(<BillingSettings {...props}/>);await screen.findByRole('heading',{name:'Cloud Pro'})
- fetchMock.mockReturnValueOnce(new Promise(done=>{resolve=done}));fireEvent.click(screen.getByRole('button',{name:'Start Cloud Pro trial'}));next.rerender(<BillingSettings {...props} accessToken="new-owner"/>);await screen.findByRole('heading',{name:'Cloud Pro'})
- await act(async()=>resolve(response({url:'https://checkout.stripe.com/stale'})));expect(window.location.assign).not.toHaveBeenCalled()
- let reject!:(reason:unknown)=>void
- fetchMock.mockReturnValueOnce(new Promise((_,fail)=>{reject=fail}));fireEvent.click(screen.getByRole('button',{name:'Start Cloud Pro trial'}));next.unmount();await act(async()=>reject(new Error('late')))
- fetchMock.mockReturnValueOnce(new Promise((_,fail)=>{reject=fail}));const last=render(<BillingSettings {...props}/>);last.unmount();await act(async()=>reject(new Error('late summary')))
+afterEach(() => { cleanup(); vi.restoreAllMocks(); window.history.replaceState({}, '', '/') })
+
+it('renders loading, disabled billing, and retryable load failures', async () => {
+  let resolve!: (value: BillingSummary) => void
+  vi.mocked(getBillingSummary).mockReturnValueOnce(new Promise((done) => { resolve = done }))
+  const view = render(<BillingSettings {...props} />)
+  expect(screen.getByRole('status')).toHaveTextContent('Loading billing')
+  await act(async () => resolve({ enabled: false }))
+  expect(screen.getByText(/Self-hosted CRRT remains free/)).toBeInTheDocument()
+  vi.mocked(getBillingSummary).mockRejectedValueOnce(new Error('network'))
+  view.rerender(<BillingSettings {...props} accessToken="next" />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Billing is temporarily unavailable')
+  vi.mocked(getBillingSummary).mockResolvedValueOnce(summary())
+  fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+  expect(await screen.findByRole('heading', { name: 'Cloud not active' })).toBeInTheDocument()
 })
 
-it('shows scheduled cancellation while Cloud remains writable and removes it after cancellation',async()=>{
- fetchMock.mockResolvedValue(response({...summary,cancelAtPeriodEnd:true,periodEnd:'2026-10-28',entitlements:{...summary.entitlements,status:'trialing',canWrite:true}}))
- const view=render(<BillingSettings {...props}/>);await screen.findByText(/Your subscription cancels on/)
- expect(screen.getByText(/You can keep using Cloud until then/)).toHaveTextContent(new Date('2026-10-28').toLocaleDateString())
- fetchMock.mockResolvedValue(response({...summary,cancelAtPeriodEnd:true,periodEnd:'2026-10-28'}))
- view.rerender(<BillingSettings {...props} accessToken="other"/>);await screen.findByRole('heading',{name:'Cloud Pro'})
- expect(screen.queryByText(/Your subscription cancels on/)).toBeNull()
- fetchMock.mockResolvedValue(response({...summary,cancelAtPeriodEnd:true,periodEnd:null}));fireEvent.click(screen.getByRole('button',{name:'Refresh billing status'}));await screen.findByRole('heading',{name:'Cloud Pro'})
- expect(screen.queryByText(/Your subscription cancels on/)).toBeNull()
+it('shows Pro workflow value and starts the selected plan once', async () => {
+  vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://checkout.stripe.com/c/session' })
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText('300 / 2,000')).toBeInTheDocument()
+  expect(screen.getByText('Private projects · Storybook · Agent workflow')).toBeInTheDocument()
+  expect(screen.getByText('Everything in Pro · higher capacity')).toBeInTheDocument()
+  expect(screen.getByRole('progressbar', { name: 'Comments usage' })).toHaveAttribute('aria-valuenow', '300')
+  fireEvent.click(screen.getByRole('button', { name: /Studio/ }))
+  const start = screen.getByRole('button', { name: 'Start 14-day trial' })
+  fireEvent.click(start); fireEvent.click(start)
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledOnce())
+  expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined)
+  expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/session')
+  expect(screen.getByText('Test mode')).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Self-hosted is free.' })).toHaveAttribute('href', '/docs/self-host')
+})
+
+it('continues a signed pricing selection exactly once after authentication', async () => {
+  vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://checkout.stripe.com/c/continued' })
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  const view = render(<BillingSettings {...props} checkoutState="payload.signature" />)
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout_state', undefined, 'payload.signature'))
+  expect(window.location.pathname).toMatch(/\/billing$/)
+  expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/continued')
+  view.rerender(<BillingSettings {...props} checkoutState="payload.signature" />)
+  expect(runBillingAction).toHaveBeenCalledOnce()
+})
+
+it('does not send a signed continuation to the transitional legacy contract', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ actions: { checkoutState: false, changePlan: false } }))
+  render(<BillingSettings {...props} checkoutState="payload.signature" />)
+  expect(await screen.findByRole('heading', { name: 'Cloud not active' })).toBeInTheDocument()
+  expect(runBillingAction).not.toHaveBeenCalled()
+})
+
+it('changes an active plan and refreshes the final contract', async () => {
+  vi.mocked(getBillingSummary)
+    .mockResolvedValueOnce(summary({ plan: 'pro', lifecycle: 'active', canManageSubscription: true, currentPeriodEnd: '2026-10-20T00:00:00Z' }))
+    .mockResolvedValueOnce(summary({ plan: 'pro', lifecycle: 'active', canManageSubscription: true, scheduledPlan: 'studio', scheduledPlanAt: '2026-10-20T00:00:00Z' }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('heading', { name: 'Cloud active' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Studio/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Switch to Studio' }))
+  await waitFor(() => expect(getBillingSummary).toHaveBeenLastCalledWith('/api', 'token', true, expect.any(AbortSignal)))
+  expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'change_plan', 'studio', undefined)
+  expect(await screen.findByText(/studio scheduled for/)).toBeInTheDocument()
+})
+
+it('uses Stripe Portal for plan changes on the current legacy contract', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle: 'active', canManageSubscription: true, actions: { checkoutState: false, changePlan: false } }))
+  vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://billing.stripe.com/p/session' })
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  render(<BillingSettings {...props} />)
+  fireEvent.click(await screen.findByRole('button', { name: /Studio/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Manage plan in Stripe' }))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'portal', undefined, undefined))
+  expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session')
+})
+
+it.each([
+  ['checkout_pending', 'Confirming checkout'],
+  ['trialing', 'Trial active'],
+  ['past_due_grace', 'Payment needs attention'],
+  ['read_only', 'Read-only'],
+] as const)('renders the %s lifecycle directly from the server', async (lifecycle, heading) => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({
+    plan: 'pro', lifecycle, canManageSubscription: true,
+    trialEndsAt: '2026-10-10T00:00:00Z', graceEndsAt: '2026-10-16T00:00:00Z', currentPeriodEnd: '2026-10-20T00:00:00Z',
+  }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
+})
+
+it('checks pending checkout and restores a blocked account through Stripe', async () => {
+  vi.mocked(getBillingSummary)
+    .mockResolvedValueOnce(summary({ plan: 'pro', lifecycle: 'checkout_pending', canManageSubscription: true }))
+    .mockResolvedValueOnce(summary({ plan: 'pro', lifecycle: 'read_only', canManageSubscription: true }))
+  render(<BillingSettings {...props} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Check status' }))
+  const restore = await screen.findByRole('button', { name: 'Restore access' })
+  vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://billing.stripe.com/p/session' })
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  fireEvent.click(restore)
+  await waitFor(() => expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session'))
+})
+
+it('shows scheduled cancellation and reactivation copy', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle: 'read_only', canManageSubscription: true, cancelAtPeriodEnd: true, periodEnd: '2026-10-20T00:00:00Z' }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('button', { name: 'Reactivate in Stripe' })).toBeInTheDocument()
+  expect(screen.getByRole('status')).toHaveTextContent('Cancellation is scheduled')
+})
+
+it.each(['http://checkout.stripe.com/x', 'https://evil.example/x', 'not a url', null])('rejects an untrusted billing destination: %s', async (url) => {
+  vi.mocked(runBillingAction).mockResolvedValue({ url } as never)
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  render(<BillingSettings {...props} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Start 14-day trial' }))
+  expect(await screen.findByRole('alert')).toBeInTheDocument()
+  expect(assign).not.toHaveBeenCalled()
+})
+
+it('keeps action errors retryable and ignores stale account requests', async () => {
+  let reject!: (error: Error) => void
+  vi.mocked(runBillingAction).mockReturnValueOnce(new Promise((_, fail) => { reject = fail }))
+  const view = render(<BillingSettings {...props} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Start 14-day trial' }))
+  view.rerender(<BillingSettings {...props} accessToken="new-account" />)
+  await act(async () => reject(new Error('old account failed')))
+  expect(screen.queryByRole('alert')).toBeNull()
+  vi.mocked(runBillingAction).mockRejectedValueOnce('down')
+  fireEvent.click(await screen.findByRole('button', { name: 'Start 14-day trial' }))
+  const alert = await screen.findByRole('alert')
+  expect(alert).toHaveTextContent('Billing is temporarily unavailable')
+  fireEvent.click(within(alert).getByRole('button', { name: 'Retry' }))
+  expect(getBillingSummary).toHaveBeenLastCalledWith('/api', 'new-account', true, expect.any(AbortSignal))
+})
+
+it('uses safe defaults for optional server fields and non-managing viewers', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plans: undefined, allowed: { manageBilling: false }, usage: undefined, testMode: false }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText('Usage becomes available after Cloud is activated.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Start 14-day trial' })).toBeDisabled()
+  expect(screen.queryByText('Test mode')).toBeNull()
+})
+
+it('renders unlimited usage, catalog fallbacks, and manual refresh', async () => {
+  vi.mocked(getBillingSummary)
+    .mockResolvedValueOnce(summary({
+      planPrices: undefined,
+      usage: {
+        projects: { used: 1, limit: null, resetAt: null },
+        internalUsers: { used: 2, limit: 10, resetAt: null },
+        comments: { used: 3, limit: 2_000, resetAt: null },
+        productAudits: { used: 0, limit: 5, resetAt: null },
+      },
+    }))
+    .mockResolvedValueOnce(summary({ lifecycle: 'checkout_pending' }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText('1 / Unlimited')).toBeInTheDocument()
+  expect(screen.getByRole('progressbar', { name: 'Projects usage' })).not.toHaveAttribute('aria-valuemax')
+  expect(screen.getByText('$19')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }))
+  expect(await screen.findByRole('heading', { name: 'Confirming checkout' })).toBeInTheDocument()
 })
 it('explains included legacy Pro and offers Studio without selling Pro again',async()=>{
  fetchMock.mockResolvedValue(response({...summary,entitlements:{...summary.entitlements,isLegacy:true,plan:'pro',status:'legacy',canWrite:true}}))

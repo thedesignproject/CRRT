@@ -14,9 +14,9 @@ export function asset(file: string): string {
   return `${import.meta.env.BASE_URL}${file}`
 }
 
-/** Link from the dashboard back to the landing app on the same deployment. */
-export function landingRoute(search = ''): string {
-  return `${LANDING_BASE}${search}`
+/** Link from the dashboard back to a landing path or query on the same deployment. */
+export function landingRoute(suffix = ''): string {
+  return suffix.startsWith('/') ? `${LANDING_BASE.replace(/\/$/, '')}${suffix}` : `${LANDING_BASE}${suffix}`
 }
 
 /** Strip the base prefix off a real pathname so route matching stays base-agnostic. */

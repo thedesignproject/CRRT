@@ -86,7 +86,8 @@ export function App() {
 
   if (!session || !user) return <LoginPage />
 
-  if (pathname === '/billing') return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} />
+  const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined
+  if (pathname === '/billing' || checkoutState) return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} checkoutState={checkoutState} />
 
   const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
   if (auditMatch) return <ProductAuditPage apiBase={API_BASE} accessToken={session.access_token} auditId={decodeURIComponent(auditMatch[1])} />

@@ -131,6 +131,63 @@ interface StorybookPairingResponse {
   connectionId: string
 }
 
+export type BillingPlanKey = 'pro' | 'studio'
+export type BillingLifecycle = 'none' | 'checkout_pending' | 'trialing' | 'active' | 'past_due_grace' | 'read_only'
+
+export interface BillingPlan {
+  key: 'community' | BillingPlanKey
+  name: string
+  hosting: 'self-hosted' | 'cloud'
+  monthlyPriceUsd: number
+  trialDays: number
+  limits: {
+    projects: number | null
+    internalUsers: number | null
+    commentsPerMonth: number | null
+    auditsPerMonth: number | null
+    guests: null
+  }
+}
+
+export interface BillingUsageItem {
+  used: number
+  limit: number | null
+  resetAt: string | null
+}
+
+export interface BillingSummary {
+  enabled: boolean
+  testMode?: boolean
+  deployment?: 'cloud' | 'self-hosted'
+  plan?: BillingPlanKey | 'community' | null
+  scheduledPlan?: BillingPlanKey | null
+  scheduledPlanAt?: string | null
+  lifecycle?: BillingLifecycle
+  status?: BillingLifecycle
+  trialEndsAt?: string | null
+  currentPeriodEnd?: string | null
+  periodEnd?: string | null
+  graceEndsAt?: string | null
+  cancelAtPeriodEnd?: boolean
+  canManageSubscription?: boolean
+  canManage?: boolean
+  allowed?: { manageBilling: boolean }
+  actions?: { checkoutState: boolean; changePlan: boolean }
+  plans?: BillingPlan[]
+  planPrices?: Record<BillingPlanKey, { amount: string; interval: 'month' | 'year' }>
+  usage?: {
+    projects: BillingUsageItem
+    internalUsers: BillingUsageItem
+    comments: BillingUsageItem
+    productAudits: BillingUsageItem
+  }
+}
+
+export type BillingAction = 'checkout' | 'checkout_state' | 'change_plan' | 'portal'
+export type BillingActionResult =
+  | { url: string }
+  | { status: 'active' | 'updated' | 'pending' | 'scheduled'; plan: BillingPlanKey; effectiveAt?: string }
+
 export interface ExtensionCommentRecord {
   id: string
   projectId: string | null
@@ -262,6 +319,64 @@ export function createExtensionAuthHandoff(
   })
 }
 
+type LegacyBillingSummary = {
+  enabled: boolean
+  testMode?: boolean
+  canManage?: boolean
+  cancelAtPeriodEnd?: boolean
+  periodEnd?: string | null
+  plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' }>
+  entitlements?: {
+    plan: BillingPlanKey | null
+    status: string
+    resetAt: string | null
+    usage: { projects: number; internal_users: number; comments: number; product_audits: number }
+    limits: { projects: number | null; internal_users: number | null; comments: number | null; product_audits: number | null }
+  }
+}
+
+function legacyLifecycle(status: string | undefined, plan: BillingPlanKey | null | undefined): BillingLifecycle {
+  if (status === 'active' || status === 'trialing') return status
+  if (status === 'past_due') return 'read_only'
+  if (plan && status && !['none', 'canceled', 'incomplete_expired'].includes(status)) return 'read_only'
+  return 'none'
+}
+
+function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): BillingSummary {
+  const legacy = value as LegacyBillingSummary
+  if (!legacy.entitlements) return value as BillingSummary
+  const entitlement = legacy.entitlements
+  const plans = legacy.plans?.map((plan): BillingPlan => ({
+    key: plan.id,
+    name: plan.name.replace(/^Cloud /, ''),
+    hosting: 'cloud',
+    monthlyPriceUsd: plan.monthlyUsd,
+    trialDays: 14,
+    limits: { projects: plan.projects, internalUsers: plan.internal_users, commentsPerMonth: plan.comments, auditsPerMonth: plan.product_audits, guests: null },
+  }))
+  const priceEntries = legacy.plans?.map((plan) => [plan.id, { amount: plan.amount, interval: plan.interval }] as const)
+  return {
+    enabled: legacy.enabled,
+    testMode: legacy.testMode,
+    deployment: 'cloud',
+    plan: entitlement.plan,
+    lifecycle: legacyLifecycle(entitlement.status, entitlement.plan),
+    cancelAtPeriodEnd: legacy.cancelAtPeriodEnd,
+    currentPeriodEnd: legacy.periodEnd,
+    canManageSubscription: legacy.canManage,
+    canManage: legacy.canManage,
+    actions: { checkoutState: false, changePlan: false },
+    plans,
+    planPrices: priceEntries ? Object.fromEntries(priceEntries) as BillingSummary['planPrices'] : undefined,
+    usage: {
+      projects: { used: entitlement.usage.projects, limit: entitlement.limits.projects, resetAt: null },
+      internalUsers: { used: entitlement.usage.internal_users, limit: entitlement.limits.internal_users, resetAt: null },
+      comments: { used: entitlement.usage.comments, limit: entitlement.limits.comments, resetAt: entitlement.resetAt },
+      productAudits: { used: entitlement.usage.product_audits, limit: entitlement.limits.product_audits, resetAt: entitlement.resetAt },
+    },
+  }
+}
+
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init)
   const text = await response.text()
@@ -276,6 +391,30 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
     const preview = text.slice(0, 80).replace(/\s+/g, ' ').trim()
     throw new Error(`Expected JSON from ${url} but got: ${preview || '(empty body)'}. Is the API server running?`)
   }
+}
+
+export function getBillingAvailability(apiBase: string, accessToken: string, signal?: AbortSignal) {
+  return requestJson<{ enabled: boolean }>(`${apiBase}/v1/billing?availability=1`, {
+    signal,
+    headers: { ...authHeaders(accessToken) },
+  })
+}
+
+export async function getBillingSummary(apiBase: string, accessToken: string, reconcile = false, signal?: AbortSignal) {
+  const value = await requestJson<BillingSummary | LegacyBillingSummary>(`${apiBase}/v1/billing${reconcile ? '?reconcile=1' : ''}`, {
+    signal,
+    cache: 'no-store',
+    headers: { ...authHeaders(accessToken) },
+  })
+  return normalizeBillingSummary(value)
+}
+
+export function runBillingAction(apiBase: string, accessToken: string, action: BillingAction, plan?: BillingPlanKey, state?: string) {
+  return requestJson<BillingActionResult>(`${apiBase}/v1/billing`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ action, ...(plan ? { plan } : {}), ...(state ? { state } : {}) }),
+  })
 }
 
 export interface AdminUser {

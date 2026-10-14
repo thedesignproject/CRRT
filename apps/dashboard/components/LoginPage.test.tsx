@@ -64,6 +64,17 @@ describe('LoginPage invitation continuation', () => {
     expect(await screen.findByText(/secure sign-in link/)).toBeInTheDocument()
   })
 
+  it('preserves only a valid signed billing selection through password sign-in', async () => {
+    window.history.replaceState({}, '', '/login?billingState=payload.signature&redirect=https://evil.test')
+    signInWithPassword.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalled())
+    expect(window.location.search).toBe('?billingState=payload.signature')
+  })
+
   it('shows specific and fallback magic-link failures', async () => {
     window.history.replaceState({}, '', '/login')
     signInWithOtp.mockResolvedValueOnce({ error: new Error('email unavailable') })
