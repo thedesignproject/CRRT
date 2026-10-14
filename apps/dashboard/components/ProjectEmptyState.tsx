@@ -1,8 +1,13 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
+import { cn } from '../lib/utils'
+import { StorybookIntegrationSettings } from './StorybookIntegrationSettings'
 
 interface ProjectEmptyStateProps {
   /** Project public key shown inline in the mount snippet. */
   projectId: string
+  apiBase: string
+  accessToken: string
+  canManage?: boolean
 }
 
 /**
@@ -11,7 +16,9 @@ interface ProjectEmptyStateProps {
  * through the two install snippets with copy buttons so they can drop the
  * widget into their app without leaving the dashboard.
  */
-export function ProjectEmptyState({ projectId }: ProjectEmptyStateProps) {
+export function ProjectEmptyState({ projectId, apiBase, accessToken, canManage = true }: ProjectEmptyStateProps) {
+  const [source, setSource] = useState<'app' | 'storybook'>('app')
+  const tabsId = useId()
   const installCode = `pnpm add @thedesignproject/crrt`
   const mountCode = `import { FeedbackWidget } from '@thedesignproject/crrt'
 
@@ -54,7 +61,7 @@ export default function App() {
             textWrap: 'balance',
           }}
         >
-          Drop the widget into your app.
+          Bring feedback into this project.
         </h2>
         <p
           style={{
@@ -68,12 +75,57 @@ export default function App() {
             textWrap: 'pretty',
           }}
         >
-          Two snippets and you're collecting feedback. We'll show comments here as soon as the first one lands.
+          Connect your product or Storybook. Feedback from either source lands here with its context attached.
         </p>
 
-        <Snippet number="01" title="INSTALL" code={installCode} />
-        <div style={{ height: 12 }} />
-        <Snippet number="02" title="MOUNT IN YOUR APP ROOT" code={mountCode} />
+        <div role="tablist" aria-label="Feedback source" className="mb-5 inline-flex rounded-lg border border-border bg-card p-1">
+          <button
+            id={`${tabsId}-app-tab`}
+            type="button"
+            role="tab"
+            aria-selected={source === 'app'}
+            aria-controls={`${tabsId}-app-panel`}
+            onClick={() => setSource('app')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              source === 'app' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Website / App
+          </button>
+          <button
+            id={`${tabsId}-storybook-tab`}
+            type="button"
+            role="tab"
+            aria-selected={source === 'storybook'}
+            aria-controls={`${tabsId}-storybook-panel`}
+            onClick={() => setSource('storybook')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              source === 'storybook' ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            Storybook
+          </button>
+        </div>
+
+        {source === 'app' ? (
+          <div id={`${tabsId}-app-panel`} role="tabpanel" aria-labelledby={`${tabsId}-app-tab`}>
+            <Snippet number="01" title="INSTALL" code={installCode} />
+            <div style={{ height: 12 }} />
+            <Snippet number="02" title="MOUNT IN YOUR APP ROOT" code={mountCode} />
+          </div>
+        ) : (
+          <div id={`${tabsId}-storybook-panel`} role="tabpanel" aria-labelledby={`${tabsId}-storybook-tab`}>
+            <StorybookIntegrationSettings
+              appearance="setup"
+              apiBase={apiBase}
+              accessToken={accessToken}
+              projectKey={projectId}
+              canManage={canManage}
+            />
+          </div>
+        )}
 
         {/* Waiting status — terminal-flavored "watching for first CRRT" */}
         <div

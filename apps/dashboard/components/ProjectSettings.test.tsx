@@ -7,6 +7,7 @@ vi.mock('./ProjectDomainAccess', () => ({ ProjectDomainAccess: () => <div>Compan
 vi.mock('./GitHubRepositorySettings', () => ({ GitHubRepositorySettings: () => null }))
 vi.mock('./LinearIntegrationSettings', () => ({ LinearIntegrationSettings: () => null }))
 vi.mock('./JiraIntegrationSettings', () => ({ JiraIntegrationSettings: () => null }))
+vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: () => <div>Storybook connection settings</div> }))
 
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { ProjectSettings } from './ProjectSettings'
@@ -334,6 +335,7 @@ it('only mounts company access controls for project managers', () => {
   vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
   rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
   expect(screen.getByText('Company access controls')).toBeInTheDocument()
+  expect(screen.getByText('Storybook connection settings')).toBeInTheDocument()
 })
 
 it('keeps company access singular across repeated settings edits',()=>{

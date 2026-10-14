@@ -571,7 +571,12 @@ export function CommentDetail({
           </div>
         </div>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
-        <ProjectEmptyState projectId={selectedProject} />
+        <ProjectEmptyState
+          projectId={selectedProject}
+          apiBase={apiBase}
+          accessToken={accessToken}
+          canManage={!readOnly}
+        />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">

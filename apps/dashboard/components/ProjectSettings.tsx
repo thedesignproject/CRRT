@@ -10,6 +10,7 @@ import { LinearIntegrationSettings } from './LinearIntegrationSettings'
 import { JiraIntegrationSettings } from './JiraIntegrationSettings'
 import { ProjectDomainAccess } from './ProjectDomainAccess'
 import { Spinner } from './primitives'
+import { StorybookIntegrationSettings } from './StorybookIntegrationSettings'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
@@ -309,6 +310,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
             </form>
           )}
         </section>
+
+        {isAdmin && (
+          <StorybookIntegrationSettings
+            apiBase={apiBase}
+            accessToken={accessToken}
+            projectKey={project.publicKey}
+          />
+        )}
 
         {isAdmin && (
           <GitHubRepositorySettings

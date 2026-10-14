@@ -7,6 +7,7 @@ vi.mock('../api', () => ({
   sendExternalWork: vi.fn(),
   resolvePendingExternalWork: vi.fn(),
 }))
+vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: () => <div>Storybook setup</div> }))
 
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'

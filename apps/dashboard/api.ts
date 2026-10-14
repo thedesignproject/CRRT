@@ -94,6 +94,24 @@ export interface ProjectTrackerIntegration {
   reauthorizationRequired?: boolean
 }
 
+export type StorybookIntegrationState =
+  | 'not_connected'
+  | 'waiting'
+  | 'connected'
+  | 'upgrade_required'
+  | 'expired'
+
+export interface StorybookIntegration {
+  state: StorybookIntegrationState
+  command?: string
+  expiresAt?: string
+  connectionId?: string
+  storybookUrl?: string
+  connectedAt?: string
+  lastSeenAt?: string
+  message?: string
+}
+
 export interface ExtensionCommentRecord {
   id: string
   projectId: string | null
@@ -827,6 +845,23 @@ export function disconnectJira(apiBase: string, accessToken: string, projectKey:
   return requestJson<void>(
     `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
     { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function getStorybookIntegration(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<StorybookIntegration>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/storybook`,
+    { cache: 'no-store', headers: { ...authHeaders(accessToken) } },
+  )
+}
+
+export function createStorybookPairing(apiBase: string, accessToken: string, projectKey: string) {
+  return requestJson<StorybookIntegration>(
+    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/storybook/pairings`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    },
   )
 }
 
