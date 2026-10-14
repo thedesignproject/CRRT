@@ -244,9 +244,11 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
 
   async function deleteSelected() {
     if (selectedCount === 0) return
+    const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
       const result = await bulkDeleteExtensionComments(apiBase, accessToken, bulkDescriptor)
+      if (context !== mutationContext.current) return
       const deleted = new Set(result.processedIds)
       setItems((current) => current.filter((item) => !deleted.has(item.id)))
       setTotal((value) => Math.max(0, value - result.processedIds.length))
@@ -262,8 +264,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       }
       setPage((current) => Math.min(current, Math.max(1, Math.ceil((total - result.processedIds.length) / 20))))
       setReload((value) => value + 1)
-    } catch (reason) { setError(errorText(reason, 'Could not delete selected Inbox items')) }
-    finally { setBusy(false); setConfirmBulkDelete(false) }
+    } catch (reason) { if (context === mutationContext.current) setError(errorText(reason, 'Could not delete selected Inbox items')) }
+    finally { if (context === mutationContext.current) { setBusy(false); setConfirmBulkDelete(false) } }
   }
 
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
