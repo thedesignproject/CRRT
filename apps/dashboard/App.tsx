@@ -351,6 +351,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const exitBulkMode = useCallback(() => {
     bulkGeneration.current++
     setBulkActionBusy(false)
+    setPendingBulkSelection(null)
     setBulkMode(false)
     setBulkSelectedIds(new Set())
     setBulkTransitionNotice('')

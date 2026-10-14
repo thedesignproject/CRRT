@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+vi.mock('./extension-image-cleanup.js', () => ({ processExtensionImageCleanup: vi.fn() }))
+
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 vi.mock('./extension-comment-limit.js', () => ({ reserveExtensionComment: vi.fn() }))
 
+import { processExtensionImageCleanup } from './extension-image-cleanup.js'
 import { getServiceSupabase } from './supabase.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
 import {
@@ -74,6 +77,7 @@ function client(responses: unknown[], storageOverrides: Record<string, unknown> 
 }
 
 beforeEach(() => {
+  vi.mocked(processExtensionImageCleanup).mockReset().mockResolvedValue()
   vi.mocked(getServiceSupabase).mockReset()
   vi.mocked(reserveExtensionComment).mockReset().mockResolvedValue(true)
 })
@@ -453,7 +457,7 @@ describe('extension comment persistence', () => {
     await expect(bulkDeleteExtensionComments('u', { mode: 'ids', ids: [first, second, missing] })).resolves.toEqual({
       processedIds: [first], skipped: [{ id: missing, reason: 'not_in_inbox' }, { id: second, reason: 'concurrent_change' }], selectedTotal: 3,
     })
-    expect(fake.bucket.remove).toHaveBeenCalledExactlyOnceWith(['u/current.png'])
+    expect(processExtensionImageCleanup).toHaveBeenCalledExactlyOnceWith(['u/current.png'])
     expect(fake.queries[1].calls).toContainEqual(['select', 'id,screenshot_storage_path'])
   })
 
@@ -471,8 +475,9 @@ describe('extension comment persistence', () => {
       { data: [{ id: 'c1', screenshot_storage_path: 'u/one.png' }, { id: 'c2', screenshot_storage_path: 'u/two.png' }, { id: 'c3', screenshot_storage_path: null }], error: null },
     ], { remove: vi.fn().mockResolvedValueOnce({ error: { message: 'storage down' } }).mockRejectedValueOnce(new Error('network down')) })
     vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+    vi.mocked(processExtensionImageCleanup).mockRejectedValueOnce(new Error('queue unavailable'))
     await expect(bulkDeleteExtensionComments('u', { mode: 'all', excludedIds: [] })).resolves.toEqual({ processedIds: ['c1', 'c2', 'c3'], skipped: [], selectedTotal: 3 })
-    expect(log).toHaveBeenCalledTimes(2)
+    expect(log).toHaveBeenCalledOnce()
     log.mockRestore()
   })
 
@@ -498,7 +503,7 @@ describe('extension comment persistence', () => {
     expect(result.selectedTotal).toBe(500)
     expect(fake.queries[1].calls).toContainEqual(['gt', 'id', '0499'])
     expect(fake.queries[1].calls).toContainEqual(['limit', 500])
-    expect(fake.bucket.remove).toHaveBeenCalledExactlyOnceWith(['u/last.png'])
+    expect(processExtensionImageCleanup).toHaveBeenCalledExactlyOnceWith(['u/last.png'])
   })
 
   it('rejects revoked access at the atomic assignment boundary', async () => {
@@ -527,9 +532,9 @@ it('cleans each committed delete batch even when a later database request fails'
   const rows = Array.from({ length: 101 }, (_, i) => ({ id: `c${i}`, screenshot_storage_path: `u/${i}.png` }))
   const fake = client([{ data: rows, error: null }, { data: rows.slice(0, 100), error: null }, { data: null, error: { message: 'later batch down' } }])
   vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
-  await expect(bulkDeleteExtensionComments('u', { mode: 'all', excludedIds: [] })).rejects.toThrow('later batch down')
-  expect(fake.bucket.remove).toHaveBeenCalledTimes(100)
-  expect(fake.bucket.remove).not.toHaveBeenCalledWith(['u/100.png'])
+  const result = await bulkDeleteExtensionComments('u', { mode: 'all', excludedIds: [] })
+  expect(result).toEqual({ processedIds: rows.slice(0, 100).map(row => row.id), skipped: [{ id: 'c100', reason: 'mutation_failed' }], selectedTotal: 101 })
+  expect(processExtensionImageCleanup).toHaveBeenCalledExactlyOnceWith(rows.slice(0, 100).map(row => row.screenshot_storage_path))
 })
 
 it('resolves over 1000 rows and bounds assignment results below the REST row cap', async () => {
@@ -544,4 +549,17 @@ it('resolves over 1000 rows and bounds assignment results below the REST row cap
   expect(result.selectedTotal).toBe(1001)
   expect(result.skipped).toEqual([])
   expect(fake.value.rpc.mock.calls.map((call: any[]) => call[1].p_ids.length)).toEqual([500, 500, 1])
+})
+
+it.each(['forbidden', 'database down'])('returns committed moves when a later batch fails: %s', async (message) => {
+  const rows = Array.from({ length: 501 }, (_, i) => ({ id: `c${i}` }))
+  const fake = client([{ data: rows.slice(0, 500) }, { data: rows.slice(500) }, { data: rows.slice(0, 499) }, { error: { message } }])
+  vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+  const result = await bulkAssignExtensionCommentsToProject('u', { mode: 'all', excludedIds: [] }, 'p')
+  expect(result.processedIds).toHaveLength(499)
+  expect(result.skipped).toEqual([
+    { id: 'c500', reason: message === 'forbidden' ? 'access_changed' : 'mutation_failed' },
+    { id: 'c499', reason: 'concurrent_change' },
+  ])
+  expect(result.selectedTotal).toBe(501)
 })
