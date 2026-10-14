@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { getServiceSupabase } from './supabase.js'
 import { parseCommentTarget } from './anchor.js'
 import { reserveExtensionComment } from './extension-comment-limit.js'
+import { processExtensionImageCleanup } from './extension-image-cleanup.js'
 import { fromLegacyStatus } from './status.js'
 
 const BUCKET = 'extension-feedback-images'
@@ -68,7 +69,7 @@ export type ExtensionCommentBulkSelection =
 
 export type ExtensionCommentBulkResult = {
   processedIds: string[]
-  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' }>
+  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed' }>
   selectedTotal: number
 }
 
@@ -136,16 +137,23 @@ export async function bulkAssignExtensionCommentsToProject(
   const client = getServiceSupabase()
   const processedIds: string[] = []
   for (let offset = 0; offset < rows.length; offset += 500) {
-    const { data, error } = await client.rpc('assign_actor_inbox_feedback', {
-      p_actor: userId, p_project: projectId, p_ids: rows.slice(offset, offset + 500).map((row) => row.id), p_visibility: visibility,
-    })
-    if (error) {
-      if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
-      throw new Error(error.message)
+    try {
+      const { data, error } = await client.rpc('assign_actor_inbox_feedback', {
+        p_actor: userId, p_project: projectId, p_ids: rows.slice(offset, offset + 500).map((row) => row.id), p_visibility: visibility,
+      })
+      if (error) {
+        if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
+        throw new Error(error.message)
+      }
+      processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
+    } catch (error) {
+      if (processedIds.length === 0) throw error
+      const reason = error instanceof ExtensionCommentError ? 'access_changed' : 'mutation_failed'
+      skipped.push(...rows.slice(offset).map((row) => ({ id: row.id, reason } as const)))
+      break
     }
-    processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
   }
-  const processed = new Set(processedIds)
+  const processed = new Set([...processedIds, ...skipped.map((item) => item.id)])
   for (const row of rows) {
     if (!processed.has(row.id)) skipped.push({ id: row.id, reason: 'concurrent_change' })
   }
@@ -168,27 +176,27 @@ export async function bulkDeleteExtensionComments(
   // Only the row snapshots returned by DELETE may have their images removed.
   // A concurrent move, ownership change, or failed DELETE retains its image.
   for (let offset = 0; offset < rows.length; offset += 100) {
-    const { data, error } = await client.from('comments').delete()
-      .eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
-      .in('id', rows.slice(offset, offset + 100).map((row) => row.id))
-      .select('id,screenshot_storage_path')
-    if (error) throw new Error(error.message)
-    const batch = (data as InboxBulkRow[] | null) ?? []
-    deletedRows.push(...batch)
-    for (let offset = 0; offset < batch.length; offset += 20) {
-      await Promise.all(batch.slice(offset, offset + 20).map(async (row) => {
-        if (!row.screenshot_storage_path) return
-        try {
-          const { error } = await client.storage.from(BUCKET).remove([row.screenshot_storage_path])
-          if (error) console.error('Deleted Inbox screenshot cleanup failed', row.screenshot_storage_path, error)
-        } catch (error) {
-          console.error('Deleted Inbox screenshot cleanup failed', row.screenshot_storage_path, error)
-        }
-      }))
+    try {
+      const { data, error } = await client.from('comments').delete()
+        .eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+        .in('id', rows.slice(offset, offset + 100).map((row) => row.id))
+        .select('id,screenshot_storage_path')
+      if (error) throw new Error(error.message)
+      const batch = (data as InboxBulkRow[] | null) ?? []
+      deletedRows.push(...batch)
+      const paths = batch.flatMap((row) => row.screenshot_storage_path ? [row.screenshot_storage_path] : [])
+      if (paths.length) {
+        try { await processExtensionImageCleanup(paths) }
+        catch (error) { console.error('Inbox image cleanup deferred to durable queue', error) }
+      }
+    } catch (error) {
+      if (deletedRows.length === 0) throw error
+      skipped.push(...rows.slice(offset).map((row) => ({ id: row.id, reason: 'mutation_failed' } as const)))
+      break
     }
   }
   const processedIds = deletedRows.map((row) => row.id)
-  const processed = new Set(processedIds)
+  const processed = new Set([...processedIds, ...skipped.map((item) => item.id)])
   for (const row of rows) {
     if (!processed.has(row.id)) skipped.push({ id: row.id, reason: 'concurrent_change' })
   }

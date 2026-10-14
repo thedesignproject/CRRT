@@ -144,11 +144,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       : [],
     [comments, commentsProjectId, selectedProject],
   )
-  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt } = useAgentSession(
+  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt, adoptSession } = useAgentSession(
     API_BASE,
     accessToken,
-    sidebarOpen && canOpenAgentPanel && selectedProject ? selectedProject : null,
+    canOpenAgentPanel && selectedProject ? selectedProject : null,
     readyAgentCommentIds,
+    sidebarOpen,
+    user.id,
   )
   const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
@@ -333,6 +335,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   const toggleBulkSelect = useCallback((id: string) => {
     if (bulkActionBusy) return
+    if (!bulkSelectedIds.has(id) && bulkSelectedIds.size >= 500) {
+      setBulkActionError('Select up to 500 comments at a time.')
+      return
+    }
     setBulkActionError('')
     setBulkSelectedIds((prev) => {
       const next = new Set(prev)
@@ -340,11 +346,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       else next.add(id)
       return next
     })
-  }, [bulkActionBusy])
+  }, [bulkActionBusy, bulkSelectedIds])
 
   const exitBulkMode = useCallback(() => {
     bulkGeneration.current++
     setBulkActionBusy(false)
+    setPendingBulkSelection(null)
     setBulkMode(false)
     setBulkSelectedIds(new Set())
     setBulkTransitionNotice('')
@@ -419,6 +426,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   const handoffSelectedToAgent = useCallback(async () => {
     const commentIds = [...bulkSelectedIds]
+    if (commentIds.length > 500) {
+      setBulkActionError('Select up to 500 comments at a time.')
+      return
+    }
     if (commentsProjectId !== selectedProject || selectedBulkComments.length !== commentIds.length) {
       setBulkActionError('Feedback changed. Review the selection and retry.')
       return
@@ -446,6 +457,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (generation !== bulkGeneration.current) return
       await navigator.clipboard.writeText(result.prompt)
       if (generation !== bulkGeneration.current) return
+      adoptSession({ shareId: share.shareId, slug: share.slug, token: share.token, docUrl: share.tokenUrl }, commentIds)
+      setSidebarOpen(true)
       setBulkTransitionNotice(`${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} copied for ${selectedAgentMeta.name}.`)
     } catch (error) {
       if (generation !== bulkGeneration.current) return
@@ -458,12 +471,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (generation === bulkGeneration.current) setBulkActionBusy(false)
     }
-  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject])
+  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject, adoptSession])
 
   const toggleSelectAllVisible = useCallback(() => {
     if (bulkActionBusy) return
     setBulkActionError('')
     const visibleIds = filteredComments.map((c) => c.id)
+    if (visibleIds.length > 500) {
+      setBulkActionError('Select up to 500 comments at a time. Narrow the list or select comments individually.')
+      return
+    }
     setBulkSelectedIds((prev) => {
       const allSelected = visibleIds.every((id) => prev.has(id))
       return allSelected ? new Set() : new Set(visibleIds)

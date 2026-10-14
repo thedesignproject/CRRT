@@ -409,3 +409,82 @@ it('cannot clear an all-Inbox selection during a pending deletion', async () => 
  expect(screen.getByRole('toolbar')).toHaveTextContent('21 selected')
  await act(async () => finish({processedIds:[],skipped:[],selectedTotal:21}))
 })
+
+
+it.each(['unmount', 'token', 'api'] as const)('ignores a late bulk move after %s context changes', async (change) => {
+  let finish!: (result: any) => void
+  vi.mocked(bulkAssignExtensionComments).mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+  const onMoved = vi.fn()
+  const view = render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} onMovedToProject={onMoved} />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Project for selected Inbox items' }), { target: { value: 'store' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+  if (change === 'unmount') view.unmount()
+  else view.rerender(<ExtensionCommentsPage apiBase={change === 'api' ? '/other-api' : '/api'} accessToken={change === 'token' ? 'new-token' : 'token'} projects={[project]} onMovedToProject={onMoved} />)
+  await act(async () => finish({ processedIds: ['c1'], skipped: [], selectedTotal: 1 }))
+  expect(onMoved).not.toHaveBeenCalled()
+})
+
+it('does not report an old move failure after the token changes', async () => {
+  let fail!: (reason: Error) => void
+  vi.mocked(bulkAssignExtensionComments).mockReturnValueOnce(new Promise((_, reject) => { fail = reject }))
+  const view = render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Project for selected Inbox items' }), { target: { value: 'store' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+  view.rerender(<ExtensionCommentsPage apiBase="/api" accessToken="new-token" projects={[project]} />)
+  await act(async () => fail(new Error('Old move failed')))
+  expect(screen.queryByText('Old move failed')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
+})
+
+it('keeps the bulk selection intact when an ordinary navigation key is pressed', async () => {
+  render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
+  fireEvent.keyDown(window, { key: 'j' })
+  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected item' })).toBeInTheDocument()
+  expect(screen.getByText('Select an Inbox item')).toBeInTheDocument()
+})
+
+
+it('retains comments that failed database deletion for a bounded retry', async () => {
+  vi.mocked(bulkDeleteExtensionComments).mockResolvedValueOnce({
+    processedIds: ['c1'], skipped: [{ id: 'c2', reason: 'mutation_failed' }], selectedTotal: 2,
+  } as never)
+  render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Select page' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Delete selected' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }))
+  await screen.findByText('1 deleted; 1 could not be deleted and remain selected.')
+  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected item' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Delete selected' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete 1' }))
+  await waitFor(() => expect(bulkDeleteExtensionComments).toHaveBeenLastCalledWith('/api', 'token', { mode: 'ids', ids: ['c2'] }))
+})
+
+it.each([false, true])('ignores an old bulk deletion after switching account (failure: %s)', async (failure) => {
+  let finish!: (value: any) => void
+  let fail!: (reason: Error) => void
+  vi.mocked(bulkDeleteExtensionComments).mockReturnValueOnce(new Promise((resolve, reject) => { finish = resolve; fail = reject }))
+  const view = render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Select page' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Delete selected' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }))
+  view.rerender(<ExtensionCommentsPage apiBase="/api" accessToken="new-token" />)
+  await screen.findByText('First comment')
+  await act(async () => { if (failure) fail(new Error('Old deletion failed')); else finish({ processedIds: ['c1'], skipped: [], selectedTotal: 2 }) })
+  expect(screen.getByText('First comment')).toBeInTheDocument()
+  expect(screen.queryByText('1 deleted.')).toBeNull()
+  expect(screen.queryByText('Old deletion failed')).toBeNull()
+  expect(screen.queryByRole('toolbar')).toBeNull()
+})
