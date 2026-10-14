@@ -34,3 +34,8 @@ describe('authenticated Agent handoff API', () => {
     })
   })
 })
+
+it('preserves an API error without an entitlement code', async () => {
+ vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'Selection changed'}),{status:409})))
+ await expect(createShare('/api','token',{})).rejects.toMatchObject({message:'Selection changed',status:409,code:undefined})
+})

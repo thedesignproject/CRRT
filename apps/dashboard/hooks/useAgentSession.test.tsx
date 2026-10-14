@@ -61,3 +61,13 @@ describe('useAgentSession', () => {
     expect(createShare).not.toHaveBeenCalled()
   })
 })
+
+it.each([null, 'offline', {code:42}])('handles session errors without a usable code: %j', async error => {
+ vi.mocked(createShare).mockRejectedValueOnce(error)
+ const {result,unmount}=renderHook(() => useAgentSession('/api','token','project',['c1']))
+ await waitFor(() => expect(result.current.loading).toBe(false))
+ expect(result.current.errorCode).toBeNull()
+ expect(result.current.session).toBeNull()
+ expect(result.current.error).toBe('Could not start session')
+ unmount()
+})

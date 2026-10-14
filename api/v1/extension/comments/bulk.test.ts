@@ -94,3 +94,10 @@ describe('extension comments bulk endpoint', () => {
     spy.mockRestore()
   })
 })
+
+it('defaults assignment visibility to shared', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
+  const response = res()
+  await call({ method: 'POST', headers: {}, body: { operation: 'assign', selection, projectId: 'project' } }, response)
+  expect(bulkAssignExtensionCommentsToProject).toHaveBeenCalledWith('u', selection, 'project', 'shared')
+})
