@@ -24,6 +24,8 @@ const fixtures = vi.hoisted(() => ({
   agentComments: vi.fn(),
   agentEnabled: vi.fn(),
   adoptSession: vi.fn(),
+  agentSession: null as null | { shareId: string },
+  agentShareState: null as null | Record<string, any>,
   updateVisibility: vi.fn(),
   fn: vi.fn(),
   superadmin: false,
@@ -73,9 +75,9 @@ vi.mock('./hooks/useAgentSession', () => ({
     fixtures.agentProject(project)
     fixtures.agentComments(ids)
     return ({
-    session: null,
+    session: fixtures.agentSession,
     adoptSession: fixtures.adoptSession,
-    shareState: null,
+    shareState: fixtures.agentShareState,
     events: fixtures.comments,
     error: null,
     copyPrompt: fixtures.fn,
@@ -112,7 +114,7 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
 }))
-vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onClose: () => void }) => <aside data-testid="agent-sidebar"><button onClick={props.onClose}>close agent sidebar</button></aside> }))
+vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onClose: () => void; projectComments: Array<{id:string;implementationStatus:string}>; agentConnected:boolean }) => <aside data-testid="agent-sidebar"><span data-testid="agent-queue">{props.agentConnected ? props.projectComments.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span><button onClick={props.onClose}>close agent sidebar</button></aside> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
@@ -143,6 +145,8 @@ beforeEach(() => {
   fixtures.getPrompt.mockReset().mockResolvedValue({ prompt: 'Fix selected feedback' })
   fixtures.beginCheckout.mockReset().mockResolvedValue({ url: 'https://checkout.example/session' })
   fixtures.fn.mockReset()
+  fixtures.agentSession = null
+  fixtures.agentShareState = null
   fixtures.agentProject.mockReset()
   fixtures.agentComments.mockReset()
   fixtures.updateVisibility.mockReset().mockResolvedValue(undefined)
@@ -970,4 +974,32 @@ it('does not restore a cancelled Inbox transfer when destination comments finish
   view.rerender(<App />)
   await waitFor(() => expect(screen.getByTestId('first-claim')).toHaveTextContent('none'))
   expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
+})
+
+it('renders only active handoff feedback and its live progress, excluding unselected and internal project items', async () => {
+ fixtures.comments = [readyFeedback('selected-1'),readyFeedback('selected-2'),readyFeedback('unselected'),{...readyFeedback('internal'),visibility:'internal'}]
+ fixtures.agentSession = {shareId:'active-share'}
+ fixtures.agentShareState = {share:{id:'active-share'},project:{publicKey:'project-1'},presence:[{agentId:'local'}],comments:[
+   {...readyFeedback('selected-1'),implementationStatus:'in_progress'},
+   {...readyFeedback('selected-2'),implementationStatus:'ready_for_testing'},
+   {...readyFeedback('internal'),visibility:'internal'},
+ ]}
+ const view = render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'Agents, 3 ready'}))
+ expect(screen.getByTestId('agent-queue')).toHaveTextContent('selected-1:in_progress,selected-2:ready_for_testing')
+ expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('unselected')
+ expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('internal')
+ fixtures.agentShareState = {...fixtures.agentShareState,comments:[{...readyFeedback('selected-1'),implementationStatus:'done'}]}
+ view.rerender(<App />)
+ expect(screen.getByTestId('agent-queue')).toHaveTextContent('selected-1:done')
+ expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('selected-2')
+})
+it.each(['loading','missing session','stale share','wrong project','empty state'])('does not show a queue from %s',async(context)=>{
+ fixtures.comments=[readyFeedback('comment-1')]
+ fixtures.agentSession=context==='missing session'?null:{shareId:'active-share'}
+ fixtures.agentShareState=context==='loading'?null:{share:{id:context==='stale share'?'old-share':'active-share'},project:{publicKey:context==='wrong project'?'other-project':'project-1'},presence:[{agentId:'local'}],comments:context==='empty state'?[]:[readyFeedback('comment-1')]}
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'Agents, 1 ready'}))
+ expect(screen.getByTestId('agent-queue')).toHaveTextContent(context==='empty state'?'':'disconnected')
+ expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('comment-1')
 })
