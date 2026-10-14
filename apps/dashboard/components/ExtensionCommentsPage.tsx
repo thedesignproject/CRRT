@@ -250,7 +250,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       const deleted = new Set(result.processedIds)
       setItems((current) => current.filter((item) => !deleted.has(item.id)))
       setTotal((value) => Math.max(0, value - result.processedIds.length))
-      const retryIds = result.skipped.filter((item) => item.reason === 'storage_delete_failed').map((item) => item.id)
+      const retryIds = result.skipped.filter((item) => ['storage_delete_failed', 'mutation_failed'].includes(item.reason)).map((item) => item.id)
       if (retryIds.length > 0) {
         setBulkSelection({ mode: 'ids', ids: new Set(retryIds.slice(0, MAX_SELECTION_IDS)) })
         setNotice(retryIds.length > MAX_SELECTION_IDS
