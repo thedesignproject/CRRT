@@ -47,6 +47,9 @@ it('renders loading, disabled billing, and retryable load failures', async () =>
   vi.mocked(getBillingSummary).mockResolvedValueOnce(summary())
   fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
   expect(await screen.findByRole('heading', { name: 'Cloud not active' })).toBeInTheDocument()
+  vi.mocked(getBillingSummary).mockRejectedValueOnce('offline')
+  view.rerender(<BillingSettings {...props} accessToken="third" />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Billing is temporarily unavailable')
 })
 
 it('shows Pro workflow value and starts the selected plan once', async () => {
@@ -76,6 +79,13 @@ it('continues a signed pricing selection exactly once after authentication', asy
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/continued')
   view.rerender(<BillingSettings {...props} checkoutState="payload.signature" />)
   expect(runBillingAction).toHaveBeenCalledOnce()
+})
+
+it('makes a failed signed continuation retryable without exposing the state', async () => {
+  vi.mocked(runBillingAction).mockRejectedValueOnce(new Error('Checkout expired'))
+  render(<BillingSettings {...props} checkoutState="payload.signature" />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Checkout expired')
+  expect(window.location.pathname).toMatch(/\/billing$/)
 })
 
 it('does not send a signed continuation to the transitional legacy contract', async () => {
@@ -123,6 +133,18 @@ it.each([
   expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
 })
 
+it.each([
+  [{ lifecycle: undefined, status: 'trialing', trialEndsAt: undefined }, 'Trial active', 'Your 14-day trial is active.'],
+  [{ lifecycle: undefined, status: 'active', cancelAtPeriodEnd: true, currentPeriodEnd: undefined, periodEnd: '2026-10-20T00:00:00Z' }, 'Cloud active', 'Access ends'],
+  [{ lifecycle: undefined, status: 'active', cancelAtPeriodEnd: false, currentPeriodEnd: undefined, periodEnd: '2026-10-20T00:00:00Z' }, 'Cloud active', 'Renews'],
+  [{ lifecycle: undefined, status: undefined }, 'Cloud not active', 'Choose a plan'],
+] as const)('supports legacy lifecycle fallbacks: %s', async (overrides, heading, detail) => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary(overrides as Partial<BillingSummary>))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument()
+  expect(screen.getByText(new RegExp(detail))).toBeInTheDocument()
+})
+
 it('checks pending checkout and restores a blocked account through Stripe', async () => {
   vi.mocked(getBillingSummary)
     .mockResolvedValueOnce(summary({ plan: 'pro', lifecycle: 'checkout_pending', canManageSubscription: true }))
@@ -168,12 +190,55 @@ it('keeps action errors retryable and ignores stale account requests', async () 
   expect(getBillingSummary).toHaveBeenLastCalledWith('/api', 'new-account', true, expect.any(AbortSignal))
 })
 
+it('deduplicates an in-flight action and ignores its stale success', async () => {
+  let resolve!: (value: { status: 'updated'; plan: 'pro' }) => void
+  vi.mocked(runBillingAction).mockReturnValueOnce(new Promise((done) => { resolve = done }))
+  const view = render(<BillingSettings {...props} />)
+  const button = await screen.findByRole('button', { name: 'Start 14-day trial' })
+  act(() => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+  expect(runBillingAction).toHaveBeenCalledOnce()
+  view.rerender(<BillingSettings {...props} accessToken="new-account" />)
+  await act(async () => resolve({ status: 'updated', plan: 'pro' }))
+  expect(await screen.findByRole('heading', { name: 'Cloud not active' })).toBeInTheDocument()
+})
+
+it('ignores stale billing loads whether they resolve or reject', async () => {
+  let resolve!: (value: BillingSummary) => void
+  let reject!: (reason: Error) => void
+  vi.mocked(getBillingSummary)
+    .mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    .mockResolvedValueOnce(summary())
+    .mockReturnValueOnce(new Promise((_, fail) => { reject = fail }))
+    .mockResolvedValueOnce(summary())
+  const view = render(<BillingSettings {...props} accessToken="first" />)
+  view.rerender(<BillingSettings {...props} accessToken="second" />)
+  expect(await screen.findByRole('heading', { name: 'Cloud not active' })).toBeInTheDocument()
+  await act(async () => resolve(summary({ lifecycle: 'read_only' })))
+  expect(screen.getByRole('heading', { name: 'Cloud not active' })).toBeInTheDocument()
+  view.rerender(<BillingSettings {...props} accessToken="third" />)
+  view.rerender(<BillingSettings {...props} accessToken="fourth" />)
+  await act(async () => reject(new Error('stale failure')))
+  expect(screen.queryByText('stale failure')).toBeNull()
+})
+
 it('uses safe defaults for optional server fields and non-managing viewers', async () => {
   vi.mocked(getBillingSummary).mockResolvedValue(summary({ plans: undefined, allowed: { manageBilling: false }, usage: undefined, testMode: false }))
   render(<BillingSettings {...props} />)
   expect(await screen.findByText('Usage becomes available after Cloud is activated.')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Start 14-day trial' })).toBeDisabled()
   expect(screen.queryByText('Test mode')).toBeNull()
+})
+
+it.each([
+  [{ allowed: undefined, canManageSubscription: undefined, canManage: true }, false],
+  [{ allowed: undefined, canManageSubscription: undefined, canManage: undefined }, false],
+] as const)('defaults optional management capabilities safely: %s', async (overrides, disabled) => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary(overrides as Partial<BillingSummary>))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('button', { name: 'Start 14-day trial' })).toHaveProperty('disabled', disabled)
 })
 
 it('renders unlimited usage, catalog fallbacks, and manual refresh', async () => {

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../lib/billing', async (importOriginal) => ({
   ...await importOriginal<typeof import('../lib/billing')>(),
@@ -35,7 +35,10 @@ it('takes an authenticated customer directly to one safe Checkout session', asyn
   render(<Pricing authenticated accessToken="session" apiBase="/api" />)
   const pro = screen.getByRole('heading', { name: 'Pro' }).closest('article')!
   const button = within(pro).getByRole('button', { name: /Start 14-day trial/ })
-  fireEvent.click(button); fireEvent.click(button)
+  act(() => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
   await waitFor(() => expect(startCloudCheckout).toHaveBeenCalledOnce())
   expect(startCloudCheckout).toHaveBeenCalledWith('/api', 'session', 'pro', 'yearly')
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/session')

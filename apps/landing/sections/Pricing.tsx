@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Button } from '../../../src/design-system/components/button'
 import { SectionIntro } from '../../../src/design-system/components/section-intro'
@@ -27,9 +27,11 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
   const [cycle, setCycle] = useState<BillingCycle>('yearly')
   const [busyPlan, setBusyPlan] = useState<CloudPlanKey | null>(null)
   const [error, setError] = useState('')
+  const checkoutRef = useRef(false)
 
   async function checkout(plan: CloudPlanKey, token: string) {
-    if (busyPlan) return
+    if (checkoutRef.current) return
+    checkoutRef.current = true
     setBusyPlan(plan)
     setError('')
     try {
@@ -37,6 +39,7 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Cloud checkout is temporarily unavailable')
       setBusyPlan(null)
+      checkoutRef.current = false
     }
   }
 
