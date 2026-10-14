@@ -106,7 +106,7 @@ vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenEx
 vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null }))
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
-vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button></div> }))
+vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button></div> }))
 vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; canOperateAgent: boolean }) => <div>
   command palette
   <button onClick={() => props.onAction('accept')}>command accept</button>
@@ -588,4 +588,11 @@ it('shows a clear error when the review link targets an inaccessible project', a
   window.history.replaceState({}, '', '/?accessProject=missing')
   render(<App />)
   expect(await screen.findByRole('alert')).toHaveTextContent('owner or admin')
+})
+
+it('reports a complete multi-item Inbox move without a skipped notice', async () => {
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'my comments' }))
+  fireEvent.click(screen.getByRole('button', { name: 'continue two moved Inbox' }))
+  expect(screen.getByRole('status')).toHaveTextContent('2 Inbox items moved.')
 })
