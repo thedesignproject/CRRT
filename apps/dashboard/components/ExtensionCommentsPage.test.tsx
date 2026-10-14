@@ -409,3 +409,35 @@ it('cannot clear an all-Inbox selection during a pending deletion', async () => 
  expect(screen.getByRole('toolbar')).toHaveTextContent('21 selected')
  await act(async () => finish({processedIds:[],skipped:[],selectedTotal:21}))
 })
+
+
+it.each(['unmount', 'token', 'api'] as const)('ignores a late bulk move after %s context changes', async (change) => {
+  let finish!: (result: any) => void
+  vi.mocked(bulkAssignExtensionComments).mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+  const onMoved = vi.fn()
+  const view = render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} onMovedToProject={onMoved} />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Project for selected Inbox items' }), { target: { value: 'store' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+  if (change === 'unmount') view.unmount()
+  else view.rerender(<ExtensionCommentsPage apiBase={change === 'api' ? '/other-api' : '/api'} accessToken={change === 'token' ? 'new-token' : 'token'} projects={[project]} onMovedToProject={onMoved} />)
+  await act(async () => finish({ processedIds: ['c1'], skipped: [], selectedTotal: 1 }))
+  expect(onMoved).not.toHaveBeenCalled()
+})
+
+it('does not report an old move failure after the token changes', async () => {
+  let fail!: (reason: Error) => void
+  vi.mocked(bulkAssignExtensionComments).mockReturnValueOnce(new Promise((_, reject) => { fail = reject }))
+  const view = render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
+  fireEvent.change(screen.getByRole('combobox', { name: 'Project for selected Inbox items' }), { target: { value: 'store' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+  view.rerender(<ExtensionCommentsPage apiBase="/api" accessToken="new-token" projects={[project]} />)
+  await act(async () => fail(new Error('Old move failed')))
+  expect(screen.queryByText('Old move failed')).toBeNull()
+  expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
+})

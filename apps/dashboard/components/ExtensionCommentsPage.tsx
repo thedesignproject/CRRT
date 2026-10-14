@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   assignExtensionComment,
   bulkAssignExtensionComments,
@@ -30,6 +30,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   projects?: Project[]
   onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number) => void
 }) {
+  const mutationContext = useRef(0)
   const [items, setItems] = useState<ExtensionCommentRecord[]>([])
   const [page, setPage] = useState(1)
   const [total, setTotal] = useState(0)
@@ -152,7 +153,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   useEffect(() => {
-    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject('')
+    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject(''); setBusy(false)
+    return () => { mutationContext.current += 1 }
   }, [apiBase, accessToken])
 
   useEffect(() => {
@@ -217,9 +219,11 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   async function moveSelected() {
+    const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
       const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, targetProject)
+      if (context !== mutationContext.current) return
       if (result.processedIds.length === 0) {
         setError('No Inbox items were moved. Refresh and try again.')
         return
@@ -233,8 +237,9 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       setTotal((value) => Math.max(0, value - result.processedIds.length))
       setNotice(`${result.processedIds.length} moved${result.skipped.length ? `; ${result.skipped.length} skipped` : ''}.`)
       exitBulkMode(); setReload((value) => value + 1)
-    } catch (reason) { setError(errorText(reason, 'Could not move selected Inbox items')) }
-    finally { setBusy(false) }
+    } catch (reason) {
+      if (context === mutationContext.current) setError(errorText(reason, 'Could not move selected Inbox items'))
+    } finally { if (context === mutationContext.current) setBusy(false) }
   }
 
   async function deleteSelected() {

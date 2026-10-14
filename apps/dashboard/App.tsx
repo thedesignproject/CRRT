@@ -313,6 +313,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   const exitBulkMode = useCallback(() => {
+    setPendingBulkSelection(null)
     setBulkMode(false)
     setBulkSelectedIds(new Set())
     setBulkTransitionNotice('')

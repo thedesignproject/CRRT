@@ -12,6 +12,7 @@ const fixtures = vi.hoisted(() => ({
     updatedAt: '',
   }] as Array<Record<string, unknown>>,
   comments: [] as Array<Record<string, unknown>>,
+  commentsProjectId: 'project-1' as string | null,
   claimProject: vi.fn(),
   acceptInvite: vi.fn(),
   updateImpl: vi.fn(),
@@ -51,7 +52,7 @@ vi.mock('./hooks/useProjects', () => ({
 vi.mock('./hooks/useComments', () => ({
   useComments: () => ({
     comments: fixtures.comments,
-    commentsProjectId: 'project-1',
+    commentsProjectId: fixtures.commentsProjectId,
     loading: false,
     error: null,
     refresh: fixtures.fn,
@@ -128,6 +129,7 @@ beforeEach(() => {
   fixtures.fn.mockReset()
   fixtures.agentProject.mockReset()
   fixtures.updateVisibility.mockReset().mockResolvedValue(undefined)
+  fixtures.commentsProjectId = 'project-1'
   fixtures.comments.splice(0)
   fixtures.projects.splice(0, fixtures.projects.length, { publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' })
   fixtures.superadmin = false
@@ -595,4 +597,20 @@ it('reports a complete multi-item Inbox move without a skipped notice', async ()
   fireEvent.click(await screen.findByRole('button', { name: 'my comments' }))
   fireEvent.click(screen.getByRole('button', { name: 'continue two moved Inbox' }))
   expect(screen.getByRole('status')).toHaveTextContent('2 Inbox items moved.')
+})
+
+
+it('does not restore a cancelled Inbox transfer when destination comments finish loading', async () => {
+  fixtures.commentsProjectId = null
+  const view = render(<App />)
+  fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
+  fireEvent.click(screen.getByRole('button', { name: 'continue moved Inbox' }))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:moved-1')
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
+  fixtures.commentsProjectId = 'project-1'
+  fixtures.comments = [{ id: 'moved-1', projectId: 'project-1', body: 'Moved feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' }]
+  view.rerender(<App />)
+  await waitFor(() => expect(screen.getByTestId('first-claim')).toHaveTextContent('none'))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
 })
