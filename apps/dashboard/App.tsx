@@ -140,7 +140,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     : false
   const readyAgentCommentIds = useMemo(
     () => commentsProjectId === selectedProject
-      ? comments.filter((comment) => getDisplayStatus(comment) === 'ready').map((comment) => comment.id)
+      ? comments.filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared').map((comment) => comment.id)
       : [],
     [comments, commentsProjectId, selectedProject],
   )
@@ -154,6 +154,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
+  const bulkGeneration = useRef(0)
+  useEffect(() => {
+    bulkGeneration.current++
+    setBulkActionBusy(false)
+  }, [selectedProject, view, accessToken])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -327,6 +332,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [accessToken, comments])
 
   const toggleBulkSelect = useCallback((id: string) => {
+    if (bulkActionBusy) return
     setBulkActionError('')
     setBulkSelectedIds((prev) => {
       const next = new Set(prev)
@@ -334,9 +340,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       else next.add(id)
       return next
     })
-  }, [])
+  }, [bulkActionBusy])
 
   const exitBulkMode = useCallback(() => {
+    bulkGeneration.current++
+    setBulkActionBusy(false)
     setBulkMode(false)
     setBulkSelectedIds(new Set())
     setBulkTransitionNotice('')
@@ -345,7 +353,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject') => {
     const ids = Array.from(bulkSelectedIds)
-    if (ids.length === 0 || bulkActionBusy) return
+    const generation = bulkGeneration.current
     setBulkActionBusy(true)
     setBulkActionError('')
     const idSet = new Set(ids)
@@ -374,7 +382,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const results = await Promise.allSettled(calls)
     const failedIds = results.flatMap((result, index) => result.status === 'rejected' ? [ids[index]!] : [])
     const failed = results.filter((result) => result.status === 'rejected')
-    const stillCurrent = ids.some((id) => reviewRequests.current.get(id) === requests.get(id))
+    const stillCurrent = generation === bulkGeneration.current && ids.some((id) => reviewRequests.current.get(id) === requests.get(id))
     if (failed.length > 0) {
       console.error(`Bulk ${action}: ${failed.length}/${calls.length} calls failed`, failed)
       if (stillCurrent) await refreshComments()
@@ -384,7 +392,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     for (const id of ids) {
       if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
     }
-    if (stillCurrent) {
+    if (stillCurrent && generation === bulkGeneration.current) {
       if (failedIds.length > 0) {
         setBulkMode(true)
         setBulkSelectedIds(action === 'ready' ? new Set(ids) : new Set(failedIds))
@@ -393,26 +401,37 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         exitBulkMode()
       }
     }
-    setBulkActionBusy(false)
+    if (generation === bulkGeneration.current) setBulkActionBusy(false)
   }, [accessToken, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments])
 
   const openAgentUpgrade = useCallback(async () => {
+    const generation = bulkGeneration.current
     setBulkActionError('')
     try {
       const checkout = await beginBillingCheckout(API_BASE, accessToken)
+      if (generation !== bulkGeneration.current) return
       window.location.assign(checkout.url)
     } catch (error) {
+      if (generation !== bulkGeneration.current) return
       setBulkActionError(error instanceof Error ? error.message : 'Could not open plan upgrade.')
     }
   }, [accessToken])
 
   const handoffSelectedToAgent = useCallback(async () => {
-    const commentIds = selectedBulkComments.map((comment) => comment.id)
-    if (commentIds.length === 0 || bulkActionBusy) return
+    const commentIds = [...bulkSelectedIds]
+    if (commentsProjectId !== selectedProject || selectedBulkComments.length !== commentIds.length) {
+      setBulkActionError('Feedback changed. Review the selection and retry.')
+      return
+    }
     if (!allSelectedReady) {
       await applyBulkAction('ready')
       return
     }
+    if (selectedBulkComments.some((comment) => comment.visibility !== 'shared')) {
+      setBulkActionError('Only shared feedback can be sent to Agent. Update the audience or remove internal items from the selection.')
+      return
+    }
+    const generation = bulkGeneration.current
     setBulkActionBusy(true)
     setBulkActionError('')
     try {
@@ -421,11 +440,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         scopeType: 'selection',
         commentIds,
       })
+      if (generation !== bulkGeneration.current) return
       if (share.commentCount !== commentIds.length) throw new Error('Feedback changed. Review the selection and retry.')
       const result = await getPrompt(API_BASE, accessToken, share.shareId, selectedAgentMeta.target)
+      if (generation !== bulkGeneration.current) return
       await navigator.clipboard.writeText(result.prompt)
+      if (generation !== bulkGeneration.current) return
       setBulkTransitionNotice(`${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} copied for ${selectedAgentMeta.name}.`)
     } catch (error) {
+      if (generation !== bulkGeneration.current) return
       const requestError = error as Error & { code?: string }
       if (requestError.code === 'upgrade_required') {
         await openAgentUpgrade()
@@ -433,18 +456,19 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         setBulkActionError(requestError.message || 'Could not send the selected feedback to Agent.')
       }
     } finally {
-      setBulkActionBusy(false)
+      if (generation === bulkGeneration.current) setBulkActionBusy(false)
     }
-  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, selectedProject])
+  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject])
 
   const toggleSelectAllVisible = useCallback(() => {
+    if (bulkActionBusy) return
     setBulkActionError('')
     const visibleIds = filteredComments.map((c) => c.id)
     setBulkSelectedIds((prev) => {
       const allSelected = visibleIds.every((id) => prev.has(id))
       return allSelected ? new Set() : new Set(visibleIds)
     })
-  }, [filteredComments])
+  }, [bulkActionBusy, filteredComments])
 
   const selectedIdx = filteredComments.findIndex((c) => c.id === selectedCommentId)
 
@@ -635,8 +659,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     <div className="dashboard-shell">
       <Header
         agentAction={canOpenAgentPanel
-          ? <AgentLauncher readyCount={counts.ready} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />
-          : <AgentLauncher readyCount={counts.ready} open={false} disabled unavailableReason={agentUnavailableReason} />}
+          ? <AgentLauncher readyCount={readyAgentCommentIds.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />
+          : <AgentLauncher readyCount={readyAgentCommentIds.length} open={false} disabled unavailableReason={agentUnavailableReason} />}
         projects={projects}
         projectsLoading={projectsLoading}
         projectsError={projectsError}
@@ -730,7 +754,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           <AgentSidebar
             selectedProject={selectedProject}
             projectComments={projectComments}
-            readyCount={counts.ready}
+            readyCount={readyAgentCommentIds.length}
             filtered={statusFilter === 'ready'}
             selectedCommentId={selectedCommentId}
             onSelectComment={setSelectedCommentId}
