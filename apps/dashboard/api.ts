@@ -123,7 +123,7 @@ export type ExtensionCommentBulkSelection =
 
 export interface ExtensionCommentBulkResult {
   processedIds: string[]
-  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' }>
+  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed' }>
   selectedTotal: number
 }
 
