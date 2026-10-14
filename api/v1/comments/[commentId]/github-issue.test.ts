@@ -8,6 +8,7 @@ vi.mock('../../../_lib/auth.js', () => ({
   requireProjectCapability: vi.fn(),
   requireProjectCommentCapability: vi.fn(),
 }))
+vi.mock('../../../_lib/comment-actor.js', () => ({ requireCommentActor: vi.fn() }))
 vi.mock('../../../_lib/comment-issue-content.js', () => ({ generateCommentIssueContent: vi.fn() }))
 vi.mock('../../../_lib/github-app.js', () => ({ createInstallationAccessToken: vi.fn() }))
 vi.mock('../../../_lib/github-issues.js', () => ({
@@ -34,6 +35,7 @@ vi.mock('../../../_lib/store.js', () => ({
 import handler from './github-issue.js'
 import { waitUntil } from '@vercel/functions'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { requireCommentActor } from '../../../_lib/comment-actor.js'
 import { generateCommentIssueContent } from '../../../_lib/comment-issue-content.js'
 import { createInstallationAccessToken } from '../../../_lib/github-app.js'
 import { closeLinkedGithubIssue } from '../../../_lib/external-work-sync.js'
@@ -67,10 +69,10 @@ function mockRes() {
     setHeader(key: string, value: string) { this.headers[key] = value },
   }
 }
-const call = (method = 'POST', query: Record<string, unknown> = { commentId: 'comment-1' }, body: unknown = undefined) => {
+const call = (method = 'POST', query: Record<string, unknown> = { commentId: 'comment-1' }, body: unknown = undefined, headers: Record<string, string> = {}) => {
   const res = mockRes()
   return (handler as never as (req: unknown, res: ReturnType<typeof mockRes>) => Promise<unknown>)({
-    method, query, body, headers: {},
+    method, query, body, headers,
   }, res).then(() => res)
 }
 
@@ -112,6 +114,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(closeLinkedGithubIssue).mockResolvedValue(undefined)
   vi.mocked(requireUser).mockResolvedValue({ userId: 'user-1', email: 'a@b.c' })
+  vi.mocked(requireCommentActor).mockResolvedValue({ userId: 'user-1', email: '' })
   vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockResolvedValue(comment as never)
@@ -140,6 +143,20 @@ beforeEach(() => {
 })
 
 describe('POST comment GitHub issue', () => {
+  it('accepts an origin-bound widget actor without dashboard authentication', async () => {
+    const result = await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+    expect(result.statusCode).toBe(201)
+    expect(requireUser).not.toHaveBeenCalled()
+    expect(requireCommentActor).toHaveBeenCalledWith(expect.anything(), result, comment)
+  })
+
+  it('stops after a rejected widget actor', async () => {
+    vi.mocked(requireCommentActor).mockResolvedValueOnce(null)
+    const result = await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+    expect(result.body).toBeNull()
+    expect(getCommentForGithubIssue).not.toHaveBeenCalled()
+  })
+
   it('authenticates, validates the method and comment id', async () => {
     vi.mocked(requireUser).mockImplementationOnce(async (_req, res) => {
       res.status(401).json({ error: 'Unauthorized' })
@@ -403,7 +420,7 @@ it('denies an existing issue response and acceptance if actor authorization is r
 it('does not dispatch GitHub if access is revoked before the atomic send decision',async()=>{
  vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
  const res=await call();expect(res.statusCode).toBe(403);expect(createGithubIssue).not.toHaveBeenCalled()
- expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null)
+ expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1','comment-1','user-1',expect.any(String),null,false)
  expect(releaseCommentGithubIssue).toHaveBeenCalled()
 })
 
@@ -420,4 +437,17 @@ it('checks dispatch authorization before AI preparation and passes its cancellat
   return {title:'Title',summary:'Summary',implementationContext:'Context'}
  })
  expect((await call()).statusCode).toBe(201)
+})
+
+it('blocks widget dispatch when approval changes and never reapproves widget work', async () => {
+  vi.mocked(beginTrackerDispatch).mockResolvedValueOnce(false)
+  await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+  expect(beginTrackerDispatch).toHaveBeenCalledWith('project-1', 'comment-1', 'user-1', expect.any(String), null, true)
+  expect(createGithubIssue).not.toHaveBeenCalled()
+  expect(acceptCommentIfOpen).not.toHaveBeenCalled()
+})
+it('keeps widget approval unchanged after successful GitHub creation', async () => {
+  const res = await call('POST', { commentId: 'comment-1' }, undefined, { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` })
+  expect(res.statusCode).toBe(201)
+  expect(acceptCommentIfOpen).not.toHaveBeenCalled()
 })

@@ -41,7 +41,7 @@ it('creates an exact owner session with every server-authoritative input', async
   const res = await call()
   expect(assertWidgetPage).toHaveBeenCalledWith(expect.objectContaining({ user_id: 'u' }), 'p', body.pageUrl)
   expect(createWidgetAgentShare).toHaveBeenCalledWith(expect.objectContaining({
-    projectKey: 'p', actorUserId: 'u', pageUrl: body.pageUrl, idempotencyKey: body.idempotencyKey,
+    approvedOnly: true, projectKey: 'p', actorUserId: 'u', pageUrl: body.pageUrl, idempotencyKey: body.idempotencyKey,
     allowedPriceIds: ['price_agent'], commentIds: [id], accessTokenHash: 'generated-hash',
     requestHash: expect.stringMatching(/^[0-9a-f]{64}$/),
   }))

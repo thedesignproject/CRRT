@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('@vercel/functions', () => ({ waitUntil: vi.fn() }))
 
 vi.mock('../../../_lib/auth.js', () => ({ requireProjectCapability: vi.fn(), requireProjectCommentCapability: vi.fn(), requireUser: vi.fn() }))
+vi.mock('../../../_lib/comment-actor.js', () => ({ requireCommentActor: vi.fn() }))
 vi.mock('../../../_lib/linear-connection.js', () => ({ getLinearAccessToken: vi.fn() }))
 vi.mock('../../../_lib/linear.js', () => ({ createLinearIssue: vi.fn() }))
 vi.mock('../../../_lib/jira-connection.js', () => ({ getJiraAccessToken: vi.fn() }))
@@ -21,6 +22,7 @@ import { waitUntil } from '@vercel/functions'
 import githubIssueHandler from './github-issue.js'
 import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
+import { requireCommentActor } from '../../../_lib/comment-actor.js'
 import { getLinearAccessToken } from '../../../_lib/linear-connection.js'
 import { createLinearIssue } from '../../../_lib/linear.js'
 import { getJiraAccessToken } from '../../../_lib/jira-connection.js'
@@ -41,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(closeLinkedExternalWork).mockResolvedValue(undefined)
   vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
+  vi.mocked(requireCommentActor).mockResolvedValue({ userId: 'widget-user', email: '' })
   vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(getComment).mockResolvedValue(comment as never)
@@ -66,6 +69,13 @@ beforeEach(() => {
 })
 
 describe('external work endpoint', () => {
+  it('accepts an origin-bound widget actor without dashboard authentication', async () => {
+    const res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` } }, res)
+    expect(res.statusCode).toBe(200)
+    expect(requireUser).not.toHaveBeenCalled()
+    expect(requireCommentActor).toHaveBeenCalledWith(expect.anything(), res, comment)
+  })
   it('prepares a deterministic editable GitHub draft without exposing credentials', async () => {
     const res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
@@ -90,6 +100,13 @@ describe('external work endpoint', () => {
     const res = response()
     await call({ method: 'GET', query: { commentId: 'c', provider: 'github' }, headers: {} }, res)
     expect(res.body).toBeNull()
+    expect(getCommentForGithubIssue).not.toHaveBeenCalled()
+  })
+
+  it('stops after a rejected widget actor', async () => {
+    vi.mocked(requireCommentActor).mockResolvedValueOnce(null)
+    const res = response()
+    await call({ method: 'GET', query: { commentId: 'c', provider: 'linear' }, headers: { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` } }, res)
     expect(getCommentForGithubIssue).not.toHaveBeenCalled()
   })
 
@@ -321,7 +338,7 @@ it.each(['github','linear','jira'])('denies a %s draft after access is revoked d
   vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockRejectedValueOnce(new Error('forbidden'))
   const res=response();await call({method:'GET',query:{commentId:'c',provider},headers:{}},res)
   expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('draft')
-  expect(getCommentForGithubIssue).toHaveBeenCalledWith('p','c','u')
+  expect(getCommentForGithubIssue).toHaveBeenCalledWith('p','c','u',false)
 })
 it.each(['github','linear'])('returns 404 if the %s draft comment disappears during metadata lookup',async provider=>{
   vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce(comment as never).mockResolvedValueOnce(null)
@@ -350,11 +367,29 @@ it('does not dispatch Jira when access is revoked during destination preparation
  })
  const res=response();await call({...post(),body:{provider:'jira',draft:{title:'Title',body:'Body'}}},res)
  expect(res.statusCode).toBe(403);expect(createJiraIssue).not.toHaveBeenCalled();expect(releaseCommentExternalWork).toHaveBeenCalled()
- expect(beginTrackerDispatch).toHaveBeenCalledWith('p','c',expect.any(String),expect.any(String),'work')
+ expect(beginTrackerDispatch).toHaveBeenCalledWith('p','c',expect.any(String),expect.any(String),'work',false)
 })
 it.each(['linear','jira'])('does not dispatch %s if the atomic actor check rejects the prepared request',async provider=>{
  vi.mocked(beginTrackerDispatch).mockRejectedValueOnce(new Error('forbidden'))
  const res=response();await call({...post(),body:{provider,draft:{title:'Title',body:'Body'}}},res)
  expect(res.statusCode).toBe(403);expect(createLinearIssue).not.toHaveBeenCalled();expect(createJiraIssue).not.toHaveBeenCalled()
  expect(releaseCommentExternalWork).toHaveBeenCalled()
+})
+
+it('does not dispatch or approve widget feedback reopened during tracker preparation', async () => {
+  vi.mocked(beginTrackerDispatch).mockResolvedValueOnce(false)
+  const res = response()
+  await call({ method: 'POST', query: { commentId: 'c' }, body: { provider: 'linear', draft: { title: 'T', body: 'B' } }, headers: { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` } }, res)
+  expect(getCommentForGithubIssue).toHaveBeenCalledWith('p', 'c', 'widget-user', true)
+  expect(beginTrackerDispatch).toHaveBeenCalledWith('p', 'c', 'widget-user', expect.any(String), 'work', true)
+  expect(createLinearIssue).not.toHaveBeenCalled()
+  expect(acceptCommentIfOpen).not.toHaveBeenCalled()
+  expect(releaseCommentExternalWork).toHaveBeenCalled()
+})
+it('creates widget tracker issues without reapproving feedback', async () => {
+  const res = response()
+  await call({ method: 'POST', query: { commentId: 'c' }, body: { provider: 'linear', draft: { title: 'T', body: 'B' } }, headers: { authorization: `Bearer crrt_widget_${'a'.repeat(43)}` } }, res)
+  expect(res.statusCode).toBe(201)
+  expect(beginTrackerDispatch).toHaveBeenCalledWith('p', 'c', 'widget-user', expect.any(String), 'work', true)
+  expect(acceptCommentIfOpen).not.toHaveBeenCalled()
 })

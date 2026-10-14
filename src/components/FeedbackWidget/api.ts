@@ -45,6 +45,22 @@ export interface WidgetAgentSessionResponse {
   commentCount: number
 }
 
+export type ExternalWorkProvider = 'github' | 'linear' | 'jira'
+
+export interface WidgetExternalWorkDraft {
+  provider: ExternalWorkProvider
+  connected: boolean
+  destination: string | null
+  existing: { externalUrl?: string; issueUrl?: string } | null
+  draft: { title: string; body: string }
+}
+
+export interface WidgetExternalWorkResult {
+  externalUrl?: string
+  issueUrl?: string
+  created: boolean
+}
+
 export async function fetchWidgetAgentEligibility(
   apiBase: string,
   projectKey: string,
@@ -85,6 +101,29 @@ export async function startWidgetAgentUpgrade(
   return (await widgetRequest(apiBase, '/v1/widget/agent/upgrade', session, {
     method: 'POST',
     body: JSON.stringify(input),
+  })).json()
+}
+
+export async function fetchWidgetExternalWorkDraft(
+  apiBase: string,
+  commentId: string,
+  provider: ExternalWorkProvider,
+  session: WidgetLoginSession,
+): Promise<WidgetExternalWorkDraft> {
+  const query = new URLSearchParams({ provider })
+  return (await widgetRequest(apiBase, `/v1/comments/${encodeURIComponent(commentId)}/external-work?${query}`, session)).json()
+}
+
+export async function createWidgetExternalWork(
+  apiBase: string,
+  commentId: string,
+  provider: ExternalWorkProvider,
+  draft: { title: string; body: string },
+  session: WidgetLoginSession,
+): Promise<WidgetExternalWorkResult> {
+  return (await widgetRequest(apiBase, `/v1/comments/${encodeURIComponent(commentId)}/external-work`, session, {
+    method: 'POST',
+    body: JSON.stringify({ provider, draft }),
   })).json()
 }
 

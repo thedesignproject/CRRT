@@ -36,6 +36,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const generatedToken = generateAccessToken()
     const generatedTokenHash = hashToken(generatedToken)
     const share = await createWidgetAgentShare({
+      approvedOnly: true,
       projectKey: input.projectKey,
       actorUserId: session.user_id,
       pageUrl: input.pageUrl,
