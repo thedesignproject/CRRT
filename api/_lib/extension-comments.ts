@@ -95,16 +95,25 @@ export function parseExtensionCommentBulkSelection(value: unknown): ExtensionCom
 
 async function resolveInboxBulkRows(userId: string, selection: ExtensionCommentBulkSelection) {
   const client = getServiceSupabase()
-  let query = client.from('comments')
-    .select('id,screenshot_storage_path')
-    .eq('source', 'extension')
-    .eq('created_by_user_id', userId)
-    .is('project_id', null)
-  if (selection.mode === 'ids') query = query.in('id', selection.ids)
-  const { data, error } = await query
-  if (error) throw new Error(error.message)
+  const rows: InboxBulkRow[] = []
   const excluded = new Set(selection.mode === 'all' ? selection.excludedIds : [])
-  return ((data as InboxBulkRow[] | null) ?? []).filter((row) => !excluded.has(row.id))
+  let cursor: string | undefined
+  // Keyset pagination survives rows disappearing between pages without skipping
+  // the next page, and never relies on PostgREST's default row cap.
+  for (;;) {
+    let query = client.from('comments').select('id,screenshot_storage_path')
+      .eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+      .order('id', { ascending: true }).limit(500)
+    if (selection.mode === 'ids') query = query.in('id', selection.ids)
+    if (cursor) query = query.gt('id', cursor)
+    const { data, error } = await query
+    if (error) throw new Error(error.message)
+    const page = (data as InboxBulkRow[] | null) ?? []
+    rows.push(...page.filter((row) => !excluded.has(row.id)))
+    if (page.length < 500) break
+    cursor = page[page.length - 1]!.id
+  }
+  return rows
 }
 
 function missingSelectionIds(selection: ExtensionCommentBulkSelection, rows: InboxBulkRow[]) {
@@ -125,15 +134,17 @@ export async function bulkAssignExtensionCommentsToProject(
   if (rows.length === 0) return { processedIds: [], skipped, selectedTotal: selection.mode === 'ids' ? selection.ids.length : 0 }
 
   const client = getServiceSupabase()
-  const { data, error } = await client.from('comments')
-    .update({ project_id: projectId, visibility, updated_at: new Date().toISOString() })
-    .eq('source', 'extension')
-    .eq('created_by_user_id', userId)
-    .is('project_id', null)
-    .in('id', rows.map((row) => row.id))
-    .select('id')
-  if (error) throw new Error(error.message)
-  const processedIds = ((data as Array<{ id: string }> | null) ?? []).map((row) => row.id)
+  const processedIds: string[] = []
+  for (let offset = 0; offset < rows.length; offset += 500) {
+    const { data, error } = await client.rpc('assign_actor_inbox_feedback', {
+      p_actor: userId, p_project: projectId, p_ids: rows.slice(offset, offset + 500).map((row) => row.id), p_visibility: visibility,
+    })
+    if (error) {
+      if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
+      throw new Error(error.message)
+    }
+    processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
+  }
   const processed = new Set(processedIds)
   for (const row of rows) {
     if (!processed.has(row.id)) skipped.push({ id: row.id, reason: 'concurrent_change' })
@@ -152,42 +163,36 @@ export async function bulkDeleteExtensionComments(
   const rows = await resolveInboxBulkRows(userId, selection)
   const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows)
     .map((id) => ({ id, reason: 'not_in_inbox' }))
-  const removableIds: string[] = []
   const client = getServiceSupabase()
-
-  for (let offset = 0; offset < rows.length; offset += 20) {
-    const batch = rows.slice(offset, offset + 20)
-    const results = await Promise.all(batch.map(async (row) => {
-      if (!row.screenshot_storage_path) return true
-      const { error } = await client.storage.from(BUCKET).remove([row.screenshot_storage_path])
-      return !error
-    }))
-    results.forEach((removed, index) => {
-      const row = batch[index]
-      if (!row) return
-      if (removed) removableIds.push(row.id)
-      else skipped.push({ id: row.id, reason: 'storage_delete_failed' })
-    })
-  }
-
-  const processedIds: string[] = []
-  for (let offset = 0; offset < removableIds.length; offset += 100) {
-    const ids = removableIds.slice(offset, offset + 100)
-    const { data, error } = await client.from('comments')
-      .delete()
-      .eq('source', 'extension')
-      .eq('created_by_user_id', userId)
-      .is('project_id', null)
-      .in('id', ids)
-      .select('id')
+  const deletedRows: InboxBulkRow[] = []
+  // Only the row snapshots returned by DELETE may have their images removed.
+  // A concurrent move, ownership change, or failed DELETE retains its image.
+  for (let offset = 0; offset < rows.length; offset += 100) {
+    const { data, error } = await client.from('comments').delete()
+      .eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
+      .in('id', rows.slice(offset, offset + 100).map((row) => row.id))
+      .select('id,screenshot_storage_path')
     if (error) throw new Error(error.message)
-    processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
+    const batch = (data as InboxBulkRow[] | null) ?? []
+    deletedRows.push(...batch)
+    for (let offset = 0; offset < batch.length; offset += 20) {
+      await Promise.all(batch.slice(offset, offset + 20).map(async (row) => {
+        if (!row.screenshot_storage_path) return
+        try {
+          const { error } = await client.storage.from(BUCKET).remove([row.screenshot_storage_path])
+          if (error) console.error('Deleted Inbox screenshot cleanup failed', row.screenshot_storage_path, error)
+        } catch (error) {
+          console.error('Deleted Inbox screenshot cleanup failed', row.screenshot_storage_path, error)
+        }
+      }))
+    }
+  }
+  const processedIds = deletedRows.map((row) => row.id)
+  const processed = new Set(processedIds)
+  for (const row of rows) {
+    if (!processed.has(row.id)) skipped.push({ id: row.id, reason: 'concurrent_change' })
   }
 
-  const processed = new Set(processedIds)
-  for (const id of removableIds) {
-    if (!processed.has(id)) skipped.push({ id, reason: 'concurrent_change' })
-  }
   return {
     processedIds,
     skipped,

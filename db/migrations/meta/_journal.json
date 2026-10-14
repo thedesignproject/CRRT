@@ -281,6 +281,13 @@
       "when": 1791465212082,
       "tag": "0039_widget_agent_workflow_upgrade",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791961699624,
+      "tag": "0040_inbox_bulk_assignment",
+      "breakpoints": true
     }
   ]
 }
