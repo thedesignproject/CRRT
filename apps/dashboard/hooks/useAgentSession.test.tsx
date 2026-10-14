@@ -188,6 +188,8 @@ it('clears cached credentials when the API server changes',async()=>{
  rerender({api:'/second'})
  await waitFor(()=>expect(result.current.error).toBe('Different server'))
  expect(result.current.session).toBeNull()
+ expect(getShareState).not.toHaveBeenCalledWith('/second','slug-1','share-token')
+ expect(getShareEvents).not.toHaveBeenCalledWith('/second','slug-1','share-token',expect.any(Number))
  unmount()
 })
 
@@ -199,5 +201,25 @@ it('retains and deduplicates the running share event history after reopening',as
  rerender({enabled:true})
  await waitFor(()=>expect(getShareEvents).toHaveBeenCalledWith('/api','slug-1','share-token',2))
  expect(result.current.events).toHaveLength(2)
+ unmount()
+})
+
+it('does not adopt or poll a share without a current project',async()=>{
+ const {result,rerender,unmount}=renderHook(({project}: {project:string|null})=>useAgentSession('/api','token',project,['c1']),{initialProps:{project:'p' as string|null}})
+ await waitFor(()=>expect(result.current.session).not.toBeNull())
+ rerender({project:null})
+ await act(async()=>result.current.adoptSession({shareId:'stale',slug:'stale',token:'stale',docUrl:'url'},['c1']))
+ expect(result.current.session).toBeNull()
+ expect(getShareState).not.toHaveBeenCalledWith('/api','stale','stale')
+ unmount()
+})
+it('ignores an initial share failure after adopting a bulk share',async()=>{
+ let fail!: (e:Error)=>void
+ vi.mocked(createShare).mockReturnValueOnce(new Promise((_,reject)=>{fail=reject}))
+ const {result,unmount}=renderHook(()=>useAgentSession('/api','token','p',['c1']))
+ await act(async()=>result.current.adoptSession({shareId:'bulk',slug:'bulk',token:'bulk',docUrl:'url'},['c1']))
+ await act(async()=>fail(new Error('Obsolete failure')))
+ expect(result.current.session?.shareId).toBe('bulk')
+ expect(result.current.error).toBeNull()
  unmount()
 })

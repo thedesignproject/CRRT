@@ -104,19 +104,19 @@ export function useAgentSession(apiBase: string, accessToken: string, projectId:
     const revision = ++sessionRevision.current
     createShare(apiBase, accessToken, { projectId, scopeType: 'selection', commentIds: selectedCommentIds })
       .then((res) => {
-        if (cancelled || revision !== sessionRevision.current || activeProjectRef.current !== projectId) return
+        if (cancelled || revision !== sessionRevision.current) return
         const next = { shareId: res.shareId, slug: res.slug, token: res.token, docUrl: res.tokenUrl }
         cachedSessions.current.set(projectId, { idsKey: commentIdsKey, session: next })
         setSession(next)
         setProjectName(projectId)
       })
       .catch((err) => {
-        if (cancelled || revision !== sessionRevision.current || activeProjectRef.current !== projectId) return
+        if (cancelled || revision !== sessionRevision.current) return
         setError(err instanceof Error ? err.message : 'Could not start session')
         setErrorCode(typeof err === 'object' && err && 'code' in err && typeof err.code === 'string' ? err.code : null)
       })
       .finally(() => {
-        if (!cancelled && revision === sessionRevision.current && activeProjectRef.current === projectId) setLoading(false)
+        if (!cancelled && revision === sessionRevision.current) setLoading(false)
       })
 
     return () => {
@@ -127,6 +127,7 @@ export function useAgentSession(apiBase: string, accessToken: string, projectId:
   useEffect(() => {
     if (!session || !enabled) return
     if (mocksEnabled) return
+    if (!projectId || cachedSessions.current.get(projectId)?.session !== session) return
     let cancelled = false
     let consecutiveFails = 0
 
@@ -169,7 +170,7 @@ export function useAgentSession(apiBase: string, accessToken: string, projectId:
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [apiBase, session, enabled])
+  }, [apiBase, session, enabled, projectId, ownerId])
 
   const adoptSession = useCallback((next: AgentSession, ids: string[]) => {
     if (!projectId) return
