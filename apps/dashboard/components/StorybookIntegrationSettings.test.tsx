@@ -108,6 +108,14 @@ describe('StorybookIntegrationSettings', () => {
     expect(screen.queryByRole('link', { name: /Open Storybook/ })).toBeNull()
   })
 
+  it('does not render an open action when the backend has no Storybook URL', async () => {
+    vi.mocked(getStorybookIntegration).mockResolvedValue({ state: 'connected' })
+    render(<StorybookIntegrationSettings {...props} />)
+
+    expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Open Storybook/ })).toBeNull()
+  })
+
   it('shows the auth recovery state and retries', async () => {
     vi.mocked(getStorybookIntegration)
       .mockRejectedValueOnce(requestError('Unauthorized', 401))
@@ -174,6 +182,16 @@ describe('StorybookIntegrationSettings', () => {
     expect(await screen.findByText('Connection command expired')).toBeInTheDocument()
   })
 
+  it('provides fallback copy for backend states without a message', async () => {
+    vi.mocked(getStorybookIntegration).mockResolvedValueOnce({ state: 'expired' })
+    const rendered = render(<StorybookIntegrationSettings {...props} />)
+    expect(await screen.findByText('Generate a fresh command to continue.')).toBeInTheDocument()
+
+    vi.mocked(getStorybookIntegration).mockResolvedValueOnce({ state: 'error' } as never)
+    rendered.rerender(<StorybookIntegrationSettings {...props} projectKey="error" />)
+    expect(await screen.findByRole('alert')).toHaveTextContent('CRRT could not load the Storybook connection.')
+  })
+
   it('expires a command whose deadline has passed', async () => {
     vi.mocked(getStorybookIntegration).mockResolvedValue({
       state: 'waiting',
@@ -212,6 +230,48 @@ describe('StorybookIntegrationSettings', () => {
     expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
     await act(async () => resolveFirst({ state: 'not_connected' }))
     expect(screen.queryByText('No Storybook connected')).toBeNull()
+  })
+
+  it('ignores a stale load failure after switching projects', async () => {
+    let rejectFirst!: (reason: unknown) => void
+    const first = new Promise<never>((_resolve, reject) => { rejectFirst = reject })
+    vi.mocked(getStorybookIntegration)
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce({ state: 'connected' })
+    const rendered = render(<StorybookIntegrationSettings {...props} />)
+
+    rendered.rerender(<StorybookIntegrationSettings {...props} projectKey="new" />)
+    expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
+    await act(async () => rejectFirst(new Error('Stale load error')))
+    expect(screen.queryByText('Stale load error')).toBeNull()
+  })
+
+  it('ignores a stale pairing success after switching projects', async () => {
+    let resolvePairing!: (value: { state: 'waiting'; command: string }) => void
+    const pairing = new Promise<{ state: 'waiting'; command: string }>((resolve) => { resolvePairing = resolve })
+    vi.mocked(createStorybookPairing).mockReturnValue(pairing)
+    const rendered = render(<StorybookIntegrationSettings {...props} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Storybook' }))
+    vi.mocked(getStorybookIntegration).mockResolvedValueOnce({ state: 'connected' })
+    rendered.rerender(<StorybookIntegrationSettings {...props} projectKey="new" />)
+    expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
+    await act(async () => resolvePairing({ state: 'waiting', command: 'npx stale' }))
+    expect(screen.queryByText('npx stale')).toBeNull()
+  })
+
+  it('ignores a stale pairing failure after switching projects', async () => {
+    let rejectPairing!: (reason: unknown) => void
+    const pairing = new Promise<never>((_resolve, reject) => { rejectPairing = reject })
+    vi.mocked(createStorybookPairing).mockReturnValue(pairing)
+    const rendered = render(<StorybookIntegrationSettings {...props} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Storybook' }))
+    vi.mocked(getStorybookIntegration).mockResolvedValueOnce({ state: 'connected' })
+    rendered.rerender(<StorybookIntegrationSettings {...props} projectKey="new" />)
+    expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
+    await act(async () => rejectPairing(new Error('Stale pairing error')))
+    expect(screen.queryByText('Stale pairing error')).toBeNull()
   })
 
   it('renders setup mode and keeps management actions admin-only', async () => {

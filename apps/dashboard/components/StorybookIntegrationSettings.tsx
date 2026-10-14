@@ -130,7 +130,6 @@ export function StorybookIntegrationSettings({
   }, [integration])
 
   async function createPairing() {
-    if (!canManage || busy) return
     const request = ++sequence.current
     setBusy(true)
     setCopyState('idle')
