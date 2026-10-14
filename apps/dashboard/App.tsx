@@ -152,7 +152,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     sidebarOpen,
     user.id,
   )
-  const agentConnected = (agentShareState?.presence?.length ?? 0) > 0
+  const activeAgentShare = agentShareState
+    && agentShareState.share.id === agentSession?.shareId
+    && agentShareState.project.publicKey === selectedProject
+    ? agentShareState : null
+  const agentConnected = (activeAgentShare?.presence?.length ?? 0) > 0
+  const agentQueueComments = (activeAgentShare?.comments ?? []).map(mapServerComment)
+    .filter((comment) => comment.visibility === 'shared')
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
@@ -771,7 +777,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         {sidebarOpen && canOpenAgentPanel && (
           <AgentSidebar
             selectedProject={selectedProject}
-            projectComments={projectComments}
+            projectComments={agentQueueComments}
             readyCount={readyAgentCommentIds.length}
             filtered={statusFilter === 'ready'}
             selectedCommentId={selectedCommentId}
