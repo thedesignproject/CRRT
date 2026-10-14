@@ -1,0 +1,54 @@
+# CRRT Cloud plan enforcement
+
+Community is the complete self-hosted product with no commercial quotas. Cloud has no permanent free plan. The browser extension's local mode is an evaluation mode, not a Cloud plan.
+
+| Cloud plan | Monthly USD | Projects | Unique internal users | New comments/window | Product Audits/window |
+| --- | --- | --- | --- | --- | --- |
+| Pro | 19 | 10 | 10 | 2,000 | 5 |
+| Studio | 49 | 50 | 25 | 10,000 | 30 |
+
+Both include unlimited guests, the dashboard, npm widget, extension sync, integrations and Agent handoff. Each owner can use one 14-day trial with a payment method; starting another Checkout after cancellation does not renew trial eligibility. Taxes are additional when applicable.
+
+For the exact enablement sequence, see [the billing activation runbook](cloud-billing-runbook.md).
+
+## Deployment configuration
+
+`CRRT_DEPLOYMENT_MODE=community` (the default) bypasses commercial checks, including Agent access. Community never needs a working Stripe account. Operational resource and abuse protections still apply.
+
+Cloud deployments set `CRRT_DEPLOYMENT_MODE=cloud`, `STRIPE_ENABLED=true`, `STRIPE_MODE=test` or `live`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRO_PRICE_ID`, `STRIPE_STUDIO_PRICE_ID`, and `STRIPE_RETURN_URL`. A mode/key mismatch fails closed. Pro and Studio prices must be distinct, active, monthly USD recurring prices at $19 and $49. No payment secrets or trusted price configuration enter a browser bundle. Direct Checkout requests also validate the configured price before creating a customer/session. Cloud Checkout enables Stripe automatic tax, requires a billing address, and allows Stripe to save that address on its customer; see the [Checkout API reference](https://docs.stripe.com/api/checkout/sessions/create).
+
+All schema and SQL guards are in `db/schema.ts`; `0041_cloud_plans.sql` is the only migration added by this stack; it follows the other PR’s unchanged `0040_inbox_bulk_assignment.sql`. Merge/deploy that predecessor first. The full approved policy is preserved in [cloud-plans-policy.md](cloud-plans-policy.md). It starts with Cloud enforcement disabled. The deployment build first runs the read-only `bun run cloud:check` preflight, then applies the additive migration without enabling enforcement. The preflight rejects omitted/Community mode against an already-enabled Cloud database and validates enabled Stripe configuration; it never updates the activation switch. Publish the new backend first, synchronize existing billing accounts and verify the new API/plan catalog, then run `bun run cloud:configure` explicitly as the post-deployment activation step. A failed or cancelled publication therefore leaves the previous application usable. An already-enabled Cloud database cannot be redeployed with its mode accidentally omitted because the preflight runs before build/publication. One database must not be shared between Cloud and Community deployments. For local tests use a disposable database; do not change a shared database's mode to bypass entitlements.
+
+The server-side plan catalog accepts only configured Pro/Studio price IDs. Subscription updates and signed webhooks persist the selected plan, current period, status and durable trial history. Checkout accepts a plan identifier, never a caller-supplied price/customer/owner. Existing nonterminal subscriptions go to the Customer Portal instead of creating another subscription. Checkout persists its exact request and a fixed 35-minute expiry before contacting Stripe; recovering workers reuse that request and idempotency key, including after a rejected create. An unknown attempt is replaced only after its expiry, when a delayed worker can no longer create a payable session. Correct configuration failures before retrying after that deadline.
+
+Merging alone does not activate commercial enforcement: the migration seeds `cloud_plan_settings.enabled=false`, and neither `deploy-build` nor `cloud:check` modifies it. Stripe endpoints require both `CRRT_DEPLOYMENT_MODE=cloud` and `STRIPE_ENABLED=true`. Enabling enforcement additionally requires the explicit post-deployment `cloud:configure` command. Pricing UI, local extension behavior and noncommercial code changes ship with the application; they are not hidden by the commercial activation switch.
+
+## Accounting and lifecycle decisions
+
+- The project owner sponsors every client and collaborator; membership in another owner's projects does not consume the actor's own allowance.
+- The owner counts as one internal user. Members/admins and unexpired internal invitations share distinct identity accounting across owned projects. Guests consume no slots. New invitations expire after seven days; expiry releases their reservation and prevents acceptance.
+- Projects count from creation or claim. Cloud cannot auto-create unowned projects from public widget traffic. Create a project through the authenticated dashboard, then configure its widget origins.
+- Creation, import, membership/promotion and ownership transfer use database guards and transaction locks. Owner advisory serialization is limited to quota admission; existing comment edits, workflow writes and Agent shares validate the locked billing row without acquiring the owner quota lock after workflow/comment locks. Transferring a project checks both destination project and internal-user capacity and rolls back on failure. Existing membership is never revoked by a downgrade.
+- Comments consume one durable ledger entry per created/imported comment ID. Edits/status changes do not consume another unit; deletion never refunds one. The ledger survives resource deletion. Existing comments are not recounted on renewal.
+- An audit reserves a credit in its acceptance transaction. Existing idempotency keys reuse the run. Internal failure before a usable terminal result releases the credit once. Cancellation before execution starts releases it; cancellation after `started_at` is set consumes it. Refunds apply to the original owner/window even after transfer or renewal.
+- Monthly usage follows Stripe's trusted current-period boundaries. Trial quotas apply for the trial window and reset at the first paid billing period. A same-window monthly plan change keeps its consumed usage. Billing-window anchor changes must be deliberately configured, rather than used to reset quotas during a same-window upgrade.
+- Active and trialing subscriptions permit writes within capacity. Past-due subscriptions get no implicit grace period; a server-approved `grace_until` may permit recovery inside the current billing period. Canceled/unpaid/expired/paused/incomplete subscriptions cannot create Cloud resources or mutate existing feedback. Authentication and project privacy still govern reads and exports. Billing recovery stays available; authorized data removal and invitation revocation are not quota-charged.
+- Downgrades keep all data and existing access. Capacity blocks additional consumption of the over-limit resource; it does not block unrelated resources or edits to existing feedback while the subscription is active.
+
+`GET /api/v1/billing` includes plan options and owner usage. Limit responses have code `plan_limit`, a `resource` of `projects`, `internal_users`, `comments`, `product_audits` or `subscription`, usage, limit, reset date and recovery action. Subscription failures return HTTP 402; resource exhaustion returns 409. Public widget error text includes the usage metadata for clients that only display messages.
+
+## Extension and exports
+
+Without a selected project, extension feedback is stored only in the extension's browser storage: one local workspace, one user, up to 50 comments, screenshots up to the 8 MiB workspace allowance, and screenshots individually small enough for hosted import requests. Web Locks serialize writes between tabs. Local comments do not consume Cloud usage. Local feedback supports capture, annotation/editing, resolve/reopen, deletion and a JSON export containing screenshot data. It has no shared pins, invitations, integrations, Agent handoff, Product Audits or managed recovery.
+
+Community operators can build the extension with `WXT_DEPLOYMENT_MODE=community` and exact HTTPS `WXT_API_BASE`, `WXT_DASHBOARD_URL`, and `WXT_SUPABASE_URL` endpoints for their instance. The public Cloud build keeps its managed-host restrictions; neither build requests wildcard browsing permissions.
+
+The popup offers explicit import to an owned Cloud or self-hosted project. Imports pin the initiating session before reading local data, validate the background token before every request, and stop on session changes or popup closure. Refreshing the token also stops the operation; local feedback remains available for an idempotent retry. Screenshot-bearing requests are sent one comment at a time; each request atomically admits its comment and canonical screenshot path against the destination owner's allowance before uploading. Failed uploads leave an admitted comment that a retry can repair without another charge; cleanup never deletes shared retry assets. Existing IDs cannot acquire extra screenshot formats or perform storage writes after subscription expiry. Partial imports retain all local feedback, retry existing IDs without charging again, and explain a later quota/network failure. Private screenshot paths are scoped to the authenticated importer. Imports into somebody else's owned project are rejected. Existing Cloud personal feedback is preserved for reading through the dashboard; new local captures do not continue writing to that old personal Cloud store.
+
+Project settings expose `GET /api/v1/projects/:projectId/export`. The export uses the same permission-aware read RPC as normal feedback views, so guests do not gain internal/private feedback and paid expiry does not disable export. Product Audit reports remain available through their existing read API.
+
+## Local validation and launch preparation
+
+Run `bun run typecheck`, `bun run test:coverage`, and `bun run test:diff-coverage -- <immediate-parent>` on each layer. Run `bunx drizzle-kit check`. `db/cloud-plans.integration.test.ts` accepts `CLOUD_PLANS_TEST_DATABASE_URL` only for a disposable database containing the full migration chain. It truncates fixture tables; never point it at a shared or production database.
+
+Before enabling real Cloud payments: configure the two Stripe products/prices, Stripe Tax, and Customer Portal plan switching; preserve the intended monthly billing anchor and choose proration for upgrades/downgrades; synchronize existing billing accounts and decide how existing unowned/personal Cloud data is transitioned; exercise trials, renewal, failed payment, cancellation, upgrade/downgrade and signed webhooks in a sandbox; and publish the separately required data-retention/legal policy. This local implementation does not change Stripe, hosting settings or any deployed database.

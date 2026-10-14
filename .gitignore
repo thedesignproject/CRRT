@@ -19,3 +19,6 @@ skills-lock.json
 .env.docker.local
 supabase/.branches/_current_branch
 /.swc
+
+# Dependency links used by isolated local worktrees
+/node_modules

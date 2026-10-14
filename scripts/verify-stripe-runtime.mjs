@@ -8,6 +8,8 @@ import { readFile } from 'node:fs/promises'
 import Stripe from 'stripe'
 
 const fixtureEnv = {
+  CRRT_DEPLOYMENT_MODE: 'cloud', STRIPE_MODE: 'test',
+  STRIPE_PRO_PRICE_ID: 'price_pro_fixture', STRIPE_STUDIO_PRICE_ID: 'price_studio_fixture',
   STRIPE_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_runtime_fixture',
   STRIPE_WEBHOOK_SECRET: 'whsec_runtime_fixture', STRIPE_PRICE_ID: 'price_fixture',
   STRIPE_RETURN_URL: 'http://127.0.0.1:5173/dashboard/',
