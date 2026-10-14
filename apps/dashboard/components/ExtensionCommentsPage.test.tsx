@@ -448,7 +448,7 @@ it('keeps the bulk selection intact when an ordinary navigation key is pressed',
   fireEvent.click(screen.getByRole('button', { name: 'Select' }))
   fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
   fireEvent.keyDown(window, { key: 'j' })
-  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected items' })).toBeInTheDocument()
+  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected item' })).toBeInTheDocument()
   expect(screen.getByText('Select an Inbox item')).toBeInTheDocument()
 })
 
@@ -464,7 +464,7 @@ it('retains comments that failed database deletion for a bounded retry', async (
   fireEvent.click(screen.getByRole('menuitem', { name: 'Delete selected' }))
   fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }))
   await screen.findByText('1 deleted; 1 could not be deleted and remain selected.')
-  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected items' })).toBeInTheDocument()
+  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected item' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('menuitem', { name: 'Delete selected' }))
   fireEvent.click(screen.getByRole('button', { name: 'Delete 1' }))
   await waitFor(() => expect(bulkDeleteExtensionComments).toHaveBeenLastCalledWith('/api', 'token', { mode: 'ids', ids: ['c2'] }))
