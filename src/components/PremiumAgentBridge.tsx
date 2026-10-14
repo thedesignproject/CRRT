@@ -294,7 +294,7 @@ export function PremiumAgentBridge({
           {view === 'authentication_required' && <StateCard title="Log in to continue" body="Sign in in the CRRT popup. This page will stay exactly where it is." actionLabel={loginBusy ? 'Opening sign in…' : 'Log in to CRRT'} action={() => { void onLogin() }} disabled={loginBusy} error={loginError || message} />}
           {view === 'upgrade_required' && <StateCard title="Agent is a premium feature" body="Upgrade this project’s owner plan, then return here. Your selection will stay ready." actionLabel={busy ? 'Opening billing…' : 'Upgrade plan'} action={() => { void beginUpgrade() }} disabled={busy} error={message} link={upgradeUrl} />}
           {view === 'owner_upgrade_required' && <StateCard title="Ask the owner to upgrade" body="This project’s owner needs an eligible CRRT plan before collaborators can use Agent." error={message} />}
-          {view === 'seat_limit_reached' && <StateCard title="No Agent seats available" body="The owner’s five collaborator seats are in use. Ask the owner to free a seat." error={message} />}
+          {view === 'seat_limit_reached' && <StateCard title="No Agent seats available" body="The owner has reached the plan’s internal-user capacity. Ask the owner to remove an unused member or invitation, or upgrade." error={message} />}
           {(view === 'forbidden' || view === 'project_access_denied') && <StateCard title="Agent is unavailable" body="Your current project role does not allow Agent access." error={message} />}
           {view === 'error' && <StateCard title="Agent could not load" body="Your selection is still here. Retry when you’re ready." actionLabel="Retry" action={() => { void refreshAccess(true) }} error={message} />}
 

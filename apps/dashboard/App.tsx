@@ -1,3 +1,4 @@
+import { useFeedbackMutationError } from './hooks/useFeedbackMutationError'
 import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
 import { SuggestedProjects } from './components/SuggestedProjects'
@@ -12,6 +13,8 @@ import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath } from './lib/routes'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
+import { BillingPage } from './components/BillingPage'
+import { UserMenu } from './components/UserMenu'
 import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
@@ -83,6 +86,8 @@ export function App() {
 
   if (!session || !user) return <LoginPage />
 
+  if (pathname === '/billing') return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} />
+
   const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
   if (auditMatch) return <ProductAuditPage apiBase={API_BASE} accessToken={session.access_token} auditId={decodeURIComponent(auditMatch[1])} />
   return <AuthenticatedApp accessToken={session.access_token} user={user} onSignOut={signOut} />
@@ -119,14 +124,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
+  const mutation = useFeedbackMutationError(`${accessToken}:${selectedProject}`)
   const activeProject = projects.find((p) => p.publicKey === selectedProject) ?? null
   // Fail closed while project access is loading. The fallback only keeps
   // backwards compatibility for project fixtures/API responses that predate
   // explicit capabilities.
-  const canManageFeedback = activeProject
+  const canManageFeedback = !mutation.blocked && activeProject
     ? activeProject.capabilities?.includes('feedback:manage') ?? true
     : false
-  const canOperateAgent = activeProject
+  const canOperateAgent = !mutation.blocked && activeProject
     ? activeProject.capabilities?.includes('agent:operate') ?? true
     : false
   const canOpenAgentPanel = view === 'feedback' && Boolean(selectedProject) && activeProject !== null && canOperateAgent
@@ -292,11 +298,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (reviewRequests.current.get(id) === request) await refreshComments()
     } catch (err) {
       console.error('Failed to update review status:', err)
+      if (reviewRequests.current.get(id) === request) mutation.report(err)
       if (reviewRequests.current.get(id) === request) await refreshComments()
     } finally {
       if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
     }
-  }, [accessToken, refreshComments])
+  }, [accessToken, refreshComments, mutation.report])
 
   const handleToggleDone = useCallback(async (id: string) => {
     const current = comments.find((c) => c.id === id)
@@ -314,9 +321,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
     } catch (err) {
       console.error('Failed to update implementation status:', err)
+      mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments])
+  }, [comments, refreshComments, mutation.report])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
@@ -336,8 +344,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           : comment))
       }
       console.error('Failed to update feedback audience:', error)
+      mutation.report(error)
     }
-  }, [accessToken, comments])
+  }, [accessToken, comments, mutation.report])
 
   const toggleBulkSelect = useCallback((id: string) => {
     if (bulkActionBusy) return
@@ -398,7 +407,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const stillCurrent = generation === bulkGeneration.current && ids.some((id) => reviewRequests.current.get(id) === requests.get(id))
     if (failed.length > 0) {
       console.error(`Bulk ${action}: ${failed.length}/${calls.length} calls failed`, failed)
-      if (stillCurrent) await refreshComments()
+      if (stillCurrent) { mutation.report((failed[0] as PromiseRejectedResult).reason); await refreshComments() }
     } else if (stillCurrent) {
       await refreshComments()
     }
@@ -415,7 +424,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       }
     }
     if (generation === bulkGeneration.current) setBulkActionBusy(false)
-  }, [accessToken, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments])
+  }, [accessToken, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report])
 
   const openAgentUpgrade = useCallback(async () => {
     const generation = bulkGeneration.current
@@ -655,6 +664,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     return (
       <>
         {accessReviewNotice}
+        <div className="absolute top-4 right-5 z-50"><UserMenu user={user} onSignOut={onSignOut} apiBase={API_BASE} accessToken={accessToken} /></div>
         <WelcomeScreen
           suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
           onOpenExtensionComments={openExtensionComments}
@@ -720,6 +730,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
       <main className="dashboard-main">
       {accessReviewNotice}
+      {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
       {view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
       ) : view === 'super-admin' && superadmin ? (

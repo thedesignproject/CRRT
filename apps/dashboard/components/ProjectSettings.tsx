@@ -1,6 +1,7 @@
 import { ProjectPrivacy } from './ProjectPrivacy'
 import { useEffect, useRef, useState } from 'react'
 import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
+import { ExportProjectFeedback } from './ExportProjectFeedback'
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
@@ -201,10 +202,12 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           {isAdmin ? 'Manage details, team, and invites.' : 'You have read-only access to this project.'}
         </p>
 
+        <ExportProjectFeedback apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
+
         {error && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{error}</p>}
         {actionError && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{actionError}</p>}
 
-        {isAdmin && <ProjectDomainAccess key={project.publicKey} apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} onMembersChanged={settings.refresh} />}
+        {isAdmin && <ProjectDomainAccess key={`domains:${project.publicKey}`} apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} onMembersChanged={settings.refresh} />}
 
         {/* Details */}
         <section className="mt-8">
@@ -249,7 +252,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           </div>
         </section>
 
-        <ProjectPrivacy key={project.publicKey} project={project} apiBase={apiBase} accessToken={accessToken} canEdit={isAdmin} onSaved={onProjectsChanged} />
+        <ProjectPrivacy key={`privacy:${project.publicKey}`} project={project} apiBase={apiBase} accessToken={accessToken} canEdit={isAdmin} onSaved={onProjectsChanged} />
         {/* Allowed domains */}
         <section className="mt-8">
           <h2 className={sectionTitle}>Allowed domains{domains.length > 0 && ` (${domains.length})`}</h2>

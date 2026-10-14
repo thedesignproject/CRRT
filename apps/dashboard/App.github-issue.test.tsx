@@ -88,11 +88,12 @@ vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: fi
 
 vi.mock('./components/CommentDetail', () => ({
   CommentDetail: (props: {
+    readOnly?: boolean
     apiBase: string
     accessToken: string
     selectedComment?: { id: string; visibility?: 'shared' | 'internal' } | null
     onVisibilityChange?: (id: string, visibility: 'shared' | 'internal') => void
-  }) => <div data-testid="detail">
+  }) => <div data-testid="detail" data-read-only={props.readOnly}>
     {props.apiBase}:{props.accessToken}:{props.selectedComment?.visibility ?? 'none'}
     {props.selectedComment && <button onClick={() => props.onVisibilityChange?.(
       props.selectedComment!.id,
@@ -1002,4 +1003,13 @@ it.each(['loading','missing session','stale share','wrong project','empty state'
  fireEvent.click(await screen.findByRole('button',{name:'Agents, 1 ready'}))
  expect(screen.getByTestId('agent-queue')).toHaveTextContent(context==='empty state'?'':'disconnected')
  expect(screen.getByTestId('agent-queue')).not.toHaveTextContent('comment-1')
+})
+it('explains expired-plan write rejection, restores retained feedback and disables further writes',async()=>{
+ fixtures.comments.push({id:'comment-1',projectId:'project-1',body:'Retained feedback',reviewStatus:'open',implementationStatus:'unassigned',createdAt:'2026-01-01',updatedAt:'2026-01-01'})
+ fixtures.updateImpl.mockRejectedValueOnce(Object.assign(new Error('The owner needs an active Cloud plan. Feedback remains readable.'),{status:402,resource:'subscription'}))
+ vi.spyOn(console,'error').mockImplementation(()=>{})
+ render(<App/>);fireEvent.click(await screen.findByRole('button',{name:'select test comment'}));fireEvent.keyDown(window,{key:'m'})
+ await screen.findByRole('alert');expect(screen.getByRole('alert')).toHaveTextContent('Feedback remains readable')
+ expect(screen.getByTestId('detail')).toHaveAttribute('data-read-only','true')
+ expect(fixtures.fn).toHaveBeenCalled();fireEvent.keyDown(window,{key:'m'});expect(fixtures.updateImpl).toHaveBeenCalledOnce()
 })

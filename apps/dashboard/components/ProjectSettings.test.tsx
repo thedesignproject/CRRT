@@ -335,3 +335,13 @@ it('only mounts company access controls for project managers', () => {
   rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
   expect(screen.getByText('Company access controls')).toBeInTheDocument()
 })
+
+it('keeps company access singular across repeated settings edits',()=>{
+ vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+ const errors=vi.spyOn(console,'error').mockImplementation(()=>{})
+ view()
+ for(const name of ['First','Second','Third']) fireEvent.change(screen.getByLabelText('Name'),{target:{value:name}})
+ expect(screen.getAllByText('Company access controls')).toHaveLength(1)
+ expect(errors.mock.calls.flat().join(' ')).not.toMatch(/same key/)
+ errors.mockRestore()
+})

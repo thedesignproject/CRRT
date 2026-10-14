@@ -231,3 +231,14 @@ it('reports private mode and requests login after an anonymous submit is rejecte
   expect(login).toHaveBeenCalledOnce()
   await postComment(API, {})
 })
+
+it('surfaces Cloud plan errors from public widgets instead of silently dropping submissions', async () => {
+  for (const status of [402,409]) {
+    mockFetch(() => new Response(JSON.stringify({code:'plan_limit',error:'Owner allowance exhausted. Usage: 2000/2000.'}),{status}))
+    await expect(postComment(API,{body:'feedback'})).rejects.toThrow('Usage: 2000/2000')
+  }
+  mockFetch(() => new Response(JSON.stringify({code:'plan_limit'}),{status:409}))
+  await expect(postComment(API,{})).rejects.toThrow('Cloud plan limit')
+  mockFetch(() => new Response('{}',{status:409}));expect(await postComment(API,{})).toBeNull()
+  mockFetch(() => new Response('invalid',{status:409}));expect(await postComment(API,{})).toBeNull()
+})

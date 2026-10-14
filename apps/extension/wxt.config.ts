@@ -8,7 +8,7 @@ export const extensionIcons = {
   128: 'icons/icon-128.png',
 } as const
 type ServiceName = 'api' | 'dashboard' | 'supabase'
-type ExtensionBuildEnvironment = Partial<Record<'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL', string>>
+type ExtensionBuildEnvironment = Partial<Record<'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL' | 'WXT_DEPLOYMENT_MODE', string>>
 
 function serviceUrl(raw: string | undefined, variable: string, mode: string): URL {
   if (!raw?.trim()) throw new Error(`${variable} is required to build the CRRT extension`)
@@ -50,7 +50,7 @@ function configuredUrl(
   mode: string,
 ) {
   const url = serviceUrl(environment[variable], variable, mode)
-  validateProductionContract(url, service, variable, mode)
+  if (environment.WXT_DEPLOYMENT_MODE !== 'community') validateProductionContract(url, service, variable, mode)
   return url
 }
 
@@ -58,6 +58,7 @@ export function extensionManifest(
   { mode }: Pick<ConfigEnv, 'mode'>,
   environment: ExtensionBuildEnvironment = process.env,
 ): UserManifest {
+  if (environment.WXT_DEPLOYMENT_MODE && !['cloud','community'].includes(environment.WXT_DEPLOYMENT_MODE)) throw new Error('WXT_DEPLOYMENT_MODE must be cloud or community')
   const api = configuredUrl(environment, 'WXT_API_BASE', 'api', mode)
   configuredUrl(environment, 'WXT_DASHBOARD_URL', 'dashboard', mode)
   const supabase = configuredUrl(environment, 'WXT_SUPABASE_URL', 'supabase', mode)

@@ -143,6 +143,10 @@ export async function postComment(
   })
   if (res.status === 401) onLoginRequired?.()
   if (!res.ok) {
+    if (res.status === 402 || res.status === 409) {
+      const failure = await res.json().catch(() => null) as { code?: string; error?: string } | null
+      if (failure?.code === 'plan_limit') throw new Error(failure.error || 'The project owner has reached a Cloud plan limit')
+    }
     console.warn('[FeedbackWidget] API returned', res.status)
     return null
   }

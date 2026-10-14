@@ -1,3 +1,4 @@
+import { responseError } from './lib/response-error'
 export interface Project {
   publicKey: string
   slug: string
@@ -229,16 +230,7 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const text = await response.text()
 
   if (!response.ok) {
-    let message = text || `Request failed with ${response.status}`
-    let code: string | undefined
-    try {
-      const payload = JSON.parse(text) as { error?: unknown; code?: unknown }
-      if (typeof payload.error === 'string') message = payload.error
-      if (typeof payload.code === 'string') code = payload.code
-    } catch {
-      // Plain-text API errors remain useful as-is.
-    }
-    throw Object.assign(new Error(message), { status: response.status, code })
+    throw responseError(text, response.status)
   }
 
   try {
@@ -719,7 +711,7 @@ export async function deleteExtensionComment(apiBase: string, accessToken: strin
   const response = await fetch(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
     method: 'DELETE', headers: { ...authHeaders(accessToken) },
   })
-  if (!response.ok) throw new Error(await response.text() || `Request failed with ${response.status}`)
+  if (!response.ok) throw responseError(await response.text(), response.status)
 }
 
 export function bulkAssignExtensionComments(

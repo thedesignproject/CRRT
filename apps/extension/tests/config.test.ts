@@ -82,3 +82,11 @@ it('deduplicates service host access and enforces one production CRRT origin', (
     WXT_SUPABASE_URL: 'https://same.example/',
   }).host_permissions).toEqual(['https://same.example/*'])
 })
+
+it('allows an explicit Community production build against exact operator-owned HTTPS endpoints',()=>{
+ const env={WXT_DEPLOYMENT_MODE:'community',WXT_API_BASE:'https://feedback.example/api',WXT_DASHBOARD_URL:'https://feedback.example/dashboard/',WXT_SUPABASE_URL:'https://database.example/'}
+ expect(extensionManifest({mode:'production'},env).host_permissions).toEqual(['https://feedback.example/*','https://database.example/*'])
+ expect(()=>extensionManifest({mode:'production'},{...env,WXT_API_BASE:'http://feedback.example/api'})).toThrow('HTTPS')
+ expect(()=>extensionManifest({mode:'production'},{...env,WXT_DEPLOYMENT_MODE:'typo'})).toThrow('cloud or community')
+ expect(()=>extensionManifest({mode:'production'},{...production,WXT_DEPLOYMENT_MODE:'cloud'})).not.toThrow()
+})

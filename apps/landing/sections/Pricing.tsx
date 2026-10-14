@@ -1,124 +1,27 @@
-import { PillButton } from '../components/PillButton'
-import { activateCRRT } from '../lib/crrt'
 import { useReveal } from '../lib/useReveal'
 
-/**
- * Pricing — a single Free card. Removes the silent "how much?" objection
- * before the visitor hits the install. When paid tiers exist, add columns
- * here; the dark-soft card surface scales horizontally.
- */
+const plans = [
+  { name:'Community', price:'Free', delivery:'Self-hosted', features:['Complete open-source product','No commercial project, user, comment or audit limits','Bring your own hosting, storage and provider credentials'], href:'https://github.com/thedesignproject/CRRT', action:'Run Community' },
+  { name:'Cloud Pro', price:'$19 / month', delivery:'Managed Cloud', features:['10 projects · 10 internal users','Unlimited guests','2,000 new comments / month','5 Product Audits / month','Dashboard, widget, extension sync and integrations'], href:'/dashboard/billing', action:'Start a 14-day trial' },
+  { name:'Cloud Studio', price:'$49 / month', delivery:'Managed Cloud', features:['50 projects · 25 internal users','Unlimited guests','10,000 new comments / month','30 Product Audits / month','Everything in Cloud Pro, with more capacity'], href:'/dashboard/billing', action:'Start a 14-day trial' },
+]
 export function Pricing() {
-  const reveal = useReveal<HTMLDivElement>()
-  return (
-    <section
-      style={{
-        background: 'var(--crrt-bg-deep)',
-        padding: '120px 32px',
-        borderTop: '1px solid var(--crrt-rule-dark)',
-      }}
-    >
-      <div ref={reveal.ref} className={`mx-auto ${reveal.className}`} style={{ maxWidth: 1120 }}>
-        {/* Eyebrow */}
-        <div className="flex items-center gap-3" style={{ marginBottom: 24 }}>
-          <span className="section-marker">/ 06 pricing</span>
-          <span style={{ width: 40, height: 1, background: 'var(--crrt-rule-dark)' }} />
-          <span className="phosphor-eyebrow">no card. no signup.</span>
-        </div>
-
-        {/* Heading */}
-        <h2
-          style={{
-            fontFamily: 'var(--crrt-font-mono)',
-            fontWeight: 700,
-            fontSize: 'var(--crrt-text-h2)',
-            lineHeight: 'var(--crrt-leading-h2)',
-            letterSpacing: 'var(--crrt-tracking-h2)',
-            color: 'var(--crrt-white)',
-            margin: '0 0 56px',
-            maxWidth: 720,
-          }}
-        >
-          Free while it's<br />
-          <span style={{ color: 'var(--crrt-carrot)', fontStyle: 'italic' }}>growing.</span>
-        </h2>
-
-        {/* Single pricing card */}
-        <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
-          <article
-            className="hover-lift"
-            style={{
-              background: 'var(--crrt-bg-deep-soft)',
-              border: '1px solid var(--crrt-rule-dark)',
-              borderRadius: 'var(--crrt-radius-2xl)',
-              padding: '40px 36px',
-              maxWidth: 420,
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 24,
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 12 }}>
-              <span
-                style={{
-                  fontFamily: 'var(--crrt-font-mono)',
-                  fontSize: 48,
-                  fontWeight: 700,
-                  color: 'var(--crrt-white)',
-                  letterSpacing: '-0.02em',
-                  lineHeight: 1,
-                }}
-              >
-                $0
-              </span>
-              <span
-                style={{
-                  fontFamily: 'var(--crrt-font-crt)',
-                  fontSize: 14,
-                  color: 'var(--crrt-ink-faint)',
-                  letterSpacing: '0.08em',
-                  textTransform: 'uppercase',
-                }}
-              >
-                forever, while in beta
-              </span>
-            </div>
-
-            <ul
-              style={{
-                margin: 0,
-                padding: 0,
-                listStyle: 'none',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 10,
-                fontFamily: 'var(--crrt-font-sans)',
-                fontSize: 15,
-                lineHeight: 1.55,
-                color: 'var(--crrt-ink-faint)',
-              }}
-            >
-              {[
-                'Unlimited comments on any URL',
-                'Drop-in widget, no auth required',
-                'Approved pins → prompts for Claude / Codex',
-                'Self-hosted backend if you want it',
-              ].map((line) => (
-                <li key={line} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                  <span style={{ color: 'var(--crrt-carrot)', flexShrink: 0 }}>✓</span>
-                  <span>{line}</span>
-                </li>
-              ))}
-            </ul>
-
-            <div style={{ marginTop: 8 }}>
-              <PillButton variant="carrot" size="lg" onClick={activateCRRT}>
-                Drop a CRRT →
-              </PillButton>
-            </div>
-          </article>
-        </div>
+  const reveal=useReveal<HTMLDivElement>()
+  return <section style={{background:'var(--crrt-bg-deep)',padding:'120px 32px',borderTop:'1px solid var(--crrt-rule-dark)'}}>
+    <div ref={reveal.ref} className={`mx-auto ${reveal.className}`} style={{maxWidth:1120}}>
+      <span className="section-marker">/ 06 pricing</span>
+      <h2 style={{fontFamily:'var(--crrt-font-mono)',fontSize:'var(--crrt-text-h2)',color:'var(--crrt-white)',margin:'24px 0 40px'}}>Run it yourself. Or let us host it.</h2>
+      <div className="grid gap-4 md:grid-cols-3">
+        {plans.map(plan=><article key={plan.name} className="hover-lift" style={{background:'var(--crrt-bg-deep-soft)',border:'1px solid var(--crrt-rule-dark)',borderRadius:'var(--crrt-radius-2xl)',padding:32}}>
+          <h3 style={{color:'var(--crrt-white)',fontSize:20}}>{plan.name}</h3>
+          <p style={{color:'var(--crrt-carrot)',fontSize:24,margin:'16px 0'}}>{plan.price}</p>
+          <p style={{color:'var(--crrt-ink-faint)'}}>{plan.delivery}</p>
+          <ul style={{color:'var(--crrt-ink-faint)',paddingLeft:16,margin:'24px 0',fontSize:14,lineHeight:1.8}}>{plan.features.map(feature=><li key={feature}>{feature}</li>)}</ul>
+          <a href={plan.href} className="inline-block rounded-full border px-5 py-3 text-sm" style={{borderColor:'var(--crrt-rule-dark-strong)',color:'var(--crrt-white)'}}>{plan.action}</a>
+        </article>)}
       </div>
-    </section>
-  )
+      <p style={{color:'var(--crrt-ink-faint)',fontSize:14,marginTop:24}}>Cloud trials require a payment method. No charge until day 14. Taxes are added at checkout when applicable. Members and guests do not need separate subscriptions.</p>
+      <p style={{color:'var(--crrt-ink-faint)',fontSize:14,marginTop:16}}>Try the extension locally: one project, one user, up to 50 stored comments and export. Cloud storage, collaboration and sync start with a Cloud plan.</p>
+    </div>
+  </section>
 }
