@@ -441,3 +441,13 @@ it('does not report an old move failure after the token changes', async () => {
   expect(screen.queryByText('Old move failed')).toBeNull()
   expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
 })
+
+it('keeps the bulk selection intact when an ordinary navigation key is pressed', async () => {
+  render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+  await screen.findByText('First comment')
+  fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+  fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
+  fireEvent.keyDown(window, { key: 'j' })
+  expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected items' })).toBeInTheDocument()
+  expect(screen.getByText('Select an Inbox item')).toBeInTheDocument()
+})
