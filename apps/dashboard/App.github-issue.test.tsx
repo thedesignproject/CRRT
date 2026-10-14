@@ -12,6 +12,7 @@ const fixtures = vi.hoisted(() => ({
     updatedAt: '',
   }] as Array<Record<string, unknown>>,
   comments: [] as Array<Record<string, unknown>>,
+  commentsProjectId: 'project-1' as string | null,
   claimProject: vi.fn(),
   acceptInvite: vi.fn(),
   updateImpl: vi.fn(),
@@ -21,6 +22,8 @@ const fixtures = vi.hoisted(() => ({
   beginCheckout: vi.fn(),
   agentProject: vi.fn(),
   agentComments: vi.fn(),
+  agentEnabled: vi.fn(),
+  adoptSession: vi.fn(),
   updateVisibility: vi.fn(),
   fn: vi.fn(),
   superadmin: false,
@@ -58,18 +61,20 @@ vi.mock('./hooks/useProjects', () => ({
 vi.mock('./hooks/useComments', () => ({
   useComments: () => ({
     comments: fixtures.comments,
-    commentsProjectId: 'project-1',
+    commentsProjectId: fixtures.commentsProjectId,
     loading: false,
     error: null,
     refresh: fixtures.fn,
   }),
 }))
 vi.mock('./hooks/useAgentSession', () => ({
-  useAgentSession: (_apiBase: string, _accessToken: string, project: string | null, ids: string[]) => {
+  useAgentSession: (_apiBase: string, _accessToken: string, project: string | null, ids: string[], enabled: boolean) => {
+    fixtures.agentEnabled(enabled)
     fixtures.agentProject(project)
     fixtures.agentComments(ids)
     return ({
     session: null,
+    adoptSession: fixtures.adoptSession,
     shareState: null,
     events: fixtures.comments,
     error: null,
@@ -115,7 +120,7 @@ vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenEx
 vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null }))
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
-vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button></div> }))
+vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
 vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; canOperateAgent: boolean }) => <div>
   command palette
   <button onClick={() => props.onAction('accept')}>command accept</button>
@@ -142,6 +147,7 @@ beforeEach(() => {
   fixtures.agentComments.mockReset()
   fixtures.updateVisibility.mockReset().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  fixtures.commentsProjectId = 'project-1'
   fixtures.comments.splice(0)
   fixtures.projects.splice(0, fixtures.projects.length, { publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' })
   fixtures.superadmin = false
@@ -525,7 +531,8 @@ describe('<App /> GitHub issue wiring', () => {
   it('keeps the live Agent session behind every available launcher path', async () => {
     render(<App />)
     const launcher = await screen.findByRole('button', { name: 'Agents, 0 ready' })
-    expect(fixtures.agentProject).toHaveBeenLastCalledWith(null)
+    expect(fixtures.agentProject).toHaveBeenLastCalledWith('project-1')
+    expect(fixtures.agentEnabled).toHaveBeenLastCalledWith(false)
 
     fireEvent.click(launcher)
     await waitFor(() => expect(fixtures.agentProject).toHaveBeenCalledWith('project-1'))
@@ -903,4 +910,67 @@ it.each(['success','failure'])('handles a two-comment prompt %s without silent o
  if(step==='success') await screen.findByText('2 selected items copied for Claude Code.')
  else await screen.findByText('Could not send the selected feedback to Agent.')
  expect(fixtures.createShare).toHaveBeenCalledWith('https://crrt.ai/api','session-token',{projectId:'project-1',scopeType:'selection',commentIds:['comment-1','comment-2']})
+})
+
+
+it('refuses oversized Select all without silently selecting a subset', async () => {
+ fixtures.comments=Array.from({length:501},(_,i)=>readyFeedback(`comment-${i}`))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('up to 500')
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:')
+ expect(fixtures.createShare).not.toHaveBeenCalled()
+})
+
+it('adopts a completed bulk handoff into the Agent sidebar',async()=>{
+ fixtures.comments=[readyFeedback('comment-1')]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
+ fireEvent.click(screen.getByRole('button',{name:'toggle test comment'}))
+ fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
+ await screen.findByText('1 selected item copied for Claude Code.')
+ expect(fixtures.adoptSession).toHaveBeenCalledWith(expect.objectContaining({shareId:'share-1'}),['comment-1'])
+ expect(screen.getByTestId('agent-sidebar')).toBeInTheDocument()
+})
+
+
+it('caps individual project selection at 500',async()=>{
+ fixtures.comments=Array.from({length:500},(_,i)=>readyFeedback(`item-${i}`))
+ const view=render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'enter bulk'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ fixtures.comments=[...fixtures.comments,readyFeedback('comment-1')]
+ view.rerender(<App />)
+ fireEvent.click(screen.getByRole('button',{name:'toggle test comment'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('up to 500')
+ expect(screen.getByTestId('bulk-state').textContent?.split(',')).toHaveLength(500)
+})
+
+it('rejects oversized inherited Inbox selections before requesting a handoff',async()=>{
+ fixtures.comments=Array.from({length:501},(_,i)=>readyFeedback(`item-${i}`))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'my comments'}))
+ fireEvent.click(screen.getByRole('button',{name:'continue oversized moved Inbox'}))
+ fireEvent.click(screen.getByRole('button',{name:'Send to Claude Code'}))
+ expect(screen.getByRole('alert')).toHaveTextContent('up to 500')
+ expect(fixtures.createShare).not.toHaveBeenCalled()
+})
+
+it('does not restore a cancelled Inbox transfer when destination comments finish loading', async () => {
+  fixtures.commentsProjectId = null
+  const view = render(<App />)
+  fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
+  fireEvent.click(screen.getByRole('button', { name: 'continue moved Inbox' }))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:moved-1')
+  fireEvent.keyDown(window, { key: 'Escape' })
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
+  fixtures.commentsProjectId = 'project-1'
+  fixtures.comments = [{ id: 'moved-1', projectId: 'project-1', body: 'Moved feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' }]
+  view.rerender(<App />)
+  await waitFor(() => expect(screen.getByTestId('first-claim')).toHaveTextContent('none'))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
 })

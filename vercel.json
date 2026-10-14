@@ -14,6 +14,7 @@
     }
   },
   "crons": [
+    { "path": "/api/v1/internal/extension-image-cleanup", "schedule": "* * * * *" },
     {
       "path": "/api/v1/internal/comment-email-deliveries",
       "schedule": "* * * * *"
