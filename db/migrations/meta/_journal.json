@@ -288,6 +288,13 @@
       "when": 1791966065485,
       "tag": "0040_inbox_bulk_assignment",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791969236335,
+      "tag": "0041_cloud_plans",
+      "breakpoints": true
     }
   ]
 }
