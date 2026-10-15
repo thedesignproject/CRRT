@@ -1,8 +1,11 @@
 # CRRT Storybook monorepo migration
 
-**Date:** 2026-10-15  
-**Package:** `@thedesignproject/crrt-storybook`  
-**Source repository:** `thedesignproject/crrt-storybook`  
+**Date:** 2026-10-15
+
+**Package:** `@thedesignproject/crrt-storybook`
+
+**Source repository:** `thedesignproject/crrt-storybook`
+
 **Destination:** `packages/crrt-storybook` in `thedesignproject/CRRT`
 
 ## Goal
