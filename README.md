@@ -8,7 +8,7 @@ CRRT 🥕 is visual feedback capture for React sites, plus a private reviewer co
 
 This repo is no longer just "a widget that stores comments."
 
-It now has three product surfaces:
+It now has five product surfaces:
 
 - **Public widget** in `src/`
   - capture feedback on any page
@@ -24,6 +24,9 @@ It now has three product surfaces:
 - **Agent bridge API** in `api/v1/`
   - expose page-scoped or selection-scoped feedback to coding agents
   - track presence, events, and implementation updates
+- **Storybook addon and CLI** in `packages/crrt-storybook/`
+  - connect a Storybook 10 project to CRRT Pro with one command
+  - capture component feedback and failed checks with authenticated story context
 
 The old `/api/comments` route still exists as a compatibility path and for the smoke workflow. The new product flow uses `/api/v1/...`.
 
@@ -37,6 +40,8 @@ The old `/api/comments` route still exists as a compatibility path and for the s
   - public CRRT landing/demo site for the widget
 - `api/`
   - Vercel serverless API routes
+- `packages/crrt-storybook/`
+  - published `@thedesignproject/crrt-storybook` addon and connection CLI
 - `db/`
   - Drizzle schema, migrations, seed
 - `supabase/`

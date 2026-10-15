@@ -1,4 +1,4 @@
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
 
@@ -13,6 +13,9 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: false,
     setupFiles: ['./src/__tests__/setup.ts'],
+    // Nested packages own their test runners and CI. In particular, the
+    // Storybook addon's `.mjs` suites use `node:test`, not Vitest.
+    exclude: [...configDefaults.exclude, 'packages/**'],
     coverage: {
       reporter: ['text', 'text-summary', 'lcov'],
       include: ['src/**/*.{ts,tsx}', 'api/**/*.ts', 'apps/dashboard/**/*.{ts,tsx}', 'apps/landing/**/*.{ts,tsx}', 'apps/extension/**/*.{ts,tsx}', 'shared/product-audit/**/*.{ts,tsx}', 'workflows/**/*.ts', 'server/**/*.ts'],

@@ -1,0 +1,87 @@
+{
+  "name": "@thedesignproject/crrt-storybook",
+  "version": "0.1.0",
+  "description": "CRRT 🥕 inside Storybook — a panel that shows the rules governing a component and sends stakeholder feedback to CRRT.",
+  "keywords": [
+    "storybook-addon",
+    "storybook-addons",
+    "crrt",
+    "feedback",
+    "design-systems",
+    "governance",
+    "panel"
+  ],
+  "license": "MIT",
+  "author": "The Design Project",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thedesignproject/CRRT.git",
+    "directory": "packages/crrt-storybook"
+  },
+  "bugs": {
+    "url": "https://github.com/thedesignproject/CRRT/issues"
+  },
+  "homepage": "https://crrt.ai",
+  "type": "module",
+  "bin": {
+    "crrt-storybook": "./dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./manager": "./dist/manager.js",
+    "./preset": "./dist/preset.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "preset.js",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "pack:verify": "node scripts/verify-package.mjs",
+    "consumer:verify": "node scripts/verify-consumer.mjs",
+    "prepack": "npm run build && npm run pack:verify",
+    "prestorybook": "npm run build",
+    "storybook": "storybook dev -p 6007",
+    "prebuild-storybook": "npm run build",
+    "build-storybook": "storybook build"
+  },
+  "peerDependencies": {
+    "storybook": "^10.0.0"
+  },
+  "devDependencies": {
+    "@storybook/react-vite": "^10.4.6",
+    "@types/node": "^24.7.2",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.0.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "storybook": "^10.4.6",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.0",
+    "vite": "^8.1.3"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "storybook": {
+    "displayName": "CRRT 🥕",
+    "supportedFrameworks": [
+      "react"
+    ]
+  }
+}
