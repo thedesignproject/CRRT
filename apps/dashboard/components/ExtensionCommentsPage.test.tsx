@@ -193,7 +193,7 @@ describe('ExtensionCommentsPage', () => {
 
     await screen.findByText('1 moved; 1 skipped.')
     expect(screen.queryByText('First comment')).toBeNull()
-    expect(screen.getByText('Second comment')).toBeInTheDocument()
+    expect(await screen.findByText('Second comment')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Select' })).toBeInTheDocument()
   })
 
