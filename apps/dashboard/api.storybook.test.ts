@@ -16,6 +16,14 @@ describe('Storybook integration API', () => {
     })
   })
 
+  it('treats a malformed connection collection as empty', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ connections: null }), { status: 200 }),
+    ))
+
+    await expect(getStorybookIntegration('/api', 'session', 'demo')).resolves.toEqual({ state: 'not_connected' })
+  })
+
   it('prefers an active claimed connection over newer abandoned attempts', async () => {
     const payload = {
       connections: [
