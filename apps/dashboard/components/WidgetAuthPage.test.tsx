@@ -39,3 +39,13 @@ it.each([true, false])('ignores responses after unmount %#', async (success) => 
   unmount(); await act(async () => finish(new Response(JSON.stringify({ code: success ? proof : 'bad', state: proof }))))
   expect(opener.postMessage).not.toHaveBeenCalled()
 })
+
+it('uses the Storybook handoff and sends only the code/state to the opener', async () => {
+  const connectionId = '11111111-1111-4111-8111-111111111111'
+  window.history.replaceState({}, '', `/widget-auth?${query}&connectionId=${connectionId}`)
+  vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ code: proof, state: proof, accessToken: 'must-not-leak' })))
+  render(<WidgetAuthPage apiBase="api" accessToken="dashboard-session" />)
+  await waitFor(() => expect(opener.postMessage).toHaveBeenCalledWith({ type: 'crrt:storybook-auth', code: proof, state: proof }, 'https://site.test'))
+  expect(fetch).toHaveBeenCalledWith('api/v1/storybook/auth/handoff', expect.objectContaining({ body: expect.stringContaining(connectionId) }))
+  expect(JSON.stringify(opener.postMessage.mock.calls)).not.toContain('must-not-leak')
+})

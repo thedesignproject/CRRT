@@ -18,7 +18,7 @@ export async function assertWidgetProject(projectKey: string, origin: string) {
   }
 }
 
-export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, user: { userId: string; email: string }) {
+export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, user: { userId: string; email: string }, connectionId: string | null = null) {
   const request = parseWidgetAuthRequest(input)
   if (!request) throw new WidgetSessionError(400, 'Invalid widget sign-in request')
   await assertWidgetProject(request.projectKey, request.origin)
@@ -29,7 +29,7 @@ export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, use
   if (cleanup.error) throw new Error('Widget session cleanup failed')
   const { error } = await db.from('widget_auth_sessions').insert({
     code_hash: hashProof(code), state_hash: hashProof(request.state), pkce_challenge: request.codeChallenge,
-    user_id: user.userId, project_key: request.projectKey, origin: request.origin,
+    user_id: user.userId, project_key: request.projectKey, origin: request.origin, storybook_connection_id: connectionId,
     display_name: user.email.split('@')[0],
     handoff_expires_at: new Date(now + 5 * 60_000).toISOString(),
     expires_at: new Date(now + 60 * 60_000).toISOString(),
@@ -38,7 +38,7 @@ export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, use
   return { code, state: request.state }
 }
 
-export async function exchangeWidgetHandoff(input: Record<string, unknown>, origin: unknown) {
+export async function exchangeWidgetHandoff(input: Record<string, unknown>, origin: unknown, connectionId: string | null = null) {
   const { code, state, verifier, projectKey } = input
   if (!widgetOrigin(origin) || typeof projectKey !== 'string' || !projectKey
     || typeof code !== 'string' || !WIDGET_PROOF.test(code)
@@ -49,11 +49,13 @@ export async function exchangeWidgetHandoff(input: Record<string, unknown>, orig
   await assertWidgetProject(projectKey, origin as string)
   const token = `crrt_widget_${createProof()}`
   // Postgres rechecks the token_hash predicate after concurrent updates: one winner.
-  const { data, error } = await getServiceSupabase().from('widget_auth_sessions')
+  let query = getServiceSupabase().from('widget_auth_sessions')
     .update({ token_hash: hashProof(token) }).eq('code_hash', hashProof(code))
     .eq('state_hash', hashProof(state)).eq('pkce_challenge', pkceChallenge(verifier))
     .eq('project_key', projectKey).eq('origin', origin).is('token_hash', null)
-    .gt('handoff_expires_at', new Date().toISOString()).select(SESSION_COLUMNS).maybeSingle()
+    .gt('handoff_expires_at', new Date().toISOString())
+  query = connectionId === null ? query.is('storybook_connection_id', null) : query.eq('storybook_connection_id', connectionId)
+  const { data, error } = await query.select(SESSION_COLUMNS).maybeSingle()
   if (error) throw new Error('Widget exchange failed')
   if (!data) throw new WidgetSessionError(400, 'Invalid or expired widget sign-in')
   return { accessToken: token, displayName: data.display_name, expiresAt: data.expires_at }
@@ -67,14 +69,16 @@ function requestOrigin(req: VercelRequest): string | null {
   try { return widgetOrigin(new URL(req.headers.referer).origin) } catch { return null }
 }
 
-export async function requireWidgetSession(req: VercelRequest): Promise<WidgetSession> {
+export async function requireWidgetSession(req: VercelRequest, connectionId: string | null = null): Promise<WidgetSession> {
   const authorization = req.headers.authorization
   const origin = requestOrigin(req)
   if (typeof authorization !== 'string' || !/^Bearer crrt_widget_[A-Za-z0-9_-]{43}$/.test(authorization)
     || !origin) throw new WidgetSessionError(401, 'Sign in to CRRT again')
-  const { data, error } = await getServiceSupabase().from('widget_auth_sessions')
+  let query = getServiceSupabase().from('widget_auth_sessions')
     .select(SESSION_COLUMNS).eq('token_hash', hashProof(authorization.slice(7)))
-    .eq('origin', origin).gt('expires_at', new Date().toISOString()).maybeSingle()
+    .eq('origin', origin).gt('expires_at', new Date().toISOString())
+  query = connectionId === null ? query.is('storybook_connection_id', null) : query.eq('storybook_connection_id', connectionId)
+  const { data, error } = await query.maybeSingle()
   if (error) throw new Error('Widget session lookup failed')
   if (!data) throw new WidgetSessionError(401, 'Sign in to CRRT again')
   await assertWidgetProject(data.project_key, data.origin)

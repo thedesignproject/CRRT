@@ -318,7 +318,7 @@ export type StoredComment = {
   }>
 }
 
-function mapComment(row: CommentRow): StoredComment {
+export function mapComment(row: CommentRow): StoredComment {
   return {
     createdByUserId: row.created_by_user_id,
     id: row.id,

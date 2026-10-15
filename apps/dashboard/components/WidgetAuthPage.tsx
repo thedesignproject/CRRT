@@ -1,22 +1,23 @@
 import { useEffect, useState } from 'react'
-import { parseWidgetAuthRequest, WIDGET_PROOF } from '../../../src/lib/widgetAuthContract'
+import { WIDGET_PROOF } from '../../../src/lib/widgetAuthContract'
+import { widgetAuthContinuation } from '../lib/widget-auth'
 import { LoginPage } from './LoginPage'
 
 export function WidgetAuthPage({ apiBase, accessToken }: { apiBase: string; accessToken: string | null }) {
   const [status, setStatus] = useState('Connecting to the website…')
   const search = window.location.search
-  const request = parseWidgetAuthRequest(Object.fromEntries(new URLSearchParams(search)))
+  const request = widgetAuthContinuation(search)
   useEffect(() => {
     if (!accessToken || !request || !window.opener) return
     let active = true
-    void fetch(`${apiBase}/v1/widget/auth/handoff`, {
+    void fetch(`${apiBase}/v1/${request.connectionId ? 'storybook' : 'widget'}/auth/handoff`, {
       method: 'POST', headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
     }).then(async (response) => {
       const result = await response.json()
       if (!response.ok || !WIDGET_PROOF.test(result.code) || result.state !== request.state) throw new Error('Could not connect. Return to the widget and try again.')
       if (!active) return
-      window.opener.postMessage({ type: 'crrt:widget-auth', ...result }, request.origin)
+      window.opener.postMessage({ type: request.connectionId ? 'crrt:storybook-auth' : 'crrt:widget-auth', code: result.code, state: result.state }, request.origin)
       setStatus('Connected. You can close this window.')
     }).catch(() => { if (active) setStatus('Could not connect. Return to the widget and try again.') })
     return () => { active = false }

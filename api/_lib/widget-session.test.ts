@@ -102,3 +102,19 @@ it('supports same-origin GETs without weakening exact-origin matching', async ()
   }
   await expect(requireWidgetSession({ headers: { authorization: `Bearer crrt_widget_${proof}`, origin: 'null', referer: origin } } as never)).rejects.toMatchObject({ status: 401 })
 })
+
+it('binds Storybook handoffs, exchanges and credentials to one connection', async () => {
+  const connectionId = '11111111-1111-4111-8111-111111111111'
+  let q = database([{ error: null }, { error: null }])
+  await createWidgetHandoff(request, { userId: 'user', email: 'ada@example.com' }, connectionId)
+  expect(q.insert).toHaveBeenCalledWith(expect.objectContaining({ storybook_connection_id: connectionId }))
+  q = database()
+  await exchangeWidgetHandoff(exchange, origin, connectionId)
+  expect(q.eq).toHaveBeenCalledWith('storybook_connection_id', connectionId)
+  q = database()
+  await requireWidgetSession(req, connectionId)
+  expect(q.eq).toHaveBeenCalledWith('storybook_connection_id', connectionId)
+  q = database()
+  await requireWidgetSession(req)
+  expect(q.is).toHaveBeenCalledWith('storybook_connection_id', null)
+})
