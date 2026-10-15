@@ -1,0 +1,46 @@
+name: Publish Storybook addon
+
+on:
+  push:
+    tags:
+      - 'crrt-storybook-v*'
+
+permissions:
+  contents: read
+  id-token: write
+
+defaults:
+  run:
+    working-directory: packages/crrt-storybook
+
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.5
+          registry-url: 'https://registry.npmjs.org'
+          cache: npm
+          cache-dependency-path: packages/crrt-storybook/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build-storybook
+      - run: npm run pack:verify
+      - run: npm run consumer:verify
+      - name: Verify tag matches package version
+        env:
+          GITHUB_REF: ${{ github.ref }}
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/crrt-storybook-v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Tag crrt-storybook-v$TAG_VERSION does not match package.json version $PKG_VERSION"
+            exit 1
+          fi
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

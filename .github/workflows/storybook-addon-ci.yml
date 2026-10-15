@@ -1,0 +1,43 @@
+name: Storybook addon
+
+on:
+  pull_request:
+    paths:
+      - 'packages/crrt-storybook/**'
+      - '.github/workflows/storybook-addon-ci.yml'
+      - '.github/workflows/publish-storybook-addon.yml'
+  push:
+    branches: [trunk]
+    paths:
+      - 'packages/crrt-storybook/**'
+      - '.github/workflows/storybook-addon-ci.yml'
+      - '.github/workflows/publish-storybook-addon.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/crrt-storybook
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 20.19.5
+          cache: npm
+          cache-dependency-path: packages/crrt-storybook/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build-storybook
+      - run: npm run pack:verify
+      - run: npm run consumer:verify
