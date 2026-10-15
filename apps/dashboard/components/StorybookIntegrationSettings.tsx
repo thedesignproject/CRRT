@@ -24,7 +24,7 @@ interface StorybookIntegrationSettingsProps {
   navigateToCheckout?: (url: string) => void
 }
 
-const button = 'inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold transition-all disabled:cursor-not-allowed disabled:opacity-50'
+const button = 'inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50'
 
 function errorState(error: unknown): LocalState {
   const requestError = error as Error & { status?: number; code?: string }
@@ -225,7 +225,7 @@ export function StorybookIntegrationSettings({
             <span className="shrink-0 rounded-full bg-status-accepted-bg px-2 py-0.5 text-[10px] font-semibold text-status-accepted">Connected</span>
           </div>
           <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <button type="button" disabled={busy || !canManage} onClick={() => { void createPairing() }} className="text-left text-[11px] font-medium text-muted-foreground hover:text-foreground disabled:opacity-50">
+            <button type="button" disabled={busy || !canManage} onClick={() => { void createPairing() }} className="rounded-sm text-left text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50">
               Connect a different Storybook
             </button>
             {safeStorybookUrl(integration.storybookUrl) && (
