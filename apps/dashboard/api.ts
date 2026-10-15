@@ -867,12 +867,21 @@ export function disconnectJira(apiBase: string, accessToken: string, projectKey:
   )
 }
 
-export async function getStorybookIntegration(apiBase: string, accessToken: string, projectKey: string): Promise<StorybookIntegration> {
+export async function getStorybookIntegration(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  pendingPairing?: StorybookIntegration,
+): Promise<StorybookIntegration> {
   const result = await requestJson<StorybookConnectionsResponse>(
     `${apiBase}/v1/storybook/connections?projectKey=${encodeURIComponent(projectKey)}`,
     { cache: 'no-store', headers: { ...authHeaders(accessToken) } },
   )
-  const connections = Array.isArray(result.connections) ? result.connections : []
+  const records = Array.isArray(result.connections) ? result.connections : []
+  // A replacement must be claimed itself; an older connection is not completion.
+  const connections = pendingPairing?.connectionId
+    ? records.filter((connection) => connection.id === pendingPairing.connectionId)
+    : records
   const connected = connections.find(
     (connection): connection is StorybookConnectionRecord & { claimed_at: string } =>
       !connection.revoked_at && typeof connection.claimed_at === 'string',
@@ -893,6 +902,11 @@ export async function getStorybookIntegration(apiBase: string, accessToken: stri
       expiresAt: latestAttempt.expires_at,
       message: 'The last connection command expired. Generate a fresh one.',
     }
+  }
+
+  if (latestAttempt && pendingPairing?.connectionId === latestAttempt.id && pendingPairing.command) {
+    // Only retain a code already held in memory, while the server still accepts it.
+    return { ...pendingPairing, expiresAt: latestAttempt.expires_at }
   }
 
   return latestAttempt

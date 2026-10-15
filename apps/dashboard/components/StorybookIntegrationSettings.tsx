@@ -78,7 +78,7 @@ export function StorybookIntegrationSettings({
   const [busy, setBusy] = useState(false)
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const sequence = useRef(0)
-  const mockCurrent = useRef<StorybookIntegration | null>(null)
+  const currentIntegration = useRef<StorybookIntegration | null>(null)
 
   const load = useCallback(async (completeMockPairing = false) => {
     const request = ++sequence.current
@@ -89,7 +89,7 @@ export function StorybookIntegrationSettings({
       if (!canManage) {
         next = { state: 'not_connected' }
       } else if (mocksEnabled) {
-        next = completeMockPairing && mockCurrent.current?.state === 'waiting'
+        next = completeMockPairing && currentIntegration.current?.state === 'waiting'
           ? {
               state: 'connected',
               connectionId: `sbconn_${projectKey}`,
@@ -97,12 +97,18 @@ export function StorybookIntegrationSettings({
               connectedAt: new Date().toISOString(),
               lastSeenAt: new Date().toISOString(),
             }
-          : mockCurrent.current ?? { state: 'not_connected' }
-        mockCurrent.current = next
+          : currentIntegration.current ?? { state: 'not_connected' }
+        currentIntegration.current = next
       } else {
-        next = await getStorybookIntegration(apiBase, accessToken, projectKey)
+        next = await getStorybookIntegration(
+          apiBase, accessToken, projectKey,
+          currentIntegration.current?.state === 'waiting' ? currentIntegration.current : undefined,
+        )
       }
-      if (request === sequence.current) setIntegration(next)
+      if (request === sequence.current) {
+        currentIntegration.current = next
+        setIntegration(next)
+      }
     } catch (error) {
       if (request === sequence.current) setIntegration(errorState(error))
     } finally {
@@ -112,7 +118,7 @@ export function StorybookIntegrationSettings({
 
   useEffect(() => {
     sequence.current += 1
-    mockCurrent.current = null
+    currentIntegration.current = null
     setIntegration(null)
     void load()
     return () => { sequence.current += 1 }
@@ -140,7 +146,7 @@ export function StorybookIntegrationSettings({
         ? mockPairing(projectKey)
         : await createStorybookPairing(apiBase, accessToken, projectKey)
       if (request !== sequence.current) return
-      mockCurrent.current = next
+      currentIntegration.current = next
       setIntegration(next)
     } catch (error) {
       if (request === sequence.current) setIntegration(errorState(error))
