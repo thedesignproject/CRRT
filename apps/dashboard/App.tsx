@@ -768,6 +768,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
         <CommentDetail
           readOnly={!canManageFeedback}
+          canManageStorybook={activeProject?.role === 'owner'}
           selectedComment={selectedComment}
           selectedProject={selectedProject}
           commentsLoading={commentsLoading}

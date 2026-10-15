@@ -110,6 +110,7 @@ interface CommentDetailProps {
   accessToken: string
   personal?: false
   readOnly?: boolean
+  canManageStorybook?: boolean
   bodyEditor?: ReactNode
   personalActions?: ReactNode
 }
@@ -133,6 +134,7 @@ export function CommentDetail({
   accessToken,
   personal = false,
   readOnly = false,
+  canManageStorybook = false,
   bodyEditor,
   personalActions,
 }: CommentDetailProps | PersonalDetailProps) {
@@ -575,7 +577,7 @@ export function CommentDetail({
           projectId={selectedProject}
           apiBase={apiBase}
           accessToken={accessToken}
-          canManage={!readOnly}
+          canManage={canManageStorybook}
         />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">

@@ -86,7 +86,9 @@ export function StorybookIntegrationSettings({
     setCopyState('idle')
     try {
       let next: StorybookIntegration
-      if (mocksEnabled) {
+      if (!canManage) {
+        next = { state: 'not_connected' }
+      } else if (mocksEnabled) {
         next = completeMockPairing && mockCurrent.current?.state === 'waiting'
           ? {
               state: 'connected',
@@ -106,7 +108,7 @@ export function StorybookIntegrationSettings({
     } finally {
       if (request === sequence.current) setBusy(false)
     }
-  }, [accessToken, apiBase, projectKey])
+  }, [accessToken, apiBase, canManage, projectKey])
 
   useEffect(() => {
     sequence.current += 1
@@ -177,9 +179,11 @@ export function StorybookIntegrationSettings({
       ) : integration.state === 'not_connected' ? (
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[13px] font-semibold text-foreground">No Storybook connected</p>
+            <p className="text-[13px] font-semibold text-foreground">{canManage ? 'No Storybook connected' : 'Storybook is managed by the project owner'}</p>
             <p className="mt-1 max-w-md text-[11px] text-muted-foreground">
-              Add CRRT to an existing Storybook 10 project with one command.
+              {canManage
+                ? integration.message ?? 'Add CRRT to an existing Storybook 10 project with one command.'
+                : 'Ask the owner to connect or replace Storybook.'}
             </p>
           </div>
           {canManage ? (
@@ -187,7 +191,7 @@ export function StorybookIntegrationSettings({
               {busy ? 'Preparing…' : 'Connect Storybook'}
             </button>
           ) : (
-            <p className="text-[11px] text-muted-foreground">Ask a project admin to connect Storybook.</p>
+            <p className="text-[11px] text-muted-foreground">Only the project owner can manage this connection.</p>
           )}
         </div>
       ) : integration.state === 'waiting' && integration.command ? (

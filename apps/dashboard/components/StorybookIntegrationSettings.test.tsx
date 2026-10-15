@@ -274,10 +274,12 @@ describe('StorybookIntegrationSettings', () => {
     expect(screen.queryByText('Stale pairing error')).toBeNull()
   })
 
-  it('renders setup mode and keeps management actions admin-only', async () => {
+  it('renders setup mode and keeps management actions owner-only', async () => {
     const { container } = render(<StorybookIntegrationSettings {...props} appearance="setup" canManage={false} />)
-    expect(await screen.findByText('Ask a project admin to connect Storybook.')).toBeInTheDocument()
+    expect(await screen.findByText('Storybook is managed by the project owner')).toBeInTheDocument()
+    expect(screen.getByText('Only the project owner can manage this connection.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Connect Storybook' })).toBeNull()
+    expect(getStorybookIntegration).not.toHaveBeenCalled()
     expect(container.firstElementChild).toHaveClass('rounded-xl')
   })
 

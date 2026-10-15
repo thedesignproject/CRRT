@@ -37,7 +37,7 @@ The choice changes only the setup content; it does not create a different projec
 
 ### Project settings
 
-Admins see a `Storybook` integration section near the existing GitHub, Linear, and Jira integrations. Non-admins do not receive or generate pairing codes.
+Owners see a `Storybook` integration section near the existing GitHub, Linear, and Jira integrations. Other roles do not receive or generate pairing codes because the backend deliberately restricts connection management to the project owner.
 
 ### States
 
@@ -54,12 +54,12 @@ Admins see a `Storybook` integration section near the existing GitHub, Linear, a
 
 ## Frontend contract
 
-The frontend isolates Pranav's backend contract behind two functions:
+The frontend isolates Pranav's shipped backend contract behind two functions:
 
-- `GET /v1/projects/:projectKey/storybook` returns the current connection or active pairing.
-- `POST /v1/projects/:projectKey/storybook/pairings` creates a short-lived, project-scoped pairing.
+- `GET /v1/storybook/connections?projectKey=…` returns owner-visible connection metadata, newest first.
+- `POST /v1/storybook/pairings` receives `{ projectKey }` and creates a short-lived, project-scoped pairing.
 
-The UI consumes stable states (`not_connected`, `waiting`, `connected`, `upgrade_required`) and derives `expired`, `authentication_required`, and generic failure states from expiry and HTTP errors. Endpoint mapping remains confined to `apps/dashboard/api.ts` so the UI does not change if the final backend route naming differs.
+`apps/dashboard/api.ts` adapts those responses into the existing UI states. A claimed, non-revoked connection wins over abandoned replacement attempts. An expired unclaimed attempt becomes `expired`. A still-valid pairing cannot be reconstructed after refresh because CRRT stores only its hash, so it safely becomes `not_connected` and the owner can generate a new command. Pairing creation converts the one-time code into the copyable CLI command in memory. The UI continues to derive `upgrade_required`, `authentication_required`, and generic failures from HTTP errors.
 
 ## Security and recovery
 

@@ -311,7 +311,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           )}
         </section>
 
-        {isAdmin && (
+        {isOwner && (
           <StorybookIntegrationSettings
             apiBase={apiBase}
             accessToken={accessToken}

@@ -613,6 +613,19 @@ describe('<CommentDetail /> GitHub issue action', () => {
     expect(screen.queryByText('Select an extension comment')).toBeNull()
   })
 
+  it('renders project onboarding when the selected project has no feedback', () => {
+    render(
+      <CommentDetail
+        {...props}
+        selectedComment={null}
+        projectComments={[]}
+        filteredComments={[]}
+        canManageStorybook={false}
+      />,
+    )
+    expect(screen.getByText('Bring feedback into this project.')).toBeInTheDocument()
+  })
+
   it('explains when the selected provider is not connected', async () => {
     vi.mocked(getExternalWorkDraft).mockResolvedValueOnce({ provider: 'github', connected: false, destination: null, existing: null, draft: { title: 'T', body: 'B' } })
     render(<CommentDetail {...props} />)
