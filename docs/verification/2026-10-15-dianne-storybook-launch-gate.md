@@ -39,12 +39,29 @@ Target length: five to seven minutes.
 | Gate | Current evidence | Release requirement |
 | --- | --- | --- |
 | CRRT Storybook addon | Local package tests pass: 17/17. A packed addon builds in a clean Storybook 10 consumer. | Merge `thedesignproject/crrt-storybook#1` and publish `@thedesignproject/crrt-storybook@0.1.0`. |
-| Customer Storybook | `template-ds` typecheck, tests, and Storybook build pass, but it still carries the old duplicate panel. | Replace the duplicate `CarrotPanel` and preview widget with the published addon; commit the npm lockfile; rerun all checks. |
-| CRRT onboarding | Dashboard onboarding is implemented in CRRT PR #334. | Merge, deploy, and verify pairing states against production. |
-| Pricing and Billing Center | Pro/Studio pricing and the Billing Center are implemented in CRRT PR #335. | Merge after both React 18 and React 19 CI pass; verify a real Checkout return. |
+| Customer Storybook | Prepared on local branch `feat/crrt-storybook-addon`: the duplicate panel, manager wiring, and preview widget are removed. The packed `0.1.0` addon passes `template-ds` typecheck, Brain/meta validation, lint, and a full Storybook build. | After npm publication, replace the temporary local tarball with pinned `@thedesignproject/crrt-storybook@0.1.0`, commit the lockfile, and rerun the same checks before opening the PR. |
+| CRRT onboarding | Dashboard onboarding is implemented in CRRT PR #334. Its not-connected, waiting, connected, auth recovery, upgrade, expiry, retry, clipboard, unsafe URL, stale request, admin-only, and demo-mock paths pass 26/26 focused tests; typecheck and dashboard build pass. | Merge, deploy, and verify pairing states against production. |
+| Pricing and Billing Center | Pro/Studio pricing and the Billing Center are implemented in CRRT PR #335. Pricing, loading/error, Checkout continuation, trial, active, past-due, read-only, cancellation, plan-change, Stripe URL, retry, and stale-request paths pass 32/32 focused tests; typecheck plus landing and dashboard builds pass. | Merge after both React 18 and React 19 CI pass; verify a real Checkout return. |
 | Billing and entitlement backend | Owned by TDP-5792. | A fresh production user can buy Pro, return entitled, manage billing, and recover from a failed return. |
 | Private Storybook backend | Owned by TDP-5793. | Pairing is short-lived and single-use; private feedback requires a signed-in project owner/member and never falls back to the public endpoint. |
 | Release and deploy | Owned by TDP-5797. | Production deploy is healthy and both CRRT packages resolve from npm before rehearsal. |
+
+## Automated evidence captured on 2026-10-14
+
+- `crrt-storybook`: 17/17 package tests, typecheck, package-content verification, and a clean-consumer Storybook build pass.
+- CRRT PR #334: 26/26 focused onboarding and mock-mode tests, typecheck, and dashboard build pass.
+- CRRT PR #335: 32/32 focused pricing and billing tests, typecheck, landing build, and dashboard build pass.
+- `template-ds`: the local packed addon replaces the duplicate implementation and passes typecheck, 47 metadata checks, 47 component-document checks, Brain validation, lint, and a full Storybook production build.
+- Browser-backed visual QA could not be captured in this environment because no controllable browser session was available. Do not treat the automated evidence above as the final visual sign-off; the Thursday production rehearsal remains required.
+
+## Recording notes
+
+- Keep the Storybook project, terminal, CRRT project, and coding agent open in separate tabs before recording. Avoid waiting on installs or builds in the final cut.
+- Use the same private project from pairing through Agent handoff so the continuity is obvious.
+- Show the one-command setup only once. Hide the raw connection code after use; it is short-lived and should not become tutorial copy.
+- Frame the broken icon-only button and the CRRT panel together, then show the resulting dashboard item before opening the Agent action.
+- Capture the corrected Storybook state and passing check as the final proof. Do not end on a terminal command or dashboard loading state.
+- Record backup clips only after the production smoke test passes: connected panel, feedback arriving with story context, and dashboard-to-agent handoff.
 
 ## Required smoke tests
 
