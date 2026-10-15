@@ -35,6 +35,7 @@ jobs:
           node-version: 20.19.5
           cache: npm
           cache-dependency-path: packages/crrt-storybook/package-lock.json
+      - run: npm install --global npm@11.16.0
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
