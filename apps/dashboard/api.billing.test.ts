@@ -65,3 +65,16 @@ it('surfaces billing API and invalid JSON failures through the shared contract',
   fetchMock.mockResolvedValueOnce({ ok: true, status: 200, text: async () => '<!doctype html> API unavailable' })
   await expect(getBillingSummary('/api', 'token')).rejects.toThrow('Expected JSON from /api/v1/billing')
 })
+
+it('retains annual billing prices and signed-handoff capabilities from the backend', async () => {
+  fetchMock.mockResolvedValue(response({
+    enabled: true, billingCycle: 'yearly', actions: { checkoutState: true, changePlan: false },
+    plans: [{ id: 'pro', name: 'Cloud Pro', monthlyUsd: 19, amount: '$192', interval: 'year' }],
+    entitlements: { plan: 'pro', status: 'active', resetAt: '2026-11-01', usage: {}, limits: {} },
+  }))
+  expect(await getBillingSummary('/api', 'token')).toMatchObject({
+    billingCycle: 'yearly', actions: { checkoutState: true, changePlan: false }, planPrices: { pro: { amount: '$192', interval: 'year' } },
+  })
+  await runBillingAction('/api', 'token', 'checkout', 'pro', undefined, 'yearly')
+  expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({ action: 'checkout', plan: 'pro', cycle: 'yearly' })
+})

@@ -46,7 +46,7 @@ The memorable element is the Pro column's clear workflow promise: Storybook revi
 - Pro explicitly includes private projects, Storybook integration, Agent workflow, GitHub/Linear/Jira handoff, 10 projects, 10 internal collaborators, unlimited guests, 2,000 comments per month, and 5 Product Audits per month.
 - Studio says “Everything in Pro” and only adds higher capacity, avoiding the impression that core workflow features require Studio.
 - The cycle control uses only server-allowlisted monthly/yearly values from the final TDP-5792 contract.
-- Until the signed checkout-state backend lands, signed-out CTAs open dashboard sign-in with an allowlisted plan hint. Billing Center preselects that plan and requires confirmation; the hint grants no billing authority. Signed plan/cycle continuation and yearly checkout remain deferred to TDP-5792.
+- Signed-out CTAs use the backend signed checkout-state handoff to preserve plan and cycle through authentication. The state expires after 30 minutes and carries no account or payment authority. The older allowlisted plan-hint path remains compatible and requires confirmation.
 - Signed-in CTAs call the same `/v1/billing` endpoint and accept only trusted Stripe destinations.
 - Errors remain inline with a retry/dismiss path.
 

@@ -5,7 +5,7 @@ import { assertCloudPrice } from './cloud-prices.js'
 import { billingConfig, stripeClient } from './config.js'
 import { accountForCustomer, getAccount, recordEvent, withAccount, type BillingAccount } from './store.js'
 
-import { cloudPriceCatalog, isCloud, planForPrice, type CloudPlan } from './plans.js'
+import { cloudPriceCatalog, isCloud, planForPrice, selectionForPrice, type BillingCycle, type CloudPlan } from './plans.js'
 
 const terminal = new Set(['canceled', 'incomplete_expired'])
 type Save = (values: Partial<BillingAccount>) => Promise<void>
@@ -70,19 +70,23 @@ export async function billingSummary(userId: string) {
   // redirect query string itself never determines payment or access state.
   if (account?.customer_id) await withAccount(userId, (locked, save) => synchronize(stripeClient(), locked, save))
   const latest = account?.customer_id ? await getAccount(userId) : account
+  const pendingPrice = latest?.checkout_payload?.line_items?.[0]?.price
+  const existing = latest?.subscription_status && !terminal.has(latest.subscription_status)
+  const selection = isCloud() ? selectionForPrice(existing ? latest.price_id : typeof pendingPrice === 'string' ? pendingPrice : latest?.price_id ?? null) : null
   return {
     enabled: true, testMode: true, proPrice, status: latest?.subscription_status ?? 'free',
     periodEnd: latest?.period_end ?? null, cancelAtPeriodEnd: latest?.cancel_at_period_end ?? false,
     canManage: Boolean(latest?.customer_id),
+    ...(isCloud() ? { billingCycle: selection?.cycle ?? 'monthly', ...(!existing && selection ? { checkoutPlan: selection.plan } : {}) } : {}),
   }
 }
 
-export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro') {
+export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro', cycle: BillingCycle = 'monthly') {
   const config = billingConfig()
   const stripe = stripeClient()
   const cloud = isCloud()
-  const price = cloud ? cloudPriceCatalog()[plan] : config.price
-  if (cloud) assertCloudPrice(plan, await stripe.prices.retrieve(price))
+  const price = cloud ? cloudPriceCatalog(process.env, cycle)[plan] : config.price
+  if (cloud) assertCloudPrice(plan, await stripe.prices.retrieve(price), cycle)
   return withAccount(user.userId, async (account, save) => {
     if (cloud && account.is_legacy && plan === 'pro') throw new Error('Cloud Pro is included for legacy users. Choose Cloud Studio to upgrade.')
     let customerId = account.customer_id

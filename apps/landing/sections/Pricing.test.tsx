@@ -6,13 +6,12 @@ vi.mock('../lib/billing', async (importOriginal) => ({
 }))
 import { startCloudCheckout } from '../lib/billing'
 import { Pricing } from './Pricing'
-import { DASHBOARD_HREF } from './Hero'
 import { renderToString } from 'react-dom/server'
 
 beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('SSR', false) })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
-it('presents the catalog and sends signed-out plan selections to dashboard sign-in', () => {
+it('presents the catalog and preserves signed-out plan and cycle selections', () => {
   render(<Pricing apiBase="https://crrt.ai/api" />)
   expect(screen.getAllByRole('article')).toHaveLength(3)
   expect(screen.getByText('Recommended')).toBeInTheDocument()
@@ -26,9 +25,9 @@ it('presents the catalog and sends signed-out plan selections to dashboard sign-
   expect(within(pro).getByText(/Agent handoff/)).toBeInTheDocument()
   expect(within(pro).getByText(/GitHub, Linear, and Jira/)).toBeInTheDocument()
   expect(within(studio).getByText('Everything in Pro')).toBeInTheDocument()
-  expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', `${DASHBOARD_HREF}/billing?billingPlan=pro`)
+  expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=pro&cycle=yearly')
   fireEvent.click(screen.getByRole('button', { name: 'Monthly' }))
-  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', `${DASHBOARD_HREF}/billing?billingPlan=studio`)
+  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly')
 })
 
 it('takes an authenticated customer directly to one safe Checkout session', async () => {
@@ -97,7 +96,7 @@ it('ignores a stale failure without unlocking the new account checkout', async (
 it('renders public pricing links without local development destinations during SSR', () => {
   vi.stubEnv('SSR', true)
   const html = renderToString(<Pricing />)
-  expect(html).toContain('/dashboard/billing?billingPlan=pro')
-  expect(html).toContain('/dashboard/billing?billingPlan=studio')
+  expect(html).toContain('/api/v1/billing?start=pro&amp;cycle=yearly')
+  expect(html).toContain('/api/v1/billing?start=studio&amp;cycle=yearly')
   expect(html).not.toContain('localhost:5173')
 })

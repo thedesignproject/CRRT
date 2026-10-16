@@ -1,8 +1,8 @@
 export type CloudPlanKey = 'pro' | 'studio'
 export type BillingCycle = 'monthly' | 'yearly'
 
-export function cloudPlanSignInUrl(dashboardBase: string, plan: CloudPlanKey) {
-  return `${dashboardBase.replace(/\/$/, '')}/billing?${new URLSearchParams({ billingPlan: plan })}`
+export function cloudPlanStartUrl(apiBase: string, plan: CloudPlanKey, cycle: BillingCycle = 'monthly') {
+  return `${apiBase.replace(/\/$/, '')}/v1/billing?${new URLSearchParams({ start: plan, cycle })}`
 }
 
 export async function startCloudCheckout(apiBase: string, accessToken: string, plan: CloudPlanKey, cycle: BillingCycle = 'monthly') {

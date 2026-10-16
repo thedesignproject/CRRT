@@ -309,6 +309,13 @@
       "when": 1792134014890,
       "tag": "0043_legacy_users",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1792157758527,
+      "tag": "0044_yearly_billing_windows",
+      "breakpoints": true
     }
   ]
 }

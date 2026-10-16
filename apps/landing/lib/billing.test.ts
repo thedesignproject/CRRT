@@ -1,11 +1,11 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { cloudPlanSignInUrl, startCloudCheckout } from './billing'
+import { cloudPlanStartUrl, startCloudCheckout } from './billing'
 
 afterEach(() => vi.unstubAllGlobals())
 
-it('routes signed-out customers through the dashboard instead of an authenticated API endpoint', () => {
-  expect(cloudPlanSignInUrl('/dashboard/', 'pro')).toBe('/dashboard/billing?billingPlan=pro')
-  expect(cloudPlanSignInUrl('http://localhost:5173', 'studio')).toBe('http://localhost:5173/billing?billingPlan=studio')
+it('routes signed-out selections through the signed plan and cycle handoff', () => {
+  expect(cloudPlanStartUrl('/api/', 'pro')).toBe('/api/v1/billing?start=pro&cycle=monthly')
+  expect(cloudPlanStartUrl('https://crrt.ai/api', 'studio', 'yearly')).toBe('https://crrt.ai/api/v1/billing?start=studio&cycle=yearly')
 })
 
 it('starts authenticated Checkout with only a bearer session and allowlisted selection', async () => {

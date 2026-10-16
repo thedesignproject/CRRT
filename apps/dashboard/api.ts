@@ -174,6 +174,8 @@ export interface BillingSummary {
   canManage?: boolean
   allowed?: { manageBilling: boolean }
   actions?: { checkoutState: boolean; changePlan: boolean }
+  checkoutPlan?: BillingPlanKey
+  billingCycle?: 'monthly' | 'yearly'
   plans?: BillingPlan[]
   planPrices?: Record<BillingPlanKey, { amount: string; interval: 'month' | 'year' }>
   usage?: {
@@ -321,12 +323,15 @@ export function createExtensionAuthHandoff(
 }
 
 type LegacyBillingSummary = {
+  actions?: { checkoutState: boolean; changePlan: boolean }
+  checkoutPlan?: BillingPlanKey
+  billingCycle?: 'monthly' | 'yearly'
   enabled: boolean
   testMode?: boolean
   canManage?: boolean
   cancelAtPeriodEnd?: boolean
   periodEnd?: string | null
-  plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' }>
+  plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' | 'year' }>
   entitlements?: {
     isLegacy?: boolean
     plan: BillingPlanKey | null
@@ -364,12 +369,14 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
     testMode: legacy.testMode,
     deployment: 'cloud',
     plan: entitlement.plan,
+    billingCycle: legacy.billingCycle,
+    checkoutPlan: legacy.checkoutPlan,
     lifecycle: legacyLifecycle(entitlement.status, entitlement.plan),
     cancelAtPeriodEnd: legacy.cancelAtPeriodEnd,
     currentPeriodEnd: legacy.periodEnd,
     canManageSubscription: legacy.canManage,
     canManage: legacy.canManage,
-    actions: { checkoutState: false, changePlan: false },
+    actions: legacy.actions ?? { checkoutState: false, changePlan: false },
     plans,
     planPrices: priceEntries ? Object.fromEntries(priceEntries) as BillingSummary['planPrices'] : undefined,
     usage: {
@@ -413,11 +420,11 @@ export async function getBillingSummary(apiBase: string, accessToken: string, re
   return normalizeBillingSummary(value)
 }
 
-export function runBillingAction(apiBase: string, accessToken: string, action: BillingAction, plan?: BillingPlanKey, state?: string) {
+export function runBillingAction(apiBase: string, accessToken: string, action: BillingAction, plan?: BillingPlanKey, state?: string, cycle?: 'monthly' | 'yearly') {
   return requestJson<BillingActionResult>(`${apiBase}/v1/billing`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-    body: JSON.stringify({ action, ...(plan ? { plan } : {}), ...(state ? { state } : {}) }),
+    body: JSON.stringify({ action, ...(plan ? { plan } : {}), ...(state ? { state } : {}), ...(cycle ? { cycle } : {}) }),
   })
 }
 

@@ -10,27 +10,16 @@ The deployment pipeline runs `bun run cloud:check`, builds the application, then
 
 Use separate databases and Stripe environments for sandbox, production and Community. Do not change a production Cloud database to Community to bypass checks.
 
-Migration `0043_legacy_users.sql` marks the auth users present at deployment as legacy; later signups keep the free default. Untouched legacy billing placeholders are cleaned when deleting an auth user, so the backfill does not block deletion for previously unbilled users. Rows with Stripe history or an active billing lease retain the existing deletion protection. Agent handoff rechecks and locks effective billing access even before quota activation; the quota switch does not bypass Cloud Agent eligibility.
-
 ## 2. Configure Stripe in a sandbox
 
-Create active USD monthly recurring prices for:
+Create active USD recurring prices for:
 
-| Product | Monthly price |
-| --- | ---: |
-| CRRT Pro | $19 |
-| CRRT Studio | $49 |
+| Product | Monthly price | Yearly price |
+| --- | ---: | ---: |
+| CRRT Pro | $19 | $192 |
+| CRRT Studio | $49 | $492 |
 
-Use distinct `price_…` IDs. Tax must not be included in the price. Configure Stripe Tax so automatic-tax Checkout can complete. Configure Customer Portal to expose only the intended Pro/Studio monthly prices, permit the desired plan changes and cancellation, and deliberately choose proration and billing-anchor behavior. Preserve the anchor for same-window plan changes so upgrades cannot reset consumed quotas.
-
-Create a **separate legacy Customer Portal configuration** in each Stripe environment:
-
-- Disable subscription updates/plan switching (`features.subscription_update.enabled=false`). Legacy users already have Pro included; Studio upgrades start through CRRT Checkout.
-- Enable cancellation at the end of the current billing period (`features.subscription_cancel.enabled=true`, `mode=at_period_end`). After Studio ends, CRRT restores the included Pro baseline.
-- Enable payment-method updates and invoice history so users can manage their Studio payments.
-- Keep the configuration active and save its `bpc_…` ID as `STRIPE_LEGACY_PORTAL_CONFIGURATION_ID` on the server.
-
-Every legacy Portal redirect, including checkout recovery, explicitly selects and validates this configuration. A missing, inaccessible, inactive, or unsafe configuration blocks the redirect; it never falls back to the default portal. Regular customers retain the default Pro/Studio portal. Do not expose the default portal's shareable login link to legacy users; disable that login link and send customers through CRRT's authenticated Billing page.
+Use distinct `price_…` IDs. Tax must not be included in the price. Configure Stripe Tax so automatic-tax Checkout can complete. Configure Customer Portal to expose only the intended Pro/Studio monthly and yearly prices, permit the desired plan changes and cancellation, and deliberately choose proration and billing-anchor behavior. Preserve the anchor for same-window plan changes so upgrades cannot reset consumed quotas.
 
 Register the API webhook endpoint, `https://<api-host>/api/v1/billing/webhook`, for these events:
 
@@ -55,10 +44,14 @@ STRIPE_SECRET_KEY=<sandbox secret key>
 STRIPE_WEBHOOK_SECRET=<matching sandbox endpoint signing secret>
 STRIPE_PRO_PRICE_ID=<sandbox Pro monthly price ID>
 STRIPE_STUDIO_PRICE_ID=<sandbox Studio monthly price ID>
-STRIPE_LEGACY_PORTAL_CONFIGURATION_ID=<matching legacy portal bpc_ ID>
+STRIPE_PRO_YEARLY_PRICE_ID=<sandbox Pro yearly price ID>
+STRIPE_STUDIO_YEARLY_PRICE_ID=<sandbox Studio yearly price ID>
+BILLING_STATE_SECRET=<at least 32 random characters>
 STRIPE_RETURN_URL=https://<dashboard-host>/dashboard/billing
 DATABASE_URL=<direct connection for this environment's database>
 ```
+
+Generate `BILLING_STATE_SECRET` with `openssl rand -hex 32`. Store the output only in the backend's secret settings, use a separate value for each environment, and keep the same value across API workers in that environment. It is an application signing secret, not a Stripe-issued secret. Replacing it invalidates outstanding sign-in continuations.
 
 These settings enable Checkout, Portal and webhook processing; they do not enable database quota enforcement. Cloud mode also enables API Agent entitlement checks, independently of the database switch. After changing deployment environment values, deploy the new backend so running API workers receive them.
 
@@ -74,9 +67,7 @@ This is read-only. It validates mode consistency and enabled Stripe configuratio
 
 Existing owners should sign in and open `/dashboard/billing`, then refresh billing status. Authenticated `GET /api/v1/billing` reconciles that owner’s current Stripe subscriptions and durable trial history; the browser redirect itself never grants access. Verify existing billing rows have the intended catalog plan and trusted current-period boundaries. Previous single-price subscriptions do not map automatically to Pro/Studio: decide and complete their transition before enabling enforcement. Review unowned projects and retained personal Cloud feedback before activation.
 
-In the sandbox, exercise a card-backed 14-day trial, cancellation/re-subscription without a second trial, upgrade/downgrade, renewal, failed payment, signed webhooks and duplicate delivery. Check quota boundaries, retained reads/exports after expiry, local extension capture and retry-safe import. Fix any unmapped prices or incomplete Tax/Portal settings before proceeding. Also verify a legacy user can start a Studio trial, manage invoices/payment methods, and cancel Studio at period end without seeing paid Pro as a plan choice. Test the Manage billing button and redirects from an already-active subscription and a recovered completed checkout. Remove or misconfigure the legacy portal ID and confirm all three redirects fail without opening the default portal.
-
-A rejected/unknown Checkout attempt retains its fixed request/key until recovery or its 35-minute deadline.
+In the sandbox, exercise a card-backed 14-day trial, cancellation/re-subscription without a second trial, upgrade/downgrade, renewal, failed payment, signed webhooks and duplicate delivery. Check quota boundaries, retained reads/exports after expiry, local extension capture and retry-safe import. Fix any unmapped prices or incomplete Tax/Portal settings before proceeding. A rejected/unknown Checkout attempt retains its fixed request/key until recovery or its 35-minute deadline.
 
 The database integration suite truncates fixtures. Run it only on a disposable local database, never on production or a shared environment.
 
@@ -95,7 +86,16 @@ Verify `public.cloud_plan_settings` has `id=1, enabled=true`, then check owner b
 
 ## 6. Enable live payments separately
 
-Repeat the verified setup using production’s separate database, live Stripe products/prices and live webhook endpoint. Set `STRIPE_MODE=live`, use the matching live secret key, live price IDs, the separate live legacy portal configuration ID, and endpoint signing secret, and use the production dashboard return URL. Sandbox price IDs and signing secrets cannot substitute for production values.
+Repeat the verified setup using production’s separate database, live Stripe products/prices and live webhook endpoint. Set `STRIPE_MODE=live`, use the matching live secret key, live price IDs and endpoint signing secret, and use the production dashboard return URL. Sandbox price IDs and signing secrets cannot substitute for production values.
+
+Production setup checklist:
+
+- Add a $192 USD yearly recurring price to the existing live CRRT Pro product and a $492 USD yearly recurring price to the existing live CRRT Studio product. Use every 1 year, with tax excluded; retain the existing monthly prices.
+- Set `STRIPE_PRO_YEARLY_PRICE_ID` and `STRIPE_STUDIO_YEARLY_PRICE_ID` to those new live price IDs. Each price has its own ID even when it belongs to an existing product. Configure both yearly variables together and retain the two monthly variables.
+- Generate a production-only `BILLING_STATE_SECRET` using `openssl rand -hex 32` and store it in the backend environment alongside the Stripe settings.
+- In the live Customer Portal configuration, enable the intended Pro/Studio monthly and yearly prices for subscription updates. Verify cancellation, proration and billing-anchor behavior as described in step 2.
+- Verify live Stripe Tax readiness, the six webhook event subscriptions from step 2, the live endpoint signing secret and the production dashboard return URL.
+- Apply `0044_yearly_billing_windows.sql` through the normal migration pipeline before enabling annual Checkout, then deploy the backend with the new environment values. Verify annual Checkout, signed-out plan/cycle continuation and Portal switching before launch.
 
 Deploy, run the read-only preflight, reconcile production accounts, verify the backend and then perform the explicit quota activation step for that database. Complete the separately required retention/legal policy before launch. A failed publication must leave enforcement off; do not activate against an old backend.
 
@@ -104,3 +104,11 @@ Deploy, run the read-only preflight, reconcile production accounts, verify the b
 The existing `/api/v1/internal/extension-image-cleanup` minute cron processes up to 100 **pending, due** screenshot deletions per run. Keep `CRON_SECRET` configured. Successful jobs leave the queue; failed jobs retry after 15 minutes. Permanent UUID tombstones remain solely to prevent deleted-feedback resurrection, so old successful deletions do not slow fresh cleanup.
 
 Both normal capture and import use [Supabase signed upload permissions](https://supabase.com/docs/reference/javascript/file-buckets-createsigneduploadurl). Before uploading, the API records the permission's server-enforced expiry while locking the live actor-owned comment. Deletion copies the latest expiry plus a 15-minute settling allowance into its final cleanup schedule. Immediate deletion and import's post-upload check still remove objects promptly; the scheduled pass recovers crashes or uncertain responses after all issued permissions have expired. This uses Supabase's documented two-hour signed-upload lifetime, the API's 60-second execution limit, and a settling allowance for Storage requests admitted before expiry. It does not depend on rescanning all historical deletions. Cleanup is independent of commercial activation.
+
+## Annual billing and signed sign-in continuation
+
+Merge and deploy PR #339 (`0043_legacy_users.sql`) before this backend PR. Migration `0044_yearly_billing_windows.sql` depends on its legacy effective-account helpers and preserves legacy Pro access. The unchanged 0043 migration and metadata are carried here as prerequisites for fresh databases; 0044 is the only new annual-billing migration. Never deploy 0044 before 0043. Monthly and trial periods retain their exact Stripe boundaries; only longer annual periods are subdivided. Annual payment periods remain Stripe-owned; comment/audit windows renew monthly in UTC, anchored to the original period start (including month-end clipping without cumulative drift). The annual price must use `interval=year`, `interval_count=1`, USD, the exact approved amount, and exclusive/unspecified tax behavior. Missing or invalid annual configuration fails closed rather than creating monthly Checkout.
+
+Signed-out pricing links use `GET /api/v1/billing?start=pro|studio&cycle=monthly|yearly`. This public route only signs the selected plan/cycle and redirects to the configured dashboard return URL. It never creates a customer or Checkout session and never accepts a client redirect. The state expires after 30 minutes, contains no account identity or payment authority, and is validated by authenticated `POST {action:"checkout_state",state}`. Direct authenticated Checkout also validates the cycle. Existing subscribers use Stripe Portal; direct plan changes remain disabled in the summary contract.
+
+Before rollout, configure all four distinct prices and the server-only signing secret in the intended environment. Test annual trial conversion, annual renewal/cancellation, monthly quota resets, plan/cycle sign-in continuation, tampered/expired state, and Checkout retry/cycle replacement. This branch does not configure Stripe, alter deployments, or apply migrations to any shared database.

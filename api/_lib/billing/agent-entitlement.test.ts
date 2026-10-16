@@ -59,3 +59,11 @@ it('keeps legacy owners and collaborators eligible after Studio ends',async()=>{
  vi.mocked(getAccount).mockResolvedValue({...account,is_legacy:true,plan:'studio',subscription_status:'canceled'} as never)
  actor(true);expect(await resolveWidgetAgentAccess('p','actor')).toMatchObject({state:'ready',collaboratorSeatLimit:9})
 })
+
+it('grants annual plans the same Agent and collaborator allowances', () => {
+  const env = {...cloud,STRIPE_PRO_YEARLY_PRICE_ID:'price_pro_year',STRIPE_STUDIO_YEARLY_PRICE_ID:'price_studio_year'}
+  expect(eligibleAgentPriceIds(env)).toEqual(['price_pro','price_studio','price_pro_year','price_studio_year'])
+  expect(hasAgentEntitlement({...account,price_id:'price_pro_year'},env)).toBe(true)
+  expect(hasAgentEntitlement({...account,plan:'studio',price_id:'price_studio_year'},env)).toBe(true)
+  expect(hasAgentEntitlement({...account,plan:'studio',price_id:'price_pro_year'},env)).toBe(false)
+})

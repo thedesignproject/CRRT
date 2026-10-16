@@ -64,7 +64,7 @@ it('shows Pro workflow value and starts the selected plan once', async () => {
   const start = screen.getByRole('button', { name: 'Start 14-day trial' })
   fireEvent.click(start); fireEvent.click(start)
   await waitFor(() => expect(runBillingAction).toHaveBeenCalledOnce())
-  expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined)
+  expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined, undefined)
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/session')
   expect(screen.getByText('Test mode')).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Self-hosted is free.' })).toHaveAttribute('href', '/docs/self-host')
@@ -74,7 +74,7 @@ it('continues a signed pricing selection exactly once after authentication', asy
   vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://checkout.stripe.com/c/continued' })
   const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
   const view = render(<BillingSettings {...props} checkoutState="payload.signature" />)
-  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout_state', undefined, 'payload.signature'))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout_state', undefined, 'payload.signature', undefined))
   expect(window.location.pathname).toMatch(/\/billing$/)
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/continued')
   view.rerender(<BillingSettings {...props} checkoutState="payload.signature" />)
@@ -104,7 +104,7 @@ it('changes an active plan and refreshes the final contract', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Studio/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Switch to Studio' }))
   await waitFor(() => expect(getBillingSummary).toHaveBeenLastCalledWith('/api', 'token', true, expect.any(AbortSignal)))
-  expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'change_plan', 'studio', undefined)
+  expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'change_plan', 'studio', undefined, undefined)
   expect(await screen.findByText(/studio scheduled for/)).toBeInTheDocument()
 })
 
@@ -115,7 +115,7 @@ it('uses Stripe Portal for plan changes on the current legacy contract', async (
   render(<BillingSettings {...props} />)
   fireEvent.click(await screen.findByRole('button', { name: /Studio/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Manage plan in Stripe' }))
-  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'portal', undefined, undefined))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'portal', undefined, undefined, undefined))
   expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session')
 })
 
@@ -305,7 +305,7 @@ it.each(['pro', 'studio'] as const)('lets a canceled customer restart the same %
   const start = await screen.findByRole('button', { name: 'Start 14-day trial' })
   expect(start).toBeEnabled()
   fireEvent.click(start)
-  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', plan, undefined))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', plan, undefined, undefined))
 })
 
 it.each(['active', 'trialing'] as const)('keeps same-plan checkout disabled for %s access', async (lifecycle) => {
@@ -320,5 +320,22 @@ it('uses the sign-in plan hint only to preselect a card and requires confirmatio
   expect(await screen.findByRole('button', { name: /Studio/ })).toHaveAttribute('aria-pressed', 'true')
   expect(runBillingAction).not.toHaveBeenCalled()
   fireEvent.click(screen.getByRole('button', { name: 'Start 14-day trial' }))
-  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined, undefined))
+})
+
+it('preserves the annual cycle when restarting an annual plan', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle: 'none', billingCycle: 'yearly' }))
+  render(<BillingSettings {...props} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Start 14-day trial' }))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'pro', undefined, 'yearly'))
+})
+
+it('restores the last annual Checkout selection after returning without subscribing', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan:null,lifecycle:'none',checkoutPlan:'studio',billingCycle:'yearly',planPrices:{pro:{amount:'$192',interval:'year'},studio:{amount:'$492',interval:'year'}} }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('button',{name:/Studio/})).toHaveAttribute('aria-pressed','true')
+  expect(screen.getByText('$492')).toBeInTheDocument()
+  expect(runBillingAction).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button',{name:'Start 14-day trial'}))
+  await waitFor(()=>expect(runBillingAction).toHaveBeenCalledWith('/api','token','checkout','studio',undefined,'yearly'))
 })

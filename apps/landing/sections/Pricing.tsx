@@ -3,8 +3,7 @@ import { Check } from 'lucide-react'
 import { Button } from '../../../src/design-system/components/button'
 import { SectionIntro } from '../../../src/design-system/components/section-intro'
 import { SegmentedControl } from '../../../src/design-system/components/segmented-control'
-import { cloudPlanSignInUrl, startCloudCheckout, type BillingCycle, type CloudPlanKey } from '../lib/billing'
-import { DASHBOARD_HREF } from './Hero'
+import { cloudPlanStartUrl, startCloudCheckout, type BillingCycle, type CloudPlanKey } from '../lib/billing'
 
 const plans = [
   {
@@ -98,7 +97,7 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
                       {busyPlan === plan.key ? 'Opening secure checkout…' : 'Start 14-day trial'}
                     </Button>
                   ) : (
-                    <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanSignInUrl(import.meta.env.SSR ? '/dashboard' : DASHBOARD_HREF, plan.key)}>Start 14-day trial</a>
+                    <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
                   )}
                 </div>
               </article>
