@@ -135,14 +135,26 @@ it('keeps legacy Pro included and starts a Studio checkout', async () => {
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/studio')
 })
 
-it('explains that legacy Pro continues after Studio cancellation', async () => {
+it.each([
+  { currentPeriodEnd: '2026-11-01T00:00:00Z' },
+  { periodEnd: '2026-11-01T00:00:00Z' },
+])('explains that legacy Pro continues after Studio cancellation %#', async (period) => {
   vi.mocked(getBillingSummary).mockResolvedValue(summary({
     isLegacy: true, plan: 'studio', lifecycle: 'active', canManageSubscription: true,
-    cancelAtPeriodEnd: true, currentPeriodEnd: '2026-11-01T00:00:00Z',
+    cancelAtPeriodEnd: true, ...period,
   }))
   render(<BillingSettings {...props} />)
   expect(await screen.findByText(/After cancellation, you return to your included Cloud Pro access/)).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /Pro.*Included/ })).toBeDisabled()
+})
+
+it('shows the normal renewal state while legacy Studio remains active', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({
+    isLegacy: true, plan: 'studio', lifecycle: 'active', canManageSubscription: true,
+    currentPeriodEnd: '2026-11-01T00:00:00Z',
+  }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText(/Renews/)).toBeInTheDocument()
 })
 
 it.each([

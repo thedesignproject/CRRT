@@ -18,8 +18,10 @@ function date(value: string | null | undefined) {
 
 function lifecycleCopy(summary: BillingSummary) {
   const lifecycle = summary.lifecycle ?? summary.status ?? 'none'
-  if (summary.isLegacy && summary.plan === 'pro') return { label: 'Cloud Pro included', detail: 'Your early-user Pro access is included at no charge. Upgrade to Studio whenever you need more capacity.' }
-  if (summary.isLegacy && summary.plan === 'studio' && summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Studio ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. Your included Pro access continues.` }
+  if (summary.isLegacy) {
+    if (summary.plan === 'pro') return { label: 'Cloud Pro included', detail: 'Your early-user Pro access is included at no charge. Upgrade to Studio whenever you need more capacity.' }
+    if (summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Studio ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. Your included Pro access continues.` }
+  }
   if (lifecycle === 'checkout_pending') return { label: 'Confirming checkout', detail: 'Complete Checkout, then check your status here.' }
   if (lifecycle === 'trialing') return { label: 'Trial active', detail: summary.trialEndsAt ? `Trial ends ${date(summary.trialEndsAt)}.` : 'Your 14-day trial is active.' }
   if (lifecycle === 'active') return { label: 'Cloud active', detail: summary.cancelAtPeriodEnd ? `Access ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.` : `Renews ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.` }
