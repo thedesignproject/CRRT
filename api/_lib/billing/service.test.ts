@@ -372,6 +372,7 @@ it('shows scheduled cancellation for flexible billing and clears it after the su
  expect(await billingSummary(user.userId)).toMatchObject({cancelAtPeriodEnd:true})
  sdk.subscriptions.list.mockResolvedValue({data:[{...sub('canceled'),cancel_at:1800000000,cancel_at_period_end:false}]})
  expect(await billingSummary(user.userId)).toMatchObject({cancelAtPeriodEnd:false})
+})
 
 function annualConfig() {
   vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')

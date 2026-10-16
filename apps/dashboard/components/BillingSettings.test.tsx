@@ -131,7 +131,7 @@ it('keeps legacy Pro included and starts a Studio checkout', async () => {
   expect(screen.getAllByText('Included')).toHaveLength(2)
   fireEvent.click(screen.getByRole('button', { name: /Studio/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Studio' }))
-  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined, undefined))
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/studio')
 })
 
