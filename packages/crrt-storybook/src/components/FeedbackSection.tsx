@@ -1,7 +1,7 @@
 import { dashboardHome } from "../auth";
 import React, { useEffect, useState } from "react";
 import { sendFeedback } from "../api";
-import { captureStoryScreenshot } from "../screenshot";
+import { tryCaptureStoryScreenshot } from "../screenshot";
 import {
   AUTHOR_STORAGE_KEY,
   CRRT_ORANGE,
@@ -76,7 +76,7 @@ export const FeedbackSection = ({
     if (!text.trim() || state.kind === "capturing" || state.kind === "sending") return;
     try {
       setState({ kind: "capturing" });
-      const screenshot = await captureStoryScreenshot();
+      const screenshot = await tryCaptureStoryScreenshot();
       setState({ kind: "sending" });
       window.localStorage.setItem(AUTHOR_STORAGE_KEY, author.trim());
       const result = await sendFeedback({
@@ -152,7 +152,7 @@ export const FeedbackSection = ({
                 />
               </label>
             ) : (
-              <span style={styles.captureNote}>Includes a story screenshot</span>
+              <span style={styles.captureNote}>Includes a story screenshot when available</span>
             )}
             <button
               onClick={send}

@@ -12,5 +12,5 @@
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "stories", ".storybook", "tsup.config.ts"]
+  "include": ["src", "stories", ".storybook", "tsup.config.ts", "vitest.config.ts", "tests/**/*.test.ts", "tests/**/*.test.tsx"]
 }

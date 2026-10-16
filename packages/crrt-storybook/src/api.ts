@@ -1,6 +1,6 @@
 import { getScopedToken, clearScopedSession } from "./auth";
 import { DEFAULT_API_BASE } from "./constants";
-import type { StoryScreenshot } from "./screenshot";
+import { MAX_SCREENSHOT_BASE64_LENGTH, type StoryScreenshot } from "./screenshot";
 import type { StoryContext } from "./types";
 
 export interface SendFeedbackInput {
@@ -82,7 +82,7 @@ export async function sendFeedback(
   if (authorName) {
     payload.authorName = authorName.slice(0, 80);
   }
-  if (input.screenshot) {
+  if (input.screenshot && input.screenshot.base64.length <= MAX_SCREENSHOT_BASE64_LENGTH) {
     payload.imageBase64 = input.screenshot.base64;
     payload.imageMimeType = input.screenshot.mimeType;
   }

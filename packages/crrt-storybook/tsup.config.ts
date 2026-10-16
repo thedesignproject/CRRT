@@ -24,6 +24,9 @@ export default defineConfig([
     // The manager must create elements with Storybook's React instance.
     // Automatic JSX would make Storybook inline a second JSX runtime.
     tsconfig: "tsconfig.manager.json",
+    // Ship the browser renderer so consumers retain Node 20/22 support even
+    // when the renderer's development package declares a newer Node engine.
+    noExternal: ["html2canvas-pro"],
     format: ["esm"],
     dts: false,
     clean: false,

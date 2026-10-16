@@ -6,6 +6,7 @@ import { join } from "node:path";
 
 const required = [
   "LICENSE",
+  "THIRD_PARTY_NOTICES.md",
   "README.md",
   "package.json",
   "preset.js",
@@ -54,5 +55,11 @@ assert.equal(
   false,
   "Manager must use Storybook's React instance instead of bundling a JSX runtime",
 );
+const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+assert.equal(manifest.dependencies?.["html2canvas-pro"], undefined,
+  "The browser renderer must not impose its Node engine on addon consumers");
+assert.doesNotMatch(readFileSync("dist/manager.js", "utf8"),
+  /(?:from\s*|import\s*\()\s*["']html2canvas-pro["']/,
+  "The browser renderer must be bundled in the manager");
 
 process.stdout.write(`Verified ${files.size} package files (${report.size} bytes).\n`);

@@ -1,5 +1,9 @@
 const PREVIEW_IFRAME_ID = "storybook-preview-iframe";
 const MAX_CAPTURE_EDGE = 1920;
+// Base64 expands by 4/3. Leave room for JSON and feedback below Vercel's
+// 4.5 MB request limit, including deployments that count MB in decimal bytes.
+const MAX_SCREENSHOT_BYTES = 3_000_000;
+export const MAX_SCREENSHOT_BASE64_LENGTH = 4_000_000;
 
 export interface StoryScreenshot {
   base64: string;
@@ -58,10 +62,33 @@ export async function captureStoryScreenshot(): Promise<StoryScreenshot> {
     windowWidth: width,
     windowHeight: height,
   });
-  const blob = await new Promise<Blob | null>((resolve) => {
-    canvas.toBlob(resolve, "image/png");
-  });
-  if (!blob) throw new Error("The story screenshot could not be encoded");
+  let image = canvas;
+  for (;;) {
+    const blob = await new Promise<Blob | null>((resolve) => {
+      image.toBlob(resolve, "image/png");
+    });
+    if (!blob) throw new Error("The story screenshot could not be encoded");
+    if (blob.size <= MAX_SCREENSHOT_BYTES) {
+      return { base64: await blobToBase64(blob), mimeType: "image/png" };
+    }
+    if (image.width === 1 && image.height === 1) {
+      throw new Error("The story screenshot is too large");
+    }
+    const smaller = previewDocument.createElement("canvas");
+    smaller.width = Math.max(1, Math.floor(image.width * 0.7));
+    smaller.height = Math.max(1, Math.floor(image.height * 0.7));
+    const context = smaller.getContext("2d");
+    if (!context) throw new Error("The story screenshot could not be resized");
+    context.drawImage(image, 0, 0, smaller.width, smaller.height);
+    image = smaller;
+  }
+}
 
-  return { base64: await blobToBase64(blob), mimeType: "image/png" };
+/** A screenshot enriches feedback; an inaccessible preview must not block it. */
+export async function tryCaptureStoryScreenshot(): Promise<StoryScreenshot | undefined> {
+  try {
+    return await captureStoryScreenshot();
+  } catch {
+    return undefined;
+  }
 }

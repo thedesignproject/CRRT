@@ -38,7 +38,7 @@ No selectors, no clicking on elements, no floating widget: the story IS the cont
 
   ![A failed check dispatched to CRRT from its own row](docs/dispatch-sent.png)
 
-**2. Feedback — the collect layer.** A textarea, compact optional author field in manual mode, and a **Send to CRRT** button. On send, the addon captures the active story viewport and posts the screenshot with the story metadata, then shows a sent state with a link to the CRRT dashboard.
+**2. Feedback — the collect layer.** A textarea, compact optional author field in manual mode, and a **Send to CRRT** button. On send, the addon captures the active story viewport and downsizes large images to fit the upload limit. If capture is unavailable, it sends the feedback without an image. It then shows a sent state with a link to the CRRT dashboard.
 
 ## Connect from CRRT Pro
 

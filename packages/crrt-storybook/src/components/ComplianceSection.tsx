@@ -11,7 +11,7 @@ import {
   type ChecksOutcome,
 } from "../checks";
 import type { CrrtRule, CrrtRuleStatus, StoryContext } from "../types";
-import { captureStoryScreenshot } from "../screenshot";
+import { tryCaptureStoryScreenshot } from "../screenshot";
 
 const STATUS_BADGE: Record<
   CrrtRuleStatus,
@@ -120,7 +120,7 @@ export const ComplianceSection = ({
     ) return;
     try {
       setDispatch((s) => ({ ...s, [check.id]: "capturing" }));
-      const screenshot = await captureStoryScreenshot();
+      const screenshot = await tryCaptureStoryScreenshot();
       setDispatch((s) => ({ ...s, [check.id]: "sending" }));
       const result = await sendFeedback({
         projectId,
