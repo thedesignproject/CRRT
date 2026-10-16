@@ -41,27 +41,28 @@ export function BillingSettings({ apiBase, accessToken }: { apiBase: string; acc
   if (!summary) return error ? <p role="alert" className="mt-8 text-xs text-muted-foreground">{error} <button onClick={() => setRefresh(value => value+1)}>Retry</button></p> : <p role="status" className="mt-8 text-xs text-muted-foreground">Loading billing…</p>
   if (!summary.enabled) return <p className="mt-8 text-xs text-muted-foreground">Billing is not enabled in this environment.</p>
   const entitlement = summary.entitlements
-  const existing = summary.canManage && !['none','canceled','incomplete_expired'].includes(entitlement.status)
+  const existing = summary.canManage && !['none','legacy','canceled','incomplete_expired'].includes(entitlement.status)
   return <section className="mt-8 space-y-6" aria-label="Account plans">
     {summary.testMode && <p className="text-xs text-muted-foreground">Sandbox · No real charges</p>}
+    {entitlement.isLegacy && <p role="status" className="rounded-xl border border-border bg-card p-4 text-sm"><strong>Legacy user · Cloud Pro included</strong><br />As an early CRRT user, you have Cloud Pro included at no charge for now. Upgrade to Cloud Studio whenever you need more capacity. If you cancel Studio, you return to your included Pro access.</p>}
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <p className="text-sm">Subscription: <span className="capitalize">{entitlement.status.replace(/_/g,' ')}</span></p>
+      <p className="text-sm">Subscription: <span className="capitalize">{entitlement.status === 'legacy' ? 'Legacy · Cloud Pro included' : entitlement.status.replace(/_/g,' ')}</span></p>
       {summary.canManage && <button className={button} disabled={busy} onClick={() => { void open('portal') }}>Manage billing</button>}
     </div>
-    {summary.cancelAtPeriodEnd && summary.periodEnd && entitlement.canWrite && <p role="status" className="rounded-xl border border-border bg-card p-4 text-sm">Your subscription cancels on {new Date(summary.periodEnd).toLocaleDateString()}. You can keep using Cloud until then. After cancellation, your feedback remains readable and exportable.</p>}
+    {summary.cancelAtPeriodEnd && summary.periodEnd && entitlement.canWrite && <p role="status" className="rounded-xl border border-border bg-card p-4 text-sm">Your subscription cancels on {new Date(summary.periodEnd).toLocaleDateString()}. You can keep using Cloud until then. {entitlement.isLegacy ? 'After cancellation, you return to your included Cloud Pro access.' : 'After cancellation, your feedback remains readable and exportable.'}</p>}
     {!entitlement.canWrite && <p role="status" className="rounded-xl border border-border bg-card p-4 text-sm">The owner needs an active Cloud trial or subscription to write. Existing feedback remains readable and exportable.</p>}
     <div className="grid gap-4 md:grid-cols-2">
       {summary.plans.map(plan => <article key={plan.id} className="rounded-xl border border-border bg-card p-6 sm:p-8">
         <h2 className="text-xl font-semibold">{plan.name}</h2>
-        <p className="mt-4"><span className="text-3xl font-semibold">{plan.amount}</span><span className="text-xs text-muted-foreground"> / {plan.interval}</span></p>
+        <p className="mt-4"><span className="text-3xl font-semibold">{entitlement.isLegacy && plan.id === 'pro' ? 'Included' : plan.amount}</span><span className="text-xs text-muted-foreground">{!(entitlement.isLegacy && plan.id === 'pro') && <> / {plan.interval}</>}</span></p>
         <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
           <li>{plan.projects} projects · {plan.internal_users} internal users</li>
           <li>Unlimited guests</li><li>{plan.comments.toLocaleString()} new comments / billing month</li>
           <li>{plan.product_audits} Product Audits / billing month</li>
           <li>Dashboard, widget, extension sync, integrations, and agent handoff</li>
         </ul>
-        <button className={`${button} mt-6`} disabled={busy || (entitlement.canWrite && entitlement.plan === plan.id)} onClick={() => { void open(existing ? 'portal' : 'checkout', existing ? undefined : plan.id) }}>
-          {entitlement.canWrite && entitlement.plan === plan.id ? 'Current plan' : existing ? 'Change plan' : entitlement.trialUsed ? `Subscribe to ${plan.name}` : `Start ${plan.name} trial`}
+        <button className={`${button} mt-6`} disabled={busy || ((entitlement.canWrite && entitlement.plan === plan.id) || (entitlement.isLegacy && plan.id === 'pro'))} onClick={() => { void open(existing ? 'portal' : 'checkout', existing ? undefined : plan.id) }}>
+          {entitlement.isLegacy && plan.id === 'pro' ? 'Included for legacy users' : entitlement.canWrite && entitlement.plan === plan.id ? 'Current plan' : existing ? 'Change plan' : entitlement.trialUsed ? `Subscribe to ${plan.name}` : `Start ${plan.name} trial`}
         </button>
       </article>)}
     </div>

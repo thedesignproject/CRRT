@@ -929,6 +929,7 @@ export const billingAccounts = pgTable('billing_accounts', {
   priceId: text('price_id'),
   plan: text('plan'),
   trialUsed: boolean('trial_used').notNull().default(false),
+  isLegacy: boolean('is_legacy').notNull().default(false),
   periodStart: timestamp('period_start', { withTimezone: true }),
   graceUntil: timestamp('grace_until', { withTimezone: true }),
   periodEnd: timestamp('period_end', { withTimezone: true }),
@@ -3169,4 +3170,87 @@ REVOKE ALL ON FUNCTION public.create_storybook_comment_snapshot(uuid,uuid,text,t
 GRANT EXECUTE ON FUNCTION public.create_storybook_comment_snapshot(uuid,uuid,text,text,jsonb), public.manage_storybook_connections(text,uuid,uuid) TO service_role;
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
+`;
+
+// Append to the generated migration. Snapshot all auth users once, including
+// people who have never opened Billing; future billing accounts default to free.
+export const legacyBillingSql = `
+-- Backfilled placeholders must not prevent deleting a previously unbilled user.
+-- Preserve Stripe history and fence in-flight billing operations with the lease.
+CREATE FUNCTION public.delete_unbilled_legacy_account() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  DELETE FROM public.billing_accounts WHERE user_id=OLD.id AND is_legacy
+    AND customer_id IS NULL AND subscription_id IS NULL AND price_id IS NULL
+    AND checkout_session_id IS NULL AND checkout_payload IS NULL
+    AND plan IS NULL AND subscription_status IS NULL AND NOT trial_used
+    AND period_start IS NULL AND period_end IS NULL AND grace_until IS NULL
+    AND NOT cancel_at_period_end
+    AND (lock_token IS NULL OR lock_expires_at<=clock_timestamp());
+  RETURN OLD;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER delete_unbilled_legacy_account BEFORE DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.delete_unbilled_legacy_account();
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.delete_unbilled_legacy_account() FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+INSERT INTO public.billing_accounts(user_id,is_legacy)
+  SELECT id,true FROM auth.users
+  ON CONFLICT (user_id) DO UPDATE SET is_legacy=true;
+--> statement-breakpoint
+CREATE FUNCTION public.cloud_effective_account(p_owner uuid) RETURNS SETOF public.billing_accounts
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE b public.billing_accounts%ROWTYPE;
+BEGIN
+  SELECT * INTO b FROM public.billing_accounts WHERE user_id=p_owner;
+  IF NOT FOUND THEN RETURN; END IF;
+  IF b.is_legacy AND NOT coalesce(
+    b.plan IN ('pro','studio') AND b.period_start<=now() AND b.period_end>now()
+    AND (b.subscription_status IN ('active','trialing')
+      OR (b.subscription_status='past_due' AND b.grace_until>now())),false) THEN
+    b.plan:='pro';
+    b.subscription_status:='legacy';
+    b.period_start:=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+    b.period_end:=(date_trunc('month',now() AT TIME ZONE 'UTC')+interval '1 month') AT TIME ZONE 'UTC';
+  END IF;
+  RETURN NEXT b;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.cloud_effective_account(uuid) FROM PUBLIC,anon,authenticated;
+` + cloudPlansSql.split('--> statement-breakpoint')
+  .filter(statement => /CREATE FUNCTION public\.(cloud_limit|cloud_usage_count|cloud_fail|cloud_validate_write|cloud_charge|cloud_entitlements)\(/.test(statement))
+  .map(statement => statement
+    .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+    .replaceAll('FROM public.billing_accounts WHERE user_id=p_owner', 'FROM public.cloud_effective_account(p_owner)')
+    .replace('JOIN public.billing_accounts b ON b.user_id=u.owner_id', 'JOIN public.cloud_effective_account(p_owner) b ON b.user_id=u.owner_id')
+    .replace('SELECT * INTO b FROM public.cloud_effective_account(p_owner) FOR SHARE;',
+      'PERFORM 1 FROM public.billing_accounts WHERE user_id=p_owner FOR SHARE;\n  SELECT * INTO b FROM public.cloud_effective_account(p_owner);')
+    .replace("b.subscription_status IN ('active','trialing')", "b.subscription_status IN ('active','trialing','legacy')")
+    .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,")
+  ).join('\n--> statement-breakpoint\n') + `
+--> statement-breakpoint
+` + approvedWidgetHandoffSql.slice(approvedWidgetHandoffSql.indexOf('CREATE FUNCTION public.create_approved_widget_agent_share('))
+  .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+  .replace('  v_status text;\n  v_price text;', '  v_billing public.billing_accounts%ROWTYPE;')
+  .replace(/  SELECT b.subscription_status,b.price_id INTO v_status,v_price[\s\S]*?  END IF;/, `
+  -- Only the trusted service-role caller supplies the Community sentinel.
+  -- Cloud Agent eligibility remains enforced independently of quota activation.
+  IF p_allowed_prices IS DISTINCT FROM ARRAY['community']::text[] THEN
+    PERFORM 1 FROM public.billing_accounts WHERE user_id=v_owner FOR SHARE;
+    SELECT * INTO v_billing FROM public.cloud_effective_account(v_owner);
+    IF NOT coalesce(v_billing.is_legacy,false) AND NOT coalesce(
+      v_billing.plan IN ('pro','studio') AND v_billing.price_id=ANY(p_allowed_prices)
+      AND v_billing.period_start<=now() AND v_billing.period_end>now()
+      AND (v_billing.subscription_status IN ('active','trialing')
+        OR (v_billing.subscription_status='past_due' AND v_billing.grace_until>now())),false) THEN
+      IF v_is_owner THEN RAISE EXCEPTION 'upgrade_required'; END IF;
+      RAISE EXCEPTION 'owner_upgrade_required';
+    END IF;
+  END IF;`)
+  + `
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
 `;

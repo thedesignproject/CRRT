@@ -9,6 +9,7 @@ export interface BillingAccount {
   subscription_status: string | null
   price_id: string | null
   plan?: 'pro' | 'studio' | null
+  is_legacy?: boolean
   trial_used?: boolean
   period_start?: string | null
   grace_until?: string | null

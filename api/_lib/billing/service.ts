@@ -10,6 +10,24 @@ import { cloudPriceCatalog, isCloud, planForPrice, type CloudPlan } from './plan
 const terminal = new Set(['canceled', 'incomplete_expired'])
 type Save = (values: Partial<BillingAccount>) => Promise<void>
 
+// Every portal entry point must apply the same legacy protection, including
+// checkout recovery redirects. Never fall back to the default configuration.
+async function portalSession(stripe: Stripe, account: BillingAccount, customerId: string, returnUrl: string) {
+  let configuration: string | undefined
+  if (isCloud() && account.is_legacy) {
+    configuration = process.env.STRIPE_LEGACY_PORTAL_CONFIGURATION_ID
+    if (!configuration || !/^bpc_[A-Za-z0-9]+$/.test(configuration)) throw new Error('Legacy billing portal is not configured')
+    const settings = await stripe.billingPortal.configurations.retrieve(configuration)
+    if (!settings.active || settings.features.subscription_update.enabled !== false
+      || !settings.features.subscription_cancel.enabled || settings.features.subscription_cancel.mode !== 'at_period_end') {
+      throw new Error('Legacy billing portal must disable plan changes and allow cancellation at period end')
+    }
+  }
+  return stripe.billingPortal.sessions.create({
+    customer: customerId, return_url: returnUrl, ...(configuration ? { configuration } : {}),
+  })
+}
+
 async function synchronize(stripe: Stripe, account: BillingAccount, save: Save) {
   if (!account.customer_id) return null
   let page = await stripe.subscriptions.list({ customer: account.customer_id, status: 'all', limit: 100 })
@@ -33,7 +51,8 @@ async function synchronize(stripe: Stripe, account: BillingAccount, save: Save) 
       ...(current?.status !== 'past_due' ? { grace_until: null } : {}),
     } : {}),
     period_end: item ? new Date(item.current_period_end * 1000).toISOString() : null,
-    cancel_at_period_end: current?.cancel_at_period_end ?? false,
+    // Flexible billing uses cancel_at even for end-of-period cancellation.
+    cancel_at_period_end: Boolean(current && !terminal.has(current.status) && (current.cancel_at_period_end || current.cancel_at != null)),
   })
   return current ?? null
 }
@@ -65,6 +84,7 @@ export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro')
   const price = cloud ? cloudPriceCatalog()[plan] : config.price
   if (cloud) assertCloudPrice(plan, await stripe.prices.retrieve(price))
   return withAccount(user.userId, async (account, save) => {
+    if (cloud && account.is_legacy && plan === 'pro') throw new Error('Cloud Pro is included for legacy users. Choose Cloud Studio to upgrade.')
     let customerId = account.customer_id
     if (!customerId) {
       const customer = await stripe.customers.create({ metadata: { crrt_user_id: user.userId } }, { idempotencyKey: `crrt-customer-${user.userId}` })
@@ -74,7 +94,7 @@ export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro')
     }
     const subscription = await synchronize(stripe, account, save)
     if (subscription && !terminal.has(subscription.status)) {
-      return { url: (await stripe.billingPortal.sessions.create({ customer: customerId, return_url: config.returnUrl })).url }
+      return { url: (await portalSession(stripe, account, customerId, config.returnUrl)).url }
     }
     // Inspect the saved session directly. An open session can complete on Stripe
     // at any time, so never infer expiry from its absence in an open-session list.
@@ -95,7 +115,7 @@ export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro')
     if (previous) {
       await save({ checkout_session_id: previous.id })
       if (previous.status === 'complete' && (!subscription || previous.subscription !== subscription.id)) {
-        return { url: (await stripe.billingPortal.sessions.create({ customer: customerId, return_url: config.returnUrl })).url }
+        return { url: (await portalSession(stripe, account, customerId, config.returnUrl)).url }
       }
       if (previous.status === 'open') {
         const items = previous.line_items
@@ -141,7 +161,7 @@ export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro')
 export async function portal(userId: string) {
   const account = await getAccount(userId)
   if (!account?.customer_id) return null
-  const session = await stripeClient().billingPortal.sessions.create({ customer: account.customer_id, return_url: billingConfig().returnUrl })
+  const session = await portalSession(stripeClient(), account, account.customer_id, billingConfig().returnUrl)
   return { url: session.url }
 }
 

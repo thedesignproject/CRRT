@@ -16,6 +16,6 @@ describe('Storybook migration', () => {
     const current = JSON.parse(readFileSync('db/migrations/meta/0042_snapshot.json', 'utf8'))
     expect(current.prevId).toBe(previous.id)
     const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-    expect(journal.entries.filter((entry: { idx: number }) => entry.idx >= 42).map((entry: { tag: string }) => entry.tag)).toEqual(['0042_storybook_private_feedback'])
+    expect(journal.entries.filter((entry: { idx: number }) => entry.idx === 42).map((entry: { tag: string }) => entry.tag)).toEqual(['0042_storybook_private_feedback'])
   })
 })

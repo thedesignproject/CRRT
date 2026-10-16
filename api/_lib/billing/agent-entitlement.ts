@@ -36,11 +36,11 @@ export function eligibleAgentPriceIds(env: Record<string, string | undefined> = 
 }
 
 export function hasAgentEntitlement(
-  account: (CloudSubscription & { price_id: string | null }) | null,
+  account: (CloudSubscription & { price_id: string | null; is_legacy?: boolean }) | null,
   env: Record<string, string | undefined> = process.env,
 ) {
   if (!isCloud(env)) return true
-  return Boolean(account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan)
+  return Boolean(account?.is_legacy || (account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan))
 }
 
 export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: string): Promise<WidgetAgentAccess> {
@@ -70,5 +70,5 @@ export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: 
 
   // Membership remains usable after a downgrade; capacity blocks additions only.
   return { state: 'ready', role, ownerUserId: owner.user_id,
-    collaboratorSeatLimit: CLOUD_PLANS[account!.plan as 'pro' | 'studio'].internal_users - 1 }
+    collaboratorSeatLimit: CLOUD_PLANS[subscriptionCanWrite(account) ? account!.plan as 'pro' | 'studio' : 'pro'].internal_users - 1 }
 }

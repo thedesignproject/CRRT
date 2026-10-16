@@ -10,6 +10,8 @@ The deployment pipeline runs `bun run cloud:check`, builds the application, then
 
 Use separate databases and Stripe environments for sandbox, production and Community. Do not change a production Cloud database to Community to bypass checks.
 
+Migration `0043_legacy_users.sql` marks the auth users present at deployment as legacy; later signups keep the free default. Untouched legacy billing placeholders are cleaned when deleting an auth user, so the backfill does not block deletion for previously unbilled users. Rows with Stripe history or an active billing lease retain the existing deletion protection. Agent handoff rechecks and locks effective billing access even before quota activation; the quota switch does not bypass Cloud Agent eligibility.
+
 ## 2. Configure Stripe in a sandbox
 
 Create active USD monthly recurring prices for:
@@ -20,6 +22,15 @@ Create active USD monthly recurring prices for:
 | CRRT Studio | $49 |
 
 Use distinct `price_…` IDs. Tax must not be included in the price. Configure Stripe Tax so automatic-tax Checkout can complete. Configure Customer Portal to expose only the intended Pro/Studio monthly prices, permit the desired plan changes and cancellation, and deliberately choose proration and billing-anchor behavior. Preserve the anchor for same-window plan changes so upgrades cannot reset consumed quotas.
+
+Create a **separate legacy Customer Portal configuration** in each Stripe environment:
+
+- Disable subscription updates/plan switching (`features.subscription_update.enabled=false`). Legacy users already have Pro included; Studio upgrades start through CRRT Checkout.
+- Enable cancellation at the end of the current billing period (`features.subscription_cancel.enabled=true`, `mode=at_period_end`). After Studio ends, CRRT restores the included Pro baseline.
+- Enable payment-method updates and invoice history so users can manage their Studio payments.
+- Keep the configuration active and save its `bpc_…` ID as `STRIPE_LEGACY_PORTAL_CONFIGURATION_ID` on the server.
+
+Every legacy Portal redirect, including checkout recovery, explicitly selects and validates this configuration. A missing, inaccessible, inactive, or unsafe configuration blocks the redirect; it never falls back to the default portal. Regular customers retain the default Pro/Studio portal. Do not expose the default portal's shareable login link to legacy users; disable that login link and send customers through CRRT's authenticated Billing page.
 
 Register the API webhook endpoint, `https://<api-host>/api/v1/billing/webhook`, for these events:
 
@@ -44,6 +55,7 @@ STRIPE_SECRET_KEY=<sandbox secret key>
 STRIPE_WEBHOOK_SECRET=<matching sandbox endpoint signing secret>
 STRIPE_PRO_PRICE_ID=<sandbox Pro monthly price ID>
 STRIPE_STUDIO_PRICE_ID=<sandbox Studio monthly price ID>
+STRIPE_LEGACY_PORTAL_CONFIGURATION_ID=<matching legacy portal bpc_ ID>
 STRIPE_RETURN_URL=https://<dashboard-host>/dashboard/billing
 DATABASE_URL=<direct connection for this environment's database>
 ```
@@ -62,7 +74,9 @@ This is read-only. It validates mode consistency and enabled Stripe configuratio
 
 Existing owners should sign in and open `/dashboard/billing`, then refresh billing status. Authenticated `GET /api/v1/billing` reconciles that owner’s current Stripe subscriptions and durable trial history; the browser redirect itself never grants access. Verify existing billing rows have the intended catalog plan and trusted current-period boundaries. Previous single-price subscriptions do not map automatically to Pro/Studio: decide and complete their transition before enabling enforcement. Review unowned projects and retained personal Cloud feedback before activation.
 
-In the sandbox, exercise a card-backed 14-day trial, cancellation/re-subscription without a second trial, upgrade/downgrade, renewal, failed payment, signed webhooks and duplicate delivery. Check quota boundaries, retained reads/exports after expiry, local extension capture and retry-safe import. Fix any unmapped prices or incomplete Tax/Portal settings before proceeding. A rejected/unknown Checkout attempt retains its fixed request/key until recovery or its 35-minute deadline.
+In the sandbox, exercise a card-backed 14-day trial, cancellation/re-subscription without a second trial, upgrade/downgrade, renewal, failed payment, signed webhooks and duplicate delivery. Check quota boundaries, retained reads/exports after expiry, local extension capture and retry-safe import. Fix any unmapped prices or incomplete Tax/Portal settings before proceeding. Also verify a legacy user can start a Studio trial, manage invoices/payment methods, and cancel Studio at period end without seeing paid Pro as a plan choice. Test the Manage billing button and redirects from an already-active subscription and a recovered completed checkout. Remove or misconfigure the legacy portal ID and confirm all three redirects fail without opening the default portal.
+
+A rejected/unknown Checkout attempt retains its fixed request/key until recovery or its 35-minute deadline.
 
 The database integration suite truncates fixtures. Run it only on a disposable local database, never on production or a shared environment.
 
@@ -81,7 +95,7 @@ Verify `public.cloud_plan_settings` has `id=1, enabled=true`, then check owner b
 
 ## 6. Enable live payments separately
 
-Repeat the verified setup using production’s separate database, live Stripe products/prices and live webhook endpoint. Set `STRIPE_MODE=live`, use the matching live secret key, live price IDs and endpoint signing secret, and use the production dashboard return URL. Sandbox price IDs and signing secrets cannot substitute for production values.
+Repeat the verified setup using production’s separate database, live Stripe products/prices and live webhook endpoint. Set `STRIPE_MODE=live`, use the matching live secret key, live price IDs, the separate live legacy portal configuration ID, and endpoint signing secret, and use the production dashboard return URL. Sandbox price IDs and signing secrets cannot substitute for production values.
 
 Deploy, run the read-only preflight, reconcile production accounts, verify the backend and then perform the explicit quota activation step for that database. Complete the separately required retention/legal policy before launch. A failed publication must leave enforcement off; do not activate against an old backend.
 
