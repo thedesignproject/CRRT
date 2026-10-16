@@ -60,6 +60,88 @@
   }
 }
 
+/* Pricing is a comparison surface, not three unrelated cards. The shared
+   baseline and quiet rules make plan differences scannable in one pass. */
+.landing-pricing {
+  padding: clamp(88px, 10vw, 132px) 32px;
+  border-top: 1px solid var(--crrt-rule-dark);
+  background: var(--crrt-bg-deep);
+}
+.landing-pricing-shell { width: min(1160px, 100%); margin: 0 auto; }
+.landing-pricing .ds-section-intro { margin-top: 24px; }
+.landing-pricing-table {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 64px;
+  overflow: hidden;
+  border: 1px solid var(--crrt-rule-dark);
+  border-radius: var(--crrt-radius-3xl);
+  background: var(--crrt-bg-deep-soft);
+}
+.landing-pricing-column {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 650px;
+  flex-direction: column;
+  padding: 32px 28px 28px;
+  background: var(--crrt-bg-deep-soft);
+}
+.landing-pricing-column + .landing-pricing-column { border-left: 1px solid var(--crrt-rule-dark); }
+.landing-pricing-column.is-recommended {
+  background: color-mix(in srgb, var(--crrt-carrot) 5%, var(--crrt-bg-deep-soft));
+  box-shadow: inset 0 3px 0 var(--crrt-carrot);
+}
+.landing-pricing-band { visibility: hidden; min-height: 28px; }
+.landing-pricing-band.is-visible {
+  visibility: visible;
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--crrt-carrot) 42%, transparent);
+  border-radius: var(--crrt-radius-pill);
+  color: var(--crrt-carrot);
+  background: color-mix(in srgb, var(--crrt-carrot) 9%, transparent);
+  font-size: 11px;
+  font-weight: 650;
+}
+.landing-pricing-heading { min-height: 168px; padding-right: 0; }
+.landing-pricing-column.is-recommended .landing-pricing-heading { padding-right: 92px; }
+.landing-pricing-heading > span { color: var(--crrt-ink-faint); font-size: 12px; }
+.landing-pricing-heading h3 { margin: 12px 0 0; color: var(--crrt-white); font: 650 clamp(28px, 3vw, 38px)/1 var(--crrt-dashboard-font); letter-spacing: -.04em; }
+.landing-pricing-heading p { margin: 18px 0 0; color: var(--crrt-ink-faint); font-size: 14px; line-height: 1.55; }
+.landing-pricing-price { display: flex; min-height: 58px; align-items: baseline; gap: 10px; margin-top: 20px; }
+.landing-pricing-price strong { color: var(--crrt-white); font: 620 clamp(40px, 4vw, 54px)/1 var(--crrt-dashboard-font); letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.landing-pricing-price span { color: var(--crrt-ink-faint); font-size: 12px; }
+.landing-pricing-billing { min-height: 38px; margin: 8px 0 0; color: var(--crrt-ink-faint); font-size: 11px; line-height: 1.45; }
+.landing-pricing-features { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--crrt-rule-dark); }
+.landing-pricing-features > p { min-height: 34px; margin: 0 0 18px; color: var(--crrt-white); font-size: 13px; font-weight: 600; }
+.landing-pricing-features ul { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.landing-pricing-features li { display: flex; align-items: flex-start; gap: 9px; color: var(--crrt-ink-faint); font-size: 12px; line-height: 1.45; }
+.landing-pricing-features li svg { flex: 0 0 auto; margin-top: 2px; color: var(--crrt-carrot); }
+.landing-pricing-action { margin-top: auto; padding-top: 30px; }
+.landing-pricing-button { width: 100%; text-decoration: none; }
+.landing-pricing-notes { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px 24px; margin-top: 20px; color: var(--crrt-ink-faint); font-size: 12px; }
+.landing-pricing-error { margin: 18px 0 0; padding: 12px 14px; border: 1px solid var(--crrt-carrot); border-radius: var(--crrt-radius-xl); color: var(--crrt-white); background: var(--crrt-bg-deep-soft); font-size: 13px; }
+.landing-pricing-error button { margin-left: 8px; border: 0; color: inherit; background: transparent; font-weight: 700; text-decoration: underline; }
+
+@media (max-width: 900px) {
+  .landing-pricing-table { grid-template-columns: minmax(0, 1fr); }
+  .landing-pricing-column { min-height: 0; }
+  .landing-pricing-column + .landing-pricing-column { border-top: 1px solid var(--crrt-rule-dark); border-left: 0; }
+  .landing-pricing-heading { min-height: 0; }
+}
+
+@media (max-width: 560px) {
+  .landing-pricing { padding-inline: 20px; }
+  .landing-pricing-column { padding: 28px 22px 24px; }
+  .landing-pricing-column.is-recommended .landing-pricing-heading { padding-right: 0; }
+  .landing-pricing-band.is-visible { position: static; align-self: flex-start; width: fit-content; margin-bottom: 20px; }
+}
+
 /* Subtle CRT scanline overlay — opt-in via .scanlines class on a section */
 .scanlines {
   position: relative;

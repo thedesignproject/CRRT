@@ -64,6 +64,50 @@ describe('LoginPage invitation continuation', () => {
     expect(await screen.findByText(/secure sign-in link/)).toBeInTheDocument()
   })
 
+  it('preserves only a valid signed billing selection through password sign-in', async () => {
+    window.history.replaceState({}, '', '/login?billingState=payload.signature&redirect=https://evil.test')
+    signInWithPassword.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
+    await waitFor(() => expect(signInWithPassword).toHaveBeenCalled())
+    expect(window.location.search).toBe('?billingState=payload.signature')
+  })
+
+  it('retains the selected plan through password sign-in', async () => {
+    window.history.replaceState({}, '', '/billing?billingPlan=studio&redirect=https://evil.test')
+    signInWithPassword.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+    fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
+    fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
+    await waitFor(() => expect(window.location.search).toBe('?billingPlan=studio'))
+  })
+
+  it('sends magic links back with only the selected plan', async () => {
+    window.history.replaceState({}, '', '/billing?billingPlan=studio&redirect=https://evil.test')
+    signInWithOtp.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
+    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({
+      email: 'buyer@example.com', options: { emailRedirectTo: 'http://localhost:3000/?billingPlan=studio' },
+    }))
+  })
+
+  it.each(['billingPlan=studio', 'billingState=payload.signature'])('preserves %s through password recovery without an arbitrary redirect', async (selection) => {
+    window.history.replaceState({}, '', '/billing?' + selection + '&redirect=https://evil.test')
+    resetPasswordForEmail.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('buyer@example.com', {
+      redirectTo: 'http://localhost:3000/reset-password?' + selection,
+    }))
+  })
+
   it('shows specific and fallback magic-link failures', async () => {
     window.history.replaceState({}, '', '/login')
     signInWithOtp.mockResolvedValueOnce({ error: new Error('email unavailable') })

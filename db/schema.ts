@@ -929,6 +929,7 @@ export const billingAccounts = pgTable('billing_accounts', {
   priceId: text('price_id'),
   plan: text('plan'),
   trialUsed: boolean('trial_used').notNull().default(false),
+  isLegacy: boolean('is_legacy').notNull().default(false),
   periodStart: timestamp('period_start', { withTimezone: true }),
   graceUntil: timestamp('grace_until', { withTimezone: true }),
   periodEnd: timestamp('period_end', { withTimezone: true }),
@@ -3170,3 +3171,148 @@ GRANT EXECUTE ON FUNCTION public.create_storybook_comment_snapshot(uuid,uuid,tex
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
 `;
+
+// Append to the generated migration. Snapshot all auth users once, including
+// people who have never opened Billing; future billing accounts default to free.
+export const legacyBillingSql = `
+-- Backfilled placeholders must not prevent deleting a previously unbilled user.
+-- Preserve Stripe history and fence in-flight billing operations with the lease.
+CREATE FUNCTION public.delete_unbilled_legacy_account() RETURNS trigger
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  DELETE FROM public.billing_accounts WHERE user_id=OLD.id AND is_legacy
+    AND customer_id IS NULL AND subscription_id IS NULL AND price_id IS NULL
+    AND checkout_session_id IS NULL AND checkout_payload IS NULL
+    AND plan IS NULL AND subscription_status IS NULL AND NOT trial_used
+    AND period_start IS NULL AND period_end IS NULL AND grace_until IS NULL
+    AND NOT cancel_at_period_end
+    AND (lock_token IS NULL OR lock_expires_at<=clock_timestamp());
+  RETURN OLD;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER delete_unbilled_legacy_account BEFORE DELETE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.delete_unbilled_legacy_account();
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.delete_unbilled_legacy_account() FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+INSERT INTO public.billing_accounts(user_id,is_legacy)
+  SELECT id,true FROM auth.users
+  ON CONFLICT (user_id) DO UPDATE SET is_legacy=true;
+--> statement-breakpoint
+CREATE FUNCTION public.cloud_effective_account(p_owner uuid) RETURNS SETOF public.billing_accounts
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE b public.billing_accounts%ROWTYPE;
+BEGIN
+  SELECT * INTO b FROM public.billing_accounts WHERE user_id=p_owner;
+  IF NOT FOUND THEN RETURN; END IF;
+  IF b.is_legacy AND NOT coalesce(
+    b.plan IN ('pro','studio') AND b.period_start<=now() AND b.period_end>now()
+    AND (b.subscription_status IN ('active','trialing')
+      OR (b.subscription_status='past_due' AND b.grace_until>now())),false) THEN
+    b.plan:='pro';
+    b.subscription_status:='legacy';
+    b.period_start:=date_trunc('month',now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC';
+    b.period_end:=(date_trunc('month',now() AT TIME ZONE 'UTC')+interval '1 month') AT TIME ZONE 'UTC';
+  END IF;
+  RETURN NEXT b;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.cloud_effective_account(uuid) FROM PUBLIC,anon,authenticated;
+` + cloudPlansSql.split('--> statement-breakpoint')
+  .filter(statement => /CREATE FUNCTION public\.(cloud_limit|cloud_usage_count|cloud_fail|cloud_validate_write|cloud_charge|cloud_entitlements)\(/.test(statement))
+  .map(statement => statement
+    .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+    .replaceAll('FROM public.billing_accounts WHERE user_id=p_owner', 'FROM public.cloud_effective_account(p_owner)')
+    .replace('JOIN public.billing_accounts b ON b.user_id=u.owner_id', 'JOIN public.cloud_effective_account(p_owner) b ON b.user_id=u.owner_id')
+    .replace('SELECT * INTO b FROM public.cloud_effective_account(p_owner) FOR SHARE;',
+      'PERFORM 1 FROM public.billing_accounts WHERE user_id=p_owner FOR SHARE;\n  SELECT * INTO b FROM public.cloud_effective_account(p_owner);')
+    .replace("b.subscription_status IN ('active','trialing')", "b.subscription_status IN ('active','trialing','legacy')")
+    .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,")
+  ).join('\n--> statement-breakpoint\n') + `
+--> statement-breakpoint
+` + approvedWidgetHandoffSql.slice(approvedWidgetHandoffSql.indexOf('CREATE FUNCTION public.create_approved_widget_agent_share('))
+  .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+  .replace('  v_status text;\n  v_price text;', '  v_billing public.billing_accounts%ROWTYPE;')
+  .replace(/  SELECT b.subscription_status,b.price_id INTO v_status,v_price[\s\S]*?  END IF;/, `
+  -- Only the trusted service-role caller supplies the Community sentinel.
+  -- Cloud Agent eligibility remains enforced independently of quota activation.
+  IF p_allowed_prices IS DISTINCT FROM ARRAY['community']::text[] THEN
+    PERFORM 1 FROM public.billing_accounts WHERE user_id=v_owner FOR SHARE;
+    SELECT * INTO v_billing FROM public.cloud_effective_account(v_owner);
+    IF NOT coalesce(v_billing.is_legacy,false) AND NOT coalesce(
+      v_billing.plan IN ('pro','studio') AND v_billing.price_id=ANY(p_allowed_prices)
+      AND v_billing.period_start<=now() AND v_billing.period_end>now()
+      AND (v_billing.subscription_status IN ('active','trialing')
+        OR (v_billing.subscription_status='past_due' AND v_billing.grace_until>now())),false) THEN
+      IF v_is_owner THEN RAISE EXCEPTION 'upgrade_required'; END IF;
+      RAISE EXCEPTION 'owner_upgrade_required';
+    END IF;
+  END IF;`)
+  + `
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
+`;
+
+// Annual payment periods retain monthly usage allowances, anchored in UTC to
+// Stripe's period start. Derive every boundary from the original anchor so a
+// Jan 31 subscription returns to Mar 31 after February's shorter month.
+export const yearlyBillingWindowsSql = `
+CREATE FUNCTION public.cloud_usage_window(p_start timestamptz,p_end timestamptz,p_now timestamptz DEFAULT now())
+RETURNS TABLE(window_start timestamptz,window_end timestamptz)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' SET timezone = 'UTC' AS $$
+DECLARE v_months integer; v_start timestamptz;
+BEGIN
+  IF p_start IS NULL OR p_end IS NULL OR p_now<p_start OR p_now>=p_end THEN RETURN; END IF;
+  -- The supported single-month periods (including clipped month ends and DST)
+  -- and 14-day trials fit within 32 days. Preserve their trusted boundaries.
+  IF p_end<=p_start+interval '32 days' THEN
+    RETURN QUERY SELECT p_start,p_end;
+    RETURN;
+  END IF;
+  v_months:=(extract(year FROM p_now)::integer-extract(year FROM p_start)::integer)*12
+    +extract(month FROM p_now)::integer-extract(month FROM p_start)::integer;
+  v_start:=p_start+make_interval(months=>v_months);
+  IF v_start>p_now THEN
+    v_months:=v_months-1;
+    v_start:=p_start+make_interval(months=>v_months);
+  END IF;
+  RETURN QUERY SELECT v_start,least(p_end,p_start+make_interval(months=>v_months+1));
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.cloud_usage_count(p_owner uuid,p_resource text) RETURNS integer
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = '' AS $$
+  SELECT count(*)::integer FROM public.cloud_usage u JOIN public.cloud_effective_account(p_owner) b ON b.user_id=u.owner_id
+    CROSS JOIN LATERAL public.cloud_usage_window(b.period_start,b.period_end) w
+    WHERE u.owner_id=p_owner AND u.resource=p_resource AND NOT u.released AND u.window_start=w.window_start;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.cloud_charge(p_owner uuid,p_resource text,p_id uuid) RETURNS void
+LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+  IF NOT public.cloud_enabled() THEN RETURN; END IF;
+  PERFORM public.cloud_require_write(p_owner);
+  IF EXISTS(SELECT 1 FROM public.cloud_usage WHERE resource=p_resource AND resource_id=p_id) THEN RETURN; END IF;
+  PERFORM public.cloud_check_capacity(p_owner,p_resource,1);
+  INSERT INTO public.cloud_usage(resource_id,resource,owner_id,window_start,window_end)
+    SELECT p_id,p_resource,b.user_id,w.window_start,w.window_end FROM public.cloud_effective_account(p_owner) b
+      CROSS JOIN LATERAL public.cloud_usage_window(b.period_start,b.period_end) w WHERE b.user_id=p_owner;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.cloud_usage_window(timestamptz,timestamptz,timestamptz) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+` + ['cloud_fail', 'cloud_entitlements'].map(name => {
+  const source = cloudPlansSql.match(new RegExp('CREATE FUNCTION public\\.' + name + '\\([\\s\\S]*?\\n\\$\\$;'))![0]
+  return source.replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+    .replaceAll('FROM public.billing_accounts WHERE user_id=p_owner', 'FROM public.cloud_effective_account(p_owner)')
+    .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,")
+    .replace('(SELECT period_end FROM public.cloud_effective_account(p_owner))',
+      '(SELECT w.window_end FROM public.cloud_effective_account(p_owner) b CROSS JOIN LATERAL public.cloud_usage_window(b.period_start,b.period_end) w WHERE b.user_id=p_owner)')
+    .replace("'resetAt',b.period_end", "'resetAt',(SELECT w.window_end FROM public.cloud_usage_window(b.period_start,b.period_end) w)")
+}).join('\n--> statement-breakpoint\n') + `
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
+`

@@ -31,7 +31,7 @@ There is no permanently free CRRT Cloud plan. Each Cloud plan includes a 14-day 
 | Browser extension sync | Available when connected to the self-hosted instance | Included | Included |
 | Managed hosting, storage, backups, and updates | No | Included | Included |
 
-Cloud pricing is monthly at launch. Taxes, when applicable, are added by the payment provider.
+Cloud pricing supports monthly or yearly payment: Pro is $19/month or $192/year; Studio is $49/month or $492/year. Comment and audit allowances renew monthly on both cycles. Taxes, when applicable, are added by the payment provider.
 
 ## 3. Community: free self-hosted
 

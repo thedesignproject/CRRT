@@ -7,7 +7,7 @@ import { accountForCustomer, getAccount, recordEvent, withAccount, type BillingA
 import { billingSummary, checkout, portal, processBillingEvent } from './service.js'
 const user = { userId: 'user-a', email: 'a@example.com' }
 const save = vi.fn()
-const sdk = { prices: { retrieve: vi.fn() }, customers: { create: vi.fn() }, subscriptions: { list: vi.fn() }, checkout: { sessions: { list: vi.fn(), create: vi.fn(), retrieve: vi.fn(), expire: vi.fn() } }, billingPortal: { sessions: { create: vi.fn() } } }
+const sdk = { prices: { retrieve: vi.fn() }, customers: { create: vi.fn() }, subscriptions: { list: vi.fn() }, checkout: { sessions: { list: vi.fn(), create: vi.fn(), retrieve: vi.fn(), expire: vi.fn() } }, billingPortal: { configurations: { retrieve: vi.fn() }, sessions: { create: vi.fn() } } }
 let account: BillingAccount
 function sub(status = 'active', id = 'sub') {
   return { id, status, items: { data: [{ price: { id: 'price_old' }, current_period_start: 1700000000, current_period_end: 1800000000 }] }, cancel_at_period_end: false }
@@ -298,4 +298,148 @@ it('preserves the same attempt when delayed first creation is below Stripe minim
  await expect(checkout(user)).rejects.toThrow('Expiry')
  expect(sdk.checkout.sessions.create).toHaveBeenCalledWith(pending,{idempotencyKey:'crrt-checkout-attempt'})
  expect(save).not.toHaveBeenCalledWith(expect.objectContaining({checkout_attempt:expect.anything()}))
+})
+it('prevents charging legacy users for included Pro and allows a Studio upgrade',async()=>{
+ vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud');vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+ account.is_legacy=true
+ sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?4900:1900,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
+ await expect(checkout(user,'pro')).rejects.toThrow('included for legacy users')
+ expect(sdk.customers.create).not.toHaveBeenCalled();expect(sdk.checkout.sessions.create).not.toHaveBeenCalled()
+ await checkout(user,'studio')
+ expect(sdk.checkout.sessions.create.mock.lastCall![0].line_items).toEqual([{price:'price_studio',quantity:1}])
+ expect(save.mock.calls.every(([values])=>!Object.prototype.hasOwnProperty.call(values,'is_legacy'))).toBe(true)
+})
+
+const legacyPortalSettings = {
+ active:true,
+ features:{subscription_update:{enabled:false},subscription_cancel:{enabled:true,mode:'at_period_end'}},
+}
+function legacyPortalSetup() {
+ vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
+ vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
+ vi.stubEnv('STRIPE_LEGACY_PORTAL_CONFIGURATION_ID','bpc_legacy')
+ account.is_legacy=true;account.customer_id='cus'
+ sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?4900:1900,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
+ sdk.billingPortal.configurations.retrieve.mockResolvedValue(legacyPortalSettings)
+}
+function enterLegacyPortal(path:string) {
+ if(path==='manage') return portal(user.userId)
+ if(path==='active') sdk.subscriptions.list.mockResolvedValue({data:[{...sub(),items:{data:[{price:{id:'price_studio'},current_period_start:1700000000,current_period_end:1800000000}]}}]})
+ else sdk.checkout.sessions.list.mockResolvedValue({data:[{id:'cs_completed',status:'complete',subscription:'new'}]})
+ return checkout(user,'studio')
+}
+it.each(['manage','active','recovery'])('restricts the legacy portal configuration for %s entry',async path=>{
+ legacyPortalSetup()
+ expect(await enterLegacyPortal(path)).toEqual({url:'https://billing.stripe.com/p/test'})
+ expect(sdk.billingPortal.configurations.retrieve).toHaveBeenCalledWith('bpc_legacy')
+ expect(sdk.billingPortal.sessions.create).toHaveBeenCalledWith({customer:'cus',return_url:'https://preview.example/dashboard/',configuration:'bpc_legacy'})
+ expect(sdk.checkout.sessions.create).not.toHaveBeenCalled()
+})
+it.each(['manage','active','recovery'])('fails closed without a legacy portal configuration for %s entry',async path=>{
+ legacyPortalSetup();vi.stubEnv('STRIPE_LEGACY_PORTAL_CONFIGURATION_ID','')
+ await expect(enterLegacyPortal(path)).rejects.toThrow('not configured')
+ expect(sdk.billingPortal.sessions.create).not.toHaveBeenCalled()
+})
+it('rejects malformed or unavailable legacy portal configuration without a default fallback',async()=>{
+ legacyPortalSetup();vi.stubEnv('STRIPE_LEGACY_PORTAL_CONFIGURATION_ID','default')
+ await expect(portal(user.userId)).rejects.toThrow('not configured')
+ expect(sdk.billingPortal.configurations.retrieve).not.toHaveBeenCalled()
+ vi.stubEnv('STRIPE_LEGACY_PORTAL_CONFIGURATION_ID','bpc_missing')
+ sdk.billingPortal.configurations.retrieve.mockRejectedValue(new Error('No such configuration'))
+ await expect(portal(user.userId)).rejects.toThrow('No such configuration')
+ expect(sdk.billingPortal.sessions.create).not.toHaveBeenCalled()
+})
+it.each([
+ {...legacyPortalSettings,active:false},
+ {...legacyPortalSettings,features:{...legacyPortalSettings.features,subscription_update:{enabled:true}}},
+ {...legacyPortalSettings,features:{...legacyPortalSettings.features,subscription_cancel:{enabled:false,mode:'at_period_end'}}},
+ {...legacyPortalSettings,features:{...legacyPortalSettings.features,subscription_cancel:{enabled:true,mode:'immediately'}}},
+])('rejects an unsafe legacy portal configuration: %j',async settings=>{
+ legacyPortalSetup();sdk.billingPortal.configurations.retrieve.mockResolvedValue(settings)
+ await expect(portal(user.userId)).rejects.toThrow('must disable plan changes')
+ expect(sdk.billingPortal.sessions.create).not.toHaveBeenCalled()
+})
+it('preserves the default portal for nonlegacy Cloud customers',async()=>{
+ legacyPortalSetup();account.is_legacy=false
+ await portal(user.userId)
+ expect(sdk.billingPortal.configurations.retrieve).not.toHaveBeenCalled()
+ expect(sdk.billingPortal.sessions.create).toHaveBeenCalledWith({customer:'cus',return_url:'https://preview.example/dashboard/'})
+})
+it('shows scheduled cancellation for flexible billing and clears it after the subscription ends',async()=>{
+ account.customer_id='cus'
+ save.mockImplementation(async values=>{Object.assign(account,values)})
+ sdk.subscriptions.list.mockResolvedValue({data:[{...sub(),cancel_at:1800000000,cancel_at_period_end:false}]})
+ expect(await billingSummary(user.userId)).toMatchObject({cancelAtPeriodEnd:true})
+ sdk.subscriptions.list.mockResolvedValue({data:[{...sub('canceled'),cancel_at:1800000000,cancel_at_period_end:false}]})
+ expect(await billingSummary(user.userId)).toMatchObject({cancelAtPeriodEnd:false})
+})
+
+function annualConfig() {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID', 'price_pro'); vi.stubEnv('STRIPE_STUDIO_PRICE_ID', 'price_studio')
+  vi.stubEnv('STRIPE_PRO_YEARLY_PRICE_ID', 'price_pro_year'); vi.stubEnv('STRIPE_STUDIO_YEARLY_PRICE_ID', 'price_studio_year')
+  sdk.prices.retrieve.mockImplementation(async id => ({ active: true, currency: 'usd', unit_amount: id === 'price_pro_year' ? 19200 : 49200, recurring: { interval: 'year', interval_count: 1 } }))
+}
+it.each(['pro', 'studio'] as const)('uses the configured annual %s price in Checkout', async plan => {
+  annualConfig()
+  await checkout(user, plan, 'yearly')
+  expect(sdk.checkout.sessions.create).toHaveBeenCalledWith(expect.objectContaining({ line_items: [{ price: `price_${plan}_year`, quantity: 1 }] }), expect.anything())
+})
+it('expires a pending monthly checkout before switching to annual', async () => {
+  annualConfig(); account.customer_id = 'cus'; account.checkout_session_id = 'cs_monthly'
+  sdk.checkout.sessions.retrieve.mockResolvedValue({ id: 'cs_monthly', status: 'open', url: 'https://checkout.stripe.com/monthly', line_items: { has_more: false, data: [{ price: { id: 'price_pro' }, quantity: 1 }] } })
+  await checkout(user, 'pro', 'yearly')
+  expect(sdk.checkout.sessions.expire).toHaveBeenCalledWith('cs_monthly')
+  expect(sdk.checkout.sessions.create.mock.lastCall![0].line_items).toEqual([{ price: 'price_pro_year', quantity: 1 }])
+})
+it('reuses an identical open annual checkout', async () => {
+  annualConfig(); account.customer_id = 'cus'; account.checkout_session_id = 'cs_annual'
+  sdk.checkout.sessions.retrieve.mockResolvedValue({ id: 'cs_annual', status: 'open', url: 'https://checkout.stripe.com/annual', line_items: { has_more: false, data: [{ price: { id: 'price_pro_year' }, quantity: 1 }] } })
+  expect(await checkout(user, 'pro', 'yearly')).toEqual({ url: 'https://checkout.stripe.com/annual' })
+  expect(sdk.checkout.sessions.create).not.toHaveBeenCalled()
+})
+it('reconciles annual webhook subscriptions into the same plan and preserves cycle in summaries', async () => {
+  annualConfig(); account.customer_id = 'cus'
+  save.mockImplementation(async values => Object.assign(account, values))
+  vi.mocked(accountForCustomer).mockResolvedValue(account)
+  sdk.subscriptions.list.mockResolvedValue({ data: [{ ...sub(), items: { data: [{ price: { id: 'price_studio_year' }, current_period_start: 1700000000, current_period_end: 1731536000 }] } }] })
+  await processBillingEvent(event())
+  expect(account).toMatchObject({ plan: 'studio', price_id: 'price_studio_year', subscription_status: 'active' })
+  expect(await billingSummary(user.userId)).toMatchObject({ billingCycle: 'yearly', status: 'active' })
+})
+it('keeps unknown attempt payloads immutable when changing billing cycle', async () => {
+  annualConfig(); account.customer_id = 'cus'
+  account.checkout_payload = { mode: 'subscription', expires_at: Math.floor(Date.now()/1000)+1800, line_items: [{ price: 'price_pro', quantity: 1 }] }
+  await expect(checkout(user, 'pro', 'yearly')).rejects.toThrow('Checkout recovered')
+  expect(sdk.checkout.sessions.create).toHaveBeenCalledWith(account.checkout_payload, { idempotencyKey: 'crrt-checkout-attempt' })
+})
+
+it('recovers a canceled annual Checkout selection without mistaking it for an active plan', async () => {
+  annualConfig(); account.customer_id = 'cus'
+  account.checkout_payload = { mode:'subscription',line_items:[{price:'price_studio_year',quantity:1}] }
+  save.mockImplementation(async values => Object.assign(account,values))
+  expect(await billingSummary(user.userId)).toMatchObject({ status:'free',billingCycle:'yearly',checkoutPlan:'studio' })
+  sdk.subscriptions.list.mockResolvedValue({ data: [sub('active')] })
+  expect(await billingSummary(user.userId)).toMatchObject({ billingCycle:'monthly' })
+})
+
+it('uses the previous annual subscription price when a canceled account has no pending checkout', async () => {
+  annualConfig(); account.customer_id = 'cus'
+  save.mockImplementation(async values => Object.assign(account, values))
+  sdk.subscriptions.list.mockResolvedValue({ data: [{ ...sub('canceled'), items: { data: [{ price: { id: 'price_pro_year' }, current_period_start: 1700000000, current_period_end: 1731536000 }] } }] })
+  expect(await billingSummary(user.userId)).toMatchObject({ status: 'canceled', billingCycle: 'yearly', checkoutPlan: 'pro' })
+})
+
+it('defaults a new Cloud account without a stored price to monthly without inventing a checkout plan', async () => {
+  annualConfig()
+  const summary = await billingSummary(user.userId)
+  expect(summary).toMatchObject({ billingCycle: 'monthly', canManage: false })
+  expect(summary).not.toHaveProperty('checkoutPlan')
+})
+
+it('returns the same safe defaults before a Cloud billing account exists', async () => {
+  annualConfig(); vi.mocked(getAccount).mockResolvedValue(null)
+  const summary = await billingSummary(user.userId)
+  expect(summary).toMatchObject({ billingCycle: 'monthly', canManage: false })
+  expect(summary).not.toHaveProperty('checkoutPlan')
 })

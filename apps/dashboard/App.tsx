@@ -12,6 +12,7 @@ import { useSuperAdmin } from './hooks/useSuperAdmin'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
 import { relPath } from './lib/routes'
+import { billingPlanSelection } from './lib/access-review-link'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { BillingPage } from './components/BillingPage'
 import { UserMenu } from './components/UserMenu'
@@ -86,7 +87,9 @@ export function App() {
 
   if (!session || !user) return <LoginPage />
 
-  if (pathname === '/billing') return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} />
+  const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined
+  const initialPlan = billingPlanSelection(window.location.search)
+  if (pathname === '/billing' || checkoutState || initialPlan) return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} checkoutState={checkoutState} initialPlan={initialPlan} />
 
   const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
   if (auditMatch) return <ProductAuditPage apiBase={API_BASE} accessToken={session.access_token} auditId={decodeURIComponent(auditMatch[1])} />

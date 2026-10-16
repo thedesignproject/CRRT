@@ -7,7 +7,7 @@ import { ProductAudit } from './sections/ProductAudit'
 import { Footer } from './sections/Footer'
 
 /** Shared by the interactive app and the build-time HTML renderer. */
-export function MarketingPage({ authenticated = false }: { authenticated?: boolean }) {
+export function MarketingPage({ authenticated = false, accessToken, apiBase }: { authenticated?: boolean; accessToken?: string; apiBase?: string }) {
   return (
     <>
       <Hero authenticated={authenticated} />
@@ -15,7 +15,7 @@ export function MarketingPage({ authenticated = false }: { authenticated?: boole
       <FakeDashboard />
       <ProductAudit />
       <Closing />
-      <Pricing />
+      <Pricing authenticated={authenticated} accessToken={accessToken} apiBase={apiBase} />
       <Footer />
     </>
   )

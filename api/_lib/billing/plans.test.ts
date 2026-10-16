@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { CLOUD_PLANS, cloudPriceCatalog, isCloud, parseCloudPlan, planForPrice, subscriptionCanWrite } from './plans.js'
+import { CLOUD_PLANS, billingCycles, parseBillingCycle, selectionForPrice, cloudPriceCatalog, isCloud, parseCloudPlan, planForPrice, subscriptionCanWrite } from './plans.js'
 afterEach(()=>vi.unstubAllEnvs())
 const prices={STRIPE_PRO_PRICE_ID:'price_pro',STRIPE_STUDIO_PRICE_ID:'price_studio'}
 it('uses the approved limits and a deployment-owned mode',()=>{
@@ -34,4 +34,27 @@ it('requires a current trusted window and eligible subscription state',()=>{
   expect(subscriptionCanWrite({...account,subscription_status:'past_due',grace_until:'2026-01-14'},now)).toBe(false)
   expect(subscriptionCanWrite({...account,period_end:'2026-01-15'},now)).toBe(false)
   vi.spyOn(Date,'now').mockReturnValue(now);expect(subscriptionCanWrite(account)).toBe(true);vi.restoreAllMocks()
+})
+
+const annual = { ...prices, STRIPE_PRO_YEARLY_PRICE_ID: 'price_pro_year', STRIPE_STUDIO_YEARLY_PRICE_ID: 'price_studio_year' }
+it('maps both cycles to the same entitlement plans using four distinct trusted prices', () => {
+  expect(billingCycles(prices)).toEqual(['monthly'])
+  expect(billingCycles(annual)).toEqual(['monthly', 'yearly'])
+  expect(cloudPriceCatalog(annual, 'yearly')).toEqual({ pro: 'price_pro_year', studio: 'price_studio_year' })
+  expect(selectionForPrice('price_studio_year', annual)).toEqual({ plan: 'studio', cycle: 'yearly' })
+  expect(planForPrice('price_pro_year', annual)).toBe('pro')
+  expect(selectionForPrice('untrusted', annual)).toBeNull()
+  expect(parseBillingCycle(undefined)).toBe('monthly')
+  expect(parseBillingCycle('monthly')).toBe('monthly')
+  expect(parseBillingCycle('yearly')).toBe('yearly')
+  expect(() => parseBillingCycle('year')).toThrow('monthly or yearly')
+})
+it.each([
+  { ...prices, STRIPE_PRO_YEARLY_PRICE_ID: 'price_pro_year' },
+  { ...annual, STRIPE_PRO_YEARLY_PRICE_ID: 'bad' },
+  { ...annual, STRIPE_STUDIO_YEARLY_PRICE_ID: 'price_pro_year' },
+  { ...annual, STRIPE_PRO_YEARLY_PRICE_ID: 'price_studio' },
+  { STRIPE_PRO_YEARLY_PRICE_ID: 'price_pro_year', STRIPE_STUDIO_YEARLY_PRICE_ID: 'price_studio_year' },
+])('rejects partial or overlapping annual configuration: %j', env => {
+  expect(() => cloudPriceCatalog(env, 'yearly')).toThrow()
 })

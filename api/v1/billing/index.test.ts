@@ -9,12 +9,13 @@ import { stripeEnabled, billingConfig } from '../../_lib/billing/config.js'
 import { billingSummary, checkout, portal } from '../../_lib/billing/service.js'
 import { BillingBusyError } from '../../_lib/billing/store.js'
 import handler from './index.js'
+import { createCheckoutState, readCheckoutState } from '../../_lib/billing/checkout-state.js'
 const user = { userId: 'authenticated-user', email: 'owner@example.com' }
 function res() {
   return { statusCode: 200, body: null as unknown, setHeader: vi.fn(), status(code: number) { this.statusCode = code; return this }, json(value: unknown) { this.body = value; return this }, end() { return this } }
 }
-async function call(method: string, body?: unknown, headers: Record<string, string | undefined> = { authorization: 'Bearer session' }) {
-  const response = res(); await handler({ method, body, headers, query: {} } as never, response as never); return response
+async function call(method: string, body?: unknown, headers: Record<string, string | undefined> = { authorization: 'Bearer session' }, query: Record<string, unknown> = {}) {
+  const response = res(); await handler({ method, body, headers, query } as never, response as never); return response
 }
 afterEach(()=>vi.unstubAllEnvs())
 beforeEach(() => {
@@ -78,5 +79,52 @@ it('uses Cloud summary and restricts checkout to trusted plan identifiers',async
   expect((await call('POST',{action:'checkout',plan:'cheap'})).statusCode).toBe(400)
   vi.mocked(checkout).mockResolvedValue({url:'checkout'})
   expect((await call('POST',{action:'checkout',plan:'studio',priceId:'cheap'})).body).toEqual({url:'checkout'})
-  expect(checkout).toHaveBeenCalledWith(user,'studio')
+  expect(checkout).toHaveBeenCalledWith(user,'studio','monthly')
+})
+
+function cloudConfig() {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')
+  vi.stubEnv('BILLING_STATE_SECRET', 'test-billing-state-secret-at-least-32-characters')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID', 'price_pro'); vi.stubEnv('STRIPE_STUDIO_PRICE_ID', 'price_studio')
+  vi.stubEnv('STRIPE_PRO_YEARLY_PRICE_ID', 'price_pro_year'); vi.stubEnv('STRIPE_STUDIO_YEARLY_PRICE_ID', 'price_studio_year')
+  vi.mocked(billingConfig).mockReturnValue({ secret: 'sk_test', price: 'price_pro', webhookSecret: 'whsec', returnUrl: 'https://app.example/dashboard/billing' })
+}
+it.each(['monthly', 'yearly'] as const)('hands signed-out %s selections to the configured dashboard without billing side effects', async cycle => {
+  cloudConfig()
+  const response = await call('GET', undefined, {}, { start: 'studio', cycle, redirect: 'https://evil.test', userId: 'victim' })
+  expect(response.statusCode).toBe(303)
+  const destination = new URL(response.setHeader.mock.calls.find(([key]) => key === 'Location')![1] as string)
+  expect(destination.origin+destination.pathname).toBe('https://app.example/dashboard/billing')
+  expect(readCheckoutState(destination.searchParams.get('billingState'))).toEqual({ plan: 'studio', cycle })
+  expect(requireUser).not.toHaveBeenCalled(); expect(checkout).not.toHaveBeenCalled()
+  expect(response.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store')
+})
+it.each([{ start: 'cheap' }, { start: ['pro','studio'] }, { start: 'pro', cycle: 'weekly' }])('rejects an invalid public selection: %j', async query => {
+  cloudConfig()
+  expect((await call('GET', undefined, {}, query)).statusCode).toBe(400)
+})
+it('does not expose configuration errors from signed handoff', async () => {
+  cloudConfig(); vi.stubEnv('BILLING_STATE_SECRET', '')
+  expect((await call('GET', undefined, {}, { start: 'pro' })).body).toEqual({ error: 'Billing is temporarily unavailable' })
+})
+it('uses the verified cycle and authenticated account for a signed continuation', async () => {
+  cloudConfig(); vi.mocked(checkout).mockResolvedValue({ url: 'checkout' })
+  const state = createCheckoutState('studio', 'yearly')
+  expect((await call('POST', { action: 'checkout_state', state, plan: 'pro', cycle: 'monthly', userId: 'victim' })).body).toEqual({ url: 'checkout' })
+  expect(checkout).toHaveBeenCalledWith(user, 'studio', 'yearly')
+  expect((await call('POST', { action: 'checkout_state', state }, {})).statusCode).toBe(401)
+})
+it('rejects invalid or expired continuations without starting checkout', async () => {
+  cloudConfig()
+  expect((await call('POST', { action: 'checkout_state', state: 'garbage' })).statusCode).toBe(400)
+  expect((await call('POST', { action: 'checkout_state', state: createCheckoutState('pro', 'yearly', 1) })).statusCode).toBe(400)
+  expect(checkout).not.toHaveBeenCalled()
+})
+it('passes only validated plan and cycle into direct checkout', async () => {
+  cloudConfig()
+  await call('POST', { action: 'checkout', plan: 'pro', cycle: 'yearly', priceId: 'untrusted' })
+  expect(checkout).toHaveBeenCalledWith(user, 'pro', 'yearly')
+  vi.mocked(checkout).mockClear()
+  expect((await call('POST', { action: 'checkout', plan: 'pro', cycle: 'weekly' })).statusCode).toBe(400)
+  expect(checkout).not.toHaveBeenCalled()
 })

@@ -7,6 +7,9 @@ afterEach(() => window.history.replaceState({}, '', '/'))
 it('preserves only trusted continuation parameters', () => {
   expect(dashboardAuthSearch('?invite=p%2Fa&accessProject=demo&redirect=https://evil.test')).toBe('?invite=p%2Fa&accessProject=demo')
   expect(dashboardAuthSearch('?email=a@b.com')).toBe('')
+  expect(dashboardAuthSearch('?billingState=payload.signature&redirect=https://evil.test')).toBe('?billingState=payload.signature')
+  expect(dashboardAuthSearch('?billingState=bad%20state')).toBe('')
+  expect(dashboardAuthSearch(`?billingState=${'a'.repeat(513)}`)).toBe('')
 })
 it('waits for projects then opens only an authorized project and consumes the link', async () => {
   window.history.replaceState({}, '', '/?accessProject=p&other=1#hash')
@@ -32,4 +35,10 @@ it('does nothing without a review link', () => {
   const open = vi.fn()
   renderHook(() => useAccessReviewLink([], false, null, open))
   expect(open).not.toHaveBeenCalled()
+})
+
+it('preserves only allowlisted plan hints through authentication', () => {
+  expect(dashboardAuthSearch('?billingPlan=pro&redirect=https://evil.test')).toBe('?billingPlan=pro')
+  expect(dashboardAuthSearch('?billingPlan=studio')).toBe('?billingPlan=studio')
+  expect(dashboardAuthSearch('?billingPlan=enterprise')).toBe('')
 })

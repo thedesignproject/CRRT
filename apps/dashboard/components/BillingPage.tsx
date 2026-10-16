@@ -1,17 +1,21 @@
+import type { BillingPlanKey } from '../api'
 import { route } from '../lib/routes'
 import { BillingSettings } from './BillingSettings'
 
-export function BillingPage({ apiBase, accessToken, email }: { apiBase: string; accessToken: string; email: string | undefined }) {
-  return <div className="min-h-screen bg-background text-foreground">
-    <header className="flex items-center justify-between gap-4 px-5 h-[60px] border-b border-border bg-card">
-      <a href={route('/')} className="shrink-0 text-xs text-muted-foreground hover:text-foreground">← Dashboard</a>
-      <span className="truncate text-xs text-muted-foreground">{email}</span>
-    </header>
-    <main className="max-w-5xl mx-auto px-6 py-8 sm:py-12">
-      <p className="text-[11px] uppercase tracking-wider text-primary mb-3">/ Account</p>
-      <h1 className="text-2xl font-semibold tracking-tight">Billing</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Keep the feedback flowing. Manage your plan here.</p>
-      <BillingSettings key={accessToken} apiBase={apiBase} accessToken={accessToken} />
-    </main>
-  </div>
+export function BillingPage({ apiBase, accessToken, email, checkoutState, initialPlan }: { apiBase: string; accessToken: string; email?: string; checkoutState?: string; initialPlan?: BillingPlanKey }) {
+  return (
+    <div className="min-h-screen bg-background text-foreground">
+      <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-card px-5 sm:px-8">
+        <a href={route('/')} className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground">← Workspace</a>
+        <span className="max-w-[55vw] truncate text-xs text-muted-foreground">{email}</span>
+      </header>
+      <main className="mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-12">
+        <div className="max-w-2xl">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Billing &amp; usage</h1>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">Manage Cloud access and see exactly where your account stands.</p>
+        </div>
+        <BillingSettings key={accessToken} apiBase={apiBase} accessToken={accessToken} checkoutState={checkoutState} initialPlan={initialPlan} />
+      </main>
+    </div>
+  )
 }
