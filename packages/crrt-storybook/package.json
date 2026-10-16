@@ -1,6 +1,6 @@
 {
   "name": "@thedesignproject/crrt-storybook",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CRRT 🥕 inside Storybook — a panel that shows the rules governing a component and sends stakeholder feedback to CRRT.",
   "keywords": [
     "storybook-addon",
