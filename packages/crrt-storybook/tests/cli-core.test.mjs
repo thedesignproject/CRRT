@@ -116,6 +116,7 @@ test("builds official Storybook installation commands for each package manager",
 
 test("connect validates, installs, claims, and writes only public metadata", async () => {
   const root = await fixture();
+  const connectionId = "4be13db6-7495-4e68-84e4-21cb765fea96";
   const requests = [];
   const commands = [];
   const fetchImpl = async (url, init) => {
@@ -127,7 +128,7 @@ test("connect validates, installs, claims, and writes only public metadata", asy
       });
     }
     return Response.json({
-      connectionId: "sbconn_demo",
+      connectionId,
       projectKey: "project_demo",
       apiBase: "https://crrt.ai/api",
       dashboardUrl: "https://crrt.ai",
@@ -148,7 +149,7 @@ test("connect validates, installs, claims, and writes only public metadata", asy
     );
     assert.equal(requests.length, 2);
     assert.equal(commands.length, 1);
-    assert.equal(result.connectionId, "sbconn_demo");
+    assert.equal(result.connectionId, connectionId);
     const stored = JSON.parse(await readFile(result.configPath, "utf8"));
     assert.equal(stored.projectKey, "project_demo");
     assert.equal(stored.code, undefined);
