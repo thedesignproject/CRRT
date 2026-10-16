@@ -88,6 +88,11 @@ describe('Storybook route and CORS boundary', () => {
     expect(log).toHaveBeenCalledWith('[Storybook API] Unexpected failure', {
       operation: 'create', error: { name: 'Error', message: 'private database secret' },
     })
+    vi.mocked(getProjectMember).mockRejectedValue('private non-error value')
+    expect((await call(create, { body: { projectKey: 'p' } })).data).toEqual({ code: 'error', message: 'Storybook is temporarily unavailable' })
+    expect(log).toHaveBeenLastCalledWith('[Storybook API] Unexpected failure', {
+      operation: 'create', error: { name: 'string' },
+    })
     db(); vi.mocked(requireWidgetSession).mockRejectedValue(new WidgetSessionError(403, 'Origin denied'))
     expect((await call(eligibility, { method: 'GET' })).data).toEqual({ code: 'access_denied', message: 'Origin denied' })
     log.mockRestore()
