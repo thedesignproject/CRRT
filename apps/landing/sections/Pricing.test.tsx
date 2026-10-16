@@ -6,11 +6,13 @@ vi.mock('../lib/billing', async (importOriginal) => ({
 }))
 import { startCloudCheckout } from '../lib/billing'
 import { Pricing } from './Pricing'
+import { DASHBOARD_HREF } from './Hero'
+import { renderToString } from 'react-dom/server'
 
-beforeEach(() => vi.clearAllMocks())
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('SSR', false) })
+afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
 
-it('presents a decision-useful catalog and preserves each signed selection', () => {
+it('presents the catalog and sends signed-out plan selections to dashboard sign-in', () => {
   render(<Pricing apiBase="https://crrt.ai/api" />)
   expect(screen.getAllByRole('article')).toHaveLength(3)
   expect(screen.getByText('Recommended')).toBeInTheDocument()
@@ -24,9 +26,9 @@ it('presents a decision-useful catalog and preserves each signed selection', () 
   expect(within(pro).getByText(/Agent handoff/)).toBeInTheDocument()
   expect(within(pro).getByText(/GitHub, Linear, and Jira/)).toBeInTheDocument()
   expect(within(studio).getByText('Everything in Pro')).toBeInTheDocument()
-  expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=pro&cycle=yearly')
+  expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', `${DASHBOARD_HREF}/billing?billingPlan=pro`)
   fireEvent.click(screen.getByRole('button', { name: 'Monthly' }))
-  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly')
+  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', `${DASHBOARD_HREF}/billing?billingPlan=studio`)
 })
 
 it('takes an authenticated customer directly to one safe Checkout session', async () => {
@@ -55,4 +57,47 @@ it('keeps checkout failures visible and retryable without navigating', async () 
   fireEvent.click(within(studio).getByRole('button', { name: /Start 14-day trial/ }))
   expect(await screen.findByRole('alert')).toHaveTextContent('temporarily unavailable')
   expect(assign).not.toHaveBeenCalled()
+})
+
+it.each(['signout', 'account', 'api', 'unmount'] as const)('ignores a stale checkout success after %s', async (change) => {
+  let resolve!: (url: string) => void
+  vi.mocked(startCloudCheckout).mockReturnValueOnce(new Promise((done) => { resolve = done }))
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  const view = render(<Pricing authenticated accessToken="account-a" apiBase="/api" />)
+  fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
+  if (change === 'unmount') view.unmount()
+  else view.rerender(<Pricing authenticated={change !== 'signout'} accessToken={change === 'account' ? 'account-b' : 'account-a'} apiBase={change === 'api' ? '/new-api' : '/api'} />)
+  await act(async () => resolve('https://checkout.stripe.com/c/old-account'))
+  expect(assign).not.toHaveBeenCalled()
+  if (change === 'account') {
+    vi.mocked(startCloudCheckout).mockResolvedValueOnce('https://checkout.stripe.com/c/new-account')
+    fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/new-account'))
+  }
+})
+
+it('ignores a stale failure without unlocking the new account checkout', async () => {
+  let reject!: (error: Error) => void
+  let resolve!: (url: string) => void
+  vi.mocked(startCloudCheckout)
+    .mockReturnValueOnce(new Promise((_, fail) => { reject = fail }))
+    .mockReturnValueOnce(new Promise((done) => { resolve = done }))
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  const view = render(<Pricing authenticated accessToken="account-a" />)
+  fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
+  view.rerender(<Pricing authenticated accessToken="account-b" />)
+  fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
+  await act(async () => reject(new Error('old account failed')))
+  expect(screen.queryByRole('alert')).toBeNull()
+  expect(screen.getByRole('button', { name: /Opening secure checkout/ })).toBeDisabled()
+  await act(async () => resolve('https://billing.stripe.com/p/new-account'))
+  expect(assign).toHaveBeenCalledExactlyOnceWith('https://billing.stripe.com/p/new-account')
+})
+
+it('renders public pricing links without local development destinations during SSR', () => {
+  vi.stubEnv('SSR', true)
+  const html = renderToString(<Pricing />)
+  expect(html).toContain('/dashboard/billing?billingPlan=pro')
+  expect(html).toContain('/dashboard/billing?billingPlan=studio')
+  expect(html).not.toContain('localhost:5173')
 })

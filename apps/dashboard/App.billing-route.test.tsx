@@ -24,3 +24,17 @@ it('routes a signed pricing continuation straight to the Billing Center', () => 
   render(<App />)
   expect(screen.getByRole('heading', { name: 'Billing & usage' })).toBeInTheDocument()
 })
+
+it('opens Billing Center with the plan selected before authentication', async () => {
+  const plans = ['pro', 'studio'].map((key) => ({
+    key, name: key === 'pro' ? 'Pro' : 'Studio', hosting: 'cloud', monthlyPriceUsd: 19, trialDays: 14,
+    limits: { projects: 10, internalUsers: 10, commentsPerMonth: 2000, auditsPerMonth: 5, guests: null },
+  }))
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, text: async () => JSON.stringify({ enabled: true, plans }) })
+  vi.stubGlobal('fetch', fetchMock)
+  window.history.replaceState({}, '', `${route('/')}?billingPlan=studio`)
+  render(<App />)
+  expect(await screen.findByRole('button', { name: /Studio/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(fetchMock).toHaveBeenCalledTimes(1)
+  expect(fetchMock.mock.calls[0][0]).toMatch(/\/v1\/billing$/)
+})

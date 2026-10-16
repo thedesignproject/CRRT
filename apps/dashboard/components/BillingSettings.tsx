@@ -92,9 +92,9 @@ function safeStripeUrl(value: unknown) {
   return destination.href
 }
 
-export function BillingSettings({ apiBase, accessToken, checkoutState }: { apiBase: string; accessToken: string; checkoutState?: string }) {
+export function BillingSettings({ apiBase, accessToken, checkoutState, initialPlan }: { apiBase: string; accessToken: string; checkoutState?: string; initialPlan?: BillingPlanKey }) {
   const [summary, setSummary] = useState<BillingSummary | null>(null)
-  const [selectedPlan, setSelectedPlan] = useState<BillingPlanKey>('pro')
+  const [selectedPlan, setSelectedPlan] = useState<BillingPlanKey>(initialPlan ?? 'pro')
   const [error, setError] = useState('')
   const [busyAction, setBusyAction] = useState<BillingAction | null>(null)
   const [refresh, setRefresh] = useState(0)
@@ -113,13 +113,14 @@ export function BillingSettings({ apiBase, accessToken, checkoutState }: { apiBa
       .then((value) => {
         if (request !== lifetime.current) return
         setSummary(value)
-        if (value.plan === 'pro' || value.plan === 'studio') setSelectedPlan(value.plan)
+        if (initialPlan && refresh === 0) setSelectedPlan(initialPlan)
+        else if (value.plan === 'pro' || value.plan === 'studio') setSelectedPlan(value.plan)
       })
       .catch((reason) => {
         if (request === lifetime.current) setError(reason instanceof Error ? reason.message : 'Billing is temporarily unavailable')
       })
     return () => { controller.abort(); lifetime.current += 1 }
-  }, [apiBase, accessToken, refresh])
+  }, [apiBase, accessToken, refresh, initialPlan])
 
   const act = useCallback(async (action: BillingAction, plan?: BillingPlanKey, state?: string) => {
     if (actionRef.current) return
@@ -185,7 +186,7 @@ export function BillingSettings({ apiBase, accessToken, checkoutState }: { apiBa
               {lifecycle === 'checkout_pending' ? (
                 <button type="button" className={primaryButton} disabled={busyAction !== null} onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={15} />Check status</button>
               ) : (
-                <button type="button" className={primaryButton} disabled={blocked || (!paymentBlocked && !changingPlan && summary.plan === selectedPlan)} onClick={() => { void act(mainAction, mainAction === 'portal' ? undefined : selectedPlan) }}>
+                <button type="button" className={primaryButton} disabled={blocked || (hasWriteAccess && summary.plan === selectedPlan)} onClick={() => { void act(mainAction, mainAction === 'portal' ? undefined : selectedPlan) }}>
                   {busyAction ? <Spinner size={15} className="text-primary-foreground" /> : <ArrowUpRight size={15} />}{actionLabel}
                 </button>
               )}

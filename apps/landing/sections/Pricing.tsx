@@ -1,9 +1,10 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check } from 'lucide-react'
 import { Button } from '../../../src/design-system/components/button'
 import { SectionIntro } from '../../../src/design-system/components/section-intro'
 import { SegmentedControl } from '../../../src/design-system/components/segmented-control'
-import { cloudPlanStartUrl, startCloudCheckout, type BillingCycle, type CloudPlanKey } from '../lib/billing'
+import { cloudPlanSignInUrl, startCloudCheckout, type BillingCycle, type CloudPlanKey } from '../lib/billing'
+import { DASHBOARD_HREF } from './Hero'
 
 const plans = [
   {
@@ -28,15 +29,28 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
   const [busyPlan, setBusyPlan] = useState<CloudPlanKey | null>(null)
   const [error, setError] = useState('')
   const checkoutRef = useRef(false)
+  const lifetime = useRef(0)
+
+  useEffect(() => {
+    lifetime.current += 1
+    checkoutRef.current = false
+    setBusyPlan(null)
+    setError('')
+    return () => { lifetime.current += 1 }
+  }, [authenticated, accessToken, apiBase])
 
   async function checkout(plan: CloudPlanKey, token: string) {
     if (checkoutRef.current) return
+    const request = lifetime.current
     checkoutRef.current = true
     setBusyPlan(plan)
     setError('')
     try {
-      window.location.assign(await startCloudCheckout(apiBase, token, plan, cycle))
+      const destination = await startCloudCheckout(apiBase, token, plan, cycle)
+      if (request !== lifetime.current) return
+      window.location.assign(destination)
     } catch (reason) {
+      if (request !== lifetime.current) return
       setError(reason instanceof Error ? reason.message : 'Cloud checkout is temporarily unavailable')
       setBusyPlan(null)
       checkoutRef.current = false
@@ -84,7 +98,7 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
                       {busyPlan === plan.key ? 'Opening secure checkout…' : 'Start 14-day trial'}
                     </Button>
                   ) : (
-                    <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
+                    <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanSignInUrl(import.meta.env.SSR ? '/dashboard' : DASHBOARD_HREF, plan.key)}>Start 14-day trial</a>
                   )}
                 </div>
               </article>

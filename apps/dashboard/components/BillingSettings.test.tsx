@@ -260,20 +260,27 @@ it('renders unlimited usage, catalog fallbacks, and manual refresh', async () =>
   fireEvent.click(screen.getByRole('button', { name: 'Refresh status' }))
   expect(await screen.findByRole('heading', { name: 'Confirming checkout' })).toBeInTheDocument()
 })
-it('explains included legacy Pro and offers Studio without selling Pro again',async()=>{
- fetchMock.mockResolvedValue(response({...summary,entitlements:{...summary.entitlements,isLegacy:true,plan:'pro',status:'legacy',canWrite:true}}))
- render(<BillingSettings {...props}/>);await screen.findByText('Legacy user · Cloud Pro included')
- expect(screen.getByText(/at no charge for now/)).toBeInTheDocument()
- expect(screen.getByRole('button',{name:'Included for legacy users'})).toBeDisabled()
- expect(screen.getByText('Included')).toBeInTheDocument();expect(screen.queryByText('$19')).toBeNull()
- fetchMock.mockResolvedValueOnce(response({url:'https://checkout.stripe.com/studio'}))
- fireEvent.click(screen.getByRole('button',{name:'Start Cloud Studio trial'}))
- await waitFor(()=>expect(window.location.assign).toHaveBeenCalled())
- expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({action:'checkout',plan:'studio'})
+
+it.each(['pro', 'studio'] as const)('lets a canceled customer restart the same %s plan', async (plan) => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan, lifecycle: 'none', canManageSubscription: true }))
+  render(<BillingSettings {...props} />)
+  const start = await screen.findByRole('button', { name: 'Start 14-day trial' })
+  expect(start).toBeEnabled()
+  fireEvent.click(start)
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', plan, undefined))
 })
-it('keeps legacy Pro included during Studio and explains cancellation fallback',async()=>{
- fetchMock.mockResolvedValue(response({...summary,canManage:true,cancelAtPeriodEnd:true,periodEnd:'2026-11-01',entitlements:{...summary.entitlements,isLegacy:true,plan:'studio',status:'active',canWrite:true}}))
- render(<BillingSettings {...props}/>);await screen.findByText(/After cancellation, you return to your included Cloud Pro access/)
- expect(screen.getByRole('button',{name:'Included for legacy users'})).toBeDisabled()
- expect(screen.getByRole('button',{name:'Current plan'})).toBeDisabled()
+
+it.each(['active', 'trialing'] as const)('keeps same-plan checkout disabled for %s access', async (lifecycle) => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('button', { name: 'Start 14-day trial' })).toBeDisabled()
+})
+
+it('uses the sign-in plan hint only to preselect a card and requires confirmation', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({ plan: 'pro', lifecycle: 'none' }))
+  render(<BillingSettings {...props} initialPlan="studio" />)
+  expect(await screen.findByRole('button', { name: /Studio/ })).toHaveAttribute('aria-pressed', 'true')
+  expect(runBillingAction).not.toHaveBeenCalled()
+  fireEvent.click(screen.getByRole('button', { name: 'Start 14-day trial' }))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined))
 })

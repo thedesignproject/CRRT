@@ -36,3 +36,9 @@ it('does nothing without a review link', () => {
   renderHook(() => useAccessReviewLink([], false, null, open))
   expect(open).not.toHaveBeenCalled()
 })
+
+it('preserves only allowlisted plan hints through authentication', () => {
+  expect(dashboardAuthSearch('?billingPlan=pro&redirect=https://evil.test')).toBe('?billingPlan=pro')
+  expect(dashboardAuthSearch('?billingPlan=studio')).toBe('?billingPlan=studio')
+  expect(dashboardAuthSearch('?billingPlan=enterprise')).toBe('')
+})

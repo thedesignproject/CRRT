@@ -1,8 +1,8 @@
 export type CloudPlanKey = 'pro' | 'studio'
 export type BillingCycle = 'monthly' | 'yearly'
 
-export function cloudPlanStartUrl(apiBase: string, plan: CloudPlanKey, cycle: BillingCycle = 'monthly') {
-  return `${apiBase.replace(/\/$/, '')}/v1/billing?${new URLSearchParams({ start: plan, cycle })}`
+export function cloudPlanSignInUrl(dashboardBase: string, plan: CloudPlanKey) {
+  return `${dashboardBase.replace(/\/$/, '')}/billing?${new URLSearchParams({ billingPlan: plan })}`
 }
 
 export async function startCloudCheckout(apiBase: string, accessToken: string, plan: CloudPlanKey, cycle: BillingCycle = 'monthly') {
@@ -15,6 +15,6 @@ export async function startCloudCheckout(apiBase: string, accessToken: string, p
   if (!response.ok) throw new Error(typeof body?.error === 'string' ? body.error : 'Cloud checkout is temporarily unavailable')
   if (typeof body?.url !== 'string') throw new Error('Cloud checkout did not return a destination')
   const destination = new URL(body.url)
-  if (destination.protocol !== 'https:' || destination.hostname !== 'checkout.stripe.com') throw new Error('Cloud checkout returned an invalid destination')
+  if (destination.protocol !== 'https:' || !['checkout.stripe.com', 'billing.stripe.com'].includes(destination.hostname)) throw new Error('Cloud checkout returned an invalid destination')
   return destination.href
 }
