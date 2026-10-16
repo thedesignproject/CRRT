@@ -306,6 +306,28 @@ describe('private Storybook comment submission', () => {
       expect.stringMatching(/^member\/storybook\/[0-9a-f-]+\.png$/),
     ])
   })
+  it('logs a screenshot cleanup response error without exposing it', async () => {
+    const { bucket } = db([
+      { data: row, error: null },
+      { data: null, error: { message: 'database error' } },
+    ])
+    bucket.remove.mockResolvedValueOnce({ data: null, error: { message: 'cleanup response secret' } })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await call(comments, {
+      body: {
+        ...body,
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    })
+
+    expect(result.status).toBe(500)
+    expect(log).toHaveBeenCalledWith(
+      '[storybook] screenshot cleanup failed',
+      { message: 'cleanup response secret' },
+    )
+  })
   it.each([
     new Error('cleanup unavailable'),
     'cleanup unavailable',
