@@ -27,6 +27,9 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
+    "storybook": "storybook dev -p 6006 --host 127.0.0.1 --no-open",
+    "build-storybook": "storybook build",
+    "typecheck:storybook": "tsc --project .storybook/tsconfig.json",
     "dev": "vite --config apps/landing/vite.config.ts",
     "dev:landing": "vite --config apps/landing/vite.config.ts",
     "dev:dashboard": "bash -c 'trap \"kill 0\" EXIT INT TERM; bunx vercel dev --listen 3000 & vite --config apps/dashboard/vite.config.ts'",
@@ -85,6 +88,10 @@
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^13.0.0",
+    "@storybook/addon-a11y": "10.6.2",
+    "@storybook/addon-docs": "10.6.2",
+    "@storybook/addon-themes": "10.6.2",
+    "@storybook/react-vite": "10.6.2",
     "@tailwindcss/vite": "^4.2.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
@@ -109,6 +116,7 @@
     "html2canvas-pro": "2.5.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "storybook": "10.6.2",
     "supabase": "^2.109.1",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",

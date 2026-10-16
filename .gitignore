@@ -2,6 +2,7 @@ node_modules/
 .workflow-data/
 dist/
 coverage/
+storybook-static/
 .env
 .env.local
 .env.docker.local

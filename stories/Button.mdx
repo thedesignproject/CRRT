@@ -1,0 +1,170 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks'
+import * as ButtonStories from './Button.stories'
+
+<Meta of={ButtonStories} name="Usage" />
+
+# Button usage
+
+Buttons run an action or move the user somewhere. This page covers when to use
+each variant, the rules that keep a screen readable, and the mistakes to avoid.
+The **Docs** page has the full prop table and every story.
+
+Design source: [CRRT – Design System › Button](https://www.figma.com/design/XhbjDqvQOTiVzWk5vAsJdF/CRRT---Design-System?node-id=5011-47001)
+· Code: `apps/dashboard/components/Button.tsx`
+
+## Rules
+
+1. **One Primary per section or dialog.** A Primary marks the main action. Two
+   of them make the user stop and compare.
+2. **Never place two Primary buttons next to each other.** Make the other one
+   Secondary.
+3. **Destructive takes the Primary's place.** A delete dialog has Cancel and
+   Destructive, not Cancel, Primary, and Destructive.
+4. **Every button has a visible label.** Icons support the label; for
+   icon-only actions use Icon Button.
+5. **There is no loading state.** Don't add spinners inside Button.
+
+## Choosing a variant
+
+<table>
+  <thead>
+    <tr><th>Variant</th><th>Use it for</th><th>Example</th></tr>
+  </thead>
+  <tbody>
+    <tr><td><code>primary</code></td><td>The main action in a section or dialog</td><td>Create project</td></tr>
+    <tr><td><code>secondary</code></td><td>Supporting actions, and Cancel in dialog footers</td><td>Copy key, Cancel</td></tr>
+    <tr><td><code>ghost</code></td><td>Low-emphasis actions with no fill until hovered</td><td>Cancel</td></tr>
+    <tr><td><code>destructive</code></td><td>Irreversible or data-removing actions</td><td>Delete, Disconnect, Remove</td></tr>
+    <tr><td><code>link</code></td><td>Text-only actions with no padding</td><td>View in dashboard</td></tr>
+  </tbody>
+</table>
+
+<Canvas of={ButtonStories.DialogFooter} />
+<Canvas of={ButtonStories.DestructiveDialogFooter} />
+
+## Sizes
+
+`sm` (28px) is the default. Dialog footers use `md` (32px). Both use 12px
+text. `link` has no padding and looks the same at either size.
+
+<Canvas of={ButtonStories.Sizes} />
+
+## Action or navigation
+
+The variant only sets the look. The element comes from `href`:
+
+- **No `href`** renders `<button type="button">`. Use it for actions: save,
+  copy, delete, open a dialog.
+- **With `href`** renders `<a>`. Use it when the browser should go somewhere,
+  so middle-click, "open in new tab", and the status bar URL all work.
+
+In the dashboard, build paths with `route()` so they include the `/dashboard/`
+base path.
+
+<Source
+  language="tsx"
+  code={`import { route } from '../lib/routes'
+
+<Button variant="secondary" onClick={refresh}>Refresh</Button>
+<Button variant="secondary" href={route('/settings')}>Open settings</Button>`}
+/>
+
+## States
+
+<table>
+  <thead>
+    <tr><th>State</th><th>What changes</th><th>Trigger</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>Hover</td><td>Primary and Destructive drop to 90% opacity. Secondary and Ghost get the accent fill (Ghost text darkens). Link underlines.</td><td>Pointer over</td></tr>
+    <tr><td>Pressed</td><td>Hover colors, and the button shrinks to 96% for 80ms. No shrink with reduced motion.</td><td>Pointer down, or Space held</td></tr>
+    <tr><td>Focus</td><td>2px ring in <code>--ring</code>, 2px outside the button</td><td>Keyboard focus only</td></tr>
+    <tr><td>Disabled</td><td>50% opacity, no clicks. A disabled link loses its <code>href</code>.</td><td><code>disabled</code></td></tr>
+  </tbody>
+</table>
+
+<Canvas of={ButtonStories.Disabled} />
+
+## Common mistakes
+
+### Two Primary buttons side by side
+
+**Why it's wrong:** Both actions claim to be the main one, so neither stands
+out. **Instead:** Keep one Primary and make the other Secondary.
+
+**❌ Don't**
+
+<Canvas of={ButtonStories.DontTwoPrimaries} sourceState="none" />
+**✅ Do**
+
+<Canvas of={ButtonStories.DoPrimaryWithSecondary} sourceState="none" />
+
+### Primary for a delete
+
+**Why it's wrong:** Primary reads as "safe, go ahead". A delete needs to look
+different from a normal confirm. **Instead:** Use `variant="destructive"`.
+
+**❌ Don't**
+
+<Canvas of={ButtonStories.DontPrimaryForDelete} sourceState="none" />
+**✅ Do**
+
+<Canvas of={ButtonStories.DestructiveDialogFooter} sourceState="none" />
+
+### Icon-only Button
+
+**Why it's wrong:** Button is built around a visible label. With no label its
+padding is off and the meaning depends on the icon alone. **Instead:** Use Icon
+Button (Figma: Atoms › Icon Button) with an `aria-label`.
+
+**❌ Don't**
+
+<Canvas of={ButtonStories.DontIconOnly} sourceState="none" />
+
+### Navigating from `onClick`
+
+**Why it's wrong:** A `<button>` that changes `window.location` can't be opened
+in a new tab or copied as a link, and screen readers announce it as a button.
+**Instead:** Pass `href`.
+
+<Source
+  language="tsx"
+  code={`// Don't
+<Button onClick={() => { window.location.href = '/dashboard/settings' }}>Open settings</Button>
+
+// Do
+<Button href={route('/settings')}>Open settings</Button>`}
+/>
+
+### Hardcoded dashboard paths
+
+**Why it's wrong:** The dashboard runs under `/dashboard/`, so `href="/settings"`
+breaks in production. **Instead:** Use `route('/settings')`.
+
+### Using Button for inbox triage
+
+**Why it's wrong:** Accept, Done, and Reject have their own tones and an Active
+state that Button doesn't have. **Instead:** Use Action Button (`ActionBtn` in
+`apps/dashboard/components/primitives.tsx`).
+
+### Copying the classes instead of using the component
+
+**Why it's wrong:** Inline `bg-primary text-primary-foreground …` copies drift
+from Figma (the dashboard already has four corner radii and four disabled
+opacities). **Instead:** Render `<Button>`. If markup can't go through the
+component, use `buttonClassName({ variant, size })`.
+
+## Accessibility
+
+- Enter and Space activate a button; Enter follows a link.
+- Focus shows only for keyboard users (`:focus-visible`).
+- Icons are hidden from screen readers. The label must say what happens.
+- `type` defaults to `"button"`, so a Button inside a form won't submit unless
+  you pass `type="submit"`.
+
+## Known issue
+
+Destructive uses `--destructive` (deep carrot, `#B85F1F`). In light mode it is
+close to Primary orange, and white text on it measures 4.47:1, just under the
+4.5:1 WCAG AA minimum for 12px text. This is accepted for now; changing the
+token updates every Destructive button.

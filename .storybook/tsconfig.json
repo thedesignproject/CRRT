@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.check.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"]
+  },
+  "include": ["./*.ts", "./*.tsx", "../stories/**/*.ts", "../stories/**/*.tsx"]
+}
