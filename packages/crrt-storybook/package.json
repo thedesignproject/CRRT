@@ -24,7 +24,7 @@
   "homepage": "https://crrt.ai",
   "type": "module",
   "bin": {
-    "crrt-storybook": "./dist/cli.js"
+    "crrt-storybook": "dist/cli.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
