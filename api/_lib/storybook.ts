@@ -47,7 +47,11 @@ function databaseError(error: { message: string } | null) {
   throw new Error(error.message)
 }
 function deployment() {
-  const origin = widgetOrigin(process.env.APP_URL)
+  const configured = process.env.APP_URL?.trim()
+  let url: URL | null = null
+  try { url = configured ? new URL(configured) : null } catch { url = null }
+  const rootOnly = !!url && url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
+  const origin = rootOnly && url ? widgetOrigin(url.origin) : null
   if (!origin) throw new Error('APP_URL must be a trusted HTTP localhost or HTTPS origin')
   return { apiBase: `${origin}/api`, dashboardUrl: origin }
 }
@@ -265,6 +269,10 @@ export function storybookHandler(operation: keyof typeof operations) {
       if (plan) return res.status(plan.resource === 'subscription' ? 402 : 409).json({ ...plan, message: PLAN_MESSAGES[plan.resource] })
       if (error instanceof StorybookError) return res.status(error.status).json({ state: error.code, code: error.code, message: error.message })
       if (error instanceof WidgetSessionError) return res.status(error.status).json({ code: 'access_denied', message: error.message })
+      console.error('[Storybook API] Unexpected failure', {
+        operation,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { name: typeof error },
+      })
       return res.status(500).json({ code: 'error', message: 'Storybook is temporarily unavailable' })
     }
   }

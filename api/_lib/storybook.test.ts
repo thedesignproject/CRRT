@@ -90,10 +90,20 @@ describe('Storybook route and CORS boundary', () => {
     expect(result.res.setHeader).not.toHaveBeenCalledWith('Access-Control-Allow-Origin', '*')
   })
   it('sanitizes unexpected failures and maps widget errors', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     vi.mocked(getProjectMember).mockRejectedValue(new Error('private database secret'))
     expect((await call(create, { body: { projectKey: 'p' } })).data).toEqual({ code: 'error', message: 'Storybook is temporarily unavailable' })
+    expect(log).toHaveBeenCalledWith('[Storybook API] Unexpected failure', {
+      operation: 'create', error: { name: 'Error', message: 'private database secret' },
+    })
+    vi.mocked(getProjectMember).mockRejectedValue('private non-error value')
+    expect((await call(create, { body: { projectKey: 'p' } })).data).toEqual({ code: 'error', message: 'Storybook is temporarily unavailable' })
+    expect(log).toHaveBeenLastCalledWith('[Storybook API] Unexpected failure', {
+      operation: 'create', error: { name: 'string' },
+    })
     db(); vi.mocked(requireWidgetSession).mockRejectedValue(new WidgetSessionError(403, 'Origin denied'))
     expect((await call(eligibility, { method: 'GET' })).data).toEqual({ code: 'access_denied', message: 'Origin denied' })
+    log.mockRestore()
   })
 })
 describe('pairing and connection lifecycle', () => {
@@ -119,6 +129,13 @@ describe('pairing and connection lifecycle', () => {
     const result = await call(claim, { body: { code: proof, ...client }, headers: {} })
     expect(result.data).toEqual({ connectionId, projectKey: 'project', apiBase: 'https://crrt.test/api', dashboardUrl: 'https://crrt.test' })
     expect(database.rpc).toHaveBeenCalledWith('claim_storybook_pairing', { p_hash: hashProof(proof), p_client: client })
+  })
+  it('normalizes a root-only APP_URL with a trailing slash before claim', async () => {
+    vi.stubEnv('APP_URL', 'https://crrt.test/')
+    const { database } = db([{ data: row, error: null }, { data: row, error: null }])
+    const result = await call(claim, { body: { code: proof, ...client }, headers: {} })
+    expect(result.data).toEqual({ connectionId, projectKey: 'project', apiBase: 'https://crrt.test/api', dashboardUrl: 'https://crrt.test' })
+    expect(database.rpc).toHaveBeenCalledOnce()
   })
   it('requires configured trusted deployment URLs before claim', async () => {
     for (const url of ['', 'http://unsafe.test', 'https://crrt.test/path']) {
