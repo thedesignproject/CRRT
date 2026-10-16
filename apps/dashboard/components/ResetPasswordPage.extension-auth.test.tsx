@@ -19,7 +19,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 
 describe('password recovery continuation', () => {
-  it.each(['', '?accessProject=project%2Fone'])('finishes recovery through the safe destination resolver %s', async search => {
+  it.each(['', '?accessProject=project%2Fone', '?billingPlan=studio', '?billingState=payload.signature'])('finishes recovery through the safe destination resolver %s', async search => {
     window.history.replaceState({}, '', '/reset-password' + search)
     render(<ResetPasswordPage />)
     const password = screen.getByLabelText('new password')

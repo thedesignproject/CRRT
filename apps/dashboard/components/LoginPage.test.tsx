@@ -96,6 +96,18 @@ describe('LoginPage invitation continuation', () => {
     }))
   })
 
+  it.each(['billingPlan=studio', 'billingState=payload.signature'])('preserves %s through password recovery without an arbitrary redirect', async (selection) => {
+    window.history.replaceState({}, '', '/billing?' + selection + '&redirect=https://evil.test')
+    resetPasswordForEmail.mockResolvedValue({ error: null })
+    render(<LoginPage />)
+    fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
+    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+    fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
+    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('buyer@example.com', {
+      redirectTo: 'http://localhost:3000/reset-password?' + selection,
+    }))
+  })
+
   it('shows specific and fallback magic-link failures', async () => {
     window.history.replaceState({}, '', '/login')
     signInWithOtp.mockResolvedValueOnce({ error: new Error('email unavailable') })

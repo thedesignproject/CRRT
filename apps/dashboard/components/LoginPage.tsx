@@ -102,10 +102,8 @@ export function LoginPage({
           setSignupSent(true)
         }
       } else {
-        const resetUrl = new URL(`${window.location.origin}${route('/reset-password')}`)
+        const resetUrl = new URL(`${window.location.origin}${route('/reset-password')}${dashboardAuthSearch(window.location.search)}`)
         if (continuationPath) resetUrl.searchParams.set('continue', continuationPath)
-        const accessProject = new URLSearchParams(window.location.search).get('accessProject')
-        if (accessProject) resetUrl.searchParams.set('accessProject', accessProject)
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: resetUrl.href,
         })
