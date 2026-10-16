@@ -1,6 +1,6 @@
 {
   "name": "@thedesignproject/crrt-storybook",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "CRRT 🥕 inside Storybook — a panel that shows the rules governing a component and sends stakeholder feedback to CRRT.",
   "keywords": [
     "storybook-addon",
@@ -58,6 +58,9 @@
   },
   "peerDependencies": {
     "storybook": "^10.0.0"
+  },
+  "dependencies": {
+    "html2canvas-pro": "2.5.2"
   },
   "devDependencies": {
     "@storybook/react-vite": "^10.4.6",

@@ -1,5 +1,6 @@
 import { getScopedToken, clearScopedSession } from "./auth";
 import { DEFAULT_API_BASE } from "./constants";
+import type { StoryScreenshot } from "./screenshot";
 import type { StoryContext } from "./types";
 
 export interface SendFeedbackInput {
@@ -10,6 +11,7 @@ export interface SendFeedbackInput {
   /** The stakeholder's feedback text. */
   body: string;
   authorName?: string;
+  screenshot?: StoryScreenshot;
   story: StoryContext;
 }
 
@@ -79,6 +81,10 @@ export async function sendFeedback(
   const authorName = input.authorName?.trim();
   if (authorName) {
     payload.authorName = authorName.slice(0, 80);
+  }
+  if (input.screenshot) {
+    payload.imageBase64 = input.screenshot.base64;
+    payload.imageMimeType = input.screenshot.mimeType;
   }
 
   try {

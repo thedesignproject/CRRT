@@ -1,6 +1,7 @@
 import { dashboardHome } from "../auth";
 import React, { useEffect, useState } from "react";
 import { sendFeedback } from "../api";
+import { captureStoryScreenshot } from "../screenshot";
 import {
   AUTHOR_STORAGE_KEY,
   CRRT_ORANGE,
@@ -21,6 +22,7 @@ interface FeedbackSectionProps {
 
 type SendState =
   | { kind: "idle" }
+  | { kind: "capturing" }
   | { kind: "sending" }
   | { kind: "sent" }
   | { kind: "error"; message: string };
@@ -71,24 +73,39 @@ export const FeedbackSection = ({
   }
 
   const send = async () => {
-    if (!text.trim() || state.kind === "sending") return;
-    setState({ kind: "sending" });
-    window.localStorage.setItem(AUTHOR_STORAGE_KEY, author.trim());
-    const result = await sendFeedback({
-      projectId,
-      connectionId,
-      apiBase,
-      body: text,
-      authorName: author,
-      story,
-    });
-    if (result.ok) {
-      setText("");
-      setState({ kind: "sent" });
-    } else {
-      setState({ kind: "error", message: result.error });
+    if (!text.trim() || state.kind === "capturing" || state.kind === "sending") return;
+    try {
+      setState({ kind: "capturing" });
+      const screenshot = await captureStoryScreenshot();
+      setState({ kind: "sending" });
+      window.localStorage.setItem(AUTHOR_STORAGE_KEY, author.trim());
+      const result = await sendFeedback({
+        projectId,
+        connectionId,
+        apiBase,
+        body: text,
+        authorName: author,
+        screenshot,
+        story,
+      });
+      if (result.ok) {
+        setText("");
+        setState({ kind: "sent" });
+      } else {
+        setState({ kind: "error", message: result.error });
+      }
+    } catch (error) {
+      setState({
+        kind: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "The story screenshot could not be captured",
+      });
     }
   };
+
+  const busy = state.kind === "capturing" || state.kind === "sending";
 
   return (
     <section>
@@ -121,24 +138,35 @@ export const FeedbackSection = ({
             aria-label="Feedback for this component"
             style={styles.textarea}
           />
-          <div style={styles.row}>
-            {!connectionId && <input
-              value={author}
-              onChange={(e) => setAuthor(e.target.value)}
-              placeholder="Your name (optional)"
-              aria-label="Your name (optional)"
-              maxLength={80}
-              style={styles.name}
-            />}
+          <div style={styles.footer}>
+            {!connectionId ? (
+              <label style={styles.authorField}>
+                <span style={styles.authorLabel}>Posting as</span>
+                <input
+                  value={author}
+                  onChange={(e) => setAuthor(e.target.value)}
+                  placeholder="Your name"
+                  aria-label="Your name (optional)"
+                  maxLength={80}
+                  style={styles.name}
+                />
+              </label>
+            ) : (
+              <span style={styles.captureNote}>Includes a story screenshot</span>
+            )}
             <button
               onClick={send}
-              disabled={!text.trim() || state.kind === "sending"}
+              disabled={!text.trim() || busy}
               style={{
                 ...styles.send,
-                opacity: !text.trim() || state.kind === "sending" ? 0.6 : 1,
+                opacity: !text.trim() || busy ? 0.6 : 1,
               }}
             >
-              {state.kind === "sending" ? "Sending…" : "Send to CRRT"}
+              {state.kind === "capturing"
+                ? "Capturing…"
+                : state.kind === "sending"
+                  ? "Sending…"
+                  : "Send to CRRT"}
             </button>
           </div>
           {state.kind === "error" && (
@@ -180,10 +208,28 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     color: "inherit",
   },
-  row: { display: "flex", gap: 8, marginTop: 8, alignItems: "center" },
-  name: {
-    flex: 1,
+  footer: {
+    display: "flex",
+    gap: 12,
+    marginTop: 8,
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+  },
+  authorField: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
     minWidth: 0,
+  },
+  authorLabel: {
+    fontSize: 11,
+    opacity: 0.58,
+    whiteSpace: "nowrap",
+  },
+  name: {
+    width: 180,
+    maxWidth: "42vw",
     padding: "6px 8px",
     borderRadius: 6,
     border: "1px solid rgba(0,0,0,0.15)",
@@ -192,6 +238,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: "transparent",
     color: "inherit",
   },
+  captureNote: { fontSize: 11, opacity: 0.58 },
   send: {
     padding: "6px 14px",
     borderRadius: 6,
