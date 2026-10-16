@@ -92,4 +92,42 @@ integration('annual subscriptions with monthly usage windows', () => {
       expect(row.allowed).toBe(false)
     }
   })
+
+  it('preserves legacy Pro access and paid annual Studio windows after migration 0043', async () => {
+    const owner = randomUUID()
+    try {
+      await sql!.begin(async tx => {
+        await tx`update cloud_plan_settings set enabled=false`
+        await tx`insert into auth.users(id,email) values(${owner},${owner+'@test.local'})`
+        await tx`insert into billing_accounts(user_id,is_legacy) values(${owner},true)`
+        await tx`update cloud_plan_settings set enabled=true`
+        const summary = async () => (await tx`select cloud_entitlements(${owner}) as value`)[0].value
+        expect(await summary()).toMatchObject({ isLegacy: true, plan: 'pro', status: 'legacy', canWrite: true })
+        const comment = randomUUID()
+        await tx`select cloud_charge(${owner},'comments',${comment})`
+        await tx`select cloud_charge(${owner},'comments',${comment})`
+        await tx`select cloud_charge(${owner},'product_audits',${randomUUID()})`
+        expect(await summary()).toMatchObject({ usage: { comments: 1, product_audits: 1 }, limits: { comments: 2000, product_audits: 5 } })
+
+        await tx`update billing_accounts set plan='studio',subscription_status='active',
+          period_start=date_trunc('second',now())-interval '6 months',
+          period_end=date_trunc('second',now())+interval '6 months' where user_id=${owner}`
+        const [window] = await tx`select w.* from cloud_effective_account(${owner}) b cross join lateral cloud_usage_window(b.period_start,b.period_end) w`
+        await tx`select cloud_charge(${owner},'comments',${randomUUID()})`
+        const paid = await summary()
+        expect(paid).toMatchObject({ isLegacy: true, plan: 'studio', status: 'active', canWrite: true, usage: { comments: 1, product_audits: 0 }, limits: { comments: 10000, product_audits: 30 } })
+        expect(new Date(paid.resetAt).toISOString()).toBe(window.window_end.toISOString())
+
+        await tx`update billing_accounts set subscription_status='canceled',period_end=now()-interval '1 day' where user_id=${owner}`
+        expect(await summary()).toMatchObject({ isLegacy: true, plan: 'pro', status: 'legacy', canWrite: true, usage: { comments: 1, product_audits: 1 } })
+        await tx`insert into cloud_usage(resource_id,resource,owner_id,window_start,window_end)
+          select gen_random_uuid(),'comments',${owner},period_start,period_end
+          from cloud_effective_account(${owner}),generate_series(1,1999)`
+        await expect(tx.savepoint(sp => sp`select cloud_charge(${owner},'comments',${randomUUID()})`)).rejects.toThrow('cloud_plan_limit')
+        throw new Error('rollback legacy annual fixtures')
+      })
+    } catch (error) {
+      if ((error as Error).message !== 'rollback legacy annual fixtures') throw error
+    }
+  })
 })
