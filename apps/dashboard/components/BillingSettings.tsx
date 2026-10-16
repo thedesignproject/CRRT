@@ -18,6 +18,8 @@ function date(value: string | null | undefined) {
 
 function lifecycleCopy(summary: BillingSummary) {
   const lifecycle = summary.lifecycle ?? summary.status ?? 'none'
+  if (summary.isLegacy && summary.plan === 'pro') return { label: 'Cloud Pro included', detail: 'Your early-user Pro access is included at no charge. Upgrade to Studio whenever you need more capacity.' }
+  if (summary.isLegacy && summary.plan === 'studio' && summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Studio ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. Your included Pro access continues.` }
   if (lifecycle === 'checkout_pending') return { label: 'Confirming checkout', detail: 'Complete Checkout, then check your status here.' }
   if (lifecycle === 'trialing') return { label: 'Trial active', detail: summary.trialEndsAt ? `Trial ends ${date(summary.trialEndsAt)}.` : 'Your 14-day trial is active.' }
   if (lifecycle === 'active') return { label: 'Cloud active', detail: summary.cancelAtPeriodEnd ? `Access ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.` : `Renews ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.` }
@@ -49,10 +51,11 @@ function UsageMeter({ label, item }: { label: string; item: BillingUsageItem }) 
   )
 }
 
-function PlanOption({ plan, price, current, scheduled, selected, disabled, onSelect }: {
+function PlanOption({ plan, price, current, included, scheduled, selected, disabled, onSelect }: {
   plan: BillingPlan
   price?: { amount: string; interval: string }
   current: boolean
+  included: boolean
   scheduled: boolean
   selected: boolean
   disabled: boolean
@@ -71,9 +74,9 @@ function PlanOption({ plan, price, current, scheduled, selected, disabled, onSel
     >
       <span className="flex w-full items-start justify-between gap-4">
         <span className="text-lg font-semibold">{plan.name}</span>
-        {current ? <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">Current</span> : scheduled ? <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">Scheduled</span> : null}
+        {included ? <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">Included</span> : current ? <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">Current</span> : scheduled ? <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground">Scheduled</span> : null}
       </span>
-      <span className="mt-3"><span className="text-2xl font-semibold tracking-tight">{price?.amount ?? `$${plan.monthlyPriceUsd}`}</span><span className="text-xs text-muted-foreground"> / {price?.interval ?? 'month'}</span></span>
+      <span className="mt-3"><span className="text-2xl font-semibold tracking-tight">{included ? 'Included' : price?.amount ?? `$${plan.monthlyPriceUsd}`}</span>{included ? null : <span className="text-xs text-muted-foreground"> / {price?.interval ?? 'month'}</span>}</span>
       <span className="mt-4 text-xs leading-5 text-muted-foreground">
         {plan.key === 'pro' ? 'Private projects · Storybook · Agent workflow' : 'Everything in Pro · higher capacity'}
       </span>
@@ -163,14 +166,17 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
   const hasWriteAccess = lifecycle === 'trialing' || lifecycle === 'active'
   const paymentBlocked = lifecycle === 'past_due_grace' || lifecycle === 'read_only'
   const changingPlan = hasWriteAccess && summary.plan !== selectedPlan
+  const legacyStudioUpgrade = Boolean(summary.isLegacy && summary.plan === 'pro' && selectedPlan === 'studio')
   const canChangePlan = summary.actions?.changePlan !== false
   const selectedPlanName: Record<BillingPlanKey, string> = { pro: 'Pro', studio: 'Studio' }
-  const actionLabel = paymentBlocked && hasCustomer
+  const actionLabel = legacyStudioUpgrade
+    ? 'Upgrade to Studio'
+    : paymentBlocked && hasCustomer
     ? (summary.cancelAtPeriodEnd ? 'Reactivate in Stripe' : 'Restore access')
     : changingPlan
       ? canChangePlan ? `Switch to ${selectedPlanName[selectedPlan]}` : 'Manage plan in Stripe'
       : 'Start 14-day trial'
-  const mainAction: BillingAction = paymentBlocked && hasCustomer ? 'portal' : changingPlan && canChangePlan ? 'change_plan' : changingPlan ? 'portal' : 'checkout'
+  const mainAction: BillingAction = legacyStudioUpgrade ? 'checkout' : paymentBlocked && hasCustomer ? 'portal' : changingPlan && canChangePlan ? 'change_plan' : changingPlan ? 'portal' : 'checkout'
 
   return (
     <section className="mt-10 space-y-8" aria-labelledby="account-status-heading">
@@ -206,9 +212,9 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
             {summary.scheduledPlan ? <p className="text-xs text-muted-foreground">{summary.scheduledPlan} scheduled for {date(summary.scheduledPlanAt)}</p> : null}
           </div>
           <div className="mt-5 grid gap-4 md:grid-cols-2">
-            {cloudPlans.map((plan) => <PlanOption key={plan.key} plan={plan} price={summary.planPrices?.[plan.key]} current={summary.plan === plan.key} scheduled={summary.scheduledPlan === plan.key} selected={selectedPlan === plan.key} disabled={blocked} onSelect={() => setSelectedPlan(plan.key)} />)}
+            {cloudPlans.map((plan) => <PlanOption key={plan.key} plan={plan} price={summary.planPrices?.[plan.key]} current={summary.plan === plan.key} included={Boolean(summary.isLegacy && plan.key === 'pro')} scheduled={summary.scheduledPlan === plan.key} selected={selectedPlan === plan.key} disabled={blocked || Boolean(summary.isLegacy && plan.key === 'pro')} onSelect={() => setSelectedPlan(plan.key)} />)}
           </div>
-          {summary.cancelAtPeriodEnd ? <p role="status" className="mt-5 rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">Cancellation is scheduled. Your data stays available; use Manage billing to reactivate before {date(summary.currentPeriodEnd ?? summary.periodEnd)}.</p> : null}
+          {summary.cancelAtPeriodEnd ? <p role="status" className="mt-5 rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">Cancellation is scheduled. {summary.isLegacy ? 'After cancellation, you return to your included Cloud Pro access.' : `Your data stays available; use Manage billing to reactivate before ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.`}</p> : null}
           <div className="mt-6 flex flex-wrap items-center justify-between gap-4 border-t border-border pt-5 text-xs text-muted-foreground">
             <p>Need full control? <a href={landingRoute('/docs/self-host')} className="font-semibold text-foreground underline underline-offset-4">Self-hosted is free.</a></p>
             <button type="button" disabled={busyAction !== null} className="inline-flex items-center gap-2 font-semibold text-foreground disabled:opacity-50" onClick={() => setRefresh((value) => value + 1)}><RefreshCw size={13} />Refresh status</button>

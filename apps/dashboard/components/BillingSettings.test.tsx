@@ -119,6 +119,32 @@ it('uses Stripe Portal for plan changes on the current legacy contract', async (
   expect(assign).toHaveBeenCalledWith('https://billing.stripe.com/p/session')
 })
 
+it('keeps legacy Pro included and starts a Studio checkout', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({
+    isLegacy: true, plan: 'pro', lifecycle: 'active', canManageSubscription: false,
+    actions: { checkoutState: false, changePlan: false },
+  }))
+  vi.mocked(runBillingAction).mockResolvedValueOnce({ url: 'https://checkout.stripe.com/c/studio' })
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByRole('heading', { name: 'Cloud Pro included' })).toBeInTheDocument()
+  expect(screen.getAllByText('Included')).toHaveLength(2)
+  fireEvent.click(screen.getByRole('button', { name: /Studio/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Studio' }))
+  await waitFor(() => expect(runBillingAction).toHaveBeenCalledWith('/api', 'token', 'checkout', 'studio', undefined))
+  expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/studio')
+})
+
+it('explains that legacy Pro continues after Studio cancellation', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValue(summary({
+    isLegacy: true, plan: 'studio', lifecycle: 'active', canManageSubscription: true,
+    cancelAtPeriodEnd: true, currentPeriodEnd: '2026-11-01T00:00:00Z',
+  }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText(/After cancellation, you return to your included Cloud Pro access/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Pro.*Included/ })).toBeDisabled()
+})
+
 it.each([
   ['checkout_pending', 'Confirming checkout'],
   ['trialing', 'Trial active'],

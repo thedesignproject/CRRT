@@ -157,6 +157,7 @@ export interface BillingUsageItem {
 
 export interface BillingSummary {
   enabled: boolean
+  isLegacy?: boolean
   testMode?: boolean
   deployment?: 'cloud' | 'self-hosted'
   plan?: BillingPlanKey | 'community' | null
@@ -327,6 +328,7 @@ type LegacyBillingSummary = {
   periodEnd?: string | null
   plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' }>
   entitlements?: {
+    isLegacy?: boolean
     plan: BillingPlanKey | null
     status: string
     resetAt: string | null
@@ -336,6 +338,7 @@ type LegacyBillingSummary = {
 }
 
 function legacyLifecycle(status: string | undefined, plan: BillingPlanKey | null | undefined): BillingLifecycle {
+  if (status === 'legacy') return 'active'
   if (status === 'active' || status === 'trialing') return status
   if (status === 'past_due') return 'read_only'
   if (plan && status && !['none', 'canceled', 'incomplete_expired'].includes(status)) return 'read_only'
@@ -357,6 +360,7 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
   const priceEntries = legacy.plans?.map((plan) => [plan.id, { amount: plan.amount, interval: plan.interval }] as const)
   return {
     enabled: legacy.enabled,
+    isLegacy: entitlement.isLegacy,
     testMode: legacy.testMode,
     deployment: 'cloud',
     plan: entitlement.plan,

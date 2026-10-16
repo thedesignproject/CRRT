@@ -32,6 +32,7 @@ it('normalizes the current trunk summary without enabling unsupported actions', 
 })
 
 it.each([
+  ['legacy', 'pro', 'active'],
   ['past_due', 'pro', 'read_only'],
   ['paused', 'pro', 'read_only'],
   ['canceled', 'pro', 'none'],
@@ -39,9 +40,9 @@ it.each([
 ] as const)('maps legacy %s lifecycle safely', async (status, plan, lifecycle) => {
   fetchMock.mockResolvedValue(response({
     enabled: true,
-    entitlements: { plan, status, resetAt: null, usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 }, limits: { projects: null, internal_users: null, comments: null, product_audits: null } },
+    entitlements: { isLegacy: status === 'legacy', plan, status, resetAt: null, usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 }, limits: { projects: null, internal_users: null, comments: null, product_audits: null } },
   }))
-  expect(await getBillingSummary('/api', 'token')).toMatchObject({ lifecycle })
+  expect(await getBillingSummary('/api', 'token')).toMatchObject({ lifecycle, isLegacy: status === 'legacy' })
 })
 
 it('posts each closed billing action and keeps the legacy Pro shortcut', async () => {
