@@ -273,3 +273,26 @@ describe('company access review continuation', () => {
     await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('admin@company.com', { redirectTo: 'http://localhost:3000/reset-password?accessProject=p' }))
   })
 })
+
+it.each([
+  '/widget-auth?' + new URLSearchParams({ projectKey: 'p', origin: 'https://site.test', state: 'a'.repeat(43), codeChallenge: 'b'.repeat(43) }),
+  '/extension-auth?' + new URLSearchParams({ state: 'a'.repeat(43), code_challenge: 'b'.repeat(43), redirect_uri: 'https://' + 'a'.repeat(32) + '.chromiumapp.org/crrt-auth' }),
+])('preserves a validated recovery continuation when requesting a fresh link: %s', async continuation => {
+  window.history.replaceState({}, '', '/forgot-password?continue=' + encodeURIComponent(continuation))
+  resetPasswordForEmail.mockResolvedValue({ error: null })
+  render(<LoginPage />)
+  fireEvent.change(screen.getByLabelText('email'), { target: { value: 'test@example.com' } })
+  fireEvent.submit(screen.getByLabelText('email').closest('form')!)
+  await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
+    redirectTo: 'http://localhost:3000/reset-password?continue=' + encodeURIComponent(continuation),
+  }))
+})
+
+it('discards an external continuation when requesting a new reset link', async () => {
+  window.history.replaceState({}, '', '/forgot-password?continue=https://evil.test')
+  resetPasswordForEmail.mockResolvedValue({ error: null })
+  render(<LoginPage />)
+  fireEvent.change(screen.getByLabelText('email'), { target: { value: 'test@example.com' } })
+  fireEvent.submit(screen.getByLabelText('email').closest('form')!)
+  await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', { redirectTo: 'http://localhost:3000/reset-password' }))
+})

@@ -70,6 +70,9 @@ export function App() {
   // render it regardless of session so the user can complete the flow even
   // if their previous session is stale.
   if (pathname === '/reset-password') return <ResetPasswordPage />
+  // Recovery can fail while another session is still signed in. Let the user
+  // request a fresh link without being routed into the dashboard.
+  if (pathname === '/forgot-password') return <LoginPage />
 
   if (authLoading) {
     return (
