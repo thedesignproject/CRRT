@@ -1,6 +1,7 @@
 import { widgetAuthRecoveryDestination } from '../lib/widget-auth'
 import { dashboardAuthSearch } from '../lib/access-review-link'
 import { useEffect, useState } from 'react'
+import { isAuthSessionMissingError } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import { asset, route } from '../lib/routes'
 import { extensionAuthRecoveryDestination } from '../lib/extension-auth'
@@ -14,6 +15,8 @@ import { Spinner } from './primitives'
  * that `updateUser({ password })` is allowed. On success we kick the user
  * back to /login.
  */
+const RECOVERY_ERROR = 'this reset link is invalid or has expired. request a new link to continue.'
+
 export function ResetPasswordPage() {
   const [ready, setReady] = useState(false)
   const [password, setPassword] = useState('')
@@ -22,35 +25,59 @@ export function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  // Wait for Supabase to surface the PASSWORD_RECOVERY event from the URL
-  // hash. If the user lands here without a recovery context (e.g. opens the
-  // link in a different browser), we still let them try — the update call
-  // will just fail and we'll surface the error.
+  const recoveryDestination = extensionAuthRecoveryDestination(window.location.search, window.location.origin)
+    ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin)
+  const recoverySearch = new URLSearchParams(dashboardAuthSearch(window.location.search))
+  if (recoveryDestination) recoverySearch.set('continue', recoveryDestination)
+  const forgotUrl = route('/forgot-password') + (recoverySearch.size ? `?${recoverySearch}` : '')
+  const signInUrl = recoveryDestination ?? (route('/login') + dashboardAuthSearch(window.location.search))
+  const invalidLink = !ready && error !== null
+
   useEffect(() => {
     let cancelled = false
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+    function invalidate() {
       if (cancelled) return
-      if (event === 'PASSWORD_RECOVERY') setReady(true)
+      setReady(false)
+      setError(RECOVERY_ERROR)
+    }
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') invalidate()
     })
-    // Also probe getSession in case the event already fired before we
-    // subscribed (race on first render).
-    supabase.auth.getSession().then(({ data }) => {
-      if (!cancelled && data.session) setReady(true)
-    })
-    // If neither resolves within 600ms, allow the form anyway so the user
-    // gets feedback instead of a stuck loader.
-    const fallback = window.setTimeout(() => {
-      if (!cancelled) setReady(true)
-    }, 600)
+    // Await the client's URL exchange, including errors that getSession alone
+    // cannot expose. An existing session must not mask a failed recovery link.
+    async function checkRecovery() {
+      try {
+        const urlError = new URLSearchParams(window.location.search + '&' + window.location.hash.slice(1))
+        if (['error', 'error_code', 'error_description'].some(key => urlError.has(key))) throw new Error(RECOVERY_ERROR)
+        const { error: initializationError } = await supabase.auth.initialize()
+        if (initializationError) throw initializationError
+        // Successful exchanges remove their URL credentials. Leftover callback
+        // parameters indicate an unsupported or incomplete link, even if a
+        // different account already has a session in this browser.
+        if (new URLSearchParams(window.location.search).has('code') || window.location.hash) throw new Error(RECOVERY_ERROR)
+        const { data, error: sessionError } = await supabase.auth.getSession()
+        if (sessionError) throw sessionError
+        if (!data.session) throw new Error(RECOVERY_ERROR)
+        if (cancelled) return
+        setError(null)
+        setReady(true)
+      } catch {
+        invalidate()
+      }
+    }
+    // Slow or stalled initialization never enables an unauthenticated form.
+    const timeout = window.setTimeout(invalidate, 15000)
+    void checkRecovery().finally(() => window.clearTimeout(timeout))
     return () => {
       cancelled = true
       sub.subscription.unsubscribe()
-      window.clearTimeout(fallback)
+      window.clearTimeout(timeout)
     }
   }, [])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (!ready || busy) return
     setError(null)
     if (password.length < 6) {
       setError('password must be at least 6 characters')
@@ -62,6 +89,12 @@ export function ResetPasswordPage() {
     }
     setBusy(true)
     try {
+      const { data, error: sessionError } = await supabase.auth.getSession()
+      if (sessionError || !data.session) {
+        setReady(false)
+        setError(RECOVERY_ERROR)
+        return
+      }
       const { error: updateError } = await supabase.auth.updateUser({ password })
       if (updateError) throw updateError
       setDone(true)
@@ -72,7 +105,12 @@ export function ResetPasswordPage() {
         window.location.href = extensionAuthRecoveryDestination(window.location.search, window.location.origin) ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin) ?? (route('/login') + dashboardAuthSearch(window.location.search))
       }, 1400)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update password')
+      if (isAuthSessionMissingError(err)) {
+        setReady(false)
+        setError(RECOVERY_ERROR)
+      } else {
+        setError(err instanceof Error ? err.message : 'Could not update password')
+      }
     } finally {
       setBusy(false)
     }
@@ -131,7 +169,7 @@ export function ResetPasswordPage() {
               animation: 'crrt-pulse 2400ms ease-in-out infinite',
             }}
           />
-          secure link
+          {invalidLink ? 'link expired' : 'secure link'}
         </span>
       </div>
 
@@ -170,9 +208,10 @@ export function ResetPasswordPage() {
           textWrap: 'balance',
         }}
       >
-        <span className="crrt-cursor">set a new password</span>
+        <span className="crrt-cursor">{invalidLink ? 'link has expired' : 'set a new password'}</span>
       </h1>
       <p
+        role={invalidLink ? 'alert' : undefined}
         style={{
           margin: 0,
           fontFamily: 'var(--crrt-font-body)',
@@ -185,10 +224,10 @@ export function ResetPasswordPage() {
           textWrap: 'pretty',
         }}
       >
-        choose something you can remember. at least 6 characters.
+        {invalidLink ? 'request a new link to reset your password.' : ready ? 'choose something you can remember. at least 6 characters.' : 'checking your reset link…'}
       </p>
 
-      <form
+      {!invalidLink && (<form
         onSubmit={handleSubmit}
         style={{
           width: '100%',
@@ -211,7 +250,7 @@ export function ResetPasswordPage() {
           placeholder="••••••••"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          disabled={busy}
+          disabled={busy || !ready}
         />
         <FieldLabel htmlFor="reset-confirm">confirm</FieldLabel>
         <AuthInput
@@ -224,7 +263,7 @@ export function ResetPasswordPage() {
           placeholder="••••••••"
           value={confirm}
           onChange={(e) => setConfirm(e.target.value)}
-          disabled={busy}
+          disabled={busy || !ready}
         />
 
         {error && (
@@ -244,20 +283,20 @@ export function ResetPasswordPage() {
 
         <button
           type="submit"
-          disabled={busy}
+          disabled={busy || !ready}
           style={{
             marginTop: 16,
             height: 46,
             padding: '0 20px',
-            background: busy ? 'var(--muted)' : 'var(--crrt-carrot)',
-            color: busy ? 'var(--muted-foreground)' : 'var(--crrt-white)',
+            background: busy || !ready ? 'var(--muted)' : 'var(--crrt-carrot)',
+            color: busy || !ready ? 'var(--muted-foreground)' : 'var(--crrt-white)',
             border: 'none',
             borderRadius: 999,
             fontFamily: 'var(--crrt-font-mono)',
             fontSize: 15,
             fontWeight: 700,
             letterSpacing: '0.02em',
-            cursor: busy ? 'not-allowed' : 'pointer',
+            cursor: busy || !ready ? 'not-allowed' : 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -277,14 +316,42 @@ export function ResetPasswordPage() {
             <>▸ update password</>
           )}
         </button>
-      </form>
+      </form>)}
 
-      <p style={{ marginTop: 28, fontFamily: 'var(--crrt-font-body)', fontSize: 14, color: 'var(--muted-foreground)' }}>
-        remembered it?{' '}
-        <a href={route('/login')} style={{ color: 'var(--crrt-carrot)', textDecoration: 'none' }}>
-          back to sign in →
-        </a>
-      </p>
+      {invalidLink ? (
+        <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 'var(--crrt-space-4)' }}>
+          <a
+            href={forgotUrl}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 'var(--crrt-space-4) var(--crrt-space-6)',
+              borderRadius: 'var(--crrt-radius-pill)',
+              background: 'var(--crrt-carrot)', color: 'var(--crrt-white)',
+              fontFamily: 'var(--crrt-font-body)', fontSize: 15, fontWeight: 700, textDecoration: 'none',
+            }}
+          >
+            request a new link →
+          </a>
+          <a
+            href={signInUrl}
+            style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              padding: 'var(--crrt-space-4) var(--crrt-space-6)',
+              borderRadius: 'var(--crrt-radius-pill)', border: '1px solid var(--border)',
+              color: 'var(--foreground)', fontFamily: 'var(--crrt-font-body)', fontSize: 15, textDecoration: 'none',
+            }}
+          >
+            back to sign in
+          </a>
+        </div>
+      ) : (
+        <p style={{ marginTop: 28, fontFamily: 'var(--crrt-font-body)', fontSize: 14, color: 'var(--muted-foreground)' }}>
+          remembered it?{' '}
+          <a href={signInUrl} style={{ color: 'var(--crrt-carrot)', textDecoration: 'none' }}>
+            back to sign in →
+          </a>
+        </p>
+      )}
     </div>
   )
 }

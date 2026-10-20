@@ -34,3 +34,11 @@ it.each([null, { access_token: 'access' }])('routes widget auth before dashboard
   render(<App />)
   expect(screen.getByText(`widget auth ${session?.access_token ?? 'anonymous'}`)).toBeInTheDocument()
 })
+
+it.each([false, true])('keeps fresh reset requests accessible with an existing session (loading=%s)', loading => {
+  auth.session = { access_token: 'access' }; auth.user = { id: 'user' }; auth.loading = loading
+  window.history.replaceState({}, '', '/forgot-password')
+  render(<App />)
+  expect(screen.getByRole('heading', { name: /reset your password/ })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /send reset link/ })).toBeEnabled()
+})

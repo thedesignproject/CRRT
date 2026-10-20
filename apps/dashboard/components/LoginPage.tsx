@@ -1,3 +1,5 @@
+import { extensionAuthRecoveryDestination } from '../lib/extension-auth'
+import { widgetAuthRecoveryDestination } from '../lib/widget-auth'
 import { dashboardAuthSearch } from '../lib/access-review-link'
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
@@ -16,11 +18,14 @@ type AuthPath = '/login' | '/signup' | '/forgot-password' | '/'
 
 export function LoginPage({
   initialMode,
-  continuationPath,
+  continuationPath: suppliedContinuationPath,
 }: {
   initialMode?: Extract<Mode, 'signin' | 'signup'>
   continuationPath?: string
 } = {}) {
+  const continuationPath = suppliedContinuationPath ?? (typeof window === 'undefined' ? undefined
+    : extensionAuthRecoveryDestination(window.location.search, window.location.origin)
+      ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin) ?? undefined)
   const [mode, setMode] = useState<Mode>(() =>
     initialMode ?? (typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname))),
   )
@@ -65,6 +70,7 @@ export function LoginPage({
     }
     if (relPath(window.location.pathname) === path) return
     window.history.pushState({}, '', route(path) + dashboardAuthSearch(window.location.search))
+    window.dispatchEvent(new PopStateEvent('popstate'))
     setMode(modeFromPath(path))
     setError(null)
     setSignupSent(false)
@@ -82,6 +88,7 @@ export function LoginPage({
         const { error: signinError } = await supabase.auth.signInWithPassword({ email, password })
         if (signinError) throw signinError
         window.history.pushState({}, '', continuationUrl())
+        window.dispatchEvent(new PopStateEvent('popstate'))
       } else if (mode === 'signup') {
         const { data, error: signupError } = await supabase.auth.signUp({
           email,
