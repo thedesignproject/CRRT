@@ -22,6 +22,10 @@ const feedbackInput = z.object({
   projectKey: z.string().min(1).max(200), pageUrl: z.url().max(2048),
   selector: z.string().regex(/^storybook:\/\/[A-Za-z0-9_-]+$/).max(1000),
   x: z.number().finite(), y: z.number().finite(), body: z.string().trim().min(1).max(8000),
+  imageBase64: z.string().max(7_000_000).optional(),
+  imageMimeType: z.enum(['image/png', 'image/jpeg', 'image/webp']).optional(),
+}).refine((value) => Boolean(value.imageBase64) === Boolean(value.imageMimeType), {
+  message: 'Screenshot data and type must be provided together',
 })
 type Connection = { id: string; project_key: string; created_by: string; expires_at: string; claimed_at: string | null; revoked_at: string | null }
 const columns = 'id,project_key,created_by,expires_at,claimed_at,revoked_at'
@@ -43,7 +47,11 @@ function databaseError(error: { message: string } | null) {
   throw new Error(error.message)
 }
 function deployment() {
-  const origin = widgetOrigin(process.env.APP_URL)
+  const configured = process.env.APP_URL?.trim()
+  let url: URL | null = null
+  try { url = configured ? new URL(configured) : null } catch { url = null }
+  const rootOnly = !!url && url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password
+  const origin = rootOnly && url ? widgetOrigin(url.origin) : null
   if (!origin) throw new Error('APP_URL must be a trusted HTTP localhost or HTTPS origin')
   return { apiBase: `${origin}/api`, dashboardUrl: origin }
 }
@@ -138,6 +146,27 @@ async function eligibility(req: VercelRequest) {
   const access = await agentAccess(row.project_key, session.user_id)
   return { state: access.state, role: access.role, collaboratorSeatLimit: access.collaboratorSeatLimit }
 }
+
+function storybookScreenshot(input: z.infer<typeof feedbackInput>) {
+  if (!input.imageBase64 || !input.imageMimeType) return null
+  const buffer = Buffer.from(input.imageBase64, 'base64')
+  if (!buffer.byteLength || buffer.byteLength > 5 * 1024 * 1024) {
+    throw new StorybookError(400, 'invalid_request', 'Screenshot must be between 1 byte and 5 MB')
+  }
+  return { buffer, mimeType: input.imageMimeType }
+}
+
+async function removeStoredScreenshot(path: string) {
+  try {
+    const { error } = await getServiceSupabase().storage.from('extension-feedback-images').remove([path])
+    if (error) console.error('[storybook] screenshot cleanup failed', { message: error.message })
+  } catch (error) {
+    console.error('[storybook] screenshot cleanup failed', {
+      message: error instanceof Error ? error.message : 'Unknown cleanup failure',
+    })
+  }
+}
+
 async function comments(req: VercelRequest) {
   const input = parse(feedbackInput, req.body)
   const row = await connection(req.query.connectionId)
@@ -149,12 +178,37 @@ async function comments(req: VercelRequest) {
     throw new StorybookError(400, 'invalid_request', 'Story deep link and selector must match')
   }
   await assertWidgetProject(row.project_key, session.origin)
-  const result = await getServiceSupabase().rpc('create_storybook_comment_snapshot', {
-    p_connection: row.id, p_actor: session.user_id, p_origin: session.origin,
-    p_token_hash: hashProof((req.headers.authorization as string).slice(7)),
-    p_comment: { ...input, authorName: session.display_name },
-  }).single()
-  databaseError(result.error)
+  const screenshot = storybookScreenshot(input)
+  const screenshotStoragePath = screenshot
+    ? `${session.user_id}/storybook/${crypto.randomUUID()}.${screenshot.mimeType === 'image/jpeg' ? 'jpg' : screenshot.mimeType.split('/')[1]}`
+    : null
+  const database = getServiceSupabase()
+  if (screenshot && screenshotStoragePath) {
+    const { error } = await database.storage.from('extension-feedback-images').upload(
+      screenshotStoragePath,
+      screenshot.buffer,
+      { contentType: screenshot.mimeType, upsert: false },
+    )
+    if (error) throw new Error(`Storybook screenshot upload failed: ${error.message}`)
+  }
+  const { imageBase64: _imageBase64, imageMimeType: _imageMimeType, ...commentInput } = input
+  let result
+  try {
+    result = await database.rpc('create_storybook_comment_snapshot', {
+      p_connection: row.id, p_actor: session.user_id, p_origin: session.origin,
+      p_token_hash: hashProof((req.headers.authorization as string).slice(7)),
+      p_comment: {
+        ...commentInput,
+        authorName: session.display_name,
+        screenshotStoragePath,
+      },
+    }).single()
+    databaseError(result.error)
+    if (!result.data) throw new Error('Storybook comment snapshot is unavailable')
+  } catch (error) {
+    if (screenshotStoragePath) await removeStoredScreenshot(screenshotStoragePath)
+    throw error
+  }
   const comment = mapComment(result.data as Parameters<typeof mapComment>[0])
   const project = await getProject(row.project_key)
   if (!project) failAccess()
@@ -215,6 +269,10 @@ export function storybookHandler(operation: keyof typeof operations) {
       if (plan) return res.status(plan.resource === 'subscription' ? 402 : 409).json({ ...plan, message: PLAN_MESSAGES[plan.resource] })
       if (error instanceof StorybookError) return res.status(error.status).json({ state: error.code, code: error.code, message: error.message })
       if (error instanceof WidgetSessionError) return res.status(error.status).json({ code: 'access_denied', message: error.message })
+      console.error('[Storybook API] Unexpected failure', {
+        operation,
+        error: error instanceof Error ? { name: error.name, message: error.message } : { name: typeof error },
+      })
       return res.status(500).json({ code: 'error', message: 'Storybook is temporarily unavailable' })
     }
   }

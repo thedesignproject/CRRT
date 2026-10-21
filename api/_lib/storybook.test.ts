@@ -37,9 +37,17 @@ function db(results: any[] = [{ data: row, error: null }]) {
     return queue.shift()
   })
   q.then = (resolve: any, reject: any) => Promise.resolve(queue.shift()).then(resolve, reject)
-  const database = { from: vi.fn(() => q), rpc: vi.fn(() => q) }
+  const bucket: any = {
+    upload: vi.fn(async () => ({ data: { path: 'uploaded' }, error: null })),
+    remove: vi.fn(async () => ({ data: {}, error: null })),
+  }
+  const database: any = {
+    from: vi.fn(() => q),
+    rpc: vi.fn(() => q),
+    storage: { from: vi.fn(() => bucket) },
+  }
   vi.mocked(getServiceSupabase).mockReturnValue(database as never)
-  return { q, database }
+  return { q, database, bucket }
 }
 async function call(handler: typeof create, input: Record<string, unknown> = {}) {
   const req = { method: 'POST', headers: { origin, authorization: `Bearer crrt_widget_${proof}` }, query: { connectionId }, body, ...input }
@@ -82,10 +90,20 @@ describe('Storybook route and CORS boundary', () => {
     expect(result.res.setHeader).not.toHaveBeenCalledWith('Access-Control-Allow-Origin', '*')
   })
   it('sanitizes unexpected failures and maps widget errors', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
     vi.mocked(getProjectMember).mockRejectedValue(new Error('private database secret'))
     expect((await call(create, { body: { projectKey: 'p' } })).data).toEqual({ code: 'error', message: 'Storybook is temporarily unavailable' })
+    expect(log).toHaveBeenCalledWith('[Storybook API] Unexpected failure', {
+      operation: 'create', error: { name: 'Error', message: 'private database secret' },
+    })
+    vi.mocked(getProjectMember).mockRejectedValue('private non-error value')
+    expect((await call(create, { body: { projectKey: 'p' } })).data).toEqual({ code: 'error', message: 'Storybook is temporarily unavailable' })
+    expect(log).toHaveBeenLastCalledWith('[Storybook API] Unexpected failure', {
+      operation: 'create', error: { name: 'string' },
+    })
     db(); vi.mocked(requireWidgetSession).mockRejectedValue(new WidgetSessionError(403, 'Origin denied'))
     expect((await call(eligibility, { method: 'GET' })).data).toEqual({ code: 'access_denied', message: 'Origin denied' })
+    log.mockRestore()
   })
 })
 describe('pairing and connection lifecycle', () => {
@@ -111,6 +129,13 @@ describe('pairing and connection lifecycle', () => {
     const result = await call(claim, { body: { code: proof, ...client }, headers: {} })
     expect(result.data).toEqual({ connectionId, projectKey: 'project', apiBase: 'https://crrt.test/api', dashboardUrl: 'https://crrt.test' })
     expect(database.rpc).toHaveBeenCalledWith('claim_storybook_pairing', { p_hash: hashProof(proof), p_client: client })
+  })
+  it('normalizes a root-only APP_URL with a trailing slash before claim', async () => {
+    vi.stubEnv('APP_URL', 'https://crrt.test/')
+    const { database } = db([{ data: row, error: null }, { data: row, error: null }])
+    const result = await call(claim, { body: { code: proof, ...client }, headers: {} })
+    expect(result.data).toEqual({ connectionId, projectKey: 'project', apiBase: 'https://crrt.test/api', dashboardUrl: 'https://crrt.test' })
+    expect(database.rpc).toHaveBeenCalledOnce()
   })
   it('requires configured trusted deployment URLs before claim', async () => {
     for (const url of ['', 'http://unsafe.test', 'https://crrt.test/path']) {
@@ -202,7 +227,7 @@ describe('private Storybook comment submission', () => {
     const result = await call(comments, { body: { ...body, authorName: 'spoofed' }, headers: { origin, authorization: `Bearer crrt_widget_${proof}` } })
     expect(result.status).toBe(201)
     expect(database.rpc).toHaveBeenCalledWith('create_storybook_comment_snapshot', {
-      p_connection: connectionId, p_actor: 'member', p_origin: origin, p_token_hash: hashProof(`crrt_widget_${proof}`), p_comment: { ...body, authorName: 'ada' },
+      p_connection: connectionId, p_actor: 'member', p_origin: origin, p_token_hash: hashProof(`crrt_widget_${proof}`), p_comment: { ...body, authorName: 'ada', screenshotStoragePath: null },
     })
     expect(result.data.body).toContain('component: Button · story: Primary · id: button--primary')
   })
@@ -218,6 +243,132 @@ describe('private Storybook comment submission', () => {
   })
   it('rejects mismatched story links', async () => {
     db(); expect((await call(comments, { body: { ...body, selector: 'storybook://another--story' } })).status).toBe(400)
+  })
+  it.each([
+    ['image/png', 'png'],
+    ['image/jpeg', 'jpg'],
+  ] as const)('stores a validated %s story screenshot with the private comment snapshot', async (mimeType, extension) => {
+    const screenshot = Buffer.from('image-bytes').toString('base64')
+    const withScreenshot = {
+      ...commentRow,
+      screenshot_storage_path: `member/storybook/image.${extension}`,
+    }
+    const { database, bucket } = db([{ data: row, error: null }, { data: withScreenshot, error: null }])
+    const result = await call(comments, {
+      body: { ...body, imageBase64: screenshot, imageMimeType: mimeType },
+    })
+
+    expect(result.status).toBe(201)
+    const path = bucket.upload.mock.calls[0]?.[0] as string
+    expect(path).toMatch(new RegExp(`^member/storybook/[0-9a-f-]+\\.${extension}$`))
+    expect(bucket.upload).toHaveBeenCalledWith(
+      path,
+      Buffer.from('image-bytes'),
+      { contentType: mimeType, upsert: false },
+    )
+    expect(database.rpc).toHaveBeenCalledWith(
+      'create_storybook_comment_snapshot',
+      expect.objectContaining({
+        p_comment: expect.objectContaining({ screenshotStoragePath: path }),
+      }),
+    )
+    const rpcComment = database.rpc.mock.calls[0]?.[1].p_comment
+    expect(rpcComment).not.toHaveProperty('imageBase64')
+    expect(rpcComment).not.toHaveProperty('imageMimeType')
+  })
+  it.each([
+    { imageBase64: Buffer.from('x').toString('base64') },
+    { imageMimeType: 'image/png' },
+    { imageBase64: '', imageMimeType: 'image/png' },
+    { imageBase64: '!!!!', imageMimeType: 'image/png' },
+    { imageBase64: Buffer.alloc(5 * 1024 * 1024 + 1).toString('base64'), imageMimeType: 'image/png' },
+    { imageBase64: Buffer.from('x').toString('base64'), imageMimeType: 'image/gif' },
+  ])('rejects malformed private screenshots %#', async (screenshot) => {
+    db()
+    const result = await call(comments, { body: { ...body, ...screenshot } })
+    expect(result.status, JSON.stringify(result.data)).toBe(400)
+  })
+  it('does not create a comment when screenshot storage fails', async () => {
+    const { database, bucket } = db()
+    bucket.upload.mockResolvedValueOnce({ data: null, error: { message: 'storage secret' } })
+
+    const result = await call(comments, {
+      body: {
+        ...body,
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    })
+
+    expect(result.status).toBe(500)
+    expect(result.data).toEqual({ code: 'error', message: 'Storybook is temporarily unavailable' })
+    expect(database.rpc).not.toHaveBeenCalled()
+  })
+  it('removes an uploaded screenshot when comment creation fails', async () => {
+    const { bucket } = db([
+      { data: row, error: null },
+      { data: null, error: { message: 'database error' } },
+    ])
+
+    const result = await call(comments, {
+      body: {
+        ...body,
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    })
+
+    expect(result.status).toBe(500)
+    expect(bucket.remove).toHaveBeenCalledWith([
+      expect.stringMatching(/^member\/storybook\/[0-9a-f-]+\.png$/),
+    ])
+  })
+  it('logs a screenshot cleanup response error without exposing it', async () => {
+    const { bucket } = db([
+      { data: row, error: null },
+      { data: null, error: { message: 'database error' } },
+    ])
+    bucket.remove.mockResolvedValueOnce({ data: null, error: { message: 'cleanup response secret' } })
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await call(comments, {
+      body: {
+        ...body,
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    })
+
+    expect(result.status).toBe(500)
+    expect(log).toHaveBeenCalledWith(
+      '[storybook] screenshot cleanup failed',
+      { message: 'cleanup response secret' },
+    )
+  })
+  it.each([
+    new Error('cleanup unavailable'),
+    'cleanup unavailable',
+  ])('sanitizes screenshot cleanup exceptions after a failed comment (%#)', async (cleanupFailure) => {
+    const { bucket } = db([
+      { data: row, error: null },
+      { data: null, error: { message: 'database error' } },
+    ])
+    bucket.remove.mockRejectedValueOnce(cleanupFailure)
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const result = await call(comments, {
+      body: {
+        ...body,
+        imageBase64: Buffer.from('png-bytes').toString('base64'),
+        imageMimeType: 'image/png',
+      },
+    })
+
+    expect(result.status).toBe(500)
+    expect(log).toHaveBeenCalledWith(
+      '[storybook] screenshot cleanup failed',
+      { message: cleanupFailure instanceof Error ? cleanupFailure.message : 'Unknown cleanup failure' },
+    )
   })
   it('returns the transaction snapshot without reloading a subsequently internal comment', async () => {
     db([{ data: row, error: null }, { data: commentRow, error: null }])

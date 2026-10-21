@@ -107,6 +107,11 @@ export const Default: Story = {};
   );
 
   run("npm", ["install"]);
+  assert.equal(
+    JSON.parse(readFileSync(join(root, "node_modules/@thedesignproject/crrt-storybook/package.json"), "utf8")).dependencies?.["html2canvas-pro"],
+    undefined,
+    "Consumers must use the bundled renderer without a Node 24 dependency",
+  );
   run("npm", ["exec", "--", "storybook", "build"]);
 
   const addonsRoot = join(root, "storybook-static", "sb-addons");

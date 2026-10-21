@@ -102,7 +102,7 @@ function MarketingSite({
   return (
     <>
       <ScrollRuler />
-      <MarketingPage authenticated={Boolean(session)} />
+      <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
       <FeedbackWidget apiBase={apiBase} projectId={projectId} />
       <EasterEgg />
     </>

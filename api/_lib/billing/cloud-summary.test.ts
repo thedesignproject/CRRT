@@ -24,3 +24,15 @@ it.each([{tax_behavior:'inclusive'},{active:false},{currency:'eur'},{unit_amount
   retrieve.mockResolvedValue({active:true,currency:'usd',unit_amount:1900,recurring:{interval:'month',interval_count:1},...patch})
   await expect(cloudBillingSummary('owner')).rejects.toThrow('approved monthly catalog')
 })
+
+it('returns annual account pricing with monthly resource allowances and supported capabilities', async () => {
+  vi.stubEnv('STRIPE_PRO_YEARLY_PRICE_ID','price_pro_year'); vi.stubEnv('STRIPE_STUDIO_YEARLY_PRICE_ID','price_studio_year')
+  vi.mocked(billingSummary).mockResolvedValue({enabled:true,billingCycle:'yearly'} as never)
+  retrieve.mockImplementation(async id => ({ active: true, currency: 'usd', unit_amount: id === 'price_pro_year' ? 19200 : 49200, recurring: { interval: 'year', interval_count: 1 } }))
+  expect(await cloudBillingSummary('owner')).toMatchObject({
+    billingCycle: 'yearly', billingCycles: ['monthly','yearly'], actions: {checkoutState:true,changePlan:false},
+    plans:[{id:'pro',amount:'$192',interval:'year',comments:2000},{id:'studio',amount:'$492',interval:'year',comments:10000}],
+  })
+  retrieve.mockResolvedValue({ active: true, currency: 'usd', unit_amount: 1900, recurring: { interval: 'month', interval_count: 1 } })
+  await expect(cloudBillingSummary('owner')).rejects.toThrow('approved yearly catalog')
+})

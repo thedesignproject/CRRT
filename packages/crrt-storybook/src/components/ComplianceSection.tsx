@@ -1,5 +1,5 @@
 import { dashboardHome } from "../auth";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useChannel } from "storybook/manager-api";
 import { STORY_RENDERED } from "storybook/internal/core-events";
 import { composeComplianceBody, sendFeedback } from "../api";
@@ -11,6 +11,7 @@ import {
   type ChecksOutcome,
 } from "../checks";
 import type { CrrtRule, CrrtRuleStatus, StoryContext } from "../types";
+import { tryCaptureStoryScreenshot } from "../screenshot";
 
 const STATUS_BADGE: Record<
   CrrtRuleStatus,
@@ -38,7 +39,7 @@ const CHECK_COLOR: Record<string, string> = {
  */
 const dispatchedThisSession = new Set<string>();
 
-type DispatchState = "sending" | "sent" | "error";
+type DispatchState = "capturing" | "sending" | "sent" | "error";
 
 /** A check maps to a declared rule only when the relationship is real. */
 function matchRule(rules: CrrtRule[], checkId: string): CrrtRule | undefined {
@@ -75,37 +76,72 @@ export const ComplianceSection = ({
 }: ComplianceSectionProps) => {
   const [checks, setChecks] = useState<ChecksOutcome | null>(null);
   const [dispatch, setDispatch] = useState<Record<string, DispatchState>>({});
+  const scheduledFrames = useRef<number[]>([]);
 
   const refresh = useCallback(() => {
     if (checksEnabled) setChecks(runStoryChecks());
   }, [checksEnabled]);
 
-  useChannel({ [STORY_RENDERED]: refresh });
+  const cancelScheduledRefresh = useCallback(() => {
+    scheduledFrames.current.forEach((frame) => cancelAnimationFrame(frame));
+    scheduledFrames.current = [];
+  }, []);
+
+  // STORY_RENDERED can fire before the iframe has completed layout. Waiting
+  // for two frames keeps real elements from being misreported as “not in story”.
+  const refreshAfterLayout = useCallback(() => {
+    cancelScheduledRefresh();
+    if (!checksEnabled) return;
+    setChecks(null);
+    const first = requestAnimationFrame(() => {
+      const second = requestAnimationFrame(() => {
+        scheduledFrames.current = [];
+        refresh();
+      });
+      scheduledFrames.current.push(second);
+    });
+    scheduledFrames.current.push(first);
+  }, [cancelScheduledRefresh, checksEnabled, refresh]);
+
+  useChannel({ [STORY_RENDERED]: refreshAfterLayout });
   useEffect(() => {
     setDispatch({});
-    refresh();
-  }, [refresh, story.storyId]);
+    refreshAfterLayout();
+    return cancelScheduledRefresh;
+  }, [cancelScheduledRefresh, refreshAfterLayout, story.storyId]);
 
   const dispatchIssue = async (check: CheckResult) => {
     const meta = CHECK_META[check.id];
-    if (!projectId || !meta || dispatch[check.id] === "sending") return;
-    setDispatch((s) => ({ ...s, [check.id]: "sending" }));
-    const result = await sendFeedback({
-      projectId,
-      connectionId,
-      apiBase,
-      body: composeComplianceBody({
-        checkLabel: meta.label,
-        verifies: meta.verifies,
-        failures: check.failures ?? [],
-        suggestion: meta.suggestion,
+    if (
+      !projectId ||
+      !meta ||
+      dispatch[check.id] === "capturing" ||
+      dispatch[check.id] === "sending"
+    ) return;
+    try {
+      setDispatch((s) => ({ ...s, [check.id]: "capturing" }));
+      const screenshot = await tryCaptureStoryScreenshot();
+      setDispatch((s) => ({ ...s, [check.id]: "sending" }));
+      const result = await sendFeedback({
+        projectId,
+        connectionId,
+        apiBase,
+        body: composeComplianceBody({
+          checkLabel: meta.label,
+          verifies: meta.verifies,
+          failures: check.failures ?? [],
+          suggestion: meta.suggestion,
+          story,
+          ruleId: matchRule(rules, check.id)?.id,
+        }),
+        screenshot,
         story,
-        ruleId: matchRule(rules, check.id)?.id,
-      }),
-      story,
-    });
-    if (result.ok) dispatchedThisSession.add(`${story.storyId}:${check.id}`);
-    setDispatch((s) => ({ ...s, [check.id]: result.ok ? "sent" : "error" }));
+      });
+      if (result.ok) dispatchedThisSession.add(`${story.storyId}:${check.id}`);
+      setDispatch((s) => ({ ...s, [check.id]: result.ok ? "sent" : "error" }));
+    } catch {
+      setDispatch((s) => ({ ...s, [check.id]: "error" }));
+    }
   };
 
   const renderAction = (check: CheckResult) => {
@@ -133,17 +169,19 @@ export const ComplianceSection = ({
         {state === "error" && <span style={styles.errorInline}>failed —</span>}
         <button
           onClick={() => dispatchIssue(check)}
-          disabled={state === "sending"}
+          disabled={state === "capturing" || state === "sending"}
           style={{
             ...styles.dispatch,
-            opacity: state === "sending" ? 0.6 : 1,
+            opacity: state === "capturing" || state === "sending" ? 0.6 : 1,
           }}
         >
-          {state === "sending"
-            ? "Sending…"
-            : state === "error"
-              ? "Retry"
-              : "Send to CRRT"}
+          {state === "capturing"
+            ? "Capturing…"
+            : state === "sending"
+              ? "Sending…"
+              : state === "error"
+                ? "Retry"
+                : "Send to CRRT"}
         </button>
       </>
     );
@@ -193,7 +231,7 @@ export const ComplianceSection = ({
         <div style={{ marginTop: 12 }}>
           <div style={styles.checksHead}>
             <span style={styles.subheading}>Built-in checks (this story's DOM)</span>
-            <button onClick={refresh} style={styles.rerun} title="Re-run checks">
+            <button onClick={refreshAfterLayout} style={styles.rerun} title="Re-run checks">
               ↻ re-run
             </button>
           </div>

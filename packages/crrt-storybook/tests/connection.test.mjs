@@ -78,6 +78,7 @@ test("private feedback uses the authenticated endpoint and never public fallback
       projectId: "project_demo",
       connectionId: "sbconn_demo",
       body: "Fix the button",
+      screenshot: { base64: "cG5n", mimeType: "image/png" },
       story: {
         storyId: "components-button--primary",
         componentTitle: "Components/Button",
@@ -92,6 +93,16 @@ test("private feedback uses the authenticated endpoint and never public fallback
     );
     assert.equal(calls[0].options.credentials, "omit");
     assert.equal(calls[0].url.includes("/public/comments"), false);
+    assert.deepEqual(JSON.parse(calls[0].options.body), {
+      projectKey: "project_demo",
+      pageUrl: "http://localhost:6006/?path=/story/components-button--primary",
+      selector: "storybook://components-button--primary",
+      x: 50,
+      y: 50,
+      body: "Fix the button\n\n— via Storybook · component: Components/Button · story: Primary · id: components-button--primary",
+      imageBase64: "cG5n",
+      imageMimeType: "image/png",
+    });
   } finally {
     globalThis.fetch = originalFetch;
     globalThis.window = originalWindow;

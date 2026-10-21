@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const auth = vi.hoisted(() => ({
-  getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), updateUser: vi.fn(),
+  initialize: vi.fn(), getSession: vi.fn(), onAuthStateChange: vi.fn(), signOut: vi.fn(), updateUser: vi.fn(),
 }))
 vi.mock('../lib/supabase', () => ({ supabase: { auth } }))
 
@@ -10,6 +10,7 @@ import { ResetPasswordPage } from './ResetPasswordPage'
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
+  auth.initialize.mockResolvedValue({ error: null })
   auth.getSession.mockResolvedValue({ data: { session: { access_token: 'recovery' } } })
   auth.onAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: vi.fn() } } })
   auth.updateUser.mockResolvedValue({ error: null })
@@ -19,7 +20,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.clearAllMocks() })
 
 describe('password recovery continuation', () => {
-  it.each(['', '?accessProject=project%2Fone'])('finishes recovery through the safe destination resolver %s', async search => {
+  it.each(['', '?accessProject=project%2Fone', '?billingPlan=studio', '?billingState=payload.signature'])('finishes recovery through the safe destination resolver %s', async search => {
     window.history.replaceState({}, '', '/reset-password' + search)
     render(<ResetPasswordPage />)
     const password = screen.getByLabelText('new password')

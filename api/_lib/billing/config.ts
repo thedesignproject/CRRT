@@ -1,5 +1,5 @@
 import Stripe from 'stripe'
-import { cloudPriceCatalog, isCloud } from './plans.js'
+import { billingCycles, cloudPriceCatalog, isCloud } from './plans.js'
 
 export function stripeEnabled() {
   return isCloud() && process.env.STRIPE_ENABLED === 'true'
@@ -7,6 +7,7 @@ export function stripeEnabled() {
 
 export function billingConfig() {
   if (process.env.STRIPE_MODE && !['test','live'].includes(process.env.STRIPE_MODE)) throw new Error('STRIPE_MODE must be test or live')
+  if (isCloud()) billingCycles()
   const secret = process.env.STRIPE_SECRET_KEY
   const price = isCloud() ? cloudPriceCatalog().pro : process.env.STRIPE_PRICE_ID
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET

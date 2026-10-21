@@ -1,7 +1,7 @@
 import { canProject, effectiveProjectRole, type ProjectRole } from '../project-capabilities.js'
 import { getServiceSupabase } from '../supabase.js'
 import { getAccount } from './store.js'
-import { CLOUD_PLANS, cloudPriceCatalog, isCloud, planForPrice, subscriptionCanWrite, type CloudSubscription } from './plans.js'
+import { CLOUD_PLANS, billingCycles, cloudPriceCatalog, isCloud, planForPrice, subscriptionCanWrite, type CloudSubscription } from './plans.js'
 
 export const AGENT_COLLABORATOR_SEAT_LIMIT = CLOUD_PLANS.pro.internal_users - 1
 export const AGENT_ELIGIBLE_SUBSCRIPTION_STATUSES = ['active', 'trialing'] as const
@@ -24,11 +24,10 @@ export type WidgetAgentAccess = {
 /** Server-only catalog keyed by trusted Stripe price ids. */
 export function agentPlanCatalog(env: Record<string, string | undefined> = process.env) {
   if (!isCloud(env)) return new Map([['community', { agent: true as const, collaboratorSeats: Number.MAX_SAFE_INTEGER }]])
-  const prices = cloudPriceCatalog(env)
-  return new Map([
-    [prices.pro, { agent: true as const, collaboratorSeats: CLOUD_PLANS.pro.internal_users - 1 }],
-    [prices.studio, { agent: true as const, collaboratorSeats: CLOUD_PLANS.studio.internal_users - 1 }],
-  ])
+  return new Map(billingCycles(env).flatMap(cycle => {
+    const prices = cloudPriceCatalog(env, cycle)
+    return (['pro', 'studio'] as const).map(plan => [prices[plan], { agent: true as const, collaboratorSeats: CLOUD_PLANS[plan].internal_users - 1 }] as const)
+  }))
 }
 
 export function eligibleAgentPriceIds(env: Record<string, string | undefined> = process.env) {
@@ -36,11 +35,11 @@ export function eligibleAgentPriceIds(env: Record<string, string | undefined> = 
 }
 
 export function hasAgentEntitlement(
-  account: (CloudSubscription & { price_id: string | null }) | null,
+  account: (CloudSubscription & { price_id: string | null; is_legacy?: boolean }) | null,
   env: Record<string, string | undefined> = process.env,
 ) {
   if (!isCloud(env)) return true
-  return Boolean(account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan)
+  return Boolean(account?.is_legacy || (account && subscriptionCanWrite(account) && planForPrice(account.price_id, env) === account.plan))
 }
 
 export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: string): Promise<WidgetAgentAccess> {
@@ -70,5 +69,5 @@ export async function resolveWidgetAgentAccess(projectKey: string, actorUserId: 
 
   // Membership remains usable after a downgrade; capacity blocks additions only.
   return { state: 'ready', role, ownerUserId: owner.user_id,
-    collaboratorSeatLimit: CLOUD_PLANS[account!.plan as 'pro' | 'studio'].internal_users - 1 }
+    collaboratorSeatLimit: CLOUD_PLANS[subscriptionCanWrite(account) ? account!.plan as 'pro' | 'studio' : 'pro'].internal_users - 1 }
 }

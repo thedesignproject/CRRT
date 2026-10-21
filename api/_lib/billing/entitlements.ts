@@ -3,6 +3,7 @@ import type { CloudPlan, PlanResource } from './plans.js'
 
 export type EntitlementSummary = {
   mode: 'community' | 'cloud'
+  isLegacy?: boolean
   plan: CloudPlan | null
   status: string
   canWrite: boolean

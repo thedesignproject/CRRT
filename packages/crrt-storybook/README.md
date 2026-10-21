@@ -38,7 +38,7 @@ No selectors, no clicking on elements, no floating widget: the story IS the cont
 
   ![A failed check dispatched to CRRT from its own row](docs/dispatch-sent.png)
 
-**2. Feedback — the collect layer.** A textarea, an optional name, and a **Send to CRRT** button. On send, the comment posts to the hosted CRRT API with the story's metadata attached, then shows a sent state with a link to the CRRT dashboard.
+**2. Feedback — the collect layer.** A textarea, compact optional author field in manual mode, and a **Send to CRRT** button. On send, the addon captures the active story viewport and downsizes large images to fit the upload limit. If capture is unavailable, it sends the feedback without an image. It then shows a sent state with a link to the CRRT dashboard.
 
 ## Connect from CRRT Pro
 
@@ -156,6 +156,7 @@ existing feedback fields:
 | `body` | The feedback text + a footer: `— via Storybook · component: Components/Button · story: Primary · id: components-button--primary` |
 | `x`, `y` | `50, 50` (required by the API; a panel has no click point) |
 | `authorName` | The optional name field (persisted in localStorage) |
+| `imageBase64`, `imageMimeType` | PNG capture of the active story viewport (the Storybook manager UI is excluded) |
 
 ## The flow (GIF-able)
 
