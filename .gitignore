@@ -22,3 +22,6 @@ supabase/.branches/_current_branch
 
 # Dependency links used by isolated local worktrees
 /node_modules
+
+# Jev preview output (written by scripts/jev)
+scripts/jev/preview/selection.json

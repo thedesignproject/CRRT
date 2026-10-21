@@ -61,7 +61,9 @@
     "build:landing": "node scripts/build-landing.ts",
     "preview:landing": "bun scripts/preview-public-site.ts",
     "cloud:configure": "bun scripts/configure-cloud-plans.ts",
-    "cloud:check": "bun scripts/check-cloud-deployment.ts"
+    "cloud:check": "bun scripts/check-cloud-deployment.ts",
+    "jev": "bun scripts/jev/cli.ts",
+    "jev:preview": "vite --config scripts/jev/preview/vite.config.ts"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
