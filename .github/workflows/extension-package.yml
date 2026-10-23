@@ -4,11 +4,21 @@ on:
   pull_request:
     paths:
       - '.github/workflows/extension-package.yml'
+      - '.github/workflows/extension-cancel-review.yml'
       - 'apps/extension/**'
       - 'scripts/package-extension.ts'
+      - 'scripts/chrome-store.py'
+      - 'scripts/test_chrome_store.py'
+      - 'scripts/chrome-store-auth.mjs'
+      - 'scripts/chrome-store-auth.node-test.mjs'
       - 'package.json'
       - 'bun.lock'
   workflow_dispatch:
+    inputs:
+      check_store_access:
+        description: 'Only check Chrome Web Store authentication (no build, upload, or publish)'
+        type: boolean
+        default: true
   push:
     tags: ['extension-v*']
 
@@ -17,6 +27,7 @@ permissions:
 
 jobs:
   package:
+    if: github.event_name != 'workflow_dispatch' || !inputs.check_store_access
     runs-on: ubuntu-latest
     env:
       WXT_API_BASE: https://crrt.ai/api
@@ -28,6 +39,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - name: Test publishing guards
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_chrome_store.py' -v
+          node --test scripts/chrome-store-auth.node-test.mjs
+      - name: Verify extension release tag
+        if: github.event_name == 'push'
+        run: |
+          python3 scripts/chrome-store.py validate-tag
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/trunk
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -50,3 +70,53 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
+
+  store:
+    needs: package
+    if: >-
+      always() && !cancelled() &&
+      ((github.event_name == 'workflow_dispatch' && inputs.check_store_access &&
+        (github.ref == 'refs/heads/trunk' || github.ref == 'refs/heads/feat/chrome-store-publishing')) ||
+       (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/extension-v') && needs.package.result == 'success'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    concurrency:
+      group: chrome-web-store-publishing
+      cancel-in-progress: false
+    env:
+      CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check publishing configuration
+        env:
+          CWS_SERVICE_ACCOUNT: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          CWS_SERVICE_ACCOUNT_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_KEY }}
+        run: |
+          : "${CWS_PUBLISHER_ID:?Set CWS_PUBLISHER_ID in Actions variables}"
+          : "${CWS_EXTENSION_ID:?Set CWS_EXTENSION_ID in Actions variables}"
+          : "${CWS_SERVICE_ACCOUNT:?Set CWS_SERVICE_ACCOUNT in Actions variables}"
+          : "${CWS_SERVICE_ACCOUNT_KEY:?Set CWS_SERVICE_ACCOUNT_KEY in Actions secrets}"
+      - uses: actions/download-artifact@v4
+        if: github.event_name == 'push'
+        with:
+          name: crrt-extension-${{ github.ref_name }}
+          path: artifacts/
+      - id: auth
+        name: Authenticate with service account JSON
+        env:
+          CWS_SERVICE_ACCOUNT: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          CWS_SERVICE_ACCOUNT_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_KEY }}
+        run: node scripts/chrome-store-auth.mjs
+      - name: Check store access
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/chrome-store.py status
+      - name: Upload and submit extension for review
+        if: github.event_name == 'push'
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/chrome-store.py publish
