@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -18,6 +19,22 @@ def revision(*versions):
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_google_api_error_details_are_reported_without_credentials(self):
+        with patch.dict(os.environ, {'CWS_PUBLISHER_ID': 'publisher', 'CWS_EXTENSION_ID': 'a' * 32,
+                                     'CWS_ACCESS_TOKEN': 'test-token'}):
+            store = release.Store()
+        for body, expected in (
+            (b'{"error":{"message":"API disabled test-token"}}', 'API disabled [redacted]'),
+            (b'not-json', 'Forbidden'),
+            (b'{"error":{"message":null}}', 'Forbidden'),
+        ):
+            error = release.urllib.error.HTTPError('https://example.invalid', 403, 'Forbidden', {}, io.BytesIO(body))
+            with self.subTest(body=body), patch.object(release.urllib.request, 'urlopen', side_effect=error):
+                with self.assertRaises(ValueError) as raised:
+                    store.request('fetchStatus')
+                self.assertIn(expected, str(raised.exception))
+                self.assertNotIn('test-token', str(raised.exception))
+
     def test_cancel_matching_pending_review_and_fetch_final_status(self):
         store = Mock()
         final_status = {'submittedItemRevisionStatus': {'state': 'CANCELLED'}}

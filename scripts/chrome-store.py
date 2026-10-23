@@ -76,11 +76,23 @@ class Store:
             headers['Content-Type'] = 'application/zip' if upload else 'application/json'
         method = 'GET' if operation == 'fetchStatus' else 'POST'
         request = urllib.request.Request(url, data=payload, headers=headers, method=method)
-        with urllib.request.urlopen(request, timeout=120) as response:
-            body = response.read()
-            if operation == 'cancelSubmission' and not body.strip():
-                return {}
-            return json.loads(body)
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                body = response.read()
+                if operation == 'cancelSubmission' and not body.strip():
+                    return {}
+                return json.loads(body)
+        except urllib.error.HTTPError as error:
+            # Google's structured message explains disabled APIs vs publisher
+            # access failures. Never log request headers or the access token.
+            try:
+                detail = json.loads(error.read()).get('error', {}).get('message', '')
+            except (ValueError, AttributeError):
+                detail = ''
+            if not isinstance(detail, str):
+                detail = ''
+            detail = detail.replace(self.token, '[redacted]') if self.token else detail
+            raise ValueError(f'Chrome Web Store HTTP {error.code}: {detail[:2000] or error.reason}') from None
 
 
 def cancel_review(store, expected_version):
