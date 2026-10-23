@@ -149,7 +149,7 @@ run it.
 
 ```bash
 python3 -m unittest discover -s scripts -p 'test_chrome_store.py' -v
-node --test scripts/chrome-store-auth.test.mjs
+node --test scripts/chrome-store-auth.node-test.mjs
 ```
 
 References: [Chrome service accounts](https://developer.chrome.com/docs/webstore/service-accounts),

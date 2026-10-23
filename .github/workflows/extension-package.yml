@@ -10,7 +10,7 @@ on:
       - 'scripts/chrome-store.py'
       - 'scripts/test_chrome_store.py'
       - 'scripts/chrome-store-auth.mjs'
-      - 'scripts/chrome-store-auth.test.mjs'
+      - 'scripts/chrome-store-auth.node-test.mjs'
       - 'package.json'
       - 'bun.lock'
   workflow_dispatch:
@@ -42,7 +42,7 @@ jobs:
       - name: Test publishing guards
         run: |
           python3 -m unittest discover -s scripts -p 'test_chrome_store.py' -v
-          node --test scripts/chrome-store-auth.test.mjs
+          node --test scripts/chrome-store-auth.node-test.mjs
       - name: Verify extension release tag
         if: github.event_name == 'push'
         run: |
