@@ -1,0 +1,41 @@
+name: Chrome Web Store cancel review
+run-name: Cancel Chrome review ${{ inputs.version }} by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version currently pending review to cancel, e.g. 1.0.1'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  cancel-review:
+    if: github.ref == 'refs/heads/trunk'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: chrome-web-store-publishing
+      cancel-in-progress: false
+    env:
+      CWS_PUBLISHER_ID: ${{ vars.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ vars.CWS_EXTENSION_ID }}
+      CWS_CANCEL_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Validate requested version
+        run: |
+          python3 -c 'import os, runpy; runpy.run_path("scripts/chrome-store.py")["version_tuple"](os.environ["CWS_CANCEL_VERSION"])'
+      - id: auth
+        name: Authenticate with service account JSON
+        env:
+          CWS_SERVICE_ACCOUNT: ${{ vars.CWS_SERVICE_ACCOUNT }}
+          CWS_SERVICE_ACCOUNT_KEY: ${{ secrets.CWS_SERVICE_ACCOUNT_KEY }}
+        run: node scripts/chrome-store-auth.mjs
+      - name: Cancel matching pending review
+        env:
+          CWS_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: python3 scripts/chrome-store.py cancel
