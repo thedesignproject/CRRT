@@ -19,7 +19,7 @@ The production V1 is asynchronous. Live mode is phase 2 of the same feature.
 - Recording and human sharing are free within product limits.
 - Agent payloads, project instruction/Brain enrichment, and Live mode are paid and enforced by the backend.
 - Viewers do not need the extension. Authors do.
-- Tab capture may include DOM targets. Window and entire-screen capture fall back to pixels, coordinates, and crops.
+- Authorized tab capture includes DOM targets. Window and entire-screen capture fall back to pixels, coordinates, and crops.
 
 ## Production V1 experience
 
@@ -35,13 +35,26 @@ The production V1 is asynchronous. Live mode is phase 2 of the same feature.
 - Source selection: This tab, Window, or Entire screen.
 - Microphone and camera selection with explicit permission state.
 - Three-second countdown.
-- Visible recording state, timer, pause, resume, restart, and Done.
-- Camera bubble.
+- The setup surface closes or moves out of the way when capture starts. It is not the surface where the author annotates.
+- Visible recording state, timer, pause, resume, restart, and Done remain with the author on the recorded browser surface.
+- Camera bubble and a best-effort live transcript chip remain visible while recording in Chrome.
 - Draw, Arrow, Box, Text, Pin, Undo, and Clear.
 - Marks stored as structured events on a shared monotonic timeline.
 - Event keyframes on marks, clicks, and route changes.
 - Tab-mode events include selector, route, viewport, scroll position, target bounds, normalized coordinates, and component metadata when available.
 - Window/screen events include normalized coordinates and capture dimensions without claiming DOM context.
+
+### Loom-style surface behavior
+
+**This tab** is the complete CRRT experience. After the countdown, the extension injects an isolated recording surface into the captured tab. It contains the fixed bottom toolbar, movable camera bubble, transcript chip, and a full-viewport annotation layer. The user talks, navigates, and marks the real page rather than a duplicate video preview. Marks resolve DOM context at the time they are created.
+
+The tab experience survives same-origin reloads, history changes, and SPA route changes. To preserve it across cross-origin navigation in the same tab, CRRT requests optional site access when the recording starts. The permission explanation is: **“CRRT needs access to the pages you record so controls and DOM context remain available while navigating.”** Denying the permission does not prevent recording the current authorized page, but CRRT warns that controls and DOM context will stop if the tab navigates to a different origin.
+
+**Window** uses the same injected surface while the author remains in an authorized Chrome tab. If the selected window is another application, the extension records it but cannot inject controls, camera, or annotations into that application.
+
+**Entire screen** records the selected monitor and keeps controls available while the author is working in an authorized Chrome tab. A Chrome extension does not claim to place an interactive transparent layer over arbitrary macOS or Windows applications. That capability requires a future desktop application.
+
+Tab capture records the injected controls and marks because they are rendered inside the captured surface. Window and entire-screen capture record them whenever the authorized Chrome tab is visible within the selected surface. Marks are also persisted as structured events. The controls can collapse to a compact recording pill; V1 does not selectively remove them from raw capture or claim to display them over an external application.
 
 ### Completion and sharing
 
@@ -63,6 +76,18 @@ The production V1 is asynchronous. Live mode is phase 2 of the same feature.
 - Dashboard and Widget launchers.
 - Recordings library, share player, transcript, and For agents presentation.
 - Mock backend adapter for the Monday demo.
+
+### Extension recording surfaces
+
+The frontend is divided into three isolated units:
+
+1. **Setup and review page:** selects source and devices before capture and shows the local result afterward. It no longer hosts the annotation experience for tab recordings.
+2. **Tab recording surface:** an extension-origin iframe inside a closed Shadow DOM, following the existing private comment-frame pattern. The host-side script owns page hit testing and DOM anchoring; the private frame owns recording UI and annotation state so host styles and scripts cannot inspect private content.
+3. **Recorder controller:** a long-lived extension context that owns capture streams and `MediaRecorder`. The frontend demo keeps the existing recorder page as the controller, moves it behind the selected tab after startup, and returns to it for review after Done. Production replaces that page with an MV3 offscreen document without changing the controller protocol. Navigation must not terminate media capture.
+
+The background service worker owns the session registry and routes typed messages between the controller and the currently mounted tab surface. Recording state uses a session ID and revision so a stale page or reinjected frame cannot pause or finish another recording.
+
+The existing comment widget and the recording surface use separate hosts, frames, message namespaces, and teardown lifecycles. Starting Record must not activate comment mode, and closing the comment widget must not affect an active recording.
 
 ### Backend ownership — Pranav
 
@@ -94,6 +119,8 @@ Frontend and backend agree on these before production integration:
 - Prefer separately synchronized screen and camera tracks for V1 playback so the camera remains an independent bubble. Validate this choice in the capture spike against composition reliability and pause/resume behavior.
 - Include microphone audio once on the main recording timeline.
 - Preserve the existing isolated Shadow DOM/private-frame security boundary for recorder controls.
+- Declare HTTP(S) site access as optional rather than persistent host access. Request it in the explicit recording gesture and only for the recording experience.
+- Reinject the tab surface after authorized navigations and restore the latest controller state. If access is unavailable after navigation, continue media capture, surface a recoverable warning from the controller, and omit DOM context until an authorized page is active again.
 
 ## Storage and processing decisions
 
@@ -115,7 +142,7 @@ The Monday demo proves the product and integration shape without pretending the 
 - Source chooser for This tab, Window, and Entire screen.
 - Working browser capture with microphone and optional camera.
 - Countdown and recorder controls.
-- A polished overlay demonstrating Draw, Arrow, Box, Text, and Pin.
+- A polished overlay injected into the recorded tab, demonstrating Draw, Arrow, Box, Text, and Pin while the user navigates the actual page.
 - Structured event timeline and DOM targets for tab mode.
 - Done transitions into a local processing simulation.
 - A local Recordings library populated by demo captures or deterministic fixtures.
@@ -141,8 +168,8 @@ The highest-value demo flow is:
 
 1. Launch Record from the extension.
 2. Choose a capture source, microphone, and camera.
-3. Record a short checkout walkthrough.
-4. Add at least one drawing, one pin, and one DOM-aware mark.
+3. Return automatically to the selected tab and record a short checkout walkthrough without using a separate preview as the annotation surface.
+4. Navigate the real page while the bottom toolbar remains present, then add at least one drawing, one pin, and one DOM-aware mark.
 5. Finish the recording.
 6. Open the local share experience.
 7. Seek through transcript/keyframe markers.
@@ -154,6 +181,8 @@ The highest-value demo flow is:
 - Put browser media APIs behind a narrow adapter so unit tests use deterministic streams and browser validation uses the real APIs.
 - Test the externally visible recorder state machine: permission, countdown, recording, pause, resume, finalizing, processing, ready, and failure.
 - Test mark geometry and timestamps independently of rendering internals.
+- Test controller-to-frame commands, session/revision rejection, reinjection after an authorized navigation, and cleanup after Done, cancellation, tab close, and permission loss.
+- Verify that the recording surface remains isolated from hostile host CSS and that hit testing never blocks the page outside visible controls or an active drawing gesture.
 - Reuse existing selector, native screenshot, hosted-auth, extension frame, prompt, and dashboard route seams.
 - Add a single browser-level happy-path demo test where automation allows it, with a documented manual check for native capture pickers.
 - Require diff line and branch coverage against the branch base before handoff.
@@ -165,6 +194,9 @@ The highest-value demo flow is:
 - **Large local media:** cap the Monday demo duration and use bounded chunks rather than a monolithic in-memory blob.
 - **Camera synchronization:** use a shared monotonic start and exercise pause/resume with real devices.
 - **Host-page interference:** keep controls isolated and pointer behavior explicit.
+- **Cross-origin navigation:** request optional site access at recording start; continue capture with a visible degraded-state warning when access is denied or revoked.
+- **MV3 lifecycle:** keep capture outside the service worker and make injected surfaces disposable clients of the durable recording session.
+- **External applications:** label Window and Entire screen honestly; arbitrary desktop overlays remain a desktop-app capability rather than a hidden extension requirement.
 - **Misleading backend readiness:** separate local demo adapters from production API contracts and label non-shareable local results.
 
 ## Phase 2: Live mode
