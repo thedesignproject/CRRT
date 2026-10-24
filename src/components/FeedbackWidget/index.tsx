@@ -1,6 +1,6 @@
 import { useWidgetLogin } from './useWidgetLogin'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Bot, MessageCircle, PanelRightOpen, X } from 'lucide-react'
+import { Bot, MessageCircle, PanelRightOpen, Video, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { buildTextRangeAnchor } from '../../lib/textAnchor'
 import { useScreenshotCapture } from '../../lib/screenshotCapture'
@@ -330,6 +330,7 @@ function FeedbackWidgetInner({
   personalComments: suppliedPersonalComments,
   viewerEmail: suppliedViewerEmail,
   page,
+  onRecord,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
   useEffect(() => {
     ensureWidgetFonts()
@@ -342,6 +343,25 @@ function FeedbackWidgetInner({
   const [sending, setSending] = useState(false)
   const [speechStopSignal, setSpeechStopSignal] = useState(0)
   const [apiError, setApiError] = useState('')
+  const [recordHint, setRecordHint] = useState(false)
+  const recordHintTimer = useRef<number | null>(null)
+
+  const openRecord = useCallback(async () => {
+    setRecordHint(false)
+    try {
+      if (onRecord) await onRecord()
+      else {
+        window.dispatchEvent(new CustomEvent('crrt:record-request'))
+        setRecordHint(true)
+        if (recordHintTimer.current) window.clearTimeout(recordHintTimer.current)
+        recordHintTimer.current = window.setTimeout(() => setRecordHint(false), 4_000)
+      }
+    } catch {
+      setRecordHint(true)
+    }
+  }, [onRecord])
+
+  useEffect(() => () => { if (recordHintTimer.current) window.clearTimeout(recordHintTimer.current) }, [])
 
   const widgetLogin = useWidgetLogin(apiBase, projectId)
   const personalComments = suppliedPersonalComments ?? widgetLogin.comments
@@ -1356,6 +1376,21 @@ function FeedbackWidgetInner({
                   stopSignal={speechStopSignal}
                   disabled={sending}
                 />
+                <button
+                  type="button"
+                  onClick={() => { void openRecord() }}
+                  aria-label="Record screen"
+                  title="Record screen, voice and marks"
+                  style={{
+                    position: 'relative', height: 28, display: 'inline-flex', alignItems: 'center', gap: 5,
+                    padding: '0 8px', borderRadius: 9999, border: '1px solid rgba(232,133,61,.35)',
+                    background: 'rgba(232,133,61,.08)', color: '#E8853D', cursor: 'pointer',
+                    fontFamily: 'inherit', fontSize: 11, fontWeight: 650,
+                  }}
+                >
+                  <Video size={13} /><span>Record</span>
+                  <span style={{ position: 'absolute', right: -3, top: -5, width: 6, height: 6, borderRadius: '50%', background: '#E8853D', boxShadow: '0 0 0 2px var(--fw-surface-card)' }} />
+                </button>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1419,6 +1454,7 @@ function FeedbackWidgetInner({
                 </button>
               </div>
             </div>
+            {recordHint && <div role="status" style={{ margin: '-4px 10px 9px', padding: '8px 10px', borderRadius: 7, border: '1px solid rgba(232,133,61,.28)', background: 'rgba(232,133,61,.08)', color: 'var(--fw-foreground-muted)', fontSize: 11, lineHeight: 1.4 }}><strong style={{ color: 'var(--fw-foreground)' }}>Open the CRRT Chrome extension</strong><br />Choose Record or press ⌥⇧R. The recorder runs in the extension so Chrome can capture safely.</div>}
           </div>
         </>
       )}

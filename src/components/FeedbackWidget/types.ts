@@ -14,6 +14,8 @@ export interface FeedbackWidgetProps {
   viewerEmail?: string
   /** Page interaction supplied by an isolated browser-extension frame. */
   page?: WidgetPage
+  /** Launch the Chrome-extension recorder. Embedded widgets omit this and show the shortcut handoff. */
+  onRecord?: () => void | Promise<void>
 }
 
 export interface WidgetPage {

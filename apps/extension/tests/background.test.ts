@@ -5,10 +5,14 @@ const state = vi.hoisted(() => ({
   removed: undefined as ((tabId: number) => void) | undefined,
   activated: undefined as ((info: { windowId: number }) => void) | undefined,
   updated: undefined as ((tabId: number, changeInfo: { url?: string; status?: string }) => void) | undefined,
+  command: undefined as ((command: string) => void) | undefined,
   session: {} as Record<string, unknown>,
 }))
 const browser = vi.hoisted(() => ({
   action: { openPopup: vi.fn() },
+  windows: { create: vi.fn() },
+  tabCapture: { getMediaStreamId: vi.fn() },
+  commands: { onCommand: { addListener: vi.fn((value) => { state.command = value }) } },
   tabs: {
     query: vi.fn(),
     get: vi.fn(),
@@ -23,7 +27,11 @@ const browser = vi.hoisted(() => ({
     remove: vi.fn(async (key: string) => { delete state.session[key] }),
   } },
   scripting: { executeScript: vi.fn() },
-  runtime: { id: 'extension-id', onMessage: { addListener: vi.fn((value) => { state.listener = value }) } },
+  runtime: {
+    id: 'extension-id',
+    getURL: vi.fn((path: string) => `chrome-extension://extension-id${path}`),
+    onMessage: { addListener: vi.fn((value) => { state.listener = value }) },
+  },
 }))
 vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
@@ -39,7 +47,7 @@ import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn } from '../lib/hosted-auth'
 
 beforeEach(() => {
-  vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.updated = undefined; state.session = {}
+  vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.updated = undefined; state.command = undefined; state.session = {}
   browser.tabs.get.mockImplementation(async (tabId: number) => ({ id: tabId, url: 'https://example.com' }))
   hasAcceptedDisclosure.mockResolvedValue(true)
 })
@@ -103,6 +111,50 @@ describe('extension background', () => {
     expect(browser.scripting.executeScript).not.toHaveBeenCalled()
     browser.action.openPopup.mockRejectedValueOnce(new Error('Popup unavailable'))
     await expect(send({ type: 'auth:open-popup' })).resolves.toEqual({ ok: false, error: 'Popup unavailable' })
+  })
+
+  it('opens the recorder with active-tab context from messages and the keyboard shortcut', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com/checkout', title: 'Acme checkout' }])
+
+    await expect(send({ type: 'record:open' })).resolves.toEqual({ ok: true })
+    expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'popup', width: 1180, height: 820,
+      url: expect.stringContaining('record.html?tabId=7'),
+    }))
+    expect(browser.windows.create.mock.calls[0]?.[0]?.url).toContain('pageTitle=Acme+checkout')
+
+    state.command?.('start-recording')
+    await vi.waitFor(() => expect(browser.windows.create).toHaveBeenCalledTimes(2))
+  })
+
+  it('grants tab capture and DOM target resolution only to extension pages', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    browser.tabCapture.getMediaStreamId.mockResolvedValue('stream-7')
+    browser.scripting.executeScript.mockResolvedValue([{ result: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' } }])
+    const sender = { url: 'chrome-extension://extension-id/record.html' }
+
+    await expect(send({ type: 'record:tab-stream', tabId: 7 }, sender)).resolves.toEqual({ ok: true, data: 'stream-7' })
+    expect(browser.tabCapture.getMediaStreamId).toHaveBeenCalledWith({ targetTabId: 7 })
+    await expect(send({ type: 'record:resolve-target', tabId: 7, x: 42, y: 61 }, sender)).resolves.toEqual({
+      ok: true, data: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' },
+    })
+    expect(browser.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 7 }, args: [42, 61] }))
+    const resolve = browser.scripting.executeScript.mock.calls[0]?.[0]?.func as (x: number, y: number) => unknown
+    const button = document.createElement('button'); button.id = 'pay:now'
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: vi.fn(() => button) })
+    Object.defineProperty(globalThis, 'CSS', { configurable: true, value: { escape: (value: string) => value.replace(':', '\\:') } })
+    expect(resolve(42, 61)).toMatchObject({ selector: '#pay\\:now', tagName: 'button' })
+    button.id = ''; button.className = 'primary large ignored'
+    Object.defineProperty(globalThis, 'CSS', { configurable: true, value: undefined })
+    expect(resolve(42, 61)).toMatchObject({ selector: 'button.primary.large' })
+    vi.mocked(document.elementFromPoint).mockReturnValueOnce(null)
+    expect(resolve(42, 61)).toBeNull()
+
+    await expect(send({ type: 'record:tab-stream', tabId: 7 }, { url: 'https://example.com' })).resolves.toEqual({ ok: false, error: 'Invalid recording request' })
+    await expect(send({ type: 'record:resolve-target', tabId: 7, x: '42', y: 61 }, sender)).resolves.toEqual({ ok: false, error: 'Invalid recording target' })
   })
 
   it('activates regular pages using temporary tab access', async () => {

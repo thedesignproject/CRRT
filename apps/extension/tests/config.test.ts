@@ -18,10 +18,11 @@ it('builds the extension with its canonical icon and declared permissions', () =
   expect((config.manifest as (environment: { mode: string }) => unknown)({ mode: 'production' })).toEqual(manifest)
   expect(manifest).toMatchObject({
     version: '1.0.0',
-    permissions: ['activeTab', 'identity', 'scripting', 'storage'],
+    permissions: ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'],
     host_permissions: ['https://crrt.ai/*', 'https://project-ref.supabase.co/*'],
     icons: extensionIcons,
     action: { default_icon: extensionIcons },
+    commands: { 'start-recording': { suggested_key: { default: 'Alt+Shift+R', mac: 'Alt+Shift+R' }, description: 'Start a CRRT recording' } },
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
   })
   for (const path of Object.values(extensionIcons)) expect(existsSync(`apps/extension/public/${path}`)).toBe(true)

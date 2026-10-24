@@ -34,6 +34,7 @@ import { BulkActionBar } from './components/BulkActionBar'
 import { Spinner } from './components/primitives'
 import { ProductAuditPage } from './components/ProductAuditPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
+import { RecordingsPage } from './components/RecordingsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -108,9 +109,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [refreshProjects])
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments'>(() =>
-    new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
-  )
+  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings'>(() => {
+    const requested = new URLSearchParams(window.location.search).get('view')
+    return requested === 'extension-comments' || requested === 'recordings' ? requested : 'feedback'
+  })
   const openAccessReview = useCallback((project: string) => {
     setSelectedProject(project)
     setView('settings')
@@ -223,7 +225,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   useEffect(() => {
-    if (view !== 'extension-comments' && !selectedProject && projects.length > 0) {
+    if (view !== 'extension-comments' && view !== 'recordings' && !selectedProject && projects.length > 0) {
       setSelectedProject(current => current || projects[0].publicKey)
     }
   }, [projects, selectedProject, view])
@@ -522,7 +524,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (view === 'extension-comments') return
+      if (view === 'extension-comments' || view === 'recordings') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -619,6 +621,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
+  const openRecordings = useCallback(() => {
+    setView('recordings')
+    setSelectedCommentId('')
+    setPendingCommentSelection(null)
+    setPendingBulkSelection(null)
+    setBulkTransitionNotice('')
+    setCmdOpen(false)
+    exitBulkMode()
+  }, [exitBulkMode])
+
   const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number) => {
     setSelectedProject(projectKey)
     setView('feedback')
@@ -664,7 +676,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   // mark the flag so the welcome doesn't reappear if they cancel out of
   // the create-project modal.
   const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
-  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments'
+  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments' && view !== 'recordings'
 
   if (showWelcome) {
     return (
@@ -721,6 +733,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
         extensionCommentsActive={view === 'extension-comments'}
+        onOpenRecordings={openRecordings}
+        recordingsActive={view === 'recordings'}
         apiBase={API_BASE}
         accessToken={accessToken}
         onProjectsChanged={refreshProjects}
@@ -739,6 +753,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
       {view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
+      ) : view === 'recordings' ? (
+        <RecordingsPage />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (

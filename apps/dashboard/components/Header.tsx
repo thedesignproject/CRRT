@@ -7,6 +7,7 @@ import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
 import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
+import { Video } from 'lucide-react'
 import { AddProjectPopover } from './AddProjectPopover'
 import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
@@ -34,6 +35,8 @@ interface HeaderProps {
   settingsActive: boolean
   onOpenExtensionComments: () => void
   extensionCommentsActive: boolean
+  onOpenRecordings?: () => void
+  recordingsActive?: boolean
   apiBase: string
   accessToken: string
   onProjectsChanged: () => void
@@ -70,6 +73,8 @@ export function Header({
   settingsActive,
   onOpenExtensionComments,
   extensionCommentsActive,
+  onOpenRecordings,
+  recordingsActive = false,
   apiBase,
   accessToken,
   onProjectsChanged,
@@ -114,6 +119,7 @@ export function Header({
 
       <nav className="dashboard-projects" aria-label="Projects">
         <button onClick={onOpenExtensionComments} aria-pressed={extensionCommentsActive} className={cn('px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', extensionCommentsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}>Inbox</button>
+        {onOpenRecordings && <button onClick={onOpenRecordings} aria-pressed={recordingsActive} className={cn('inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap', recordingsActive ? 'bg-accent text-foreground' : 'text-muted-foreground hover:text-foreground hover:bg-accent')}><Video size={13} />Recordings <span className="recordings-new-dot">New</span></button>}
         {projectsLoading && projects.length === 0 ? (
           <span className="text-xs text-muted-foreground px-2">Loading projects…</span>
         ) : projectsError ? (

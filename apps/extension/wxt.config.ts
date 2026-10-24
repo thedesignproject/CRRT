@@ -64,9 +64,9 @@ export function extensionManifest(
   const supabase = configuredUrl(environment, 'WXT_SUPABASE_URL', 'supabase', mode)
   return {
     name: 'CRRT',
-    description: 'Drop visual feedback on any page and share it with your CRRT projects.',
+    description: 'Comment or record your screen, voice, and visual context for people and agents.',
     version: readExtensionVersion(),
-    permissions: ['activeTab', 'identity', 'scripting', 'storage'],
+    permissions: ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'],
     host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`])],
     // This only lets the explicitly injected, isolated iframe load on a chosen HTTP(S) page.
     // It does not grant CRRT persistent access to those pages.
@@ -74,6 +74,12 @@ export function extensionManifest(
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
     icons: extensionIcons,
     action: { default_title: 'CRRT', default_icon: extensionIcons },
+    commands: {
+      'start-recording': {
+        suggested_key: { default: 'Alt+Shift+R', mac: 'Alt+Shift+R' },
+        description: 'Start a CRRT recording',
+      },
+    },
   }
 }
 

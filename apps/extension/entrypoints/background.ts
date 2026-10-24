@@ -56,6 +56,52 @@ async function currentWebTab() {
   return { id: tab.id, origin }
 }
 
+async function openRecorder() {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+  const params = new URLSearchParams()
+  if (typeof tab?.id === 'number') params.set('tabId', String(tab.id))
+  if (tab?.url) params.set('pageUrl', tab.url)
+  if (tab?.title) params.set('pageTitle', tab.title)
+  await browser.windows.create({
+    url: new URL(`/record.html?${params}`, browser.runtime.getURL('/private.html')).toString(),
+    type: 'popup',
+    width: 1180,
+    height: 820,
+  })
+}
+
+function isExtensionPage(sender: unknown) {
+  const url = (sender as { url?: string } | null)?.url
+  return typeof url === 'string' && new URL(url).origin === new URL(browser.runtime.getURL('/private.html')).origin
+}
+
+async function tabStreamId(tabId: unknown, sender: unknown) {
+  if (!isExtensionPage(sender) || !Number.isInteger(tabId)) throw new Error('Invalid recording request')
+  const tab = await browser.tabs.get(tabId as number)
+  if (!webOrigin(tab.url)) throw new Error('This tab cannot be recorded. Choose Window or Entire screen.')
+  return browser.tabCapture.getMediaStreamId({ targetTabId: tabId as number })
+}
+
+async function resolveRecordingTarget(tabId: unknown, x: unknown, y: unknown, sender: unknown) {
+  if (!isExtensionPage(sender) || !Number.isInteger(tabId) || typeof x !== 'number' || typeof y !== 'number') {
+    throw new Error('Invalid recording target')
+  }
+  const [result] = await browser.scripting.executeScript({
+    target: { tabId: tabId as number },
+    args: [x, y],
+    func: (xPercent: number, yPercent: number) => {
+      const element = document.elementFromPoint(innerWidth * xPercent / 100, innerHeight * yPercent / 100) as HTMLElement | null
+      if (!element) return null
+      const escaped = (value: string) => globalThis.CSS?.escape ? globalThis.CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
+      const selector = element.id
+        ? `#${escaped(element.id)}`
+        : `${element.tagName.toLowerCase()}${Array.from(element.classList).slice(0, 2).map((name) => `.${escaped(name)}`).join('')}`
+      return { selector, pageUrl: location.href, tagName: element.tagName.toLowerCase() }
+    },
+  })
+  return result?.result ?? null
+}
+
 export async function tabActivation(tabId: number, pageUrl?: string): Promise<ActiveTabState | null> {
   return withTabOperation(tabId, async () => {
     const key = activeTabKey(tabId)
@@ -198,6 +244,17 @@ export default defineBackground(() => {
         await activateCurrentTab()
         return { ok: true }
       }
+      if ((message as { type?: unknown } | null)?.type === 'record:open') {
+        await openRecorder()
+        return { ok: true }
+      }
+      if ((message as { type?: unknown } | null)?.type === 'record:tab-stream') {
+        return { ok: true, data: await tabStreamId((message as { tabId?: unknown }).tabId, sender) }
+      }
+      if ((message as { type?: unknown } | null)?.type === 'record:resolve-target') {
+        const input = message as { tabId?: unknown; x?: unknown; y?: unknown }
+        return { ok: true, data: await resolveRecordingTarget(input.tabId, input.x, input.y, sender) }
+      }
       if ((message as { type?: unknown } | null)?.type === 'comment:is-active') {
         const tab = senderTab(sender)
         const pageUrl = (sender as { url?: string } | null)?.url ?? tab?.url
@@ -228,5 +285,8 @@ export default defineBackground(() => {
   browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (changeInfo.url || changeInfo.status === 'loading') invalidateCapture(`tab:${tabId}`)
     if (changeInfo.url) void clearNavigatedTab(tabId, changeInfo.url)
+  })
+  browser.commands?.onCommand.addListener((command) => {
+    if (command === 'start-recording') void openRecorder()
   })
 })
