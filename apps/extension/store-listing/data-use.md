@@ -17,8 +17,8 @@ CRRT captures contextual visual feedback or a user-initiated screen recording an
 | Feedback text, author, visibility, timestamps, and status | The user submits feedback | Save, display, review, and synchronize feedback | Creator for Private feedback; authorized collaborators for project feedback; internal feedback excludes guests |
 | Selected element or text anchor, selector, page geometry, and optional screenshot | The user explicitly selects a target and submits feedback | Restore the contextual pin and provide implementation evidence | Same audience as the feedback; screenshots use protected storage and short-lived signed URLs |
 | Speech transcript | The user presses the microphone and submits the resulting feedback | Let the user dictate feedback | Same audience as the submitted feedback; Chrome or its speech service may process audio, while CRRT stores the submitted text and not microphone audio |
-| Tab, window, or screen video; optional camera and microphone audio | The user opens Record, selects a source, and confirms Chrome's capture prompt | Create a replayable recording with a face bubble and voice | In the current frontend demo, media remains in local browser IndexedDB and is not uploaded |
-| Recording marks, timestamps, page URL, DOM selector, and generated demo transcript | The user draws, adds an arrow, box, text, or pin while recording | Build the timeline and an agent-readable capture | Stored with the local recording; copied to the clipboard only when the user chooses Copy for Claude Code |
+| Tab, window, or screen video; optional camera and microphone audio | The user opens Record, selects a source, and confirms Chrome's capture prompt | Create a replayable recording with a face bubble and voice | Video and camera media remain in local browser IndexedDB. When microphone or captured audio is available, an audio-only copy is sent to CRRT and its speech-to-text processor for transcription. |
+| Recording marks, timestamps, page URL, DOM selector, and speech transcript | The user draws, adds an arrow, box, text, or pin while recording | Build the timeline and an agent-readable capture | Stored with the local recording; copied to the clipboard only when the user chooses Copy for Claude Code |
 | Editable tracker-draft input | An authorized internal collaborator requests a tracker draft | Propose concise issue copy from the feedback and limited page context | The configured model provider; CRRT falls back to deterministic copy when no model is configured |
 | Confirmed external-work fields, destination, identifier, URL, and status | An authorized internal collaborator confirms Send to GitHub, Linear, or Jira | Create and synchronize linked work | CRRT and the selected provider |
 
@@ -26,6 +26,7 @@ CRRT captures contextual visual feedback or a user-initiated screen recording an
 
 - Supabase provides authentication, database records, and protected screenshot storage.
 - Vercel provides application hosting and server execution.
+- Deepgram processes the audio-only recording derivative to return timestamped speech text. CRRT does not persist that derivative on the server in this version.
 - Resend delivers invitation and feedback-notification email.
 - The operator-configured model provider receives limited feedback context only when an authorized internal collaborator requests an editable tracker draft.
 - GitHub, Linear, and Atlassian Jira receive the confirmed draft only when the project has connected that provider and an authorized internal collaborator confirms the send.
@@ -36,7 +37,7 @@ Provider credentials and service-role credentials remain on the CRRT server and 
 
 - One-time extension handoff codes expire after five minutes. Hashed handoff metadata is scheduled for removal after 24 hours.
 - Local session and preference data remains until expiry, sign-out, preference change, browser clearing, or uninstall.
-- Local demo recordings remain until the user deletes them, clears browser data, or uninstalls the extension.
+- Local recordings and their retryable audio derivative remain until the user deletes them, clears browser data, or uninstalls the extension.
 - Feedback and protected screenshots remain until the feedback owner deletes them or an authorized deletion request is completed.
 - Connected-provider records remain until an authorized project administrator disconnects the provider or an authorized deletion request is completed.
 

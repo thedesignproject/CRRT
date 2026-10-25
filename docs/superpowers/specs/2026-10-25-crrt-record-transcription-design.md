@@ -32,7 +32,7 @@ Headers:
 
 ```http
 Authorization: Bearer <Supabase access token>
-Content-Type: audio/webm
+Content-Type: application/octet-stream
 ```
 
 Body: raw audio-only WebM bytes.
@@ -42,7 +42,7 @@ Limits for this version:
 - maximum recording length in the UI: 5 minutes;
 - audio bitrate: 48 kbps;
 - maximum request body: 4 MB;
-- accepted media type: `audio/webm`;
+- accepted transport media type: `application/octet-stream`; the endpoint validates the WebM EBML header and forwards it to the provider as `audio/webm`;
 - provider timeout: 45 seconds;
 - no automatic provider retries inside the request.
 
@@ -84,7 +84,7 @@ Errors returned to the extension are stable product copy and do not expose provi
 
 ## Server design
 
-- `api/v1/extension/recordings/transcribe.ts`: HTTP boundary, CORS, authentication, size/type validation, status mapping. Vercel body parsing is disabled so the route reads raw bytes and aborts as soon as the 4 MB limit is crossed.
+- `api/v1/extension/recordings/transcribe.ts`: HTTP boundary, CORS, authentication, size/type validation, status mapping. The client uses Vercel's documented `application/octet-stream` request contract so the shared function router exposes an unmodified `Buffer`; the route rejects declared or actual bodies above 4 MB.
 - `api/_lib/recording-transcription.ts`: provider-independent types, Deepgram request, response normalization, timeout.
 - `api/_lib/extension-auth-http.ts`: allow authenticated extension requests to preflight `Authorization` without weakening the extension-origin check.
 - `.env.example`: documents `DEEPGRAM_API_KEY` and optional `DEEPGRAM_API_BASE_URL` for tests/self-hosting.

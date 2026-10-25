@@ -12,6 +12,7 @@ import {
 } from '../../lib/recording'
 import { getLocalRecording, saveLocalRecording } from '../../lib/recording-store'
 import { sessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
+import { withRecordingTranscript } from '../../lib/recording-transcription'
 import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
@@ -36,31 +37,18 @@ export function sourceLabel(source: RecordingSource) {
   return source === 'tab' ? 'This tab' : source === 'window' ? 'Window' : 'Entire screen'
 }
 
-export function fixtureTranscript(marks: RecordingMark[], durationMs: number) {
-  const intro = { id: crypto.randomUUID(), startMs: 1_200, endMs: 4_600, text: 'Okay, this is the flow we are reviewing today.' }
-  const moments = marks.map((mark, index) => ({
-    id: crypto.randomUUID(),
-    startMs: Math.max(0, mark.atMs - 900),
-    endMs: Math.min(durationMs, mark.atMs + 2_400),
-    text: fixtureTranscriptText(mark),
-  }))
-  return [intro, ...moments]
-}
-
-export function fixtureTranscriptText(mark: RecordingMark) {
-  if (mark.text) return mark.text
-  if (mark.type === 'pin') return `This is item ${mark.pinNumber}. The interaction here needs attention.`
-  return `Look here. This ${mark.target?.tagName || 'area'} should be clearer before we ship.`
-}
-
 export function recordingTitle(marks: RecordingMark[], pageTitle?: string) {
   return marks[0]?.text || pageTitle || 'Untitled recording'
 }
 
-export function liveTranscriptText(durationMs: number) {
-  if (durationMs < 4_000) return 'Listening…'
-  if (durationMs < 10_000) return '“Okay, this is the flow we are reviewing today.”'
-  return '“Look here—this is the part that should change.”'
+type StoredRecording = Omit<LocalRecording, 'transcriptionStatus'> & Pick<Partial<LocalRecording>, 'transcriptionStatus'>
+
+export function normalizeStoredRecording(recording: StoredRecording): LocalRecording {
+  if (recording.transcriptionStatus) return { ...recording, transcriptionStatus: recording.transcriptionStatus }
+  return {
+    ...recording,
+    transcriptionStatus: recording.transcript.length ? 'ready' : 'failed',
+  }
 }
 
 export function captureThumbnail(video: HTMLVideoElement | null) {
@@ -136,7 +124,7 @@ export function RecordApp() {
     getLocalRecording(recordingId).then((stored) => {
       /* v8 ignore next -- a stale local recording URL intentionally leaves the setup screen intact */
       if (!stored) return
-      setRecording(stored)
+      setRecording(normalizeStoredRecording(stored))
       if (stored.screenBlob) setScreenUrl(URL.createObjectURL(stored.screenBlob))
       if (stored.cameraBlob) setCameraUrl(URL.createObjectURL(stored.cameraBlob))
     }).catch(() => {})
@@ -175,40 +163,49 @@ export function RecordApp() {
         id: crypto.randomUUID(),
         title: recordingTitle(marks, pageTitle),
         source: current.source,
-        status: 'ready',
+        status: 'processing',
         pageUrl,
         pageTitle,
         durationMs,
         createdAt: new Date().toISOString(),
         authorName: 'Tomás',
         marks,
-        transcript: fixtureTranscript(marks, durationMs),
+        transcript: [],
+        transcriptionStatus: 'processing',
         screenBlob: blobs.screenBlob,
         cameraBlob: blobs.cameraBlob,
+        audioBlob: blobs.audioBlob,
         thumbnailDataUrl: captureThumbnail(previewRef.current),
       }
       await saveLocalRecording(saved)
+      const completed = await withRecordingTranscript(saved)
+      await saveLocalRecording(completed)
       const sessionId = sessionRef.current
       sessionRef.current = null
       if (sessionId) await send({ type: 'record:session-stop', sessionId }).catch(() => undefined)
-      setRecording(saved)
+      setRecording(completed)
       setScreenUrl(URL.createObjectURL(blobs.screenBlob))
       if (blobs.cameraBlob) setCameraUrl(URL.createObjectURL(blobs.cameraBlob))
       dispatch({ type: 'processing.ready' })
-      history.replaceState(null, '', `${location.pathname}?recording=${saved.id}`)
+      history.replaceState(null, '', `${location.pathname}?recording=${completed.id}`)
     } catch (error) {
       dispatch({ type: 'recording.failed', message: error instanceof Error ? error.message : 'Could not finish this recording.' })
     }
   }, [pageTitle, pageUrl])
 
   async function start() {
-    if (state.status === 'failed') dispatch({ type: 'recording.restarted' })
+    if (state.status === 'failed') {
+      stateRef.current = recorderReducer(stateRef.current, { type: 'recording.restarted' })
+      dispatch({ type: 'recording.restarted' })
+    }
     let warning: string | undefined
     if (state.source === 'tab') {
       const granted = await browser.permissions.request({ origins: ['http://*/*', 'https://*/*'] }).catch(() => false)
       if (!granted) warning = 'Cross-site navigation may hide controls. Recording continues on this page.'
       setSessionWarning(warning)
     }
+    const countdownState = recorderReducer(stateRef.current, { type: 'countdown.started' })
+    stateRef.current = countdownState
     dispatch({ type: 'countdown.started' })
     try {
       const tabStreamId = state.source === 'tab'
@@ -234,7 +231,6 @@ export function RecordApp() {
       }
       if (state.source === 'tab' && tabId !== null) {
         const sessionId = crypto.randomUUID()
-        const countdownState = recorderReducer(stateRef.current, { type: 'countdown.started' })
         await send({ type: 'record:session-create', tabId, sessionId, snapshot: sessionSnapshot(countdownState, warning) })
         sessionRef.current = sessionId
       }
@@ -343,7 +339,17 @@ export function RecordApp() {
     setCopied(true); window.setTimeout(() => setCopied(false), 1_600)
   }
 
-  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} />
+  const retryTranscript = useCallback(async () => {
+    if (!recording || recording.transcriptionStatus === 'processing') return
+    const processing = { ...recording, transcriptionStatus: 'processing' as const, transcriptionError: undefined }
+    setRecording(processing)
+    await saveLocalRecording(processing)
+    const completed = await withRecordingTranscript(processing)
+    await saveLocalRecording(completed)
+    setRecording(completed)
+  }, [recording])
+
+  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} />
 
   if (state.status === 'setup' || state.status === 'failed') return <Setup state={state} tabAvailable={tabId !== null && Boolean(pageUrl?.startsWith('http'))} start={() => { void start() }} dispatch={dispatch} />
 
@@ -355,8 +361,6 @@ export function RecordApp() {
   const previewMark: RecordingMark | null = draft.length && state.tool !== 'pointer'
     ? { id: 'draft', type: state.tool, atMs: state.durationMs, points: draft, pinNumber: state.marks.filter((mark) => mark.type === 'pin').length + 1, text: state.tool === 'text' ? 'Type a note' : undefined }
     : null
-  const liveTranscript = liveTranscriptText(state.durationMs)
-
   return <main className="record-stage">
     <header className="record-stage-header"><div className="brand"><span>🥕</span><strong>CRRT Record</strong></div><div className="capture-live"><i />CRRT is recording {sourceLabel(state.source).toLowerCase()}</div></header>
     <section className="record-preview-shell">
@@ -365,7 +369,7 @@ export function RecordApp() {
         <Marks marks={state.marks} />{previewMark && <MarkShape mark={previewMark} />}
       </svg>
       {state.cameraEnabled && <video ref={cameraPreviewRef} className="camera-bubble" muted playsInline />}
-      {state.microphoneEnabled && state.status !== 'countdown' && <div className="live-transcript"><Mic size={12} /><span>{liveTranscript}</span><em>Live transcript preview</em></div>}
+      {state.microphoneEnabled && state.status !== 'countdown' && <div className="live-transcript"><Mic size={12} /><span>Voice recording</span><em>Transcribed after Done</em></div>}
       {state.status === 'countdown' && <div className="countdown"><span>{state.countdown}</span><p>Get ready</p></div>}
       {state.status === 'paused' && <div className="paused-screen"><Pause size={30} fill="currentColor" /><strong>Recording paused</strong></div>}
       {state.status === 'processing' && <div className="paused-screen processing"><span className="processing-ring" /><strong>Building your capture…</strong><small>Video is safe. Transcript and keyframes are next.</small></div>}
@@ -405,12 +409,13 @@ function Setup({ state, tabAvailable, start, dispatch }: { state: typeof initial
       <button className="start-recording" onClick={start}><Video size={18} /><span>Start recording</span><kbd>3 sec</kbd></button>
       <p className="privacy-note">Chrome will ask exactly what to share. Camera and microphone remain optional.</p>
     </section>
-    <footer className="setup-footer"><span>Local demo</span><span>Nothing uploads yet</span></footer>
+    <footer className="setup-footer"><span>Local recording</span><span>Voice uploads for transcription</span></footer>
   </main>
 }
 
-function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare }: {
+function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare, retryTranscript }: {
   recording: LocalRecording; screenUrl: string; cameraUrl: string; tab: 'transcript' | 'agents'; setTab: (tab: 'transcript' | 'agents') => void; playbackMs: number; setPlaybackMs: (value: number) => void; cameraRef: React.RefObject<HTMLVideoElement | null>; copied: boolean; copyShare: () => Promise<void>
+  retryTranscript: () => Promise<void>
 }) {
   const player = useRef<HTMLVideoElement>(null)
   const payload = buildRecordingAgentPayload(recording)
@@ -438,11 +443,15 @@ function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setP
       </section>
       <aside className="context-panel">
         <div className="context-tabs"><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button><button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>For agents</button></div>
-        {tab === 'transcript' ? <div className="transcript-list">{recording.transcript.length === 0 && <div className="transcript-empty"><strong>No transcript captured</strong><p>The recording and marks are intact. Speech transcription was unavailable in this browser session.</p></div>}{recording.transcript.map((segment) => {
+        {tab === 'transcript' ? <div className="transcript-list">
+          {recording.transcriptionStatus === 'processing' && <div className="transcript-empty"><strong>Transcribing voice…</strong><p>Your recording is already saved locally.</p></div>}
+          {recording.transcriptionStatus === 'failed' && <div className="transcript-empty"><strong>Transcript unavailable</strong><p>{recording.transcriptionError || 'CRRT could not transcribe this recording.'}</p>{recording.audioBlob?.size ? <button className="retry-transcript" onClick={() => { void retryTranscript() }}>Retry transcription</button> : null}</div>}
+          {recording.transcriptionStatus === 'ready' && recording.transcript.length === 0 && <div className="transcript-empty"><strong>No speech detected</strong><p>The recording and marks are intact.</p></div>}
+          {recording.transcript.map((segment) => {
           const mark = nearestRecordingMark(recording.marks, (segment.startMs + segment.endMs) / 2)
           /* v8 ignore next -- thumbnail/mark fallbacks are presentation-only variants of the tested transcript row */
           return <button key={segment.id} onClick={() => { if (player.current) player.current.currentTime = segment.startMs / 1000 }}><span className="keyframe-mini">{recording.thumbnailDataUrl ? <img src={recording.thumbnailDataUrl} alt="" /> : <Video size={14} />}</span><span><time>{formatRecordingTime(segment.startMs)}</time><p>{segment.text}</p>{mark && <small>{mark.target?.selector || mark.type}</small>}</span></button>
-        })}</div> : <div className="agent-context"><div className="agent-callout"><strong>Ready for Claude Code</strong><p>Compact transcript, frames, marks and DOM targets. Project rules join here after backend integration.</p></div><pre>{payload}</pre><button onClick={() => { void copyPayload() }}><Copy size={15} />Copy for Claude Code</button><small>Paid capability · backend enforcement pending</small></div>}
+          })}</div> : <div className="agent-context"><div className="agent-callout"><strong>Ready for Claude Code</strong><p>Compact transcript, frames, marks and DOM targets. Project rules join here after backend integration.</p></div><pre>{payload}</pre><button onClick={() => { void copyPayload() }}><Copy size={15} />Copy for Claude Code</button><small>Paid capability · backend enforcement pending</small></div>}
       </aside>
     </div>
   </main>

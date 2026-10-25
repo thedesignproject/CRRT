@@ -1,4 +1,4 @@
-import type { RecorderState, RecordingMark, RecordingSource, RecordingTool, RecordingTranscriptSegment } from './recording'
+import type { RecorderState, RecordingMark, RecordingSource, RecordingTool } from './recording'
 
 export type RecordingSessionSnapshot = Pick<RecorderState,
   'status' | 'source' | 'cameraEnabled' | 'microphoneEnabled' | 'countdown' | 'durationMs' | 'tool' | 'marks' | 'error'> & {
@@ -18,7 +18,6 @@ export type RecordingSurfaceCommand =
   | { kind: 'mark.added'; mark: RecordingMark }
   | { kind: 'mark.undone' }
   | { kind: 'marks.cleared' }
-  | { kind: 'transcript.segment-added'; segment: RecordingTranscriptSegment }
 
 export type RecordingSessionDescriptor = {
   sessionId: string
@@ -41,16 +40,6 @@ export function isRecordingSurfaceCommand(value: unknown): value is RecordingSur
   if (['camera.toggled', 'microphone.toggled', 'start', 'cancel', 'pause.toggle', 'restart', 'finish', 'mark.undone', 'marks.cleared'].includes(String(command.kind))) return true
   if (command.kind === 'source.changed') return ['tab', 'window', 'screen'].includes(String(command.source))
   if (command.kind === 'tool.changed') return isRecordingTool(command.tool)
-  if (command.kind === 'transcript.segment-added') {
-    const segment = command.segment as Partial<RecordingTranscriptSegment> | undefined
-    return Boolean(segment
-      && typeof segment.id === 'string'
-      && typeof segment.text === 'string'
-      && segment.text.trim()
-      && Number.isFinite(segment.startMs)
-      && Number.isFinite(segment.endMs)
-      && Number(segment.endMs) >= Number(segment.startMs))
-  }
   if (command.kind !== 'mark.added' || !command.mark || typeof command.mark !== 'object') return false
   const mark = command.mark as Partial<RecordingMark>
   return typeof mark.id === 'string'

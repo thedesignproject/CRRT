@@ -37,8 +37,11 @@ export type LocalRecording = {
   authorName: string
   marks: RecordingMark[]
   transcript: RecordingTranscriptSegment[]
+  transcriptionStatus: 'processing' | 'ready' | 'failed'
+  transcriptionError?: string
   screenBlob?: Blob
   cameraBlob?: Blob
+  audioBlob?: Blob
   thumbnailDataUrl?: string
 }
 

@@ -45,6 +45,11 @@ const routes = routeFiles
   .map(buildRoute)
   .sort((left, right) => left.parameterNames.length - right.parameterNames.length)
 
+const rawBodyRoutes = new Set([
+  'api/v1/billing/webhook.ts',
+  'api/v1/extension/recordings/transcribe.ts',
+])
+
 function addQueryValue(query: Record<string, QueryValue>, key: string, value: string) {
   const current = query[key]
   query[key] = current === undefined ? value : Array.isArray(current) ? [...current, value] : [current, value]
@@ -119,7 +124,7 @@ Bun.serve({
         method: request.method,
         headers: Object.fromEntries(request.headers.entries()),
         query,
-        body: await parseBody(request, route.file === 'api/v1/billing/webhook.ts'),
+        body: await parseBody(request, rawBodyRoutes.has(route.file)),
       }
       const localResponse = createResponseAdapter()
       const module = await import(new URL(`../${route.file}`, import.meta.url).href)

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   play: vi.fn().mockResolvedValue(undefined),
   pause: vi.fn(),
   requestPermission: vi.fn(),
+  withTranscript: vi.fn(),
   listeners: new Set<(message: unknown) => unknown>(),
 }))
 
@@ -23,6 +24,7 @@ vi.mock('../../lib/recording-store', () => ({
   getLocalRecording: mocks.getRecording,
   saveLocalRecording: mocks.saveRecording,
 }))
+vi.mock('../../lib/recording-transcription', () => ({ withRecordingTranscript: mocks.withTranscript }))
 
 function mediaStream() {
   const track = { addEventListener: vi.fn(), stop: vi.fn(), kind: 'video' }
@@ -32,7 +34,7 @@ function mediaStream() {
 function capture(): RecordingCapture {
   return {
     screenStream: mediaStream() as unknown as MediaStream, cameraStream: mediaStream() as unknown as MediaStream, previewStream: mediaStream() as unknown as MediaStream,
-    pause: vi.fn(), resume: vi.fn(), stop: vi.fn().mockResolvedValue({ screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']) }),
+    pause: vi.fn(), resume: vi.fn(), stop: vi.fn().mockResolvedValue({ screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']), audioBlob: new Blob(['audio']) }),
   }
 }
 
@@ -58,6 +60,10 @@ beforeEach(() => {
   mocks.startCapture.mockResolvedValue(capture())
   mocks.getRecording.mockResolvedValue(undefined)
   mocks.saveRecording.mockResolvedValue('saved')
+  mocks.withTranscript.mockImplementation(async (recording) => ({
+    ...recording, status: 'ready', transcriptionStatus: 'ready',
+    transcript: [{ id: 'speech', startMs: 1_000, endMs: 2_500, text: 'This is the actual narration.' }],
+  }))
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play })
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause })
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, writable: true, value: null })
@@ -86,20 +92,17 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   helpers.revokeRecordingUrls('blob:screen', 'blob:camera')
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:screen')
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:camera')
-  expect(helpers.fixtureTranscript([
-    { id: 'pin', type: 'pin', atMs: 2_000, points: [], pinNumber: 2 },
-    { id: 'draw', type: 'draw', atMs: 3_000, points: [], target: { tagName: 'button' } },
-  ], 8_000).map((line) => line.text)).toEqual(expect.arrayContaining([
-    expect.stringContaining('item 2'), expect.stringContaining('button'),
-  ]))
-  expect(helpers.fixtureTranscriptText({ id: 'note', type: 'text', atMs: 0, points: [], text: 'Exact note' })).toBe('Exact note')
-  expect(helpers.fixtureTranscriptText({ id: 'area', type: 'box', atMs: 0, points: [] })).toContain('area')
   expect(helpers.recordingTitle([], undefined)).toBe('Untitled recording')
   expect(helpers.recordingTitle([], 'Checkout')).toBe('Checkout')
   expect(helpers.recordingTitle([{ id: 'note', type: 'text', atMs: 0, points: [], text: 'Title note' }], 'Checkout')).toBe('Title note')
-  expect([helpers.liveTranscriptText(0), helpers.liveTranscriptText(5_000), helpers.liveTranscriptText(12_000)]).toEqual([
-    'Listening…', '“Okay, this is the flow we are reviewing today.”', '“Look here—this is the part that should change.”',
-  ])
+  const legacyRecording = {
+    id: 'legacy', title: 'Legacy', source: 'tab' as const, status: 'ready' as const, durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
+  }
+  expect(helpers.normalizeStoredRecording(legacyRecording).transcriptionStatus).toBe('failed')
+  expect(helpers.normalizeStoredRecording({ ...legacyRecording, transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Hello' }] }).transcriptionStatus).toBe('ready')
+  const currentRecording = { ...legacyRecording, transcriptionStatus: 'processing' as const }
+  expect(helpers.normalizeStoredRecording(currentRecording)).toStrictEqual(currentRecording)
   const drawImage = vi.fn()
   expect(helpers.captureThumbnail(null)).toBeUndefined()
   expect(helpers.captureThumbnail({ videoWidth: 10, videoHeight: 0 } as HTMLVideoElement)).toBeUndefined()
@@ -123,9 +126,9 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalled())
   await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
-  expect(screen.getByText(/Live transcript preview/)).toBeInTheDocument()
+  expect(screen.getByText(/Transcribed after Done/)).toBeInTheDocument()
   await act(async () => { await vi.advanceTimersByTimeAsync(4_200) })
-  expect(screen.getByText(/Okay, this is the flow/)).toBeInTheDocument()
+  expect(screen.getByText(/Voice recording/)).toBeInTheDocument()
 
   const overlay = document.querySelector('.record-overlay') as SVGSVGElement
   vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 600 } as DOMRect)
@@ -156,6 +159,7 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
   await screen.findByText('Capture ready')
+  expect(screen.getByText('This is the actual narration.')).toBeInTheDocument()
   expect(mocks.saveRecording).toHaveBeenCalled()
   expect(mocks.saveRecording.mock.calls[0]?.[0]).toMatchObject({ title: 'Needs more contrast' })
   const videos = document.querySelectorAll('video')
@@ -216,10 +220,11 @@ it('restarts an active recording and handles a share ending during countdown', a
   await load()
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalledOnce())
+  await screen.findByRole('heading', { name: 'Controls are on the page.' })
   const first = await mocks.startCapture.mock.results[0]!.value
   const ended = first.screenStream.getVideoTracks()[0].addEventListener.mock.calls[0][1] as () => void
-  ended()
-  expect(await screen.findByRole('alert')).toHaveTextContent('ended before recording started')
+  await act(async () => { ended() })
+  expect(await screen.findByRole('alert', {}, { timeout: 5_000 })).toHaveTextContent('ended before recording started')
 
   const create = mocks.sendMessage.mock.calls.find(([message]) => message.type === 'record:session-create')?.[0]
   if (create) await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'restart' } }) })
@@ -329,6 +334,7 @@ it('opens a locally stored recording directly in review', async () => {
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', pageTitle: 'Checkout',
     marks: [{ id: 'pin', type: 'pin', atMs: 3_000, points: [{ x: 20, y: 20 }], pinNumber: 1 }],
     transcript: [{ id: 'line', startMs: 2_000, endMs: 4_000, text: 'Change this.' }],
+    transcriptionStatus: 'ready',
     screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']),
   })
   history.replaceState(null, '', '/record.html?recording=saved')
@@ -354,5 +360,46 @@ it('opens a stored recording without media blobs and renders an empty text mark 
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByRole('heading', { name: 'Notes only' })).toBeInTheDocument()
-  expect(screen.getByText('No transcript captured')).toBeInTheDocument()
+  expect(screen.getByText('Transcript unavailable')).toBeInTheDocument()
+})
+
+it('retries a failed transcript from the locally retained audio', async () => {
+  const stored = {
+    id: 'retry', title: 'Retry review', source: 'tab', status: 'ready', durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
+    transcriptionStatus: 'failed', transcriptionError: 'Provider unavailable',
+    screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
+  }
+  mocks.getRecording.mockResolvedValue(stored)
+  mocks.withTranscript.mockResolvedValue({ ...stored, transcriptionStatus: 'ready', transcriptionError: undefined, transcript: [{ id: 's', startMs: 0, endMs: 500, text: 'Recovered speech.' }] })
+  history.replaceState(null, '', '/record.html?recording=retry')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+  expect(await screen.findByText('Provider unavailable')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Retry transcription' }))
+  expect(await screen.findByText('Recovered speech.')).toBeInTheDocument()
+  expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'processing' }))
+  expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'ready' }))
+})
+
+it('renders a processing transcript state honestly', async () => {
+  mocks.getRecording.mockResolvedValue({
+    id: 'processing', title: 'Processing', source: 'tab', status: 'processing', durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'processing',
+  })
+  history.replaceState(null, '', '/record.html?recording=processing')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+  expect(await screen.findByText('Transcribing voice…')).toBeInTheDocument()
+})
+
+it('renders a successful silent transcript without treating it as an error', async () => {
+  mocks.getRecording.mockResolvedValue({
+    id: 'silent', title: 'Silent', source: 'tab', status: 'ready', durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'ready',
+  })
+  history.replaceState(null, '', '/record.html?recording=silent')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+  expect(await screen.findByText('No speech detected')).toBeInTheDocument()
 })

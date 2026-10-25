@@ -8,7 +8,7 @@ class FakeRecorder {
   ondataavailable: ((event: BlobEvent) => void) | null = null
   onstop: (() => void) | null = null
   onerror: (() => void) | null = null
-  constructor(public stream: MediaStream) {}
+  constructor(public stream: MediaStream, public options?: MediaRecorderOptions) {}
   start() { this.state = 'recording' }
   pause() { this.state = 'paused' }
   resume() { this.state = 'recording' }
@@ -50,6 +50,7 @@ it('captures a tab with microphone and camera and stops every stream', async () 
   const result = await capture.stop()
   expect(result.screenBlob.size).toBeGreaterThan(0)
   expect(result.cameraBlob?.size).toBeGreaterThan(0)
+  expect(result.audioBlob?.size).toBeGreaterThan(0)
   expect(close).toHaveBeenCalledOnce()
 })
 
@@ -104,6 +105,28 @@ it('falls back when media types and recorder metadata are unavailable', async ()
   const result = await capture.stop()
   expect(result.screenBlob.type).toBe('video/webm')
   expect(result.screenBlob.size).toBe(0)
+})
+
+it('falls back to the standard audio WebM type when codec metadata is unavailable', async () => {
+  const display = stream(1, 1), mixed = stream(1, 0)
+  class SparseRecorder extends FakeRecorder {
+    static isTypeSupported = vi.fn(() => false)
+    mimeType = ''
+  }
+  class FakeAudioContext {
+    destination = {}
+    createMediaStreamDestination() { return { stream: mixed } }
+    createMediaStreamSource() { return { connect: vi.fn() } }
+    close = vi.fn()
+  }
+  const capture = await startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false }, {
+    mediaDevices: { getDisplayMedia: vi.fn().mockResolvedValue(display) } as unknown as MediaDevices,
+    MediaRecorder: SparseRecorder as unknown as typeof MediaRecorder,
+    AudioContext: FakeAudioContext as unknown as typeof AudioContext,
+    MediaStream: FakeMediaStream as unknown as typeof MediaStream,
+  })
+  const result = await capture.stop()
+  expect(result.audioBlob).toMatchObject({ type: 'audio/webm' })
 })
 
 it('reports browsers without media capture', async () => {

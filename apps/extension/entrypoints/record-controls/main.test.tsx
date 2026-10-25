@@ -31,8 +31,6 @@ beforeEach(() => {
   Object.defineProperty(SVGElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() })
   Object.defineProperty(window, 'prompt', { configurable: true, value: vi.fn(() => 'Make this clearer') })
   Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
-  Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: undefined })
-  Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: undefined })
 })
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); document.body.innerHTML = '' })
@@ -74,7 +72,8 @@ it('renders the live tab surface and emits structured recording commands', async
   await act(async () => {
     for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 4_200 }) })
   })
-  expect(screen.getByText('Live transcript unavailable in this browser')).toBeInTheDocument()
+  expect(screen.getByText('Voice recording')).toBeInTheDocument()
+  expect(screen.getByText('Transcribed after Done')).toBeInTheDocument()
   expect(mocks.getUserMedia).toHaveBeenCalledWith({ video: true, audio: false })
   fireEvent.click(screen.getByRole('button', { name: 'Draw' }))
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'tool.changed', tool: 'draw' } })))
@@ -98,47 +97,6 @@ it('renders the live tab surface and emits structured recording commands', async
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'pause.toggle' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'restart' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'finish' } }))
-})
-
-it('streams real Chrome speech segments on the recording clock', async () => {
-  let recognition: {
-    continuous: boolean; interimResults: boolean; lang: string
-    onresult: ((event: any) => void) | null; onend: (() => void) | null; onerror: (() => void) | null
-    start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>
-  } | undefined
-  class Recognition {
-    continuous = false; interimResults = false; lang = ''
-    onresult: ((event: any) => void) | null = null; onend: (() => void) | null = null; onerror: (() => void) | null = null
-    start = vi.fn(); stop = vi.fn()
-    constructor() { recognition = this }
-  }
-  Object.defineProperty(window, 'webkitSpeechRecognition', { configurable: true, value: Recognition })
-  const module = await import('./main')
-  const view = render(<module.RecordControls />)
-  await screen.findByText('Get ready')
-  await act(async () => {
-    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 4_200 }) })
-  })
-  expect(recognition?.start).toHaveBeenCalled()
-  await act(async () => {
-    recognition?.onresult?.({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: 'Este botón' } }] })
-  })
-  expect(screen.getByText('Este botón')).toBeInTheDocument()
-  await act(async () => {
-    recognition?.onresult?.({ resultIndex: 0, results: [{ isFinal: true, 0: { transcript: 'Este botón no se lee bien' } }] })
-  })
-  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-    command: expect.objectContaining({ kind: 'transcript.segment-added', segment: expect.objectContaining({ text: 'Este botón no se lee bien', endMs: 4_200 }) }),
-  })))
-  await act(async () => { recognition?.onerror?.() })
-  expect(screen.getByText('Live transcript unavailable')).toBeInTheDocument()
-  recognition?.start.mockImplementationOnce(() => { throw new Error('restart rejected') })
-  await act(async () => { recognition?.onend?.() })
-  expect(screen.getByText('Listening…')).toBeInTheDocument()
-  const ended = recognition?.onend
-  view.unmount()
-  expect(recognition?.stop).toHaveBeenCalled()
-  ended?.()
 })
 
 it('keeps recording controls available when camera preview permission is rejected', async () => {

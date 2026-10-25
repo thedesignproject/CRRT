@@ -106,7 +106,7 @@ async function buildApiFunction(webhook = false) {
     }
     await writeFile(join(functionDirectory, '.vc-config.json'), JSON.stringify({
       runtime: lambda.runtime, handler: lambda.handler, launcherType: 'Nodejs',
-      architecture: lambda.architecture, memory: 128, maxDuration: 10,
+      architecture: lambda.architecture, memory: 128, maxDuration: 60,
       shouldAddHelpers: !webhook, shouldAddSourcemapSupport: true,
     }, null, 2))
   } finally {

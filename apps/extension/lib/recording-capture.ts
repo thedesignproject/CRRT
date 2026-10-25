@@ -13,7 +13,7 @@ export type RecordingCapture = {
   previewStream: MediaStream
   pause: () => void
   resume: () => void
-  stop: () => Promise<{ screenBlob: Blob; cameraBlob?: Blob }>
+  stop: () => Promise<{ screenBlob: Blob; cameraBlob?: Blob; audioBlob?: Blob }>
 }
 
 type CaptureEnvironment = {
@@ -23,19 +23,24 @@ type CaptureEnvironment = {
   MediaStream: typeof MediaStream
 }
 
-function supportedMime(MediaRecorderType: typeof MediaRecorder) {
-  const options = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+function supportedMime(MediaRecorderType: typeof MediaRecorder, kind: 'audio' | 'video') {
+  const options = kind === 'audio'
+    ? ['audio/webm;codecs=opus', 'audio/webm']
+    : ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
   return options.find((value) => MediaRecorderType.isTypeSupported(value))
 }
 
-function recorderFor(stream: MediaStream, MediaRecorderType: typeof MediaRecorder) {
-  const mimeType = supportedMime(MediaRecorderType)
-  const recorder = new MediaRecorderType(stream, mimeType ? { mimeType } : undefined)
+function recorderFor(stream: MediaStream, MediaRecorderType: typeof MediaRecorder, kind: 'audio' | 'video' = 'video') {
+  const mimeType = supportedMime(MediaRecorderType, kind)
+  const recorder = new MediaRecorderType(stream, {
+    ...(mimeType ? { mimeType } : {}),
+    ...(kind === 'audio' ? { audioBitsPerSecond: 48_000 } : {}),
+  })
   const chunks: Blob[] = []
   recorder.ondataavailable = (event) => { if (event.data.size) chunks.push(event.data) }
   const stopped = new Promise<Blob>((resolve, reject) => {
     recorder.onerror = () => reject(new Error('The browser could not finish this recording.'))
-    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || 'video/webm' }))
+    recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || `${kind}/webm` }))
   })
   recorder.start(1_000)
   return { recorder, stopped }
@@ -99,10 +104,13 @@ export async function startRecordingCapture(
   ])
   const primary = recorderFor(previewStream, environment.MediaRecorder)
   const camera = cameraStream?.getVideoTracks().length ? recorderFor(cameraStream, environment.MediaRecorder) : null
-  let stopping: Promise<{ screenBlob: Blob; cameraBlob?: Blob }> | null = null
+  const audio = destination.stream.getAudioTracks().length
+    ? recorderFor(new environment.MediaStream(destination.stream.getAudioTracks()), environment.MediaRecorder, 'audio')
+    : null
+  let stopping: Promise<{ screenBlob: Blob; cameraBlob?: Blob; audioBlob?: Blob }> | null = null
 
   function apply(method: 'pause' | 'resume') {
-    for (const recorder of [primary.recorder, camera?.recorder]) {
+    for (const recorder of [primary.recorder, camera?.recorder, audio?.recorder]) {
       if (!recorder) continue
       if (method === 'pause' && recorder.state === 'recording') recorder.pause()
       if (method === 'resume' && recorder.state === 'paused') recorder.resume()
@@ -116,13 +124,13 @@ export async function startRecordingCapture(
     pause: () => apply('pause'),
     resume: () => apply('resume'),
     stop: () => stopping ??= (async () => {
-      for (const recorder of [primary.recorder, camera?.recorder]) {
+      for (const recorder of [primary.recorder, camera?.recorder, audio?.recorder]) {
         if (recorder && recorder.state !== 'inactive') recorder.stop()
       }
-      const [screenBlob, cameraBlob] = await Promise.all([primary.stopped, camera?.stopped])
+      const [screenBlob, cameraBlob, audioBlob] = await Promise.all([primary.stopped, camera?.stopped, audio?.stopped])
       for (const stream of [screenStream, auxiliary, previewStream, cameraStream]) stream?.getTracks().forEach((track) => track.stop())
       await audioContext.close()
-      return { screenBlob, ...(cameraBlob ? { cameraBlob } : {}) }
+      return { screenBlob, ...(cameraBlob ? { cameraBlob } : {}), ...(audioBlob?.size ? { audioBlob } : {}) }
     })(),
   }
 }

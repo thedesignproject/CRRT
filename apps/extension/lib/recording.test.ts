@@ -72,7 +72,7 @@ it('formats durations and creates a compact agent payload', () => {
     id: 'r1', title: 'Checkout review', source: 'tab', status: 'ready', durationMs: 42_000,
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Sofia', pageTitle: 'Acme checkout',
     marks: [{ id: 'm1', type: 'box', atMs: 11_000, points: [], text: 'too dark', target: { selector: 'button.pay-cta' } }],
-    transcript: [{ id: 's1', startMs: 10_500, endMs: 13_000, text: 'This pay button barely reads.' }],
+    transcript: [{ id: 's1', startMs: 10_500, endMs: 13_000, text: 'This pay button barely reads.' }], transcriptionStatus: 'ready',
   }
   expect(formatRecordingTime(62_100)).toBe('1:02')
   expect(buildRecordingAgentPayload(recording)).toContain('## CRRT capture · Acme checkout · 0:42')

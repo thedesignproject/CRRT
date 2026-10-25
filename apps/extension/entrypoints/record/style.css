@@ -111,6 +111,7 @@ button:disabled { cursor: not-allowed; opacity: .4 }
 .transcript-empty { margin: 12px 5px; padding: 18px; border: 1px solid var(--crrt-rule-dark); border-radius: var(--crrt-radius-xl); color: var(--crrt-ink-faint) }
 .transcript-empty strong { display: block; margin-bottom: 7px; color: var(--crrt-white); font-size: 13px }
 .transcript-empty p { margin: 0; font-size: 11px; line-height: 1.55 }
+.retry-transcript { min-height: 34px; margin-top: 14px; padding: 0 11px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-size: 10px; font-weight: 700 }
 .transcript-list > button { display: grid; grid-template-columns: 70px 1fr; gap: 10px; padding: 12px 5px; border-bottom: 1px solid rgba(255,255,255,.07); background: transparent; color: #fff; text-align: left }
 .transcript-list > button:hover { background: #17171a }
 .keyframe-mini { height: 42px; display: grid; place-items: center; overflow: hidden; border-radius: 5px; background: #242428; color: #777 }

@@ -1,8 +1,9 @@
 import { browser } from 'wxt/browser'
 import { startRecordingCapture, type RecordingCapture } from '../../lib/recording-capture'
-import { initialRecorderState, recorderReducer, type LocalRecording, type RecorderState, type RecordingTranscriptSegment } from '../../lib/recording'
+import { initialRecorderState, recorderReducer, type LocalRecording, type RecorderState } from '../../lib/recording'
 import { saveLocalRecording } from '../../lib/recording-store'
 import { sessionSnapshot, type RecordingSessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
+import { withRecordingTranscript } from '../../lib/recording-transcription'
 
 type Active = {
   sessionId: string
@@ -10,7 +11,6 @@ type Active = {
   pageTitle?: string
   state: RecorderState
   capture: RecordingCapture
-  transcript: RecordingTranscriptSegment[]
   timer?: number
 }
 
@@ -43,7 +43,7 @@ async function begin(message: any) {
   })
   capture.pause()
   let state = recorderReducer(initial, { type: 'countdown.started' })
-  active = { sessionId: message.sessionId, pageUrl: message.pageUrl, pageTitle: message.pageTitle, state, capture, transcript: [] }
+  active = { sessionId: message.sessionId, pageUrl: message.pageUrl, pageTitle: message.pageTitle, state, capture }
   await emit(active.sessionId, sessionSnapshot(state))
   active.timer = window.setInterval(() => {
     /* v8 ignore next -- stale timer callbacks are ignored after disposal */
@@ -81,20 +81,22 @@ async function finish(session: Active) {
     id: crypto.randomUUID(),
     title: title(session.state, session.pageTitle),
     source: session.state.source,
-    status: 'ready',
+    status: 'processing',
     pageUrl: session.pageUrl,
     pageTitle: session.pageTitle,
     durationMs,
     createdAt: new Date().toISOString(),
     authorName: 'Tomás',
     marks: session.state.marks,
-    transcript: session.transcript
-      .map((segment) => ({ ...segment, endMs: Math.min(durationMs, segment.endMs) }))
-      .sort((a, b) => a.startMs - b.startMs),
+    transcript: [],
+    transcriptionStatus: 'processing',
     screenBlob: blobs.screenBlob,
     cameraBlob: blobs.cameraBlob,
+    audioBlob: blobs.audioBlob,
   }
   await saveLocalRecording(recording)
+  const completed = await withRecordingTranscript(recording)
+  await saveLocalRecording(completed)
   active = null
   await browser.runtime.sendMessage({ type: 'record:offscreen-finished', target: 'background', sessionId: session.sessionId, recordingId: recording.id })
 }
@@ -118,13 +120,6 @@ async function applyCommand(command: RecordingSurfaceCommand) {
       if (session.state.status === 'paused') { session.capture.resume(); session.state = recorderReducer(session.state, { type: 'recording.resumed', now: performance.now() }) }
     }
   } else if (command.kind === 'tool.changed') session.state = recorderReducer(session.state, { type: 'tool.changed', tool: command.tool })
-  else if (command.kind === 'transcript.segment-added') {
-    const text = command.segment.text.trim()
-    /* v8 ignore next -- validated commands are non-empty; duplicate ids are idempotent */
-    if (text && !session.transcript.some((segment) => segment.id === command.segment.id)) {
-      session.transcript.push({ ...command.segment, text })
-    }
-  }
   else if (command.kind === 'mark.added') session.state = recorderReducer(session.state, { type: 'mark.added', mark: command.mark })
   else if (command.kind === 'mark.undone') session.state = recorderReducer(session.state, { type: 'mark.undone' })
   else session.state = recorderReducer(session.state, { type: 'marks.cleared' })

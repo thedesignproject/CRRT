@@ -51,7 +51,7 @@ beforeEach(() => {
 
 it('persists recordings through IndexedDB and creates the object store on upgrade', async () => {
   const store = await import('./recording-store')
-  const older: LocalRecording = { id: 'older', title: 'Older', source: 'tab', status: 'ready', durationMs: 1, createdAt: '2026-10-23', authorName: 'Tomás', marks: [], transcript: [] }
+  const older: LocalRecording = { id: 'older', title: 'Older', source: 'tab', status: 'ready', durationMs: 1, createdAt: '2026-10-23', authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'ready' }
   const newer = { ...older, id: 'newer', title: 'Newer', createdAt: '2026-10-24' }
   await store.saveLocalRecording(older)
   await store.saveLocalRecording(newer)
