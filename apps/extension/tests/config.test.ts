@@ -19,6 +19,7 @@ it('builds the extension with its canonical icon and declared permissions', () =
   expect(manifest).toMatchObject({
     version: '1.0.0',
     permissions: ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     host_permissions: ['https://crrt.ai/*', 'https://project-ref.supabase.co/*'],
     icons: extensionIcons,
     action: { default_icon: extensionIcons },
@@ -29,7 +30,7 @@ it('builds the extension with its canonical icon and declared permissions', () =
   expect(manifest.host_permissions).not.toContain('http://*/*')
   expect(manifest.host_permissions).not.toContain('https://*/*')
   expect(manifest.web_accessible_resources).toEqual([
-    { resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] },
+    { resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] },
   ])
   expect(existsSync('apps/extension/entrypoints/autoload.content.ts')).toBe(false)
 })

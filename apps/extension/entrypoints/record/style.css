@@ -41,6 +41,14 @@ button:disabled { cursor: not-allowed; opacity: .4 }
 .setup-footer { height: 48px; display: flex; justify-content: center; align-items: center; gap: 16px; color: #57575c; font: 10px var(--crrt-font-mono) }
 .setup-footer span + span::before { content: '·'; margin-right: 16px }
 
+.controller-page { min-height: 100vh; display: grid; place-items: center; padding: 32px; background: #0c0c0d }
+.controller-card { width: min(540px, 100%); padding: 38px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-3xl); background: var(--crrt-bg-deep-soft); box-shadow: 0 30px 100px rgba(0,0,0,.42); text-align: center }
+.controller-live { display: inline-flex; align-items: center; gap: 8px; color: #aaaab0; font-size: 11px }
+.controller-live i { width: 8px; height: 8px; border-radius: 50%; background: var(--record-red); box-shadow: 0 0 0 4px rgba(255,87,61,.12) }
+.controller-card h1 { margin: 18px 0 10px; font-size: 34px; letter-spacing: -.045em }
+.controller-card p { margin: 0 auto 24px; max-width: 420px; color: #929299; font-size: 13px; line-height: 1.6 }
+.controller-card button { min-height: 42px; padding: 0 16px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-size: 12px; font-weight: 700 }
+
 .record-stage { min-height: 100vh; display: grid; grid-template-rows: 48px 1fr; background: #111 }
 .record-stage-header { height: 48px }
 .capture-live { display: flex; align-items: center; gap: 8px; color: #aaaab0; font-size: 11px }

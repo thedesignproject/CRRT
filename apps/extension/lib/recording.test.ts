@@ -44,6 +44,27 @@ describe('recorder state', () => {
     expect(recorderReducer(initialRecorderState, { type: 'marks.cleared' })).toBe(initialRecorderState)
     expect(recorderReducer(initialRecorderState, { type: 'unknown' } as never)).toBe(initialRecorderState)
   })
+
+  it('guards every state-specific transition and duration edge', () => {
+    const recording = { ...initialRecorderState, status: 'recording' as const, startedAt: 1_000 }
+    const paused = { ...recording, status: 'paused' as const, pausedAt: 2_000, durationMs: 1_000 }
+    const malformedPause = { ...paused, pausedAt: null }
+
+    expect(recorderReducer(recording, { type: 'source.changed', source: 'screen' })).toBe(recording)
+    expect(recorderReducer(recording, { type: 'microphone.toggled' })).toBe(recording)
+    expect(recorderReducer(recording, { type: 'countdown.started', seconds: 5 })).toBe(recording)
+    expect(recorderReducer(initialRecorderState, { type: 'countdown.started', seconds: 5 }).countdown).toBe(5)
+    expect(recorderReducer(initialRecorderState, { type: 'countdown.ticked' })).toBe(initialRecorderState)
+    expect(recorderReducer(initialRecorderState, { type: 'recording.paused', now: 2_000 })).toBe(initialRecorderState)
+    expect(recorderReducer(recording, { type: 'recording.resumed', now: 2_000 })).toBe(recording)
+    expect(recorderReducer(malformedPause, { type: 'recording.resumed', now: 2_000 })).toBe(malformedPause)
+    expect(recorderReducer(paused, { type: 'recording.ticked', now: 3_000 })).toBe(paused)
+    expect(recorderReducer(paused, { type: 'mark.added', mark: { id: 'x', type: 'draw', atMs: 0, points: [] } })).toBe(paused)
+    expect(recorderReducer(initialRecorderState, { type: 'recording.finished', now: 3_000 })).toBe(initialRecorderState)
+    expect(recorderReducer(initialRecorderState, { type: 'processing.ready' })).toBe(initialRecorderState)
+    expect(recorderReducer(paused, { type: 'recording.finished', now: 3_000 })).toMatchObject({ status: 'processing', durationMs: 1_000 })
+    expect(recorderReducer({ ...recording, startedAt: null, durationMs: 900 }, { type: 'recording.ticked', now: 5_000 }).durationMs).toBe(900)
+  })
 })
 
 it('formats durations and creates a compact agent payload', () => {
@@ -59,4 +80,12 @@ it('formats durations and creates a compact agent payload', () => {
   expect(buildRecordingAgentPayload(recording)).toContain('target: button.pay-cta')
   expect(buildRecordingAgentPayload(recording)).toContain('note: "too dark"')
   expect(buildRecordingAgentPayload({ ...recording, pageTitle: undefined })).toContain('CRRT capture · Checkout review')
+  expect(buildRecordingAgentPayload({
+    ...recording,
+    marks: [
+      { id: 'late', type: 'pin', atMs: 99_000, points: [] },
+      { id: 'near', type: 'draw', atMs: 10_700, points: [] },
+      { id: 'far', type: 'box', atMs: 8_500, points: [] },
+    ],
+  })).toContain('keyframe_01.png  draw')
 })

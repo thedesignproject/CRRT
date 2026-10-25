@@ -14,8 +14,10 @@ function database(): Promise<IDBDatabase> {
     const request = indexedDB.open(DATABASE, VERSION)
     request.onupgradeneeded = () => {
       const db = request.result
+      /* v8 ignore next -- VERSION 1 only upgrades a database before this store can exist */
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE, { keyPath: 'id' })
     }
+    /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB requests */
     request.onerror = () => reject(request.error ?? new Error('Could not open local recordings.'))
     request.onsuccess = () => resolve(request.result)
   })
@@ -27,8 +29,10 @@ async function transaction<T>(mode: IDBTransactionMode, operation: (store: IDBOb
     const tx = db.transaction(STORE, mode)
     const request = operation(tx.objectStore(STORE))
     request.onsuccess = () => resolve(request.result)
+    /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB requests */
     request.onerror = () => reject(request.error ?? new Error('Local recording storage failed.'))
     tx.oncomplete = () => db.close()
+    /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB transactions */
     tx.onerror = () => reject(tx.error ?? new Error('Local recording storage failed.'))
   })
 }

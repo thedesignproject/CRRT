@@ -67,10 +67,11 @@ export function extensionManifest(
     description: 'Comment or record your screen, voice, and visual context for people and agents.',
     version: readExtensionVersion(),
     permissions: ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`])],
     // This only lets the explicitly injected, isolated iframe load on a chosen HTTP(S) page.
     // It does not grant CRRT persistent access to those pages.
-    web_accessible_resources: [{ resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] }],
+    web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] }],
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
     icons: extensionIcons,
     action: { default_title: 'CRRT', default_icon: extensionIcons },

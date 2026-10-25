@@ -166,6 +166,7 @@ function Disclosure({ busy, error, onContinue }: { busy: boolean; error: string;
       <li>Page content and screenshots are captured only after your feedback action.</li>
       <li>The microphone starts only when you press it and Chrome supports speech input.</li>
       <li>Record captures only the tab, window, or screen you explicitly choose. Camera and microphone remain optional.</li>
+      <li>When recording a tab, CRRT asks for access to recorded pages so controls, marks, and DOM context can remain available while you navigate.</li>
       <li>Project feedback is shared with project collaborators. Private feedback stays yours.</li>
       <li>A requested tracker draft may use the configured model. No issue is sent until an authorized collaborator confirms it.</li>
     </ul>

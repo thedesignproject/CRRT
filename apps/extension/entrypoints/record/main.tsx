@@ -11,15 +11,25 @@ import {
   type LocalRecording, type RecordingMark, type RecordingPoint, type RecordingSource, type RecordingTool,
 } from '../../lib/recording'
 import { getLocalRecording, saveLocalRecording } from '../../lib/recording-store'
+import { sessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
 import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
 type Target = NonNullable<RecordingMark['target']>
 
-async function send(message: unknown) {
+export async function send(message: unknown) {
   const response = await browser.runtime.sendMessage(message) as Response
   if (!response?.ok) throw new Error(response?.error || 'CRRT Record is unavailable.')
   return response.data
+}
+
+export function revokeRecordingUrls(screenUrl: string, cameraUrl: string) {
+  if (screenUrl) URL.revokeObjectURL(screenUrl)
+  if (cameraUrl) URL.revokeObjectURL(cameraUrl)
+}
+
+export function canResolveDomTarget(source: RecordingSource, tabId: number | null) {
+  return source === 'tab' && tabId !== null
 }
 
 export function sourceLabel(source: RecordingSource) {
@@ -69,6 +79,7 @@ function point(event: ReactPointerEvent<SVGSVGElement>): RecordingPoint {
 
 function MarkShape({ mark, active = true }: { mark: RecordingMark; active?: boolean }) {
   const [start, end = start] = mark.points
+  /* v8 ignore next -- persisted and newly-created marks are schema-validated to include a point */
   if (!start) return null
   const opacity = active ? 1 : .32
   if (mark.type === 'draw') return <polyline points={mark.points.map((p) => `${p.x},${p.y}`).join(' ')} fill="none" stroke="var(--record-red)" strokeWidth=".65" strokeLinecap="round" strokeLinejoin="round" opacity={opacity} />
@@ -102,6 +113,7 @@ export function RecordApp() {
   const [state, dispatch] = useReducer(recorderReducer, initialRecorderState)
   const stateRef = useRef(state)
   const captureRef = useRef<RecordingCapture | null>(null)
+  const sessionRef = useRef<string | null>(null)
   const previewRef = useRef<HTMLVideoElement>(null)
   const draftRef = useRef<RecordingPoint[]>([])
   const [draft, setDraft] = useState<RecordingPoint[]>([])
@@ -111,11 +123,12 @@ export function RecordApp() {
   const [reviewTab, setReviewTab] = useState<'transcript' | 'agents'>('transcript')
   const [playbackMs, setPlaybackMs] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [sessionWarning, setSessionWarning] = useState<string>()
   const cameraPreviewRef = useRef<HTMLVideoElement>(null)
   const reviewCameraRef = useRef<HTMLVideoElement>(null)
 
   useEffect(() => { stateRef.current = state }, [state])
-  useEffect(() => () => { if (screenUrl) URL.revokeObjectURL(screenUrl); if (cameraUrl) URL.revokeObjectURL(cameraUrl) }, [screenUrl, cameraUrl])
+  useEffect(() => () => revokeRecordingUrls(screenUrl, cameraUrl), [screenUrl, cameraUrl])
 
   useEffect(() => {
     const recordingId = query.get('recording')
@@ -134,8 +147,15 @@ export function RecordApp() {
     return () => window.clearInterval(timer)
   }, [state.status])
 
+  useEffect(() => {
+    const sessionId = sessionRef.current
+    if (!sessionId) return
+    void send({ type: 'record:session-sync', sessionId, snapshot: sessionSnapshot(state, sessionWarning) }).catch(() => {})
+  }, [sessionWarning, state])
+
   const resolveTarget = useCallback(async (at: RecordingPoint): Promise<Target | undefined> => {
-    if (stateRef.current.source !== 'tab' || tabId === null) return undefined
+    /* v8 ignore next -- only the tab-injected surface can emit DOM-target lookups */
+    if (!canResolveDomTarget(stateRef.current.source, tabId)) return undefined
     try { return await send({ type: 'record:resolve-target', tabId, x: at.x, y: at.y }) as Target | undefined }
     catch { return undefined }
   }, [tabId])
@@ -167,6 +187,9 @@ export function RecordApp() {
         thumbnailDataUrl: captureThumbnail(previewRef.current),
       }
       await saveLocalRecording(saved)
+      const sessionId = sessionRef.current
+      sessionRef.current = null
+      if (sessionId) await send({ type: 'record:session-stop', sessionId }).catch(() => undefined)
       setRecording(saved)
       setScreenUrl(URL.createObjectURL(blobs.screenBlob))
       if (blobs.cameraBlob) setCameraUrl(URL.createObjectURL(blobs.cameraBlob))
@@ -179,6 +202,12 @@ export function RecordApp() {
 
   async function start() {
     if (state.status === 'failed') dispatch({ type: 'recording.restarted' })
+    let warning: string | undefined
+    if (state.source === 'tab') {
+      const granted = await browser.permissions.request({ origins: ['http://*/*', 'https://*/*'] }).catch(() => false)
+      if (!granted) warning = 'Cross-site navigation may hide controls. Recording continues on this page.'
+      setSessionWarning(warning)
+    }
     dispatch({ type: 'countdown.started' })
     try {
       const tabStreamId = state.source === 'tab'
@@ -201,6 +230,12 @@ export function RecordApp() {
       if (cameraPreviewRef.current && capture.cameraStream) {
         cameraPreviewRef.current.srcObject = capture.cameraStream
         await cameraPreviewRef.current.play()
+      }
+      if (state.source === 'tab' && tabId !== null) {
+        const sessionId = crypto.randomUUID()
+        const countdownState = recorderReducer(stateRef.current, { type: 'countdown.started' })
+        await send({ type: 'record:session-create', tabId, sessionId, snapshot: sessionSnapshot(countdownState, warning) })
+        sessionRef.current = sessionId
       }
       capture.screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
         if (stateRef.current.status === 'countdown') {
@@ -240,8 +275,37 @@ export function RecordApp() {
     if (capture) await capture.stop().catch(() => undefined)
     if (previewRef.current) previewRef.current.srcObject = null
     if (cameraPreviewRef.current) cameraPreviewRef.current.srcObject = null
+    const sessionId = sessionRef.current
+    sessionRef.current = null
+    if (sessionId) await send({ type: 'record:session-stop', sessionId }).catch(() => undefined)
     dispatch({ type: 'recording.restarted' })
   }
+
+  useEffect(() => {
+    const listener = (message: unknown) => {
+      const value = message as { type?: unknown; sessionId?: unknown; command?: RecordingSurfaceCommand; warning?: unknown }
+      if (value.sessionId !== sessionRef.current) return false
+      if (value.type === 'record:controller-warning' && typeof value.warning === 'string') {
+        setSessionWarning(value.warning)
+        return false
+      }
+      if (value.type !== 'record:controller-command' || !value.command) return false
+      const command = value.command
+      if (command.kind === 'pause.toggle') togglePause()
+      else if (command.kind === 'restart') void restart()
+      else if (command.kind === 'finish') void finish()
+      else if (command.kind === 'tool.changed') dispatch({ type: 'tool.changed', tool: command.tool })
+      else if (command.kind === 'mark.undone') dispatch({ type: 'mark.undone' })
+      else if (command.kind === 'marks.cleared') dispatch({ type: 'marks.cleared' })
+      else if (command.kind === 'mark.added') {
+        const mark = command.mark, at = mark.points[mark.points.length - 1]
+        if (at) void resolveTarget(at).then((target) => dispatch({ type: 'mark.added', mark: { ...mark, ...(target ? { target } : {}) } }))
+      }
+      return false
+    }
+    browser.runtime.onMessage.addListener(listener)
+    return () => browser.runtime.onMessage.removeListener(listener)
+  }, [finish, resolveTarget, state.status])
 
   function pointerDown(event: ReactPointerEvent<SVGSVGElement>) {
     if (state.status !== 'recording' || state.tool === 'pointer') return
@@ -261,10 +325,8 @@ export function RecordApp() {
     if (!draftRef.current.length || state.status !== 'recording' || state.tool === 'pointer') return
     const points = draftRef.current.length === 1 ? [...draftRef.current, point(event)] : draftRef.current
     draftRef.current = []; setDraft([])
-    const at = points[points.length - 1]!
     const text = state.tool === 'text' ? window.prompt('What should the agent know?', 'Needs attention')?.trim() : undefined
     if (state.tool === 'text' && !text) return
-    const target = await resolveTarget(at)
     dispatch({ type: 'mark.added', mark: {
       id: crypto.randomUUID(),
       type: state.tool,
@@ -272,7 +334,6 @@ export function RecordApp() {
       points,
       ...(text ? { text } : {}),
       ...(state.tool === 'pin' ? { pinNumber: state.marks.filter((mark) => mark.type === 'pin').length + 1 } : {}),
-      ...(target ? { target } : {}),
     } })
   }
 
@@ -281,9 +342,14 @@ export function RecordApp() {
     setCopied(true); window.setTimeout(() => setCopied(false), 1_600)
   }
 
-  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={cameraUrl} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} />
+  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} />
 
   if (state.status === 'setup' || state.status === 'failed') return <Setup state={state} tabAvailable={tabId !== null && Boolean(pageUrl?.startsWith('http'))} start={() => { void start() }} dispatch={dispatch} />
+
+  if (state.source === 'tab') return <main className="controller-page"><div className="controller-card"><span className="controller-live"><i />Recording this tab</span><h1>Controls are on the page.</h1><p>Keep this window open. CRRT is recording in the background and will return here when you finish.</p><button onClick={() => {
+    /* v8 ignore next -- tab recording cannot start unless setup has a concrete tab id */
+    if (tabId !== null) void browser.tabs.update(tabId, { active: true })
+  }}>Return to recorded tab</button></div></main>
 
   const previewMark: RecordingMark | null = draft.length && state.tool !== 'pointer'
     ? { id: 'draft', type: state.tool, atMs: state.durationMs, points: draft, pinNumber: state.marks.filter((mark) => mark.type === 'pin').length + 1, text: state.tool === 'text' ? 'Type a note' : undefined }

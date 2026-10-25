@@ -232,8 +232,13 @@ it('opens CRRT Record without requiring sign-in',async()=>{
 it('reports CRRT Record launch failures',async()=>{
  sendMessage.mockResolvedValueOnce({ok:true,data:null}).mockRejectedValueOnce(new Error('Recorder unavailable'))
  render(<Popup />)
- fireEvent.click(await screen.findByRole('button',{name:/Try CRRT Record/}))
+ const record=await screen.findByRole('button',{name:/Try CRRT Record/})
+ fireEvent.click(record)
  expect(await screen.findByRole('alert')).toHaveTextContent('Recorder unavailable')
+ await waitFor(()=>expect(record).not.toBeDisabled())
+ sendMessage.mockRejectedValueOnce('offline')
+ fireEvent.click(screen.getByRole('button',{name:/Try CRRT Record/}))
+ await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Could not open CRRT Record'))
 })
 
 it.each(['https://crrt.ai/dashboard','https://crrt.ai/dashboard/'])('resolves billing beneath the configured dashboard base %s',async base=>{

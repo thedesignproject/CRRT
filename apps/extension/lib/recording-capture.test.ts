@@ -78,7 +78,41 @@ it('captures a chosen window through the browser display picker', async () => {
     MediaStream: FakeMediaStream as unknown as typeof MediaStream,
   })
   expect(getDisplayMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: true, video: expect.objectContaining({ displaySurface: 'window' }) }))
+  capture.pause(); capture.resume()
   await capture.stop()
+})
+
+it('falls back when media types and recorder metadata are unavailable', async () => {
+  const display = stream(0, 1), mixed = stream(0, 0)
+  class SparseRecorder extends FakeRecorder {
+    static isTypeSupported = vi.fn(() => false)
+    mimeType = ''
+    stop() { this.ondataavailable?.({ data: new Blob() } as BlobEvent); this.state = 'inactive'; this.onstop?.() }
+  }
+  class FakeAudioContext {
+    destination = {}
+    createMediaStreamDestination() { return { stream: mixed } }
+    createMediaStreamSource() { return { connect: vi.fn() } }
+    close = vi.fn()
+  }
+  const capture = await startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false }, {
+    mediaDevices: { getDisplayMedia: vi.fn().mockResolvedValue(display) } as unknown as MediaDevices,
+    MediaRecorder: SparseRecorder as unknown as typeof MediaRecorder,
+    AudioContext: FakeAudioContext as unknown as typeof AudioContext,
+    MediaStream: FakeMediaStream as unknown as typeof MediaStream,
+  })
+  const result = await capture.stop()
+  expect(result.screenBlob.type).toBe('video/webm')
+  expect(result.screenBlob.size).toBe(0)
+})
+
+it('reports browsers without media capture', async () => {
+  await expect(startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false }, {
+    mediaDevices: undefined as unknown as MediaDevices,
+    MediaRecorder: FakeRecorder as unknown as typeof MediaRecorder,
+    AudioContext: class {} as unknown as typeof AudioContext,
+    MediaStream: FakeMediaStream as unknown as typeof MediaStream,
+  })).rejects.toThrow('Media capture is unavailable')
 })
 
 it('uses browser media globals by default', async () => {

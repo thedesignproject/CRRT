@@ -10,13 +10,15 @@ const state = vi.hoisted(() => ({
 }))
 const browser = vi.hoisted(() => ({
   action: { openPopup: vi.fn() },
-  windows: { create: vi.fn() },
+  windows: { create: vi.fn(), update: vi.fn() },
   tabCapture: { getMediaStreamId: vi.fn() },
   commands: { onCommand: { addListener: vi.fn((value) => { state.command = value }) } },
   tabs: {
     query: vi.fn(),
     get: vi.fn(),
     captureVisibleTab: vi.fn(),
+    sendMessage: vi.fn(),
+    update: vi.fn(),
     onActivated: { addListener: vi.fn((value) => { state.activated = value }) },
     onRemoved: { addListener: vi.fn((value) => { state.removed = value }) },
     onUpdated: { addListener: vi.fn((value) => { state.updated = value }) },
@@ -30,6 +32,7 @@ const browser = vi.hoisted(() => ({
   runtime: {
     id: 'extension-id',
     getURL: vi.fn((path: string) => `chrome-extension://extension-id${path}`),
+    sendMessage: vi.fn(),
     onMessage: { addListener: vi.fn((value) => { state.listener = value }) },
   },
 }))
@@ -49,6 +52,10 @@ import { startHostedSignIn } from '../lib/hosted-auth'
 beforeEach(() => {
   vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.updated = undefined; state.command = undefined; state.session = {}
   browser.tabs.get.mockImplementation(async (tabId: number) => ({ id: tabId, url: 'https://example.com' }))
+  browser.tabs.sendMessage.mockResolvedValue({ ok: true })
+  browser.tabs.update.mockResolvedValue(undefined)
+  browser.windows.update.mockResolvedValue(undefined)
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true })
   hasAcceptedDisclosure.mockResolvedValue(true)
 })
 
@@ -127,6 +134,9 @@ describe('extension background', () => {
 
     state.command?.('start-recording')
     await vi.waitFor(() => expect(browser.windows.create).toHaveBeenCalledTimes(2))
+    browser.tabs.query.mockResolvedValueOnce([{}])
+    await expect(send({ type: 'record:open' })).resolves.toEqual({ ok: true })
+    expect(browser.windows.create.mock.calls[2]?.[0]?.url).toMatch(/record\.html\?$/)
   })
 
   it('grants tab capture and DOM target resolution only to extension pages', async () => {
@@ -154,7 +164,56 @@ describe('extension background', () => {
     expect(resolve(42, 61)).toBeNull()
 
     await expect(send({ type: 'record:tab-stream', tabId: 7 }, { url: 'https://example.com' })).resolves.toEqual({ ok: false, error: 'Invalid recording request' })
+    browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'chrome://extensions' })
+    await expect(send({ type: 'record:tab-stream', tabId: 7 }, sender)).resolves.toEqual({ ok: false, error: 'This tab cannot be recorded. Choose Window or Entire screen.' })
     await expect(send({ type: 'record:resolve-target', tabId: 7, x: '42', y: 61 }, sender)).resolves.toEqual({ ok: false, error: 'Invalid recording target' })
+  })
+
+  it('routes a tab recording session between its controller and injected surface', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://example.com', windowId: 2 })
+    const controller = { url: 'chrome-extension://extension-id/record.html', tab: { id: 9, windowId: 3 } }
+    const snapshot = { status: 'countdown', source: 'tab', cameraEnabled: true, microphoneEnabled: true, countdown: 3, durationMs: 0, tool: 'pointer', marks: [], error: null }
+
+    await expect(send({ type: 'record:session-create', tabId: 7, sessionId: 'session-1', snapshot }, controller)).resolves.toMatchObject({ ok: true, data: { sessionId: 'session-1', tabId: 7 } })
+    expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['record-overlay.js'] })
+    await expect(send({ type: 'record:surface-mount' }, { url: 'https://example.com', tab: { id: 7 }, frameId: 0 })).resolves.toEqual({ ok: true, data: { sessionId: 'session-1' } })
+    await expect(send({ type: 'record:surface-ready', sessionId: 'session-1' }, { url: 'chrome-extension://extension-id/record-controls.html', tab: { id: 7 }, frameId: 2 })).resolves.toEqual({ ok: true, data: snapshot })
+
+    const next = { ...snapshot, status: 'recording', countdown: 0 }
+    await expect(send({ type: 'record:session-sync', sessionId: 'session-1', snapshot: next }, controller)).resolves.toEqual({ ok: true, data: 2 })
+    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:surface-state', snapshot: next }), { frameId: 2 })
+    const surface = { url: 'chrome-extension://extension-id/record-controls.html', tab: { id: 7 }, frameId: 2 }
+    await expect(send({ type: 'record:surface-layout', sessionId: 'session-1', tool: 'pointer', rects: [[1, 2, 3, 4]] }, surface)).resolves.toEqual({ ok: true })
+    await expect(send({ type: 'record:surface-pointer', sessionId: 'session-1', x: 'bad', y: 60 }, surface)).resolves.toEqual({ ok: false, error: 'Invalid recording surface' })
+    await expect(send({ type: 'record:surface-pointer', sessionId: 'session-1', x: 50, y: 60 }, surface)).resolves.toEqual({ ok: true })
+    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:overlay-pointer', x: 50, y: 60 }), { frameId: 0 })
+    await expect(send({ type: 'record:surface-command', sessionId: 'session-1', command: { kind: 'finish' } }, surface)).resolves.toEqual({ ok: true })
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'record:controller-command', sessionId: 'session-1', command: { kind: 'finish' } })
+    await expect(send({ type: 'record:session-stop', sessionId: 'session-1' }, controller)).resolves.toEqual({ ok: true, data: true })
+    expect(state.session).not.toHaveProperty('crrt:recording-session')
+  })
+
+  it('reinjects an active recording after navigation, reports lost access, and clears closed sessions', async () => {
+    ;(background as unknown as () => void)()
+    vi.mocked(isAuthMessage).mockReturnValue(false)
+    browser.tabs.get.mockResolvedValue({ id: 7, url: 'https://example.com', windowId: 2 })
+    const controller = { url: 'chrome-extension://extension-id/record.html', tab: { id: 9, windowId: 3 } }
+    const snapshot = { status: 'recording', source: 'tab', cameraEnabled: false, microphoneEnabled: true, countdown: 0, durationMs: 2_000, tool: 'pointer', marks: [], error: null }
+    await send({ type: 'record:session-create', tabId: 7, sessionId: 'session-nav', snapshot }, controller)
+    browser.scripting.executeScript.mockClear()
+    state.updated!(8, { status: 'complete' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(browser.scripting.executeScript).not.toHaveBeenCalled()
+    state.updated!(7, { status: 'complete' })
+    await vi.waitFor(() => expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['record-overlay.js'] }))
+    browser.scripting.executeScript.mockRejectedValueOnce(new Error('access revoked'))
+    browser.runtime.sendMessage.mockRejectedValueOnce(new Error('controller closed'))
+    state.updated!(7, { status: 'complete' })
+    await vi.waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:controller-warning', sessionId: 'session-nav' })))
+    state.removed!(7)
+    await vi.waitFor(() => expect(state.session).not.toHaveProperty('crrt:recording-session'))
   })
 
   it('activates regular pages using temporary tab access', async () => {
