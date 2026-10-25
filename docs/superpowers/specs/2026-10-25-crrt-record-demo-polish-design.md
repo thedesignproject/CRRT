@@ -13,7 +13,7 @@
 The CRRT Record demo must be presentable as a coherent Loom-like flow:
 
 - annotations help explain one moment without remaining stuck over the page;
-- the camera bubble can be resized or hidden during recording without stopping the camera track;
+- the camera bubble can be resized or closed during recording, disabling its video output until the user reopens it;
 - the local review always exposes the structured agent payload and can copy it without authentication;
 - production can later enforce the paid agent capability at the backend boundary without changing the demo interaction.
 
@@ -34,6 +34,22 @@ This would remove the immediate obstruction, but marks could disappear unexpecte
 ### C. Keep annotations until the user manually clears them
 
 This is the current behavior. It overloads the screen, makes scrolling confusing, and forces the user to manage cleanup while speaking. Rejected.
+
+## Camera close behavior: considered approaches
+
+### A. Disable and re-enable the active video track (selected)
+
+Closing the camera sets its active video track to `enabled = false`, removes the bubble, and updates the recording state to camera off. Reopening from the toolbar sets the same track back to `enabled = true` and restores the bubble immediately.
+
+This is the selected behavior because it produces no camera image while closed, keeps the recording timeline continuous, and avoids a second permission prompt or fragmented camera recordings.
+
+### B. Stop and reacquire the camera device
+
+Stopping the track would release the physical camera and may turn off its hardware indicator. Reopening would require a new stream and a new media segment, followed by stitching or synchronized multi-segment playback. Rejected for this frontend demo because it introduces recording gaps and media assembly work unrelated to the interaction being validated.
+
+### C. Hide only the preview
+
+This was the previous implementation. It removed the bubble while camera capture continued, which made the label and behavior misleading. Rejected.
 
 ## Temporal annotation behavior
 
@@ -57,12 +73,16 @@ The camera bubble remains draggable only if the current implementation already s
 
 - clicking or hovering the bubble reveals a compact adjacent menu;
 - three size choices: Small (`72px`), Medium (`112px`, default), and Large (`160px`);
-- a Hide camera action;
-- hiding removes only the preview from the recording surface and does not stop or discard the camera track;
-- after hiding, a camera icon appears in the recording toolbar so the preview can be restored in one click;
+- a Close camera action represented by an X and exposed to assistive technology as `Close camera`;
+- closing disables the active camera video track, removes the preview from the recording surface, and prevents camera imagery from being captured while closed;
+- closing does not stop or replace the underlying track, preserving one continuous recording and instant restoration;
+- after closing, a camera-off icon remains in the recording toolbar with the tooltip and accessible name `Turn camera on`;
+- reopening re-enables the existing video track and restores the preview at its previous size;
 - the chosen size persists for the current recording and is used by the local review camera overlay.
 
 The menu must not be captured as a mark, must not activate drawing, and must have keyboard-accessible controls, labels, focus styles, and tooltips.
+
+Before recording begins, camera state must be unambiguous. When disabled, the device row uses a crossed-out camera icon, the label `No camera`, and a high-contrast `OFF` state. When enabled, it uses `Camera` and `ON`. The full row remains the toggle target and exposes its pressed state.
 
 ## Local agent preview
 
@@ -84,7 +104,8 @@ The transcript tab stays available without login. Failed transcription never dis
 ## State boundaries
 
 - Stored recording state owns marks and media.
-- Presentation state owns mark visibility, camera bubble size, and camera preview visibility.
+- Presentation state owns mark visibility and camera bubble size.
+- Capture state owns whether the camera video track is enabled during recording; the bubble is rendered only while that state is enabled.
 - Authentication state does not gate local transcript or local agent-preview rendering.
 - Production entitlement state will gate the server-backed agent/share operation, not access to locally generated demo data.
 
@@ -92,8 +113,9 @@ No fake transcript, fake account, or client-only production billing gate is adde
 
 ## Error behavior
 
-- If camera preview permission fails, recording controls remain usable and the camera bubble stays hidden.
-- If the camera preview is hidden, the recorded camera stream continues unless the user explicitly disables camera before recording.
+- If camera permission fails, recording controls remain usable, the bubble stays closed, and the camera control reports OFF.
+- Closing camera during recording disables its video output without interrupting screen or microphone recording.
+- If reopening the existing camera track fails, the camera remains closed and the toolbar control stays available for retry.
 - If transcription fails, review explains the real error and still permits viewing/copying the mark-only agent payload.
 - If clipboard permission fails, the copy button reports failure and remains retryable.
 - A navigation or scroll does not reset stored marks; only their three-second visual presentation expires.
@@ -107,8 +129,9 @@ Automated coverage must prove:
 - playback uses the same visibility helper as live capture;
 - Undo and Clear operate on stored marks, not only visible marks;
 - camera size changes among Small, Medium, and Large;
-- Hide removes the bubble and the toolbar action restores it;
-- hiding the preview does not toggle or stop the camera capture state;
+- Close disables the active video track and removes the bubble;
+- Turn camera on re-enables the same track and restores the bubble at its previous size;
+- the setup launcher renders clearly distinct ON and OFF camera states;
 - For agents opens without an extension session in local demo;
 - Copy for Claude Code copies the actual generated payload;
 - failed or missing transcripts do not block the agent panel;
@@ -119,7 +142,7 @@ Manual acceptance:
 1. Start a This tab recording with camera and microphone.
 2. Draw, scroll, and confirm the drawing fades after three seconds instead of following the viewport indefinitely.
 3. Repeat with Arrow, Box, and Text.
-4. Resize the camera to all three sizes, hide it, and restore it from the toolbar.
+4. Resize the camera to all three sizes, close it, confirm camera imagery disappears, and restore it from the toolbar.
 5. Finish the recording and seek to each timeline marker; confirm the matching annotation appears briefly.
 6. Open For agents while signed out and copy the payload.
 7. Confirm the copied payload contains only actual recording data and remains usable when transcription is unavailable.
