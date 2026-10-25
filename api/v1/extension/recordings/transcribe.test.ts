@@ -1,13 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../_lib/recording-transcription.js', async () => {
   const actual = await vi.importActual<typeof import('../../../_lib/recording-transcription.js')>('../../../_lib/recording-transcription.js')
   return { ...actual, transcribeRecordingAudio: vi.fn() }
 })
 
 import handler from './transcribe.js'
-import { requireUser } from '../../../_lib/auth.js'
 import { RecordingTranscriptionError, transcribeRecordingAudio } from '../../../_lib/recording-transcription.js'
 
 const extensionId = 'abcdefghijklmnopabcdefghijklmnop'
@@ -25,13 +23,12 @@ function response() {
   }
 }
 function request(overrides: Record<string, unknown> = {}) {
-  return { method: 'POST', query: {}, headers: { origin, authorization: 'Bearer token', 'content-type': 'application/octet-stream', 'content-length': String(webm.length) }, body: webm, ...overrides }
+  return { method: 'POST', query: {}, headers: { origin, 'content-type': 'application/octet-stream', 'content-length': String(webm.length) }, body: webm, ...overrides }
 }
 const call = (req: unknown, res: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
   process.env.EXTENSION_ALLOWED_IDS = extensionId
-  vi.mocked(requireUser).mockReset().mockResolvedValue({ userId: 'u', email: 'u@example.com' })
   vi.mocked(transcribeRecordingAudio).mockReset().mockResolvedValue({ source: 'deepgram:nova-3', language: 'es', segments: [] })
 })
 afterEach(() => {
@@ -40,25 +37,22 @@ afterEach(() => {
 })
 
 describe('recording transcription endpoint', () => {
-  it('allows exact-origin preflight, authenticates, and returns normalized transcription', async () => {
+  it('allows exact-origin preflight and returns transcription without an account', async () => {
     let res = response()
     await call(request({ method: 'OPTIONS', body: undefined }), res)
     expect(res.statusCode).toBe(204)
-    expect(res.headers['Access-Control-Allow-Headers']).toContain('Authorization')
+    expect(res.headers['Access-Control-Allow-Headers']).toContain('Content-Type')
     res = response()
     await call(request(), res)
-    expect(requireUser).toHaveBeenCalled()
     expect(transcribeRecordingAudio).toHaveBeenCalledWith(webm)
     expect(res).toMatchObject({ statusCode: 200, body: { transcript: { language: 'es', segments: [] } } })
   })
 
-  it('fails closed for origin, method, auth, and media-type violations', async () => {
+  it('fails closed for origin, method, and media-type violations', async () => {
     let res = response()
     await call(request({ headers: { origin: 'https://example.com' } }), res)
     expect(res.statusCode).toBe(403)
     res = response(); await call(request({ method: 'GET' }), res); expect(res.statusCode).toBe(405)
-    vi.mocked(requireUser).mockResolvedValueOnce(null)
-    res = response(); await call(request(), res); expect(transcribeRecordingAudio).not.toHaveBeenCalled()
     res = response(); await call(request({ headers: { origin, 'content-type': 'audio/webm' } }), res); expect(res.statusCode).toBe(415)
   })
 

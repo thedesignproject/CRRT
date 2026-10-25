@@ -25,7 +25,7 @@ export type RecordingTranscriptSegment = {
   text: string
 }
 
-export type RecordingTranscriptionErrorCode = 'auth-required' | 'request-failed'
+export type RecordingTranscriptionErrorCode = 'request-failed'
 
 export type LocalRecording = {
   id: string

@@ -1,5 +1,4 @@
 import type { RecordingTranscriptSegment } from './recording'
-import { extensionSession } from './comments-api'
 
 type TranscriptResponse = {
   transcript: {
@@ -10,7 +9,7 @@ type TranscriptResponse = {
 }
 
 export class RecordingTranscriptionClientError extends Error {
-  constructor(public readonly code: 'auth-required' | 'request-failed', message: string) {
+  constructor(message: string) {
     super(message)
     this.name = 'RecordingTranscriptionClientError'
   }
@@ -32,26 +31,23 @@ function parseTranscript(value: unknown): TranscriptResponse['transcript'] {
   const transcript = (value as Partial<TranscriptResponse> | null)?.transcript
   if (!transcript || typeof transcript.source !== 'string' || typeof transcript.language !== 'string'
     || !Array.isArray(transcript.segments) || !transcript.segments.every(validSegment)) {
-    throw new RecordingTranscriptionClientError('request-failed', 'CRRT returned an invalid transcript.')
+    throw new RecordingTranscriptionClientError('CRRT returned an invalid transcript.')
   }
   return { ...transcript, segments: transcript.segments.map((segment) => ({ ...segment, text: segment.text.trim() })) }
 }
 
 export async function transcribeRecording(audio: Blob) {
   if (!audio.size) return { source: 'none', language: 'und', segments: [] }
-  const session = await extensionSession()
-  if (!session) throw new RecordingTranscriptionClientError('auth-required', 'Sign in to CRRT to transcribe this recording.')
   const response = await fetch(`${import.meta.env.WXT_API_BASE.replace(/\/$/, '')}/v1/extension/recordings/transcribe`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${session.accessToken}`,
       'Content-Type': 'application/octet-stream',
     },
     body: audio,
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => ({})) as { error?: string }
-    throw new RecordingTranscriptionClientError('request-failed', payload.error || `Transcription failed (${response.status}).`)
+    throw new RecordingTranscriptionClientError(payload.error || `Transcription failed (${response.status}).`)
   }
   return parseTranscript(await response.json())
 }

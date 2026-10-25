@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { requireUser } from '../../../_lib/auth.js'
 import { ExtensionAuthContractError } from '../../../_lib/extension-auth-contracts.js'
 import { extensionJsonError, setExtensionCors, setExtensionNoStore } from '../../../_lib/extension-auth-http.js'
 import { firstHeaderValue } from '../../../_lib/http.js'
@@ -30,7 +29,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return extensionJsonError(res, 405, 'Method not allowed')
-  if (!await requireUser(req, res)) return
   if (firstHeaderValue(req.headers['content-type'])?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/octet-stream') {
     return extensionJsonError(res, 415, 'Recording audio must be WebM.')
   }

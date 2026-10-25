@@ -4,7 +4,7 @@
 
 CRRT Record will transcribe the microphone audio already captured by the extension. It will not use the browser `SpeechRecognition` API and will not acquire the microphone a second time.
 
-The first implementation is intentionally synchronous and local-first: the finished recording remains in extension IndexedDB, while a small audio-only derivative is sent to an authenticated CRRT endpoint and returned as normalized timestamped segments. There are no recording tables, remote video storage, background jobs, or live transcription in this slice.
+The first implementation is intentionally synchronous and local-first: the finished recording remains in extension IndexedDB, while a small audio-only derivative is sent to CRRT and returned as normalized timestamped segments. Recording and transcription are account-free; agent payloads remain authenticated and billable. There are no recording tables, remote video storage, background jobs, or live transcription in this slice.
 
 Deepgram Nova-3 multilingual is the initial provider because its pre-recorded endpoint accepts WebM, supports mixed Spanish/English speech, and returns word/utterance timestamps. The provider stays behind a small server adapter so Pranav can replace or extend it without changing the extension contract.
 
@@ -16,7 +16,7 @@ Deepgram Nova-3 multilingual is the initial provider because its pre-recorded en
 4. On **Done**, the toolbar enters `Processing` and prevents duplicate completion.
 5. The offscreen controller stops all recorders and immediately saves the playable recording, audio derivative, and `processing` transcription state to IndexedDB. This protects the capture if the request or extension lifecycle is interrupted.
 6. The controller requests the existing extension session through the background `auth:get` route and posts the audio-only WebM to CRRT.
-7. CRRT authenticates the user, validates the extension origin and payload, sends the audio to the STT provider, and returns normalized transcript segments.
+7. CRRT validates the allowlisted extension origin and bounded payload, sends the audio to the STT provider, and returns normalized transcript segments without requiring an account.
 8. The extension updates the saved recording to `ready`, then opens the existing review page.
 9. The review matches each transcript segment to only the nearest mark within the existing bounded threshold.
 
@@ -31,7 +31,6 @@ If transcription fails, CRRT updates and opens the already-saved recording. The 
 Headers:
 
 ```http
-Authorization: Bearer <Supabase access token>
 Content-Type: application/octet-stream
 ```
 
@@ -46,7 +45,7 @@ Limits for this version:
 - provider timeout: 45 seconds;
 - no automatic provider retries inside the request.
 
-The endpoint uses the existing extension-origin allowlist and `requireUser`. The shared CORS helper is extended to allow the `Authorization` header while retaining the exact-origin allowlist; it must not fall back to wildcard CORS. It never accepts a provider key from the client.
+The endpoint uses the existing exact extension-origin allowlist without `requireUser`; it must not fall back to wildcard CORS. Abuse is bounded by the allowlist, the 4 MB body ceiling, WebM validation, the provider timeout, and provider-side quotas. It never accepts a provider key from the client. Authentication and entitlement enforcement belong to the separate agent-payload action.
 
 ### Success response
 
@@ -84,9 +83,9 @@ Errors returned to the extension are stable product copy and do not expose provi
 
 ## Server design
 
-- `api/v1/extension/recordings/transcribe.ts`: HTTP boundary, CORS, authentication, size/type validation, status mapping. The client uses Vercel's documented `application/octet-stream` request contract so the shared function router exposes an unmodified `Buffer`; the route rejects declared or actual bodies above 4 MB.
+- `api/v1/extension/recordings/transcribe.ts`: account-free HTTP boundary, exact extension CORS, size/type validation, and status mapping. The client uses Vercel's documented `application/octet-stream` request contract so the shared function router exposes an unmodified `Buffer`; the route rejects declared or actual bodies above 4 MB.
 - `api/_lib/recording-transcription.ts`: provider-independent types, Deepgram request, response normalization, timeout.
-- `api/_lib/extension-auth-http.ts`: allow authenticated extension requests to preflight `Authorization` without weakening the extension-origin check.
+- `api/_lib/extension-auth-http.ts`: retain exact-origin extension CORS; authenticated extension features may preflight `Authorization` without weakening that check.
 - `.env.example`: documents `DEEPGRAM_API_KEY` and optional `DEEPGRAM_API_BASE_URL` for tests/self-hosting.
 
 Provider request:
@@ -107,7 +106,7 @@ No database or storage schema changes are required.
 
 - `recording-capture.ts` returns `audioBlob` alongside `screenBlob` and `cameraBlob`.
 - The audio recorder uses the existing mixed audio destination stream and pauses/resumes on the same commands as video.
-- A focused `recording-transcription-api.ts` owns authentication lookup, request construction, response validation, and retry calls.
+- A focused `recording-transcription-api.ts` owns request construction, response validation, and retry calls without consulting extension auth.
 - `LocalRecording` gains `audioBlob`, `transcriptionStatus: 'processing' | 'ready' | 'failed'`, and optional `transcriptionError`. The small audio derivative remains in local IndexedDB to make an explicit retry possible; it is never synced independently.
 - `recording-store.ts` keeps its single upsert operation: save once before the request, then save the same record ID again with the terminal transcription result.
 - The offscreen controller removes all browser speech-recognition logic and performs one transcription request after capture stops.
@@ -131,7 +130,7 @@ The video, camera, and retry copy of the audio blob remain local in this slice. 
 
 ### Initial backend implementation, for Pranav to review
 
-- authenticated raw-audio endpoint;
+- account-free, allowlisted raw-audio endpoint;
 - provider adapter and normalization;
 - request limits, timeout, and error mapping;
 - server-side configuration.

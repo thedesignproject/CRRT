@@ -11,6 +11,7 @@ import {
   type LocalRecording, type RecordingMark, type RecordingPoint, type RecordingSource, type RecordingTool,
 } from '../../lib/recording'
 import { getLocalRecording, saveLocalRecording } from '../../lib/recording-store'
+import { extensionSession } from '../../lib/comments-api'
 import { sessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
 import { withRecordingTranscript } from '../../lib/recording-transcription'
 import './style.css'
@@ -44,16 +45,19 @@ export function recordingTitle(marks: RecordingMark[], pageTitle?: string) {
 type StoredRecording = Omit<LocalRecording, 'transcriptionStatus'> & Pick<Partial<LocalRecording>, 'transcriptionStatus'>
 
 export function normalizeStoredRecording(recording: StoredRecording): LocalRecording {
-  const transcriptionErrorCode = recording.transcriptionErrorCode
-    ?? (recording.transcriptionError === 'Sign in to CRRT to transcribe this recording.' ? 'auth-required' : undefined)
+  const legacyAuthError = recording.transcriptionError === 'Sign in to CRRT to transcribe this recording.'
+  const transcriptionErrorCode = recording.transcriptionErrorCode ?? (legacyAuthError ? 'request-failed' : undefined)
+  const transcriptionError = legacyAuthError ? 'Transcript is ready to retry.' : recording.transcriptionError
   if (recording.transcriptionStatus) return {
     ...recording,
     transcriptionStatus: recording.transcriptionStatus,
+    ...(transcriptionError ? { transcriptionError } : {}),
     ...(transcriptionErrorCode ? { transcriptionErrorCode } : {}),
   }
   return {
     ...recording,
     transcriptionStatus: recording.transcript.length ? 'ready' : 'failed',
+    ...(transcriptionError ? { transcriptionError } : {}),
     ...(transcriptionErrorCode ? { transcriptionErrorCode } : {}),
   }
 }
@@ -118,7 +122,6 @@ export function RecordApp() {
   const [reviewTab, setReviewTab] = useState<'transcript' | 'agents'>('transcript')
   const [playbackMs, setPlaybackMs] = useState(0)
   const [copied, setCopied] = useState(false)
-  const [signInRequested, setSignInRequested] = useState(false)
   const [sessionWarning, setSessionWarning] = useState<string>()
   const cameraPreviewRef = useRef<HTMLVideoElement>(null)
   const reviewCameraRef = useRef<HTMLVideoElement>(null)
@@ -357,12 +360,15 @@ export function RecordApp() {
     setRecording(completed)
   }, [recording])
 
-  const requestSignIn = useCallback(async () => {
+  const openAgentTab = useCallback(async () => {
+    if (await extensionSession()) {
+      setReviewTab('agents')
+      return
+    }
     await send({ type: 'auth:open-popup' })
-    setSignInRequested(true)
   }, [])
 
-  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} requestSignIn={requestSignIn} signInRequested={signInRequested} />
+  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} tab={reviewTab} setTab={setReviewTab} openAgentTab={openAgentTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} />
 
   if (state.status === 'setup' || state.status === 'failed') return <Setup state={state} tabAvailable={tabId !== null && Boolean(pageUrl?.startsWith('http'))} start={() => { void start() }} dispatch={dispatch} />
 
@@ -426,11 +432,10 @@ function Setup({ state, tabAvailable, start, dispatch }: { state: typeof initial
   </main>
 }
 
-function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare, retryTranscript, requestSignIn, signInRequested }: {
+function Review({ recording, screenUrl, cameraUrl, tab, setTab, openAgentTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare, retryTranscript }: {
   recording: LocalRecording; screenUrl: string; cameraUrl: string; tab: 'transcript' | 'agents'; setTab: (tab: 'transcript' | 'agents') => void; playbackMs: number; setPlaybackMs: (value: number) => void; cameraRef: React.RefObject<HTMLVideoElement | null>; copied: boolean; copyShare: () => Promise<void>
   retryTranscript: () => Promise<void>
-  requestSignIn: () => Promise<void>
-  signInRequested: boolean
+  openAgentTab: () => Promise<void>
 }) {
   const player = useRef<HTMLVideoElement>(null)
   const payload = buildRecordingAgentPayload(recording)
@@ -457,10 +462,10 @@ function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setP
         <div className="review-summary"><span>Capture ready</span><p>Human playback is local for this demo. The structured agent context below uses the same events the production backend will receive.</p></div>
       </section>
       <aside className="context-panel">
-        <div className="context-tabs"><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button><button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>For agents</button></div>
+        <div className="context-tabs"><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button><button className={tab === 'agents' ? 'active' : ''} onClick={() => { void openAgentTab() }}>For agents</button></div>
         {tab === 'transcript' ? <div className="transcript-list">
           {recording.transcriptionStatus === 'processing' && <div className="transcript-empty"><strong>Transcribing voice…</strong><p>Your recording is already saved locally.</p></div>}
-          {recording.transcriptionStatus === 'failed' && <div className="transcript-empty"><strong>Transcript unavailable</strong><p>{recording.transcriptionError || 'CRRT could not transcribe this recording.'}</p>{recording.audioBlob?.size ? recording.transcriptionErrorCode === 'auth-required' && !signInRequested ? <button className="retry-transcript" onClick={() => { void requestSignIn() }}>Sign in to CRRT</button> : <button className="retry-transcript" onClick={() => { void retryTranscript() }}>Retry transcription</button> : null}</div>}
+          {recording.transcriptionStatus === 'failed' && <div className="transcript-empty"><strong>Transcript unavailable</strong><p>{recording.transcriptionError || 'CRRT could not transcribe this recording.'}</p>{recording.audioBlob?.size ? <button className="retry-transcript" onClick={() => { void retryTranscript() }}>Retry transcription</button> : null}</div>}
           {recording.transcriptionStatus === 'ready' && recording.transcript.length === 0 && <div className="transcript-empty"><strong>No speech detected</strong><p>The recording and marks are intact.</p></div>}
           {recording.transcript.map((segment) => {
           const mark = nearestRecordingMark(recording.marks, (segment.startMs + segment.endMs) / 2)

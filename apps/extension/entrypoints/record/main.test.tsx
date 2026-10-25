@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   pause: vi.fn(),
   requestPermission: vi.fn(),
   withTranscript: vi.fn(),
+  extensionSession: vi.fn(),
   listeners: new Set<(message: unknown) => unknown>(),
 }))
 
@@ -25,6 +26,7 @@ vi.mock('../../lib/recording-store', () => ({
   saveLocalRecording: mocks.saveRecording,
 }))
 vi.mock('../../lib/recording-transcription', () => ({ withRecordingTranscript: mocks.withTranscript }))
+vi.mock('../../lib/comments-api', () => ({ extensionSession: mocks.extensionSession }))
 
 function mediaStream() {
   const track = { addEventListener: vi.fn(), stop: vi.fn(), kind: 'video' }
@@ -64,6 +66,7 @@ beforeEach(() => {
     ...recording, status: 'ready', transcriptionStatus: 'ready',
     transcript: [{ id: 'speech', startMs: 1_000, endMs: 2_500, text: 'This is the actual narration.' }],
   }))
+  mocks.extensionSession.mockResolvedValue({ accessToken: 'token', email: 'u@example.com' })
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play })
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause })
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, writable: true, value: null })
@@ -107,11 +110,11 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
     ...legacyRecording,
     transcriptionStatus: 'failed',
     transcriptionError: 'Sign in to CRRT to transcribe this recording.',
-  })).toMatchObject({ transcriptionErrorCode: 'auth-required' })
+  })).toMatchObject({ transcriptionError: 'Transcript is ready to retry.', transcriptionErrorCode: 'request-failed' })
   expect(helpers.normalizeStoredRecording({
     ...legacyRecording,
     transcriptionError: 'Sign in to CRRT to transcribe this recording.',
-  })).toMatchObject({ transcriptionStatus: 'failed', transcriptionErrorCode: 'auth-required' })
+  })).toMatchObject({ transcriptionStatus: 'failed', transcriptionError: 'Transcript is ready to retry.', transcriptionErrorCode: 'request-failed' })
   const drawImage = vi.fn()
   expect(helpers.captureThumbnail(null)).toBeUndefined()
   expect(helpers.captureThumbnail({ videoWidth: 10, videoHeight: 0 } as HTMLVideoElement)).toBeUndefined()
@@ -178,7 +181,7 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   expect(videos[1].currentTime).toBe(2)
   fireEvent.play(videos[0]); fireEvent.pause(videos[0])
   fireEvent.click(screen.getByRole('button', { name: 'For agents' }))
-  expect(screen.getByText('Ready for Claude Code')).toBeInTheDocument()
+  expect(await screen.findByText('Ready for Claude Code')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /Copy for Claude Code/ }))
   fireEvent.click(screen.getByRole('button', { name: /Copy link/ }))
   await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(2))
@@ -391,19 +394,21 @@ it('retries a failed transcript from the locally retained audio', async () => {
   expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'ready' }))
 })
 
-it('opens the extension sign-in flow for an authentication failure', async () => {
+it('keeps transcripts account-free and gates the agent payload behind sign-in', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'auth-required', title: 'Sign-in review', source: 'tab', status: 'ready', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
-    transcriptionStatus: 'failed', transcriptionError: 'Sign in to CRRT to transcribe this recording.',
-    transcriptionErrorCode: 'auth-required', screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
+    id: 'free-transcript', title: 'Free transcript', source: 'tab', status: 'ready', durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [],
+    transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Visible without an account.' }],
+    transcriptionStatus: 'ready', screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
   })
-  history.replaceState(null, '', '/record.html?recording=auth-required')
+  mocks.extensionSession.mockResolvedValueOnce(null)
+  history.replaceState(null, '', '/record.html?recording=free-transcript')
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
-  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to CRRT' }))
+  expect(await screen.findByText('Visible without an account.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'For agents' }))
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'auth:open-popup' }))
-  expect(screen.getByRole('button', { name: 'Retry transcription' })).toBeInTheDocument()
+  expect(screen.getByText('Visible without an account.')).toBeInTheDocument()
 })
 
 it('renders a processing transcript state honestly', async () => {
