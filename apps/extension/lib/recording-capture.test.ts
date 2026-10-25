@@ -15,7 +15,7 @@ class FakeRecorder {
   stop() { this.ondataavailable?.({ data: new Blob(['video']) } as BlobEvent); this.state = 'inactive'; this.onstop?.() }
 }
 
-function track(kind: 'audio' | 'video') { return { kind, stop: vi.fn() } as unknown as MediaStreamTrack }
+function track(kind: 'audio' | 'video') { return { kind, enabled: true, stop: vi.fn() } as unknown as MediaStreamTrack }
 function stream(audio = 0, video = 0) {
   const audioTracks = Array.from({ length: audio }, () => track('audio'))
   const videoTracks = Array.from({ length: video }, () => track('video'))
@@ -46,6 +46,10 @@ it('captures a tab with microphone and camera and stops every stream', async () 
     MediaStream: FakeMediaStream as unknown as typeof MediaStream,
   })
   expect(getUserMedia).toHaveBeenNthCalledWith(1, expect.objectContaining({ video: expect.anything() }))
+  expect(capture.setCameraEnabled(false)).toBe(true)
+  expect(capture.cameraStream?.getVideoTracks()[0]?.enabled).toBe(false)
+  expect(capture.setCameraEnabled(true)).toBe(true)
+  expect(capture.cameraStream?.getVideoTracks()[0]?.enabled).toBe(true)
   capture.pause(); capture.resume()
   const result = await capture.stop()
   expect(result.screenBlob.size).toBeGreaterThan(0)
@@ -79,6 +83,7 @@ it('captures a chosen window through the browser display picker', async () => {
     MediaStream: FakeMediaStream as unknown as typeof MediaStream,
   })
   expect(getDisplayMedia).toHaveBeenCalledWith(expect.objectContaining({ audio: true, video: expect.objectContaining({ displaySurface: 'window' }) }))
+  expect(capture.setCameraEnabled(false)).toBe(false)
   capture.pause(); capture.resume()
   await capture.stop()
 })

@@ -1,5 +1,5 @@
 import type { RefObject } from 'react'
-import { Camera, CameraOff } from 'lucide-react'
+import { CameraOff, X } from 'lucide-react'
 import './recording-camera.css'
 
 export type CameraPreviewSize = 'small' | 'medium' | 'large'
@@ -13,17 +13,15 @@ const sizes: { id: CameraPreviewSize; label: string }[] = [
 export function RecordingCamera({
   videoRef,
   size,
-  hidden = false,
   onSizeChange,
-  onHide,
+  onClose,
 }: {
   videoRef: RefObject<HTMLVideoElement | null>
   size: CameraPreviewSize
-  hidden?: boolean
   onSizeChange: (size: CameraPreviewSize) => void
-  onHide: () => void
+  onClose: () => void
 }) {
-  return <div className={`recording-camera camera-size-${size}`} data-record-control hidden={hidden}>
+  return <div className={`recording-camera camera-size-${size}`} data-record-control>
     <button className="recording-camera-preview" aria-label="Camera preview settings" title="Camera preview settings">
       <video ref={videoRef} muted playsInline />
       <span>Camera</span>
@@ -32,11 +30,11 @@ export function RecordingCamera({
       <div role="group" aria-label="Camera size">
         {sizes.map(({ id, label }) => <button key={id} aria-label={`${label} camera`} aria-pressed={size === id} title={`${label} camera`} onClick={() => onSizeChange(id)}>{label[0]}</button>)}
       </div>
-      <button className="camera-hide" onClick={onHide}><CameraOff size={13} /><span>Hide</span></button>
+      <button className="camera-close" aria-label="Close camera" title="Close camera" onClick={onClose}><X size={13} /><span>Close</span></button>
     </div>
   </div>
 }
 
 export function RestoreCameraButton({ onClick }: { onClick: () => void }) {
-  return <button className="icon camera-restore" title="Show camera" aria-label="Show camera" onClick={onClick}><Camera size={15} /></button>
+  return <button className="icon camera-restore" title="Turn camera on" aria-label="Turn camera on" onClick={onClick}><CameraOff size={15} /></button>
 }

@@ -11,6 +11,7 @@ export type RecordingCapture = {
   screenStream: MediaStream
   cameraStream: MediaStream | null
   previewStream: MediaStream
+  setCameraEnabled: (enabled: boolean) => boolean
   pause: () => void
   resume: () => void
   stop: () => Promise<{ screenBlob: Blob; cameraBlob?: Blob; audioBlob?: Blob }>
@@ -121,6 +122,11 @@ export async function startRecordingCapture(
     screenStream,
     cameraStream,
     previewStream,
+    setCameraEnabled: (enabled) => {
+      const tracks = cameraStream?.getVideoTracks() ?? []
+      for (const track of tracks) track.enabled = enabled
+      return tracks.length > 0
+    },
     pause: () => apply('pause'),
     resume: () => apply('resume'),
     stop: () => stopping ??= (async () => {

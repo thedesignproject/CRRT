@@ -20,6 +20,7 @@ vi.mock('../../lib/recording-transcription', () => ({ withRecordingTranscript: m
 function capture() {
   return {
     screenStream: {} as MediaStream, cameraStream: null, previewStream: {} as MediaStream,
+    setCameraEnabled: vi.fn(() => true),
     pause: vi.fn(), resume: vi.fn(),
     stop: vi.fn().mockResolvedValue({ screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']) }),
   }
@@ -43,7 +44,7 @@ it('records offscreen, applies commands, and saves a finished capture', async ()
   mocks.listener!({
     type: 'record:offscreen-start', target: 'offscreen', sessionId: 'session-1', tabStreamId: 'stream-1',
     pageUrl: 'https://example.com', pageTitle: 'Checkout',
-    snapshot: { status: 'setup', source: 'tab', cameraEnabled: false, microphoneEnabled: true, countdown: 3, durationMs: 0, tool: 'pointer', marks: [], error: null },
+    snapshot: { status: 'setup', source: 'tab', cameraEnabled: true, microphoneEnabled: true, countdown: 3, durationMs: 0, tool: 'pointer', marks: [], error: null },
   })
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalledWith(expect.objectContaining({ source: 'tab', tabStreamId: 'stream-1' })))
   await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
@@ -52,6 +53,13 @@ it('records offscreen, applies commands, and saves a finished capture', async ()
   await waitFor(() => expect(activeCapture.pause).toHaveBeenCalledTimes(2))
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'pause.toggle' } })
   await waitFor(() => expect(activeCapture.resume).toHaveBeenCalledTimes(2))
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'camera.toggled' } })
+  await waitFor(() => expect(activeCapture.setCameraEnabled).toHaveBeenCalledWith(false))
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'camera.toggled' } })
+  await waitFor(() => expect(activeCapture.setCameraEnabled).toHaveBeenCalledWith(true))
+  activeCapture.setCameraEnabled.mockReturnValueOnce(false)
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'camera.toggled' } })
+  await waitFor(() => expect(activeCapture.setCameraEnabled).toHaveBeenCalledTimes(3))
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'tool.changed', tool: 'box' } })
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'mark.added', mark: { id: 'box', type: 'box', atMs: 1_000, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] } } })
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'mark.undone' } })

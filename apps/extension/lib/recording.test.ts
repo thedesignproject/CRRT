@@ -21,7 +21,9 @@ describe('recorder state', () => {
     const recording = recorderReducer(initialRecorderState, { type: 'recording.started', now: 0 })
     expect(recording).toEqual(initialRecorderState)
     const withoutCamera = recorderReducer(initialRecorderState, { type: 'camera.toggled' })
-    expect(recorderReducer({ ...withoutCamera, status: 'recording' }, { type: 'camera.toggled' }).cameraEnabled).toBe(false)
+    expect(recorderReducer({ ...withoutCamera, status: 'recording' }, { type: 'camera.toggled' }).cameraEnabled).toBe(true)
+    const processing = { ...withoutCamera, status: 'processing' as const }
+    expect(recorderReducer(processing, { type: 'camera.toggled' })).toBe(processing)
     expect(recorderReducer({ ...withoutCamera, status: 'recording' }, { type: 'recording.restarted' }).cameraEnabled).toBe(false)
   })
 

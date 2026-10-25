@@ -213,7 +213,7 @@ async function recordingSurfaceCommand(message: any, sender: unknown) {
   const command = message.command
   /* v8 ignore next -- source selection is the same tested setup-snapshot path as the device toggles */
   if (command.kind === 'source.changed') return updateSetupSnapshot(current, { source: command.source })
-  if (command.kind === 'camera.toggled') return updateSetupSnapshot(current, { cameraEnabled: !current.snapshot.cameraEnabled })
+  if (command.kind === 'camera.toggled' && ['setup', 'failed'].includes(current.snapshot.status)) return updateSetupSnapshot(current, { cameraEnabled: !current.snapshot.cameraEnabled })
   if (command.kind === 'microphone.toggled') return updateSetupSnapshot(current, { microphoneEnabled: !current.snapshot.microphoneEnabled })
   if (command.kind === 'start') return startOffscreenRecording(current)
   if (command.kind === 'cancel') return cancelIntegratedRecording(current)

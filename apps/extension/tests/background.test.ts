@@ -159,6 +159,8 @@ describe('extension background', () => {
     const recording = { ...descriptor.snapshot, status: 'recording', countdown: 0, durationMs: 2_000 }
     await send({ type: 'record:offscreen-state', target: 'background', sessionId: descriptor.sessionId, snapshot: recording })
     expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:surface-state', snapshot: recording }), { frameId: 0 })
+    await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }, surface)
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith({ type: 'record:offscreen-command', target: 'offscreen', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } })
     browser.scripting.executeScript.mockResolvedValueOnce([{ result: { selector: '#pay', pageUrl: 'https://example.com/checkout', tagName: 'button' } }])
     await send({
       type: 'record:surface-command', sessionId: descriptor.sessionId,

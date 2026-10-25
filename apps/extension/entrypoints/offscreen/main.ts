@@ -119,6 +119,9 @@ async function applyCommand(command: RecordingSurfaceCommand) {
       /* v8 ignore else -- the toolbar only sends pause-toggle in recording or paused states */
       if (session.state.status === 'paused') { session.capture.resume(); session.state = recorderReducer(session.state, { type: 'recording.resumed', now: performance.now() }) }
     }
+  } else if (command.kind === 'camera.toggled') {
+    const enabled = !session.state.cameraEnabled
+    if (session.capture.setCameraEnabled(enabled)) session.state = recorderReducer(session.state, { type: 'camera.toggled' })
   } else if (command.kind === 'tool.changed') session.state = recorderReducer(session.state, { type: 'tool.changed', tool: command.tool })
   else if (command.kind === 'mark.added') session.state = recorderReducer(session.state, { type: 'mark.added', mark: command.mark })
   else if (command.kind === 'mark.undone') session.state = recorderReducer(session.state, { type: 'mark.undone' })

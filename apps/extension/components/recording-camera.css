@@ -82,7 +82,7 @@
 }
 .recording-camera-menu button:hover,
 .recording-camera-menu button[aria-pressed="true"] { background: var(--crrt-rule-dark); color: var(--crrt-white); }
-.recording-camera-menu .camera-hide { border-left: 1px solid var(--crrt-rule-dark-strong); border-radius: 0 var(--crrt-radius-md) var(--crrt-radius-md) 0; }
+.recording-camera-menu .camera-close { border-left: 1px solid var(--crrt-rule-dark-strong); border-radius: 0 var(--crrt-radius-md) var(--crrt-radius-md) 0; }
 
 @media (max-width: 660px) {
   .recording-camera.camera-size-medium { width: 82px; }

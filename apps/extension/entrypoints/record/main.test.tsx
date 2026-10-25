@@ -34,6 +34,7 @@ function mediaStream() {
 function capture(): RecordingCapture {
   return {
     screenStream: mediaStream() as unknown as MediaStream, cameraStream: mediaStream() as unknown as MediaStream, previewStream: mediaStream() as unknown as MediaStream,
+    setCameraEnabled: vi.fn(() => true),
     pause: vi.fn(), resume: vi.fn(), stop: vi.fn().mockResolvedValue({ screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']), audioBlob: new Blob(['audio']) }),
   }
 }
@@ -127,9 +128,9 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
     : originalCreate(tag)) as typeof document.createElement)
   expect(helpers.captureThumbnail({ videoWidth: 10, videoHeight: 10 } as HTMLVideoElement)).toBeUndefined()
   vi.mocked(document.createElement).mockRestore()
-  fireEvent.click(screen.getByRole('button', { name: 'Camera' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Camera ON' }))
   fireEvent.click(screen.getByRole('button', { name: 'Microphone' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Camera' }))
+  fireEvent.click(screen.getByRole('button', { name: 'No camera OFF' }))
   fireEvent.click(screen.getByRole('button', { name: 'Microphone' }))
   fireEvent.click(screen.getByRole('radio', { name: /Window/ }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
@@ -146,9 +147,11 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 50, clientY: 50 })
   fireEvent.click(screen.getByRole('button', { name: 'Small camera' }))
   expect(document.querySelector('.recording-camera')).toHaveClass('camera-size-small')
-  fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Close camera' }))
+  expect((await mocks.startCapture.mock.results[0]!.value).setCameraEnabled).toHaveBeenCalledWith(false)
   expect(screen.queryByRole('button', { name: 'Camera preview settings' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Show camera' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }))
+  expect((await mocks.startCapture.mock.results[0]!.value).setCameraEnabled).toHaveBeenCalledWith(true)
   for (const tool of ['Draw', 'Arrow', 'Box', 'Text']) {
     fireEvent.click(screen.getByRole('button', { name: tool }))
     fireEvent.pointerDown(overlay, { pointerId: 1, clientX: 100, clientY: 100 })
@@ -200,6 +203,7 @@ it('moves tab recording controls to the injected surface and accepts its command
     await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command }) })
   }
   await earlyDeliver({ kind: 'pause.toggle' })
+  await earlyDeliver({ kind: 'camera.toggled' })
   await earlyDeliver({ kind: 'finish' })
   await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
   const deliver = async (command: unknown) => {
@@ -209,6 +213,14 @@ it('moves tab recording controls to the injected surface and accepts its command
   await act(async () => { for (const listener of mocks.listeners) listener({ type: 'unrelated', sessionId: create.sessionId }) })
   await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'future.command' } }) })
   await deliver({ kind: 'pause.toggle' })
+  const capture = await mocks.startCapture.mock.results[0]!.value
+  capture.setCameraEnabled.mockReturnValueOnce(false)
+  await deliver({ kind: 'camera.toggled' })
+  const attemptedCameraState = capture.setCameraEnabled.mock.calls.at(-1)![0]
+  await deliver({ kind: 'camera.toggled' })
+  expect(capture.setCameraEnabled).toHaveBeenLastCalledWith(attemptedCameraState)
+  await deliver({ kind: 'camera.toggled' })
+  expect(capture.setCameraEnabled).toHaveBeenLastCalledWith(!attemptedCameraState)
   await deliver({ kind: 'tool.changed', tool: 'box' })
   await deliver({ kind: 'mark.added', mark: { id: 'empty', type: 'box', atMs: 900, points: [] } })
   await deliver({ kind: 'mark.added', mark: { id: 'box', type: 'box', atMs: 1_000, points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] } })
@@ -307,7 +319,7 @@ it('finishes a camera-free capture without a camera recording', async () => {
   mocks.startCapture.mockResolvedValueOnce(screenOnly)
   await load()
   fireEvent.click(screen.getByRole('radio', { name: /Entire screen/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Camera' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Camera ON' }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
@@ -322,7 +334,7 @@ it('recovers from denied capture and lets the user choose another source', async
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Permission denied')
   fireEvent.click(screen.getByRole('radio', { name: /Entire screen/ }))
-  fireEvent.click(screen.getByRole('button', { name: 'Camera' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Camera ON' }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalledTimes(2))
 })

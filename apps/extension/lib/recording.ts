@@ -111,7 +111,9 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
     case 'source.changed':
       return state.status === 'setup' || state.status === 'failed' ? { ...state, source: action.source } : state
     case 'camera.toggled':
-      return state.status === 'setup' || state.status === 'failed' ? { ...state, cameraEnabled: !state.cameraEnabled } : state
+      return ['setup', 'failed', 'countdown', 'recording', 'paused'].includes(state.status)
+        ? { ...state, cameraEnabled: !state.cameraEnabled }
+        : state
     case 'microphone.toggled':
       return state.status === 'setup' || state.status === 'failed' ? { ...state, microphoneEnabled: !state.microphoneEnabled } : state
     case 'countdown.started':

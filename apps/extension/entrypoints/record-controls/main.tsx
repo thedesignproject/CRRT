@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { browser } from 'wxt/browser'
-import { ArrowUpRight, Box, Camera, Check, Eraser, Mic, Monitor, Pause, Pencil, Play, RotateCcw, ScreenShare, Square, Type, Undo2, X } from 'lucide-react'
+import { ArrowUpRight, Box, Camera, CameraOff, Check, Eraser, Mic, Monitor, Pause, Pencil, Play, RotateCcw, ScreenShare, Square, Type, Undo2, X } from 'lucide-react'
 import { RecordingCamera, RestoreCameraButton, type CameraPreviewSize } from '../../components/recording-camera'
 import { formatRecordingTime, recordingMarkOpacity, type RecordingMark, type RecordingPoint, type RecordingTool } from '../../lib/recording'
 import type { RecordingSessionSnapshot, RecordingSurfaceCommand } from '../../lib/recording-session'
@@ -43,11 +43,14 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
   const [snapshot, setSnapshot] = useState<RecordingSessionSnapshot | null>(null)
   const [draft, setDraft] = useState<RecordingPoint[]>([])
   const [pending, setPending] = useState(false)
-  const [cameraPreviewVisible, setCameraPreviewVisible] = useState(true)
+  const [cameraAvailable, setCameraAvailable] = useState(false)
   const [cameraPreviewSize, setCameraPreviewSize] = useState<CameraPreviewSize>('medium')
   const draftRef = useRef<RecordingPoint[]>([])
   const exclusiveRef = useRef(false)
   const cameraRef = useRef<HTMLVideoElement>(null)
+  const cameraStreamRef = useRef<MediaStream | null>(null)
+  const cameraEnabledRef = useRef(false)
+  cameraEnabledRef.current = snapshot?.cameraEnabled ?? false
 
   const command = useCallback(async (value: RecordingSurfaceCommand, exclusive = false) => {
     /* v8 ignore next -- disabled Start/Done controls prevent a second exclusive DOM event */
@@ -71,18 +74,35 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
     return () => browser.runtime.onMessage.removeListener(listener)
   }, [id])
 
+  const cameraSessionActive = Boolean(snapshot && ['countdown', 'recording', 'paused'].includes(snapshot.status))
   useEffect(() => {
-    if (!snapshot?.cameraEnabled || !['countdown', 'recording', 'paused'].includes(snapshot.status)) return
-    let stream: MediaStream | null = null, alive = true
+    if (!cameraSessionActive || !cameraEnabledRef.current) return
+    let alive = true
     navigator.mediaDevices?.getUserMedia({ video: true, audio: false }).then(async (value) => {
       /* v8 ignore next -- resolves only when a permission prompt outlives an unmounted recording surface */
       if (!alive) { value.getTracks().forEach((track) => track.stop()); return }
-      stream = value
+      cameraStreamRef.current = value
+      value.getVideoTracks().forEach((track) => { track.enabled = cameraEnabledRef.current })
+      setCameraAvailable(true)
       cameraRef.current!.srcObject = value
       await cameraRef.current!.play().catch(() => {})
     }).catch(() => {})
-    return () => { alive = false; stream?.getTracks().forEach((track) => track.stop()) }
-  }, [snapshot?.cameraEnabled, snapshot?.status])
+    return () => {
+      alive = false
+      cameraStreamRef.current?.getTracks().forEach((track) => track.stop())
+      cameraStreamRef.current = null
+      setCameraAvailable(false)
+    }
+  }, [cameraSessionActive])
+
+  useEffect(() => {
+    const stream = cameraStreamRef.current
+    stream?.getVideoTracks().forEach((track) => { track.enabled = Boolean(snapshot?.cameraEnabled) })
+    if (snapshot?.cameraEnabled && stream && cameraRef.current) {
+      cameraRef.current.srcObject = stream
+      void cameraRef.current.play().catch(() => {})
+    }
+  }, [snapshot?.cameraEnabled])
 
   useEffect(() => {
     if (!snapshot || snapshot.tool === 'pointer') return
@@ -142,7 +162,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
         ] as const).map(([source, label, detail, Icon]) => <button key={source} className={snapshot.source === source ? 'source active' : 'source'} onClick={() => { void command({ kind: 'source.changed', source }) }}><Icon size={20} /><strong>{label}</strong><small>{detail}</small></button>)}
       </div>
       <div className="device-options">
-        <button onClick={() => { void command({ kind: 'camera.toggled' }) }}><Camera size={17} /><span>Camera</span><em>{snapshot.cameraEnabled ? 'On' : 'Off'}</em></button>
+        <button className={snapshot.cameraEnabled ? '' : 'device-off'} aria-pressed={snapshot.cameraEnabled} onClick={() => { void command({ kind: 'camera.toggled' }) }}>{snapshot.cameraEnabled ? <Camera size={17} /> : <CameraOff size={17} />}<span>{snapshot.cameraEnabled ? 'Camera' : 'No camera'}</span><em>{snapshot.cameraEnabled ? 'ON' : 'OFF'}</em></button>
         <button onClick={() => { void command({ kind: 'microphone.toggled' }) }}><Mic size={17} /><span>Microphone</span><em>{snapshot.microphoneEnabled ? 'On' : 'Off'}</em></button>
       </div>
       {snapshot.error && <p className="setup-error" role="alert">{snapshot.error}</p>}
@@ -160,7 +180,10 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
         return opacity > 0 ? <MarkShape key={mark.id} mark={mark} opacity={opacity} /> : null
       })}{preview && <MarkShape mark={preview} />}
     </svg>
-    {snapshot.cameraEnabled && <RecordingCamera videoRef={cameraRef} size={cameraPreviewSize} hidden={!cameraPreviewVisible} onSizeChange={setCameraPreviewSize} onHide={() => setCameraPreviewVisible(false)} />}
+    {snapshot.cameraEnabled ? <RecordingCamera videoRef={cameraRef} size={cameraPreviewSize} onSizeChange={setCameraPreviewSize} onClose={() => {
+      cameraStreamRef.current?.getVideoTracks().forEach((track) => { track.enabled = false })
+      void command({ kind: 'camera.toggled' })
+    }} /> : null}
     {snapshot.microphoneEnabled && snapshot.status !== 'countdown' && <div className="transcript-chip" data-record-control><Mic size={12} /><span>Voice recording</span><em>Transcribed after Done</em></div>}
     {snapshot.warning && <div className="surface-warning" data-record-control>{snapshot.warning}</div>}
     {snapshot.status === 'countdown' && <div className="countdown"><strong>{snapshot.countdown}</strong><span>Get ready</span></div>}
@@ -172,7 +195,10 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
       {/* v8 ignore next -- paused and recording render paths are both exercised; duplicate ternaries share the same state */}
       <button className="icon" title={snapshot.status === 'paused' ? 'Resume' : 'Pause'} onClick={() => { void command({ kind: 'pause.toggle' }) }} aria-label={snapshot.status === 'paused' ? 'Resume' : 'Pause'}>{snapshot.status === 'paused' ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}</button>
       <button className="icon" title="Restart" onClick={() => { if (window.confirm('Restart this recording?')) void command({ kind: 'restart' }) }} aria-label="Restart"><RotateCcw size={15} /></button>
-      {snapshot.cameraEnabled && !cameraPreviewVisible && <RestoreCameraButton onClick={() => setCameraPreviewVisible(true)} />}
+      {!snapshot.cameraEnabled && cameraAvailable ? <RestoreCameraButton onClick={() => {
+        cameraStreamRef.current?.getVideoTracks().forEach((track) => { track.enabled = true })
+        void command({ kind: 'camera.toggled' })
+      }} /> : null}
       <div className="divider" />
       {tools.map(({ id: tool, label, icon: Icon }) => <button key={tool} className={snapshot.tool === tool ? 'tool active' : 'tool'} onClick={() => chooseTool(tool)}><Icon size={14} /><span>{label}</span></button>)}
       <div className="divider" />

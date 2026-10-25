@@ -62,6 +62,9 @@ button:disabled { cursor: not-allowed; opacity: .36 }
 .device-options button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-lg); background: var(--crrt-bg-deep-soft); color: var(--crrt-white); text-align: left }
 .device-options span { font-size: 11px }
 .device-options em { color: var(--crrt-carrot); font: normal 9px var(--crrt-font-mono) }
+.device-options .device-off { border-color: color-mix(in srgb, var(--record-red) 42%, transparent); background: color-mix(in srgb, var(--record-red) 8%, transparent); color: var(--crrt-white) }
+.device-options .device-off svg, .device-options .device-off em { color: var(--record-red) }
+.device-options .device-off em { padding: 3px 5px; border: 1px solid color-mix(in srgb, var(--record-red) 45%, transparent); border-radius: var(--crrt-radius-md); background: color-mix(in srgb, var(--record-red) 12%, transparent); font-weight: 800 }
 .start { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; width: calc(100% - 32px); min-height: 48px; margin: 0 16px 16px; padding: 0 14px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-weight: 700; text-align: left }
 .start:hover { background: var(--crrt-carrot-deep) }
 .start kbd { padding: 4px 6px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--crrt-radius-md); font: 9px var(--crrt-font-mono) }

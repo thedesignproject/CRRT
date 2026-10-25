@@ -23,8 +23,8 @@ beforeEach(() => {
   history.replaceState(null, '', '/record-controls.html?session=s')
   document.body.innerHTML = '<div id="root"></div>'
   mocks.sendMessage.mockImplementation(async (message: { type: string }) => ({ ok: true, ...(message.type === 'record:surface-ready' ? { data: snapshot() } : {}) }))
-  const track = { stop: vi.fn() }
-  mocks.getUserMedia.mockResolvedValue({ getTracks: () => [track] })
+  const track = { enabled: true, stop: vi.fn() }
+  mocks.getUserMedia.mockResolvedValue({ getTracks: () => [track], getVideoTracks: () => [track] })
   Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: mocks.getUserMedia } })
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play })
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, writable: true, value: null })
@@ -54,7 +54,7 @@ it('shows setup failures and lets the user change devices or close the launcher'
   const module = await import('./main')
   render(<module.RecordControls />)
   expect(await screen.findByRole('alert')).toHaveTextContent('Permission denied')
-  fireEvent.click(screen.getByRole('button', { name: /Camera Off/ }))
+  fireEvent.click(screen.getByRole('button', { name: /No camera OFF/ }))
   fireEvent.click(screen.getByRole('button', { name: /Microphone Off/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Close recorder' }))
   await waitFor(() => {
@@ -187,9 +187,19 @@ it('fades completed marks and lets the user resize, hide, and restore the camera
 
   fireEvent.click(screen.getByRole('button', { name: 'Large camera' }))
   expect(document.querySelector('.recording-camera')).toHaveClass('camera-size-large')
-  fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+  await waitFor(() => expect((document.querySelector('.recording-camera video') as HTMLVideoElement).srcObject).not.toBeNull())
+  const cameraTrack = ((document.querySelector('.recording-camera video') as HTMLVideoElement).srcObject as MediaStream).getVideoTracks()[0]!
+  fireEvent.click(screen.getByRole('button', { name: 'Close camera' }))
+  expect(cameraTrack.enabled).toBe(false)
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 4_000, marks: [mark], cameraEnabled: false }) })
+  })
   expect(screen.queryByRole('button', { name: 'Camera preview settings' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Show camera' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }))
+  expect(cameraTrack.enabled).toBe(true)
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 4_000, marks: [mark], cameraEnabled: true }) })
+  })
   expect(screen.getByRole('button', { name: 'Camera preview settings' })).toBeInTheDocument()
-  expect(mocks.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'camera.toggled' } }))
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'camera.toggled' } }))
 })

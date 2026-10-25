@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type Poi
 import { createRoot } from 'react-dom/client'
 import { browser } from 'wxt/browser'
 import {
-  ArrowUpRight, Box, Camera, Check, CircleDot, Copy, Eraser, Mic, Monitor,
+  ArrowUpRight, Box, Camera, CameraOff, Check, CircleDot, Copy, Eraser, Mic, Monitor,
   Pause, Pencil, Play, RotateCcw, ScreenShare, Square, Type, Undo2, Video, X,
 } from 'lucide-react'
 import { RecordingCamera, type CameraPreviewSize } from '../../components/recording-camera'
@@ -123,7 +123,6 @@ export function RecordApp() {
   const [playbackMs, setPlaybackMs] = useState(0)
   const [copied, setCopied] = useState(false)
   const [sessionWarning, setSessionWarning] = useState<string>()
-  const [cameraPreviewVisible, setCameraPreviewVisible] = useState(true)
   const [cameraPreviewSize, setCameraPreviewSize] = useState<CameraPreviewSize>('medium')
   const cameraPreviewRef = useRef<HTMLVideoElement>(null)
   const reviewCameraRef = useRef<HTMLVideoElement>(null)
@@ -148,6 +147,13 @@ export function RecordApp() {
     const timer = window.setInterval(() => dispatch({ type: 'recording.ticked', now: performance.now() }), 200)
     return () => window.clearInterval(timer)
   }, [state.status])
+
+  useEffect(() => {
+    const stream = captureRef.current?.cameraStream
+    if (!state.cameraEnabled || !stream || !cameraPreviewRef.current) return
+    cameraPreviewRef.current.srcObject = stream
+    void cameraPreviewRef.current.play().catch(() => {})
+  }, [state.cameraEnabled])
 
   useEffect(() => {
     const sessionId = sessionRef.current
@@ -279,6 +285,14 @@ export function RecordApp() {
     else if (state.status === 'paused') { captureRef.current?.resume(); dispatch({ type: 'recording.resumed', now: performance.now() }) }
   }
 
+  function setCameraDuringRecording(enabled: boolean) {
+    const capture = captureRef.current
+    if (!capture || !capture.setCameraEnabled(enabled)) return
+    const next = recorderReducer(stateRef.current, { type: 'camera.toggled' })
+    stateRef.current = next
+    dispatch({ type: 'camera.toggled' })
+  }
+
   async function restart() {
     const capture = captureRef.current
     captureRef.current = null
@@ -302,6 +316,7 @@ export function RecordApp() {
       if (value.type !== 'record:controller-command' || !value.command) return false
       const command = value.command
       if (command.kind === 'pause.toggle') togglePause()
+      else if (command.kind === 'camera.toggled') setCameraDuringRecording(!stateRef.current.cameraEnabled)
       else if (command.kind === 'restart') void restart()
       else if (command.kind === 'finish') void finish()
       else if (command.kind === 'tool.changed') dispatch({ type: 'tool.changed', tool: command.tool })
@@ -381,7 +396,7 @@ export function RecordApp() {
       <svg className={`record-overlay tool-${state.tool}`} viewBox="0 0 100 100" preserveAspectRatio="none" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={(event) => { void pointerUp(event) }}>
         <Marks marks={state.marks} atMs={state.durationMs} />{previewMark && <MarkShape mark={previewMark} />}
       </svg>
-      {state.cameraEnabled && <RecordingCamera videoRef={cameraPreviewRef} size={cameraPreviewSize} hidden={!cameraPreviewVisible} onSizeChange={setCameraPreviewSize} onHide={() => setCameraPreviewVisible(false)} />}
+      {state.cameraEnabled ? <RecordingCamera videoRef={cameraPreviewRef} size={cameraPreviewSize} onSizeChange={setCameraPreviewSize} onClose={() => setCameraDuringRecording(false)} /> : null}
       {state.microphoneEnabled && state.status !== 'countdown' && <div className="live-transcript"><Mic size={12} /><span>Voice recording</span><em>Transcribed after Done</em></div>}
       {state.status === 'countdown' && <div className="countdown"><span>{state.countdown}</span><p>Get ready</p></div>}
       {state.status === 'paused' && <div className="paused-screen"><Pause size={30} fill="currentColor" /><strong>Recording paused</strong></div>}
@@ -391,7 +406,7 @@ export function RecordApp() {
       <div className="record-clock"><i />{formatRecordingTime(state.durationMs)}</div>
       <button className="icon-control" onClick={togglePause} aria-label={state.status === 'paused' ? 'Resume' : 'Pause'}>{state.status === 'paused' ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}</button>
       <button className="icon-control" onClick={() => { void restart() }} aria-label="Restart"><RotateCcw size={15} /></button>
-      {state.cameraEnabled && !cameraPreviewVisible && <button className="icon-control" onClick={() => setCameraPreviewVisible(true)} aria-label="Show camera" title="Show camera"><Camera size={15} /></button>}
+      {!state.cameraEnabled && captureRef.current?.cameraStream ? <button className="icon-control" onClick={() => setCameraDuringRecording(true)} aria-label="Turn camera on" title="Turn camera on"><CameraOff size={15} /></button> : null}
       <div className="toolbar-divider" />
       {tools.map(({ id, label, icon: Icon }) => <button key={id} className={state.tool === id ? 'tool active' : 'tool'} onClick={() => dispatch({ type: 'tool.changed', tool: id })}><Icon size={14} /><span>{label}</span></button>)}
       <div className="toolbar-divider" />
@@ -416,7 +431,7 @@ function Setup({ state, tabAvailable, start, dispatch }: { state: typeof initial
         {sources.map(({ id, label, note, icon: Icon }) => <button key={id} role="radio" aria-checked={state.source === id} disabled={id === 'tab' && !tabAvailable} className={state.source === id ? 'source active' : 'source'} onClick={() => dispatch({ type: 'source.changed', source: id })}><Icon size={21} /><strong>{label}</strong><small>{id === 'tab' && !tabAvailable ? 'Unavailable here' : note}</small>{id === 'tab' && <em>Best for agents</em>}</button>)}
       </div>
       <div className="device-options">
-        <button aria-pressed={state.cameraEnabled} onClick={() => dispatch({ type: 'camera.toggled' })}><span><Camera size={17} />Camera</span><i className={state.cameraEnabled ? 'switch on' : 'switch'} /></button>
+        <button className={state.cameraEnabled ? '' : 'device-off'} aria-pressed={state.cameraEnabled} onClick={() => dispatch({ type: 'camera.toggled' })}><span>{state.cameraEnabled ? <Camera size={17} /> : <CameraOff size={17} />}{state.cameraEnabled ? 'Camera' : 'No camera'}</span><strong className={state.cameraEnabled ? 'device-state on' : 'device-state off'}>{state.cameraEnabled ? 'ON' : 'OFF'}</strong></button>
         <button aria-pressed={state.microphoneEnabled} onClick={() => dispatch({ type: 'microphone.toggled' })}><span><Mic size={17} />Microphone</span><i className={state.microphoneEnabled ? 'switch on' : 'switch'} /></button>
       </div>
       {state.error && <p className="setup-error" role="alert">{state.error}</p>}
