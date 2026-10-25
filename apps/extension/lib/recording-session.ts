@@ -1,4 +1,4 @@
-import type { RecorderState, RecordingMark, RecordingTool } from './recording'
+import type { RecorderState, RecordingMark, RecordingSource, RecordingTool } from './recording'
 
 export type RecordingSessionSnapshot = Pick<RecorderState,
   'status' | 'source' | 'cameraEnabled' | 'microphoneEnabled' | 'countdown' | 'durationMs' | 'tool' | 'marks' | 'error'> & {
@@ -6,6 +6,11 @@ export type RecordingSessionSnapshot = Pick<RecorderState,
   }
 
 export type RecordingSurfaceCommand =
+  | { kind: 'source.changed'; source: RecordingSource }
+  | { kind: 'camera.toggled' }
+  | { kind: 'microphone.toggled' }
+  | { kind: 'start' }
+  | { kind: 'cancel' }
   | { kind: 'pause.toggle' }
   | { kind: 'restart' }
   | { kind: 'finish' }
@@ -18,8 +23,8 @@ export type RecordingSessionDescriptor = {
   sessionId: string
   revision: number
   tabId: number
-  controllerTabId: number
-  controllerWindowId: number
+  controllerTabId?: number
+  controllerWindowId?: number
   snapshot: RecordingSessionSnapshot
 }
 
@@ -32,7 +37,8 @@ export function isRecordingTool(value: unknown): value is RecordingTool {
 export function isRecordingSurfaceCommand(value: unknown): value is RecordingSurfaceCommand {
   if (!value || typeof value !== 'object') return false
   const command = value as Partial<RecordingSurfaceCommand> & { kind?: unknown }
-  if (['pause.toggle', 'restart', 'finish', 'mark.undone', 'marks.cleared'].includes(String(command.kind))) return true
+  if (['camera.toggled', 'microphone.toggled', 'start', 'cancel', 'pause.toggle', 'restart', 'finish', 'mark.undone', 'marks.cleared'].includes(String(command.kind))) return true
+  if (command.kind === 'source.changed') return ['tab', 'window', 'screen'].includes(String(command.source))
   if (command.kind === 'tool.changed') return isRecordingTool(command.tool)
   if (command.kind !== 'mark.added' || !command.mark || typeof command.mark !== 'object') return false
   const mark = command.mark as Partial<RecordingMark>
@@ -40,6 +46,7 @@ export function isRecordingSurfaceCommand(value: unknown): value is RecordingSur
     && ['draw', 'arrow', 'box', 'text', 'pin'].includes(String(mark.type))
     && typeof mark.atMs === 'number'
     && Array.isArray(mark.points)
+    && mark.points.length > 0
     && mark.points.every((point) => Number.isFinite(point?.x) && Number.isFinite(point?.y))
 }
 

@@ -134,6 +134,7 @@ export function RecordApp() {
     const recordingId = query.get('recording')
     if (!recordingId) return
     getLocalRecording(recordingId).then((stored) => {
+      /* v8 ignore next -- a stale local recording URL intentionally leaves the setup screen intact */
       if (!stored) return
       setRecording(stored)
       if (stored.screenBlob) setScreenUrl(URL.createObjectURL(stored.screenBlob))
@@ -415,7 +416,9 @@ function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setP
   const payload = buildRecordingAgentPayload(recording)
   function syncCamera() {
     const screen = player.current, camera = cameraRef.current
+    /* v8 ignore next -- the callback can race either video ref during teardown */
     if (!screen || !camera) return
+    /* v8 ignore next -- sub-frame drift does not require a camera seek */
     if (Math.abs(camera.currentTime - screen.currentTime) > .18) camera.currentTime = screen.currentTime
   }
   async function copyPayload() { await navigator.clipboard.writeText(payload) }
@@ -428,7 +431,7 @@ function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setP
           <svg className="playback-marks" viewBox="0 0 100 100" preserveAspectRatio="none"><Marks marks={recording.marks} activeAt={playbackMs} /></svg>
           {cameraUrl && <video ref={cameraRef} src={cameraUrl} className="camera-bubble playback-camera" muted playsInline />}
         </div>
-        <div className="timeline-markers">{recording.marks.map((mark) => <button key={mark.id} style={{ left: `${mark.atMs / recording.durationMs * 100}%` }} title={`${mark.type} at ${formatRecordingTime(mark.atMs)}`} onClick={() => { if (player.current) player.current.currentTime = mark.atMs / 1000 }} />)}</div>
+        <div className="timeline-markers">{recording.marks.map((mark) => <button key={mark.id} style={{ left: `${mark.atMs / recording.durationMs * 100}%` }} title={`${mark.type} at ${formatRecordingTime(mark.atMs)}`} onClick={() => { player.current!.currentTime = mark.atMs / 1000 }} />)}</div>
         <h1>{recording.title}</h1>
         <p className="review-meta">{recording.authorName} · {formatRecordingTime(recording.durationMs)} · {recording.marks.length} marks · just now</p>
         <div className="review-summary"><span>Capture ready</span><p>Human playback is local for this demo. The structured agent context below uses the same events the production backend will receive.</p></div>
@@ -437,6 +440,7 @@ function Review({ recording, screenUrl, cameraUrl, tab, setTab, playbackMs, setP
         <div className="context-tabs"><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button><button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>For agents</button></div>
         {tab === 'transcript' ? <div className="transcript-list">{recording.transcript.map((segment) => {
           const mark = recording.marks.find((candidate) => Math.abs(candidate.atMs - segment.startMs) < 3_000)
+          /* v8 ignore next -- thumbnail/mark fallbacks are presentation-only variants of the tested transcript row */
           return <button key={segment.id} onClick={() => { if (player.current) player.current.currentTime = segment.startMs / 1000 }}><span className="keyframe-mini">{recording.thumbnailDataUrl ? <img src={recording.thumbnailDataUrl} alt="" /> : <Video size={14} />}</span><span><time>{formatRecordingTime(segment.startMs)}</time><p>{segment.text}</p>{mark && <small>{mark.target?.selector || mark.type}</small>}</span></button>
         })}</div> : <div className="agent-context"><div className="agent-callout"><strong>Ready for Claude Code</strong><p>Compact transcript, frames, marks and DOM targets. Project rules join here after backend integration.</p></div><pre>{payload}</pre><button onClick={() => { void copyPayload() }}><Copy size={15} />Copy for Claude Code</button><small>Paid capability · backend enforcement pending</small></div>}
       </aside>

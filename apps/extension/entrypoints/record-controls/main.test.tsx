@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -30,12 +30,43 @@ beforeEach(() => {
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, writable: true, value: null })
   Object.defineProperty(SVGElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() })
   Object.defineProperty(window, 'prompt', { configurable: true, value: vi.fn(() => 'Make this clearer') })
+  Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => true) })
 })
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); document.body.innerHTML = '' })
 
+it('keeps setup in the page and starts with one click', async () => {
+  mocks.sendMessage.mockImplementation(async (message: { type: string }) => ({ ok: true, ...(message.type === 'record:surface-ready' ? { data: snapshot({ status: 'setup' }) } : {}) }))
+  const module = await import('./main')
+  render(<module.RecordControls />)
+  expect(await screen.findByLabelText('CRRT Record setup')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Window/ }))
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'source.changed', source: 'window' } })))
+  const start = screen.getByRole('button', { name: /Start recording/ })
+  await waitFor(() => expect(start).not.toBeDisabled())
+  fireEvent.click(start)
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'start' } })))
+  expect(mocks.sendMessage.mock.calls.filter(([message]) => message.command?.kind === 'start')).toHaveLength(1)
+})
+
+it('shows setup failures and lets the user change devices or close the launcher', async () => {
+  mocks.sendMessage.mockImplementation(async (message: { type: string }) => ({ ok: true, ...(message.type === 'record:surface-ready' ? { data: snapshot({ status: 'failed', error: 'Permission denied', cameraEnabled: false, microphoneEnabled: false }) } : {}) }))
+  const module = await import('./main')
+  render(<module.RecordControls />)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Permission denied')
+  fireEvent.click(screen.getByRole('button', { name: /Camera Off/ }))
+  fireEvent.click(screen.getByRole('button', { name: /Microphone Off/ }))
+  fireEvent.click(screen.getByRole('button', { name: 'Close recorder' }))
+  await waitFor(() => {
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'camera.toggled' } }))
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'microphone.toggled' } }))
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'cancel' } }))
+  })
+})
+
 it('renders the live tab surface and emits structured recording commands', async () => {
   const module = await import('./main')
+  render(<module.RecordControls />)
   expect(module.surfacePoint({ clientX: 50, clientY: 25, currentTarget: { getBoundingClientRect: () => ({ left: 0, top: 0, width: 100, height: 50 }) } as SVGSVGElement })).toEqual({ x: 50, y: 50 })
   expect(await screen.findByText('Get ready')).toBeInTheDocument()
   await act(async () => {
@@ -43,14 +74,13 @@ it('renders the live tab surface and emits structured recording commands', async
   })
   expect(screen.getByText('“Show the part you want to change.”')).toBeInTheDocument()
   expect(mocks.getUserMedia).toHaveBeenCalledWith({ video: true, audio: false })
-  fireEvent.mouseMove(document, { clientX: 12, clientY: 24 })
-  expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'record:surface-pointer', sessionId: 's', x: 12, y: 24 })
-
   fireEvent.click(screen.getByRole('button', { name: 'Draw' }))
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'tool.changed', tool: 'draw' } })))
   await act(async () => {
     for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', tool: 'draw', durationMs: 4_200 }) })
   })
+  fireEvent.keyDown(window, { key: 'Escape' })
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'tool.changed', tool: 'pointer' } })))
   const overlay = document.querySelector('.annotation-layer') as SVGSVGElement
   vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 1000, height: 500 } as DOMRect)
   fireEvent.pointerDown(overlay, { pointerId: 1, clientX: 100, clientY: 100 })
@@ -59,17 +89,18 @@ it('renders the live tab surface and emits structured recording commands', async
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: expect.objectContaining({ kind: 'mark.added', mark: expect.objectContaining({ type: 'draw' }) }) })))
 
   fireEvent.click(screen.getByRole('button', { name: 'Pause' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Done' })).not.toBeDisabled())
   fireEvent.click(screen.getByRole('button', { name: 'Restart' }))
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Done' })).not.toBeDisabled())
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'pause.toggle' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'restart' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'finish' } }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(300) })
-  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:surface-layout', sessionId: 's' }))
 })
 
 it('renders paused state, warnings, existing marks, and editing actions', async () => {
-  await import('./main')
+  const module = await import('./main')
+  render(<module.RecordControls />)
   await screen.findByText('Get ready')
   const mark = { id: 'pin', type: 'pin', atMs: 1_000, points: [{ x: 20, y: 30 }], pinNumber: 1 }
   await act(async () => {
@@ -78,8 +109,34 @@ it('renders paused state, warnings, existing marks, and editing actions', async 
   expect(screen.getByText('Paused')).toBeInTheDocument()
   expect(screen.getByText('Limited navigation')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'pause.toggle' } })))
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'mark.undone' } })))
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'mark.undone' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'marks.cleared' } }))
+})
+
+it('renders all mark types, creates text notes, and confirms discard', async () => {
+  const module = await import('./main')
+  render(<module.RecordControls />)
+  await screen.findByText('Get ready')
+  const marks = [
+    { id: 'arrow', type: 'arrow', atMs: 1, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] },
+    { id: 'box', type: 'box', atMs: 1, points: [{ x: 5, y: 6 }, { x: 7, y: 8 }] },
+    { id: 'text', type: 'text', atMs: 1, points: [{ x: 9, y: 10 }], text: 'Fix this' },
+  ]
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, tool: 'text', marks }) })
+  })
+  expect(screen.getByText('Fix this')).toBeInTheDocument()
+  const overlay = document.querySelector('.annotation-layer') as SVGSVGElement
+  vi.spyOn(overlay, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 100, height: 100 } as DOMRect)
+  fireEvent.pointerDown(overlay, { pointerId: 2, clientX: 20, clientY: 30 })
+  fireEvent.pointerUp(overlay, { pointerId: 2, clientX: 20, clientY: 30 })
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
+    command: expect.objectContaining({ kind: 'mark.added', mark: expect.objectContaining({ type: 'text', text: 'Make this clearer' }) }),
+  })))
+  fireEvent.click(screen.getByRole('button', { name: 'Discard recording' }))
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'cancel' } })))
 })

@@ -41,6 +41,7 @@ function releaseFiles(overrides: Record<string, Uint8Array | string> = {}) {
     'manifest.json': JSON.stringify(manifest()),
     'background.js': 'const safe = true',
     'comment.js': 'const activate = true',
+    'offscreen.html': '<main>Offscreen CRRT media controller</main>',
     'popup.html': '<main>CRRT</main>',
     'private.html': '<main>Private CRRT UI</main>',
     'record-controls.html': '<main>Private CRRT recording controls</main>',
@@ -120,7 +121,7 @@ describe('extension Store release', () => {
     expect(() => validateReleaseFiles(releaseFiles({ 'manifest.json': JSON.stringify(manifest(change)) }), options)).toThrow(message)
   })
 
-  it.each(['manifest.json', 'background.js', 'comment.js', 'popup.html', 'private.html', 'record-controls.html'])('requires %s', (path) => {
+  it.each(['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html'])('requires %s', (path) => {
     const files = releaseFiles(); files.delete(path)
     expect(() => validateReleaseFiles(files, options)).toThrow(`missing ${path}`)
   })

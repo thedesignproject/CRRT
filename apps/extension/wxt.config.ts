@@ -66,7 +66,7 @@ export function extensionManifest(
     name: 'CRRT',
     description: 'Comment or record your screen, voice, and visual context for people and agents.',
     version: readExtensionVersion(),
-    permissions: ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'],
+    permissions: ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
     host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`])],
     // This only lets the explicitly injected, isolated iframe load on a chosen HTTP(S) page.

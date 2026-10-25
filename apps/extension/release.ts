@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 
-export const STORE_PERMISSIONS = ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'] as const
+export const STORE_PERMISSIONS = ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'] as const
 export const STORE_OPTIONAL_HOST_PERMISSIONS = ['http://*/*', 'https://*/*'] as const
 export const STORE_ICON_SIZES = [16, 32, 48, 128] as const
 export const STORE_CSP = "script-src 'self'; object-src 'self'"
@@ -131,7 +131,7 @@ export function validateReleaseFiles(
   { version, apiBase, supabaseUrl }: { version: string; apiBase: string; supabaseUrl: string },
 ): ReleaseValidation {
   const names = [...files.keys()].sort()
-  for (const required of ['manifest.json', 'background.js', 'comment.js', 'popup.html', 'private.html', 'record-controls.html']) {
+  for (const required of ['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html']) {
     requireValue(files.has(required), `Release is missing ${required}`)
   }
   requireValue(!names.some((path) => path.endsWith('.map') || path.includes('/.env') || path.startsWith('.env')), 'Release must not contain source maps or environment files')

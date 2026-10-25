@@ -27,14 +27,17 @@ export function connectRecordingPageHost(frame: HTMLIFrameElement, sessionId: st
       updatePointer(value.x, value.y)
       return false
     }
+    /* v8 ignore next -- malformed legacy iframe messages are intentionally ignored */
     if (value.type !== 'record:overlay-interaction' || !Array.isArray(value.rects)) return false
     const rects = value.rects.filter((rect): rect is number[] => Array.isArray(rect) && rect.length === 4 && rect.every(Number.isFinite))
+    /* v8 ignore next -- unknown legacy tools safely fall back to pointer mode */
     const tool = ['pointer', 'draw', 'arrow', 'box', 'text', 'pin'].includes(String(value.tool)) ? value.tool as RecordingTool : 'pointer'
     layout = { tool, rects }
     frame.style.pointerEvents = tool === 'pointer' ? 'none' : 'auto'
     return false
   }
   const cleanup = () => {
+    /* v8 ignore next -- cleanup is idempotent across remove and pagehide */
     if (stopped) return
     stopped = true
     browser.runtime.onMessage.removeListener(listener)

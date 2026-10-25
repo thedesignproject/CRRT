@@ -18,7 +18,7 @@ it('builds the extension with its canonical icon and declared permissions', () =
   expect((config.manifest as (environment: { mode: string }) => unknown)({ mode: 'production' })).toEqual(manifest)
   expect(manifest).toMatchObject({
     version: '1.0.0',
-    permissions: ['activeTab', 'identity', 'scripting', 'storage', 'tabCapture'],
+    permissions: ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
     host_permissions: ['https://crrt.ai/*', 'https://project-ref.supabase.co/*'],
     icons: extensionIcons,

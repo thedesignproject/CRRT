@@ -1,12 +1,69 @@
-@import "../../../../branding/crrt/tokens.css";
-
 :root { color-scheme: dark; font-family: var(--crrt-font-sans); color: var(--crrt-white); --record-red: #ff573d }
+:root {
+  --crrt-bg-deep-soft: #181818;
+  --crrt-white: #fff;
+  --crrt-ink-faint: #a8a29a;
+  --crrt-carrot: #e8853d;
+  --crrt-carrot-deep: #b85f1f;
+  --crrt-phosphor: #ffb000;
+  --crrt-rule-dark: rgba(255,255,255,.08);
+  --crrt-rule-dark-strong: rgba(255,255,255,.16);
+  --crrt-font-sans: "Geist Mono", ui-monospace, monospace;
+  --crrt-font-mono: "Geist Mono", ui-monospace, monospace;
+  --crrt-radius-md: 6px;
+  --crrt-radius-lg: 8px;
+  --crrt-radius-xl: 10px;
+  --crrt-radius-2xl: 12px;
+  --crrt-radius-3xl: 16px;
+  --crrt-shadow-pill: 0 8px 24px rgba(10,10,10,.18);
+}
+:host {
+  color-scheme: dark;
+  color: var(--crrt-white);
+  font-family: var(--crrt-font-sans);
+  --record-red: #ff573d;
+  --crrt-bg-deep-soft: #181818;
+  --crrt-white: #fff;
+  --crrt-ink-faint: #a8a29a;
+  --crrt-carrot: #e8853d;
+  --crrt-carrot-deep: #b85f1f;
+  --crrt-phosphor: #ffb000;
+  --crrt-rule-dark: rgba(255,255,255,.08);
+  --crrt-rule-dark-strong: rgba(255,255,255,.16);
+  --crrt-font-sans: "Geist Mono", ui-monospace, monospace;
+  --crrt-font-mono: "Geist Mono", ui-monospace, monospace;
+  --crrt-radius-md: 6px;
+  --crrt-radius-lg: 8px;
+  --crrt-radius-xl: 10px;
+  --crrt-radius-2xl: 12px;
+  --crrt-radius-3xl: 16px;
+  --crrt-shadow-pill: 0 8px 24px rgba(10,10,10,.18);
+}
 * { box-sizing: border-box }
-html, body, #root { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent }
+html, body, #root, .crrt-record-root { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent }
 button { border: 0; font: inherit; cursor: pointer }
 button:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 3px }
 button:disabled { cursor: not-allowed; opacity: .36 }
 .record-surface { position: fixed; inset: 0; pointer-events: none }
+.setup-surface { display: grid; place-items: start end; padding: 24px }
+.setup-launcher { width: min(390px, calc(100vw - 32px)); overflow: hidden; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-3xl); background: rgba(10,10,10,.97); box-shadow: var(--crrt-shadow-pill); pointer-events: auto }
+.setup-launcher header { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--crrt-rule-dark) }
+.setup-launcher header span { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700 }
+.setup-launcher header i { width: 8px; height: 8px; border-radius: 50%; background: var(--crrt-carrot) }
+.source-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 16px }
+.source { display: grid; justify-items: start; gap: 5px; min-width: 0; min-height: 96px; padding: 14px 12px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-xl); background: var(--crrt-bg-deep-soft); color: var(--crrt-ink-faint); text-align: left }
+.source:hover, .source.active { border-color: var(--crrt-carrot); color: var(--crrt-white) }
+.source.active { background: rgba(232,133,61,.12) }
+.source strong { font-size: 12px }
+.source small { color: var(--crrt-ink-faint); font-size: 9px }
+.device-options { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 16px 16px }
+.device-options button { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-lg); background: var(--crrt-bg-deep-soft); color: var(--crrt-white); text-align: left }
+.device-options span { font-size: 11px }
+.device-options em { color: var(--crrt-carrot); font: normal 9px var(--crrt-font-mono) }
+.start { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; width: calc(100% - 32px); min-height: 48px; margin: 0 16px 16px; padding: 0 14px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-weight: 700; text-align: left }
+.start:hover { background: var(--crrt-carrot-deep) }
+.start kbd { padding: 4px 6px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--crrt-radius-md); font: 9px var(--crrt-font-mono) }
+.setup-error { margin: 0 16px 12px; color: var(--crrt-phosphor); font-size: 11px }
 .annotation-layer { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; pointer-events: none }
 .record-surface:not(.tool-pointer) .annotation-layer { pointer-events: auto; cursor: crosshair }
 .camera-shell { position: absolute; left: 24px; bottom: 82px; width: 112px; aspect-ratio: 1; overflow: hidden; border: 3px solid var(--record-red); border-radius: 50%; background: var(--crrt-bg-deep-soft); box-shadow: var(--crrt-shadow-pill); pointer-events: auto }
@@ -25,13 +82,14 @@ button:disabled { cursor: not-allowed; opacity: .36 }
 .clock { display: flex; align-items: center; gap: 8px; padding: 0 10px 0 8px; font: 11px var(--crrt-font-mono); white-space: nowrap }
 .clock i { width: 7px; height: 7px; border-radius: 50%; background: var(--record-red); box-shadow: 0 0 0 4px rgba(255,87,61,.12) }
 .icon, .tool { height: 36px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; border-radius: var(--crrt-radius-lg); background: transparent; color: #aaaab0; font-size: 11px; white-space: nowrap }
-.icon { width: 34px; padding: 0 }
+.icon { width: 36px; min-width: 36px; padding: 0 }
+.icon.cancel:hover { color: var(--crrt-carrot) }
 .icon:hover, .tool:hover { background: #29292c; color: var(--crrt-white) }
 .tool.active { background: var(--crrt-carrot); color: var(--crrt-white) }
 .tool.quiet { color: #898990 }
 .divider { width: 1px; height: 25px; margin: 0 3px; background: var(--crrt-rule-dark-strong) }
 .done { height: 36px; display: inline-flex; align-items: center; gap: 6px; margin-left: 3px; padding: 0 13px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-size: 11px; font-weight: 750 }
 .done:hover { background: var(--crrt-carrot-deep) }
-@media (max-width: 900px) { .record-toolbar .tool span { display: none } .transcript-chip { max-width: calc(100vw - 220px) } }
+@media (max-width: 760px) { .record-toolbar .tool span { display: none } .transcript-chip { max-width: calc(100vw - 220px) } }
 @media (max-width: 660px) { .record-toolbar { overflow-x: auto } .camera-shell { width: 82px } .transcript-chip { display: none } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important } }
