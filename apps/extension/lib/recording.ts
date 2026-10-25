@@ -151,6 +151,13 @@ export function formatRecordingTime(valueMs: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
+export function nearestRecordingMark(marks: RecordingMark[], atMs: number, thresholdMs = 3_000) {
+  const nearest = marks.reduce<RecordingMark | null>((best, mark) => (
+    !best || Math.abs(mark.atMs - atMs) < Math.abs(best.atMs - atMs) ? mark : best
+  ), null)
+  return nearest && Math.abs(nearest.atMs - atMs) <= thresholdMs ? nearest : null
+}
+
 export function buildRecordingAgentPayload(recording: LocalRecording) {
   const lines = [
     `## CRRT capture · ${recording.pageTitle || recording.title} · ${formatRecordingTime(recording.durationMs)}`,
@@ -159,10 +166,7 @@ export function buildRecordingAgentPayload(recording: LocalRecording) {
   ]
   const moments = [...recording.transcript].sort((a, b) => a.startMs - b.startMs)
   moments.forEach((segment, index) => {
-    const nearest = recording.marks.reduce<RecordingMark | null>((best, mark) => {
-      if (mark.atMs > segment.endMs + 2500) return best
-      return !best || Math.abs(mark.atMs - segment.startMs) < Math.abs(best.atMs - segment.startMs) ? mark : best
-    }, null)
+    const nearest = nearestRecordingMark(recording.marks, (segment.startMs + segment.endMs) / 2)
     lines.push(`[${formatRecordingTime(segment.startMs)}] keyframe_${String(index + 1).padStart(2, '0')}.png${nearest ? `  ${nearest.type}` : ''}`)
     if (nearest?.target?.selector) lines.push(`  target: ${nearest.target.selector}`)
     if (nearest?.text) lines.push(`  note: "${nearest.text}"`)

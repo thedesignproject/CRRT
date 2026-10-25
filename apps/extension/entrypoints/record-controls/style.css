@@ -8,7 +8,7 @@
   --crrt-phosphor: #ffb000;
   --crrt-rule-dark: rgba(255,255,255,.08);
   --crrt-rule-dark-strong: rgba(255,255,255,.16);
-  --crrt-font-sans: "Geist Mono", ui-monospace, monospace;
+  --crrt-font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --crrt-font-mono: "Geist Mono", ui-monospace, monospace;
   --crrt-radius-md: 6px;
   --crrt-radius-lg: 8px;
@@ -30,7 +30,7 @@
   --crrt-phosphor: #ffb000;
   --crrt-rule-dark: rgba(255,255,255,.08);
   --crrt-rule-dark-strong: rgba(255,255,255,.16);
-  --crrt-font-sans: "Geist Mono", ui-monospace, monospace;
+  --crrt-font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --crrt-font-mono: "Geist Mono", ui-monospace, monospace;
   --crrt-radius-md: 6px;
   --crrt-radius-lg: 8px;
@@ -41,14 +41,16 @@
 }
 * { box-sizing: border-box }
 html, body, #root, .crrt-record-root { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent }
-button { border: 0; font: inherit; cursor: pointer }
+.crrt-record-root { color: var(--crrt-white); font-family: var(--crrt-font-sans); font-size: 16px; font-style: normal; font-weight: 400; line-height: 1.3; letter-spacing: normal; text-align: left; text-transform: none; text-shadow: none }
+.crrt-record-root button, .crrt-record-root span, .crrt-record-root strong, .crrt-record-root small, .crrt-record-root em, .crrt-record-root kbd, .crrt-record-root p { font-family: inherit; font-style: normal; letter-spacing: normal; text-transform: none; text-shadow: none }
+button { appearance: none; border: 0; font: inherit; cursor: pointer }
 button:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 3px }
 button:disabled { cursor: not-allowed; opacity: .36 }
 .record-surface { position: fixed; inset: 0; pointer-events: none }
 .setup-surface { display: grid; place-items: start end; padding: 24px }
-.setup-launcher { width: min(390px, calc(100vw - 32px)); overflow: hidden; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-3xl); background: rgba(10,10,10,.97); box-shadow: var(--crrt-shadow-pill); pointer-events: auto }
+.setup-launcher { width: min(390px, calc(100vw - 32px)); overflow: hidden; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-3xl); background: rgba(10,10,10,.97); color: var(--crrt-white); font-family: var(--crrt-font-sans); box-shadow: var(--crrt-shadow-pill); pointer-events: auto }
 .setup-launcher header { display: flex; align-items: center; justify-content: space-between; min-height: 52px; padding: 8px 12px 8px 16px; border-bottom: 1px solid var(--crrt-rule-dark) }
-.setup-launcher header span { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700 }
+.setup-launcher header span { display: inline-flex; align-items: center; gap: 9px; color: var(--crrt-white); font-size: 13px; font-weight: 700 }
 .setup-launcher header i { width: 8px; height: 8px; border-radius: 50%; background: var(--crrt-carrot) }
 .source-options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 16px }
 .source { display: grid; justify-items: start; gap: 5px; min-width: 0; min-height: 96px; padding: 14px 12px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-xl); background: var(--crrt-bg-deep-soft); color: var(--crrt-ink-faint); text-align: left }

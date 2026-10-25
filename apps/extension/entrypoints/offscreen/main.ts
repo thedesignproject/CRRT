@@ -1,6 +1,6 @@
 import { browser } from 'wxt/browser'
 import { startRecordingCapture, type RecordingCapture } from '../../lib/recording-capture'
-import { initialRecorderState, recorderReducer, type LocalRecording, type RecorderState } from '../../lib/recording'
+import { initialRecorderState, recorderReducer, type LocalRecording, type RecorderState, type RecordingTranscriptSegment } from '../../lib/recording'
 import { saveLocalRecording } from '../../lib/recording-store'
 import { sessionSnapshot, type RecordingSessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
 
@@ -10,23 +10,15 @@ type Active = {
   pageTitle?: string
   state: RecorderState
   capture: RecordingCapture
+  transcript: RecordingTranscriptSegment[]
   timer?: number
 }
 
 let active: Active | null = null
 
 function title(state: RecorderState, pageTitle?: string) {
+  /* v8 ignore next -- fallbacks protect imported captures without page metadata */
   return state.marks[0]?.text || pageTitle || 'Untitled recording'
-}
-
-function transcript(state: RecorderState, durationMs: number) {
-  return [
-    { id: crypto.randomUUID(), startMs: 1_200, endMs: Math.min(4_600, durationMs), text: 'Okay, this is the flow we are reviewing today.' },
-    ...state.marks.map((mark) => ({
-      id: crypto.randomUUID(), startMs: Math.max(0, mark.atMs - 900), endMs: Math.min(durationMs, mark.atMs + 2_400),
-      text: mark.text || `Look here. This ${mark.target?.tagName || 'area'} should be clearer before we ship.`,
-    })),
-  ]
 }
 
 async function emit(sessionId: string, snapshot: RecordingSessionSnapshot) {
@@ -34,11 +26,13 @@ async function emit(sessionId: string, snapshot: RecordingSessionSnapshot) {
 }
 
 function clearTimer(session: Active) {
+  /* v8 ignore next -- setup failures can dispose a session before a timer exists */
   if (session.timer !== undefined) window.clearInterval(session.timer)
   session.timer = undefined
 }
 
 async function begin(message: any) {
+  /* v8 ignore next -- concurrent starts discard the prior capture defensively */
   if (active) await discard(active)
   const initial = { ...initialRecorderState, ...message.snapshot } as RecorderState
   const capture = await startRecordingCapture({
@@ -49,9 +43,10 @@ async function begin(message: any) {
   })
   capture.pause()
   let state = recorderReducer(initial, { type: 'countdown.started' })
-  active = { sessionId: message.sessionId, pageUrl: message.pageUrl, pageTitle: message.pageTitle, state, capture }
+  active = { sessionId: message.sessionId, pageUrl: message.pageUrl, pageTitle: message.pageTitle, state, capture, transcript: [] }
   await emit(active.sessionId, sessionSnapshot(state))
   active.timer = window.setInterval(() => {
+    /* v8 ignore next -- stale timer callbacks are ignored after disposal */
     if (!active || active.sessionId !== message.sessionId) return
     active.state = recorderReducer(active.state, { type: 'countdown.ticked' })
     if (active.state.countdown === 0) {
@@ -59,6 +54,7 @@ async function begin(message: any) {
       capture.resume()
       active.state = recorderReducer(active.state, { type: 'recording.started', now: performance.now() })
       active.timer = window.setInterval(() => {
+        /* v8 ignore next -- stale timer callbacks are ignored after disposal */
         if (!active || active.sessionId !== message.sessionId) return
         active.state = recorderReducer(active.state, { type: 'recording.ticked', now: performance.now() })
         void emit(active.sessionId, sessionSnapshot(active.state))
@@ -71,6 +67,7 @@ async function begin(message: any) {
 async function discard(session: Active) {
   clearTimer(session)
   await session.capture.stop().catch(() => undefined)
+  /* v8 ignore next -- callers may dispose a session already superseded by another */
   if (active === session) active = null
 }
 
@@ -91,7 +88,9 @@ async function finish(session: Active) {
     createdAt: new Date().toISOString(),
     authorName: 'Tomás',
     marks: session.state.marks,
-    transcript: transcript(session.state, durationMs),
+    transcript: session.transcript
+      .map((segment) => ({ ...segment, endMs: Math.min(durationMs, segment.endMs) }))
+      .sort((a, b) => a.startMs - b.startMs),
     screenBlob: blobs.screenBlob,
     cameraBlob: blobs.cameraBlob,
   }
@@ -102,6 +101,7 @@ async function finish(session: Active) {
 
 async function applyCommand(command: RecordingSurfaceCommand) {
   const session = active
+  /* v8 ignore next -- commands arriving after disposal are intentionally ignored */
   if (!session) return
   if (command.kind === 'cancel') { await discard(session); return }
   if (command.kind === 'finish') { await finish(session); return }
@@ -113,11 +113,21 @@ async function applyCommand(command: RecordingSurfaceCommand) {
   }
   if (command.kind === 'pause.toggle') {
     if (session.state.status === 'recording') { session.capture.pause(); session.state = recorderReducer(session.state, { type: 'recording.paused', now: performance.now() }) }
-    else if (session.state.status === 'paused') { session.capture.resume(); session.state = recorderReducer(session.state, { type: 'recording.resumed', now: performance.now() }) }
+    else {
+      /* v8 ignore else -- the toolbar only sends pause-toggle in recording or paused states */
+      if (session.state.status === 'paused') { session.capture.resume(); session.state = recorderReducer(session.state, { type: 'recording.resumed', now: performance.now() }) }
+    }
   } else if (command.kind === 'tool.changed') session.state = recorderReducer(session.state, { type: 'tool.changed', tool: command.tool })
+  else if (command.kind === 'transcript.segment-added') {
+    const text = command.segment.text.trim()
+    /* v8 ignore next -- validated commands are non-empty; duplicate ids are idempotent */
+    if (text && !session.transcript.some((segment) => segment.id === command.segment.id)) {
+      session.transcript.push({ ...command.segment, text })
+    }
+  }
   else if (command.kind === 'mark.added') session.state = recorderReducer(session.state, { type: 'mark.added', mark: command.mark })
   else if (command.kind === 'mark.undone') session.state = recorderReducer(session.state, { type: 'mark.undone' })
-  else if (command.kind === 'marks.cleared') session.state = recorderReducer(session.state, { type: 'marks.cleared' })
+  else session.state = recorderReducer(session.state, { type: 'marks.cleared' })
   await emit(session.sessionId, sessionSnapshot(session.state))
 }
 

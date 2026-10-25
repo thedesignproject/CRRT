@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, recorderReducer, type LocalRecording } from './recording'
+import { buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, nearestRecordingMark, recorderReducer, type LocalRecording } from './recording'
 
 describe('recorder state', () => {
   it('tracks countdown, pauses, duration, marks, processing, and restart', () => {
@@ -88,4 +88,6 @@ it('formats durations and creates a compact agent payload', () => {
       { id: 'far', type: 'box', atMs: 8_500, points: [] },
     ],
   })).toContain('keyframe_01.png  draw')
+  expect(nearestRecordingMark(recording.marks, 11_500)?.id).toBe('m1')
+  expect(nearestRecordingMark(recording.marks, 20_000)).toBeNull()
 })

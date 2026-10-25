@@ -15,7 +15,7 @@ vi.mock('wxt/browser', () => ({ browser: { runtime: {
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
 vi.mock('../entrypoints/record-controls/main', () => ({ RecordControls: ({ id }: { id: string }) => <div>{id}</div> }))
 
-import { mountActiveRecording, mountRecordingSurface } from '../entrypoints/record-overlay'
+import recordOverlayMain, { mountActiveRecording, mountRecordingSurface } from '../entrypoints/record-overlay'
 
 beforeEach(() => {
   document.documentElement.innerHTML = '<head></head><body></body>'
@@ -45,4 +45,10 @@ it('mounts the active background session and ignores absent or inaccessible sess
   mocks.sendMessage.mockRejectedValueOnce(new Error('restricted'))
   await expect(mountActiveRecording()).resolves.toBeUndefined()
   for (const listener of mocks.listeners) listener({ type: 'record:overlay-remove', sessionId: 'active' })
+})
+
+it('runs the WXT entrypoint', async () => {
+  mocks.sendMessage.mockResolvedValueOnce({ ok: true })
+  ;(recordOverlayMain as unknown as () => void)()
+  await vi.waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'record:surface-mount' }))
 })

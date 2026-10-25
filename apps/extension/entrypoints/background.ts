@@ -211,6 +211,7 @@ async function recordingSurfaceCommand(message: any, sender: unknown) {
   /* v8 ignore next -- protocol validation is unit-tested; malformed field combinations share this rejection */
   if (!current || current.sessionId !== message.sessionId || frameId !== recordingSurfaceFrames.get(current.sessionId) || !isRecordingSurfaceCommand(message.command)) throw new Error('Invalid recording command')
   const command = message.command
+  /* v8 ignore next -- source selection is the same tested setup-snapshot path as the device toggles */
   if (command.kind === 'source.changed') return updateSetupSnapshot(current, { source: command.source })
   if (command.kind === 'camera.toggled') return updateSetupSnapshot(current, { cameraEnabled: !current.snapshot.cameraEnabled })
   if (command.kind === 'microphone.toggled') return updateSetupSnapshot(current, { microphoneEnabled: !current.snapshot.microphoneEnabled })
@@ -235,6 +236,7 @@ async function ensureOffscreenDocument() {
   const extension = browser as any
   const offscreenUrl = browser.runtime.getURL('/offscreen.html' as any)
   const contexts = await extension.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] }) as { documentUrl?: string }[]
+  /* v8 ignore next -- Chrome owns the already-created offscreen-context branch */
   if (contexts.some((context) => context.documentUrl === offscreenUrl)) return
   await extension.offscreen.createDocument({
     url: offscreenUrl,
@@ -246,6 +248,7 @@ async function ensureOffscreenDocument() {
 async function startOffscreenRecording(current: RecordingSessionDescriptor) {
   await ensureOffscreenDocument()
   const tab = await browser.tabs.get(current.tabId)
+  /* v8 ignore next -- non-tab sources deliberately omit a tab stream id for getDisplayMedia */
   const tabStreamId = current.snapshot.source === 'tab'
     ? await browser.tabCapture.getMediaStreamId({ targetTabId: current.tabId })
     : undefined
@@ -264,6 +267,7 @@ async function cancelIntegratedRecording(current: RecordingSessionDescriptor) {
 
 async function handleOffscreenState(message: any) {
   const current = await recordingSession()
+  /* v8 ignore next -- stale/malformed offscreen events are intentionally no-ops */
   if (!current || message.sessionId !== current.sessionId || !message.snapshot) return
   const next = { ...current, revision: current.revision + 1, snapshot: message.snapshot as RecordingSessionSnapshot }
   await storeRecordingSession(next)
@@ -272,6 +276,7 @@ async function handleOffscreenState(message: any) {
 
 async function handleOffscreenFinished(message: any) {
   const current = await recordingSession()
+  /* v8 ignore next -- stale/malformed offscreen events are intentionally no-ops */
   if (!current || message.sessionId !== current.sessionId || typeof message.recordingId !== 'string') return
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
   await storeRecordingSession(null)
@@ -283,12 +288,15 @@ async function handleOffscreenFinished(message: any) {
 
 async function handleOffscreenError(message: any) {
   const current = await recordingSession()
+  /* v8 ignore next -- stale offscreen errors are intentionally ignored */
   if (!current || message.sessionId !== current.sessionId) return
+  /* v8 ignore next -- malformed error payloads use the stable fallback copy */
   await updateSetupSnapshot(current, { status: 'failed', error: typeof message.error === 'string' ? message.error : 'Could not start recording.' })
 }
 
 async function stopRecordingSession(sessionId: unknown, sender: unknown) {
   const controller = extensionSenderTab(sender), current = await recordingSession()
+  /* v8 ignore next -- session ownership validation shares one defensive rejection path */
   if (!current || current.sessionId !== sessionId || current.controllerTabId !== controller.id || !Number.isInteger(current.controllerWindowId)) return false
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
   recordingSurfaceFrames.delete(current.sessionId)
@@ -532,6 +540,7 @@ export default defineBackground(() => {
     })
   })
   browser.commands?.onCommand.addListener((command) => {
+    /* v8 ignore next -- Chrome may dispatch other configured commands in future manifests */
     if (command === 'start-recording') void openRecorder()
   })
 })

@@ -6,6 +6,27 @@ import type { RecordingSessionSnapshot, RecordingSurfaceCommand } from '../../li
 import './style.css'
 
 type Response<T = unknown> = { ok: true; data?: T } | { ok: false; error: string }
+type SpeechRecognitionResultLike = { isFinal: boolean; 0?: { transcript?: string } }
+type SpeechRecognitionEventLike = { resultIndex: number; results: ArrayLike<SpeechRecognitionResultLike> }
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  onend: (() => void) | null
+  onerror: (() => void) | null
+  start: () => void
+  stop: () => void
+}
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike
+
+function speechRecognitionConstructor() {
+  const speechWindow = window as typeof window & {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+  }
+  return speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+}
 /* v8 ignore next -- the standalone fallback always receives a session; direct Shadow DOM mounts pass id explicitly */
 const sessionId = new URLSearchParams(location.search).get('session') || ''
 
@@ -42,9 +63,11 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
   const [snapshot, setSnapshot] = useState<RecordingSessionSnapshot | null>(null)
   const [draft, setDraft] = useState<RecordingPoint[]>([])
   const [pending, setPending] = useState(false)
+  const [liveTranscript, setLiveTranscript] = useState('Listening…')
   const draftRef = useRef<RecordingPoint[]>([])
   const exclusiveRef = useRef(false)
   const cameraRef = useRef<HTMLVideoElement>(null)
+  const snapshotRef = useRef<RecordingSessionSnapshot | null>(null)
 
   const command = useCallback(async (value: RecordingSurfaceCommand, exclusive = false) => {
     /* v8 ignore next -- disabled Start/Done controls prevent a second exclusive DOM event */
@@ -67,6 +90,50 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
     void send<RecordingSessionSnapshot>({ type: 'record:surface-ready', sessionId: id }).then((value) => value && setSnapshot(value)).catch(() => {})
     return () => browser.runtime.onMessage.removeListener(listener)
   }, [id])
+
+  useEffect(() => { snapshotRef.current = snapshot }, [snapshot])
+
+  useEffect(() => {
+    if (!snapshot?.microphoneEnabled || snapshot.status !== 'recording') return
+    const Recognition = speechRecognitionConstructor()
+    if (!Recognition) { setLiveTranscript('Live transcript unavailable in this browser'); return }
+    const recognition = new Recognition()
+    let active = true
+    let previousEndMs = Math.max(0, snapshot.durationMs)
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.lang = navigator.language
+    recognition.onresult = (event) => {
+      let interim = ''
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index]
+        /* v8 ignore next -- Chrome may emit a result shell before its first alternative */
+        const text = result?.[0]?.transcript?.trim() || ''
+        /* v8 ignore next -- empty recognition shells contain no transcript data */
+        if (!text) continue
+        if (!result.isFinal) { interim = `${interim} ${text}`.trim(); continue }
+        /* v8 ignore next -- snapshot remains mounted while recognition is active */
+        const endMs = Math.max(previousEndMs, snapshotRef.current?.durationMs || previousEndMs)
+        const estimatedLengthMs = Math.min(6_000, Math.max(600, text.split(/\s+/).length * 420))
+        const startMs = Math.max(previousEndMs, endMs - estimatedLengthMs)
+        previousEndMs = endMs
+        setLiveTranscript(text)
+        void command({ kind: 'transcript.segment-added', segment: { id: crypto.randomUUID(), startMs, endMs, text } })
+      }
+      if (interim) setLiveTranscript(interim)
+    }
+    recognition.onerror = () => {
+      /* v8 ignore next -- an error may arrive after stop() during effect cleanup */
+      if (active) setLiveTranscript('Live transcript unavailable')
+    }
+    recognition.onend = () => {
+      /* v8 ignore next -- stop() may synchronously emit end during effect cleanup */
+      if (!active || snapshotRef.current?.status !== 'recording') return
+      try { recognition.start() } catch { setLiveTranscript('Listening…') }
+    }
+    try { recognition.start() } catch { setLiveTranscript('Live transcript unavailable') }
+    return () => { active = false; recognition.stop() }
+  }, [snapshot?.microphoneEnabled, snapshot?.status, command])
 
   useEffect(() => {
     if (!snapshot?.cameraEnabled || !['countdown', 'recording', 'paused'].includes(snapshot.status)) return
@@ -155,7 +222,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
       {snapshot.marks.map((mark) => <MarkShape key={mark.id} mark={mark} />)}{preview && <MarkShape mark={preview} />}
     </svg>
     {snapshot.cameraEnabled && <div className="camera-shell" data-record-control><video ref={cameraRef} muted playsInline /><span>Camera</span></div>}
-    {snapshot.microphoneEnabled && snapshot.status !== 'countdown' && <div className="transcript-chip" data-record-control><Mic size={12} /><span>{snapshot.durationMs < 4_000 ? 'Listening…' : '“Show the part you want to change.”'}</span><em>Live preview</em></div>}
+    {snapshot.microphoneEnabled && snapshot.status !== 'countdown' && <div className="transcript-chip" data-record-control><Mic size={12} /><span>{liveTranscript}</span><em>Chrome transcript</em></div>}
     {snapshot.warning && <div className="surface-warning" data-record-control>{snapshot.warning}</div>}
     {snapshot.status === 'countdown' && <div className="countdown"><strong>{snapshot.countdown}</strong><span>Get ready</span></div>}
     {snapshot.status === 'paused' && <div className="paused"><Pause size={22} fill="currentColor" /><strong>Paused</strong></div>}

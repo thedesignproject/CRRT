@@ -354,4 +354,5 @@ it('opens a stored recording without media blobs and renders an empty text mark 
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByRole('heading', { name: 'Notes only' })).toBeInTheDocument()
+  expect(screen.getByText('No transcript captured')).toBeInTheDocument()
 })

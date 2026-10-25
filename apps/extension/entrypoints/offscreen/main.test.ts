@@ -53,11 +53,16 @@ it('records offscreen, applies commands, and saves a finished capture', async ()
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'mark.added', mark: { id: 'note', type: 'text', atMs: 1_000, text: 'Pay button', points: [{ x: 1, y: 2 }] } } })
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'mark.added', mark: { id: 'target', type: 'box', atMs: 1_400, target: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' }, points: [{ x: 1, y: 2 }, { x: 3, y: 4 }] } } })
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'mark.added', mark: { id: 'area', type: 'arrow', atMs: 1_800, points: [{ x: 5, y: 6 }, { x: 7, y: 8 }] } } })
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'transcript.segment-added', segment: { id: 'speech-1', startMs: 900, endMs: 2_100, text: '  This is the actual narration.  ' } } })
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'transcript.segment-added', segment: { id: 'speech-1', startMs: 900, endMs: 2_100, text: 'Duplicate' } } })
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'transcript.segment-added', segment: { id: 'speech-2', startMs: 200, endMs: 400, text: 'First.' } } })
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
     type: 'record:offscreen-state', snapshot: expect.objectContaining({ tool: 'box', marks: expect.arrayContaining([expect.objectContaining({ id: 'note' }), expect.objectContaining({ id: 'target' }), expect.objectContaining({ id: 'area' })]) }),
   })))
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'finish' } })
-  await waitFor(() => expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ title: 'Pay button', source: 'tab' })))
+  await waitFor(() => expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({
+    title: 'Pay button', source: 'tab', transcript: [expect.objectContaining({ id: 'speech-2' }), expect.objectContaining({ id: 'speech-1', text: 'This is the actual narration.' })],
+  })))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-finished', recordingId: expect.any(String) }))
 })
 
