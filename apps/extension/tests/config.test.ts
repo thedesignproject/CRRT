@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 vi.mock('wxt', () => ({ defineConfig: (config: unknown) => config }))
 import config, { extensionIcons, extensionManifest } from '../wxt.config'
 
@@ -17,7 +17,7 @@ it('builds the extension with its canonical icon and declared permissions', () =
   for (const [name, value] of Object.entries(production)) vi.stubEnv(name, value)
   expect((config.manifest as (environment: { mode: string }) => unknown)({ mode: 'production' })).toEqual(manifest)
   expect(manifest).toMatchObject({
-    version: '1.0.0',
+    version: JSON.parse(readFileSync('apps/extension/package.json', 'utf8')).version,
     permissions: ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
     host_permissions: ['https://crrt.ai/*', 'https://project-ref.supabase.co/*'],

@@ -76,7 +76,8 @@ describe('extension Store release', () => {
   })
 
   it('reads the single package version source and rejects invalid Chrome versions', () => {
-    expect(readExtensionVersion()).toBe('1.0.0')
+    const packageVersion = JSON.parse(readFileSync('apps/extension/package.json', 'utf8')).version
+    expect(readExtensionVersion()).toBe(packageVersion)
     const directory = mkdtempSync(join(tmpdir(), 'crrt-version-'))
     const file = join(directory, 'package.json')
     writeFileSync(file, JSON.stringify({ version: 'one' }))
