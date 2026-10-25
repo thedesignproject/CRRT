@@ -1,7 +1,7 @@
 # CRRT Record integrated launcher and compact controls
 
 **Date:** 2026-10-25  
-**Status:** Awaiting written-spec review  
+**Status:** Approved  
 **Owner:** Tomás (frontend)  
 **Scope:** Local frontend demo; no backend upload, hosted transcription, billing, or share persistence.
 
