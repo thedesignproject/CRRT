@@ -103,6 +103,15 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   expect(helpers.normalizeStoredRecording({ ...legacyRecording, transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Hello' }] }).transcriptionStatus).toBe('ready')
   const currentRecording = { ...legacyRecording, transcriptionStatus: 'processing' as const }
   expect(helpers.normalizeStoredRecording(currentRecording)).toStrictEqual(currentRecording)
+  expect(helpers.normalizeStoredRecording({
+    ...legacyRecording,
+    transcriptionStatus: 'failed',
+    transcriptionError: 'Sign in to CRRT to transcribe this recording.',
+  })).toMatchObject({ transcriptionErrorCode: 'auth-required' })
+  expect(helpers.normalizeStoredRecording({
+    ...legacyRecording,
+    transcriptionError: 'Sign in to CRRT to transcribe this recording.',
+  })).toMatchObject({ transcriptionStatus: 'failed', transcriptionErrorCode: 'auth-required' })
   const drawImage = vi.fn()
   expect(helpers.captureThumbnail(null)).toBeUndefined()
   expect(helpers.captureThumbnail({ videoWidth: 10, videoHeight: 0 } as HTMLVideoElement)).toBeUndefined()

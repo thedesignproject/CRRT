@@ -44,10 +44,17 @@ export function recordingTitle(marks: RecordingMark[], pageTitle?: string) {
 type StoredRecording = Omit<LocalRecording, 'transcriptionStatus'> & Pick<Partial<LocalRecording>, 'transcriptionStatus'>
 
 export function normalizeStoredRecording(recording: StoredRecording): LocalRecording {
-  if (recording.transcriptionStatus) return { ...recording, transcriptionStatus: recording.transcriptionStatus }
+  const transcriptionErrorCode = recording.transcriptionErrorCode
+    ?? (recording.transcriptionError === 'Sign in to CRRT to transcribe this recording.' ? 'auth-required' : undefined)
+  if (recording.transcriptionStatus) return {
+    ...recording,
+    transcriptionStatus: recording.transcriptionStatus,
+    ...(transcriptionErrorCode ? { transcriptionErrorCode } : {}),
+  }
   return {
     ...recording,
     transcriptionStatus: recording.transcript.length ? 'ready' : 'failed',
+    ...(transcriptionErrorCode ? { transcriptionErrorCode } : {}),
   }
 }
 
