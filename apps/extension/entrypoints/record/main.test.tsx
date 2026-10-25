@@ -11,7 +11,6 @@ const mocks = vi.hoisted(() => ({
   pause: vi.fn(),
   requestPermission: vi.fn(),
   withTranscript: vi.fn(),
-  extensionSession: vi.fn(),
   listeners: new Set<(message: unknown) => unknown>(),
 }))
 
@@ -26,7 +25,6 @@ vi.mock('../../lib/recording-store', () => ({
   saveLocalRecording: mocks.saveRecording,
 }))
 vi.mock('../../lib/recording-transcription', () => ({ withRecordingTranscript: mocks.withTranscript }))
-vi.mock('../../lib/comments-api', () => ({ extensionSession: mocks.extensionSession }))
 
 function mediaStream() {
   const track = { addEventListener: vi.fn(), stop: vi.fn(), kind: 'video' }
@@ -66,7 +64,6 @@ beforeEach(() => {
     ...recording, status: 'ready', transcriptionStatus: 'ready',
     transcript: [{ id: 'speech', startMs: 1_000, endMs: 2_500, text: 'This is the actual narration.' }],
   }))
-  mocks.extensionSession.mockResolvedValue({ accessToken: 'token', email: 'u@example.com' })
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play })
   Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: mocks.pause })
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, writable: true, value: null })
@@ -147,7 +144,12 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 50, clientY: 50 })
   fireEvent.pointerDown(overlay, { pointerId: 1, clientX: 50, clientY: 50 })
   fireEvent.pointerUp(overlay, { pointerId: 1, clientX: 50, clientY: 50 })
-  for (const tool of ['Draw', 'Arrow', 'Box', 'Text', 'Pin']) {
+  fireEvent.click(screen.getByRole('button', { name: 'Small camera' }))
+  expect(document.querySelector('.recording-camera')).toHaveClass('camera-size-small')
+  fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+  expect(screen.queryByRole('button', { name: 'Camera preview settings' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Show camera' }))
+  for (const tool of ['Draw', 'Arrow', 'Box', 'Text']) {
     fireEvent.click(screen.getByRole('button', { name: tool }))
     fireEvent.pointerDown(overlay, { pointerId: 1, clientX: 100, clientY: 100 })
     fireEvent.pointerMove(overlay, { pointerId: 1, clientX: 300, clientY: 240 })
@@ -344,7 +346,7 @@ it('opens a locally stored recording directly in review', async () => {
   mocks.getRecording.mockResolvedValue({
     id: 'saved', title: 'Saved review', source: 'screen', status: 'ready', durationMs: 12_000,
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', pageTitle: 'Checkout',
-    marks: [{ id: 'pin', type: 'pin', atMs: 3_000, points: [{ x: 20, y: 20 }], pinNumber: 1 }],
+    marks: [{ id: 'pin', type: 'pin', atMs: 0, points: [{ x: 20, y: 20 }], pinNumber: 1 }],
     transcript: [{ id: 'line', startMs: 2_000, endMs: 4_000, text: 'Change this.' }],
     transcriptionStatus: 'ready',
     screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']),
@@ -353,6 +355,7 @@ it('opens a locally stored recording directly in review', async () => {
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByRole('heading', { name: 'Saved review' })).toBeInTheDocument()
+  expect(document.querySelector('.playback-marks circle')).toBeInTheDocument()
   fireEvent.click(screen.getByText('Change this.'))
   fireEvent.click(document.querySelector('.timeline-markers button')!)
 })
@@ -365,7 +368,7 @@ it('ignores a missing local recording', async () => {
 
 it('opens a stored recording without media blobs and renders an empty text mark safely', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'saved-lite', title: 'Notes only', source: 'tab', status: 'ready', durationMs: 1_000,
+    id: 'saved-lite', title: 'Notes only', source: 'screen', status: 'ready', durationMs: 1_000,
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [{ id: 'text', type: 'text', atMs: 0, points: [{ x: 5, y: 5 }] }], transcript: [],
   })
   history.replaceState(null, '', '/record.html?recording=saved-lite')
@@ -394,21 +397,39 @@ it('retries a failed transcript from the locally retained audio', async () => {
   expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'ready' }))
 })
 
-it('keeps transcripts account-free and gates the agent payload behind sign-in', async () => {
+it('keeps transcripts and the local agent preview account-free', async () => {
   mocks.getRecording.mockResolvedValue({
     id: 'free-transcript', title: 'Free transcript', source: 'tab', status: 'ready', durationMs: 1_000,
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [],
     transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Visible without an account.' }],
     transcriptionStatus: 'ready', screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
   })
-  mocks.extensionSession.mockResolvedValueOnce(null)
   history.replaceState(null, '', '/record.html?recording=free-transcript')
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByText('Visible without an account.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'For agents' }))
-  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'auth:open-popup' }))
-  expect(screen.getByText('Visible without an account.')).toBeInTheDocument()
+  expect(await screen.findByText('Ready for Claude Code')).toBeInTheDocument()
+  expect(screen.getByText(/Visible without an account/)).toBeInTheDocument()
+  expect(mocks.sendMessage).not.toHaveBeenCalledWith({ type: 'auth:open-popup' })
+})
+
+it('reports clipboard failures without hiding the local agent payload', async () => {
+  mocks.getRecording.mockResolvedValue({
+    id: 'copy-failure', title: 'Copy failure', source: 'tab', status: 'ready', durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
+    transcriptionStatus: 'ready', screenBlob: new Blob(['screen']),
+  })
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+  history.replaceState(null, '', '/record.html?recording=copy-failure')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+
+  fireEvent.click(await screen.findByRole('button', { name: 'For agents' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Copy for Claude Code' }))
+
+  expect(await screen.findByText('Copy failed. Try again.')).toBeInTheDocument()
+  expect(screen.getByText(/No speech detected/)).toBeInTheDocument()
 })
 
 it('renders a processing transcript state honestly', async () => {

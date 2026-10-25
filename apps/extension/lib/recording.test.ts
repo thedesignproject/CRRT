@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, nearestRecordingMark, recorderReducer, type LocalRecording } from './recording'
+import { buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, nearestRecordingMark, recordingMarkOpacity, recorderReducer, type LocalRecording } from './recording'
 
 describe('recorder state', () => {
   it('tracks countdown, pauses, duration, marks, processing, and restart', () => {
@@ -90,4 +90,26 @@ it('formats durations and creates a compact agent payload', () => {
   })).toContain('keyframe_01.png  draw')
   expect(nearestRecordingMark(recording.marks, 11_500)?.id).toBe('m1')
   expect(nearestRecordingMark(recording.marks, 20_000)).toBeNull()
+  expect(recordingMarkOpacity(recording.marks[0], 10_999)).toBe(0)
+  expect(recordingMarkOpacity(recording.marks[0], 11_000)).toBe(1)
+  expect(recordingMarkOpacity(recording.marks[0], 13_750)).toBe(1)
+  expect(recordingMarkOpacity(recording.marks[0], 13_875)).toBe(.5)
+  expect(recordingMarkOpacity(recording.marks[0], 14_000)).toBe(0)
+})
+
+it('builds an honest mark-only agent payload when transcription is unavailable', () => {
+  const recording: LocalRecording = {
+    id: 'marks', title: 'Navigation review', source: 'tab', status: 'ready', durationMs: 8_000,
+    createdAt: '2026-10-25T00:00:00Z', authorName: 'Tomás',
+    marks: [{ id: 'm1', type: 'text', atMs: 2_000, points: [{ x: 10, y: 20 }], text: 'Tighten spacing', target: { selector: 'nav' } }],
+    transcript: [], transcriptionStatus: 'failed', transcriptionError: 'Not found',
+  }
+  const payload = buildRecordingAgentPayload(recording)
+  expect(payload).toContain('Transcript unavailable.')
+  expect(payload).toContain('[0:02] keyframe_01.png  text')
+  expect(payload).toContain('target: nav')
+  expect(payload).toContain('note: "Tighten spacing"')
+  expect(buildRecordingAgentPayload({ ...recording, marks: [], transcriptionStatus: 'processing' })).toContain('Transcript is still processing.')
+  expect(buildRecordingAgentPayload({ ...recording, marks: [], transcriptionStatus: 'ready' })).toContain('No speech detected.')
+  expect(buildRecordingAgentPayload({ ...recording, marks: [] })).toContain('No marks captured.')
 })

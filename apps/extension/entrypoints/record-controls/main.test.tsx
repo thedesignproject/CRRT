@@ -111,12 +111,13 @@ it('renders paused state, warnings, existing marks, and editing actions', async 
   const module = await import('./main')
   render(<module.RecordControls />)
   await screen.findByText('Get ready')
-  const mark = { id: 'pin', type: 'pin', atMs: 1_000, points: [{ x: 20, y: 30 }], pinNumber: 1 }
+  const mark = { id: 'pin', type: 'pin', atMs: 0, points: [{ x: 20, y: 30 }], pinNumber: 1 }
   await act(async () => {
     for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'paused', countdown: 0, marks: [mark], warning: 'Limited navigation', cameraEnabled: false }) })
   })
   expect(screen.getByText('Paused')).toBeInTheDocument()
   expect(screen.getByText('Limited navigation')).toBeInTheDocument()
+  expect(document.querySelector('.annotation-layer circle')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'pause.toggle' } })))
   fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
@@ -124,6 +125,22 @@ it('renders paused state, warnings, existing marks, and editing actions', async 
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'mark.undone' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'marks.cleared' } }))
+})
+
+it('keeps a recording when discard or restart confirmation is declined', async () => {
+  Object.defineProperty(window, 'confirm', { configurable: true, value: vi.fn(() => false) })
+  const module = await import('./main')
+  render(<module.RecordControls />)
+  await screen.findByText('Get ready')
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0 }) })
+  })
+
+  fireEvent.click(screen.getByRole('button', { name: 'Discard recording' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Restart' }))
+
+  expect(mocks.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'cancel' } }))
+  expect(mocks.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'restart' } }))
 })
 
 it('renders all mark types, creates text notes, and confirms discard', async () => {
@@ -136,7 +153,7 @@ it('renders all mark types, creates text notes, and confirms discard', async () 
     { id: 'text', type: 'text', atMs: 1, points: [{ x: 9, y: 10 }], text: 'Fix this' },
   ]
   await act(async () => {
-    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, tool: 'text', marks }) })
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 1, tool: 'text', marks }) })
   })
   expect(screen.getByText('Fix this')).toBeInTheDocument()
   const overlay = document.querySelector('.annotation-layer') as SVGSVGElement
@@ -148,4 +165,31 @@ it('renders all mark types, creates text notes, and confirms discard', async () 
   })))
   fireEvent.click(screen.getByRole('button', { name: 'Discard recording' }))
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'cancel' } })))
+})
+
+it('fades completed marks and lets the user resize, hide, and restore the camera preview', async () => {
+  const module = await import('./main')
+  render(<module.RecordControls />)
+  await screen.findByText('Get ready')
+  const mark = { id: 'draw', type: 'draw', atMs: 1_000, points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] }
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 1_000, marks: [mark] }) })
+  })
+  expect(document.querySelector('.annotation-layer polyline')).toHaveAttribute('opacity', '1')
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 3_875, marks: [mark] }) })
+  })
+  expect(document.querySelector('.annotation-layer polyline')).toHaveAttribute('opacity', '0.5')
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', countdown: 0, durationMs: 4_000, marks: [mark] }) })
+  })
+  expect(document.querySelector('.annotation-layer polyline')).toBeNull()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Large camera' }))
+  expect(document.querySelector('.recording-camera')).toHaveClass('camera-size-large')
+  fireEvent.click(screen.getByRole('button', { name: 'Hide' }))
+  expect(screen.queryByRole('button', { name: 'Camera preview settings' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Show camera' }))
+  expect(screen.getByRole('button', { name: 'Camera preview settings' })).toBeInTheDocument()
+  expect(mocks.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'camera.toggled' } }))
 })

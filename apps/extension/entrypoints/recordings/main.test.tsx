@@ -40,11 +40,16 @@ it('shows local captures in All and Mine but not client filters', async () => {
     id: 'plain', title: 'Plain capture', source: 'screen', status: 'ready', durationMs: 1_000,
     createdAt: '2026-10-23T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
     transcriptionStatus: 'processing',
+  }, {
+    id: 'ready', title: 'Ready capture', source: 'window', status: 'ready', durationMs: 2_000,
+    createdAt: '2026-10-22T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
+    transcriptionStatus: 'ready',
   }])
   await import('./main')
   expect(await screen.findByText('Local checkout')).toBeInTheDocument()
   expect(screen.getByText('Transcript failed')).toBeInTheDocument()
   expect(screen.getByText('Transcribing')).toBeInTheDocument()
+  expect(screen.getByText('Ready')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Mine' }))
   expect(screen.getByText('Local checkout')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'From clients' }))

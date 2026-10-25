@@ -12,6 +12,7 @@ describe('recording transcription provider adapter', () => {
         { start: -1, end: 2, transcript: 'bad start' },
         { start: 3, end: 2, transcript: 'bad range' },
         { start: 3, end: 4, transcript: ' ' },
+        { start: 4, end: 5, transcript: 42 },
       ],
     } })).toEqual({
       source: 'deepgram:nova-3', language: 'es',
@@ -44,6 +45,10 @@ describe('recording transcription provider adapter', () => {
     request.mockResolvedValueOnce(new Response(JSON.stringify({ results: { channels: [{ alternatives: [{ transcript: '' }] }] } }), { status: 200 }))
     await transcribeRecordingAudio(new Uint8Array([3]), { fetch: request })
     expect(String(request.mock.calls[1]?.[0])).toContain('environment.example/v1/listen')
+
+    const globalRequest = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ results: { channels: [{}] } }), { status: 200 }))
+    await transcribeRecordingAudio(new Uint8Array([4]))
+    expect(globalRequest).toHaveBeenCalledOnce()
   })
 
   it('maps missing configuration, provider rejection, invalid JSON, and network failure', async () => {

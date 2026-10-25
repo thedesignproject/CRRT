@@ -2,6 +2,9 @@ export type RecordingSource = 'tab' | 'window' | 'screen'
 export type RecordingTool = 'pointer' | 'draw' | 'arrow' | 'box' | 'text' | 'pin'
 export type RecordingStatus = 'setup' | 'countdown' | 'recording' | 'paused' | 'processing' | 'ready' | 'failed'
 
+export const RECORDING_MARK_VISIBLE_MS = 3_000
+export const RECORDING_MARK_FADE_MS = 250
+
 export type RecordingPoint = { x: number; y: number }
 
 export type RecordingMark = {
@@ -164,6 +167,14 @@ export function nearestRecordingMark(marks: RecordingMark[], atMs: number, thres
   return nearest && Math.abs(nearest.atMs - atMs) <= thresholdMs ? nearest : null
 }
 
+export function recordingMarkOpacity(mark: Pick<RecordingMark, 'atMs'>, atMs: number) {
+  const age = atMs - mark.atMs
+  if (age < 0 || age >= RECORDING_MARK_VISIBLE_MS) return 0
+  const fadeStart = RECORDING_MARK_VISIBLE_MS - RECORDING_MARK_FADE_MS
+  if (age <= fadeStart) return 1
+  return (RECORDING_MARK_VISIBLE_MS - age) / RECORDING_MARK_FADE_MS
+}
+
 export function buildRecordingAgentPayload(recording: LocalRecording) {
   const lines = [
     `## CRRT capture · ${recording.pageTitle || recording.title} · ${formatRecordingTime(recording.durationMs)}`,
@@ -171,6 +182,23 @@ export function buildRecordingAgentPayload(recording: LocalRecording) {
     '',
   ]
   const moments = [...recording.transcript].sort((a, b) => a.startMs - b.startMs)
+  if (!moments.length) {
+    const transcriptState = recording.transcriptionStatus === 'processing'
+      ? 'Transcript is still processing.'
+      : recording.transcriptionStatus === 'failed'
+        ? 'Transcript unavailable.'
+        : 'No speech detected.'
+    lines.push(transcriptState, '')
+    const marks = [...recording.marks].sort((a, b) => a.atMs - b.atMs)
+    marks.forEach((mark, index) => {
+      lines.push(`[${formatRecordingTime(mark.atMs)}] keyframe_${String(index + 1).padStart(2, '0')}.png  ${mark.type}`)
+      if (mark.target?.selector) lines.push(`  target: ${mark.target.selector}`)
+      if (mark.text) lines.push(`  note: "${mark.text}"`)
+      lines.push('')
+    })
+    if (!marks.length) lines.push('No marks captured.')
+    return lines.join('\n').trim()
+  }
   moments.forEach((segment, index) => {
     const nearest = nearestRecordingMark(recording.marks, (segment.startMs + segment.endMs) / 2)
     lines.push(`[${formatRecordingTime(segment.startMs)}] keyframe_${String(index + 1).padStart(2, '0')}.png${nearest ? `  ${nearest.type}` : ''}`)

@@ -68,9 +68,6 @@ button:disabled { cursor: not-allowed; opacity: .36 }
 .setup-error { margin: 0 16px 12px; color: var(--crrt-phosphor); font-size: 11px }
 .annotation-layer { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; pointer-events: none }
 .record-surface:not(.tool-pointer) .annotation-layer { pointer-events: auto; cursor: crosshair }
-.camera-shell { position: absolute; left: 24px; bottom: 82px; width: 112px; aspect-ratio: 1; overflow: hidden; border: 3px solid var(--record-red); border-radius: 50%; background: var(--crrt-bg-deep-soft); box-shadow: var(--crrt-shadow-pill); pointer-events: auto }
-.camera-shell video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1) }
-.camera-shell span { position: absolute; inset: auto 0 8px; color: var(--crrt-ink-faint); font-size: 9px; text-align: center }
 .transcript-chip { position: absolute; left: 50%; bottom: 80px; display: flex; align-items: center; gap: 7px; max-width: min(560px, calc(100vw - 340px)); min-height: 34px; padding: 7px 10px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-lg); background: rgba(24,24,24,.94); box-shadow: var(--crrt-shadow-pill); font-size: 11px; transform: translateX(-50%); backdrop-filter: blur(16px); pointer-events: auto }
 .transcript-chip svg { color: var(--crrt-carrot) }
 .transcript-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -93,5 +90,5 @@ button:disabled { cursor: not-allowed; opacity: .36 }
 .done { height: 36px; display: inline-flex; align-items: center; gap: 6px; margin-left: 3px; padding: 0 13px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-size: 11px; font-weight: 750 }
 .done:hover { background: var(--crrt-carrot-deep) }
 @media (max-width: 760px) { .record-toolbar .tool span { display: none } .transcript-chip { max-width: calc(100vw - 220px) } }
-@media (max-width: 660px) { .record-toolbar { overflow-x: auto } .camera-shell { width: 82px } .transcript-chip { display: none } }
+@media (max-width: 660px) { .record-toolbar { overflow-x: auto } .transcript-chip { display: none } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important } }

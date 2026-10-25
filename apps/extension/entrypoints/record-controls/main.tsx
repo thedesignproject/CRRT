@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { browser } from 'wxt/browser'
 import { ArrowUpRight, Box, Camera, Check, Eraser, Mic, Monitor, Pause, Pencil, Play, RotateCcw, ScreenShare, Square, Type, Undo2, X } from 'lucide-react'
-import { formatRecordingTime, type RecordingMark, type RecordingPoint, type RecordingTool } from '../../lib/recording'
+import { RecordingCamera, RestoreCameraButton, type CameraPreviewSize } from '../../components/recording-camera'
+import { formatRecordingTime, recordingMarkOpacity, type RecordingMark, type RecordingPoint, type RecordingTool } from '../../lib/recording'
 import type { RecordingSessionSnapshot, RecordingSurfaceCommand } from '../../lib/recording-session'
 import './style.css'
 
@@ -19,16 +20,16 @@ export function surfacePoint(event: Pick<ReactPointerEvent<SVGSVGElement>, 'clie
   const rect = event.currentTarget.getBoundingClientRect()
   return { x: (event.clientX - rect.left) / rect.width * 100, y: (event.clientY - rect.top) / rect.height * 100 }
 }
-function MarkShape({ mark }: { mark: RecordingMark }) {
+function MarkShape({ mark, opacity = 1 }: { mark: RecordingMark; opacity?: number }) {
   const [start, end = start] = mark.points
   /* v8 ignore next -- persisted and newly-created marks are schema-validated to include a point */
   if (!start) return null
-  if (mark.type === 'draw') return <polyline points={mark.points.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="var(--record-red)" strokeWidth=".65" strokeLinecap="round" strokeLinejoin="round" />
-  if (mark.type === 'arrow') return <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="var(--record-red)" strokeWidth=".7" strokeLinecap="round" markerEnd="url(#record-arrow)" />
-  if (mark.type === 'box') return <rect x={Math.min(start.x, end.x)} y={Math.min(start.y, end.y)} width={Math.abs(end.x - start.x)} height={Math.abs(end.y - start.y)} rx="1" fill="none" stroke="var(--record-red)" strokeWidth=".65" />
+  if (mark.type === 'draw') return <polyline points={mark.points.map((point) => `${point.x},${point.y}`).join(' ')} fill="none" stroke="var(--record-red)" strokeWidth=".65" strokeLinecap="round" strokeLinejoin="round" opacity={opacity} />
+  if (mark.type === 'arrow') return <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="var(--record-red)" strokeWidth=".7" strokeLinecap="round" markerEnd="url(#record-arrow)" opacity={opacity} />
+  if (mark.type === 'box') return <rect x={Math.min(start.x, end.x)} y={Math.min(start.y, end.y)} width={Math.abs(end.x - start.x)} height={Math.abs(end.y - start.y)} rx="1" fill="none" stroke="var(--record-red)" strokeWidth=".65" opacity={opacity} />
   /* v8 ignore next -- interactive text marks cannot be committed without non-empty text */
-  if (mark.type === 'text') return <g><rect x={start.x - 1} y={start.y - 3.5} width={Math.max(13, (mark.text?.length || 4) * .72)} height="5.5" rx="1.6" fill="var(--record-red)" /><text x={start.x + 1.1} y={start.y} fill="white" fontSize="2.45" fontWeight="700">{mark.text}</text></g>
-  return <g><circle cx={start.x} cy={start.y} r="2.5" fill="var(--record-red)" /><text x={start.x} y={start.y + .9} fill="white" fontSize="2.65" fontWeight="800" textAnchor="middle">{mark.pinNumber}</text></g>
+  if (mark.type === 'text') return <g opacity={opacity}><rect x={start.x - 1} y={start.y - 3.5} width={Math.max(13, (mark.text?.length || 4) * .72)} height="5.5" rx="1.6" fill="var(--record-red)" /><text x={start.x + 1.1} y={start.y} fill="white" fontSize="2.45" fontWeight="700">{mark.text}</text></g>
+  return <g opacity={opacity}><circle cx={start.x} cy={start.y} r="2.5" fill="var(--record-red)" /><text x={start.x} y={start.y + .9} fill="white" fontSize="2.65" fontWeight="800" textAnchor="middle">{mark.pinNumber}</text></g>
 }
 
 const tools: { id: RecordingTool; label: string; icon: typeof Pencil }[] = [
@@ -42,6 +43,8 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
   const [snapshot, setSnapshot] = useState<RecordingSessionSnapshot | null>(null)
   const [draft, setDraft] = useState<RecordingPoint[]>([])
   const [pending, setPending] = useState(false)
+  const [cameraPreviewVisible, setCameraPreviewVisible] = useState(true)
+  const [cameraPreviewSize, setCameraPreviewSize] = useState<CameraPreviewSize>('medium')
   const draftRef = useRef<RecordingPoint[]>([])
   const exclusiveRef = useRef(false)
   const cameraRef = useRef<HTMLVideoElement>(null)
@@ -152,9 +155,12 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
   return <main className={`record-surface tool-${snapshot.tool}`}>
     <svg className="annotation-layer" viewBox="0 0 100 100" preserveAspectRatio="none" onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp}>
       <defs><marker id="record-arrow" markerWidth="5" markerHeight="5" refX="4.2" refY="2.5" orient="auto"><path d="M0,0 L5,2.5 L0,5 z" fill="var(--record-red)" /></marker></defs>
-      {snapshot.marks.map((mark) => <MarkShape key={mark.id} mark={mark} />)}{preview && <MarkShape mark={preview} />}
+      {snapshot.marks.map((mark) => {
+        const opacity = recordingMarkOpacity(mark, snapshot.durationMs)
+        return opacity > 0 ? <MarkShape key={mark.id} mark={mark} opacity={opacity} /> : null
+      })}{preview && <MarkShape mark={preview} />}
     </svg>
-    {snapshot.cameraEnabled && <div className="camera-shell" data-record-control><video ref={cameraRef} muted playsInline /><span>Camera</span></div>}
+    {snapshot.cameraEnabled && <RecordingCamera videoRef={cameraRef} size={cameraPreviewSize} hidden={!cameraPreviewVisible} onSizeChange={setCameraPreviewSize} onHide={() => setCameraPreviewVisible(false)} />}
     {snapshot.microphoneEnabled && snapshot.status !== 'countdown' && <div className="transcript-chip" data-record-control><Mic size={12} /><span>Voice recording</span><em>Transcribed after Done</em></div>}
     {snapshot.warning && <div className="surface-warning" data-record-control>{snapshot.warning}</div>}
     {snapshot.status === 'countdown' && <div className="countdown"><strong>{snapshot.countdown}</strong><span>Get ready</span></div>}
@@ -166,6 +172,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
       {/* v8 ignore next -- paused and recording render paths are both exercised; duplicate ternaries share the same state */}
       <button className="icon" title={snapshot.status === 'paused' ? 'Resume' : 'Pause'} onClick={() => { void command({ kind: 'pause.toggle' }) }} aria-label={snapshot.status === 'paused' ? 'Resume' : 'Pause'}>{snapshot.status === 'paused' ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}</button>
       <button className="icon" title="Restart" onClick={() => { if (window.confirm('Restart this recording?')) void command({ kind: 'restart' }) }} aria-label="Restart"><RotateCcw size={15} /></button>
+      {snapshot.cameraEnabled && !cameraPreviewVisible && <RestoreCameraButton onClick={() => setCameraPreviewVisible(true)} />}
       <div className="divider" />
       {tools.map(({ id: tool, label, icon: Icon }) => <button key={tool} className={snapshot.tool === tool ? 'tool active' : 'tool'} onClick={() => chooseTool(tool)}><Icon size={14} /><span>{label}</span></button>)}
       <div className="divider" />

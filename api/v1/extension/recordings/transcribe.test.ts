@@ -83,4 +83,14 @@ describe('recording transcription endpoint', () => {
     expect(res).toMatchObject({ statusCode: 500, body: { error: 'Recording transcription is unavailable.' } })
     expect(res.headers).not.toHaveProperty('Access-Control-Allow-Origin')
   })
+
+  it('fails closed when CORS validation throws an unexpected error', async () => {
+    const brokenRequest = {
+      method: 'POST', query: {}, body: webm,
+      get headers() { throw new Error('unexpected request shape') },
+    }
+    const res = response()
+    await call(brokenRequest, res)
+    expect(res).toMatchObject({ statusCode: 500, body: { error: 'Recording transcription is unavailable.' } })
+  })
 })

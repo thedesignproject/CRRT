@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser'
 import { defineUnlistedScript } from 'wxt/utils/define-unlisted-script'
 import { createRoot, type Root } from 'react-dom/client'
+import cameraStyles from '../components/recording-camera.css?raw'
 import controlStyles from './record-controls/style.css?raw'
 import { RecordControls } from './record-controls/main'
 
@@ -17,7 +18,7 @@ export function mountRecordingSurface(sessionId: string) {
   host.dataset.sessionId = sessionId
   host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none;display:block;'
   const shadow = host.attachShadow({ mode: 'closed' })
-  const style = document.createElement('style'); style.textContent = controlStyles
+  const style = document.createElement('style'); style.textContent = `${controlStyles}\n${cameraStyles}`
   const container = document.createElement('div'); container.className = 'crrt-record-root'
   shadow.append(style, container)
   document.documentElement.append(host)

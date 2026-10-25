@@ -58,7 +58,6 @@ button:disabled { cursor: not-allowed; opacity: .4 }
 .record-overlay, .playback-marks { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none }
 .record-overlay.tool-pointer { pointer-events: none }
 .record-overlay:not(.tool-pointer) { cursor: crosshair }
-.camera-bubble { position: absolute; left: 26px; bottom: 84px; width: 112px; aspect-ratio: 1; border: 3px solid var(--record-red); border-radius: 50%; object-fit: cover; background: #222; box-shadow: 0 14px 35px rgba(0,0,0,.32); transform: scaleX(-1) }
 .live-transcript { position: absolute; left: 50%; bottom: 82px; display: flex; align-items: center; gap: 7px; max-width: min(560px, calc(100vw - 360px)); min-height: 34px; padding: 7px 10px; border: 1px solid rgba(255,255,255,.13); border-radius: 8px; background: rgba(15,15,17,.9); color: #e6e6e8; box-shadow: 0 10px 32px rgba(0,0,0,.28); font-size: 11px; transform: translateX(-50%); backdrop-filter: blur(12px) }
 .live-transcript > svg { flex: 0 0 auto; color: var(--crrt-carrot) }
 .live-transcript span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
@@ -94,7 +93,11 @@ button:disabled { cursor: not-allowed; opacity: .4 }
 .player-shell { position: relative; width: min(100%, 1050px); aspect-ratio: 16/9; overflow: hidden; border-radius: 12px; background: #050505; box-shadow: 0 28px 70px rgba(0,0,0,.35) }
 .player-shell > video:first-child { width: 100%; height: 100%; object-fit: contain }
 .playback-marks { pointer-events: none }
-.playback-camera { bottom: 24px; width: 92px }
+.camera-bubble { position: absolute; left: 26px; bottom: 84px; width: 112px; aspect-ratio: 1; border: 3px solid var(--record-red); border-radius: 50%; object-fit: cover; background: var(--crrt-bg-deep-soft); box-shadow: var(--crrt-shadow-pill); transform: scaleX(-1) }
+.playback-camera { bottom: 24px }
+.playback-camera.camera-size-small { width: 72px }
+.playback-camera.camera-size-medium { width: 112px }
+.playback-camera.camera-size-large { width: 160px }
 .timeline-markers { position: relative; width: min(100%, 1050px); height: 12px; margin-top: 2px }
 .timeline-markers::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: #29292d }
 .timeline-markers button { position: absolute; top: 2px; width: 7px; height: 7px; padding: 0; border-radius: 50%; background: var(--crrt-carrot); transform: translateX(-50%) }

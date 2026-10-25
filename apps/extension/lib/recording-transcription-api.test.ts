@@ -38,6 +38,7 @@ describe('recording transcription API client', () => {
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: -1, endMs: 2, text: 'bad' }] } },
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: 2, endMs: 1, text: 'bad' }] } },
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: 1, endMs: 2, text: ' ' }] } },
+    { transcript: { source: 'provider', language: 'es', segments: [null] } },
   ])('rejects malformed successful payloads (%j)', async (payload) => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 }))
     await expect(transcribeRecording(new Blob(['audio']))).rejects.toThrow('invalid transcript')
