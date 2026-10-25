@@ -25,8 +25,8 @@ it('stores normalized provider segments on success', async () => {
 })
 
 it('keeps the recording ready and exposes a retryable stable failure', async () => {
-  vi.mocked(transcribeRecording).mockRejectedValueOnce(new Error('Sign in again'))
-  await expect(withRecordingTranscript(recording(new Blob(['audio'])))).resolves.toMatchObject({ status: 'ready', transcriptionStatus: 'failed', transcriptionError: 'Sign in again' })
+  vi.mocked(transcribeRecording).mockRejectedValueOnce(Object.assign(new Error('Sign in again'), { code: 'auth-required' }))
+  await expect(withRecordingTranscript(recording(new Blob(['audio'])))).resolves.toMatchObject({ status: 'ready', transcriptionStatus: 'failed', transcriptionError: 'Sign in again', transcriptionErrorCode: 'auth-required' })
   vi.mocked(transcribeRecording).mockRejectedValueOnce('unknown')
-  await expect(withRecordingTranscript(recording(new Blob(['audio'])))).resolves.toMatchObject({ transcriptionError: 'CRRT could not transcribe this recording.' })
+  await expect(withRecordingTranscript(recording(new Blob(['audio'])))).resolves.toMatchObject({ transcriptionError: 'CRRT could not transcribe this recording.', transcriptionErrorCode: 'request-failed' })
 })

@@ -25,6 +25,8 @@ export type RecordingTranscriptSegment = {
   text: string
 }
 
+export type RecordingTranscriptionErrorCode = 'auth-required' | 'request-failed'
+
 export type LocalRecording = {
   id: string
   title: string
@@ -39,6 +41,7 @@ export type LocalRecording = {
   transcript: RecordingTranscriptSegment[]
   transcriptionStatus: 'processing' | 'ready' | 'failed'
   transcriptionError?: string
+  transcriptionErrorCode?: RecordingTranscriptionErrorCode
   screenBlob?: Blob
   cameraBlob?: Blob
   audioBlob?: Blob

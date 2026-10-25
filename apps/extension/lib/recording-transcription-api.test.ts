@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./comments-api', () => ({ extensionSession: vi.fn() }))
 import { extensionSession } from './comments-api'
-import { transcribeRecording } from './recording-transcription-api'
+import { RecordingTranscriptionClientError, transcribeRecording } from './recording-transcription-api'
 
 beforeEach(() => {
   vi.restoreAllMocks()
@@ -25,7 +25,8 @@ describe('recording transcription API client', () => {
 
   it('requires sign-in and uses stable API and status errors', async () => {
     vi.mocked(extensionSession).mockResolvedValueOnce(null)
-    await expect(transcribeRecording(new Blob(['audio']))).rejects.toThrow('Sign in')
+    await expect(transcribeRecording(new Blob(['audio']))).rejects.toMatchObject({ code: 'auth-required', message: expect.stringContaining('Sign in') })
+    expect(new RecordingTranscriptionClientError('request-failed', 'Failure').name).toBe('RecordingTranscriptionClientError')
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Provider unavailable' }), { status: 503 }))
     await expect(transcribeRecording(new Blob(['audio']))).rejects.toThrow('Provider unavailable')
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('not-json', { status: 502 }))

@@ -382,6 +382,21 @@ it('retries a failed transcript from the locally retained audio', async () => {
   expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'ready' }))
 })
 
+it('opens the extension sign-in flow for an authentication failure', async () => {
+  mocks.getRecording.mockResolvedValue({
+    id: 'auth-required', title: 'Sign-in review', source: 'tab', status: 'ready', durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
+    transcriptionStatus: 'failed', transcriptionError: 'Sign in to CRRT to transcribe this recording.',
+    transcriptionErrorCode: 'auth-required', screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
+  })
+  history.replaceState(null, '', '/record.html?recording=auth-required')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+  fireEvent.click(await screen.findByRole('button', { name: 'Sign in to CRRT' }))
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'auth:open-popup' }))
+  expect(screen.getByRole('button', { name: 'Retry transcription' })).toBeInTheDocument()
+})
+
 it('renders a processing transcript state honestly', async () => {
   mocks.getRecording.mockResolvedValue({
     id: 'processing', title: 'Processing', source: 'tab', status: 'processing', durationMs: 1_000,
