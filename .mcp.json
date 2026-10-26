@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "jev": {
+      "command": "bun",
+      "args": ["--env-file=.env.local", "scripts/jev/mcp.ts"]
+    }
+  }
+}
