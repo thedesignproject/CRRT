@@ -57,15 +57,15 @@ it('keeps the landing page for non-audit routes', () => {
   window.history.pushState({}, '', '/')
   render(<App />)
   expect(screen.queryByText('Live audit workspace')).not.toBeInTheDocument()
-  expect(screen.getByText('Landing product audit')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Sign up →' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /Humans give feedback/i })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Start trial' })).toBeInTheDocument()
 })
 
 it('recognizes an existing session, updates the nav, and redirects to the dashboard', async () => {
   const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
   auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-1' } } } })
   render(<App />)
-  expect(await screen.findByRole('button', { name: 'Dashboard →' })).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
   await waitFor(() => expect(replace).toHaveBeenCalledWith('http://localhost:5173'))
 })
 
@@ -74,8 +74,8 @@ it('keeps the promo page visible for a signed-in user who opts to stay', async (
   window.history.replaceState({}, '', '/?stay=1')
   auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-1' } } } })
   render(<App />)
-  expect(await screen.findByRole('button', { name: 'Dashboard →' })).toBeInTheDocument()
-  expect(screen.getByText('Landing product audit')).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: /Humans give feedback/i })).toBeInTheDocument()
   expect(replace).not.toHaveBeenCalled()
 })
 
@@ -83,7 +83,7 @@ it('reacts to later auth changes and unsubscribes on unmount', () => {
   const view = render(<App />)
   expect(auth.listener).not.toBeNull()
   act(() => auth.listener?.('SIGNED_IN', { user: { id: 'user-1' } }))
-  expect(screen.getByRole('button', { name: 'Dashboard →' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
   view.unmount()
   expect(auth.unsubscribe).toHaveBeenCalledOnce()
 })

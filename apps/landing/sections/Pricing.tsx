@@ -57,56 +57,53 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
   }
 
   return (
-    <section id="pricing" className="landing-pricing">
-      <div className="landing-pricing-shell">
-        <span className="section-marker">/ 06 pricing</span>
-        <SectionIntro
-          title="Choose how CRRT runs."
-          description="Self-host CRRT for free, or choose Cloud when you want Storybook review, private feedback, and Agent handoff ready for your team."
-          aside={<SegmentedControl label="Billing cycle" value={cycle} onChange={setCycle} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save 16%' }]} />}
-        />
-        <div className="landing-pricing-table">
-          {plans.map((plan) => {
-            const community = plan.key === 'community'
-            const annual = cycle === 'yearly'
-            const price = community ? '$0' : annual ? `$${plan.yearly / 12}` : `$${plan.monthly}`
-            const recommended = 'recommended' in plan && plan.recommended
-            const eyebrow = community ? 'Free forever' : plan.key === 'pro' ? 'For product teams' : 'For studios and agencies'
-            return (
-              <article key={plan.key} className={`landing-pricing-column ${recommended ? 'is-recommended' : ''}`}>
-                <div className={`landing-pricing-band ${recommended ? 'is-visible' : ''}`}>{recommended ? 'Recommended' : null}</div>
-                <div className="landing-pricing-heading">
-                  <span>{eyebrow}</span>
-                  <h3>{plan.name}</h3>
-                  <p>{plan.description}</p>
-                </div>
-                <div className="landing-pricing-price">
-                  <strong>{price}</strong>
-                  <span>{community ? 'forever' : '/ month'}</span>
-                </div>
-                <p className="landing-pricing-billing">{community ? 'Run it on your own infrastructure.' : annual ? `$${plan.yearly} billed yearly · save 16%` : 'Billed monthly. Cancel anytime.'}</p>
-                <div className="landing-pricing-features">
-                  <p>{community ? 'Self-hosted includes:' : plan.key === 'pro' ? 'Everything needed to ship:' : 'More capacity for every team:'}</p>
-                  <ul>{plan.features.map((feature) => <li key={feature}><Check size={14} aria-hidden="true" />{feature}</li>)}</ul>
-                </div>
-                <div className="landing-pricing-action">
-                  {community ? (
-                    <a className="ds-button ds-button-secondary ds-button-md landing-pricing-button" href="/docs/self-host">Read self-host guide</a>
-                  ) : authenticated && accessToken ? (
-                    <Button tone={plan.key === 'pro' ? 'primary' : 'secondary'} className="landing-pricing-button" disabled={busyPlan !== null} onClick={() => { void checkout(plan.key, accessToken) }}>
-                      {busyPlan === plan.key ? 'Opening secure checkout…' : 'Start 14-day trial'}
-                    </Button>
-                  ) : (
-                    <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
-                  )}
-                </div>
-              </article>
-            )
-          })}
-        </div>
-        <div className="landing-pricing-notes"><span>Cloud trials require a card. Cancel anytime.</span><span>Self-hosted is the only permanently free plan.</span></div>
-        {error ? <p className="landing-pricing-error" role="alert" aria-live="polite">{error} <button type="button" onClick={() => setError('')}>Dismiss</button></p> : null}
+    <section id="pricing" className="landing-section landing-pricing">
+      <SectionIntro
+        title="Choose how CRRT runs."
+        description="Self-host CRRT for free, or choose Cloud when you want it managed and ready for your team."
+        aside={<SegmentedControl label="Billing cycle" value={cycle} onChange={setCycle} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save 16%' }]} />}
+      />
+      <div className="landing-pricing-table">
+        {plans.map((plan) => {
+          const community = plan.key === 'community'
+          const annual = cycle === 'yearly'
+          const price = community ? '$0' : annual ? `$${plan.yearly / 12}` : `$${plan.monthly}`
+          const recommended = 'recommended' in plan && plan.recommended
+          const eyebrow = community ? 'Free forever' : plan.key === 'pro' ? 'For product teams' : 'For studios and agencies'
+          return (
+            <article key={plan.key} className={`landing-pricing-column ${recommended ? 'is-recommended' : ''}`}>
+              <div className={`landing-pricing-band ${recommended ? 'is-visible' : ''}`}>{recommended ? 'Recommended' : null}</div>
+              <div className="landing-pricing-heading">
+                <span>{eyebrow}</span>
+                <h3>{plan.name}</h3>
+                <p>{plan.description}</p>
+              </div>
+              <div className="landing-pricing-price">
+                <strong>{price}</strong>
+                <span>{community ? 'forever' : '/ month'}</span>
+              </div>
+              <p className="landing-pricing-billing">{community ? 'Run it on your own infrastructure.' : annual ? `$${plan.yearly} billed yearly · save 16%` : 'Billed monthly. Cancel anytime.'}</p>
+              <div className="landing-pricing-features">
+                <p>{community ? 'Self-hosted includes:' : plan.key === 'pro' ? 'Everything needed to ship:' : 'More capacity for every team:'}</p>
+                <ul>{plan.features.map((feature) => <li key={feature}><Check size={14} aria-hidden="true" />{feature}</li>)}</ul>
+              </div>
+              <div className="landing-pricing-action">
+                {community ? (
+                  <a className="ds-button ds-button-secondary ds-button-md landing-pricing-button" href="/docs/self-host">Read self-host guide</a>
+                ) : authenticated && accessToken ? (
+                  <Button tone={plan.key === 'pro' ? 'primary' : 'secondary'} className="landing-pricing-button" disabled={busyPlan !== null} onClick={() => { void checkout(plan.key, accessToken) }}>
+                    {busyPlan === plan.key ? 'Opening secure checkout…' : 'Start 14-day trial'}
+                  </Button>
+                ) : (
+                  <a className={`ds-button ${plan.key === 'pro' ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md landing-pricing-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
+                )}
+              </div>
+            </article>
+          )
+        })}
       </div>
+      <div className="landing-pricing-notes"><span>Cloud trials require a card. Cancel anytime.</span><span>Self-hosted is the only permanently free plan.</span></div>
+      {error ? <p className="landing-pricing-error" role="alert" aria-live="polite">{error} <button type="button" onClick={() => setError('')}>Dismiss</button></p> : null}
     </section>
   )
 }

@@ -597,3 +597,13 @@ branding/
 - This document, the tokens, the canonical asset, and the four components share a single version line.
 - Current: **v0.2 / WIP / build_2026.05.11**.
 - Breaking token rename → minor bump. Visual redesign of a component → minor bump. Adding a token / prop → patch.
+
+### Integrations glass treatment — approved October 2026
+
+The landing's integrations diagram alone uses smoked glass; other sections retain
+their light surfaces and the photo hero keeps its original treatment.
+The diagram uses `--crrt-marketing-radius-panel` (32px),
+`--crrt-marketing-radius-card` (24px), `--crrt-marketing-smoked-glass`,
+`--crrt-marketing-smoked-edge`, and `--crrt-marketing-smoked-shadow`
+over `--crrt-marketing-glass-stage`. White foregrounds keep text readable.
+Use the opaque fallback without backdrop-filter and preserve reduced-motion support.

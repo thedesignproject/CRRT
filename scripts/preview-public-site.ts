@@ -5,7 +5,6 @@ import { publicResponse } from '../server/public-site.ts'
 import { publicPagePattern, applicationFallbackRoutes } from './public-pages.ts'
 
 const dist = resolve(import.meta.dirname, '../apps/landing/dist')
-const pages = JSON.parse(await readFile(join(dist, 'public-pages.json'), 'utf8'))
 const types: Record<string, string> = { '.html': 'text/html', '.md': 'text/markdown', '.txt': 'text/plain', '.json': 'application/json', '.xml': 'application/xml', '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ttf': 'font/ttf' }
 const server = createServer(async (req, res) => {
   const path = new URL(req.url!, 'http://localhost').pathname
@@ -26,7 +25,9 @@ const server = createServer(async (req, res) => {
       } catch { /* A missing dashboard build remains a 404. */ }
     }
   }
+  // Builds replace hashed assets. Read the matching HTML manifest on each request.
+  const pages = JSON.parse(await readFile(join(dist, 'public-pages.json'), 'utf8'))
   const result = publicResponse(path, req.headers.accept, req.method!, pages)
-  res.writeHead(result.status, result.headers); res.end(result.body)
+  res.writeHead(result.status, { ...result.headers, 'Cache-Control': 'no-store' }); res.end(result.body)
 })
 server.listen(Number(process.env.PORT || 4317), '127.0.0.1', () => console.log(`CRRT public preview: http://127.0.0.1:${process.env.PORT || 4317} (API requires deployed preview)` ))
