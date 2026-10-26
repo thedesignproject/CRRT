@@ -300,6 +300,13 @@ Run the reviewer dashboard:
 bun run dev:dashboard
 ```
 
+### Storybook
+
+Run `bun run storybook` to open the component development framework at
+`http://127.0.0.1:6006`. The initial shell has no component stories; see
+[the Storybook guide](stories/README.md) for configuration and adding them.
+Use `bun run build-storybook` for a static build.
+
 ### Fully local development with Docker
 
 Docker Desktop and the Supabase CLI can run Postgres, Auth, Storage, Realtime,

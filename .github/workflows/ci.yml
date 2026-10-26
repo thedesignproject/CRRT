@@ -45,6 +45,8 @@ jobs:
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
       - run: bun run typecheck
+      - name: Install Chromium for Storybook tests
+        run: bunx playwright install --with-deps chromium
       - run: bun run test:coverage
       - name: Enforce 100% diff coverage
         if: matrix.react == '19' && github.event_name == 'pull_request'

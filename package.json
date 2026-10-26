@@ -27,6 +27,10 @@
     "THIRD_PARTY_NOTICES.md"
   ],
   "scripts": {
+    "storybook": "storybook dev -p 6006 --host 127.0.0.1 --no-open",
+    "test:storybook": "vitest --project storybook run",
+    "build-storybook": "storybook build",
+    "typecheck:storybook": "tsc --project .storybook/tsconfig.json",
     "dev": "vite --config apps/landing/vite.config.ts",
     "dev:landing": "vite --config apps/landing/vite.config.ts",
     "dev:dashboard": "bash -c 'trap \"kill 0\" EXIT INT TERM; bunx vercel dev --listen 3000 & vite --config apps/dashboard/vite.config.ts'",
@@ -85,6 +89,13 @@
   },
   "devDependencies": {
     "@apidevtools/swagger-parser": "^13.0.0",
+    "@chromatic-com/storybook": "^5.6.0",
+    "@storybook/addon-a11y": "10.6.3",
+    "@storybook/addon-docs": "10.6.3",
+    "@storybook/addon-mcp": "10.6.3",
+    "@storybook/addon-themes": "10.6.3",
+    "@storybook/addon-vitest": "^10.6.3",
+    "@storybook/react-vite": "10.6.3",
     "@tailwindcss/vite": "^4.2.4",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/jest-dom": "^7.0.1",
@@ -99,7 +110,8 @@
     "@vercel/functions": "^3.7.5",
     "@vercel/node": "^5.7.12",
     "@vitejs/plugin-react": "^6.0.1",
-    "@vitest/coverage-v8": "^4.1.4",
+    "@vitest/browser-playwright": "4.1.12",
+    "@vitest/coverage-v8": "4.1.12",
     "@wxt-dev/module-react": "^1.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -107,8 +119,12 @@
     "drizzle-orm": "^0.45.2",
     "happy-dom": "^20.9.0",
     "html2canvas-pro": "2.5.2",
+    "msw": "^3.0.3",
+    "msw-storybook-addon": "^3",
+    "playwright": "latest",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "storybook": "10.6.3",
     "supabase": "^2.109.1",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.4",
@@ -116,7 +132,7 @@
     "typescript": "^6.0.3",
     "vite": "^8.0.9",
     "vite-plugin-dts": "^5.0.2",
-    "vitest": "^4.1.4",
+    "vitest": "4.1.12",
     "wxt": "^0.21.4"
   },
   "overrides": {
@@ -129,5 +145,10 @@
     "@workflow/core@4.8.5": "patches/@workflow%2Fcore@4.8.5.patch",
     "@workflow/world-local@4.4.0": "patches/@workflow%2Fworld-local@4.4.0.patch",
     "@workflow/world-vercel@4.7.1": "patches/@workflow%2Fworld-vercel@4.7.1.patch"
+  },
+  "msw": {
+    "workerDirectory": [
+      "public"
+    ]
   }
 }

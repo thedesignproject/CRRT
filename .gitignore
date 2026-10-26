@@ -2,6 +2,7 @@ node_modules/
 .workflow-data/
 dist/
 coverage/
+storybook-static/
 .env
 .env.local
 .env.docker.local
@@ -22,3 +23,5 @@ supabase/.branches/_current_branch
 
 # Dependency links used by isolated local worktrees
 /node_modules
+
+*storybook.log
