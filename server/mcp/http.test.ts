@@ -21,6 +21,8 @@ it('routes discovery metadata and preserves authorization query parameters', asy
     expect((await mcpHttp(new Request(`http://127.0.0.1:3001${path}`))).status).toBe(200)
   }
   expect(metadataPath('/other')).toBe('/other')
+  transport.mockResolvedValueOnce(Response.json({}, { headers: { 'X-Request-Id': 'existing-request-id' } }))
+  expect((await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', body: '{}' }))).headers.get('x-request-id')).toBe('existing-request-id')
   await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/oauth/authorize?state=preserved'))
   expect(vi.mocked(oauth).mock.lastCall![0].url).toContain('state=preserved')
   expect(await (await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', body: '{}' }))).json()).toEqual({ tools: true })
@@ -57,4 +59,12 @@ it('adapts Node/Vercel requests, including body formats, query values, and route
   vi.stubEnv('MCP_ORIGIN', undefined)
   const failure = res(); await nodeMcp({ headers: {}, query: {} } as never, failure as never, '/api/mcp/v1')
   expect(failure.code).toBe(400)
+})
+it('correlates origin-denial security events with the response request ID', async () => {
+  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+  try {
+    const response = await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { headers: { origin: 'https://private-origin.test' } }))
+    expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ event: 'crrt.mcp.security', requestId: response.headers.get('x-request-id'), action: 'http', userId: null, failureCategory: 'origin_not_allowed' })
+    expect(JSON.stringify(log.mock.calls)).not.toContain('private-origin')
+  } finally { log.mockRestore() }
 })

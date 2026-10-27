@@ -1,7 +1,9 @@
+import { randomUUID } from 'node:crypto'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { authFailure, config, ensure, oauth } from './auth.js'
 import { mcpHandler } from './transport.js'
 import { tools } from './tools.js'
+import { securityAudit } from './security-audit.js'
 
 export function metadataPath(path: string) {
   if (path === '/.well-known/oauth-authorization-server') return '/api/mcp/oauth/metadata'
@@ -9,6 +11,7 @@ export function metadataPath(path: string) {
   return path
 }
 export async function mcpHttp(request: Request) {
+  const requestId = randomUUID(), started = Date.now()
   let response: Response
   try {
     const { origin } = config()
@@ -20,14 +23,18 @@ export async function mcpHttp(request: Request) {
       const url = new URL(request.url)
       const path = metadataPath(url.pathname)
       const forwarded = new Request(new URL(path + url.search, origin), request)
-      response = path.startsWith('/api/mcp/oauth/') ? await oauth(forwarded) : await mcpHandler(tools)(forwarded)
+      response = path.startsWith('/api/mcp/oauth/') ? await oauth(forwarded, requestId) : await mcpHandler(tools)(forwarded)
     }
     if (browserOrigin) response.headers.set('Access-Control-Allow-Origin', browserOrigin)
     response.headers.set('Vary', 'Origin')
     response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, MCP-Protocol-Version, MCP-Session-Id')
     response.headers.set('Access-Control-Expose-Headers', 'WWW-Authenticate, MCP-Protocol-Version, X-Request-Id, Retry-After')
-  } catch (error) { response = authFailure(error) }
+  } catch (error) {
+    response = authFailure(error)
+    securityAudit(requestId, 'http', started, null, (await response.clone().json()).error)
+  }
+  if (!response.headers.has('X-Request-Id')) response.headers.set('X-Request-Id', requestId)
   response.headers.set('Cache-Control', 'no-store')
   response.headers.set('X-Content-Type-Options', 'nosniff')
   return response

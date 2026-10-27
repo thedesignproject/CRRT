@@ -175,6 +175,7 @@ describe('MCP OAuth boundary', () => {
     fake.getUser.mockRejectedValue(new Error('private secret'))
     expect((await call('consent', params, { authorization: 'Bearer session' })).data).toEqual({ error: 'temporarily_unavailable' })
     fake.results.push(ok(false)); await expect(reserve('key', 1)).rejects.toThrow('rate_limited')
+    fake.results.push(ok(false)); expect((await call('register', { client_name: 'Client', redirect_uris: [callback] })).response.headers.get('retry-after')).toBe('60')
     fake.results.push(ok(true), ok(null)); expect((await call('register', { client_name: 'Client', redirect_uris: [callback] })).response.status).toBe(503)
   })
   it('accepts only active resource-bound MCP access credentials in the Authorization header', async () => {
@@ -266,4 +267,30 @@ it('reports the actual issued lifetime near connection expiry and fails closed o
       expect((await call('token', { client_id: id, resource, grant_type: 'refresh_token', refresh_token: credential })).data.error).toBe('storage_unavailable')
     }
   } finally { clock.mockRestore() }
+})
+it('audits OAuth outcomes without credentials, callback queries, or private errors', async () => {
+  const log = vi.spyOn(console, 'info').mockImplementation(() => {})
+  try {
+    user(); fake.results.push(ok(true), app())
+    await call('consent', { ...params, decision: 'deny' }, { authorization: 'Bearer private-dashboard-session' })
+    fake.results.push(app(), ok({ hash: 'known', mcp_connections: { scope: 'crrt:read' } }), ok(true), ok(null))
+    await call('token', { client_id: id, resource, grant_type: 'refresh_token', refresh_token: credential })
+    fake.results.push(app(), ok())
+    await call('revoke', { client_id: id, token: credential })
+    fake.getUser.mockResolvedValue({ data: { user: null }, error: new Error('private-auth-error') })
+    await call('consent', params, { authorization: 'Bearer private-dashboard-session' })
+    await call('private-untrusted-path')
+    await oauth(new Request('http://127.0.0.1:3001/api/mcp/oauth/metadata'), 'explicit-request-id')
+    const events = log.mock.calls.map(([line]) => JSON.parse(line))
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ event: 'crrt.mcp.security', action: 'consent', userId: id, failureCategory: 'access_denied' }),
+      expect.objectContaining({ action: 'token', failureCategory: 'invalid_grant' }),
+      expect.objectContaining({ action: 'revoke', failureCategory: null }),
+      expect.objectContaining({ action: 'consent', failureCategory: 'login_required' }),
+      expect.objectContaining({ action: 'unknown', failureCategory: 'method_not_allowed' }),
+      expect.objectContaining({ action: 'metadata', requestId: 'explicit-request-id', failureCategory: null }),
+    ]))
+    expect(events.every(event => typeof event.requestId === 'string' && typeof event.latencyMs === 'number')).toBe(true)
+    expect(JSON.stringify(events)).not.toMatch(/private|crrt_mcp_|redirect_uri|code_challenge/)
+  } finally { log.mockRestore() }
 })

@@ -1,4 +1,6 @@
 import { z } from 'zod'
+import { randomUUID } from 'node:crypto'
+import { securityAudit } from './security-audit.js'
 import { createProof, hashProof, pkceChallenge } from '../../api/_lib/extension-auth-contracts.js'
 import { getNonPersistentSupabase, getServiceSupabase } from '../../api/_lib/supabase.js'
 
@@ -84,13 +86,18 @@ export async function reserve(key: string, limit: number) {
 function json(value: unknown, status = 200) { return Response.json(value, { status, headers: { 'Cache-Control': 'no-store' } }) }
 export function authFailure(error: unknown) {
   const failure = error instanceof McpError ? error : new McpError(error instanceof z.ZodError ? 400 : 503, error instanceof z.ZodError ? 'invalid_request' : 'temporarily_unavailable')
-  return json({ error: failure.code }, failure.status)
+  const response = json({ error: failure.code }, failure.status)
+  if (failure.status === 429) response.headers.set('Retry-After', '60')
+  return response
 }
-export async function oauth(request: Request): Promise<Response> {
+export async function oauth(request: Request, requestId: string = randomUUID()): Promise<Response> {
+  const started = Date.now()
+  let action = 'unknown', userId: string | null = null, failureCategory: string | null = null
   try {
     const { origin, resource } = config()
     const url = new URL(request.url)
-    const action = url.pathname.split('/').pop()
+    const candidate = url.pathname.split('/').pop()!
+    if (['metadata', 'resource', 'authorize', 'register', 'consent', 'connections', 'token', 'revoke'].includes(candidate)) action = candidate
     if (request.method === 'GET' && action === 'metadata') return json({
       issuer: origin, authorization_endpoint: `${origin}/api/mcp/oauth/authorize`,
       token_endpoint: `${origin}/api/mcp/oauth/token`, registration_endpoint: `${origin}/api/mcp/oauth/register`,
@@ -123,6 +130,7 @@ export async function oauth(request: Request): Promise<Response> {
     }
     if (action === 'consent') {
       const user = await dashboardUser(request)
+      userId = user.id
       await reserve(`consent:${user.id}`, 30)
       const { params, name } = await authorize(input)
       if (input.decision === 'inspect') return json({ name, scope: params.scope, redirectUri: params.redirect_uri })
@@ -130,7 +138,7 @@ export async function oauth(request: Request): Promise<Response> {
       const redirect = new URL(params.redirect_uri)
       redirect.searchParams.set('state', params.state)
       redirect.searchParams.set('iss', origin)
-      if (input.decision === 'deny') redirect.searchParams.set('error', 'access_denied')
+      if (input.decision === 'deny') { failureCategory = 'access_denied'; redirect.searchParams.set('error', 'access_denied') }
       else {
         const code = createProof()
         await checked(await getServiceSupabase().from('mcp_codes').insert({
@@ -144,6 +152,7 @@ export async function oauth(request: Request): Promise<Response> {
     }
     if (action === 'connections') {
       const user = await dashboardUser(request)
+      userId = user.id
       if (input.connectionId) {
         await checked(await getServiceSupabase().from('mcp_connections').update({ revoked_at: new Date().toISOString() }).eq('id', uuid.parse(input.connectionId)).eq('user_id', user.id))
       }
@@ -188,5 +197,9 @@ export async function oauth(request: Request): Promise<Response> {
     ensure(typeof expiresAt === 'string' && Number.isFinite(Date.parse(expiresAt)), 503, 'storage_unavailable')
     const expiresIn = Math.max(0, Math.min(900, Math.floor((Date.parse(expiresAt) - Date.now()) / 1000)))
     return json({ access_token: access, refresh_token: refresh, token_type: 'Bearer', expires_in: expiresIn, scope: grantedScope })
-  } catch (error) { return authFailure(error) }
+  } catch (error) {
+    const response = authFailure(error)
+    failureCategory = (await response.clone().json()).error
+    return response
+  } finally { securityAudit(requestId, action, started, userId, failureCategory) }
 }
