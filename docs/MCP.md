@@ -129,8 +129,16 @@ before sharing or deploying; historical migrations remain untouched.
 
 No deployment or plugin installation is required for local acceptance. Deployment
 wiring already includes the MCP route and well-known discovery aliases. Before a
-future HTTPS rollout, set the canonical HTTPS origin and dashboard URL, explicit
-trusted HTTPS `MCP_CALLBACK_ORIGINS`, browser origins, and `CRON_SECRET`. Native
+future HTTPS rollout, set `APP_URL=https://crrt.ai` in Vercel's **Production**
+environment. MCP reuses `APP_URL`; `MCP_ORIGIN` is an optional override.
+For **Preview**, leave both unset: MCP derives the exact HTTPS origin from
+Vercel's system `VERCEL_URL` when `VERCEL_ENV=preview`. Enable access to system
+environment variables in Vercel. Do not set a wildcard or copy the production
+origin into Preview. Explicit configuration wins, and all origins retain URL and
+HTTPS validation. The consent page defaults to `<origin>/dashboard/mcp-auth`;
+set `MCP_DASHBOARD_URL` only for a separate dashboard host.
+Configure trusted HTTPS `MCP_CALLBACK_ORIGINS` and extra `MCP_BROWSER_ORIGINS`
+only when needed by clients; keep the existing `CRON_SECRET` configured. Native
 HTTP callbacks on literal `127.0.0.1` or `[::1]` are allowed in production, with
 exact registered redirect matching and PKCE. The `localhost` hostname remains
 development-only; non-loopback HTTP callbacks are rejected. The protected cleanup endpoint
