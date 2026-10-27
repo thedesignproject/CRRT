@@ -1,3 +1,4 @@
+import { metadataPath } from '../server/mcp/http.js'
 type QueryValue = string | string[]
 
 type LocalRequest = {
@@ -104,6 +105,7 @@ Bun.serve({
   port,
   async fetch(request) {
     const url = new URL(request.url)
+    url.pathname = metadataPath(url.pathname)
     const route = routes.find((candidate) => candidate.pattern.test(url.pathname))
     if (!route) return Response.json({ error: 'Not found' }, { status: 404 })
 

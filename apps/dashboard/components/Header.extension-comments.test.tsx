@@ -4,6 +4,7 @@ vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }))
 vi.mock('./AddProjectPopover', () => ({ AddProjectPopover: () => null }))
 import { Header } from './Header'
+import { route } from '../lib/routes'
 
 const fn = vi.fn()
 const props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, addProjectOpen: false, setAddProjectOpen: fn, onAddProject: fn, onCheckAvailability: fn, addProjectBusy: false, addProjectError: null, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark' as const, toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn }
@@ -59,4 +60,10 @@ describe('Header extension comments navigation', () => {
     expect(screen.getByRole('button', { name: 'Inbox' })).toHaveAttribute('aria-pressed', 'false')
     expect(screen.getByRole('button', { name: 'Project One' })).toHaveAttribute('aria-pressed', 'true')
   })
+})
+
+it('makes account-wide MCP setup discoverable without a selected project', () => {
+  render(<Header {...props} />)
+  const nav = screen.getByRole('navigation', { name: 'Workspace administration' })
+  expect(within(nav).getByRole('link', { name: 'MCP connections' })).toHaveAttribute('href', route('/mcp-auth'))
 })

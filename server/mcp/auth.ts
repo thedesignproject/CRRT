@@ -147,7 +147,7 @@ export async function oauth(request: Request): Promise<Response> {
       if (input.connectionId) {
         await checked(await getServiceSupabase().from('mcp_connections').update({ revoked_at: new Date().toISOString() }).eq('id', uuid.parse(input.connectionId)).eq('user_id', user.id))
       }
-      const rows = await checked(await getServiceSupabase().from('mcp_connections').select('id,created_at,expires_at,mcp_clients(name)').eq('user_id', user.id).is('revoked_at', null).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(50))
+      const rows = await checked(await getServiceSupabase().from('mcp_connections').select('id,created_at,expires_at,scope,mcp_clients(name)').eq('user_id', user.id).is('revoked_at', null).gt('expires_at', new Date().toISOString()).order('created_at', { ascending: false }).limit(50))
       return json({ connections: rows })
     }
     ensure(action === 'token' || action === 'revoke', 404, 'not_found')
