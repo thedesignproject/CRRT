@@ -18,7 +18,9 @@ export function ensure(ok: unknown, status: number, code: string): asserts ok {
   if (!ok) throw new McpError(status, code)
 }
 export function config() {
-  const origin = z.url().parse(process.env.MCP_ORIGIN)
+  const previewOrigin = process.env.VERCEL_ENV === 'preview' && process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}` : undefined
+  const origin = z.url().parse(process.env.MCP_ORIGIN ?? process.env.APP_URL ?? previewOrigin)
   const url = new URL(origin)
   ensure(url.pathname === '/' && !url.search && !url.hash && !url.username && !url.password, 503, 'invalid_origin')
   ensure(url.protocol === 'https:' || (process.env.NODE_ENV !== 'production' && ['127.0.0.1', 'localhost'].includes(url.hostname) && url.protocol === 'http:'), 503, 'https_required')
