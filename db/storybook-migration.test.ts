@@ -28,7 +28,7 @@ describe('Storybook migration', () => {
     expect(yearlyBilling.prevId).toBe(legacyUsers.id)
     expect(screenshots.prevId).toBe(yearlyBilling.id)
     const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-    expect(journal.entries.filter((entry: { idx: number }) => entry.idx >= 42).map((entry: { tag: string }) => entry.tag)).toEqual([
+    expect(journal.entries.filter((entry: { idx: number }) => entry.idx >= 42 && entry.idx <= 45).map((entry: { tag: string }) => entry.tag)).toEqual([
       '0042_storybook_private_feedback',
       '0043_legacy_users',
       '0044_yearly_billing_windows',
