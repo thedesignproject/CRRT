@@ -1,5 +1,4 @@
 import { Hero } from './sections/Hero'
-import { HowItWorks } from './sections/HowItWorks'
 import { Closing } from './sections/Closing'
 import { Pricing } from './sections/Pricing'
 import { Footer } from './sections/Footer'
@@ -14,7 +13,6 @@ export function MarketingPage({ authenticated = false, accessToken, apiBase }: {
   return (
     <>
       <Hero authenticated={authenticated} />
-      <HowItWorks />
       <FeedbackJourney />
       <InstallPaths />
       <Integrations />

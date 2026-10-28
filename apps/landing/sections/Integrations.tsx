@@ -19,18 +19,6 @@ export function Integrations() {
         <h2>Keep the context. Choose the next step.</h2>
         <p>Send selected feedback to a coding agent, or turn one approved comment into a reviewable tracker issue. CRRT keeps the evidence attached either way.</p>
         <a href={DASHBOARD_HREF}>Start with CRRT <ArrowRight size={18} /></a>
-        <div className="landing-handoff-lanes">
-          <article>
-            <span>Agent handoff</span>
-            <strong>Send selected feedback to implementation.</strong>
-            <div><i>Claude Code</i><i>Codex</i><i>Cursor</i></div>
-          </article>
-          <article>
-            <span>Tracked issue</span>
-            <strong>Create one draft from one approved comment.</strong>
-            <div><i>GitHub</i><i>Linear</i><i>Jira</i></div>
-          </article>
-        </div>
       </div>
 
       <div className="landing-integrations-stage">

@@ -3,7 +3,6 @@ import type { Session } from '@supabase/supabase-js'
 import { DASHBOARD_HREF } from './sections/Hero'
 import { MarketingPage } from './MarketingPage'
 import { EasterEgg } from './components/EasterEgg'
-import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
 import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
@@ -110,7 +109,6 @@ function MarketingSite({
 
   return (
     <>
-      <ScrollRuler />
       <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
       <FeedbackWidget apiBase={apiBase} projectId={projectId} />
       <EasterEgg />
