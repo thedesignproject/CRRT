@@ -130,9 +130,9 @@ export function FeedbackJourney() {
 
   return (
     <section className="landing-section feedback-journey" id="how-it-works">
-      <header className="journey-intro"><h2>Give your agent eyes on the product.</h2><p>Follow one comment from the page where it was left to the fix that ships.</p></header>
       <div ref={trackRef} className="story-track" data-act={act}>
-        <div className="story-sticky">
+        <div className="story-sticky" id="try-crrt" tabIndex={-1} aria-labelledby="story-title">
+          <h2 id="story-title" className="story-title">Give your agent eyes on the product.</h2>
           <div className="story-copy">
             {acts.map((item, index) => <article key={item.title} className={index === act ? 'is-active' : ''} aria-hidden={index !== act}>
               <h3>{item.title}</h3>

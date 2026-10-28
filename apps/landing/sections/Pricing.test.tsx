@@ -20,6 +20,10 @@ it('presents the catalog and preserves signed-out plan and cycle selections', ()
   const studio = screen.getByRole('heading', { name: 'Studio' }).closest('article')!
   const price = (plan: HTMLElement) => plan.querySelector('.plan-price')!.textContent
   expect(price(community)).toBe('$0Free foreverRuns on your infrastructure')
+  expect(price(pro)).toBe('$19Per monthBilled monthly')
+  expect(price(studio)).toBe('$49Per monthBilled monthly')
+  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly')
+  fireEvent.click(screen.getByRole('button', { name: /Yearly/ }))
   expect(price(pro)).toBe('$16Per monthBilled yearly at $192')
   expect(price(studio)).toBe('$41Per monthBilled yearly at $492')
   expect(within(pro).getByText('Recommended')).toBeInTheDocument()
@@ -50,7 +54,7 @@ it('takes an authenticated customer directly to one safe Checkout session', asyn
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
   await waitFor(() => expect(startCloudCheckout).toHaveBeenCalledOnce())
-  expect(startCloudCheckout).toHaveBeenCalledWith('/api', 'session', 'pro', 'yearly')
+  expect(startCloudCheckout).toHaveBeenCalledWith('/api', 'session', 'pro', 'monthly')
   expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/session')
 })
 
@@ -105,7 +109,7 @@ it('ignores a stale failure without unlocking the new account checkout', async (
 it('renders public pricing links without local development destinations during SSR', () => {
   vi.stubEnv('SSR', true)
   const html = renderToString(<Pricing />)
-  expect(html).toContain('/api/v1/billing?start=pro&amp;cycle=yearly')
-  expect(html).toContain('/api/v1/billing?start=studio&amp;cycle=yearly')
+  expect(html).toContain('/api/v1/billing?start=pro&amp;cycle=monthly')
+  expect(html).toContain('/api/v1/billing?start=studio&amp;cycle=monthly')
   expect(html).not.toContain('localhost:5173')
 })

@@ -1,4 +1,4 @@
-.feedback-journey { background: var(--landing-page); }
+.landing-section.feedback-journey { padding-block: 0; background: var(--landing-page); }
 .journey-panel { --crrt-white: var(--foreground); --crrt-ink-faint: var(--muted-foreground); --crrt-rule-dark: var(--border); --crrt-rule-dark-strong: var(--border); --crrt-bg-deep: var(--background); --crrt-bg-deep-soft: var(--background); --crrt-carrot: var(--crrt-dashboard-orange); }
 .journey-person > b { color: white; }
 .journey-panel-body > .journey-filters { margin: 14px 0; }
@@ -145,10 +145,11 @@
    scroll progress to --story-p; acts and beats arrive as data attributes.
    Geometry is authored on an 860 × 660 canvas and scaled by --story-fit. */
 @property --story-p { syntax: '<number>'; inherits: true; initial-value: 0; }
-.story-track { --story-move: cubic-bezier(.2, .8, .2, 1); --story-spring: cubic-bezier(.22, 1.18, .36, 1); position: relative; height: 600vh; margin: 72px calc(-1 * var(--landing-shell-gutter)) 0; transition: --story-p 320ms linear; }
-.story-sticky { position: sticky; top: 0; display: grid; height: 100svh; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 20px clamp(28px, 4vw, 56px); padding: 40px var(--landing-shell-gutter) 24px; overflow: hidden; color: var(--foreground); background: var(--landing-page); }
+.story-track { --story-move: cubic-bezier(.2, .8, .2, 1); --story-spring: cubic-bezier(.22, 1.18, .36, 1); position: relative; height: 600vh; margin: 0 calc(-1 * var(--landing-shell-gutter)); transition: --story-p 320ms linear; }
+.story-sticky { position: sticky; top: 0; display: grid; height: 100svh; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 20px clamp(28px, 4vw, 56px); padding: 40px var(--landing-shell-gutter) 24px; overflow: hidden; color: var(--foreground); background: var(--landing-page); }
 
 
+.story-title { grid-column: 1 / -1; margin: 0; font: var(--landing-h2); letter-spacing: var(--landing-h2-track); }
 .story-copy { display: grid; align-self: center; }
 .story-copy article { grid-area: 1 / 1; opacity: 0; transform: translateY(18px); transition: opacity 400ms ease, transform 600ms var(--story-move); pointer-events: none; }
 .story-copy article.is-active { opacity: 1; transform: none; transition-delay: 120ms; pointer-events: auto; }
@@ -263,7 +264,7 @@
 @keyframes story-flash { 0% { opacity: 0; } 12% { opacity: .9; } 100% { opacity: 0; } }
 
 @media (max-width: 900px) {
-  .story-sticky { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 18px; padding: 28px var(--landing-shell-gutter) 20px; }
+  .story-sticky { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); gap: 18px; padding: 28px var(--landing-shell-gutter) 20px; }
   .story-copy h3 { margin-bottom: 10px; }
   .story-copy p { display: -webkit-box; overflow: hidden; font-size: 14px; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
 }

@@ -1,9 +1,9 @@
 /* Capture reel: the section pins while the four capture methods pan past.
    The active frame is centered; --reel-index arrives from React on each step. */
 /* The pinned frame already leaves room under the clips, so the section adds little more. */
-.landing-section.capture-reel { padding-bottom: clamp(24px, 3vw, 48px); }
-.reel-track { position: relative; height: 450vh; margin: 56px calc(-1 * var(--landing-shell-gutter)) 0; }
-.reel-sticky { position: sticky; top: 0; display: flex; height: 100svh; flex-direction: column; justify-content: center; gap: 28px; padding: 32px 0 28px; overflow: hidden; }
+.landing-section.capture-reel { padding-block: 0; }
+.reel-track { position: relative; height: 450vh; margin: 0 calc(-1 * var(--landing-shell-gutter)); }
+.reel-sticky { position: sticky; top: 0; display: flex; height: 100svh; flex-direction: column; justify-content: flex-start; gap: var(--crrt-space-9); padding: var(--crrt-space-9) 0 var(--crrt-space-7); overflow: hidden; }
 .reel-strip { --reel-frame: min(1080px, 80vw); --reel-gap: 56px; display: flex; width: max-content; gap: var(--reel-gap); margin: 0; padding: 0 calc((100vw - var(--reel-frame)) / 2); list-style: none; transform: translateX(calc(var(--reel-index, 0) * -1 * (var(--reel-frame) + var(--reel-gap)))); transition: transform 900ms cubic-bezier(.2, .8, .2, 1); will-change: transform; }
 
 .reel-frame { display: grid; width: var(--reel-frame); grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 40px; align-items: center; opacity: .3; transform: scale(.94); transform-origin: 50% 50%; transition: opacity 500ms ease, transform 700ms cubic-bezier(.2, .8, .2, 1); }
@@ -28,3 +28,6 @@
 @media (prefers-reduced-motion: reduce) {
   .reel-strip, .reel-frame { transition: none; }
 }
+
+.reel-sticky > .ds-section-intro { padding-inline: var(--landing-shell-gutter); }
+@media (max-width: 760px) { .reel-sticky { padding-block: var(--crrt-space-9); } }

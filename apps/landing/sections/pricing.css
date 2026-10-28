@@ -32,7 +32,6 @@
 .plan-features .plan-includes { margin-bottom: 4px; font-weight: 600; }
 .plan-features .plan-includes svg { color: var(--crrt-dashboard-orange); }
 
-.plan-notes { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 28px; margin: 32px 0 0; color: var(--muted-foreground); font-size: 14px; }
 .plan-error { width: fit-content; margin: 20px auto 0; padding: 12px 14px; border: 1px solid var(--crrt-dashboard-orange); border-radius: var(--crrt-radius-xl); color: var(--foreground); background: var(--card); font-size: 14px; }
 .plan-error button { margin-left: 8px; border: 0; color: inherit; background: transparent; font-weight: 700; text-decoration: underline; }
 
@@ -46,3 +45,6 @@
   .plan { padding: 32px 22px; }
   .plan-intro .ds-segmented { width: auto; }
 }
+
+.plan-fine-print { display: block; margin-top: var(--crrt-space-4); color: var(--muted-foreground); font-size: var(--crrt-text-caption); line-height: 1.5; }
+.plan-record-note { padding-top: var(--crrt-space-7); margin-top: auto; }

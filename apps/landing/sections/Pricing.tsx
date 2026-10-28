@@ -24,7 +24,7 @@ const plans = [
 ] as const
 
 export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }: { authenticated?: boolean; accessToken?: string; apiBase?: string }) {
-  const [cycle, setCycle] = useState<BillingCycle>('yearly')
+  const [cycle, setCycle] = useState<BillingCycle>('monthly')
   const [busyPlan, setBusyPlan] = useState<CloudPlanKey | null>(null)
   const [error, setError] = useState('')
   const checkoutRef = useRef(false)
@@ -87,16 +87,16 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
               ) : (
                 <a className={`ds-button ${recommended ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md plan-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
               )}
+              <small className="plan-fine-print">{community ? 'Free forever. Your infrastructure.' : 'Card required · cancel anytime'}</small>
               <ul className="plan-features">
                 {'includes' in plan ? <li className="plan-includes"><CheckCheck size={18} aria-hidden="true" />Everything in {plan.includes}</li> : null}
                 {plan.features.map((feature) => <li key={feature}><Check size={16} aria-hidden="true" />{feature}</li>)}
               </ul>
+              {!community && <small className="plan-fine-print plan-record-note">Record preview: capture & transcription free; agent access requires sign-in.</small>}
             </article>
           )
         })}
       </div>
-      <p className="plan-notes"><span>Cloud trials require a card. Cancel anytime.</span><span>Self-hosted is the free full-product plan.</span></p>
-      <p className="plan-notes">CRRT Record is in private preview. Recording and transcription are account-free; agent handoff requires sign-in and eligible access. Videos stay on your device.</p>
       {error ? <p className="plan-error" role="alert" aria-live="polite">{error} <button type="button" onClick={() => setError('')}>Dismiss</button></p> : null}
     </section>
   )

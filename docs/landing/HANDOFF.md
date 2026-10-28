@@ -11,13 +11,13 @@ Both are drafts for continued design work, not deployment approval. Built from t
 
 ## Accepted design
 
-- **Hero visual is locked.** The primary button is now “Try CRRT” and scrolls to the live demo before activating the widget. Keep the photo/video hero, its floating glass comments and pins, and the two-line headline “Humans give feedback. Agents ship the fix.” Improve the sections after it.
+- **Hero visual is locked.** The primary button is now “Try CRRT” and scrolls to the existing workflow scene before activating the widget. Keep the photo/video hero, its floating glass comments and pins, and the two-line headline “Humans give feedback. Agents ship the fix.” Improve the sections after it.
 - **The page should not look generated.** Real product UI and real data over illustrations; no decorative eyebrows, step rails, trays or chips that repeat what the content already says.
 - **Story (`FeedbackJourney`)**: one pinned scene follows comment #24 through comment → approve → ship → fixed. CRRT is desktop-first, so the subject is a desktop pricing card that gets fixed (no phone mockup). The side panel mirrors the product panel; keep it product-identical.
 - **Capture reel (`InstallPaths`)**: four real clips (Widget, Chrome extension, Storybook, Record), each a 6–9 s recording of CRRT's own UI on CRRT's own sites. Clips sit on the page without a card frame and play only while on screen. Record stays labelled “Private preview”.
 - **Scroll pacing (`lib/useScrollSteps.ts`)**: pinned sections walk one step at a time, so a hard flick still plays every step in order (`dwell` ms per step), and the last step holds extra scroll (`hold`) so it is seen before the section unpins.
 - **Integrations**: smoked glass is retained only in the integrations diagram. Destinations respond to hover/focus/click as previews; they send nothing.
-- **Reviews** are “What people say about CRRT.”: real comments only, quoted verbatim (casing included), as compact cards. Never add invented quotes or handles. Add new ones to `voices` in `sections/Reviews.tsx`.
+- **Reviews** are “What people say about CRRT.”: real comments only, quoted verbatim (casing included), as compact cards. Two explicitly labelled illustrative review cards fill the draft layout; replace them with approved real testimonials before launch. Add new ones to `voices` in `sections/Reviews.tsx`.
 - **Pricing** follows a centered layout: intro and billing toggle centered; three equal plan cards; Pro carries a “Recommended” tab and the only primary button; price figure beside its two-line billing label; CTA above the feature list; Studio opens with “Everything in Pro”.
 - **Type scale** (tokens in `marketing-polish.css`): one semibold weight (600, never heavier) after the hero. `--landing-h2` section titles, `--landing-h3` step and plan titles, `--landing-h4` card titles, `--landing-lead` paragraphs under a section title. Use the tokens; do not set heading sizes per section.
 
@@ -51,3 +51,10 @@ Use a free port if 5399 is already occupied.
 Run typecheck (`bunx tsc -p tsconfig.check.json --noEmit`), `bun run build:landing`, and `NODE_OPTIONS=--no-experimental-webstorage bun run test:coverage`.
 Run diff coverage against each PR's immediate base (`bash scripts/check-diff-coverage.sh origin/feat/landing-foundations-draft`); line and branch coverage must be 100% per `AGENTS.md`.
 A full-suite run can time out a few dashboard/widget tests under load; rerun those files alone before treating them as real failures.
+
+## Visual cleanup — October 28
+
+- Removed the standalone live-demo module and detached journey introduction. The existing sticky scene owns its title and the Try CRRT anchor.
+- Story sections have no outer vertical padding; the reel title stays inside its sticky frame next to the first capture mode.
+- Monthly billing is the default, showing $19/$49. Actual annual prices remain $192/$492 until a billing price change is confirmed; never advertise $39 while checkout charges $492/year.
+- Pricing terms are concise notes inside each card; closing uses the shared official-color Chrome mark.

@@ -7,3 +7,6 @@
 .voice figcaption { display: flex; align-items: center; gap: 10px; color: var(--foreground); font-size: 14px; font-weight: 600; }
 .voice-avatar { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: var(--crrt-dashboard-orange); background: color-mix(in srgb, var(--crrt-dashboard-orange) 11%, var(--card)); font-size: 12px; font-weight: 600; }
 .voice blockquote { margin: 14px 0 0; color: var(--foreground); font-size: 16px; line-height: 1.5; text-wrap: pretty; }
+
+.voice figcaption { flex-wrap: wrap; }
+.voice-example { flex-basis: 100%; color: var(--muted-foreground); font-weight: 400; font-size: var(--crrt-text-caption); }

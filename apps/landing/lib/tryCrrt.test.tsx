@@ -1,26 +1,23 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { LiveDemo } from './LiveDemo'
-import { Hero } from './Hero'
+import { FeedbackJourney } from '../sections/FeedbackJourney'
+import { Hero } from '../sections/Hero'
 import { ThemeProvider } from '../../../src/design-system'
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
 
 it('takes the hero CTA to the real demo before activating selection', () => {
-  vi.useFakeTimers()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   const scroll = vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {})
   const activate = vi.fn()
   window.addEventListener('crrt:activate', activate)
-  render(<ThemeProvider><Hero authenticated={false} /><LiveDemo /></ThemeProvider>)
+  render(<ThemeProvider><Hero authenticated={false} /><FeedbackJourney /></ThemeProvider>)
   fireEvent.click(screen.getByRole('link', { name: 'Try CRRT' }))
   expect(scroll).toHaveBeenCalledWith({ behavior: 'instant', block: 'start' })
   expect(document.activeElement).toBe(document.getElementById('try-crrt'))
   expect(activate).not.toHaveBeenCalled()
-  vi.runAllTimers()
+  vi.advanceTimersByTime(0)
   expect(activate).toHaveBeenCalledOnce()
-  fireEvent.click(screen.getByRole('button', { name: 'Leave feedback' }))
-  vi.runAllTimers()
-  expect(activate).toHaveBeenCalledTimes(2)
   window.removeEventListener('crrt:activate', activate)
 })
 

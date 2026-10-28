@@ -1,3 +1,4 @@
+import { ChromeLogo } from '../components/ChromeLogo'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { AppWindow, CirclePlay, ExternalLink } from 'lucide-react'
 import { SectionIntro } from '../../../src/design-system'
@@ -5,14 +6,6 @@ import { DASHBOARD_HREF } from './Hero'
 import { useScrollSteps } from '../lib/useScrollSteps'
 import './capture-reel.css'
 
-function ChromeLogo({ size }: { size: number }) {
-  return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
-    <path fill="#EA4335" d="M12 0a12 12 0 0 1 10.4 6H12a6 6 0 0 0-5.2 3L3.6 3.5A12 12 0 0 1 12 0Z" />
-    <path fill="#FBBC05" d="M22.4 6a12 12 0 0 1-10.4 18l5.2-9A6 6 0 0 0 12 6Z" />
-    <path fill="#34A853" d="M12 24A12 12 0 0 1 3.6 3.5L6.8 9a6 6 0 0 0 10.4 6Z" />
-    <circle cx="12" cy="12" r="5.3" fill="#4285F4" stroke="white" strokeWidth="1.2" />
-  </svg>
-}
 
 function StorybookLogo({ size }: { size: number }) {
   return <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
@@ -96,9 +89,9 @@ export function InstallPaths() {
   const active = useScrollSteps(trackRef, captureEntries.length, '--reel-p', FRAME_DWELL, 1)
   return (
     <section id="install" className="landing-section landing-install capture-reel">
-      <SectionIntro title="Wherever you work. Bring CRRT." description="Four ways to leave feedback, one project that receives it. Scroll through each one." />
       <div ref={trackRef} className="reel-track">
         <div className="reel-sticky">
+          <SectionIntro title="Wherever you work. Bring CRRT." description="Four ways to leave feedback, one project that receives it." />
           <ol className="reel-strip" style={{ '--reel-index': active } as CSSProperties}>
             {captureEntries.map(([value, item], index) => <li key={value} className={`reel-frame${index === active ? ' is-active' : ''}`} aria-current={index === active ? 'step' : undefined}>
               <div className="reel-frame-copy">

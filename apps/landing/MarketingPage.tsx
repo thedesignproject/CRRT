@@ -1,4 +1,3 @@
-import { LiveDemo } from './sections/LiveDemo'
 import { Hero } from './sections/Hero'
 import { Closing } from './sections/Closing'
 import { Pricing } from './sections/Pricing'
@@ -14,7 +13,6 @@ export function MarketingPage({ authenticated = false, accessToken, apiBase }: {
   return (
     <>
       <Hero authenticated={authenticated} />
-      <LiveDemo />
       <FeedbackJourney />
       <InstallPaths />
       <Integrations />

@@ -1,4 +1,4 @@
-import { Puzzle } from 'lucide-react'
+import { ChromeLogo } from '../components/ChromeLogo'
 import { CTAGroup } from '../../../src/design-system'
 import { tryCrrt } from '../lib/tryCrrt'
 
@@ -14,7 +14,7 @@ export function Closing() {
       <div>
         <CTAGroup>
           <a className="ds-button ds-button-primary ds-button-lg" href="#try-crrt" onClick={tryCrrt}>Try CRRT</a>
-          <a className="ds-button ds-button-secondary ds-button-lg" href={CHROME_HREF}><Puzzle size={17} /> Add to Chrome</a>
+          <a className="ds-button ds-button-secondary ds-button-lg" href={CHROME_HREF}><ChromeLogo size={20} /> Add to Chrome</a>
         </CTAGroup>
         <small>Try the widget here. No account needed.</small>
       </div>
