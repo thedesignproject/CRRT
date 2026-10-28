@@ -281,6 +281,7 @@ it('audits OAuth outcomes without credentials, callback queries, or private erro
     await call('consent', params, { authorization: 'Bearer private-dashboard-session' })
     await call('private-untrusted-path')
     await oauth(new Request('http://127.0.0.1:3001/api/mcp/oauth/metadata'), 'explicit-request-id')
+    await oauth(new Request('http://127.0.0.1:3001/api/mcp/oauth/metadata'), undefined)
     const events = log.mock.calls.map(([line]) => JSON.parse(line))
     expect(events).toEqual(expect.arrayContaining([
       expect.objectContaining({ event: 'crrt.mcp.security', action: 'consent', userId: id, failureCategory: 'access_denied' }),

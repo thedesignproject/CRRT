@@ -90,7 +90,8 @@ export function authFailure(error: unknown) {
   if (failure.status === 429) response.headers.set('Retry-After', '60')
   return response
 }
-export async function oauth(request: Request, requestId: string = randomUUID()): Promise<Response> {
+export async function oauth(request: Request, requestId?: string): Promise<Response> {
+  requestId ??= randomUUID()
   const started = Date.now()
   let action = 'unknown', userId: string | null = null, failureCategory: string | null = null
   try {
