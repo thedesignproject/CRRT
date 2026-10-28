@@ -1,7 +1,7 @@
 {
   "name": "@thedesignproject/crrt",
   "version": "0.3.22",
-  "description": "CRRT 🥕 visual feedback capture for React apps",
+  "description": "CRRT \ud83e\udd55 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -61,7 +61,8 @@
     "build:landing": "node scripts/build-landing.ts",
     "preview:landing": "bun scripts/preview-public-site.ts",
     "cloud:configure": "bun scripts/configure-cloud-plans.ts",
-    "cloud:check": "bun scripts/check-cloud-deployment.ts"
+    "cloud:check": "bun scripts/check-cloud-deployment.ts",
+    "test:mcp:local": "MCP_TEST_LOCAL=1 NODE_OPTIONS=--no-experimental-webstorage bun --env-file=.env.docker.local run test -- db/mcp-auth.integration.test.ts server/mcp/local.integration.test.ts server/mcp/actions.local.integration.test.ts"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",

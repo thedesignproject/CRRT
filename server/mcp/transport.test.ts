@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { z } from 'zod'
-vi.mock('./auth.js', async original => ({ ...await original<object>(), identity: vi.fn() }))
-import { identity, McpError } from './auth.js'
+vi.mock('./auth.js', async original => ({ ...await original<object>(), identity: vi.fn(), reserve: vi.fn().mockResolvedValue(undefined) }))
+import { identity, reserve, McpError } from './auth.js'
 import { mcpHandler, type ToolSpec } from './transport.js'
 const actor = { user_id: 'user', email: 'a@test.local', connection_id: 'connection' }
 const run = vi.fn()
@@ -43,6 +43,8 @@ it('returns safe tool failures, validates outputs, and bounds serialized results
     expect((await client.callTool({ name: 'read', arguments: { value: 'test' } })).isError).toBe(true)
     run.mockResolvedValueOnce({ value: 'x'.repeat(131072) })
     expect(JSON.stringify(await client.callTool({ name: 'read', arguments: { value: 'test' } }))).toContain('result_too_large')
+    vi.mocked(reserve).mockRejectedValueOnce(new McpError(429, 'rate_limited'))
+    expect(JSON.stringify(await client.callTool({ name: 'read', arguments: { value: 'test' } }))).toContain('retry after 60 seconds')
   } finally { await client.close() }
 })
 it('challenges unauthenticated clients and rejects session operations', async () => {
@@ -72,4 +74,19 @@ it('only discovers granted tools and accurately marks their mutation behavior', 
   run.mockResolvedValue({ value: 'updated' })
   expect((await writer.callTool({ name: 'work', arguments: { value: 'hello' } })).structuredContent).toEqual({ value: 'updated' })
   await writer.close()
+})
+it('returns retry guidance for a rate-limited transport boundary', async () => {
+  vi.mocked(identity).mockRejectedValueOnce(new McpError(429, 'rate_limited'))
+  const response = await mcpHandler([])(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST' }))
+  expect(response.status).toBe(429); expect(response.headers.get('retry-after')).toBe('60')
+})
+it('serves the 2025 Streamable HTTP handshake and tool calls for older clients', async () => {
+  const handler = mcpHandler([spec])
+  const headers = { 'content-type': 'application/json', accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-11-25' }
+  const request = (body: unknown) => handler(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', headers, body: JSON.stringify(body) }))
+  const initialized = await request({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25', capabilities: {}, clientInfo: { name: 'legacy-test', version: '1.0.0' } } })
+  expect(initialized.status).toBe(200); expect(await initialized.text()).toContain('2025-11-25')
+  run.mockResolvedValueOnce({ value: 'legacy data' })
+  const result = await request({ jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'read', arguments: { value: 'test' } } })
+  expect(result.status).toBe(200); expect(await result.text()).toContain('legacy data')
 })

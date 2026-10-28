@@ -2,7 +2,7 @@
 import { Client, StreamableHTTPClientTransport } from '@modelcontextprotocol/client'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 vi.mock('../../api/_lib/store.js', () => ({ listProjectsForUser: vi.fn(), getProjectMember: vi.fn(), listProjectComments: vi.fn() }))
-vi.mock('./auth.js', async original => ({ ...await original<object>(), identity: vi.fn() }))
+vi.mock('./auth.js', async original => ({ ...await original<object>(), identity: vi.fn(), reserve: vi.fn().mockResolvedValue(undefined) }))
 import { getProjectMember, listProjectComments, listProjectsForUser } from '../../api/_lib/store.js'
 import { identity } from './auth.js'
 import { mcpHandler } from './transport.js'
