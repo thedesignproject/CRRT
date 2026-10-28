@@ -1,3 +1,4 @@
+import { tryCrrt } from '../lib/tryCrrt'
 import { useRef, useState } from 'react'
 import { Check, MessageCircle, Send } from 'lucide-react'
 import { NavLink, ThemeToggle } from '../../../src/design-system'
@@ -64,9 +65,9 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
         <div className="landing-photo-copy">
           <h1><span>Humans give feedback.</span>{' '}<span>Agents ship the fix.</span></h1>
           <p>Comment on your live UI. Give your coding agent the context to fix it.</p>
-          <a className="landing-hero-cta" href={DASHBOARD_HREF}>
+          <a className="landing-hero-cta" href="#try-crrt" onClick={tryCrrt}>
             <span><CarrotIcon size={28} /></span>
-            {authenticated ? 'Open Dashboard' : 'Start Free Trial'}
+            Try CRRT
           </a>
         </div>
 

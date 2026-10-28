@@ -1,9 +1,8 @@
 import { useState } from 'react'
 import { ArrowRight, Check, Bot } from 'lucide-react'
-import { DASHBOARD_HREF } from './Hero'
 
 const integrations = [
-  { name: 'Claude Code', detail: 'Coding agent', status: 'Context ready', Mark: Bot },
+  { name: 'Claude Code', detail: 'Connected with MCP', status: 'Context ready', Mark: Bot },
   { name: 'GitHub', detail: 'Issue #184', status: 'Ready', Mark: GitHubMark },
   { name: 'Linear', detail: 'DES-42', status: 'Synced', Mark: LinearMark },
   { name: 'Jira', detail: 'WEB-219', status: 'Draft ready', Mark: JiraMark },
@@ -17,8 +16,8 @@ export function Integrations() {
     <section id="integrations" className="landing-section landing-integrations">
       <div className="landing-integrations-copy">
         <h2>Keep the context. Choose the next step.</h2>
-        <p>Send selected feedback to a coding agent, or turn one approved comment into a reviewable tracker issue. CRRT keeps the evidence attached either way.</p>
-        <a href={DASHBOARD_HREF}>Start with CRRT <ArrowRight size={18} /></a>
+        <p>Send selected feedback to a coding agent, or turn one approved comment into a reviewable tracker issue. Connect through MCP to read feedback, get the full context, and report progress. Your team reviews the fix.</p>
+        <a href="/docs/agent-handoff">Connect your agent with MCP <ArrowRight size={18} /></a>
       </div>
 
       <div className="landing-integrations-stage">
@@ -47,7 +46,7 @@ export function Integrations() {
             <li><Check size={14} /> Project instructions when configured</li>
           </ul>
           <div className="landing-integration-action"><DestinationMark /><span>{selected === 0 ? 'Send to Claude Code' : `Create a ${destination.name} issue`}</span><ArrowRight size={15} /></div>
-          <p className="handoff-preview-note">{selected === 0 ? 'Also works with Codex and Cursor.' : 'The original comment and its context stay together.'}</p>
+          <p className="handoff-preview-note">{selected === 0 ? 'Works with compatible MCP clients, including Codex.' : 'The original comment and its context stay together.'}</p>
         </article>
       </div>
     </section>

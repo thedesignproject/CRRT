@@ -138,3 +138,13 @@
 .landing-integrations-output h3 { font: var(--landing-h4); letter-spacing: var(--landing-h4-track); }
 .landing-closing h2 { font: 600 clamp(40px, 4.4vw, 64px)/1 var(--crrt-dashboard-font); letter-spacing: -.04em; }
 .landing-capture-chapter-action, .landing-integrations-copy > a, .landing-integrations-list button strong, .plan-button, .landing-closing .ds-button { font-weight: 600; }
+
+/* The live demo uses the landing's existing type and surface tokens. */
+.landing-live-demo { display: grid; grid-template-columns: 1fr 1fr; gap: var(--crrt-space-10); align-items: center; scroll-margin-top: var(--crrt-space-5); }
+.landing-live-demo h2 { font: var(--landing-h2); letter-spacing: var(--landing-h2-track); }
+.landing-live-demo p { color: var(--muted-foreground); font: var(--landing-lead); margin-block: var(--crrt-space-7); }
+.landing-live-demo small { display: block; color: var(--muted-foreground); margin-top: var(--crrt-space-5); max-width: 48ch; }
+.landing-demo-target { padding: var(--crrt-space-9); background: var(--card); border: 1px solid var(--border); border-radius: var(--crrt-marketing-radius-card); }
+.landing-demo-target h3 { font: var(--landing-h3); margin-top: var(--crrt-space-7); }
+.landing-demo-target > span { color: var(--muted-foreground); font-size: var(--crrt-text-caption); }
+@media (max-width: 760px) { .landing-live-demo { grid-template-columns: 1fr; gap: var(--crrt-space-8); } .landing-demo-target { padding: var(--crrt-space-7); } }

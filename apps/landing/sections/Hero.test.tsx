@@ -37,7 +37,7 @@ it('presents the agent-led promise, conversion action, and all feedback surfaces
   expect(heroVideo.closest('.landing-photo-stage')).toHaveClass('is-media-ready')
   expect(screen.getByRole('heading', { name: 'Humans give feedback. Agents ship the fix.' })).toBeInTheDocument()
   expect(screen.getByText(/Give your coding agent the context to fix it/)).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Start Free Trial' })).toHaveAttribute('href', 'http://localhost:5173')
+  expect(screen.getByRole('link', { name: 'Try CRRT' })).toHaveAttribute('href', '#try-crrt')
   expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument()
   expect(screen.getByText('This headline doesn’t explain the product yet.')).toBeInTheDocument()
   expect(screen.getByText('Can we make the primary action easier to find?')).toBeInTheDocument()

@@ -11,7 +11,7 @@ Both are drafts for continued design work, not deployment approval. Built from t
 
 ## Accepted design
 
-- **Hero is locked.** Keep the photo/video hero, its floating glass comments and pins, and the two-line headline “Humans give feedback. Agents ship the fix.” Improve the sections after it.
+- **Hero visual is locked.** The primary button is now “Try CRRT” and scrolls to the live demo before activating the widget. Keep the photo/video hero, its floating glass comments and pins, and the two-line headline “Humans give feedback. Agents ship the fix.” Improve the sections after it.
 - **The page should not look generated.** Real product UI and real data over illustrations; no decorative eyebrows, step rails, trays or chips that repeat what the content already says.
 - **Story (`FeedbackJourney`)**: one pinned scene follows comment #24 through comment → approve → ship → fixed. CRRT is desktop-first, so the subject is a desktop pricing card that gets fixed (no phone mockup). The side panel mirrors the product panel; keep it product-identical.
 - **Capture reel (`InstallPaths`)**: four real clips (Widget, Chrome extension, Storybook, Record), each a 6–9 s recording of CRRT's own UI on CRRT's own sites. Clips sit on the page without a card frame and play only while on screen. Record stays labelled “Private preview”.
@@ -41,8 +41,9 @@ Use a free port if 5399 is already occupied.
 
 - The Widget and Chrome clips were recorded on the previous pricing design; re-record them on the current pricing section.
 - Reviews has one real comment (@devonlamond). Add more real ones; confirm permission to quote before launch.
-- The local widget may display “Failed to fetch” without a configured API; this design work did not validate that integration.
+- Live demo feedback uses a session-local adapter with screenshot quota fallback; it never sends comments to a shared project. The real widget supports selection, screenshots, editing and deletion.
 - Record's implementation is separate (PR #350) and stays a private preview here.
+- MCP is merged from trunk; integrations, pricing, agent docs and llms.txt now describe account authorization and scoped feedback work.
 - Preserve trunk billing behavior: duplicate checkout protection, stale-session request handling, and Stripe billing portal destinations.
 
 ## Verification

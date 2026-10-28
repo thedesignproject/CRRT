@@ -12,34 +12,16 @@ import { ThemeProvider } from '../../src/design-system'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
-
-const DEMO_PROJECT_SESSION_KEY = 'crrt:landing-demo-project-id'
-let fallbackProjectId: string | null = null
-
-function createDemoProjectId(prefix: string) {
-  const suffix = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)
-  return `${prefix}-${suffix}`
-}
-
-function getDemoProjectId(prefix: string) {
-  try {
-    const existing = sessionStorage.getItem(DEMO_PROJECT_SESSION_KEY)
-    if (existing) return existing
-    const next = createDemoProjectId(prefix)
-    sessionStorage.setItem(DEMO_PROJECT_SESSION_KEY, next)
-    return next
-  } catch {
-    fallbackProjectId ??= createDemoProjectId(prefix)
-    return fallbackProjectId
-  }
-}
+import { createDemoComments } from './lib/demoComments'
+import type { PersonalComments } from '../../src/components/FeedbackWidget/types'
 
 export function App() {
   return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light"><RoutedApp /></ThemeProvider>
 }
 
 function RoutedApp() {
-  const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
+  const apiBase = import.meta.env.VITE_API_BASE ?? '/api'
+  const [demoComments] = useState(createDemoComments)
 
   // /docs/* shows the docs surface. Anything else renders the marketing site.
   // SSR-safe: location is read only after mount.
@@ -60,15 +42,13 @@ function RoutedApp() {
     return <SupportPage />
   }
 
-  const projectId = getDemoProjectId(
-    import.meta.env.VITE_PROJECT_KEY ?? import.meta.env.VITE_PROJECT_ID ?? 'crrt-landing-demo',
-  )
+  const projectId = 'crrt-landing-demo'
 
   if (isDocs) {
     return (
       <>
         <DocsApp initialPath={initialPath} />
-        <FeedbackWidget apiBase={apiBase} projectId={projectId} />
+        <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
       </>
     )
   }
@@ -77,17 +57,19 @@ function RoutedApp() {
     return <ProductAuditWorkspace />
   }
 
-  return <MarketingSite apiBase={apiBase} projectId={projectId} stayOnMarketing={stayOnMarketing} />
+  return <MarketingSite apiBase={apiBase} projectId={projectId} stayOnMarketing={stayOnMarketing} demoComments={demoComments} />
 }
 
 function MarketingSite({
   apiBase,
   projectId,
   stayOnMarketing,
+  demoComments,
 }: {
   apiBase: string
   projectId: string
   stayOnMarketing: boolean
+  demoComments: PersonalComments
 }) {
   const [session, setSession] = useState<Session | null>(null)
 
@@ -110,7 +92,7 @@ function MarketingSite({
   return (
     <>
       <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
-      <FeedbackWidget apiBase={apiBase} projectId={projectId} />
+      <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
       <EasterEgg />
     </>
   )

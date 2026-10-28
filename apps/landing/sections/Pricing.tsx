@@ -14,7 +14,7 @@ const plans = [
   {
     key: 'pro', name: 'Pro', monthly: 19, yearly: 192, recommended: true,
     description: 'For product teams shipping from private feedback without infrastructure work.',
-    features: ['Private projects · 10 internal collaborators', 'Storybook review and component context', 'Agent handoff from selected feedback', 'GitHub, Linear, and Jira integrations', '2,000 comments · 5 Product Audits / month', 'Unlimited guests'],
+    features: ['Private projects · 10 internal collaborators', 'Storybook review and component context', 'MCP connection and agent handoff', 'GitHub, Linear, and Jira integrations', 'Record agent handoff · private preview', '2,000 comments · 5 Product Audits / month', 'Unlimited guests'],
   },
   {
     key: 'studio', name: 'Studio', monthly: 49, yearly: 492, includes: 'Pro',
@@ -95,7 +95,8 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
           )
         })}
       </div>
-      <p className="plan-notes"><span>Cloud trials require a card. Cancel anytime.</span><span>Self-hosted is the only permanently free plan.</span></p>
+      <p className="plan-notes"><span>Cloud trials require a card. Cancel anytime.</span><span>Self-hosted is the free full-product plan.</span></p>
+      <p className="plan-notes">CRRT Record is in private preview. Recording and transcription are account-free; agent handoff requires sign-in and eligible access. Videos stay on your device.</p>
       {error ? <p className="plan-error" role="alert" aria-live="polite">{error} <button type="button" onClick={() => setError('')}>Dismiss</button></p> : null}
     </section>
   )
