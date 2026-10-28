@@ -33,6 +33,7 @@ import { ExtensionCommentsPage } from './components/ExtensionCommentsPage'
 import { BulkActionBar } from './components/BulkActionBar'
 import { Spinner } from './components/primitives'
 import { ProductAuditPage } from './components/ProductAuditPage'
+import { McpAuthPage } from './components/McpAuthPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
@@ -81,6 +82,8 @@ export function App() {
       </div>
     )
   }
+
+  if (pathname === '/mcp-auth') return <McpAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
   if (pathname === '/widget-auth') return <WidgetAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 

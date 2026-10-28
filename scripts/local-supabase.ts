@@ -56,6 +56,9 @@ function writeLocalEnv(status: Record<string, string>) {
     WIDGET_AUTH_SECRET: 'local-widget-auth-secret-do-not-use-in-production',
     APP_URL: 'http://127.0.0.1:3001',
     LOCAL_API_PORT: '3001',
+    MCP_ORIGIN: 'http://127.0.0.1:3001',
+    MCP_DASHBOARD_URL: 'http://127.0.0.1:5173/dashboard/mcp-auth',
+    MCP_BROWSER_ORIGINS: 'http://127.0.0.1:5173,http://localhost:6274',
   }
   const block = [managedStart, ...Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`), managedEnd].join('\n')
   const path = `${root}.env.docker.local`

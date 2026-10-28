@@ -5,7 +5,7 @@ import { cn } from '../lib/utils'
 import { asset, landingRoute, route } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
+import { BotIcon, MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { AddProjectPopover } from './AddProjectPopover'
 import { NotificationBell } from './NotificationBell'
@@ -178,6 +178,7 @@ export function Header({
       </nav>
 
       <nav className="dashboard-navigation-footer" aria-label="Workspace administration">
+        <a href={route('/mcp-auth')} className="dashboard-navigation-action"><BotIcon size={16} /><span>MCP connections</span></a>
         {!extensionCommentsActive && selectedProject && canManageProject && (
           <button type="button" onClick={onOpenSettings} aria-label="Project settings" aria-pressed={settingsActive} className={cn('dashboard-navigation-action', settingsActive && 'bg-accent text-foreground')}>
             <SettingsIcon size={16} />

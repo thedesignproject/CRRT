@@ -49,6 +49,7 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProp
             <div className="text-[11px] text-muted-foreground">Signed in as</div>
             <div className="text-xs font-medium text-foreground truncate">{user.email}</div>
           </div>
+          <a href={route('/mcp-auth')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">MCP connections</a>
           {billingEnabled && <a href={route('/billing')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">Billing</a>}
           <button
             onClick={onSignOut}
