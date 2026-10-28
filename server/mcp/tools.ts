@@ -1,2 +1,3 @@
 import { discoveryTools } from './feedback.js'
-export const tools = discoveryTools
+import { contextTools } from './context.js'
+export const tools = [...discoveryTools, ...contextTools]
