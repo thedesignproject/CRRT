@@ -1,2 +1,2 @@
-import type { ToolSpec } from './transport.js'
-export const tools: ToolSpec[] = []
+import { discoveryTools } from './feedback.js'
+export const tools = discoveryTools

@@ -1313,3 +1313,28 @@ it('fails a share read on an atomic access rejection and handles missing rows', 
     else expect(await listCommentsForShare(share,'hash')).toEqual([])
   }
 })
+
+it('paginates project memberships before fetching projects and forwards exact name filters', async () => {
+  const calls: unknown[] = []
+  const result = { data: [], error: null }
+  const query: Record<string, unknown> = { then: (done: (value: unknown) => void) => done(result) }
+  for (const method of ['select', 'eq', 'gt', 'order', 'limit']) query[method] = (...args: unknown[]) => { calls.push([method, ...args]); return query }
+  vi.mocked(getServiceSupabase).mockReturnValue({ from: () => query } as never)
+  expect(await listProjectsForUser('user', { after: 'a', name: 'Acme', limit: 21 })).toEqual([])
+  expect(calls).toContainEqual(['gt', 'project_key', 'a'])
+  expect(calls).toContainEqual(['eq', 'projects.name', 'Acme'])
+  expect(calls).toContainEqual(['limit', 21])
+})
+it('applies feedback keyset pagination and explicit selection at the database boundary', async () => {
+  const calls: unknown[] = []
+  const query: Record<string, unknown> = { then: (done: (value: unknown) => void) => done({ data: [], error: null }) }
+  for (const method of ['select', 'eq', 'in', 'or', 'order', 'limit']) query[method] = (...args: unknown[]) => { calls.push([method, ...args]); return query }
+  vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => query } as never)
+  expect(await listProjectComments('project', { actorUserId: 'user', readyForAgent: true, ids: ['id'], cursor: { createdAt: '2026-01-01T00:00:00Z', id: 'id' }, limit: 21 })).toEqual([])
+  expect(calls).toContainEqual(['eq', 'status', 'approved'])
+  expect(calls).toContainEqual(['or', 'implementation_status.is.null,implementation_status.not.in.(ready_for_testing,done)'])
+  expect(calls).toContainEqual(['in', 'id', ['id']])
+  expect(calls).toContainEqual(['or', 'created_at.lt.2026-01-01T00:00:00Z,and(created_at.eq.2026-01-01T00:00:00Z,id.lt.id)'])
+  expect(calls).toContainEqual(['order', 'id', { ascending: false }])
+  expect(calls).toContainEqual(['limit', 21])
+})
