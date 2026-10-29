@@ -2177,12 +2177,14 @@ export async function updateImplementationStatus(commentId: string, patch: {
 
 // Human mutations check current capability under the database privacy fence.
 export async function mutateProjectFeedback(projectKey: string, actorUserId: string, commentId: string, patch: {
+  expectedUpdatedAt?: string
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
   claimedByAgentId?: string | null
   visibility?: CommentVisibility
 }) {
   const changes: Record<string, unknown> = {}
+  if (patch.expectedUpdatedAt !== undefined) changes.expected_updated_at = patch.expectedUpdatedAt
   if (patch.reviewStatus !== undefined) changes.status = toLegacyStatus(patch.reviewStatus)
   if (patch.implementationStatus !== undefined) changes.implementation_status = patch.implementationStatus
   if (patch.claimedByAgentId !== undefined) changes.claimed_by_agent_id = patch.claimedByAgentId
