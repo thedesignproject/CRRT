@@ -72,6 +72,10 @@ Report the verified client, MCP server URL, and whether `list_projects` succeede
 
 When the user requests feedback implementation, use CRRT's selected-feedback work preparation and its returned implementation instructions. Setup is not an instruction to process all accepted feedback.
 
+## Optional widget maintenance
+
+When the user requests automatic updates for an installed npm widget, follow [the widget update skill](https://crrt.ai/widget-updates/SKILL.md). It configures scheduled update PRs in their repository, with human review by default. Connecting MCP alone does not enable or authorize dependency automation.
+
 ## Client documentation
 
 - [Codex MCP setup](https://developers.openai.com/codex/mcp)

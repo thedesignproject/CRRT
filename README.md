@@ -55,6 +55,8 @@ Install:
 bun add @thedesignproject/crrt
 ```
 
+For scheduled update PRs in your GitHub repository, ask your agent to follow the [widget update skill](apps/landing/public/widget-updates/SKILL.md). Human review is the default; installation alone does not enable automatic updates.
+
 Usage:
 
 ```tsx
