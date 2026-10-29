@@ -40,6 +40,11 @@ it('keeps setup in the page and starts with one click', async () => {
   const module = await import('./main')
   render(<module.RecordControls />)
   expect(await screen.findByLabelText('CRRT Record setup')).toBeInTheDocument()
+  expect(screen.getByRole('checkbox')).not.toBeChecked()
+  fireEvent.click(screen.getByRole('checkbox'))
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'transcription.toggled' } })))
+  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'setup', hostedTranscription: true }) }) })
+  expect(screen.getByRole('checkbox')).toBeChecked()
   fireEvent.click(screen.getByRole('button', { name: /Window/ }))
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'source.changed', source: 'window' } })))
   const start = screen.getByRole('button', { name: /Start recording/ })
@@ -125,6 +130,9 @@ it('renders paused state, warnings, existing marks, and editing actions', async 
   fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'mark.undone' } }))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'marks.cleared' } }))
+  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording', warning: 'Limited navigation', annotationError: 'Shorten your note' }) }) })
+  expect(screen.getByRole('alert')).toHaveTextContent('Shorten your note')
+  expect(screen.queryByText('Limited navigation')).toBeNull()
 })
 
 it('keeps a recording when discard or restart confirmation is declined', async () => {

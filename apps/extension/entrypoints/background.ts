@@ -233,6 +233,10 @@ async function recordingSurfaceCommand(message: any, sender: unknown) {
   if (command.kind === 'source.changed') return updateSetupSnapshot(current, { source: command.source })
   if (command.kind === 'camera.toggled' && ['setup', 'failed'].includes(current.snapshot.status)) return updateSetupSnapshot(current, { cameraEnabled: !current.snapshot.cameraEnabled })
   if (command.kind === 'microphone.toggled') return updateSetupSnapshot(current, { microphoneEnabled: !current.snapshot.microphoneEnabled })
+  if (command.kind === 'transcription.toggled') {
+    if (!['setup', 'failed'].includes(current.snapshot.status)) throw new Error('Transcription consent is locked after capture starts.')
+    return updateSetupSnapshot(current, { hostedTranscription: !current.snapshot.hostedTranscription })
+  }
   if (command.kind === 'start') return startOffscreenRecording(current)
   if (command.kind === 'cancel') return cancelIntegratedRecording(current)
   if (command.kind === 'mark.added') {
@@ -482,7 +486,7 @@ export default defineBackground(() => {
       if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-restart') {
         const current = await recordingSession()
         /* v8 ignore next -- stale restart events are intentionally ignored after their session is cleared */
-        if (current && (message as any).sessionId === current.sessionId) await startOffscreenRecording({ ...current, snapshot: { ...initialRecorderState, source: current.snapshot.source, cameraEnabled: current.snapshot.cameraEnabled, microphoneEnabled: current.snapshot.microphoneEnabled } })
+        if (current && (message as any).sessionId === current.sessionId) await startOffscreenRecording({ ...current, snapshot: { ...initialRecorderState, source: current.snapshot.source, cameraEnabled: current.snapshot.cameraEnabled, microphoneEnabled: current.snapshot.microphoneEnabled, hostedTranscription: current.snapshot.hostedTranscription === true } })
         return { ok: true }
       }
       if ((message as { type?: string } | null)?.type === 'comment:capture') return { ok: true, data: await capture(sender) }

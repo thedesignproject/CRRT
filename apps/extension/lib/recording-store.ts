@@ -28,10 +28,10 @@ async function transaction<T>(mode: IDBTransactionMode, operation: (store: IDBOb
   return new Promise<T>((resolve, reject) => {
     const tx = db.transaction(STORE, mode)
     const request = operation(tx.objectStore(STORE))
-    request.onsuccess = () => resolve(request.result)
     /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB requests */
     request.onerror = () => reject(request.error ?? new Error('Local recording storage failed.'))
-    tx.oncomplete = () => db.close()
+    tx.oncomplete = () => { db.close(); resolve(request.result) }
+    tx.onabort = () => { db.close(); reject(new Error('Local recording storage was interrupted.')) }
     /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB transactions */
     tx.onerror = () => reject(tx.error ?? new Error('Local recording storage failed.'))
   })

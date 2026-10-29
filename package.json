@@ -1,7 +1,7 @@
 {
   "name": "@thedesignproject/crrt",
   "version": "0.3.23",
-  "description": "CRRT \ud83e\udd55 visual feedback capture for React apps",
+  "description": "CRRT 🥕 visual feedback capture for React apps",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -69,6 +69,8 @@
     "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1161.0",
+    "@aws-sdk/s3-request-presigner": "^3.1161.0",
     "@fontsource-variable/figtree": "^5.3.0",
     "@fontsource/vt323": "^5.3.0",
     "@modelcontextprotocol/client": "2.4.0",

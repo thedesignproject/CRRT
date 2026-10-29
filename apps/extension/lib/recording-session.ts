@@ -3,12 +3,16 @@ import type { RecorderState, RecordingMark, RecordingSource, RecordingTool } fro
 export type RecordingSessionSnapshot = Pick<RecorderState,
   'status' | 'source' | 'cameraEnabled' | 'microphoneEnabled' | 'countdown' | 'durationMs' | 'tool' | 'marks' | 'error'> & {
     warning?: string
+    hostedTranscription?: boolean
+    annotationLimitReached?: boolean
+    annotationError?: string | null
   }
 
 export type RecordingSurfaceCommand =
   | { kind: 'source.changed'; source: RecordingSource }
   | { kind: 'camera.toggled' }
   | { kind: 'microphone.toggled' }
+  | { kind: 'transcription.toggled' }
   | { kind: 'start' }
   | { kind: 'cancel' }
   | { kind: 'pause.toggle' }
@@ -39,7 +43,7 @@ export function isRecordingTool(value: unknown): value is RecordingTool {
 export function isRecordingSurfaceCommand(value: unknown): value is RecordingSurfaceCommand {
   if (!value || typeof value !== 'object') return false
   const command = value as Partial<RecordingSurfaceCommand> & { kind?: unknown }
-  if (['camera.toggled', 'microphone.toggled', 'start', 'cancel', 'pause.toggle', 'restart', 'finish', 'mark.undone', 'marks.cleared'].includes(String(command.kind))) return true
+  if (['camera.toggled', 'microphone.toggled', 'transcription.toggled', 'start', 'cancel', 'pause.toggle', 'restart', 'finish', 'mark.undone', 'marks.cleared'].includes(String(command.kind))) return true
   if (command.kind === 'source.changed') return ['tab', 'window', 'screen'].includes(String(command.source))
   if (command.kind === 'tool.changed') return isRecordingTool(command.tool)
   if (command.kind !== 'mark.added' || !command.mark || typeof command.mark !== 'object') return false
@@ -58,11 +62,14 @@ export function sessionSnapshot(state: RecorderState, warning?: string): Recordi
     source: state.source,
     cameraEnabled: state.cameraEnabled,
     microphoneEnabled: state.microphoneEnabled,
+    hostedTranscription: state.hostedTranscription,
     countdown: state.countdown,
     durationMs: state.durationMs,
     tool: state.tool,
     marks: state.marks,
     error: state.error,
+    ...(state.annotationLimitReached ? { annotationLimitReached: true } : {}),
+    ...(state.annotationError ? { annotationError: state.annotationError } : {}),
     ...(warning ? { warning } : {}),
   }
 }

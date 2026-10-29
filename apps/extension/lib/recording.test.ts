@@ -1,7 +1,81 @@
 import { describe, expect, it } from 'vitest'
-import { buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, nearestRecordingMark, recordingMarkOpacity, recorderReducer, type LocalRecording } from './recording'
+import { appendRecordingStroke, captureRecordingTitle, normalizeRecordingTitle, MAX_RECORDING_MARK_BYTES, boundedRecordingPoints, MAX_RECORDING_MARKS, buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, nearestRecordingMark, recordingMarkOpacity, recorderReducer, type LocalRecording, type RecordingStroke } from './recording'
+
+it('bounds long strokes deterministically and enforces the mark cap with undo/clear recovery', () => {
+  const points = Array.from({ length: 10000 }, (_, i) => ({ x: i / 100, y: 50 }))
+  const bounded = boundedRecordingPoints(points)
+  expect(bounded).toHaveLength(2048)
+  expect(bounded[0]).toEqual(points[0]); expect(bounded[bounded.length - 1]).toEqual(points[points.length - 1])
+  expect(boundedRecordingPoints(bounded)).toBe(bounded)
+  const mark = { id: 'mark', type: 'draw' as const, atMs: 1, points: [{ x: 1, y: 1 }] }
+  expect(recorderReducer({ ...initialRecorderState, status: 'recording' }, { type: 'mark.added', mark: { ...mark, points } }).marks[0].points).toHaveLength(2048)
+  let state = { ...initialRecorderState, status: 'recording' as const }
+  for (let i = 0; i < MAX_RECORDING_MARKS + 1; i++) state = recorderReducer(state, { type: 'mark.added', mark: { ...mark, id: String(i) } }) as typeof state
+  expect(state.marks).toHaveLength(500)
+  expect(state.marks[0].points).toHaveLength(1)
+  expect(state.marks[state.marks.length - 1].id).toBe('499')
+  state = recorderReducer(state, { type: 'mark.undone' }) as typeof state
+  state = recorderReducer(state, { type: 'mark.added', mark }) as typeof state
+  expect(state.marks).toHaveLength(500)
+  expect(state.marks[state.marks.length - 1].id).toBe('mark')
+  state = recorderReducer(state, { type: 'marks.cleared' }) as typeof state
+  expect(state.marks).toHaveLength(0)
+})
+it('preserves the middle trajectory and endpoints while streaming a long stroke within a bounded buffer', () => {
+  let stroke: RecordingStroke = { points: [], stride: 1, seen: 0 }
+  for (let i = 0; i < 10000; i++) {
+    stroke = appendRecordingStroke(stroke, { x: i, y: i >= 2000 && i <= 3000 ? 100 : 0 })
+    expect(stroke.points.length).toBeLessThanOrEqual(2048)
+    expect(stroke.points[stroke.points.length - 1].x).toBe(i)
+  }
+  expect(stroke.points[0].x).toBe(0)
+  expect(stroke.points.some(p => p.x > 2100 && p.x < 2900 && p.y === 100)).toBe(true)
+  expect(stroke.points.some(p => p.x > 4000 && p.x < 6000)).toBe(true)
+})
+it('keeps the annotation byte budget bounded and allows recovery with Undo or Clear', () => {
+  const mark = { id: 'large', type: 'draw' as const, atMs: 1, points: Array.from({ length: 2048 }, (_, i) => ({ x: i / 21.3, y: i / 22.7 })) }
+  let state = { ...initialRecorderState, status: 'recording' as const }
+  for (let i = 0; i < 30; i++) state = recorderReducer(state, { type: 'mark.added', mark: { ...mark, id: String(i) } }) as typeof state
+  expect(state.marks.length).toBeLessThan(30)
+  expect(new TextEncoder().encode(JSON.stringify(state.marks)).length).toBeLessThanOrEqual(MAX_RECORDING_MARK_BYTES)
+  expect(state.annotationLimitReached).toBe(true)
+  state = recorderReducer(state, { type: 'mark.undone' }) as typeof state
+  expect(state.annotationLimitReached).toBe(false)
+  state = recorderReducer(state, { type: 'mark.added', mark }) as typeof state
+  expect(state.annotationLimitReached).toBe(false)
+  expect(recorderReducer({ ...state, annotationLimitReached: true }, { type: 'marks.cleared' }).annotationLimitReached).toBe(false)
+})
+it('limits generated titles while preserving the complete first note and handles empty imports', () => {
+  const note = 'Important note '.repeat(100)
+  expect(captureRecordingTitle([{ text: note } as any], 'Page')).toBe(note.slice(0, 240).trim())
+  expect(captureRecordingTitle([], '  Page  ')).toBe('Page')
+  expect(captureRecordingTitle([{ text: '  ' } as any], 'Page')).toBe('Page')
+  expect(captureRecordingTitle([], undefined)).toBe('Untitled recording')
+  expect(normalizeRecordingTitle('   ')).toBe('Untitled recording')
+  expect(normalizeRecordingTitle('x'.repeat(239) + '🥕')).toBe('x'.repeat(239))
+})
+it('rejects oversized capture notes with feedback and accepts a complete 2,000-character replacement', () => {
+  const mark = { id: 'note', type: 'text' as const, atMs: 1, points: [{ x: 50, y: 50 }], text: 'x'.repeat(2001) }
+  const rejected = recorderReducer({ ...initialRecorderState, status: 'recording' }, { type: 'mark.added', mark })
+  expect(rejected.marks).toEqual([])
+  expect(rejected.annotationError).toContain('Shorten the note and try again')
+  expect(mark.text).toHaveLength(2001)
+  const accepted = recorderReducer(rejected, { type: 'mark.added', mark: { ...mark, text: 'x'.repeat(2000) } })
+  expect(accepted.marks[0].text).toHaveLength(2000)
+  expect(accepted.annotationError).toBeNull()
+  expect(recorderReducer(rejected, { type: 'mark.undone' }).annotationError).toBeNull()
+  expect(recorderReducer(rejected, { type: 'marks.cleared' }).annotationError).toBeNull()
+})
 
 describe('recorder state', () => {
+  it('keeps explicit transcription consent through countdown/restart and locks it during capture', () => {
+    const consented = recorderReducer(initialRecorderState, { type: 'transcription.toggled' })
+    expect(consented.hostedTranscription).toBe(true)
+    expect(recorderReducer({ ...consented, status: 'failed' }, { type: 'transcription.toggled' }).hostedTranscription).toBe(false)
+    expect(recorderReducer({ ...consented, status: 'recording' }, { type: 'transcription.toggled' }).hostedTranscription).toBe(true)
+    expect(recorderReducer(consented, { type: 'countdown.started' }).hostedTranscription).toBe(true)
+    expect(recorderReducer(consented, { type: 'recording.restarted' }).hostedTranscription).toBe(true)
+  })
   it('tracks countdown, pauses, duration, marks, processing, and restart', () => {
     let state = recorderReducer(initialRecorderState, { type: 'source.changed', source: 'screen' })
     state = recorderReducer(state, { type: 'countdown.started' })

@@ -29,7 +29,7 @@ class FakeMediaStream {
   getTracks() { return this.tracks }
 }
 
-it('captures a tab with microphone and camera and stops every stream', async () => {
+it('captures the tab camera bubble without creating a duplicate camera artifact', async () => {
   const tab = stream(1, 1), devices = stream(1, 1), mixed = stream(1, 0)
   const getUserMedia = vi.fn().mockResolvedValueOnce(tab).mockResolvedValueOnce(devices)
   const close = vi.fn()
@@ -53,7 +53,7 @@ it('captures a tab with microphone and camera and stops every stream', async () 
   capture.pause(); capture.resume()
   const result = await capture.stop()
   expect(result.screenBlob.size).toBeGreaterThan(0)
-  expect(result.cameraBlob?.size).toBeGreaterThan(0)
+  expect(result.cameraBlob).toBeUndefined()
   expect(result.audioBlob?.size).toBeGreaterThan(0)
   expect(close).toHaveBeenCalledOnce()
 })
@@ -174,6 +174,13 @@ function captureEnvironment(display: MediaStream, recorder = FakeRecorder) {
     MediaStream: FakeMediaStream as unknown as typeof MediaStream,
   }
 }
+
+it.each(['window', 'screen'] as const)('retains a separate camera video for %s capture', async source => {
+  const environment = captureEnvironment(stream(0, 1))
+  vi.mocked(environment.mediaDevices.getUserMedia).mockResolvedValue(stream(0, 1))
+  const capture = await startRecordingCapture({ source, cameraEnabled: true, microphoneEnabled: false }, environment)
+  expect((await capture.stop()).cameraBlob?.size).toBeGreaterThan(0)
+})
 
 it('releases screen sharing when camera permission is rejected during startup', async () => {
   const display = stream(0, 1)

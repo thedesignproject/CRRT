@@ -11,6 +11,12 @@ const production = {
 
 afterEach(() => vi.unstubAllEnvs())
 
+it('adds only the configured private media origin for direct R2 uploads', () => {
+  const env = { ...production, WXT_RECORD_STORAGE_ORIGIN: 'https://account.r2.cloudflarestorage.com' }
+  expect(extensionManifest({ mode: 'production' }, env).host_permissions).toContain('https://account.r2.cloudflarestorage.com/*')
+  expect(() => extensionManifest({ mode: 'production' }, { ...env, WXT_RECORD_STORAGE_ORIGIN: 'https://storage.test/path' })).toThrow('must be an origin')
+})
+
 it('builds the extension with its canonical icon and declared permissions', () => {
   expect((config.vite as () => unknown)()).toEqual({ build: { assetsInlineLimit: Infinity } })
   const manifest = extensionManifest({ mode: 'production' }, production)

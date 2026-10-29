@@ -8,12 +8,14 @@ import {
 import { RecordingCamera, type CameraPreviewSize } from '../../components/recording-camera'
 import { startRecordingCapture, type RecordingCapture } from '../../lib/recording-capture'
 import {
-  buildRecordingAgentPayload, formatRecordingTime, initialRecorderState, nearestRecordingMark, recordingMarkOpacity, recorderReducer,
+  appendRecordingStroke, captureRecordingTitle, formatRecordingTime, initialRecorderState, nearestRecordingMark, recordingMarkOpacity, recorderReducer, type RecordingStroke,
   type LocalRecording, type RecordingMark, type RecordingPoint, type RecordingSource, type RecordingTool,
 } from '../../lib/recording'
 import { getLocalRecording, saveLocalRecording } from '../../lib/recording-store'
 import { sessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
-import { withRecordingTranscript } from '../../lib/recording-transcription'
+import { RecordingCloud, RecordingAgentContext } from '../../components/recording-cloud'
+import { RecordingMarkLimit } from '../../components/recording-mark-limit'
+import { ownerRecordRequest, syncRecording } from '../../lib/recording-cloud'
 import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
@@ -39,7 +41,7 @@ export function sourceLabel(source: RecordingSource) {
 }
 
 export function recordingTitle(marks: RecordingMark[], pageTitle?: string) {
-  return marks[0]?.text || pageTitle || 'Untitled recording'
+  return captureRecordingTitle(marks, pageTitle)
 }
 
 type StoredRecording = Omit<LocalRecording, 'transcriptionStatus'> & Pick<Partial<LocalRecording>, 'transcriptionStatus'>
@@ -115,6 +117,7 @@ export function RecordApp() {
   const sessionRef = useRef<string | null>(null)
   const previewRef = useRef<HTMLVideoElement>(null)
   const draftRef = useRef<RecordingPoint[]>([])
+  const strokeRef = useRef<RecordingStroke>({ points: [], stride: 1, seen: 0 })
   const [draft, setDraft] = useState<RecordingPoint[]>([])
   const [recording, setRecording] = useState<LocalRecording | null>(null)
   const [screenUrl, setScreenUrl] = useState('')
@@ -122,6 +125,8 @@ export function RecordApp() {
   const [reviewTab, setReviewTab] = useState<'transcript' | 'agents'>('transcript')
   const [playbackMs, setPlaybackMs] = useState(0)
   const [copied, setCopied] = useState(false)
+  const hostedTranscription = state.hostedTranscription
+  const setHostedTranscription = () => dispatch({ type: 'transcription.toggled' })
   const [sessionWarning, setSessionWarning] = useState<string>()
   const [cameraPreviewSize, setCameraPreviewSize] = useState<CameraPreviewSize>('medium')
   const cameraPreviewRef = useRef<HTMLVideoElement>(null)
@@ -195,9 +200,10 @@ export function RecordApp() {
         cameraBlob: blobs.cameraBlob,
         audioBlob: blobs.audioBlob,
         thumbnailDataUrl: captureThumbnail(previewRef.current),
+        hostedTranscription,
       }
       await saveLocalRecording(saved)
-      const completed = await withRecordingTranscript(saved)
+      const completed: LocalRecording = { ...saved, status: 'ready' }
       await saveLocalRecording(completed)
       const sessionId = sessionRef.current
       sessionRef.current = null
@@ -210,7 +216,7 @@ export function RecordApp() {
     } catch (error) {
       dispatch({ type: 'recording.failed', message: error instanceof Error ? error.message : 'Could not finish this recording.' })
     }
-  }, [pageTitle, pageUrl])
+  }, [pageTitle, pageUrl, hostedTranscription])
 
   async function start() {
     if (state.status === 'failed') {
@@ -337,13 +343,14 @@ export function RecordApp() {
     if (state.status !== 'recording' || state.tool === 'pointer') return
     event.currentTarget.setPointerCapture(event.pointerId)
     const next = [point(event)]
+    strokeRef.current = { points: next, stride: 1, seen: 1 }
     draftRef.current = next; setDraft(next)
   }
 
   function pointerMove(event: ReactPointerEvent<SVGSVGElement>) {
     if (!draftRef.current.length || state.status !== 'recording') return
     const nextPoint = point(event)
-    const next = state.tool === 'draw' ? [...draftRef.current, nextPoint] : [draftRef.current[0], nextPoint]
+    const next = state.tool === 'draw' ? (strokeRef.current = appendRecordingStroke(strokeRef.current, nextPoint)).points : [draftRef.current[0], nextPoint]
     draftRef.current = next; setDraft(next)
   }
 
@@ -373,14 +380,15 @@ export function RecordApp() {
     const processing = { ...recording, transcriptionStatus: 'processing' as const, transcriptionError: undefined, transcriptionErrorCode: undefined }
     setRecording(processing)
     await saveLocalRecording(processing)
-    const completed = await withRecordingTranscript(processing)
-    await saveLocalRecording(completed)
-    setRecording(completed)
+    try {
+      if (processing.cloud?.finalized) await ownerRecordRequest(`recordings/${processing.cloud.id}/retry`, { stage: 'transcription' })
+      else await syncRecording(processing, setRecording)
+    } catch (error) { setRecording({ ...processing, transcriptionStatus: 'failed', transcriptionError: (error as Error).message }) }
   }, [recording])
 
-  if (recording) return <Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} cameraSize={cameraPreviewSize} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} />
+  if (recording) return <><RecordingCloud recording={recording} changed={setRecording} /><Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} cameraSize={cameraPreviewSize} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} /></>
 
-  if (state.status === 'setup' || state.status === 'failed') return <Setup state={state} tabAvailable={tabId !== null && Boolean(pageUrl?.startsWith('http'))} start={() => { void start() }} dispatch={dispatch} />
+  if (state.status === 'setup' || state.status === 'failed') return <Setup hostedTranscription={hostedTranscription} setHostedTranscription={setHostedTranscription} state={state} tabAvailable={tabId !== null && Boolean(pageUrl?.startsWith('http'))} start={() => { void start() }} dispatch={dispatch} />
 
   if (state.source === 'tab') return <main className="controller-page"><div className="controller-card"><span className="controller-live"><i />Recording this tab</span><h1>Controls are on the page.</h1><p>Keep this window open. CRRT is recording in the background and will return here when you finish.</p><button onClick={() => {
     /* v8 ignore next -- tab recording cannot start unless setup has a concrete tab id */
@@ -403,6 +411,7 @@ export function RecordApp() {
       {state.status === 'paused' && <div className="paused-screen"><Pause size={30} fill="currentColor" /><strong>Recording paused</strong></div>}
       {state.status === 'processing' && <div className="paused-screen processing"><span className="processing-ring" /><strong>Building your capture…</strong><small>Video is safe. Transcript and keyframes are next.</small></div>}
     </section>
+    <RecordingMarkLimit count={state.marks.length} sizeLimited={state.annotationLimitReached} error={state.annotationError} />
     <div className="record-toolbar" aria-label="Recording controls">
       <div className="record-clock"><i />{formatRecordingTime(state.durationMs)}</div>
       <button className="icon-control" onClick={togglePause} aria-label={state.status === 'paused' ? 'Resume' : 'Pause'}>{state.status === 'paused' ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}</button>
@@ -418,7 +427,7 @@ export function RecordApp() {
   </main>
 }
 
-function Setup({ state, tabAvailable, start, dispatch }: { state: typeof initialRecorderState; tabAvailable: boolean; start: () => void; dispatch: React.Dispatch<Parameters<typeof recorderReducer>[1]> }) {
+function Setup({ hostedTranscription, setHostedTranscription, state, tabAvailable, start, dispatch }: { hostedTranscription: boolean; setHostedTranscription: (value: boolean) => void; state: typeof initialRecorderState; tabAvailable: boolean; start: () => void; dispatch: React.Dispatch<Parameters<typeof recorderReducer>[1]> }) {
   const sources: { id: RecordingSource; label: string; note: string; icon: typeof Monitor }[] = [
     { id: 'tab', label: 'This tab', note: 'DOM-aware', icon: Square },
     { id: 'window', label: 'Window', note: 'One application', icon: Monitor },
@@ -437,9 +446,10 @@ function Setup({ state, tabAvailable, start, dispatch }: { state: typeof initial
       </div>
       {state.error && <p className="setup-error" role="alert">{state.error}</p>}
       <button className="start-recording" onClick={start}><Video size={18} /><span>Start recording</span><kbd>3 sec</kbd></button>
+      <label className="record-transcription-consent"><input type="checkbox" checked={hostedTranscription} onChange={event => setHostedTranscription(event.target.checked)} /><span><strong>Transcribe audio with Deepgram</strong><small>Audio is sent for hosted processing; recordings stay private until shared.</small></span></label>
       <p className="privacy-note">Chrome will ask exactly what to share. Camera and microphone remain optional.</p>
     </section>
-    <footer className="setup-footer"><span>Local recording</span><span>Voice uploads for transcription</span></footer>
+    <footer className="setup-footer"><span>Local recording</span><span>Private upload after recording</span></footer>
   </main>
 }
 
@@ -448,8 +458,6 @@ function Review({ recording, screenUrl, cameraUrl, cameraSize, tab, setTab, play
   retryTranscript: () => Promise<void>
 }) {
   const player = useRef<HTMLVideoElement>(null)
-  const [payloadCopyState, setPayloadCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
-  const payload = buildRecordingAgentPayload(recording)
   function syncCamera() {
     const screen = player.current, camera = cameraRef.current
     /* v8 ignore next -- the callback can race either video ref during teardown */
@@ -457,16 +465,8 @@ function Review({ recording, screenUrl, cameraUrl, cameraSize, tab, setTab, play
     /* v8 ignore next -- sub-frame drift does not require a camera seek */
     if (Math.abs(camera.currentTime - screen.currentTime) > .18) camera.currentTime = screen.currentTime
   }
-  async function copyPayload() {
-    try {
-      await navigator.clipboard.writeText(payload)
-      setPayloadCopyState('copied')
-    } catch {
-      setPayloadCopyState('failed')
-    }
-  }
   return <main className="review-page">
-    <header className="review-header"><div className="brand"><span>🥕</span><strong>CRRT</strong><i>/</i><span className="review-project">{recording.pageTitle}</span></div><div><span className="demo-chip">Local demo</span><button className="header-link" onClick={() => location.assign(new URL('/recordings.html', browser.runtime.getURL('/private.html')).toString())}>Recordings</button><button className="share-button" onClick={() => { void copyShare() }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Copied' : 'Copy link'}</button></div></header>
+    <header className="review-header"><div className="brand"><span>🥕</span><strong>CRRT</strong><i>/</i><span className="review-project">{recording.pageTitle}</span></div><div><span className="demo-chip">Local playback</span><button className="header-link" onClick={() => location.assign(new URL('/recordings.html', browser.runtime.getURL('/private.html')).toString())}>Recordings</button><button className="share-button" onClick={() => { void copyShare() }}>{copied ? <Check size={14} /> : <Copy size={14} />}{copied ? 'Copied' : 'Copy browser-only link'}</button></div></header>
     <div className="review-layout">
       <section className="review-main">
         <div className="player-shell">
@@ -477,19 +477,19 @@ function Review({ recording, screenUrl, cameraUrl, cameraSize, tab, setTab, play
         <div className="timeline-markers">{recording.marks.map((mark) => <button key={mark.id} style={{ left: `${mark.atMs / recording.durationMs * 100}%` }} title={`${mark.type} at ${formatRecordingTime(mark.atMs)}`} onClick={() => { player.current!.currentTime = mark.atMs / 1000 }} />)}</div>
         <h1>{recording.title}</h1>
         <p className="review-meta">{recording.authorName} · {formatRecordingTime(recording.durationMs)} · {recording.marks.length} marks · just now</p>
-        <div className="review-summary"><span>Capture ready</span><p>Human playback is local for this demo. The structured agent context below uses the same events the production backend will receive.</p></div>
+        <div className="review-summary"><span>Capture ready</span><p>Your local recording is available while private upload and processing continue. Use the share link above to invite viewers.</p></div>
       </section>
       <aside className="context-panel">
         <div className="context-tabs"><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button><button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>For agents</button></div>
         {tab === 'transcript' ? <div className="transcript-list">
           {recording.transcriptionStatus === 'processing' && <div className="transcript-empty"><strong>Transcribing voice…</strong><p>Your recording is already saved locally.</p></div>}
           {recording.transcriptionStatus === 'failed' && <div className="transcript-empty"><strong>Transcript unavailable</strong><p>{recording.transcriptionError || 'CRRT could not transcribe this recording.'}</p>{recording.audioBlob?.size ? <button className="retry-transcript" onClick={() => { void retryTranscript() }}>Retry transcription</button> : null}</div>}
-          {recording.transcriptionStatus === 'ready' && recording.transcript.length === 0 && <div className="transcript-empty"><strong>No speech detected</strong><p>The recording and marks are intact.</p></div>}
+          {recording.transcriptionStatus === 'ready' && recording.transcript.length === 0 && <div className="transcript-empty"><strong>{recording.hostedTranscription ? 'No speech detected' : 'Transcription off'}</strong><p>The recording and marks are intact.</p></div>}
           {recording.transcript.map((segment) => {
           const mark = nearestRecordingMark(recording.marks, (segment.startMs + segment.endMs) / 2)
           /* v8 ignore next -- thumbnail/mark fallbacks are presentation-only variants of the tested transcript row */
           return <button key={segment.id} onClick={() => { if (player.current) player.current.currentTime = segment.startMs / 1000 }}><span className="keyframe-mini">{recording.thumbnailDataUrl ? <img src={recording.thumbnailDataUrl} alt="" /> : <Video size={14} />}</span><span><time>{formatRecordingTime(segment.startMs)}</time><p>{segment.text}</p>{mark && <small>{mark.target?.selector || mark.type}</small>}</span></button>
-          })}</div> : <div className="agent-context"><div className="agent-callout"><strong>Ready for Claude Code</strong><p>Compact transcript, frames, marks and DOM targets. Project rules join here after backend integration.</p></div><pre>{payload}</pre><button onClick={() => { void copyPayload() }}><Copy size={15} />{payloadCopyState === 'copied' ? 'Copied for Claude Code' : 'Copy for Claude Code'}</button><small aria-live="polite">{payloadCopyState === 'failed' ? 'Copy failed. Try again.' : 'Demo preview · paid capability in production'}</small></div>}
+          })}</div> : <RecordingAgentContext recording={recording} />}
       </aside>
     </div>
   </main>

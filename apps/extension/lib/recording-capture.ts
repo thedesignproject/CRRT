@@ -133,7 +133,9 @@ export async function startRecordingCapture(
       return recorder
     }
     const primary = createRecorder(previewStream, 'video')
-    const camera = cameraStream?.getVideoTracks().length ? createRecorder(cameraStream, 'video') : null
+    // Tab capture already contains the injected camera bubble. Keep its live
+    // controls working, but do not encode/store/upload a second camera video.
+    const camera = options.source !== 'tab' && cameraStream?.getVideoTracks().length ? createRecorder(cameraStream, 'video') : null
     const audio = mixedAudioTracks.length
       ? createRecorder(new environment.MediaStream(mixedAudioTracks), 'audio')
       : null

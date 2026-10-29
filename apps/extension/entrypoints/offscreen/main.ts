@@ -1,9 +1,8 @@
 import { browser } from 'wxt/browser'
 import { startRecordingCapture, type RecordingCapture } from '../../lib/recording-capture'
-import { initialRecorderState, recorderReducer, type LocalRecording, type RecorderState } from '../../lib/recording'
+import { captureRecordingTitle, initialRecorderState, recorderReducer, type LocalRecording, type RecorderState } from '../../lib/recording'
 import { saveLocalRecording } from '../../lib/recording-store'
 import { sessionSnapshot, type RecordingSessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
-import { withRecordingTranscript } from '../../lib/recording-transcription'
 import { hasRecordingPermissions } from '../../lib/recording-permissions'
 
 type Active = {
@@ -21,7 +20,7 @@ let generation = 0
 
 function title(state: RecorderState, pageTitle?: string) {
   /* v8 ignore next -- fallbacks protect imported captures without page metadata */
-  return state.marks[0]?.text || pageTitle || 'Untitled recording'
+  return captureRecordingTitle(state.marks, pageTitle)
 }
 
 async function emit(sessionId: string, snapshot: RecordingSessionSnapshot) {
@@ -108,22 +107,21 @@ async function saveFinishedRecording(session: Active) {
     id: crypto.randomUUID(),
     title: title(session.state, session.pageTitle),
     source: session.state.source,
-    status: 'processing',
+    status: 'ready',
     pageUrl: session.pageUrl,
     pageTitle: session.pageTitle,
     durationMs,
     createdAt: new Date().toISOString(),
-    authorName: 'Tomás',
+    authorName: 'You',
     marks: session.state.marks,
     transcript: [],
-    transcriptionStatus: 'processing',
+    transcriptionStatus: session.state.hostedTranscription ? 'processing' : 'ready',
+    hostedTranscription: session.state.hostedTranscription,
     screenBlob: blobs.screenBlob,
     cameraBlob: blobs.cameraBlob,
     audioBlob: blobs.audioBlob,
   }
   await saveLocalRecording(recording)
-  const completed = await withRecordingTranscript(recording)
-  await saveLocalRecording(completed)
   if (active === session) active = null
   await browser.runtime.sendMessage({ type: 'record:offscreen-finished', target: 'background', sessionId: session.sessionId, recordingId: recording.id })
 }

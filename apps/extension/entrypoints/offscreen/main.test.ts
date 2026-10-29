@@ -43,6 +43,15 @@ beforeEach(() => {
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
+it('stages consented audio for authoritative backend processing without a demo provider call', async () => {
+  await import('./main')
+  mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'consented', snapshot: { status: 'setup', source: 'tab', hostedTranscription: true } })
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'finish' } })
+  await waitFor(() => expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ hostedTranscription: true, transcriptionStatus: 'processing', transcript: [], authorName: 'You' })))
+  expect(mocks.withTranscript).not.toHaveBeenCalled()
+})
+
 it('records offscreen, applies commands, and saves a finished capture', async () => {
   await import('./main')
   mocks.listener!({
@@ -76,9 +85,10 @@ it('records offscreen, applies commands, and saves a finished capture', async ()
   })))
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'finish' } })
   await waitFor(() => expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({
-    title: 'Pay button', source: 'tab', transcript: [expect.objectContaining({ id: 'speech', text: 'This is the actual narration.' })], transcriptionStatus: 'ready',
+    title: 'Pay button', source: 'tab', transcript: [], transcriptionStatus: 'ready', hostedTranscription: false,
   })))
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-finished', recordingId: expect.any(String) }))
+  expect(mocks.withTranscript).not.toHaveBeenCalled()
 })
 
 it('discards, restarts, and reports capture failures', async () => {
@@ -159,8 +169,8 @@ it('finalizes Stop sharing exactly once even when Done arrives simultaneously', 
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', sessionId: 'ended', command: { kind: 'finish' } })
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-finished' })))
   expect(recording.stop).toHaveBeenCalledOnce()
-  expect(mocks.withTranscript).toHaveBeenCalledOnce()
-  expect(mocks.saveRecording).toHaveBeenCalledTimes(2)
+  expect(mocks.withTranscript).not.toHaveBeenCalled()
+  expect(mocks.saveRecording).toHaveBeenCalledTimes(1)
   expect(mocks.sendMessage.mock.calls.filter(([message]) => message.type === 'record:offscreen-finished')).toHaveLength(1)
 })
 
@@ -205,17 +215,17 @@ it('does not leak pending captures after cancel and refuses duplicate starts ove
   expect(recording.stop).not.toHaveBeenCalled()
 })
 
-it('keeps the new capture active when an older transcription completes after cancellation', async () => {
+it('keeps the new capture active when an older durable save completes after cancellation', async () => {
   let complete!: () => void
-  mocks.withTranscript.mockImplementationOnce((recording) => new Promise((resolve) => {
-    complete = () => resolve({ ...recording, status: 'ready' })
+  mocks.saveRecording.mockImplementationOnce(() => new Promise((resolve) => {
+    complete = () => resolve('saved')
   }))
   await import('./main')
   const start = (sessionId: string) => mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId, snapshot: { status: 'setup', source: 'tab' } })
   start('older')
   await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'finish' } })
-  await waitFor(() => expect(mocks.withTranscript).toHaveBeenCalledOnce())
+  await waitFor(() => expect(mocks.saveRecording).toHaveBeenCalledOnce())
   const cancelled = vi.fn()
   mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'cancel' } }, {}, cancelled)
   await waitFor(() => expect(cancelled).toHaveBeenCalledWith({ ok: true }))
