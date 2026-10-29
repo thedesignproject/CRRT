@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BotIcon, CopyIcon, ShieldIcon } from './icons'
+import { landingRoute } from '../lib/routes'
 
 function CopyField({ label, value }: { label: string; value: string }) {
   const [status, setStatus] = useState<'idle' | 'copied' | 'error'>('idle')
@@ -19,9 +20,9 @@ function CopyField({ label, value }: { label: string; value: string }) {
 }
 
 export function McpSetup({ apiBase }: { apiBase: string }) {
-  const [client, setClient] = useState<'codex' | 'claude' | 'other'>('codex')
   const serverUrl = new URL(`${apiBase.replace(/\/$/, '')}/mcp/v1`, window.location.origin).href
-  const command = `${client === 'claude' ? 'claude mcp add --transport http crrt' : 'codex mcp add crrt --url'} '${serverUrl.replace(/'/g, "'\\''")}'`
+  const guideUrl = new URL(landingRoute('/get-started.md'), window.location.origin).href
+  const setupPrompt = `Set up CRRT for this agent. Fetch ${guideUrl} and follow its instructions. Use this MCP server URL: ${serverUrl}. After setup, continue any existing user-requested task that needed CRRT once its tools are available. If the client requires a reload, preserve the task and explain how to resume it after reloading, without repeating successful setup or login. If there is no existing task, confirm readiness once verified and wait for instructions.`
   return <div className="grid items-start gap-8 lg:grid-cols-3">
     <section aria-labelledby="mcp-setup-heading" className="min-w-0 rounded-xl border border-border bg-card lg:col-span-2">
       <div className="border-b border-border px-6 py-5">
@@ -29,28 +30,20 @@ export function McpSetup({ apiBase }: { apiBase: string }) {
         <p className="mt-1 text-sm text-muted-foreground">Set up once, then bring feedback into your conversations.</p>
       </div>
       <div className="space-y-6 p-6">
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Choose your MCP client">
-          {(['codex', 'claude', 'other'] as const).map(value => <button key={value} type="button" aria-pressed={client === value} onClick={() => setClient(value)} className={`rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-ring ${client === value ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:bg-accent'}`}>
-            {value === 'codex' ? 'Codex CLI' : value === 'claude' ? 'Claude Code' : 'Others'}
-          </button>)}
-        </div>
         <ol className="space-y-6">
           <li className="space-y-3">
-            <h3 className="text-sm font-semibold">1. Add CRRT to your client</h3>
-            {client !== 'other' ? <>
-              <p className="text-sm leading-6 text-muted-foreground">{client === 'claude' ? 'Run this command in the folder where you use Claude Code.' : 'Run this command in your terminal. Codex will start the authorization flow.'}</p>
-              <CopyField key={client} label={client === 'claude' ? 'Claude Code command' : 'Codex command'} value={command} />
-            </> : <p className="text-sm leading-6 text-muted-foreground">In your client’s MCP settings, add a remote server using the URL below. Choose Streamable HTTP and OAuth authentication, then connect.</p>}
+            <h3 className="text-sm font-semibold">1. Ask your agent to set up CRRT</h3>
+            <p className="text-sm leading-6 text-muted-foreground">Paste this prompt into Codex, Claude Code, Cursor, or another MCP-compatible agent. Your agent will follow the setup steps for its client.</p>
+            <CopyField label="setup prompt" value={setupPrompt} />
             <div className="space-y-2"><p className="text-xs font-medium text-muted-foreground">Server URL</p><CopyField label="server URL" value={serverUrl} /></div>
           </li>
           <li className="space-y-2">
             <h3 className="text-sm font-semibold">2. Review and approve permissions</h3>
-            {client === 'claude' && <p className="text-sm leading-6 text-muted-foreground">Open Claude Code in that folder, enter <code className="font-mono">/mcp</code>, select <code className="font-mono">crrt</code>, and choose Authenticate.</p>}
             <p className="text-sm leading-6 text-muted-foreground">Sign in with your CRRT account in the browser window that opens. Review the request, then approve the permissions shown.</p>
-            {client === 'codex' && <p className="text-xs leading-5 text-muted-foreground">If Codex does not open authorization, run <code className="font-mono">codex mcp login crrt</code>. After connecting, start a new conversation.</p>}
           </li>
           <li className="space-y-3">
-            <h3 className="text-sm font-semibold">3. Try your first conversation</h3>
+            <h3 className="text-sm font-semibold">3. Continue your conversation</h3>
+            <p className="text-sm leading-6 text-muted-foreground">Your agent checks the connection and continues your existing task once its tools are available. If a reload is needed, it tells you how to resume. If you have not given it a task yet, tell it what you want to do.</p>
             <CopyField label="example prompt" value="List my CRRT projects, then show Ready for Agent feedback for one project, grouped by page." />
           </li>
         </ol>
