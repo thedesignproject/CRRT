@@ -3,8 +3,8 @@ import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../lib/widgetLogin', async (importOriginal) => ({ ...await importOriginal<typeof import('../lib/widgetLogin')>(), startWidgetLogin: vi.fn(), widgetComments: vi.fn(() => ({ label: 'mine' })), widgetRequest: vi.fn() }))
 import { WidgetRequestError, startWidgetLogin, widgetRequest } from '../lib/widgetLogin'
 import { useWidgetLogin } from '../components/FeedbackWidget/useWidgetLogin'
-const session = { accessToken: 'token', displayName: 'Ada', expiresAt: '2099-01-01' }
-beforeEach(() => { vi.clearAllMocks(); vi.mocked(startWidgetLogin).mockResolvedValue(session); vi.mocked(widgetRequest).mockResolvedValue({} as never) })
+const session = { accessToken: `crrt_widget_${'a'.repeat(43)}`, displayName: 'Ada', expiresAt: '2099-01-01' }
+beforeEach(() => { localStorage.clear(); vi.clearAllMocks(); vi.mocked(startWidgetLogin).mockResolvedValue(session); vi.mocked(widgetRequest).mockResolvedValue({} as never) })
 it('logs in, exposes the adapter, revokes and clears the session', async () => {
   const { result } = renderHook(() => useWidgetLogin('https://crrt.ai/api', 'p'))
   await act(() => result.current.logout()); expect(widgetRequest).not.toHaveBeenCalled()
@@ -71,4 +71,38 @@ it.each(['success', 'failure'] as const)('ignores a stale logout %s after switch
   await act(async () => { if (outcome === 'success') resolve(new Response()); else reject(new Error('offline')); await pending })
   expect(result.current.session).toEqual(next)
   expect(result.current.error).toBe('')
+})
+
+
+it('restores a session on remount without opening another login', async () => {
+  const first = renderHook(() => useWidgetLogin('/api', 'one'))
+  await act(() => first.result.current.login()); first.unmount()
+  const restored = renderHook(() => useWidgetLogin('/api', 'one'))
+  expect(restored.result.current.session).toEqual(session)
+  expect(startWidgetLogin).toHaveBeenCalledOnce()
+  const other = renderHook(() => useWidgetLogin('/api', 'two'))
+  expect(other.result.current.session).toBeNull()
+})
+
+it('synchronizes storage changes and clears only the rejected current credential', async () => {
+  const { widgetSessionKey, WIDGET_SESSION_REJECTED } = await import('../lib/widgetSessionStorage')
+  const key = widgetSessionKey('/api', 'one')
+  const hook = renderHook(() => useWidgetLogin('/api', 'one'))
+  await act(() => hook.result.current.login())
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'unrelated' })))
+  expect(hook.result.current.session).toEqual(session)
+  localStorage.removeItem(key)
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key })))
+  expect(hook.result.current.session).toBeNull()
+  await act(() => hook.result.current.login())
+  const reject = (apiBase: string, token: string) => act(() => { window.dispatchEvent(new CustomEvent(WIDGET_SESSION_REJECTED, { detail: { apiBase, token } })) })
+  reject('/different', session.accessToken); reject('/api', 'old-token')
+  expect(hook.result.current.session).toEqual(session)
+  reject('/api', session.accessToken)
+  expect(hook.result.current.session).toBeNull(); expect(localStorage.getItem(key)).toBeNull()
+  reject('/api', session.accessToken)
+  await act(() => hook.result.current.login())
+  localStorage.clear()
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: null })))
+  expect(hook.result.current.session).toBeNull()
 })

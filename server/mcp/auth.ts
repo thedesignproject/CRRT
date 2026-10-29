@@ -5,7 +5,7 @@ import { createProof, hashProof, pkceChallenge } from '../../api/_lib/extension-
 import { getNonPersistentSupabase, getServiceSupabase } from '../../api/_lib/supabase.js'
 
 export const SCOPE = 'crrt:read'
-export const SCOPES = [SCOPE, 'crrt:implement', 'crrt:review'] as const
+export const SCOPES = [SCOPE, 'crrt:implement', 'crrt:review', 'crrt:projects'] as const
 export const ALL_SCOPES = SCOPES.join(' ')
 export function normalizeScope(raw: string) {
   const scopes = raw.split(' ')

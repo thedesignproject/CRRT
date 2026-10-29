@@ -28,3 +28,10 @@ The dashboard ships under a base path (`/dashboard/`), so all in-app routes/link
 ## Diff coverage
 
 After any code change, MUST invoke the repo-local `$diff-coverage` skill from `.agents/skills/diff-coverage` before handing work back. Both line and branch diff coverage against the current PR's base are required at 100%. For stacked PRs, validate every layer against the branch immediately below it, not against `trunk`.
+
+## CRRT client workflows
+
+For installing CRRT into a user's repository, follow `skills/crrt-setup/SKILL.md`.
+For implementing selected CRRT feedback, follow `skills/crrt-feedback/SKILL.md`.
+For repeated login or unavailable MCP tools, follow `skills/crrt-connection/SKILL.md`.
+These client workflows do not replace this repository's engineering/security rules.

@@ -32,7 +32,8 @@ export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, use
     user_id: user.userId, project_key: request.projectKey, origin: request.origin, storybook_connection_id: connectionId,
     display_name: user.email.split('@')[0],
     handoff_expires_at: new Date(now + 5 * 60_000).toISOString(),
-    expires_at: new Date(now + 60 * 60_000).toISOString(),
+    // Website sessions survive reloads for seven days; Storybook retains its shorter boundary.
+    expires_at: new Date(now + (connectionId === null ? 7 * 24 : 1) * 60 * 60_000).toISOString(),
   })
   if (error) throw new Error('Widget handoff creation failed')
   return { code, state: request.state }

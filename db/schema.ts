@@ -3366,7 +3366,7 @@ export const mcpCodes = pgTable('mcp_codes', {
 }, t => ({
   expiry: index('mcp_codes_expiry').on(t.expiresAt),
   hashCheck: check('mcp_codes_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$' and ${t.stateHash} ~ '^[0-9a-f]{64}$'`),
-  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review')`),
+  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:projects','crrt:read crrt:implement crrt:projects','crrt:read crrt:review crrt:projects','crrt:read crrt:implement crrt:review crrt:projects')`),
   challengeCheck: check('mcp_codes_challenge', sql`${t.challenge} ~ '^[A-Za-z0-9_-]{43}$'`),
   lifetime: check('mcp_codes_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`),
 })).enableRLS()
@@ -3382,7 +3382,7 @@ export const mcpConnections = pgTable('mcp_connections', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   user: index('mcp_connections_user').on(t.userId),
-  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review')`),
+  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:projects','crrt:read crrt:implement crrt:projects','crrt:read crrt:review crrt:projects','crrt:read crrt:implement crrt:review crrt:projects')`),
   lifetime: check('mcp_connections_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '30 days'`),
 })).enableRLS()
 
@@ -3682,3 +3682,35 @@ REVOKE ALL ON FUNCTION public.mcp_require_connection(uuid,uuid,text), public.mcp
 GRANT EXECUTE ON FUNCTION public.mcp_require_connection(uuid,uuid,text), public.mcp_prepare_work(uuid,uuid,text,uuid[],text,text,jsonb), public.mcp_work_operation(uuid,uuid,uuid,text,uuid,text,text,text,text), public.mcp_set_feedback_status(uuid,uuid,text,uuid,text,text,text,text) TO service_role;
 
 `;
+
+// Source of truth for the generated MCP project setup routine.
+export const mcpProjectSetupSql = `
+CREATE FUNCTION public.mcp_create_project(p_connection uuid,p_actor uuid,p_project text,p_name text,p_origins text[])
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE existing public.projects%ROWTYPE; result jsonb;
+BEGIN
+  IF p_project IS NULL OR p_project !~ '^[a-z0-9]+(-[a-z0-9]+)*$' OR length(p_project)>63
+    OR nullif(trim(p_name),'') IS NULL OR length(p_name)>80
+    OR cardinality(p_origins) IS NULL OR cardinality(p_origins)<1 OR cardinality(p_origins)>20
+    OR EXISTS (SELECT 1 FROM unnest(p_origins) AS host WHERE host IS NULL OR host='' OR host LIKE '%/%' OR host LIKE '%*%') THEN
+    RAISE EXCEPTION 'invalid_project';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-project-claim:' || p_project,0));
+  PERFORM public.mcp_require_connection(p_connection,p_actor,'crrt:projects');
+  SELECT * INTO existing FROM public.projects WHERE public_key=p_project FOR UPDATE;
+  IF FOUND THEN
+    IF NOT EXISTS (SELECT 1 FROM public.project_members WHERE project_key=p_project AND user_id=p_actor AND is_owner)
+      THEN RAISE EXCEPTION 'project_key_unavailable'; END IF;
+    IF existing.name IS DISTINCT FROM p_name OR existing.allowed_origins IS DISTINCT FROM p_origins
+      THEN RAISE EXCEPTION 'project_configuration_conflict'; END IF;
+    RETURN;
+  END IF;
+  PERFORM public.cloud_require_write(p_actor);
+  result:=public.claim_project(p_actor,p_project,p_name);
+  IF result->>'status' IS DISTINCT FROM 'claimed' THEN RAISE EXCEPTION 'project_key_unavailable'; END IF;
+  UPDATE public.projects SET allowed_origins=p_origins WHERE public_key=p_project;
+END;
+$$;
+REVOKE ALL ON FUNCTION public.mcp_create_project(uuid,uuid,text,text,text[]) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.mcp_create_project(uuid,uuid,text,text,text[]) TO service_role;
+`

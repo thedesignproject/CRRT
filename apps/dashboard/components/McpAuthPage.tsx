@@ -16,6 +16,7 @@ export function McpAuthPage({ apiBase, accessToken }: { apiBase: string; accessT
   const params = useMemo(() => Object.fromEntries(new URLSearchParams(search)), [search])
   const connecting = Boolean(params.client_id)
   const implementation = client?.scope?.split(' ').includes('crrt:implement') ?? false
+  const projects = client?.scope?.split(' ').includes('crrt:projects') ?? false
   const review = client?.scope?.split(' ').includes('crrt:review') ?? false
   const request = useCallback(async (action: string, body: unknown) => {
     const response = await fetch(`${apiBase}/mcp/oauth/${action}`, {
@@ -65,14 +66,15 @@ export function McpAuthPage({ apiBase, accessToken }: { apiBase: string; accessT
         {client && <>
           <div className="flex items-center gap-3"><span className="rounded-lg border border-border p-3 text-muted-foreground"><BotIcon size={20} /></span><div><p className="font-semibold">{client.name}</p><p className="text-xs text-muted-foreground">Requests access to your CRRT account</p></div></div>
           <div className="space-y-3 border-y border-border py-5">
-            <p className="inline-flex items-center gap-2 text-sm font-semibold"><ShieldIcon size={16} /> {implementation || review ? 'Requested permissions' : 'Read-only access'}</p>
+            <p className="inline-flex items-center gap-2 text-sm font-semibold"><ShieldIcon size={16} /> {implementation || review || projects ? 'Requested permissions' : 'Read-only access'}</p>
             <p className="text-sm leading-6 text-muted-foreground">This client can read projects and feedback you have access to, including screenshot references and implementation context.</p>
             {implementation && <p className="text-sm leading-6 text-muted-foreground">Implementation updates: prepare work sessions, claim accepted feedback, and report presence, progress, blockers, and readiness for testing.</p>}
+            {projects && <p className="text-sm leading-6 text-muted-foreground">Project setup: create projects under your account when you request installation, and retrieve widget configuration. Existing project permissions still apply.</p>}
             {review && <p className="text-sm leading-6 text-muted-foreground">Review changes: change review and completion statuses only when you explicitly ask. Your project permissions still apply.</p>}
-            <p className="text-sm leading-6 text-muted-foreground">{!implementation && !review && 'This connection cannot change feedback, statuses, or handoffs. '}Revoke access any time from <a className="underline underline-offset-4" href={route('/mcp-auth')}>MCP connections</a>.</p>
+            <p className="text-sm leading-6 text-muted-foreground">{!implementation && !review && !projects && 'This connection cannot change feedback, statuses, or handoffs. '}Revoke access any time from <a className="underline underline-offset-4" href={route('/mcp-auth')}>MCP connections</a>.</p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50" type="button" disabled={busy} onClick={() => void decide('approve')}>{implementation || review ? 'Allow access' : 'Allow read access'}</button>
+            <button className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50" type="button" disabled={busy} onClick={() => void decide('approve')}>{implementation || review || projects ? 'Allow access' : 'Allow read access'}</button>
             <button className="rounded-md border border-border px-4 py-2 text-sm font-medium hover:bg-accent disabled:opacity-50" type="button" disabled={busy} onClick={() => void decide('deny')}>Cancel</button>
           </div>
         </>}
