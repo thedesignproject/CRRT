@@ -222,18 +222,18 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
     finally { setBusy(false) }
   }
 
-  async function moveSelected() {
+  async function moveSelected(projectId: string) {
     const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, targetProject)
+      const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, projectId)
       if (context !== mutationContext.current) return
       if (result.processedIds.length === 0) {
         setError('No Inbox items were moved. Refresh and try again.')
         return
       }
       if (onMovedToProject) {
-        onMovedToProject(targetProject, result.processedIds, result.skipped.length)
+        onMovedToProject(projectId, result.processedIds, result.skipped.length)
         return
       }
       const moved = new Set(result.processedIds)
@@ -317,14 +317,13 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
         </>} />
     </main>
     <BulkActionBar selectedCount={selectedCount} busy={busy} onClose={cancelBulkMode}>
-      <select aria-label="Project for selected Inbox items" value={targetProject} disabled={busy || eligibleProjects.length === 0}
-        onChange={(event) => setTargetProject(event.target.value)} className="dashboard-bulk-select">
-        <option value="">{eligibleProjects.length > 0 ? 'Move to project…' : 'No available projects'}</option>
-        {eligibleProjects.map((project) => <option key={project.publicKey} value={project.publicKey}>{project.name}</option>)}
-      </select>
-      <button type="button" className="dashboard-bulk-primary" disabled={busy || !targetProject} onClick={() => { void moveSelected() }}>
-        {busy ? 'Moving…' : 'Move'}
-      </button>
+      <div role="group" aria-label="Move selected Inbox items to project" className="flex min-w-0 max-w-full gap-2 overflow-x-auto">
+        {eligibleProjects.length === 0 && <span className="text-xs text-muted-foreground">No available projects</span>}
+        {eligibleProjects.map((project) => <button key={project.publicKey} type="button" disabled={busy}
+          className="dashboard-bulk-secondary shrink-0" onClick={() => { void moveSelected(project.publicKey) }}>
+          Move to {project.name}
+        </button>)}
+      </div>
       <details className="dashboard-bulk-menu">
         <summary>Actions</summary>
         <div role="menu">

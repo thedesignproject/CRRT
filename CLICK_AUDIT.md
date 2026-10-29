@@ -44,3 +44,7 @@ Remaining: server-side compare-and-set is needed to close the race with another 
 Expose Select page and Select all N in Inbox before selection mode. Both enter selection mode automatically, clear the individual editor, and preserve the existing server-side all/exclusions descriptor, permission checks and busy guards. Whole-Inbox selection falls from 3 clicks to 1; selecting only the visible page falls from 2 to 1. Moving still requires destination selection plus Move; this is the next separate click problem. Permanent deletion still requires confirmation pending a reversible-delete contract.
 
 Browser verification at 1440px and 390px confirms one-click all-pages selection survives pagination. Remove project-only bulk scroll padding from Inbox so the Next/Previous controls remain clickable on mobile.
+
+## Fifth layer: move selected Inbox items directly
+
+Replace the destination dropdown plus Move button with explicit Move to [project] buttons for eligible destinations. Whole-Inbox move becomes Select all → Move to [project] = 2 clicks; no default destination or implicit move on dropdown change. Destinations remain keyboard reachable in a horizontally scrollable group, and all are disabled while moving. Existing skipped-item, error, account-switch and destination-handoff logic stays in place. Reverse movement back to Inbox still needs a compatible API and remains pending.
