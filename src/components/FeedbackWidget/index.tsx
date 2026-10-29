@@ -118,11 +118,11 @@ function LauncherAction({
       <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
         <span
           style={{
-            fontFamily: "'VT323', 'JetBrains Mono', ui-monospace, monospace",
-            fontSize: 24,
-            fontWeight: 400,
-            letterSpacing: '0.02em',
-            lineHeight: 1,
+            fontFamily: 'inherit',
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: 0,
+            lineHeight: 1.35,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -130,7 +130,7 @@ function LauncherAction({
         >
           {title}
         </span>
-        <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--fw-foreground-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {subtitle}
         </span>
       </span>
@@ -2207,6 +2207,7 @@ function FeedbackWidgetInner({
               width: 282,
               padding: 8,
               borderRadius: 16,
+              fontFamily: "'Figtree Variable', system-ui, sans-serif",
               lineHeight: 1.2,
               background: 'var(--fw-menu-translucent)',
               border: '1px solid var(--fw-contrast-10)',
