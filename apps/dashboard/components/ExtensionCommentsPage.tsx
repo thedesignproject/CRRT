@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   assignExtensionComment,
@@ -30,6 +31,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   projects?: Project[]
   onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number) => void
 }) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const mutationContext = useRef(0)
   const [items, setItems] = useState<ExtensionCommentRecord[]>([])
   const [page, setPage] = useState(1)
@@ -177,14 +179,14 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       if (event.key === 'Escape' && bulkMode) {
         event.preventDefault(); exitBulkMode(); return
       }
-      if (bulkMode) return
+      if (!shortcutsEnabled || bulkMode) return
       if (['j', 'ArrowDown', ' ', 'k', 'ArrowUp'].includes(event.key)) {
         event.preventDefault(); navigate(event.key === 'k' || event.key === 'ArrowUp' ? -1 : 1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [comments, selectedIdx, busy, bulkMode, confirmBulkDelete])
+  }, [shortcutsEnabled, comments, selectedIdx, busy, bulkMode, confirmBulkDelete])
 
   async function save() {
     setBusy(true); setError('')

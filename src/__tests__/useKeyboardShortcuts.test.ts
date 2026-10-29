@@ -1,0 +1,42 @@
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { shortcutPreferenceKey, useKeyboardShortcuts } from '../lib/useKeyboardShortcuts'
+const data = new Map<string, string>()
+beforeEach(() => {
+  data.clear()
+  vi.stubGlobal('localStorage', { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => data.set(key, value) })
+})
+afterEach(() => vi.unstubAllGlobals())
+it('shares changes across widget instances, persists reloads, and isolates the dashboard', () => {
+  const first = renderHook(() => useKeyboardShortcuts('widget'))
+  const second = renderHook(() => useKeyboardShortcuts('widget'))
+  const dashboard = renderHook(() => useKeyboardShortcuts('dashboard'))
+  expect(first.result.current[0]).toBe(true)
+  act(() => first.result.current[1](false))
+  expect(second.result.current[0]).toBe(false)
+  expect(dashboard.result.current[0]).toBe(true)
+  first.unmount()
+  const reloaded = renderHook(() => useKeyboardShortcuts('widget'))
+  expect(reloaded.result.current[0]).toBe(false)
+  act(() => reloaded.result.current[1](true))
+  expect(second.result.current[0]).toBe(true)
+  expect(data.get(shortcutPreferenceKey('widget'))).toBe('enabled')
+})
+it('updates on another tab changing the preference or clearing storage', () => {
+  const hook = renderHook(() => useKeyboardShortcuts('widget'))
+  data.set(shortcutPreferenceKey('widget'), 'disabled')
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: 'unrelated' })))
+  expect(hook.result.current[0]).toBe(true)
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: shortcutPreferenceKey('widget') })))
+  expect(hook.result.current[0]).toBe(false)
+  data.clear()
+  act(() => window.dispatchEvent(new StorageEvent('storage', { key: null })))
+  expect(hook.result.current[0]).toBe(true)
+})
+it('works in memory when browser storage is blocked', () => {
+  vi.stubGlobal('localStorage', { getItem: () => { throw Error('blocked') }, setItem: () => { throw Error('blocked') } })
+  const hook = renderHook(() => useKeyboardShortcuts('widget'))
+  expect(hook.result.current[0]).toBe(true)
+  act(() => hook.result.current[1](false))
+  expect(hook.result.current[0]).toBe(false)
+})

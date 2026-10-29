@@ -67,3 +67,14 @@ it('makes account-wide MCP setup discoverable without a selected project', () =>
   const nav = screen.getByRole('navigation', { name: 'Workspace administration' })
   expect(within(nav).getByRole('link', { name: 'MCP connections' })).toHaveAttribute('href', route('/mcp-auth'))
 })
+
+it('hides the search shortcut hint when disabled but preserves the search button', () => {
+  vi.stubGlobal('localStorage', { getItem: () => 'disabled' })
+  try {
+    const view = render(<Header {...props} />)
+    expect(view.container.querySelector('kbd')).toBeNull()
+    fn.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Search feedback' }))
+    expect(fn).toHaveBeenCalledOnce()
+  } finally { vi.unstubAllGlobals() }
+})
