@@ -128,7 +128,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
-      {personalBulk && bulkMode && (
+      {personalBulk && (
         <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
           <button type="button" onClick={personalBulk.toggleSelectAllVisible}
             className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground">
@@ -138,15 +138,12 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
-      {personalBulk && bulkMode && (personalBulk.canSelectAllMatching || personalBulk.allMatchingSelected) && (
+      {personalBulk && (personalBulk.canSelectAllMatching || personalBulk.allMatchingSelected) && (
         <div className="border-b border-border bg-muted/35 px-4 py-2 text-center text-[11px] text-muted-foreground" role="status">
           {personalBulk.allMatchingSelected ? <>
             All {counts.all} Inbox items are selected.{' '}
             <button type="button" onClick={personalBulk.clearSelection} className="font-semibold text-foreground hover:underline">Clear selection</button>
-          </> : <>
-            All {filteredComments.length} items on this page are selected.{' '}
-            <button type="button" onClick={personalBulk.selectAllMatching} className="font-semibold text-foreground hover:underline">Select all {counts.all} in Inbox</button>
-          </>}
+          </> : <button type="button" onClick={personalBulk.selectAllMatching} className="font-semibold text-foreground hover:underline">Select all {counts.all} in Inbox</button>}
         </div>
       )}
 

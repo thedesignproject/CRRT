@@ -38,3 +38,7 @@ Undo investigation: the implementation-status endpoint clears `claimedByAgentId`
 Capture the previous review statuses for successfully approved items and offer a persistent one-click Undo. Failed restores remain available for retry; already-accepted and failed approvals are excluded. Undo never writes implementation status or agent ownership. Project/navigation changes, later local status actions, and starting a handoff discard the old snapshot. Refuse restores when the currently loaded review, implementation, or claim differs from the expected state.
 
 Remaining: server-side compare-and-set is needed to close the race with another reviewer/agent after the loaded-state check. Reject also asynchronously closes linked GitHub/Linear/Jira tickets (`review-status.ts` → `closeLinkedExternalWork`); restoring its review status alone is not full undo. Record both as incomplete instead of promising a generic reversible action.
+
+## Fourth layer: select Inbox scope directly
+
+Expose Select page and Select all N in Inbox before selection mode. Both enter selection mode automatically, clear the individual editor, and preserve the existing server-side all/exclusions descriptor, permission checks and busy guards. Whole-Inbox selection falls from 3 clicks to 1; selecting only the visible page falls from 2 to 1. Moving still requires destination selection plus Move; this is the next separate click problem. Permanent deletion still requires confirmation pending a reversible-delete contract.
