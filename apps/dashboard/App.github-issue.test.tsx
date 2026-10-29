@@ -1037,7 +1037,7 @@ it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
- fireEvent.click(screen.getByRole('button', { name: 'Reopen', exact: true }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
  await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledTimes(2))
  for (const id of ['comment-1', 'comment-2']) {
   expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open')
@@ -1053,7 +1053,7 @@ it('keeps failed reopen items selected for retry and reports partial failure', a
  fixtures.updateImpl.mockRejectedValueOnce(new Error('offline'))
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
- fireEvent.click(screen.getByRole('button', { name: 'Reopen', exact: true }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
  await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1'))
  expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
