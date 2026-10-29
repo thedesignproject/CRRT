@@ -9,6 +9,51 @@ These instructions apply to any coding agent working in this repo, including Cla
 
 # Repo notes for AI agents
 
+## Publishing npm widget updates
+
+Changes affecting the published `@thedesignproject/crrt` package's user experience,
+behavior, public API, or installation must ship in an npm release. A merge to
+`trunk` deploys the hosted CRRT application; it does **not** publish the npm package.
+Dashboard-, backend-, or landing-only changes do not require a widget release
+unless they also change the package. Related widget PRs may ship in one release.
+
+For each package-affecting PR, identify its release plan. Before publishing:
+
+1. Include all intended widget changes in the release, and open a version-bump PR
+   updating the root `package.json` and `docs/CHANGELOG.md`.
+2. Merge the reviewed release PR into `trunk` after its required checks pass.
+3. Create **and push** a tag on the exact release merge commit. Do not tag a moving
+   branch tip or an unmerged feature branch. The tag version must match that
+   commit's root `package.json`; never move or overwrite an existing release tag.
+
+Run these commands when publishing is authorized, replacing both example values:
+
+```bash
+release_version='0.3.23' # Example only; use the approved release version.
+release_commit='REPLACE_WITH_RELEASE_MERGE_COMMIT_SHA'
+git fetch origin trunk --tags
+git show "${release_commit}:package.json" # Confirm its version matches.
+git merge-base --is-ancestor "$release_commit" origin/trunk &&
+  git tag "v${release_version}" "$release_commit" &&
+  git push origin "refs/tags/v${release_version}"
+```
+
+Pushing the `v*` tag triggers `.github/workflows/publish.yml`, which validates the
+package and publishes it to npm. Creating a local tag alone is not enough.
+
+```bash
+gh run list --workflow=publish.yml --commit "$release_commit" --limit 3
+gh run watch <publish-run-id> --exit-status
+npm view "@thedesignproject/crrt@${release_version}" version
+npm view @thedesignproject/crrt dist-tags.latest
+```
+
+Replace `<publish-run-id>` with the matching tag-triggered run's ID. Do not report
+the update as released until that run succeeds and npm contains the expected
+version (and `latest` points to it for a stable latest release). Consumers must
+then update their dependency and redeploy. If publication is still pending,
+explicitly distinguish **merged**, **hosted deployment**, and **published to npm**.
+
 ## Database changes
 
 **ALL schema changes go through `db/schema.ts`.** Do not write hand-rolled SQL files. Do not edit existing migration files in `db/migrations/`.
