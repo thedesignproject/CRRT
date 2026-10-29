@@ -396,7 +396,7 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Mark done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }))
     await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'done',
     ))
@@ -1027,4 +1027,33 @@ it('explains expired-plan write rejection, restores retained feedback and disabl
  await screen.findByRole('alert');expect(screen.getByRole('alert')).toHaveTextContent('Feedback remains readable')
  expect(screen.getByTestId('detail')).toHaveAttribute('data-read-only','true')
  expect(fixtures.fn).toHaveBeenCalled();fireEvent.keyDown(window,{key:'m'});expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+})
+
+
+it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together', async (status) => {
+ const comment = { projectId: 'project-1', body: 'Feedback', reviewStatus: status === 'done' ? 'accepted' : status, implementationStatus: status === 'done' ? 'done' : 'unassigned', claimedByAgentId: 'agent', createdAt: '', updatedAt: '' }
+ fixtures.comments.push({ ...comment, id: 'comment-1' }, { ...comment, id: 'comment-2' })
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+ fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
+ fireEvent.click(screen.getByRole('button', { name: 'Reopen', exact: true }))
+ await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledTimes(2))
+ for (const id of ['comment-1', 'comment-2']) {
+  expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open')
+  expect(fixtures.updateImpl).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'unassigned')
+ }
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
+ expect(screen.getByTestId('first-claim')).toHaveTextContent('none')
+ await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
+})
+
+it('keeps failed reopen items selected for retry and reports partial failure', async () => {
+ fixtures.comments.push(...['comment-1', 'comment-2'].map(id => ({ id, projectId: 'project-1', body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' })))
+ fixtures.updateImpl.mockRejectedValueOnce(new Error('offline'))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reopen', exact: true }))
+ await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1'))
+ expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
