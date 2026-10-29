@@ -193,7 +193,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
-  const [readyUndo, setReadyUndo] = useState<Comment[]>([])
+  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -444,7 +444,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
     }
     if (stillCurrent && generation === bulkGeneration.current) {
-      if (action === 'ready') setReadyUndo(previous.filter(c => !failedIds.includes(c.id)))
+      if (action === 'ready') setReadyUndo(previous.flatMap(c => {
+        const result = results[ids.indexOf(c.id)]
+        return result.status === 'fulfilled' && result.value && result.value.updatedAt ? [{ ...c, undoVersion: result.value.updatedAt }] : []
+      }))
       if (failedIds.length > 0) {
         setBulkMode(true)
         setBulkSelectedIds(action === 'ready' ? new Set(ids) : new Set(failedIds))
@@ -465,7 +468,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const results = await Promise.allSettled(readyUndo.map(async (before) => {
       const current = comments.find(c => c.id === before.id)
       if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== before.implementationStatus || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
-      await apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus)
+      await apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion)
       if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
     }))
     if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) return
@@ -473,10 +476,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     for (const result of results) {
       if (result.status === 'rejected') mutation.report(result.reason)
     }
-    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected')
+    const conflicts = new Set(results.flatMap((result, i) => result.status === 'rejected' && result.reason?.status === 409 ? [i] : []))
+    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i))
     setReadyUndo(remaining)
     setBulkActionBusy(false)
-    if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
+    if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
+    else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
     else setBulkTransitionNotice('Previous review statuses restored.')
     await refreshComments()
   }

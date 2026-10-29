@@ -162,3 +162,23 @@ it('handles a non-Error storage failure without exposing the thrown value',async
  const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'accepted'},headers:{}},res)
  expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
 })
+
+it.each([null, 123, '', 'not-a-date'])('rejects invalid expected version %s before mutation', async (expectedUpdatedAt) => {
+ vi.mocked(requireUser).mockResolvedValue({ userId:'u',email:'u@test.local' })
+ const res=mockRes()
+ await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'open',expectedUpdatedAt},headers:{}},res)
+ expect(res.statusCode).toBe(400)
+ expect(mutateProjectFeedback).not.toHaveBeenCalled()
+})
+it('forwards the exact version and returns a conflict without publishing activity', async () => {
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test.local'})
+ vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+ vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'admin'} as never)
+ vi.mocked(mutateProjectFeedback).mockRejectedValue(new Error('status_conflict'))
+ const res=mockRes(), version='2026-10-29T12:00:00.123456Z'
+ await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'open',expectedUpdatedAt:version},headers:{}},res)
+ expect(mutateProjectFeedback).toHaveBeenCalledWith('p','u','c',{reviewStatus:'open',expectedUpdatedAt:version})
+ expect(res.statusCode).toBe(409)
+ expect(createFeedbackEvent).not.toHaveBeenCalled()
+ expect(closeLinkedExternalWork).not.toHaveBeenCalled()
+})
