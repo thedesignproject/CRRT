@@ -42,3 +42,5 @@ Remaining: server-side compare-and-set is needed to close the race with another 
 ## Fourth layer: select Inbox scope directly
 
 Expose Select page and Select all N in Inbox before selection mode. Both enter selection mode automatically, clear the individual editor, and preserve the existing server-side all/exclusions descriptor, permission checks and busy guards. Whole-Inbox selection falls from 3 clicks to 1; selecting only the visible page falls from 2 to 1. Moving still requires destination selection plus Move; this is the next separate click problem. Permanent deletion still requires confirmation pending a reversible-delete contract.
+
+Browser verification at 1440px and 390px confirms one-click all-pages selection survives pagination. Remove project-only bulk scroll padding from Inbox so the Next/Previous controls remain clickable on mobile.

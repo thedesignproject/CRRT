@@ -147,7 +147,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
-      <div className={cn('flex-1 overflow-y-auto', bulkMode && 'pb-24 dashboard-bulk-scroll')}>
+      <div className={cn('flex-1 overflow-y-auto', bulkMode && !props.personal && 'pb-24 dashboard-bulk-scroll')}>
         {commentsLoading ? (
           <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
             <Spinner />
