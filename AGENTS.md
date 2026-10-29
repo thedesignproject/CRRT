@@ -28,3 +28,7 @@ The dashboard ships under a base path (`/dashboard/`), so all in-app routes/link
 ## Diff coverage
 
 After any code change, MUST invoke the repo-local `$diff-coverage` skill from `.agents/skills/diff-coverage` before handing work back. Both line and branch diff coverage against the current PR's base are required at 100%. For stacked PRs, validate every layer against the branch immediately below it, not against `trunk`.
+
+## Customer widget updates
+
+When installing or updating CRRT in a customer project, check the installed npm version against the latest published release. Apply compatible updates within the authorized scope and run the project's relevant checks. For scheduled updates, follow the [widget update skill](apps/landing/public/widget-updates/SKILL.md): reuse existing automation, keep human review by default, and enable patch auto-merge only when explicitly requested. These instructions do not run a background schedule by themselves.
