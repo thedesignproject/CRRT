@@ -237,7 +237,7 @@ it('accepts only literal loopback HTTP callbacks in production with exact regist
 })
 
 it('grants only consented scopes and preserves them on refresh', async () => {
-  expect(normalizeScope('crrt:review crrt:read crrt:implement')).toBe(ALL_SCOPES)
+  expect(normalizeScope('crrt:projects crrt:review crrt:read crrt:implement')).toBe(ALL_SCOPES)
   for (const scope of ['', 'crrt:implement', 'crrt:read admin', 'crrt:read  crrt:review']) expect(() => normalizeScope(scope)).toThrow('invalid_scope')
   expect(hasScope({ user_id: id, email: '', connection_id: id }, 'crrt:implement')).toBe(false)
   expect(hasScope({ user_id: id, email: '', connection_id: id, scope: ALL_SCOPES }, 'crrt:review')).toBe(true)

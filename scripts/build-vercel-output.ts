@@ -126,6 +126,10 @@ if (!workflowIds.includes(PRODUCT_AUDIT_WORKFLOW_ID)) {
 }
 await rm(join(output, 'static'), { recursive: true, force: true })
 await cp(join(root, 'apps/landing/dist'), join(output, 'static'), { recursive: true })
+await mkdir(join(output, 'static/agent-skills'), { recursive: true })
+for (const name of ['setup', 'feedback', 'connection']) {
+  await cp(join(root, `skills/crrt-${name}/SKILL.md`), join(output, `static/agent-skills/${name}.md`))
+}
 await buildApiFunction()
 await buildApiFunction(true)
 await buildPublicFunction(root, output)

@@ -83,8 +83,12 @@ Login opens the hosted dashboard and reuses an existing CRRT session. No additio
 or Supabase credentials are needed. Self-hosted deployments must serve `/dashboard/widget-auth`
 on the same origin as `apiBase` and apply the generated widget-session migration.
 
-The website receives an opaque, one-hour credential scoped to the signed-in user, project, and
-exact website origin. It stays in memory; reloading requires another handoff. The credential can
+The website receives an opaque, seven-day credential scoped to the signed-in user, project, and
+exact website origin. It is persisted in that website’s browser storage, separately for each API
+endpoint and project, so reloads reuse it. If browser storage is unavailable, it stays in memory.
+Expired or rejected credentials require a new handoff; network failures do not sign you out.
+This scoped credential is accessible to scripts on the host website, just as during an active
+widget session; it is never a dashboard or MCP credential. Storybook sessions remain one hour. The credential can
 create feedback and read, edit, or delete that user's widget comments on that origin. It cannot
 access dashboard or account APIs. The signed-in widget shows **My feedback**; the avatar opens
 account controls and **Sign out of this widget**, which revokes that widget session.
@@ -447,3 +451,15 @@ We tag widget releases on npm but the OSS server-side moves on `trunk`. Pull per
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+
+## Install through your coding agent
+
+Ask your connected agent to install CRRT in the current repository. It should check its existing
+MCP connection first, use `list_projects` and `get_installation`, and create a project with
+`create_project` only when needed and authorized. Project creation requires the explicit
+`crrt:projects` OAuth scope; old connections keep their original grants.
+
+Agent skills live in [`skills/`](skills/) and are published at `/agent-skills/setup.md`,
+`/agent-skills/feedback.md`, and `/agent-skills/connection.md`. They describe setup, selected
+feedback implementation, and connection recovery. See the setup skill for CLI commands and
+remote/mobile client limitations. A new chat is not a reason to log in again.

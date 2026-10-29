@@ -89,3 +89,12 @@ it('labels existing read-only grants separately from approved updates', async ()
   expect(screen.getByText('Connected · Read-only')).toBeInTheDocument()
   expect(screen.getByText('Connected · Approved updates')).toBeInTheDocument()
 })
+
+it('discloses project creation separately without granting implementation or review', async () => {
+  fetcher.mockImplementationOnce(() => reply({ name: 'Installer', redirectUri: 'http://localhost/callback', scope: 'crrt:read crrt:projects' }))
+  mount(); await screen.findByText('Installer')
+  expect(screen.getByText(/Project setup:/)).toBeInTheDocument()
+  expect(screen.queryByText(/Implementation updates:/)).toBeNull()
+  expect(screen.queryByText(/Review changes:/)).toBeNull()
+  expect(screen.getByRole('button', { name: 'Allow access' })).toBeInTheDocument()
+})

@@ -9,7 +9,7 @@ it('ships the schema-sourced MCP routines and deny-all workflow storage in one m
   expect(migration).toContain('ALTER TABLE "mcp_workflows" ENABLE ROW LEVEL SECURITY')
   expect(migration).not.toMatch(/CREATE POLICY.*mcp_/)
   const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-  expect(journal.entries.filter((row: { idx: number }) => row.idx > 45).map((row: { tag: string }) => row.tag)).toEqual(['0046_mcp_scoped'])
+  expect(journal.entries.filter((row: { idx: number }) => row.idx === 46).map((row: { tag: string }) => row.tag)).toEqual(['0046_mcp_scoped'])
 })
 
 it('serializes conflicting retries before reading the request hash or comment', () => {

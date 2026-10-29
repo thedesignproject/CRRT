@@ -95,4 +95,31 @@ suite('MCP authorization transactions on local Docker Postgres', () => {
     expect((await sql`select mcp_reserve(${client},3) as allowed`)[0].allowed).toBe(true)
     await sql`select mcp_cleanup()`
   })
+  it('creates projects with explicit consent, retries safely, and rejects revoked connections and collisions', async () => {
+    const key = `mcp-${randomUUID()}`, connection = randomUUID(), orphan = `mcp-${randomUUID()}`
+    await sql`insert into mcp_connections(id,user_id,client_id,resource,scope)
+      values(${connection},${user},${client},${resource},'crrt:read')`
+    const create = (project = key, name = 'MCP install', origins = ['example.test']) =>
+      sql`select mcp_create_project(${connection},${user},${project},${name},${origins})`
+    try {
+      await expect(create()).rejects.toThrow('insufficient_scope')
+      await sql`update mcp_connections set scope='crrt:read crrt:projects' where id=${connection}`
+      await Promise.all([create(), create()])
+      expect((await sql`select * from projects where public_key=${key}`)).toHaveLength(1)
+      expect((await sql`select * from project_members where project_key=${key} and user_id=${user}`)[0].is_owner).toBe(true)
+      await expect(create(key, 'Changed')).rejects.toThrow('project_configuration_conflict')
+      await expect(create(key, 'MCP install', ['other.test'])).rejects.toThrow('project_configuration_conflict')
+      await sql`insert into projects(public_key,slug,name,claimable) values(${orphan},${orphan},'Unclaimed',true)`
+      await expect(create(orphan)).rejects.toThrow('project_key_unavailable')
+      await sql`update mcp_connections set revoked_at=now() where id=${connection}`
+      await expect(create()).rejects.toThrow('insufficient_scope')
+      for (const role of ['anon', 'authenticated']) {
+        expect((await sql`select has_function_privilege(${role},'public.mcp_create_project(uuid,uuid,text,text,text[])','execute') as allowed`)[0].allowed).toBe(false)
+      }
+    } finally {
+      await sql`delete from projects where public_key in (${key},${orphan})`
+      await sql`delete from mcp_connections where id=${connection}`
+    }
+  })
+
 })

@@ -118,3 +118,15 @@ it('binds Storybook handoffs, exchanges and credentials to one connection', asyn
   await requireWidgetSession(req)
   expect(q.is).toHaveBeenCalledWith('storybook_connection_id', null)
 })
+
+it('gives website sessions a fixed seven-day lifetime without extending Storybook sessions', async () => {
+  for (const connection of [null, 'storybook']) {
+    const q = database([{ error: null }, { error: null }])
+    const before = Date.now()
+    await createWidgetHandoff(request, { userId: 'user', email: 'ada@example.com' }, connection)
+    const expiration = Date.parse(q.insert.mock.calls[0][0].expires_at)
+    const lifetime = (connection ? 1 : 7 * 24) * 60 * 60_000
+    expect(expiration).toBeGreaterThanOrEqual(before + lifetime)
+    expect(expiration).toBeLessThanOrEqual(Date.now() + lifetime)
+  }
+})
