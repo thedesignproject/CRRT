@@ -8,17 +8,17 @@ import './pricing.css'
 const plans = [
   {
     key: 'community', name: 'Self-hosted', monthly: 0, yearly: 0,
-    description: 'The complete product on infrastructure you operate.',
+    description: 'Your infrastructure. Your data.',
     features: ['Unlimited projects and users', 'Unlimited comments and audits', 'Your infrastructure and data'],
   },
   {
     key: 'pro', name: 'Pro', monthly: 19, yearly: 192, recommended: true,
-    description: 'For product teams shipping from private feedback without infrastructure work.',
+    description: 'For teams turning feedback into fixes.',
     features: ['Private projects · 10 internal collaborators', 'Storybook review and component context', 'MCP connection and agent handoff', 'GitHub, Linear, and Jira integrations', 'Record agent handoff · private preview', '2,000 comments · 5 Product Audits / month', 'Unlimited guests'],
   },
   {
     key: 'studio', name: 'Studio', monthly: 49, yearly: 492, includes: 'Pro',
-    description: 'For studios and agencies running several active products.',
+    description: 'For agencies managing multiple client projects.',
     features: ['50 projects · 25 internal collaborators', '10,000 comments / month', '30 Product Audits / month', 'Unlimited guests'],
   },
 ] as const

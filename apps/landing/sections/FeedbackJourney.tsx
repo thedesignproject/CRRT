@@ -6,17 +6,17 @@ import { useScrollSteps } from '../lib/useScrollSteps'
 import './feedback-journey.css'
 
 const acts = [
-  { title: 'Point at what’s wrong.', description: 'Click the element and say what you want. CRRT keeps the screenshot, the selector, and the viewport with your words.' },
-  { title: 'Your team agrees on what ships.', description: 'Feedback from the product, Chrome, and Storybook lands in one project. Approve the comments that are ready for work.' },
-  { title: 'Your agent gets the full picture.', description: 'Approved feedback goes to Claude Code, Codex, or Cursor with the evidence attached. Prefer a tracker? Open the issue in Linear, GitHub, or Jira.' },
-  { title: 'The fix comes back to the comment.', description: 'Your agent drafts the change on a branch. Compare it with the original screenshot, then merge it yourself.' },
+  { title: 'Point to the problem.', description: 'Click the element and say what you want. CRRT keeps the screenshot, the selector, and the viewport with your words.' },
+  { title: 'Agree on the change.', description: 'Feedback from the product, Chrome, and Storybook lands in one project. Approve the comments that are ready for work.' },
+  { title: 'Give your agent the context.', description: 'Approved feedback goes to Claude Code, Codex, or Cursor with the evidence attached. Prefer a tracker? Open the issue in Linear, GitHub, or Jira.' },
+  { title: 'Review the fix.', description: 'Your agent drafts the change on a branch. Compare it with the original screenshot, then merge it yourself.' },
 ] as const
 
 /** Each act holds four beats, so the story advances on scroll without feeling like tabs. */
 export const BEATS_PER_ACT = 4
 const BEATS = acts.length * BEATS_PER_ACT
-/** A fast scroll still plays every beat, at this many ms each. */
-const BEAT_DWELL = 280
+/** Let each scene transition finish before advancing, even during a fast scroll. */
+const BEAT_DWELL = 900
 /** Extra beats of scroll the fixed card stays pinned for before the page moves on. */
 export const BEATS_HELD = 3
 
@@ -84,7 +84,7 @@ function PricingCard({ fixed }: { fixed: boolean }) {
     <strong>Team</strong>
     <p>$12 <small>per seat / month</small></p>
     <ul><li /><li /><li /></ul>
-    <div className="story-cta">{fixed ? 'Start free trial' : 'Start trial'}</div>
+    <div className="story-cta">{fixed ? 'Start free trial' : 'Get started'}</div>
   </div>
 }
 
@@ -132,12 +132,14 @@ export function FeedbackJourney() {
     <section className="landing-section feedback-journey" id="how-it-works">
       <div ref={trackRef} className="story-track" data-act={act}>
         <div className="story-sticky" id="try-crrt" tabIndex={-1} aria-labelledby="story-title">
-          <h2 id="story-title" className="story-title">Give your agent eyes on the product.</h2>
-          <div className="story-copy">
+          <div className="story-narrative">
+            <h2 id="story-title" className="story-title">Give your agent eyes on the product.</h2>
+            <div className="story-copy">
             {acts.map((item, index) => <article key={item.title} className={index === act ? 'is-active' : ''} aria-hidden={index !== act}>
               <h3>{item.title}</h3>
               <p>{item.description}</p>
             </article>)}
+          </div>
           </div>
           <div ref={viewportRef} className="story-viewport"><div className="story-box"><StoryScene act={act} sub={sub} /></div></div>
         </div>

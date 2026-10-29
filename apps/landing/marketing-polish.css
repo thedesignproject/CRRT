@@ -138,3 +138,27 @@
 .landing-integrations-output h3 { font: var(--landing-h4); letter-spacing: var(--landing-h4-track); }
 .landing-closing h2 { font: 600 clamp(40px, 4.4vw, 64px)/1 var(--crrt-dashboard-font); letter-spacing: -.04em; }
 .landing-capture-chapter-action, .landing-integrations-copy > a, .landing-integrations-list button strong, .plan-button, .landing-closing .ds-button { font-weight: 600; }
+
+
+.landing-hero-actions { display: flex; flex-direction: column; align-items: center; gap: var(--crrt-space-3); }
+.connect-agent { position: relative; max-width: 100%; color: var(--muted-foreground); }
+.connect-agent > p { max-width: 42ch; font-size: 13px; line-height: 1.6; margin: var(--crrt-space-4) 0 0; }
+.connect-agent details { display: none; }
+.connect-agent[data-status="error"] details { display: block; margin-top: var(--crrt-space-4); }
+.connect-agent summary { cursor: pointer; font-size: 12px; }
+.connect-agent-prompt { max-width: 54ch; max-height: 180px; overflow-y: auto; font: 12px/1.8 var(--crrt-font-mono); overflow-wrap: anywhere; padding: var(--crrt-space-5); border: 1px solid var(--border); border-radius: var(--crrt-radius-2xl); }
+.connect-agent-logos { display: inline-flex; align-items: center; gap: var(--crrt-space-2); }
+.connect-agent-logos > span { display: flex; }
+.connect-agent-logos img { display: block; width: 18px; height: 18px; }
+.connect-agent button > svg { opacity: .65; flex-shrink: 0; }
+.landing-hero-actions .connect-agent { color: var(--crrt-white); }
+.landing-hero-actions .connect-agent button { min-height: 44px; padding: var(--crrt-space-3); gap: var(--crrt-space-3); border-color: transparent; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; color: rgba(255,255,255,.8); font-size: 13px; font-weight: 450; }
+.landing-hero-actions .connect-agent button:hover { color: var(--crrt-white); border-color: transparent; background: transparent; }
+.landing-hero-actions .connect-agent button:focus-visible { outline: 2px solid var(--crrt-white); outline-offset: 3px; }
+.landing-hero-actions .connect-agent-logos img { width: 16px; height: 16px; filter: invert(1); opacity: .7; }
+.landing-hero-actions .connect-agent > p { display: none; }
+.landing-hero-actions .connect-agent[data-status="copied"] > p { display: block; }
+.landing-hero-actions .connect-agent-prompt { background: var(--crrt-bg-deep); text-align: left; }
+
+.landing-integrations-copy > .connect-agent { margin-top: var(--crrt-space-8); }
+.landing-integrations-copy > .connect-agent > p { margin-top: var(--crrt-space-6); }

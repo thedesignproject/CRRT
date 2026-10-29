@@ -1,3 +1,4 @@
+import { ConnectAgent } from '../components/ConnectAgent'
 import { tryCrrt } from '../lib/tryCrrt'
 import { useRef, useState } from 'react'
 import { Check, MessageCircle, Send } from 'lucide-react'
@@ -64,11 +65,14 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
 
         <div className="landing-photo-copy">
           <h1><span>Humans give feedback.</span>{' '}<span>Agents ship the fix.</span></h1>
-          <p>Comment on your live UI. Give your coding agent the context to fix it.</p>
+          <p>Point to what needs changing. Give your coding agent the context to fix it. Review the result.</p>
+          <div className="landing-hero-actions">
           <a className="landing-hero-cta" href="#try-crrt" onClick={tryCrrt}>
             <span><CarrotIcon size={28} /></span>
-            Try CRRT
+            Try it live
           </a>
+          <ConnectAgent />
+          </div>
         </div>
 
         <div className="landing-floating-feedback" aria-label="Example product feedback">
@@ -105,16 +109,15 @@ export function Navigation({ authenticated }: { authenticated: boolean }) {
     <nav className="landing-navigation" aria-label="Main navigation">
       <a href="#product" aria-label="CRRT home" className="landing-navigation-brand"><Wordmark level="nav" /></a>
       <div className="landing-navigation-links">
-        <NavLink href="#product">Product</NavLink>
         <NavLink href="#how-it-works">How it works</NavLink>
-        <NavLink href="#install">Capture anywhere</NavLink>
         <NavLink href="#pricing">Pricing</NavLink>
         <NavLink href="/docs">Docs</NavLink>
+        <NavLink href="https://github.com/thedesignproject/CRRT">GitHub</NavLink>
       </div>
       <div className="landing-navigation-actions">
         <ThemeToggle />
         <a className="ds-button ds-button-primary ds-button-sm" href={DASHBOARD_HREF}>
-          {authenticated ? 'Dashboard' : 'Start trial'}
+          {authenticated ? 'Dashboard' : 'Get started'}
         </a>
       </div>
     </nav>

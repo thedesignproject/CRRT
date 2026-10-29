@@ -22,24 +22,24 @@ const captureModes = {
   widget: {
     Icon: AppWindow,
     source: 'Website / App widget',
-    title: 'Comment inside the product.',
-    description: 'Pin feedback to the exact interface your team is reviewing. CRRT keeps the screenshot, selected element, viewport, and project instructions together.',
+    title: 'Point. Comment. Keep the context.',
+    description: 'Leave feedback on the exact element, with a screenshot attached.',
     clip: { src: '/capture-widget.mp4', poster: '/capture-widget.jpg', label: 'The CRRT widget on the crrt.ai pricing page: a comment is pinned to the Studio trial button and sent.' },
     action: { label: 'Install the widget', href: '/docs/install' },
   },
   chrome: {
     Icon: ChromeLogo,
     source: 'Chrome extension',
-    title: 'Review any page before installing code.',
-    description: 'Pin the extension once and it goes wherever you browse: localhost, a preview link, or production. Every comment lands in the same CRRT project.',
+    title: 'Review any page. No code to install.',
+    description: 'Leave feedback on localhost, previews, or production.',
     clip: { src: '/capture-chrome.mp4', poster: '/capture-chrome.jpg', label: 'The CRRT extension pinned in the Chrome toolbar: a comment is dropped on CRRT pages running on localhost, a Vercel preview, and crrt.ai.' },
     action: { label: 'Add to Chrome', href: CHROME_HREF },
   },
   storybook: {
     Icon: StorybookLogo,
     source: 'Storybook 10',
-    title: 'Review the component inside its story.',
-    description: 'Send manual feedback or a failed check to CRRT with the component, story, and DOM evidence already attached.',
+    title: 'Catch issues before they reach the page.',
+    description: 'Review components with their story and test results attached.',
     clip: { src: '/capture-storybook.mp4', poster: '/capture-storybook.jpg', label: 'The CRRT Storybook panel on an icon-only button story: the failed accessible-name check is sent to CRRT.' },
     action: { label: 'Connect Storybook', href: DASHBOARD_HREF },
   },
@@ -47,8 +47,8 @@ const captureModes = {
     badge: 'Private preview',
     Icon: CirclePlay,
     source: 'CRRT Record',
-    title: 'Show the flow, not only one frame.',
-    description: 'Record the tab with your voice, box what matters as you talk, and hand your agent the transcript, marks, and DOM targets in one payload.',
+    title: 'Show the whole flow.',
+    description: 'Record your screen, explain the issue, and mark what matters.',
     clip: { src: '/capture-record.mp4', poster: '/capture-record.jpg', label: 'CRRT Record on the crrt.ai pricing page: a box is drawn around the Studio trial button while recording, then the review copies the agent payload for Claude Code.' },
     action: { label: 'Private preview' },
   },
@@ -81,17 +81,17 @@ function ChapterAction({ item }: { item: CaptureItem }) {
 }
 
 /** A fast scroll still lands on every clip: the 900ms pan settles, then the frame rests before the next. */
-const FRAME_DWELL = 1300
+const FRAME_DWELL = 1800
 
 /** Desktop pins the section and pans the reel sideways, one capture method per step. */
 export function InstallPaths() {
   const trackRef = useRef<HTMLDivElement>(null)
-  const active = useScrollSteps(trackRef, captureEntries.length, '--reel-p', FRAME_DWELL, 1)
+  const active = useScrollSteps(trackRef, captureEntries.length, '--reel-p', FRAME_DWELL, 2)
   return (
     <section id="install" className="landing-section landing-install capture-reel">
       <div ref={trackRef} className="reel-track">
         <div className="reel-sticky">
-          <SectionIntro title="Wherever you work. Bring CRRT." description="Four ways to leave feedback, one project that receives it." />
+          <SectionIntro title="Leave feedback wherever you work." description="Four ways to leave feedback, one project that receives it." />
           <ol className="reel-strip" style={{ '--reel-index': active } as CSSProperties}>
             {captureEntries.map(([value, item], index) => <li key={value} className={`reel-frame${index === active ? ' is-active' : ''}`} aria-current={index === active ? 'step' : undefined}>
               <div className="reel-frame-copy">

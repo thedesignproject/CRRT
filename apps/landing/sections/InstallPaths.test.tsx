@@ -15,15 +15,15 @@ it('pans through all four capture methods', () => {
   const strip = () => container.querySelector<HTMLElement>('.reel-strip')!
 
   expect(frames().map(frame => frame.querySelector('h3')?.textContent)).toEqual([
-    'Comment inside the product.',
-    'Review any page before installing code.',
-    'Review the component inside its story.',
-    'Show the flow, not only one frame.',
+    'Point. Comment. Keep the context.',
+    'Review any page. No code to install.',
+    'Catch issues before they reach the page.',
+    'Show the whole flow.',
   ])
   expect(frames()[0]).toHaveClass('is-active')
   expect(strip().style.getPropertyValue('--reel-index')).toBe('0')
 
-  for (const [index, offset] of [[1, -300], [2, -550], [3, -800], [3, -1150]]) {
+  for (const [index, offset] of [[1, -250], [2, -450], [3, -650], [3, -1150]]) {
     top = offset
     window.dispatchEvent(new Event('scroll'))
     act(() => { queue.splice(0).forEach(callback => callback(0)) })

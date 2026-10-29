@@ -32,7 +32,7 @@ it('follows one comment from the page to the reviewed fix as the reader scrolls'
 
   expect(screen.getByRole('heading', { name: 'Give your agent eyes on the product.' })).toBeInTheDocument()
   expect(scene()).toHaveAttribute('data-act', '0')
-  expect(screen.getByRole('heading', { name: 'Point at what’s wrong.' }).closest('article')).toHaveClass('is-active')
+  expect(screen.getByRole('heading', { name: 'Point to the problem.' }).closest('article')).toHaveClass('is-active')
   expect(panel()).toHaveTextContent('1 comment · 0 ready')
   expect(container.querySelector<HTMLElement>('.story-viewport')!.style.getPropertyValue('--story-fit')).toBe('0.5000')
 
@@ -76,7 +76,7 @@ it('follows one comment from the page to the reviewed fix as the reader scrolls'
   goTo(18)
   expect(scene()).toHaveAttribute('data-act', '3')
   expect(scene()).toHaveAttribute('data-sub', '3')
-  expect(screen.getByRole('heading', { name: 'The fix comes back to the comment.' }).closest('article')).toHaveClass('is-active')
+  expect(screen.getByRole('heading', { name: 'Review the fix.' }).closest('article')).toHaveClass('is-active')
 })
 
 it('fits the scene once when ResizeObserver is unavailable and observes size changes otherwise', () => {

@@ -58,7 +58,7 @@ it('keeps the landing page for non-audit routes', () => {
   render(<App />)
   expect(screen.queryByText('Live audit workspace')).not.toBeInTheDocument()
   expect(screen.getByRole('heading', { name: /Humans give feedback/i })).toBeInTheDocument()
-  expect(screen.getByRole('link', { name: 'Start trial' })).toBeInTheDocument()
+  expect(screen.getAllByRole('link', { name: 'Get started' })[0]).toBeInTheDocument()
 })
 
 it('recognizes an existing session, updates the nav, and redirects to the dashboard', async () => {

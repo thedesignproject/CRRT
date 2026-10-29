@@ -5,7 +5,7 @@ import { publicResponse } from '../server/public-site.ts'
 import { publicPagePattern, applicationFallbackRoutes } from './public-pages.ts'
 
 const dist = resolve(import.meta.dirname, '../apps/landing/dist')
-const types: Record<string, string> = { '.html': 'text/html', '.md': 'text/markdown', '.txt': 'text/plain', '.json': 'application/json', '.xml': 'application/xml', '.css': 'text/css', '.js': 'application/javascript', '.png': 'image/png', '.ttf': 'font/ttf' }
+const types: Record<string, string> = { '.html': 'text/html', '.md': 'text/markdown', '.txt': 'text/plain', '.json': 'application/json', '.xml': 'application/xml', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf' }
 const server = createServer(async (req, res) => {
   const path = new URL(req.url!, 'http://localhost').pathname
   let file = resolve(dist, '.' + decodeURIComponent(path))

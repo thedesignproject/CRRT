@@ -1,3 +1,4 @@
+import { ConnectAgent } from '../components/ConnectAgent'
 import { useState } from 'react'
 import { ArrowRight, Check, Bot } from 'lucide-react'
 
@@ -15,9 +16,9 @@ export function Integrations() {
   return (
     <section id="integrations" className="landing-section landing-integrations">
       <div className="landing-integrations-copy">
-        <h2>Keep the context. Choose the next step.</h2>
-        <p>Send selected feedback to a coding agent, or turn one approved comment into a reviewable tracker issue. Connect through MCP to read feedback, get the full context, and report progress. Your team reviews the fix.</p>
-        <a href="/docs/agent-handoff">Connect your agent with MCP <ArrowRight size={18} /></a>
+        <h2>Your tools. The full picture.</h2>
+        <p>Connect your coding agent through MCP, or send approved feedback to GitHub, Linear, or Jira.</p>
+        <ConnectAgent />
       </div>
 
       <div className="landing-integrations-stage">

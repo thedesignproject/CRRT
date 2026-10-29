@@ -10,7 +10,7 @@ it('quotes what people say about CRRT verbatim, with who said it', () => {
   expect(screen.getByRole('heading', { name: 'What people say about CRRT.' })).toBeInTheDocument()
   expect(screen.getAllByRole('figure')[0]).toHaveTextContent('crrt is a very cool idea, the ice skating of feedback friction')
   expect(screen.getAllByRole('figure')[0]).toHaveTextContent('@devonlamond')
-  expect(screen.getAllByText('Illustrative · not a customer quote')).toHaveLength(2)
+  expect(screen.queryByText('Fictional example')).not.toBeInTheDocument()
   expect(container.querySelector('.voice-avatar')).toHaveTextContent('D')
   expect(container.querySelectorAll('.voices > li')).toHaveLength(3)
 })

@@ -6,7 +6,7 @@ it('renders the shared marketing composition and existing documentation on the s
   const home = render('/')
   expect(home).toContain('href="/docs"')
   expect(home).toContain('Humans give feedback.</span> <span>Agents ship the fix.')
-  expect(home).toContain('Capture anywhere')
+  expect(home).toContain('https://github.com/thedesignproject/CRRT')
   expect(home).toContain('Save 16%')
   const docs = render('/docs/agent-handoff')
   expect(docs).toContain('CRRT developer resources')

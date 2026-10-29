@@ -2,7 +2,7 @@
    The active frame is centered; --reel-index arrives from React on each step. */
 /* The pinned frame already leaves room under the clips, so the section adds little more. */
 .landing-section.capture-reel { padding-block: 0; }
-.reel-track { position: relative; height: 450vh; margin: 0 calc(-1 * var(--landing-shell-gutter)); }
+.reel-track { position: relative; height: 1000vh; margin: 0 calc(-1 * var(--landing-shell-gutter)); }
 .reel-sticky { position: sticky; top: 0; display: flex; height: 100svh; flex-direction: column; justify-content: flex-start; gap: var(--crrt-space-9); padding: var(--crrt-space-9) 0 var(--crrt-space-7); overflow: hidden; }
 .reel-strip { --reel-frame: min(1080px, 80vw); --reel-gap: 56px; display: flex; width: max-content; gap: var(--reel-gap); margin: 0; padding: 0 calc((100vw - var(--reel-frame)) / 2); list-style: none; transform: translateX(calc(var(--reel-index, 0) * -1 * (var(--reel-frame) + var(--reel-gap)))); transition: transform 900ms cubic-bezier(.2, .8, .2, 1); will-change: transform; }
 
@@ -14,9 +14,9 @@
 .reel-frame-copy p { margin: 0 0 24px; color: var(--muted-foreground); font-size: 15px; line-height: 1.65; text-wrap: pretty; }
 .reel-frame-stage { min-width: 0; }
 
-/* The clip carries its own browser window on the section's white, so the media needs no frame. */
-.reel-media { position: relative; display: grid; margin: 0; aspect-ratio: 16 / 9; }
-.reel-media video { width: 100%; height: 100%; object-fit: contain; mix-blend-mode: multiply; }
+/* A quiet review frame keeps every capture surface grounded in the page. */
+.reel-media { position: relative; display: grid; margin: 0; padding: var(--crrt-space-5); border: 1px solid var(--crrt-rule); border-radius: var(--crrt-marketing-radius-panel); background: var(--crrt-white); box-shadow: var(--crrt-shadow-md); }
+.reel-media video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; border: 1px solid var(--crrt-rule); border-radius: var(--crrt-radius-3xl); background: var(--crrt-bg-warm); }
 
 @media (max-width: 760px) {
   .reel-track { height: auto; }
