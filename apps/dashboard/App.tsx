@@ -790,14 +790,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onProjectsChanged={refreshProjects}
         />
       ) : (
-      <div className="dashboard-feedback">
-        <div className="absolute left-4 right-4 top-3 z-20 flex flex-col gap-2">
+      <>
+        <div className="flex shrink-0 flex-col gap-2">
         {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
         {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
           <span>{readyUndo.length} marked ready.</span>
           <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo mark ready</button>
         </div>}
         </div>
+      <div className="dashboard-feedback">
         <CommentList
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
@@ -881,6 +882,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           </BulkActionBar>
         )}
       </div>
+      </>
       )}
 
       </main>
