@@ -35,7 +35,8 @@ port = 54324
 
 [storage]
 enabled = true
-file_size_limit = "5MiB"
+# Record media uploads are bounded to 1 GiB; feedback buckets keep their 5 MiB caps.
+file_size_limit = "1GiB"
 
 [storage.buckets.feedback-images]
 public = true
