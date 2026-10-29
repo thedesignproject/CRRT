@@ -2417,6 +2417,30 @@ describe('<FeedbackWidget />', () => {
       expect(button?.getAttribute('style')).toMatch(/fw-carrot-active|box-shadow/)
     })
 
+    it.each(['metaKey', 'ctrlKey', 'altKey', 'shiftKey'] as const)(
+      'ignores C with %s in idle and selecting modes', async (modifier) => {
+        mockFetch()
+        render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+        await waitFor(() => expect(document.querySelector('[data-fw]')).not.toBeNull())
+
+        const hint = 'Click an element or select text to leave feedback'
+        const key = modifier === 'shiftKey' ? 'C' : 'c'
+        await act(async () => { fireEvent.keyDown(window, { key, [modifier]: true }) })
+        expect(document.body.textContent).not.toContain(hint)
+        expect(document.body.style.cursor).not.toBe('crosshair')
+
+        await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+        expect(document.body.style.cursor).toBe('crosshair')
+        await act(async () => { fireEvent.keyDown(window, { key, [modifier]: true }) })
+        expect(document.body.textContent).toContain(hint)
+        expect(document.body.style.cursor).toBe('crosshair')
+
+        await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+        expect(document.body.textContent).not.toContain(hint)
+        expect(document.body.style.cursor).not.toBe('crosshair')
+      },
+    )
+
     it('toggles selecting mode with C while ignoring repeat C and active carrot clicks', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)

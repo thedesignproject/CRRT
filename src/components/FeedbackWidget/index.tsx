@@ -845,6 +845,7 @@ function FeedbackWidgetInner({
       }
 
       if (e.key === 'c' || e.key === 'C') {
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
         if (mode === 'idle') {
           enterFeedbackMode()
           return
