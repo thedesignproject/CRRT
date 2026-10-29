@@ -1,60 +1,78 @@
-# Landing draft handoff
+# Landing review handoff
 
-For any agent (Codex, Claude, Cursor) continuing the landing. Read `AGENTS.md` first; this file records the design decisions the user has accepted so far.
+Review order for Pranav: [#351](https://github.com/thedesignproject/CRRT/pull/351), then [#352](https://github.com/thedesignproject/CRRT/pull/352). Read AGENTS.md before editing.
 
-## Branches and review order
+## Stack and scope
 
-1. `feat/landing-foundations-draft` → `trunk`: shared design-system primitives and scoped theme preferences (PR #351).
-2. `feat/landing-story-draft` → `feat/landing-foundations-draft`: the landing itself (PR #352).
+1. **#351 — design-system foundations**, based on trunk: landing primitives, component metadata, and scoped theme preferences. Defaulting the landing to light does not change dashboard theme preferences.
+2. **#352 — landing**, based on #351: the complete reviewed page, real local widget demo, agent setup CTA, capture videos, pricing presentation, and supporting public docs.
 
-Both are drafts for continued design work, not deployment approval. Built from trunk 92739c97. Do not use the old `feat/landing-product-story` branch as a base; it carries unrelated dashboard/API history.
+Both layers include trunk 6bb4cb32, including MCP and the shared agent onboarding guide (#362). The stack is for code and product review; merging or launching remains a separate decision.
 
-## Accepted design
+Related work is deliberately not included:
+- **#363** changes dashboard MCP onboarding only. Its setup prompt matches the landing prompt, and Git's merge simulation reports no conflicts with this stack. It can be reviewed independently.
+- **#350** implements CRRT Record. The landing labels Record as private preview and does not imply general availability.
+- **#346** contains Storybook work; this landing uses the existing install destination.
 
-- **Hero visual is locked.** The primary button is now “Try CRRT” and scrolls to the existing workflow scene before activating the widget. Keep the photo/video hero, its floating glass comments and pins, and the two-line headline “Humans give feedback. Agents ship the fix.” Improve the sections after it.
-- **The page should not look generated.** Real product UI and real data over illustrations; no decorative eyebrows, step rails, trays or chips that repeat what the content already says.
-- **Story (`FeedbackJourney`)**: one pinned scene follows comment #24 through comment → approve → ship → fixed. CRRT is desktop-first, so the subject is a desktop pricing card that gets fixed (no phone mockup). The side panel mirrors the product panel; keep it product-identical.
-- **Capture reel (`InstallPaths`)**: four real clips (Widget, Chrome extension, Storybook, Record), each a 6–9 s recording of CRRT's own UI on CRRT's own sites. Clips sit on the page without a card frame and play only while on screen. Record stays labelled “Private preview”.
-- **Scroll pacing (`lib/useScrollSteps.ts`)**: pinned sections walk one step at a time, so a hard flick still plays every step in order (`dwell` ms per step), and the last step holds extra scroll (`hold`) so it is seen before the section unpins.
-- **Integrations**: smoked glass is retained only in the integrations diagram. Destinations respond to hover/focus/click as previews; they send nothing.
-- **Reviews** are “What people say about CRRT.”: real comments only, quoted verbatim (casing included), as compact cards. Two explicitly labelled illustrative review cards fill the draft layout; replace them with approved real testimonials before launch. Add new ones to `voices` in `sections/Reviews.tsx`.
-- **Pricing** follows a centered layout: intro and billing toggle centered; three equal plan cards; Pro carries a “Recommended” tab and the only primary button; price figure beside its two-line billing label; CTA above the feature list; Studio opens with “Everything in Pro”.
-- **Type scale** (tokens in `marketing-polish.css`): one semibold weight (600, never heavier) after the hero. `--landing-h2` section titles, `--landing-h3` step and plan titles, `--landing-h4` card titles, `--landing-lead` paragraphs under a section title. Use the tokens; do not set heading sizes per section.
+## Accepted page and interactions
 
-## Files
+- Preserve the photo/video hero, floating glass comments, and two-line headline: “Humans give feedback. Agents ship the fix.”
+- The main hero CTA is **Try it live**. It scrolls to the existing workflow scene and activates the real widget. There is no separate demo module.
+- **Connect your agent** sits below the main CTA as a smaller text action with monochrome agent logos. It is not a second boxed hero button. In integrations it uses the standard secondary DS button, with 32 px above it and 20 px before its helper text.
+- The agent CTA copies the full setup prompt pointing to https://crrt.ai/get-started.md and https://crrt.ai/api/mcp/v1. Copy success explains the next step; clipboard failure reveals selectable instructions. It does not authenticate or execute work itself.
+- Navbar: How it works, Pricing, Docs, GitHub; signed-out action **Get started**, signed-in **Dashboard**.
+- The journey heading belongs in the left narrative column above its current step. It must not become a detached full-width heading.
+- The story follows one comment through pointing, agreement, agent context, and human review. The track is 1100vh, with 900 ms minimum beat spacing.
+- The horizontal reel shows Widget, Chrome, Storybook, and Record. Desktop track is 1000vh, with 1800 ms minimum frame spacing and two extra final hold slices. Mobile uses a native horizontal snap scroller.
+- Capture videos sit in rounded review frames with a thin border and subtle shadow. Clips play only while on screen.
+- The integrations diagram is a preview. Hover, focus, and click change the example destination; they do not send feedback.
+- Use the existing DS and landing type tokens. Preserve the accepted hierarchy instead of introducing new pill/button treatments.
+- Closing: “Your next fix starts with a comment.” Primary **Get started**, secondary **Add to Chrome** with the Chrome logo.
 
-- `apps/landing/MarketingPage.tsx`: section composition.
-- `apps/landing/sections/FeedbackJourney.tsx`, `feedback-journey.css`: the pinned story.
-- `apps/landing/sections/InstallPaths.tsx`, `capture-reel.css`: capture reel; clips in `apps/landing/public/capture-*.mp4` with `.jpg` posters.
-- `apps/landing/sections/Pricing.tsx`, `pricing.css`; `Reviews.tsx`, `reviews.css`.
-- `apps/landing/lib/useScrollSteps.ts`: step pacing shared by the story and the reel.
-- `apps/landing/marketing-polish.css`: type tokens and final overrides; it loads after `globals.css`. Section stylesheets imported by components load before both, so a section rule can be overridden by the global sheets at equal specificity.
-- `scripts/preview-public-site.ts`: rereads the built manifest per request so rebuilding does not leave stale asset references.
+## Product consistency
 
-## Local review
+| Surface | Current behavior |
+| --- | --- |
+| Live demo | Real selection, screenshots, comments, editing, and deletion; comments stay in this tab with session storage and an in-memory fallback. No shared project writes or account required. |
+| MCP | Account consent and project permissions remain enforced by the existing backend. The landing copies the same onboarding instructions as dashboard, using production URLs. |
+| Record | Private preview. Recording/transcription are distinct from authenticated agent access. |
+| Pricing | Default monthly: Pro $19 and Studio $49. Annual totals remain $192 and $492. These match api/_lib/billing/plans.ts; no Stripe amount or entitlement change. |
+| Checkout | Existing duplicate-request guard, stale-session handling, and authenticated checkout destinations are retained. |
+| Themes | Landing and dashboard preferences remain scoped separately. |
 
-Run `bun run build:landing`, then `PORT=5399 bun run preview:landing`.
-Visit `http://127.0.0.1:5399/?stay=1`. A query string keeps signed-in users on the marketing page.
-Use a free port if 5399 is already occupied.
+## Review notes before launch
 
-## Open before leaving draft
+- The Widget and Chrome clips show an earlier pricing layout. Other recordings can also contain annual prices from that recording; these are recorded product footage, not the current checkout selector. Re-record if launch requires every frame to match the final page.
+- Reviews contains one real verbatim quote from @devonlamond and two invented layout examples (Sofia Bennett and Lucas Reed). The local visual review removed their visible labels; these are not verified customer endorsements. Replace them with approved quotes before a public launch.
+- Studio's proposed $39 price was not approved as a billing change. Do not advertise it while checkout still uses $492/year.
+- The Chrome URL uses VITE_CHROME_EXTENSION_URL when configured and otherwise falls back to /support#extension.
 
-- The Widget and Chrome clips were recorded on the previous pricing design; re-record them on the current pricing section.
-- Reviews has one real comment (@devonlamond). Add more real ones; confirm permission to quote before launch.
-- Live demo feedback uses a session-local adapter with screenshot quota fallback; it never sends comments to a shared project. The real widget supports selection, screenshots, editing and deletion.
-- Record's implementation is separate (PR #350) and stays a private preview here.
-- MCP is merged from trunk; integrations, pricing, agent docs and llms.txt now describe account authorization and scoped feedback work.
-- Preserve trunk billing behavior: duplicate checkout protection, stale-session request handling, and Stripe billing portal destinations.
+## Files and preview
 
-## Verification
+- apps/landing/MarketingPage.tsx: composition.
+- apps/landing/sections/Hero.tsx and components/ConnectAgent.tsx: entry actions.
+- apps/landing/lib/demoComments.ts and tryCrrt.ts: local demo.
+- apps/landing/sections/FeedbackJourney.tsx, feedback-journey.css, InstallPaths.tsx, capture-reel.css: scroll narratives.
+- apps/landing/marketing-polish.css: final overrides; loads after globals.css.
+- apps/landing/sections/Pricing.tsx: presentation, preserving checkout behavior.
+- scripts/preview-public-site.ts: built-page preview; includes SVG MIME type for agent logos.
+- THIRD_PARTY_NOTICES.md: agent-logo attribution and license.
 
-Run typecheck (`bunx tsc -p tsconfig.check.json --noEmit`), `bun run build:landing`, and `NODE_OPTIONS=--no-experimental-webstorage bun run test:coverage`.
-Run diff coverage against each PR's immediate base (`bash scripts/check-diff-coverage.sh origin/feat/landing-foundations-draft`); line and branch coverage must be 100% per `AGENTS.md`.
-A full-suite run can time out a few dashboard/widget tests under load; rerun those files alone before treating them as real failures.
+Run:
 
-## Visual cleanup — October 28
+    node scripts/build-landing.ts
+    PORT=5401 bun run preview:landing
 
-- Removed the standalone live-demo module and detached journey introduction. The existing sticky scene owns its title and the Try CRRT anchor.
-- Story sections have no outer vertical padding; the reel title stays inside its sticky frame next to the first capture mode.
-- Monthly billing is the default, showing $19/$49. Actual annual prices remain $192/$492 until a billing price change is confirmed; never advertise $39 while checkout charges $492/year.
-- Pricing terms are concise notes inside each card; closing uses the shared official-color Chrome mark.
+Visit http://127.0.0.1:5401/?stay=1. The query keeps signed-in users on the marketing page. Rebuild after edits; this server serves built assets. API-backed flows require the deployed preview.
+
+## Validation and review path
+
+Run typecheck, landing build/prerender, and the full coverage suite. Locally, NODE_OPTIONS=--no-experimental-webstorage avoids Node 26 storage conflicts with the test DOM. Validate 100% line and branch diff coverage independently: #351 against trunk, #352 against #351.
+
+Manual review at 1440, 1100, and 390 px:
+1. Try it live → select an element → send a comment → edit/delete it; reload to verify per-tab persistence.
+2. Connect your agent → copy prompt; reject clipboard access to inspect fallback.
+3. Scroll forward and backward through all four journey modules and capture clips; verify the last clip holds.
+4. Check the navbar, headings, video frames, integration CTA spacing, Chrome logo, and mobile overflow.
+5. Toggle monthly/yearly pricing and inspect the unauthenticated destinations without starting a purchase.
+6. Compare dashboard MCP onboarding separately in #363.
