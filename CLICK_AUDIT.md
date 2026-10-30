@@ -11,7 +11,7 @@ Count starts on the relevant surface with the task's items visible; navigation t
 | Undo dashboard Mark ready | At least 2N | Undo mark ready = 1 | 4 | 76 | Third layer; other bulk states remain pending |
 | Widget handoff accepts open comments (PremiumAgentBridge.confirmHandoff) | Send to agent mutates selection before prompt copy | Explicit approval copy + reversible action | 5 | TBD | Audit server mutation and undo semantics |
 | Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Code inspected; verify in browser |
-| Dashboard select arbitrary N items | Enter select mode + N clicks + action | Direct selection/keyboard range + action | 5 | TBD | Pending |
+| Dashboard select arbitrary N items | Enter select mode + N clicks + action | N checkbox clicks + action; contiguous range: first + Shift-last + action | 5 | 5 (arbitrary), 45 (range) | Direct checkboxes and range implemented; arbitrary selection inherently depends on N |
 | Inbox select all + move to a project | Select → Select page → Select all matching → destination → Move = 5+ | Select all → Move to [project] = 2 | 4 | ≥12 | Merged #375/#377; Undo move pending |
 | Bulk Reject (App) | Originally 4; parent layer Select all → Actions → Reject = 3 | Select all → Reject = 2 | 3 | 3 vs parent | Implemented in second layer |
 | Project/filter/navigation/settings/export/audits/integrations | Not yet measured | ≤2 each | TBD | TBD | Inventory pending |
@@ -64,3 +64,7 @@ After merging #367–#379, start from trunk including reviewer fixes for pending
 ## Ninth layer: Undo Mark done
 
 Mark done now writes review and implementation together with the current server version, avoiding partial completion. Capture exact previous states only for successful changes and expose Undo mark done in the existing notice: Select all → Mark done = 2 clicks; Undo = 1. Restores use the returned server version and preserve agent ownership; stale versions are rejected rather than overwriting later work. Failed completion items remain selected, and failed undo items retain the existing retry behavior. Reopen, Reject, and Inbox move Undo remain pending for their distinct ownership/external-side-effect contracts.
+
+## Tenth layer: direct selection and ranges
+
+Project feedback and Inbox expose native checkboxes without entering Select mode first. Shift-click extends selection over the current visible order; ranges respect the 500-item cap and Inbox all/exclusions semantics. Clicking the comment still opens it outside bulk mode. Arbitrary disconnected items require N selections; a contiguous range takes two selections regardless of N. Browser verified at 1440/390 px including completion and Undo. Full suite: 2,971 passed, TypeScript clean, diff line/branch coverage 100%.

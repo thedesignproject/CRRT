@@ -82,3 +82,11 @@ describe('shared feedback controls', () => {
     expect(screen.queryByRole('button')).toBeNull()
   })
 })
+
+it('uses Inbox selection callbacks when its checkbox is clicked', () => {
+  const toggleBulkSelect = vi.fn()
+  render(<CommentList personal filteredComments={[comment]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()}
+    bulkControls={{bulkMode:false,selectedCount:0,allVisibleSelected:false,allMatchingSelected:false,canSelectAllMatching:true,isSelected:()=>false,enterBulkMode:vi.fn(),exitBulkMode:vi.fn(),toggleBulkSelect,toggleSelectAllVisible:vi.fn(),selectAllMatching:vi.fn(),clearSelection:vi.fn()}} />)
+  fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: Project feedback'}))
+  expect(toggleBulkSelect).toHaveBeenCalledWith('c1', undefined)
+})
