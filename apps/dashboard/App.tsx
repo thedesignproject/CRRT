@@ -180,11 +180,19 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const bulkGeneration = useRef(0)
+  const readyUndoRequest = useRef<symbol | null>(null)
+  const clearReadyUndo = useCallback(() => {
+    if (readyUndoRequest.current) {
+      readyUndoRequest.current = null
+      setBulkActionBusy(false)
+    }
+    setReadyUndo([])
+  }, [])
   useEffect(() => {
     bulkGeneration.current++
     setBulkActionBusy(false)
-    setReadyUndo([])
-  }, [selectedProject, view, accessToken])
+    clearReadyUndo()
+  }, [selectedProject, view, accessToken, clearReadyUndo])
   const [readyUndo, setReadyUndo] = useState<Comment[]>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
@@ -303,7 +311,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   ), [projectComments])
 
   const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
-    setReadyUndo([])
+    clearReadyUndo()
     const request = Symbol(id)
     reviewRequests.current.set(id, request)
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
@@ -317,10 +325,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
     }
-  }, [accessToken, refreshComments, mutation.report])
+  }, [accessToken, refreshComments, mutation.report, clearReadyUndo])
 
   const handleToggleDone = useCallback(async (id: string) => {
-    setReadyUndo([])
+    clearReadyUndo()
     const current = comments.find((c) => c.id === id)
     if (!current) return
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
@@ -339,7 +347,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments, mutation.report])
+  }, [comments, refreshComments, mutation.report, clearReadyUndo])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
@@ -391,7 +399,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
     const ids = Array.from(bulkSelectedIds)
     const previous = comments.filter(c => bulkSelectedIds.has(c.id) && c.reviewStatus !== 'accepted')
-    setReadyUndo([])
+    clearReadyUndo()
     const generation = bulkGeneration.current
     setBulkActionBusy(true)
     setBulkActionError('')
@@ -446,19 +454,25 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       }
     }
     if (generation === bulkGeneration.current) setBulkActionBusy(false)
-  }, [accessToken, comments, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report])
+  }, [accessToken, comments, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report, clearReadyUndo])
 
   const undoReady = async () => {
     const generation = bulkGeneration.current
+    const request = Symbol('undo-ready')
+    readyUndoRequest.current = request
     setBulkActionBusy(true)
     setBulkActionError('')
     const results = await Promise.allSettled(readyUndo.map(async (before) => {
       const current = comments.find(c => c.id === before.id)
       if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== before.implementationStatus || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
       await apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus)
-      if (generation === bulkGeneration.current) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
+      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
     }))
-    if (generation !== bulkGeneration.current) return
+    if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) return
+    readyUndoRequest.current = null
+    for (const result of results) {
+      if (result.status === 'rejected') mutation.report(result.reason)
+    }
     const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected')
     setReadyUndo(remaining)
     setBulkActionBusy(false)
@@ -499,7 +513,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       return
     }
     const generation = bulkGeneration.current
-    setReadyUndo([])
+    clearReadyUndo()
     setBulkActionBusy(true)
     setBulkActionError('')
     try {
@@ -528,7 +542,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (generation === bulkGeneration.current) setBulkActionBusy(false)
     }
-  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject, adoptSession])
+  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject, adoptSession, clearReadyUndo])
 
   const toggleSelectAllVisible = useCallback(() => {
     if (bulkActionBusy) return

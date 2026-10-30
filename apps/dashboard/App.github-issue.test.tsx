@@ -1159,3 +1159,43 @@ it('ignores a late undo response after changing project', async () => {
  expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
 })
+
+it.each(['success', 'failure'])('ignores a late Undo %s after a newer local status action', async (result) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finish!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+  finish = () => result === 'success' ? resolve() : reject(new Error('offline'))
+ }))
+ fireEvent.click(undo)
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledOnce())
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.getByRole('button', { name: 'Mark done' })).toBeEnabled()
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finish())
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Some items could not be restored. Undo retries only those items.')).toBeNull()
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+})
+
+it('reports subscription failures from Undo and blocks further writes', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('The owner needs an active Cloud plan. Feedback remains readable.'), { status: 402, resource: 'subscription' }))
+ fireEvent.click(undo)
+ await waitFor(() => expect(screen.getByTestId('detail')).toHaveAttribute('data-read-only', 'true'))
+ expect(screen.getByText('The owner needs an active Cloud plan. Feedback remains readable.')).toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
