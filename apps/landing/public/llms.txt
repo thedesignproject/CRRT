@@ -20,7 +20,7 @@ A human must create the handoff and provide its share slug and scoped token. Ann
 
 Send the share token as Authorization: Bearer <token>. Presence and operations also require a stable X-Agent-Id; operations require Idempotency-Key. Do not put tokens in public links or logs. Missing or invalid credentials return 401, missing shares return 404, and expired or revoked shares return 410.
 
-Request public pages with Accept: text/markdown to receive Markdown at the same URL. Plain Markdown copies are also available by appending .md to documentation paths; the homepage is /index.md. No official CLI or MCP server is currently published. Use an HTTP client with the documented API.
+Request public pages with Accept: text/markdown to receive Markdown at the same URL. Plain Markdown copies are also available by appending .md to documentation paths; the homepage is /index.md. CRRT MCP is available over Streamable HTTP at /api/mcp/v1 with account authorization and scoped read, implementation, and review permissions. See /docs/agent-handoff for setup. The HTTP Agent API remains available for scoped shares.
 
 ## Optional
 

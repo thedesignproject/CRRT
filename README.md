@@ -449,3 +449,14 @@ We tag widget releases on npm but the OSS server-side moves on `trunk`. Pull per
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+
+### Keyboard shortcut preferences
+
+Use **Keyboard shortcuts** in the widget's carrot menu or the dashboard's user menu
+to turn CRRT action and navigation shortcuts off or back on. Shortcuts start enabled.
+The two preferences are independent and saved in this browser; the widget preference
+applies to the current website, not every site where CRRT is installed. Changes sync
+across tabs on the same origin. If storage is blocked, the setting lasts for this page.
+
+Mouse controls, Tab navigation, Enter/Space on focused buttons, and Escape to close or
+cancel remain available. No project permission or account change is required.

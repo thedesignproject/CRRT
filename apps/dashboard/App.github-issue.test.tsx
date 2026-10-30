@@ -141,7 +141,7 @@ beforeEach(() => {
   fixtures.acceptInvite.mockReset().mockResolvedValue(undefined)
   fixtures.claimProject.mockReset().mockResolvedValue({ publicKey: 'new-project' })
   fixtures.updateImpl.mockReset().mockResolvedValue(undefined)
-  fixtures.updateReview.mockReset().mockResolvedValue(undefined)
+  fixtures.updateReview.mockReset().mockResolvedValue({ updatedAt: '2026-10-29T12:00:00.000Z' })
   fixtures.createShare.mockReset().mockResolvedValue({ shareId: 'share-1', commentCount: 1 })
   fixtures.getPrompt.mockReset().mockResolvedValue({ prompt: 'Fix selected feedback' })
   fixtures.beginCheckout.mockReset().mockResolvedValue({ url: 'https://checkout.example/session' })
@@ -237,6 +237,21 @@ describe('<App /> GitHub issue wiring', () => {
     expect(fixtures.updateImpl).not.toHaveBeenCalled()
   })
 
+  it('disables global dashboard shortcuts while retaining mouse search and Escape', async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue('disabled')
+    render(<App />)
+    await screen.findByRole('button', { name: 'search' })
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(screen.queryByRole('button', { name: 'command accept' })).toBeNull()
+    for (const key of ['j', 'k', 'a', 'd', 'm', 's', 'ArrowDown', ' ']) fireEvent.keyDown(window, { key })
+    expect(fixtures.updateReview).not.toHaveBeenCalled()
+    expect(fixtures.updateImpl).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    expect(screen.getByRole('button', { name: 'command accept' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('button', { name: 'command accept' })).toBeNull()
+  })
+
   it('runs review and completion actions for project managers', async () => {
     fixtures.comments.push({
       id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
@@ -289,7 +304,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
     ))
@@ -381,7 +396,7 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Mark done' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Mark done' }))
     await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'done',
     ))
@@ -389,7 +404,7 @@ describe('<App /> GitHub issue wiring', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenLastCalledWith(
       'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
     ))
@@ -462,7 +477,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
     fireEvent.keyDown(window, { key: 'a' })
@@ -490,7 +505,7 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(1))
     fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
     fireEvent.keyDown(window, { key: 'a' })
@@ -520,7 +535,7 @@ describe('<App /> GitHub issue wiring', () => {
     fixtures.updateReview.mockRejectedValueOnce(new Error('bulk failed'))
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getAllByRole('button', { name: 'toggle test comment' })[0])
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalledTimes(2))
     expect(error).toHaveBeenCalledWith(expect.stringContaining('Bulk reject'), expect.any(Array))
   })
@@ -756,7 +771,7 @@ it.each(['cancel', 'navigate'])('does not resurrect old bulk failures after %s',
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
@@ -776,7 +791,7 @@ it('does not clear a newer selection after an older successful bulk completion',
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
  fireEvent.keyDown(window, { key: 'Escape' })
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
@@ -792,7 +807,7 @@ it('does not restore selection after cancellation during the refresh await', asy
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
- fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
  await waitFor(() => expect(fixtures.fn).toHaveBeenCalled())
  fireEvent.keyDown(window, { key: 'Escape' })
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
@@ -842,7 +857,7 @@ it('keeps only failed items after a partial multi-item rejection', async () => {
  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
  fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
- fireEvent.click(screen.getByRole('menuitem', { name: 'Reject' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
  await screen.findByText('2 items could not be updated and remain selected.')
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
 })
@@ -1012,4 +1027,273 @@ it('explains expired-plan write rejection, restores retained feedback and disabl
  await screen.findByRole('alert');expect(screen.getByRole('alert')).toHaveTextContent('Feedback remains readable')
  expect(screen.getByTestId('detail')).toHaveAttribute('data-read-only','true')
  expect(fixtures.fn).toHaveBeenCalled();fireEvent.keyDown(window,{key:'m'});expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+})
+
+
+it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together', async (status) => {
+ const comment = { projectId: 'project-1', body: 'Feedback', reviewStatus: status === 'done' ? 'accepted' : status, implementationStatus: status === 'done' ? 'done' : 'unassigned', claimedByAgentId: 'agent', createdAt: '', updatedAt: '' }
+ fixtures.comments.push({ ...comment, id: 'comment-1' }, { ...comment, id: 'comment-2' })
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+ fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
+ fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+ await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledTimes(2))
+ for (const id of ['comment-1', 'comment-2']) {
+  expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open')
+  expect(fixtures.updateImpl).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'unassigned')
+ }
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
+ expect(screen.getByTestId('first-claim')).toHaveTextContent('none')
+ await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
+})
+
+it('keeps failed reopen items selected for retry and reports partial failure', async () => {
+ fixtures.comments.push(...['comment-1', 'comment-2'].map(id => ({ id, projectId: 'project-1', body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' })))
+ fixtures.updateImpl.mockRejectedValueOnce(new Error('offline'))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+ await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1'))
+ expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
+})
+
+it.each(['Reopen', 'Mark done'])('waits for both %s updates before handling either failure', async (action) => {
+ for (const failedUpdate of [fixtures.updateReview, fixtures.updateImpl]) {
+  const pendingUpdate = failedUpdate === fixtures.updateReview ? fixtures.updateImpl : fixtures.updateReview
+  let finishPending!: () => void
+  failedUpdate.mockRejectedValueOnce(new Error('offline'))
+  pendingUpdate.mockImplementationOnce(() => new Promise<void>(resolve => { finishPending = resolve }))
+  fixtures.comments.push({ id: 'comment-1', projectId: 'project-1', body: 'Feedback', reviewStatus: 'accepted', implementationStatus: 'done', claimedByAgentId: 'agent', createdAt: '', updatedAt: '' })
+  const view = render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
+  const refreshCalls = fixtures.fn.mock.calls.length
+  fireEvent.click(screen.getByRole('button', { name: action }))
+  await act(async () => { await Promise.resolve() })
+  expect(screen.getByRole('button', { name: action })).toBeDisabled()
+  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+  expect(screen.queryByText('1 item could not be updated and remain selected.')).toBeNull()
+
+  await act(async () => { finishPending() })
+  await screen.findByText('1 item could not be updated and remain selected.')
+  expect(screen.getByRole('button', { name: action })).toBeEnabled()
+  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+  view.unmount()
+  fixtures.comments.splice(0)
+ }
+})
+
+it('rejects the visible list in two clicks without changing implementation status', async () => {
+ fixtures.comments.push(...['comment-1', 'comment-2'].map(id => ({ id, projectId: 'project-1', body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' })))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+ await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
+ for (const id of ['comment-1', 'comment-2']) expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'rejected')
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it('undoes bulk approval in one click and retries only failed restores', async () => {
+ fixtures.comments = ['comment-1', 'comment-2'].map(id => ({ ...readyFeedback(id), reviewStatus: 'open' }))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
+ fireEvent.click(undo)
+ await screen.findByText('Some items could not be restored. Undo retries only those items.')
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(4)
+ fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
+ await screen.findByText('Previous review statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(5)
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'open', '2026-10-29T12:00:00.000Z')
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+})
+
+it('does not offer undo for failed approvals and clears it when changing projects', async () => {
+ fixtures.comments = ['comment-1', 'comment-2'].map(id => ({ ...readyFeedback(id), reviewStatus: 'open' }))
+ fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ await screen.findByText('1 marked ready.')
+ fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
+ await screen.findByText('Previous review statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(3)
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-2', 'open', '2026-10-29T12:00:00.000Z')
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ await screen.findByRole('button', { name: 'Undo mark ready' })
+ fireEvent.click(screen.getByRole('button', { name: 'other project' }))
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+})
+
+it.each(['review', 'implementation', 'claim', 'missing'])('refuses undo after refreshed %s changes', async (change) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ const rendered = render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ await screen.findByRole('button', { name: 'Undo mark ready' })
+ fixtures.comments = change === 'missing' ? [] : [{ ...readyFeedback('comment-1'), ...(change === 'review' ? {reviewStatus:'rejected'} : change === 'implementation' ? {implementationStatus:'in_progress'} : {claimedByAgentId:'new-agent'}) }]
+ rendered.rerender(<App />)
+ fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
+ await screen.findByText('Some items could not be restored. Undo retries only those items.')
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(1)
+})
+
+it('ignores a late undo response after changing project', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finish!: () => void
+ fixtures.updateReview.mockReturnValueOnce(new Promise<void>(resolve => { finish = resolve }))
+ fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
+ expect(screen.getByRole('button', { name: 'Undo mark ready' })).toBeDisabled()
+ fireEvent.click(screen.getByRole('button', { name: 'other project' }))
+ await act(async () => finish())
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+})
+
+it.each(['success', 'failure'])('ignores a late Undo %s after a newer local status action', async (result) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finish!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>((resolve, reject) => {
+  finish = () => result === 'success' ? resolve() : reject(new Error('offline'))
+ }))
+ fireEvent.click(undo)
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledOnce())
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.getByRole('button', { name: 'Mark done' })).toBeEnabled()
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finish())
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Some items could not be restored. Undo retries only those items.')).toBeNull()
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+})
+
+it('reports subscription failures from Undo and blocks further writes', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('The owner needs an active Cloud plan. Feedback remains readable.'), { status: 402, resource: 'subscription' }))
+ fireEvent.click(undo)
+ await waitFor(() => expect(screen.getByTestId('detail')).toHaveAttribute('data-read-only', 'true'))
+ expect(screen.getByText('The owner needs an active Cloud plan. Feedback remains readable.')).toBeInTheDocument()
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it('never offers an unfenced Undo when the server omits the changed version', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ fixtures.updateReview.mockResolvedValueOnce({})
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ await waitFor(() => expect(screen.getByRole('button', { name: 'Send to Claude Code' })).toBeEnabled())
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+})
+
+it('discards a conflicting Undo version without reverting newer feedback', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ await screen.findByRole('button', { name: 'Undo mark ready' })
+ fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('changed'), {status:409}))
+ fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
+ await screen.findByText('Feedback changed after this action and was not undone. Refresh to review it.')
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.getByRole('button', { name: 'Send to Claude Code' })).toBeEnabled()
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it.each(['stay', 'navigate'])('waits for a newer write before reconciling invalidated Undo (%s)', async (navigation) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finishUndo!: () => void
+ let finishWrite!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
+ fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fireEvent.click(undo)
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finishUndo())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+ if (navigation === 'navigate') fireEvent.click(screen.getByRole('button', { name: 'other project' }))
+ await act(async () => finishWrite())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + (navigation === 'stay' ? 1 : 0))
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+})
+
+it.each(['stay', 'navigate'])('guards reconciliation data when another write starts during the fetch (%s)', async (navigation) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finishUndo!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
+ fireEvent.click(undo)
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ await act(async () => {})
+ let canApply!: () => boolean
+ let finishRead!: () => void
+ const refreshCalls = fixtures.fn.mock.calls.length
+ fixtures.fn.mockImplementationOnce((guard: () => boolean) => {
+  canApply = guard
+  return new Promise<void>(resolve => { finishRead = resolve })
+ })
+ await act(async () => finishUndo())
+ expect(canApply()).toBe(true)
+ let finishWrite!: () => void
+ fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fireEvent.keyDown(window, { key: 'm' })
+ expect(canApply()).toBe(false)
+ if (navigation === 'navigate') fireEvent.click(screen.getByRole('button', { name: 'other project' }))
+ await act(async () => finishRead())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+ await act(async () => finishWrite())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + (navigation === 'stay' ? 2 : 1))
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+})
+
+it('discards the in-flight Undo snapshot and reconciles after Escape cancels bulk selection', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finishUndo!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
+ fireEvent.click(undo)
+ fireEvent.keyDown(window, { key: 'Escape' })
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finishUndo())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
 })

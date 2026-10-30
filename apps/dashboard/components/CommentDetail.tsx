@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react'
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
@@ -138,6 +139,7 @@ export function CommentDetail({
   bodyEditor,
   personalActions,
 }: CommentDetailProps | PersonalDetailProps) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const [issueBusy, setIssueBusy] = useState(false)
   const [issueError, setIssueError] = useState<string | null>(null)
   const [syncBusy, setSyncBusy] = useState(false)
@@ -590,7 +592,7 @@ export function CommentDetail({
               ? 'Pick an Inbox item to see its page context and screenshot.'
               : 'Pick a feedback item from the list to see the full context, screenshot, and actions.'}
           </p>
-          {!personal && <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">
+          {!personal && shortcutsEnabled && <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">
             <Kbd>J</Kbd><Kbd>K</Kbd> navigate
             <span className="mx-1">·</span>
             <Kbd>A</Kbd> ready

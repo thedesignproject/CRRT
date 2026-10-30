@@ -1,5 +1,6 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 
 vi.mock('../api', () => ({
   getExternalWorkDraft: vi.fn(),
@@ -101,6 +102,78 @@ async function openExternalWorkDraft() {
   await waitFor(() => expect(create).toBeEnabled())
   return create
 }
+
+describe('dashboard shortcut hints', () => {
+  beforeEach(() => {
+    const data = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => data.set(key, value),
+    })
+  })
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('updates empty comment-panel hints when shortcuts are toggled', () => {
+    const preference = renderHook(() => useKeyboardShortcuts('dashboard'))
+    const view = render(<CommentDetail {...props} selectedComment={null} />)
+    const keys = () => [...view.container.querySelectorAll('kbd')].map(key => key.textContent)
+    expect(keys()).toEqual(['J', 'K', 'A', 'D'])
+    act(() => preference.result.current[1](false))
+    expect(keys()).toEqual([])
+    expect(screen.getByText('Select a comment')).toBeInTheDocument()
+    act(() => preference.result.current[1](true))
+    expect(keys()).toEqual(['J', 'K', 'A', 'D'])
+  })
+
+  it('hides empty comment-panel hints when the saved preference is off', () => {
+    localStorage.setItem('crrt:keyboard-shortcuts:dashboard', 'disabled')
+    const view = render(<CommentDetail {...props} selectedComment={null} />)
+    expect(view.container.querySelector('kbd')).toBeNull()
+    expect(screen.getByText('Select a comment')).toBeInTheDocument()
+  })
+
+  it('hides palette action hints while retaining comment metadata, mouse actions, and dialog keys', () => {
+    localStorage.setItem('crrt:keyboard-shortcuts:dashboard', 'disabled')
+    const preference = renderHook(() => useKeyboardShortcuts('dashboard'))
+    const onAction = vi.fn()
+    const onSelect = vi.fn()
+    const onClose = vi.fn()
+    const view = render(<CommandPalette
+      comments={[{ ...comment, pageUrl: 'https://example.com/page' }]}
+      onAction={onAction}
+      onSelect={onSelect}
+      onClose={onClose}
+      selectedCommentId=""
+    />)
+    const actionHints = [
+      ['Toggle Ready for Agent', 'A'], ['Toggle Done', 'M'],
+      ['Toggle Reject', 'D'], ['Toggle agent panel', 'S'],
+    ]
+    for (const [label, key] of actionHints) {
+      expect(within(screen.getByRole('button', { name: label })).queryByText(key)).toBeNull()
+    }
+    expect(screen.getByText('Ada · /page')).toBeInTheDocument()
+    expect([...view.container.querySelectorAll('kbd')].map(key => key.textContent))
+      .toEqual(['ESC', '↑', '↓', '↵', 'esc'])
+    fireEvent.click(screen.getByRole('button', { name: 'Toggle Done' }))
+    expect(onAction).toHaveBeenLastCalledWith('done')
+    fireEvent.click(screen.getByRole('button', { name: /Increase contrast/ }))
+    expect(onSelect).toHaveBeenCalledWith('comment-1')
+    const input = screen.getByRole('textbox')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onAction).toHaveBeenLastCalledWith('accept')
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledOnce()
+    act(() => preference.result.current[1](true))
+    for (const [label, key] of actionHints) {
+      const button = screen.getByRole('button', { name: new RegExp(label) })
+      expect(within(button).getByText(key, { selector: 'kbd' })).toBeInTheDocument()
+      expect(within(button).getByText(key, { selector: 'p' })).toBeInTheDocument()
+    }
+  })
+})
 
 describe('<CommentDetail /> feedback audience', () => {
   it('lets internal members change visibility and presents guests as shared-only', () => {

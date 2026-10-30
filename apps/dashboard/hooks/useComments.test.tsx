@@ -164,3 +164,20 @@ it('revalidates on visible tabs, ignores hidden transitions, and removes listene
   expect(listComments).toHaveBeenCalledTimes(after)
   visibility.mockRestore()
 })
+
+it.each(['success', 'failure'])('discards a reconciliation %s invalidated during its request', async (outcome) => {
+ const pending = deferred<CommentRecord[]>()
+ vi.mocked(listComments).mockResolvedValueOnce([comment('current')]).mockReturnValueOnce(pending.promise)
+ const { result } = renderHook(() => useComments('/api', 'token', 'project'))
+ await waitFor(() => expect(result.current.comments[0]?.body).toBe('current'))
+ let canApply = true
+ let refresh!: Promise<void>
+ act(() => { refresh = result.current.refresh(() => canApply) })
+ canApply = false
+ if (outcome === 'success') pending.resolve([comment('stale')])
+ else pending.reject(Object.assign(new Error('stale denial'), {status:403}))
+ await act(async () => refresh)
+ expect(result.current.comments[0]?.body).toBe('current')
+ expect(result.current.error).toBeNull()
+ expect(result.current.loading).toBe(false)
+})

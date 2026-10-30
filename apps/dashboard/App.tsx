@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../src/lib/useKeyboardShortcuts'
 import { useFeedbackMutationError } from './hooks/useFeedbackMutationError'
 import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
@@ -103,6 +104,7 @@ export function App() {
 }
 
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
   useEffect(() => {
     const onFocus = () => { void refreshProjects() }
@@ -126,6 +128,34 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
   const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
+  const feedbackScopeKey = JSON.stringify([accessToken, selectedProject, view])
+  const feedbackWrites = useRef({ key: feedbackScopeKey, version: 0, pending: new Set<Promise<unknown>>() })
+  if (feedbackWrites.current.key !== feedbackScopeKey) {
+    feedbackWrites.current = { key: feedbackScopeKey, version: 0, pending: new Set() }
+  }
+  useEffect(() => () => {
+    feedbackWrites.current = { ...feedbackWrites.current, pending: new Set() }
+  }, [])
+  const trackFeedbackWrite = useCallback(async <T,>(operation: Promise<T>) => {
+    const scope = feedbackWrites.current
+    scope.version++
+    scope.pending.add(operation)
+    try {
+      return await operation
+    } finally {
+      scope.pending.delete(operation)
+    }
+  }, [])
+  const reconcileFeedback = useCallback(async (scope: typeof feedbackWrites.current) => {
+    while (feedbackWrites.current === scope) {
+      while (scope.pending.size) await Promise.allSettled([...scope.pending])
+      if (feedbackWrites.current !== scope) return
+      const version = scope.version
+      await refreshComments(() => feedbackWrites.current === scope && scope.version === version)
+      // A write during the fetch invalidates its data; reconcile again once idle.
+      if (scope.version === version) return
+    }
+  }, [refreshComments])
   const reviewRequests = useRef(new Map<string, symbol>())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -178,10 +208,20 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [bulkMode, setBulkMode] = useState(false)
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set())
   const bulkGeneration = useRef(0)
+  const readyUndoRequest = useRef<symbol | null>(null)
+  const clearReadyUndo = useCallback(() => {
+    if (readyUndoRequest.current) {
+      readyUndoRequest.current = null
+      setBulkActionBusy(false)
+    }
+    setReadyUndo([])
+  }, [])
   useEffect(() => {
     bulkGeneration.current++
     setBulkActionBusy(false)
-  }, [selectedProject, view, accessToken])
+    clearReadyUndo()
+  }, [selectedProject, view, accessToken, clearReadyUndo])
+  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -299,11 +339,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   ), [projectComments])
 
   const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
+    clearReadyUndo()
     const request = Symbol(id)
     reviewRequests.current.set(id, request)
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
     try {
-      await apiUpdateReview(API_BASE, accessToken, id, status)
+      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status))
       if (reviewRequests.current.get(id) === request) await refreshComments()
     } catch (err) {
       console.error('Failed to update review status:', err)
@@ -312,9 +353,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
     }
-  }, [accessToken, refreshComments, mutation.report])
+  }, [accessToken, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
 
   const handleToggleDone = useCallback(async (id: string) => {
+    clearReadyUndo()
     const current = comments.find((c) => c.id === id)
     if (!current) return
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
@@ -327,13 +369,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         }
       : c))
     try {
-      await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
+      await trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments, mutation.report])
+  }, [comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
@@ -345,7 +387,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ? { ...comment, visibility }
       : comment))
     try {
-      await apiUpdateVisibility(API_BASE, accessToken, id, visibility)
+      await trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
     } catch (error) {
       if (previous) {
         setComments((current) => current.map((comment) => comment.id === id
@@ -355,7 +397,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       console.error('Failed to update feedback audience:', error)
       mutation.report(error)
     }
-  }, [accessToken, comments, mutation.report])
+  }, [accessToken, comments, mutation.report, trackFeedbackWrite])
 
   const toggleBulkSelect = useCallback((id: string) => {
     if (bulkActionBusy) return
@@ -382,8 +424,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionError('')
   }, [])
 
-  const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject') => {
+  const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
     const ids = Array.from(bulkSelectedIds)
+    const previous = comments.filter(c => bulkSelectedIds.has(c.id) && c.reviewStatus !== 'accepted')
+    clearReadyUndo()
     const generation = bulkGeneration.current
     setBulkActionBusy(true)
     setBulkActionError('')
@@ -397,17 +441,21 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setComments((prev) => prev.map((c) => {
       if (!idSet.has(c.id)) return c
       const ts = new Date().toISOString()
+      if (action === 'reopen') return { ...c, reviewStatus: 'open' as ReviewStatus, implementationStatus: 'unassigned' as ImplStatus, claimedByAgentId: null, updatedAt: ts }
       if (action === 'ready') return { ...c, reviewStatus: 'accepted' as ReviewStatus, updatedAt: ts }
       if (action === 'done') return { ...c, reviewStatus: 'accepted' as ReviewStatus, implementationStatus: 'done' as ImplStatus, updatedAt: ts }
       return { ...c, reviewStatus: 'rejected' as ReviewStatus, updatedAt: ts }
     }))
     const calls = ids.map(async (id) => {
-      if (action === 'ready') return apiUpdateReview(API_BASE, accessToken, id, 'accepted')
-      if (action === 'reject') return apiUpdateReview(API_BASE, accessToken, id, 'rejected')
-      await Promise.all([
-        apiUpdateReview(API_BASE, accessToken, id, 'accepted'),
-        apiUpdateImpl(API_BASE, accessToken, id, 'done'),
+      if (action === 'ready') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted'))
+      if (action === 'reject') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'rejected'))
+      const updates = await Promise.allSettled([
+        trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted')),
+        trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done')),
       ])
+      // A failed PATCH must not release the busy guard while its sibling still writes.
+      const failure = updates.find((update) => update.status === 'rejected')
+      if (failure) throw failure.reason
     })
 
     const results = await Promise.allSettled(calls)
@@ -424,6 +472,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
     }
     if (stillCurrent && generation === bulkGeneration.current) {
+      if (action === 'ready') setReadyUndo(previous.flatMap(c => {
+        const result = results[ids.indexOf(c.id)]
+        return result.status === 'fulfilled' && result.value && result.value.updatedAt ? [{ ...c, undoVersion: result.value.updatedAt }] : []
+      }))
       if (failedIds.length > 0) {
         setBulkMode(true)
         setBulkSelectedIds(action === 'ready' ? new Set(ids) : new Set(failedIds))
@@ -433,7 +485,39 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       }
     }
     if (generation === bulkGeneration.current) setBulkActionBusy(false)
-  }, [accessToken, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report])
+  }, [accessToken, comments, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+
+  const undoReady = async () => {
+    const generation = bulkGeneration.current
+    const scope = feedbackWrites.current
+    const request = Symbol('undo-ready')
+    readyUndoRequest.current = request
+    setBulkActionBusy(true)
+    setBulkActionError('')
+    const results = await Promise.allSettled(readyUndo.map(async (before) => {
+      const current = comments.find(c => c.id === before.id)
+      if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== before.implementationStatus || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
+      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion))
+      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
+    }))
+    if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) {
+      if (readyUndoRequest.current === request) clearReadyUndo()
+      await reconcileFeedback(scope)
+      return
+    }
+    readyUndoRequest.current = null
+    for (const result of results) {
+      if (result.status === 'rejected') mutation.report(result.reason)
+    }
+    const conflicts = new Set(results.flatMap((result, i) => result.status === 'rejected' && result.reason?.status === 409 ? [i] : []))
+    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i))
+    setReadyUndo(remaining)
+    setBulkActionBusy(false)
+    if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
+    else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
+    else setBulkTransitionNotice('Previous review statuses restored.')
+    await refreshComments()
+  }
 
   const openAgentUpgrade = useCallback(async () => {
     const generation = bulkGeneration.current
@@ -467,6 +551,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       return
     }
     const generation = bulkGeneration.current
+    clearReadyUndo()
     setBulkActionBusy(true)
     setBulkActionError('')
     try {
@@ -495,7 +580,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (generation === bulkGeneration.current) setBulkActionBusy(false)
     }
-  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject, adoptSession])
+  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject, adoptSession, clearReadyUndo])
 
   const toggleSelectAllVisible = useCallback(() => {
     if (bulkActionBusy) return
@@ -505,6 +590,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       setBulkActionError('Select up to 500 comments at a time. Narrow the list or select comments individually.')
       return
     }
+    setBulkMode(true)
     setBulkSelectedIds((prev) => {
       const allSelected = visibleIds.every((id) => prev.has(id))
       return allSelected ? new Set() : new Set(visibleIds)
@@ -527,7 +613,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     function onKey(e: KeyboardEvent) {
       if (view === 'extension-comments') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (shortcutsEnabled && (e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         setCmdOpen((v) => !v)
         return
@@ -543,6 +629,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         return
       }
 
+      if (!shortcutsEnabled) return
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
@@ -562,7 +649,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
+  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -755,8 +842,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           onProjectsChanged={refreshProjects}
         />
       ) : (
+      <>
+        <div className="flex shrink-0 flex-col gap-2">
+        {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
+        {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
+          <span>{readyUndo.length} marked ready.</span>
+          <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo mark ready</button>
+        </div>}
+        </div>
       <div className="dashboard-feedback">
-        {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="absolute left-4 right-4 top-3 z-20 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
         <CommentList
           readOnly={!canManageFeedback}
           filteredComments={filteredComments}
@@ -834,16 +928,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
             >
               {bulkActionBusy ? 'Working…' : allSelectedReady ? `Send to ${selectedAgentMeta.name}` : 'Mark ready'}
             </button>
-            <details className="dashboard-bulk-menu">
-              <summary aria-label="More bulk actions">Actions</summary>
-              <div role="menu">
-                <button type="button" role="menuitem" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
-                <button type="button" role="menuitem" className="dashboard-bulk-danger" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reject') }}>Reject</button>
-              </div>
-            </details>
+            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
+            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reopen') }}>Reopen</button>
+            <button type="button" className="dashboard-bulk-secondary dashboard-bulk-danger" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reject') }}>Reject</button>
           </BulkActionBar>
         )}
       </div>
+      </>
       )}
 
       </main>

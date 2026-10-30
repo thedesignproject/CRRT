@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { SuggestedProjects } from './SuggestedProjects'
 import type { User } from '@supabase/supabase-js'
 import type { ReactNode } from 'react'
@@ -82,6 +83,7 @@ export function Header({
   superAdminActive,
   onOpenSuperAdmin,
 }: HeaderProps) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   return (
     <>
     <aside className="dashboard-navigation" aria-label="Workspace navigation">
@@ -207,9 +209,9 @@ export function Header({
         >
           <SearchIcon />
           <span className="hidden sm:block flex-1 text-left">Search Feedback…</span>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border bg-card text-[10px] font-mono text-muted-foreground">
+          {shortcutsEnabled && <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border bg-card text-[10px] font-mono text-muted-foreground">
             <span className="text-[11px]">⌘</span>K
-          </kbd>
+          </kbd>}
         </button>
         <NotificationBell
           apiBase={apiBase}
