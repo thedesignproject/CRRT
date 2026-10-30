@@ -1181,7 +1181,7 @@ it.each(['success', 'failure'])('ignores a late Undo %s after a newer local stat
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
  expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
  expect(screen.queryByText('Some items could not be restored. Undo retries only those items.')).toBeNull()
- expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
 })
 
 it('reports subscription failures from Undo and blocks further writes', async () => {
@@ -1222,4 +1222,78 @@ it('discards a conflicting Undo version without reverting newer feedback', async
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
  expect(screen.getByRole('button', { name: 'Send to Claude Code' })).toBeEnabled()
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it.each(['stay', 'navigate'])('waits for a newer write before reconciling invalidated Undo (%s)', async (navigation) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finishUndo!: () => void
+ let finishWrite!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
+ fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fireEvent.click(undo)
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finishUndo())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+ if (navigation === 'navigate') fireEvent.click(screen.getByRole('button', { name: 'other project' }))
+ await act(async () => finishWrite())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + (navigation === 'stay' ? 1 : 0))
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+})
+
+it.each(['stay', 'navigate'])('guards reconciliation data when another write starts during the fetch (%s)', async (navigation) => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finishUndo!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
+ fireEvent.click(undo)
+ fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
+ fireEvent.keyDown(window, { key: 'm' })
+ await act(async () => {})
+ let canApply!: () => boolean
+ let finishRead!: () => void
+ const refreshCalls = fixtures.fn.mock.calls.length
+ fixtures.fn.mockImplementationOnce((guard: () => boolean) => {
+  canApply = guard
+  return new Promise<void>(resolve => { finishRead = resolve })
+ })
+ await act(async () => finishUndo())
+ expect(canApply()).toBe(true)
+ let finishWrite!: () => void
+ fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fireEvent.keyDown(window, { key: 'm' })
+ expect(canApply()).toBe(false)
+ if (navigation === 'navigate') fireEvent.click(screen.getByRole('button', { name: 'other project' }))
+ await act(async () => finishRead())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+ await act(async () => finishWrite())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + (navigation === 'stay' ? 2 : 1))
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+})
+
+it('discards the in-flight Undo snapshot and reconciles after Escape cancels bulk selection', async () => {
+ fixtures.comments = [{ ...readyFeedback('comment-1'), reviewStatus: 'open' }]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
+ fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
+ const undo = await screen.findByRole('button', { name: 'Undo mark ready' })
+ let finishUndo!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
+ fireEvent.click(undo)
+ fireEvent.keyDown(window, { key: 'Escape' })
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finishUndo())
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+ expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
+ expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
 })

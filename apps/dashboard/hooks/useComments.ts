@@ -7,7 +7,7 @@ export interface UseCommentsResult {
   commentsProjectId: string | null
   loading: boolean
   error: string | null
-  refresh: () => Promise<void>
+  refresh: (canApply?: () => boolean) => Promise<void>
 }
 
 export function useComments(apiBase: string, accessToken: string, projectId: string | null): UseCommentsResult {
@@ -18,7 +18,7 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
   const activeProjectRef = useRef<string | null>(null)
   const refreshSequence = useRef(0)
 
-  const loadComments = useCallback(async (background = false) => {
+  const loadComments = useCallback(async (background = false, canApply: () => boolean = () => true) => {
     const sequence = ++refreshSequence.current
     activeProjectRef.current = projectId
 
@@ -39,11 +39,11 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
     try {
       const data = await listComments(apiBase, accessToken, projectId)
       // Race guard: drop response if user switched projects mid-flight.
-      if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence) return
+      if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence || !canApply()) return
       setComments(data)
       setCommentsProjectId(projectId)
     } catch (err) {
-      if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence) return
+      if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence || !canApply()) return
       if (err instanceof Error && 'status' in err && (err.status === 401 || err.status === 403)) {
         setComments([])
         setCommentsProjectId(null)
@@ -54,7 +54,7 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
     }
   }, [apiBase, accessToken, projectId])
 
-  const refresh = useCallback(() => loadComments(), [loadComments])
+  const refresh = useCallback((canApply?: () => boolean) => loadComments(false, canApply), [loadComments])
 
   // Clear previous project's data before the next fetch lands.
   useEffect(() => {
