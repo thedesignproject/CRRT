@@ -193,3 +193,25 @@ it('forwards the exact version and returns a conflict without publishing activit
  expect(createFeedbackEvent).not.toHaveBeenCalled()
  expect(closeLinkedExternalWork).not.toHaveBeenCalled()
 })
+
+
+it.each(['done', 'unassigned', 'claimed', 'in_progress', 'blocked', 'ready_for_testing'] as const)('mutates review and %s implementation together under one version fence', async (implementationStatus) => {
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test.local'})
+ vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+ vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'admin'} as never)
+ vi.mocked(mutateProjectFeedback).mockResolvedValue({id:'c',updatedAt:'new'} as never)
+ vi.mocked(findActiveSharesForComment).mockResolvedValue([{id:'s'}] as never)
+ const res=mockRes(), expectedUpdatedAt='2026-10-30T12:00:00.123456Z'
+ await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'accepted',implementationStatus,expectedUpdatedAt},headers:{}},res)
+ expect(res.statusCode).toBe(200)
+ expect(mutateProjectFeedback).toHaveBeenCalledExactlyOnceWith('p','u','c',{reviewStatus:'accepted',expectedUpdatedAt,implementationStatus,...(implementationStatus==='unassigned'?{claimedByAgentId:null}:{})})
+ expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({eventType:'comment.reviewed',payload:{reviewStatus:'accepted'}}))
+ expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({eventType:'comment.implementation_changed',payload:{implementationStatus}}))
+})
+it.each([{implementationStatus:'done'}, {implementationStatus:'invalid',expectedUpdatedAt:'2026-10-30T12:00:00Z'}, {implementationStatus:null,expectedUpdatedAt:'2026-10-30T12:00:00Z'}])('rejects an invalid or unfenced combined mutation %j', async (body) => {
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test.local'})
+ const res=mockRes()
+ await call({method:'PATCH',query:{commentId:'c'},body:{reviewStatus:'accepted',...body},headers:{}},res)
+ expect(res.statusCode).toBe(400)
+ expect(mutateProjectFeedback).not.toHaveBeenCalled()
+})
