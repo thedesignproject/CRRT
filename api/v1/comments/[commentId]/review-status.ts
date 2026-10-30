@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
+import { z } from 'zod'
 import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createFeedbackEvent, findActiveSharesForComment, getComment, mutateProjectFeedback } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
@@ -7,6 +8,7 @@ import type { ReviewStatus } from '../../../_lib/status.js'
 import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 
 const VALID_STATUSES = new Set<ReviewStatus>(['open', 'accepted', 'rejected'])
+const VERSION_TIMESTAMP = z.iso.datetime({ offset: true })
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, ['PATCH', 'OPTIONS'])) return
@@ -18,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const commentId = getStringQuery(req.query.commentId)
     const reviewStatus = req.body?.reviewStatus as ReviewStatus | undefined
     const expectedUpdatedAt = req.body?.expectedUpdatedAt
-    if (expectedUpdatedAt !== undefined && (typeof expectedUpdatedAt !== 'string' || !Number.isFinite(Date.parse(expectedUpdatedAt)))) return jsonError(req, res, 400, 'expectedUpdatedAt must be a timestamp')
+    if (expectedUpdatedAt !== undefined && !VERSION_TIMESTAMP.safeParse(expectedUpdatedAt).success) return jsonError(req, res, 400, 'expectedUpdatedAt must be a timestamp')
 
     if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
     if (!reviewStatus || !VALID_STATUSES.has(reviewStatus)) {
