@@ -1,7 +1,6 @@
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  assignExtensionComment,
   bulkAssignExtensionComments,
   bulkDeleteExtensionComments,
   deleteExtensionComment,
@@ -216,21 +215,14 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   async function addToProject() {
-    setBusy(true); setError('')
-    try {
-      await assignExtensionComment(apiBase, accessToken, selectedId, targetProject)
-      setItems((current) => current.filter((item) => item.id !== selectedId))
-      setTotal((value) => Math.max(0, value - 1)); setSelectedId(''); setTargetProject('')
-      setReload((value) => value + 1)
-    } catch (reason) { setError(errorText(reason, 'Could not add comment to project')) }
-    finally { setBusy(false) }
+    await moveSelected(targetProject, { mode: 'ids', ids: [selectedId] })
   }
 
-  async function moveSelected(projectId: string) {
+  async function moveSelected(projectId: string, selection = bulkDescriptor) {
     const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, projectId)
+      const result = await bulkAssignExtensionComments(apiBase, accessToken, selection, projectId)
       if (context !== mutationContext.current) return
       if (result.processedIds.length === 0) {
         setError('No Inbox items were moved. Refresh and try again.')
@@ -245,7 +237,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       setItems((current) => current.filter((item) => !moved.has(item.id)))
       setTotal((value) => Math.max(0, value - result.processedIds.length))
       setNotice(`${result.processedIds.length} moved${result.skipped.length ? `; ${result.skipped.length} skipped` : ''}.`)
-      exitBulkMode(); setReload((value) => value + 1)
+      setSelectedId(''); exitBulkMode(); setReload((value) => value + 1)
     } catch (reason) {
       if (context === mutationContext.current) setError(errorText(reason, 'Could not move selected Inbox items'))
     } finally { if (context === mutationContext.current) setBusy(false) }
