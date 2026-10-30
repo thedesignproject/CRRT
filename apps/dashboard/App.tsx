@@ -4,6 +4,8 @@ import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
 import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { InboxMoveUndo } from './components/InboxMoveUndo'
+import type { InboxUndoItem } from './api'
 import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
@@ -221,6 +223,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
+  const [inboxUndo,setInboxUndo]=useState<{actor:string;projectId:string;items:InboxUndoItem[]}|null>(null)
   const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string; undoImplementation?: ImplStatus; undoToken?: string; undoAction?: 'reopen' | 'reject' }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
@@ -708,16 +711,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
-  const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number) => {
+  const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => {
     setSelectedProject(projectKey)
     setView('feedback')
     setStatusFilter('open')
     setSelectedCommentId('')
+    setInboxUndo(undoItems?.length ? {actor:user.id,projectId:projectKey,items:undoItems} : null)
     setPendingBulkSelection({ projectKey, commentIds })
     setBulkSelectedIds(new Set(commentIds))
     setBulkMode(true)
     setBulkTransitionNotice(`${commentIds.length} Inbox item${commentIds.length === 1 ? '' : 's'} moved${skippedCount ? `; ${skippedCount} skipped` : ''}.`)
-  }, [])
+  }, [user.id])
 
   const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
@@ -844,6 +848,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       <>
         <div className="flex shrink-0 flex-col gap-2">
         {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
+        {inboxUndo && inboxUndo.actor === user.id && inboxUndo.projectId === selectedProject && canManageFeedback && <InboxMoveUndo key={`${user.id}:${inboxUndo.items[0].updatedAt}`} apiBase={API_BASE} accessToken={accessToken} projectId={inboxUndo.projectId} items={inboxUndo.items} onRestored={()=>{setInboxUndo(null);openExtensionComments()}} />}
         {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
           <span>{readyUndo.length} {readyUndo[0].undoAction === 'reject' ? 'rejected. Linked issues unchanged' : readyUndo[0].undoAction === 'reopen' ? 'reopened' : `marked ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}.</span>
           <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo {readyUndo[0].undoAction ?? `mark ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}</button>

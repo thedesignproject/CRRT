@@ -15,6 +15,7 @@ const fixtures = vi.hoisted(() => ({
   commentsProjectId: 'project-1' as string | null,
   claimProject: vi.fn(),
   acceptInvite: vi.fn(),
+  restoreInbox: vi.fn(),
   updateImpl: vi.fn(),
   updateReview: vi.fn(),
   createShare: vi.fn(),
@@ -33,6 +34,7 @@ const fixtures = vi.hoisted(() => ({
 }))
 
 vi.mock('./api', () => ({
+  restoreInboxComments: fixtures.restoreInbox,
   acceptInvite: fixtures.acceptInvite,
   updateImplementationStatus: fixtures.updateImpl,
   updateReviewStatus: fixtures.updateReview,
@@ -123,7 +125,7 @@ vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenEx
 vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null }))
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
-vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
+vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number, undo?: Array<{id:string;updatedAt:string}>) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 0, [{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])}>continue undoable move</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
 vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; canOperateAgent: boolean }) => <div>
   command palette
   <button onClick={() => props.onAction('accept')}>command accept</button>
@@ -1340,4 +1342,14 @@ it.each(['Reopen','Reject'])('restores previous states and ownership through sig
  expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-1','accepted',undefined,undefined,{undoToken:'signed-receipt'})
  expect(screen.getByTestId('first-claim')).toHaveTextContent('agent')
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it('offers Inbox Undo in the destination project and returns to Inbox',async()=>{
+ fixtures.restoreInbox.mockResolvedValue({processedIds:['moved-1'],skipped:[]})
+ window.history.replaceState({}, '', '/?view=extension-comments')
+ render(<App />)
+ fireEvent.click(screen.getByRole('button',{name:'continue undoable move'}))
+ fireEvent.click(await screen.findByRole('button',{name:'Undo move'}))
+ await screen.findByText('extension page')
+ expect(fixtures.restoreInbox).toHaveBeenCalledWith('https://crrt.ai/api','session-token','project-1',[{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])
 })

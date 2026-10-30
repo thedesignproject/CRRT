@@ -219,7 +219,9 @@ export type ExtensionCommentBulkSelection =
   | { mode: 'ids'; ids: string[] }
   | { mode: 'all'; excludedIds: string[] }
 
+export type InboxUndoItem = {id:string;updatedAt:string}
 export interface ExtensionCommentBulkResult {
+  undoItems?: InboxUndoItem[]
   processedIds: string[]
   skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed' }>
   selectedTotal: number
@@ -910,7 +912,7 @@ export function bulkAssignExtensionComments(
   return requestJson<ExtensionCommentBulkResult>(`${apiBase}/v1/extension/comments/bulk`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-    body: JSON.stringify({ operation: 'assign', selection, projectId }),
+    body: JSON.stringify({ operation: 'assign', selection, projectId, captureUndo: true }),
   })
 }
 
@@ -1159,5 +1161,11 @@ export function resolvePendingExternalWork(apiBase: string, accessToken: string,
   return requestJson<{resolved: boolean}>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-recovery`, {
     method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders(accessToken)},
     body: JSON.stringify({provider, confirmCheckedTracker: true}),
+  })
+}
+
+export function restoreInboxComments(apiBase:string, accessToken:string, projectId:string, items:InboxUndoItem[]) {
+  return requestJson<Pick<ExtensionCommentBulkResult,'processedIds'|'skipped'>>(`${apiBase}/v1/extension/comments/restore`, {
+    method:'POST', headers:{'Content-Type':'application/json',...authHeaders(accessToken)}, body:JSON.stringify({projectId,items}),
   })
 }
