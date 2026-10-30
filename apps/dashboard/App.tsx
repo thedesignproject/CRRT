@@ -221,7 +221,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
-  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string }>>([])
+  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string; undoImplementation?: ImplStatus }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -426,7 +426,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
     const ids = Array.from(bulkSelectedIds)
-    const previous = comments.filter(c => bulkSelectedIds.has(c.id) && c.reviewStatus !== 'accepted')
+    const previous = comments.filter(c => bulkSelectedIds.has(c.id) && (c.reviewStatus !== 'accepted' || (action === 'done' && c.implementationStatus !== 'done')))
     clearReadyUndo()
     const generation = bulkGeneration.current
     setBulkActionBusy(true)
@@ -449,9 +449,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const calls = ids.map(async (id) => {
       if (action === 'ready') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted'))
       if (action === 'reject') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'rejected'))
+      if (action === 'done') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted', comments.find(c => c.id === id)?.updatedAt, 'done'))
       const updates = await Promise.allSettled([
-        trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted')),
-        trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done')),
+        trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'open')),
+        trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, 'unassigned')),
       ])
       // A failed PATCH must not release the busy guard while its sibling still writes.
       const failure = updates.find((update) => update.status === 'rejected')
@@ -472,9 +473,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
     }
     if (stillCurrent && generation === bulkGeneration.current) {
-      if (action === 'ready') setReadyUndo(previous.flatMap(c => {
+      if (action === 'ready' || action === 'done') setReadyUndo(previous.flatMap(c => {
         const result = results[ids.indexOf(c.id)]
-        return result.status === 'fulfilled' && result.value && result.value.updatedAt ? [{ ...c, undoVersion: result.value.updatedAt }] : []
+        return result.status === 'fulfilled' && result.value && result.value.updatedAt ? [{ ...c, undoVersion: result.value.updatedAt, ...(action === 'done' ? { undoImplementation: c.implementationStatus } : {}) }] : []
       }))
       if (failedIds.length > 0) {
         setBulkMode(true)
@@ -496,9 +497,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionError('')
     const results = await Promise.allSettled(readyUndo.map(async (before) => {
       const current = comments.find(c => c.id === before.id)
-      if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== before.implementationStatus || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
-      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion))
-      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
+      if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== (before.undoImplementation === undefined ? before.implementationStatus : 'done') || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
+      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion, before.undoImplementation))
+      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus, implementationStatus: before.undoImplementation ?? c.implementationStatus } : c))
     }))
     if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) {
       if (readyUndoRequest.current === request) clearReadyUndo()
@@ -515,7 +516,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
     else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
-    else setBulkTransitionNotice('Previous review statuses restored.')
+    else setBulkTransitionNotice('Previous statuses restored.')
     await refreshComments()
   }
 
@@ -846,8 +847,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <div className="flex shrink-0 flex-col gap-2">
         {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
         {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
-          <span>{readyUndo.length} marked ready.</span>
-          <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo mark ready</button>
+          <span>{readyUndo.length} marked {readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}.</span>
+          <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo mark {readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}</button>
         </div>}
         </div>
       <div className="dashboard-feedback">
