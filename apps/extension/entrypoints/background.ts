@@ -247,15 +247,23 @@ async function ensureOffscreenDocument() {
 
 async function startOffscreenRecording(current: RecordingSessionDescriptor) {
   await ensureOffscreenDocument()
+  const permissions = await browser.runtime.sendMessage({ type: 'record:permissions-check', target: 'offscreen', devices: current.snapshot })
+  if (!permissions.granted) {
+    const url = new URL('/record-permissions.html', browser.runtime.getURL('/private.html'))
+    url.search = new URLSearchParams({ session: current.sessionId, camera: current.snapshot.cameraEnabled ? '1' : '0', microphone: current.snapshot.microphoneEnabled ? '1' : '0' }).toString()
+    await browser.windows.create({ url: url.toString(), type: 'popup', width: 760, height: 520 })
+    return
+  }
   const tab = await browser.tabs.get(current.tabId)
   /* v8 ignore next -- non-tab sources deliberately omit a tab stream id for getDisplayMedia */
   const tabStreamId = current.snapshot.source === 'tab'
     ? await browser.tabCapture.getMediaStreamId({ targetTabId: current.tabId })
     : undefined
-  await browser.runtime.sendMessage({
+  const started = await browser.runtime.sendMessage({
     type: 'record:offscreen-start', target: 'offscreen', sessionId: current.sessionId,
     snapshot: current.snapshot, tabStreamId, pageUrl: tab.url, pageTitle: tab.title,
   })
+  if (!started.ok) throw new Error(started.error)
 }
 
 async function cancelIntegratedRecording(current: RecordingSessionDescriptor) {
@@ -263,6 +271,11 @@ async function cancelIntegratedRecording(current: RecordingSessionDescriptor) {
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
   recordingSurfaceFrames.delete(current.sessionId)
   await storeRecordingSession(null)
+  await closePermissionWindow(current)
+}
+
+async function closePermissionWindow(current: RecordingSessionDescriptor) {
+  if (current.permissionWindowId !== undefined) await browser.windows.remove(current.permissionWindowId).catch(() => undefined)
 }
 
 async function handleOffscreenState(message: any) {
@@ -280,6 +293,7 @@ async function handleOffscreenFinished(message: any) {
   if (!current || message.sessionId !== current.sessionId || typeof message.recordingId !== 'string') return
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
   await storeRecordingSession(null)
+  await closePermissionWindow(current)
   await browser.windows.create({
     url: new URL(`/record.html?recording=${encodeURIComponent(message.recordingId)}`, browser.runtime.getURL('/private.html')).toString(),
     type: 'popup', width: 1180, height: 820,
@@ -290,6 +304,7 @@ async function handleOffscreenError(message: any) {
   const current = await recordingSession()
   /* v8 ignore next -- stale offscreen errors are intentionally ignored */
   if (!current || message.sessionId !== current.sessionId) return
+  await closePermissionWindow(current)
   /* v8 ignore next -- malformed error payloads use the stable fallback copy */
   await updateSetupSnapshot(current, { status: 'failed', error: typeof message.error === 'string' ? message.error : 'Could not start recording.' })
 }
@@ -434,6 +449,17 @@ export default defineBackground(() => {
   }
   async function handleMessage(message: unknown, sender: unknown): Promise<MessageResponse | undefined> {
     try {
+      if ((message as any)?.type === 'record:permissions-ready') {
+        const current = await recordingSession()
+        const windowId = (sender as { tab?: { windowId?: number } }).tab?.windowId
+        if (!isExtensionPage(sender) || !current || current.sessionId !== (message as any).sessionId
+          || !['setup', 'failed'].includes(current.snapshot.status) || !Number.isInteger(windowId)) throw new Error('Recording setup expired. Start a new recording.')
+        const next = { ...current, permissionWindowId: windowId }
+        await storeRecordingSession(next)
+        await startOffscreenRecording(next)
+        await browser.windows.update(windowId!, { state: 'minimized' })
+        return { ok: true }
+      }
       if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-state') { await handleOffscreenState(message); return { ok: true } }
       if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-finished') { await handleOffscreenFinished(message); return { ok: true } }
       if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-error') { await handleOffscreenError(message); return { ok: true } }
@@ -523,8 +549,7 @@ export default defineBackground(() => {
     void withTabOperation(tabId, () => browser.storage.session.remove(activeTabKey(tabId)))
     void recordingSession().then(async (current) => {
       if (!current || ![current.tabId, current.controllerTabId].includes(tabId)) return
-      recordingSurfaceFrames.delete(current.sessionId)
-      await storeRecordingSession(null)
+      await cancelIntegratedRecording(current)
     })
   })
   browser.tabs.onUpdated.addListener((tabId, changeInfo) => {

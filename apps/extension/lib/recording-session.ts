@@ -25,6 +25,7 @@ export type RecordingSessionDescriptor = {
   tabId: number
   controllerTabId?: number
   controllerWindowId?: number
+  permissionWindowId?: number
   snapshot: RecordingSessionSnapshot
 }
 

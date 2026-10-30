@@ -10,7 +10,7 @@ const state = vi.hoisted(() => ({
 }))
 const browser = vi.hoisted(() => ({
   action: { openPopup: vi.fn() },
-  windows: { create: vi.fn(), update: vi.fn() },
+  windows: { create: vi.fn(), update: vi.fn(), remove: vi.fn().mockResolvedValue(undefined) },
   tabCapture: { getMediaStreamId: vi.fn() },
   commands: { onCommand: { addListener: vi.fn((value) => { state.command = value }) } },
   tabs: {
@@ -57,7 +57,7 @@ beforeEach(() => {
   browser.tabs.sendMessage.mockResolvedValue({ ok: true })
   browser.tabs.update.mockResolvedValue(undefined)
   browser.windows.update.mockResolvedValue(undefined)
-  browser.runtime.sendMessage.mockResolvedValue({ ok: true })
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true, granted: true })
   hasAcceptedDisclosure.mockResolvedValue(true)
 })
 
@@ -537,4 +537,84 @@ it('discards native pixels when the tab switches away and back or reloads at the
     })
     await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false })
   }
+})
+
+it('requests first-use device permissions in a visible window before acquiring a tab stream', async () => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com', title: 'Example' }])
+  browser.runtime.sendMessage.mockImplementation(async (message) => message.type === 'record:permissions-check' ? { granted: false } : { ok: true })
+  await send({ type: 'record:open' })
+  const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
+  const surface = { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }
+  await send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)
+  await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'start' } }, surface)
+  expect(browser.tabCapture.getMediaStreamId).not.toHaveBeenCalled()
+  expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining('/record-permissions.html?session=') }))
+  const permissionUrl = new URL(browser.windows.create.mock.calls[browser.windows.create.mock.calls.length - 1]![0].url)
+  expect(permissionUrl.searchParams.get('camera')).toBe('1')
+  expect(permissionUrl.searchParams.get('microphone')).toBe('1')
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true, granted: true })
+  const ready = { type: 'record:permissions-ready', sessionId: descriptor.sessionId }
+  await expect(send(ready, { url: 'https://example.com' })).resolves.toMatchObject({ ok: false })
+  await expect(send({ ...ready, sessionId: 'expired' }, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toMatchObject({ ok: false })
+  await expect(send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toEqual({ ok: true })
+  expect(browser.tabCapture.getMediaStreamId).toHaveBeenCalledWith({ targetTabId: 7 })
+  const current = state.session['crrt:recording-session'] as any
+  current.snapshot.status = 'recording'
+  await expect(send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toMatchObject({ ok: false })
+  delete state.session['crrt:recording-session']
+  await expect(send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toMatchObject({ ok: false })
+})
+
+it('requests only the enabled devices when a setup attempt needs permission', async () => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+  browser.runtime.sendMessage.mockResolvedValue({ granted: false })
+  await send({ type: 'record:open' })
+  const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
+  const surface = { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }
+  await send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)
+  for (const kind of ['camera.toggled', 'microphone.toggled', 'start']) await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind } }, surface)
+  const url = new URL(browser.windows.create.mock.calls[browser.windows.create.mock.calls.length - 1]![0].url)
+  expect(url.searchParams.get('camera')).toBe('0')
+  expect(url.searchParams.get('microphone')).toBe('0')
+})
+
+it('returns a failed capture acknowledgment to the visible permission window', async () => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+  browser.runtime.sendMessage.mockImplementation(async (message) => message.type === 'record:permissions-check' ? { granted: true } : { ok: false, error: 'Camera disconnected' })
+  await send({ type: 'record:open' })
+  const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
+  await expect(send({ type: 'record:permissions-ready', sessionId: descriptor.sessionId }, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toEqual({ ok: false, error: 'Camera disconnected' })
+})
+
+it.each(['finish', 'cancel', 'error', 'tab-close'])('closes the temporary permission window on %s', async (action) => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+  browser.runtime.sendMessage.mockResolvedValue({ ok: true, granted: true })
+  await send({ type: 'record:open' })
+  const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
+  const sessionId = descriptor.sessionId
+  const sender = { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } }
+  await expect(send({ type: 'record:permissions-ready', sessionId }, { url: sender.url })).resolves.toMatchObject({ ok: false })
+  await expect(send({ type: 'record:permissions-ready', sessionId }, sender)).resolves.toMatchObject({ ok: true })
+  expect(browser.windows.update).toHaveBeenCalledWith(99, { state: 'minimized' })
+  if (action === 'finish') {
+    browser.windows.remove.mockRejectedValueOnce(new Error('Window already closed'))
+    await send({ type: 'record:offscreen-finished', target: 'background', sessionId, recordingId: 'capture-1' })
+  } else if (action === 'cancel') {
+    const surface = { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }
+    await send({ type: 'record:surface-ready', sessionId }, surface)
+    await send({ type: 'record:surface-command', sessionId, command: { kind: 'cancel' } }, surface)
+  } else if (action === 'error') {
+    await send({ type: 'record:offscreen-error', target: 'background', sessionId, error: 'Encoder failed' })
+  } else {
+    state.removed!(7)
+  }
+  await vi.waitFor(() => expect(browser.windows.remove).toHaveBeenCalledWith(99))
 })

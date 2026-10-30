@@ -117,7 +117,13 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
     case 'microphone.toggled':
       return state.status === 'setup' || state.status === 'failed' ? { ...state, microphoneEnabled: !state.microphoneEnabled } : state
     case 'countdown.started':
-      return state.status === 'setup' ? { ...state, status: 'countdown', countdown: action.seconds ?? 3, error: null } : state
+      return state.status === 'setup' || state.status === 'failed' ? {
+        ...initialRecorderState,
+        source: state.source,
+        cameraEnabled: state.cameraEnabled,
+        microphoneEnabled: state.microphoneEnabled,
+        status: 'countdown', countdown: action.seconds ?? 3,
+      } : state
     case 'countdown.ticked':
       return state.status === 'countdown' ? { ...state, countdown: Math.max(0, state.countdown - 1) } : state
     case 'recording.started':

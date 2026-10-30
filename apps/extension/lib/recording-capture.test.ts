@@ -107,9 +107,7 @@ it('falls back when media types and recorder metadata are unavailable', async ()
     AudioContext: FakeAudioContext as unknown as typeof AudioContext,
     MediaStream: FakeMediaStream as unknown as typeof MediaStream,
   })
-  const result = await capture.stop()
-  expect(result.screenBlob.type).toBe('video/webm')
-  expect(result.screenBlob.size).toBe(0)
+  await expect(capture.stop()).rejects.toThrow('No video was captured')
 })
 
 it('falls back to the standard audio WebM type when codec metadata is unavailable', async () => {
@@ -158,4 +156,123 @@ it('uses browser media globals by default', async () => {
   const capture = await startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false })
   await capture.stop()
   vi.unstubAllGlobals()
+})
+
+function captureEnvironment(display: MediaStream, recorder = FakeRecorder) {
+  const mixed = stream(0, 0)
+  const close = vi.fn()
+  class Context {
+    destination = {}
+    createMediaStreamDestination() { return { stream: mixed } }
+    createMediaStreamSource() { return { connect: vi.fn() } }
+    close = close
+  }
+  return {
+    mediaDevices: { getDisplayMedia: vi.fn().mockResolvedValue(display), getUserMedia: vi.fn() } as unknown as MediaDevices,
+    MediaRecorder: recorder as unknown as typeof MediaRecorder,
+    AudioContext: Context as unknown as typeof AudioContext,
+    MediaStream: FakeMediaStream as unknown as typeof MediaStream,
+  }
+}
+
+it('releases screen sharing when camera permission is rejected during startup', async () => {
+  const display = stream(0, 1)
+  const environment = captureEnvironment(display)
+  vi.mocked(environment.mediaDevices.getUserMedia).mockRejectedValue(new Error('Permission dismissed'))
+  await expect(startRecordingCapture({ source: 'window', cameraEnabled: true, microphoneEnabled: true }, environment)).rejects.toThrow('Permission dismissed')
+  expect(display.getVideoTracks()[0]!.stop).toHaveBeenCalledOnce()
+})
+
+it('starts recorders after the countdown instead of pausing and losing a static window frame', async () => {
+  const recorders: FakeRecorder[] = []
+  class DeferredRecorder extends FakeRecorder {
+    start = vi.fn(() => { this.state = 'recording' })
+    constructor(stream: MediaStream, options?: MediaRecorderOptions) { super(stream, options); recorders.push(this) }
+  }
+  const display = stream(0, 1)
+  const capture = await startRecordingCapture({ source: 'window', cameraEnabled: false, microphoneEnabled: false, deferRecording: true }, captureEnvironment(display, DeferredRecorder))
+  expect(recorders[0]!.state).toBe('inactive')
+  capture.pause()
+  capture.resume()
+  expect(recorders[0]!.start).toHaveBeenCalledOnce()
+  capture.pause(); capture.pause(); capture.resume(); capture.resume()
+  const firstStop = capture.stop()
+  expect(capture.stop()).toBe(firstStop)
+  expect((await firstStop).screenBlob.size).toBeGreaterThan(0)
+  expect(display.getTracks()[0]!.stop).toHaveBeenCalledOnce()
+})
+
+it('can cancel before the countdown finishes without leaving a stream or pending stop', async () => {
+  const display = stream(0, 1)
+  const capture = await startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false, deferRecording: true }, captureEnvironment(display))
+  await expect(capture.stop()).rejects.toThrow('No video was captured')
+  expect(display.getTracks()[0]!.stop).toHaveBeenCalledOnce()
+})
+
+it('cleans up streams and the audio context even when an encoder fails', async () => {
+  let recorder: FakeRecorder
+  class BrokenRecorder extends FakeRecorder {
+    constructor(stream: MediaStream, options?: MediaRecorderOptions) { super(stream, options); recorder = this }
+    stop() { this.state = 'inactive'; this.onerror?.() }
+  }
+  const display = stream(0, 1)
+  const capture = await startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false }, captureEnvironment(display, BrokenRecorder))
+  await expect(capture.stop()).rejects.toThrow('could not finish')
+  expect(recorder!.state).toBe('inactive')
+  expect(display.getTracks()[0]!.stop).toHaveBeenCalledOnce()
+})
+
+it('releases acquired media if constructing the encoder fails', async () => {
+  class BrokenRecorder extends FakeRecorder {
+    constructor(stream: MediaStream, options?: MediaRecorderOptions) { super(stream, options); throw new Error('Encoder unavailable') }
+  }
+  const display = stream(0, 1)
+  const environment = captureEnvironment(display, BrokenRecorder)
+  await expect(startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false }, environment)).rejects.toThrow('Encoder unavailable')
+  expect(display.getTracks()[0]!.stop).toHaveBeenCalledOnce()
+})
+
+it('finishes an encoder that has already stopped without stopping it twice', async () => {
+  let recorder!: FakeRecorder
+  class EndedRecorder extends FakeRecorder {
+    constructor(stream: MediaStream, options?: MediaRecorderOptions) { super(stream, options); recorder = this }
+  }
+  const capture = await startRecordingCapture({ source: 'screen', cameraEnabled: false, microphoneEnabled: false }, captureEnvironment(stream(0, 1), EndedRecorder))
+  recorder.stop()
+  expect((await capture.stop()).screenBlob.size).toBeGreaterThan(0)
+})
+
+it('stops earlier encoders if a later encoder cannot be constructed', async () => {
+  let count = 0
+  const instances: FakeRecorder[] = []
+  class PartiallyBrokenRecorder extends FakeRecorder {
+    constructor(stream: MediaStream, options?: MediaRecorderOptions) {
+      super(stream, options)
+      if (++count === 2) throw new Error('Camera encoder unavailable')
+      instances.push(this)
+    }
+  }
+  const environment = captureEnvironment(stream(0, 1), PartiallyBrokenRecorder)
+  vi.mocked(environment.mediaDevices.getUserMedia).mockResolvedValue(stream(0, 1))
+  await expect(startRecordingCapture({ source: 'window', cameraEnabled: true, microphoneEnabled: false }, environment)).rejects.toThrow('Camera encoder unavailable')
+  expect(instances[0]!.state).toBe('inactive')
+})
+
+it('records video only when neither the window nor microphone supplies audio', async () => {
+  const display = stream(0, 1), silentDestination = stream(1, 0)
+  const environment = captureEnvironment(display)
+  class SilentContext {
+    destination = {}
+    createMediaStreamDestination() { return { stream: silentDestination } }
+    createMediaStreamSource() { throw new Error('There is no audio input') }
+    close = vi.fn()
+  }
+  environment.AudioContext = SilentContext as unknown as typeof AudioContext
+  const capture = await startRecordingCapture({ source: 'window', cameraEnabled: false, microphoneEnabled: false, deferRecording: true }, environment)
+  expect(capture.previewStream.getAudioTracks()).toHaveLength(0)
+  capture.resume()
+  const result = await capture.stop()
+  expect(result.screenBlob.size).toBeGreaterThan(0)
+  expect(result.audioBlob).toBeUndefined()
+  expect(silentDestination.getAudioTracks()[0]!.stop).toHaveBeenCalledOnce()
 })

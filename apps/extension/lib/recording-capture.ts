@@ -5,6 +5,7 @@ export type RecordingCaptureOptions = {
   cameraEnabled: boolean
   microphoneEnabled: boolean
   tabStreamId?: string
+  deferRecording?: boolean
 }
 
 export type RecordingCapture = {
@@ -31,7 +32,7 @@ function supportedMime(MediaRecorderType: typeof MediaRecorder, kind: 'audio' | 
   return options.find((value) => MediaRecorderType.isTypeSupported(value))
 }
 
-function recorderFor(stream: MediaStream, MediaRecorderType: typeof MediaRecorder, kind: 'audio' | 'video' = 'video') {
+function recorderFor(stream: MediaStream, MediaRecorderType: typeof MediaRecorder, kind: 'audio' | 'video', deferred: boolean) {
   const mimeType = supportedMime(MediaRecorderType, kind)
   const recorder = new MediaRecorderType(stream, {
     ...(mimeType ? { mimeType } : {}),
@@ -43,8 +44,17 @@ function recorderFor(stream: MediaStream, MediaRecorderType: typeof MediaRecorde
     recorder.onerror = () => reject(new Error('The browser could not finish this recording.'))
     recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || `${kind}/webm` }))
   })
-  recorder.start(1_000)
-  return { recorder, stopped }
+  let started = false
+  const start = () => { recorder.start(1_000); started = true }
+  if (!deferred) start()
+  return {
+    recorder, start,
+    stop: () => {
+      if (!started) return Promise.resolve(new Blob())
+      if (recorder.state !== 'inactive') recorder.stop()
+      return stopped
+    },
+  }
 }
 
 async function tabStream(mediaDevices: MediaDevices, streamId: string) {
@@ -80,63 +90,88 @@ export async function startRecordingCapture(
   if (!environment.mediaDevices) throw new Error('Media capture is unavailable in this browser.')
   if (options.source === 'tab' && !options.tabStreamId) throw new Error('The selected tab is no longer available.')
 
-  const screenStream = options.source === 'tab'
-    ? await tabStream(environment.mediaDevices, options.tabStreamId!)
-    : await displayStream(environment.mediaDevices, options.source)
-  const auxiliary = options.cameraEnabled || options.microphoneEnabled
-    ? await environment.mediaDevices.getUserMedia({ video: options.cameraEnabled, audio: options.microphoneEnabled })
-    : null
-  const cameraStream = auxiliary && options.cameraEnabled
-    ? new environment.MediaStream(auxiliary.getVideoTracks())
-    : null
-
-  const audioContext = new environment.AudioContext()
-  const destination = audioContext.createMediaStreamDestination()
-  const audioStreams = [screenStream, auxiliary].filter((stream): stream is MediaStream => Boolean(stream?.getAudioTracks().length))
-  for (const stream of audioStreams) {
-    const audioOnly = new environment.MediaStream(stream.getAudioTracks())
-    const node = audioContext.createMediaStreamSource(audioOnly)
-    node.connect(destination)
-    if (stream === screenStream) node.connect(audioContext.destination)
+  const streams: MediaStream[] = []
+  const recorders: ReturnType<typeof recorderFor>[] = []
+  let audioContext: AudioContext | undefined
+  const cleanup = async () => {
+    for (const stream of streams) stream.getTracks().forEach((track) => track.stop())
+    await audioContext?.close()
   }
-  const previewStream = new environment.MediaStream([
-    ...screenStream.getVideoTracks(),
-    ...destination.stream.getAudioTracks(),
-  ])
-  const primary = recorderFor(previewStream, environment.MediaRecorder)
-  const camera = cameraStream?.getVideoTracks().length ? recorderFor(cameraStream, environment.MediaRecorder) : null
-  const audio = destination.stream.getAudioTracks().length
-    ? recorderFor(new environment.MediaStream(destination.stream.getAudioTracks()), environment.MediaRecorder, 'audio')
-    : null
-  let stopping: Promise<{ screenBlob: Blob; cameraBlob?: Blob; audioBlob?: Blob }> | null = null
+  try {
+    const screenStream = options.source === 'tab'
+      ? await tabStream(environment.mediaDevices, options.tabStreamId!)
+      : await displayStream(environment.mediaDevices, options.source)
+    streams.push(screenStream)
+    const auxiliary = options.cameraEnabled || options.microphoneEnabled
+      ? await environment.mediaDevices.getUserMedia({ video: options.cameraEnabled, audio: options.microphoneEnabled })
+      : null
+    if (auxiliary) streams.push(auxiliary)
+    const cameraStream = auxiliary && options.cameraEnabled
+      ? new environment.MediaStream(auxiliary.getVideoTracks())
+      : null
 
-  function apply(method: 'pause' | 'resume') {
-    for (const recorder of [primary.recorder, camera?.recorder, audio?.recorder]) {
-      if (!recorder) continue
-      if (method === 'pause' && recorder.state === 'recording') recorder.pause()
-      if (method === 'resume' && recorder.state === 'paused') recorder.resume()
+    audioContext = new environment.AudioContext()
+    const destination = audioContext.createMediaStreamDestination()
+    streams.push(destination.stream)
+    const audioStreams = [screenStream, auxiliary].filter((stream): stream is MediaStream => Boolean(stream?.getAudioTracks().length))
+    for (const stream of audioStreams) {
+      const audioOnly = new environment.MediaStream(stream.getAudioTracks())
+      const node = audioContext.createMediaStreamSource(audioOnly)
+      node.connect(destination)
+      if (stream === screenStream) node.connect(audioContext.destination)
     }
-  }
+    // A destination track without an input can stall WebM muxing while the
+    // offscreen AudioContext is suspended. Video-only captures need no audio track.
+    const mixedAudioTracks = audioStreams.length ? destination.stream.getAudioTracks() : []
+    const previewStream = new environment.MediaStream([
+      ...screenStream.getVideoTracks(),
+      ...mixedAudioTracks,
+    ])
+    const createRecorder = (stream: MediaStream, kind: 'audio' | 'video') => {
+      const recorder = recorderFor(stream, environment.MediaRecorder, kind, options.deferRecording === true)
+      recorders.push(recorder)
+      return recorder
+    }
+    const primary = createRecorder(previewStream, 'video')
+    const camera = cameraStream?.getVideoTracks().length ? createRecorder(cameraStream, 'video') : null
+    const audio = mixedAudioTracks.length
+      ? createRecorder(new environment.MediaStream(mixedAudioTracks), 'audio')
+      : null
+    let stopping: Promise<{ screenBlob: Blob; cameraBlob?: Blob; audioBlob?: Blob }> | null = null
 
-  return {
-    screenStream,
-    cameraStream,
-    previewStream,
-    setCameraEnabled: (enabled) => {
-      const tracks = cameraStream?.getVideoTracks() ?? []
-      for (const track of tracks) track.enabled = enabled
-      return tracks.length > 0
-    },
-    pause: () => apply('pause'),
-    resume: () => apply('resume'),
-    stop: () => stopping ??= (async () => {
-      for (const recorder of [primary.recorder, camera?.recorder, audio?.recorder]) {
-        if (recorder && recorder.state !== 'inactive') recorder.stop()
+    function apply(method: 'pause' | 'resume') {
+      for (const capture of recorders) {
+        const recorder = capture.recorder
+        if (method === 'pause' && recorder.state === 'recording') recorder.pause()
+        if (method === 'resume' && recorder.state === 'paused') recorder.resume()
+        else if (method === 'resume' && recorder.state === 'inactive') capture.start()
       }
-      const [screenBlob, cameraBlob, audioBlob] = await Promise.all([primary.stopped, camera?.stopped, audio?.stopped])
-      for (const stream of [screenStream, auxiliary, previewStream, cameraStream]) stream?.getTracks().forEach((track) => track.stop())
-      await audioContext.close()
-      return { screenBlob, ...(cameraBlob ? { cameraBlob } : {}), ...(audioBlob?.size ? { audioBlob } : {}) }
-    })(),
+    }
+
+    return {
+      screenStream,
+      cameraStream,
+      previewStream,
+      setCameraEnabled: (enabled) => {
+        const tracks = cameraStream?.getVideoTracks() ?? []
+        for (const track of tracks) track.enabled = enabled
+        return tracks.length > 0
+      },
+      pause: () => apply('pause'),
+      resume: () => apply('resume'),
+      stop: () => stopping ??= (async () => {
+        try {
+          const [screenBlob, cameraBlob, audioBlob] = await Promise.all([primary.stop(), camera?.stop(), audio?.stop()])
+          if (!screenBlob.size) throw new Error('No video was captured. Start a new recording and keep the selected window visible.')
+          return { screenBlob, ...(cameraBlob ? { cameraBlob } : {}), ...(audioBlob?.size ? { audioBlob } : {}) }
+        } finally {
+          await cleanup()
+        }
+      })(),
+    }
+  } catch (error) {
+    await Promise.allSettled(recorders.map((capture) => capture.stop()))
+    await cleanup()
+    throw error
   }
 }

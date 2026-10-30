@@ -115,3 +115,15 @@ it('builds an honest mark-only agent payload when transcription is unavailable',
   expect(buildRecordingAgentPayload({ ...recording, marks: [], transcriptionStatus: 'ready' })).toContain('No speech detected.')
   expect(buildRecordingAgentPayload({ ...recording, marks: [] })).toContain('No marks captured.')
 })
+
+it('retries a failed capture without requiring the launcher to be reopened', () => {
+  const failed = recorderReducer(initialRecorderState, { type: 'recording.failed', message: 'Permission dismissed' })
+  const retry = recorderReducer(failed, { type: 'countdown.started' })
+  expect(retry).toMatchObject({ status: 'countdown', countdown: 3, error: null })
+  expect(recorderReducer(retry, { type: 'recording.started', now: 100 })).toMatchObject({ status: 'recording', startedAt: 100 })
+})
+
+it('clears marks and pause timing when retrying an interrupted recording', () => {
+  const failed = { ...initialRecorderState, source: 'window' as const, cameraEnabled: false, status: 'failed' as const, durationMs: 9000, pausedMs: 4000, pausedAt: 5000, marks: [{ id: 'old', type: 'box' as const, atMs: 500, points: [] }] }
+  expect(recorderReducer(failed, { type: 'countdown.started' })).toMatchObject({ status: 'countdown', source: 'window', cameraEnabled: false, durationMs: 0, pausedMs: 0, pausedAt: null, marks: [] })
+})

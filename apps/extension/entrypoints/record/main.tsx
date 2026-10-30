@@ -235,6 +235,7 @@ export function RecordApp() {
         cameraEnabled: state.cameraEnabled,
         microphoneEnabled: state.microphoneEnabled,
         tabStreamId,
+        deferRecording: true,
       })
       captureRef.current = capture
       // Acquire every permission in the initiating gesture, then keep the
