@@ -215,3 +215,54 @@ it.each([{implementationStatus:'done'}, {implementationStatus:'invalid',expected
  expect(res.statusCode).toBe(400)
  expect(mutateProjectFeedback).not.toHaveBeenCalled()
 })
+
+it('issues a bound receipt and restores a released agent claim atomically without closing external work', async () => {
+ vi.stubEnv('WIDGET_AUTH_SECRET','receipt-test')
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@x.test'})
+ vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'owner'} as never)
+ const before={id:'c',projectId:'p',reviewStatus:'rejected',implementationStatus:'in_progress',claimedByAgentId:'agent',updatedAt:'2026-10-30T12:00:00Z'}
+ const after={...before,reviewStatus:'open',implementationStatus:'unassigned',claimedByAgentId:null,updatedAt:'2026-10-30T12:01:00.123456Z'}
+ vi.mocked(getComment).mockResolvedValue(before as never)
+ vi.mocked(mutateProjectFeedback).mockResolvedValue(after as never)
+ vi.mocked(findActiveSharesForComment).mockResolvedValue([])
+ const res=mockRes()
+ await call({method:'PATCH',query:{commentId:'c'},headers:{},body:{reviewStatus:'open',implementationStatus:'unassigned',expectedUpdatedAt:before.updatedAt,captureUndo:true}},res)
+ expect(res.statusCode).toBe(200)
+ const undoToken=(res.body as {undoToken:string}).undoToken
+ expect(undoToken).toBeTruthy()
+ vi.mocked(getComment).mockResolvedValue(after as never)
+ const restored=mockRes()
+ await call({method:'PATCH',query:{commentId:'c'},headers:{},body:{undoToken}},restored)
+ expect(restored.statusCode).toBe(200)
+ expect(mutateProjectFeedback).toHaveBeenLastCalledWith('p','u','c',{reviewStatus:'rejected',implementationStatus:'in_progress',claimedByAgentId:'agent',expectedUpdatedAt:after.updatedAt})
+ expect(closeLinkedExternalWork).not.toHaveBeenCalled()
+ vi.unstubAllEnvs()
+})
+it.each([
+ [{captureUndo:true,reviewStatus:'open'},400],
+ [{captureUndo:true,reviewStatus:'rejected',expectedUpdatedAt:'2026-10-30T12:00:00Z'},400],
+ [{captureUndo:true,reviewStatus:'open',expectedUpdatedAt:'2026-10-30T12:00:01Z'},409],
+ [{undoToken:'forged'},400],
+])('rejects unsafe undo requests %j',async(body,status)=>{
+ vi.stubEnv('WIDGET_AUTH_SECRET','receipt-test')
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@x.test'})
+ vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'owner'} as never)
+ vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p',updatedAt:'2026-10-30T12:00:00Z'} as never)
+ const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},headers:{},body},res)
+ expect(res.statusCode).toBe(status);expect(mutateProjectFeedback).not.toHaveBeenCalled();vi.unstubAllEnvs()
+})
+it('does not resolve an Undo against a missing comment',async()=>{
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@x.test'})
+ const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},headers:{},body:{undoToken:'x'}},res)
+ expect(res.statusCode).toBe(404)
+})
+it('preserves external tickets for an explicit reversible rejection',async()=>{
+ vi.stubEnv('WIDGET_AUTH_SECRET','receipt-test')
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@x.test'})
+ vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'owner'} as never)
+ const before={id:'c',projectId:'p',reviewStatus:'open',implementationStatus:'unassigned',claimedByAgentId:null,updatedAt:'2026-10-30T12:00:00Z'}
+ vi.mocked(getComment).mockResolvedValue(before as never);vi.mocked(mutateProjectFeedback).mockResolvedValue({...before,reviewStatus:'rejected'} as never)
+ vi.mocked(findActiveSharesForComment).mockResolvedValue([])
+ const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},headers:{},body:{reviewStatus:'rejected',expectedUpdatedAt:before.updatedAt,captureUndo:true,preserveExternalWork:true}},res)
+ expect(res.statusCode).toBe(200);expect(closeLinkedExternalWork).not.toHaveBeenCalled();vi.unstubAllEnvs()
+})
