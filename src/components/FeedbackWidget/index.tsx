@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../lib/useKeyboardShortcuts'
 import { useWidgetLogin } from './useWidgetLogin'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bot, MessageCircle, PanelRightOpen, Video, X } from 'lucide-react'
@@ -74,7 +75,7 @@ function LauncherAction({
   icon: ReactNode
   title: string
   subtitle: string
-  shortcut: string
+  shortcut?: string
   onClick: () => void
 }) {
   return (
@@ -118,11 +119,11 @@ function LauncherAction({
       <span style={{ minWidth: 0, display: 'grid', gap: 2 }}>
         <span
           style={{
-            fontFamily: "'VT323', 'JetBrains Mono', ui-monospace, monospace",
-            fontSize: 24,
-            fontWeight: 400,
-            letterSpacing: '0.02em',
-            lineHeight: 1,
+            fontFamily: 'inherit',
+            fontSize: 14,
+            fontWeight: 600,
+            letterSpacing: 0,
+            lineHeight: 1.35,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -130,11 +131,11 @@ function LauncherAction({
         >
           {title}
         </span>
-        <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--fw-foreground-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {subtitle}
         </span>
       </span>
-      <kbd
+      {shortcut && <kbd
         style={{
           minWidth: 26,
           padding: '4px 7px',
@@ -149,7 +150,7 @@ function LauncherAction({
         }}
       >
         {shortcut}
-      </kbd>
+      </kbd>}
     </button>
   )
 }
@@ -332,6 +333,7 @@ function FeedbackWidgetInner({
   page,
   onRecord,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
+  const [shortcutsEnabled, setShortcutsEnabled] = useKeyboardShortcuts('widget')
   useEffect(() => {
     ensureWidgetFonts()
   }, [])
@@ -850,6 +852,7 @@ function FeedbackWidgetInner({
           setLauncherOpen(false)
         }
       }
+      if (!shortcutsEnabled) return
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && mode === 'commenting') {
         handleSend()
       }
@@ -865,6 +868,7 @@ function FeedbackWidgetInner({
       }
 
       if (e.key === 'c' || e.key === 'C') {
+        if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return
         if (mode === 'idle') {
           enterFeedbackMode()
           return
@@ -885,7 +889,7 @@ function FeedbackWidgetInner({
       }
     }
     return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
-  }, [mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal])
+  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal])
 
   function exitFeedbackMode() {
     clearNativeSelection()
@@ -1258,7 +1262,7 @@ function FeedbackWidgetInner({
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (shortcutsEnabled && e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault()
                     if (comment.trim()) handleSend()
                   }
@@ -1657,7 +1661,7 @@ function FeedbackWidgetInner({
                           value={editText}
                           onChange={(e) => setEditText(e.target.value)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(c.id) }
+                            if (shortcutsEnabled && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(c.id) }
                             if (e.key === 'Escape') { setEditingId(null) }
                           }}
                           rows={3}
@@ -1843,7 +1847,7 @@ function FeedbackWidgetInner({
                     : 'Approve comments to queue work'}
                 </span>
               </span>
-            <span
+            {shortcutsEnabled && <span
               style={{
                 flexShrink: 0,
                 padding: '3px 7px',
@@ -1855,7 +1859,7 @@ function FeedbackWidgetInner({
               }}
             >
               Shift + A
-            </span>
+            </span>}
           </button>
         </div>}
 
@@ -2051,7 +2055,7 @@ function FeedbackWidgetInner({
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={(e) => {
-                          if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(c.id) }
+                          if (shortcutsEnabled && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(c.id) }
                           if (e.key === 'Escape') { setEditingId(null) }
                         }}
                         rows={2}
@@ -2242,6 +2246,7 @@ function FeedbackWidgetInner({
               width: 282,
               padding: 8,
               borderRadius: 16,
+              fontFamily: "'Figtree Variable', system-ui, sans-serif",
               lineHeight: 1.2,
               background: 'var(--fw-menu-translucent)',
               border: '1px solid var(--fw-contrast-10)',
@@ -2259,7 +2264,7 @@ function FeedbackWidgetInner({
               icon={<MessageCircle size={17} />}
               title="Drop comment"
               subtitle="Pin feedback on the page"
-              shortcut="C"
+              shortcut={shortcutsEnabled ? "C" : undefined}
               onClick={() => {
                 setLauncherOpen(false)
                 enterFeedbackMode()
@@ -2269,7 +2274,7 @@ function FeedbackWidgetInner({
               icon={<PanelRightOpen size={17} />}
               title="Open sidebar"
               subtitle="Review active comments"
-              shortcut="F"
+              shortcut={shortcutsEnabled ? "F" : undefined}
               onClick={() => {
                 setLauncherOpen(false)
                 setSidebarOpen(true)
@@ -2279,12 +2284,23 @@ function FeedbackWidgetInner({
               icon={<Bot size={17} />}
               title="Open agent"
               subtitle="Send context to agent"
-              shortcut="Shift + A"
+              shortcut={shortcutsEnabled ? "Shift + A" : undefined}
               onClick={() => {
                 setLauncherOpen(false)
                 openAgentBridge()
               }}
             />}
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={shortcutsEnabled}
+              aria-label="Keyboard shortcuts"
+              onClick={() => setShortcutsEnabled(!shortcutsEnabled)}
+              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: 8, marginTop: 8, border: 0, borderTop: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground)', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer' }}
+              title="Remembered on this site. Escape still closes or cancels."
+            >
+              <span>Keyboard shortcuts</span><span>{shortcutsEnabled ? 'On' : 'Off'}</span>
+            </button>
           </div>
 
           {/* Primary launcher — click toggles menu; active state uses Paper orange border. */}

@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   assignExtensionComment,
@@ -30,6 +31,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   projects?: Project[]
   onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number) => void
 }) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const mutationContext = useRef(0)
   const [items, setItems] = useState<ExtensionCommentRecord[]>([])
   const [page, setPage] = useState(1)
@@ -110,6 +112,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       return
     }
     setError('')
+    setBulkMode(true)
+    setSelectedId(''); setEditing(false)
     setBulkSelection(next)
   }
 
@@ -177,14 +181,14 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       if (event.key === 'Escape' && bulkMode) {
         event.preventDefault(); exitBulkMode(); return
       }
-      if (bulkMode) return
+      if (!shortcutsEnabled || bulkMode) return
       if (['j', 'ArrowDown', ' ', 'k', 'ArrowUp'].includes(event.key)) {
         event.preventDefault(); navigate(event.key === 'k' || event.key === 'ArrowUp' ? -1 : 1)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [comments, selectedIdx, busy, bulkMode, confirmBulkDelete])
+  }, [shortcutsEnabled, comments, selectedIdx, busy, bulkMode, confirmBulkDelete])
 
   async function save() {
     setBusy(true); setError('')
@@ -218,18 +222,18 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
     finally { setBusy(false) }
   }
 
-  async function moveSelected() {
+  async function moveSelected(projectId: string) {
     const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, targetProject)
+      const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, projectId)
       if (context !== mutationContext.current) return
       if (result.processedIds.length === 0) {
         setError('No Inbox items were moved. Refresh and try again.')
         return
       }
       if (onMovedToProject) {
-        onMovedToProject(targetProject, result.processedIds, result.skipped.length)
+        onMovedToProject(projectId, result.processedIds, result.skipped.length)
         return
       }
       const moved = new Set(result.processedIds)
@@ -284,8 +288,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
           toggleSelectAllVisible,
           allVisibleSelected,
           allMatchingSelected: bulkSelection.mode === 'all' && bulkSelection.excludedIds.size === 0,
-          canSelectAllMatching: allVisibleSelected && selectedCount < total,
-          selectAllMatching: () => { if (!busy) { setError(''); setBulkSelection({ mode: 'all', excludedIds: new Set() }) } },
+          canSelectAllMatching: !loading && total > 0,
+          selectAllMatching: () => { if (!busy) setBoundedSelection({ mode: 'all', excludedIds: new Set() }) },
           clearSelection: () => { if (!busy) setBulkSelection(emptySelection()) },
         }}
         footer={pages > 1 && <div className="flex items-center justify-center gap-3 border-t border-border px-4 py-3">
@@ -313,14 +317,13 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
         </>} />
     </main>
     <BulkActionBar selectedCount={selectedCount} busy={busy} onClose={cancelBulkMode}>
-      <select aria-label="Project for selected Inbox items" value={targetProject} disabled={busy || eligibleProjects.length === 0}
-        onChange={(event) => setTargetProject(event.target.value)} className="dashboard-bulk-select">
-        <option value="">{eligibleProjects.length > 0 ? 'Move to project…' : 'No available projects'}</option>
-        {eligibleProjects.map((project) => <option key={project.publicKey} value={project.publicKey}>{project.name}</option>)}
-      </select>
-      <button type="button" className="dashboard-bulk-primary" disabled={busy || !targetProject} onClick={() => { void moveSelected() }}>
-        {busy ? 'Moving…' : 'Move'}
-      </button>
+      <div role="group" aria-label="Move selected Inbox items to project" className="flex min-w-0 max-w-full gap-2 overflow-x-auto">
+        {eligibleProjects.length === 0 && <span className="text-xs text-muted-foreground">No available projects</span>}
+        {eligibleProjects.map((project) => <button key={project.publicKey} type="button" disabled={busy}
+          className="dashboard-bulk-secondary shrink-0" onClick={() => { void moveSelected(project.publicKey) }}>
+          Move to {project.name}
+        </button>)}
+      </div>
       <details className="dashboard-bulk-menu">
         <summary>Actions</summary>
         <div role="menu">

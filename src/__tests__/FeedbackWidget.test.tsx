@@ -2165,6 +2165,20 @@ describe('<FeedbackWidget />', () => {
       })
     })
 
+    it('keeps edit text unsaved when shortcuts are disabled', async () => {
+      const calls = mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const area = await openPinEditMode()
+      act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
+      fireEvent.change(area, { target: { value: 'keep editing' } })
+      fireEvent.keyDown(area, { key: 'Enter' })
+      fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
+      expect(area).toBeInTheDocument()
+      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
+      fireEvent.keyDown(area, { key: 'Escape' })
+      expect(area).not.toBeInTheDocument()
+    })
+
     it('pin detail popover Edit → Enter key saves edit (line 1036)', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
@@ -2449,6 +2463,56 @@ describe('<FeedbackWidget />', () => {
       expect(button?.getAttribute('style')).toMatch(/rgba\(228,\s*110,\s*57,\s*0\.72\)/)
       expect(button?.getAttribute('style')).toMatch(/fw-carrot-active|box-shadow/)
     })
+
+    it('can disable shortcuts, retain mouse actions and Escape, and re-enable them', async () => {
+      mockFetch()
+      const view = render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      fireEvent.click(view.getByRole('button', { name: 'Open CRRT menu' }))
+      fireEvent.click(view.getByRole('menuitemcheckbox', { name: 'Keyboard shortcuts' }))
+      expect(view.getByRole('menuitemcheckbox')).toHaveAttribute('aria-checked', 'false')
+      expect(document.querySelector('[data-fw-launcher-menu] kbd')).toBeNull()
+      for (const key of ['c', 's', 'f', 'm', 'h']) fireEvent.keyDown(window, { key })
+      fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      expect(document.body.style.cursor).not.toBe('crosshair')
+      expect(view.queryByText('Click an element or select text to leave feedback')).toBeNull()
+      fireEvent.click(view.getByRole('menuitem', { name: /Drop comment/ }))
+      expect(document.body.style.cursor).toBe('crosshair')
+      fireEvent.keyDown(window, { key: 'Escape' })
+      expect(document.body.style.cursor).not.toBe('crosshair')
+      view.unmount()
+      const next = render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      fireEvent.keyDown(window, { key: 'c' })
+      expect(document.body.style.cursor).not.toBe('crosshair')
+      fireEvent.click(next.getByRole('button', { name: 'Open CRRT menu' }))
+      expect(next.getByRole('menuitemcheckbox')).toHaveAttribute('aria-checked', 'false')
+      fireEvent.click(next.getByRole('menuitemcheckbox'))
+      fireEvent.keyDown(window, { key: 'c' })
+      expect(document.body.style.cursor).toBe('crosshair')
+    })
+
+    it.each(['metaKey', 'ctrlKey', 'altKey', 'shiftKey'] as const)(
+      'ignores C with %s in idle and selecting modes', async (modifier) => {
+        mockFetch()
+        render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+        await waitFor(() => expect(document.querySelector('[data-fw]')).not.toBeNull())
+
+        const hint = 'Click an element or select text to leave feedback'
+        const key = modifier === 'shiftKey' ? 'C' : 'c'
+        await act(async () => { fireEvent.keyDown(window, { key, [modifier]: true }) })
+        expect(document.body.textContent).not.toContain(hint)
+        expect(document.body.style.cursor).not.toBe('crosshair')
+
+        await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+        expect(document.body.style.cursor).toBe('crosshair')
+        await act(async () => { fireEvent.keyDown(window, { key, [modifier]: true }) })
+        expect(document.body.textContent).toContain(hint)
+        expect(document.body.style.cursor).toBe('crosshair')
+
+        await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+        expect(document.body.textContent).not.toContain(hint)
+        expect(document.body.style.cursor).not.toBe('crosshair')
+      },
+    )
 
     it('toggles selecting mode with C while ignoring repeat C and active carrot clicks', async () => {
       mockFetch()
@@ -2870,6 +2934,18 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('comment textarea Enter key (lines 718-719)', () => {
+    it('does not submit comment text when shortcuts are disabled', async () => {
+      const calls = mockFetch()
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const { textarea } = await enterCommentingMode()
+      act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
+      fireEvent.change(textarea, { target: { value: 'still writing' } })
+      fireEvent.keyDown(textarea, { key: 'Enter' })
+      fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
+      expect(calls.some(c => c.init?.method === 'POST')).toBe(false)
+      expect(textarea).toBeInTheDocument()
+    })
+
     it('Enter without Shift in comment textarea triggers send', async () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
@@ -3132,6 +3208,20 @@ describe('<FeedbackWidget />', () => {
     function openEditMode() {
       return openCardEditByBody('edit kbd test')
     }
+
+    it('keeps edit text unsaved when shortcuts are disabled', async () => {
+      const calls = mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const area = await openEditMode()
+      act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
+      fireEvent.change(area, { target: { value: 'keep editing' } })
+      fireEvent.keyDown(area, { key: 'Enter' })
+      fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
+      expect(area).toBeInTheDocument()
+      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
+      fireEvent.keyDown(area, { key: 'Escape' })
+      expect(area).not.toBeInTheDocument()
+    })
 
     it('Cmd+Enter in edit textarea saves the edit (L1353 metaKey branch)', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))

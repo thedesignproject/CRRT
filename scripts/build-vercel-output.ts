@@ -132,6 +132,8 @@ await buildPublicFunction(root, output)
 await rm(join(output, 'static/public-pages.json'))
 const workflowConfig = JSON.parse(await readFile(join(output, 'config.json'), 'utf8'))
 workflowConfig.routes = [
+  { src: '^/\\.well-known/oauth-authorization-server$', dest: '/api-router?__audit_path=/api/mcp/oauth/metadata' },
+  { src: '^/\\.well-known/oauth-protected-resource(?:/api/mcp/v1)?$', dest: '/api-router?__audit_path=/api/mcp/oauth/resource' },
   { src: '^/api(?:/.*)?$', headers: {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',

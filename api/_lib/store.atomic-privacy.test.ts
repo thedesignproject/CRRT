@@ -118,3 +118,10 @@ it('acknowledges only the exact sender lease after callback completion',async()=
  expect(rpc).toHaveBeenCalledWith('acknowledge_tracker_dispatch_stopped',{p_project:'p',p_comment:'c',p_lease:'lease',p_work:'work'})
  result={data:null,error:{message:'database down'}};await expect(acknowledgeTrackerDispatchStopped('p','c','lease',null)).rejects.toThrow('database down')
 })
+
+it('passes the optional undo version to the atomic mutation and surfaces conflicts', async () => {
+ await mutateProjectFeedback('p','u','c',{reviewStatus:'open',expectedUpdatedAt:'2026-10-29T12:00:00Z'})
+ expect(rpc).toHaveBeenCalledWith('mutate_actor_feedback',{p_project:'p',p_actor:'u',p_comment:'c',p_patch:{status:'pending',expected_updated_at:'2026-10-29T12:00:00Z'}})
+ result={data:null,error:{message:'status_conflict'}}
+ await expect(mutateProjectFeedback('p','u','c',{reviewStatus:'open',expectedUpdatedAt:'old'})).rejects.toThrow('status_conflict')
+})

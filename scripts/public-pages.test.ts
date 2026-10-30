@@ -58,7 +58,7 @@ describe('built public pages', () => {
     const llms = read('llms.txt')
     expect(llms).toMatch(/^# CRRT\n\n> /)
     expect(llms).toContain('## When to use CRRT')
-    expect(llms).toContain('No official CLI or MCP server')
+    expect(llms).toContain('CRRT MCP is available over Streamable HTTP at /api/mcp/v1')
     for (const match of llms.matchAll(/\]\(https:\/\/crrt.ai([^)]*)\)/g)) {
       const path = match[1]
       expect(publicPages.some(page => page.path === path) || existsSync(resolve(dist, path.slice(1)))).toBe(true)

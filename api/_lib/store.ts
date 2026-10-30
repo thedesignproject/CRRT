@@ -469,12 +469,16 @@ function mapEvent(row: EventRow) {
   }
 }
 
-export async function listProjectsForUser(userId: string) {
+export async function listProjectsForUser(userId: string, options: { after?: string; limit?: number; name?: string } = {}) {
   const supabase = getSupabase()
-  const { data: memberRows, error: memberError } = await supabase
+  let membershipQuery = supabase
     .from('project_members')
-    .select('project_key, role, is_owner')
+    .select('project_key, user_id, role, is_owner, projects!inner(name)')
     .eq('user_id', userId)
+  if (options.after) membershipQuery = membershipQuery.gt('project_key', options.after)
+  if (options.name) membershipQuery = membershipQuery.eq('projects.name', options.name)
+  if (options.limit) membershipQuery = membershipQuery.order('project_key').limit(options.limit)
+  const { data: memberRows, error: memberError } = await membershipQuery
 
   if (memberError) throw new Error(memberError.message)
   const memberships = (memberRows || []) as ProjectMemberRow[]
@@ -1897,12 +1901,16 @@ export async function listComments(projectKey: string, filters: {
 }
 
 export async function listProjectComments(projectKey: string, filters: {
+  readyForAgent?: boolean
   actorUserId?: string
   pageUrl?: string
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
   visibility?: CommentVisibility
   includeExternalWork?: boolean
+  limit?: number
+  cursor?: { createdAt: string; id: string }
+  ids?: string[]
 } = {}) {
   const supabase = getSupabase()
   const columns: string = filters.includeExternalWork === false
@@ -1914,12 +1922,17 @@ export async function listProjectComments(projectKey: string, filters: {
     .select(columns)
     .eq('project_id', projectKey)
 
+  if (filters.readyForAgent) query = query.eq('status', 'approved').or('implementation_status.is.null,implementation_status.not.in.(ready_for_testing,done)')
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
   if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
   if (filters.implementationStatus) query = query.eq('implementation_status', filters.implementationStatus)
   if (filters.visibility) query = query.eq('visibility', filters.visibility)
 
-  const { data, error } = await query.order('created_at', { ascending: false })
+  if (filters.ids) query = query.in('id', filters.ids)
+  if (filters.cursor) query = query.or(`created_at.lt.${filters.cursor.createdAt},and(created_at.eq.${filters.cursor.createdAt},id.lt.${filters.cursor.id})`)
+  query = query.order('created_at', { ascending: false })
+  if (filters.limit) query = query.order('id', { ascending: false }).limit(filters.limit)
+  const { data, error } = await query
   if (error) throw new Error(error.message)
   return Promise.all(((data as unknown as CommentRow[] | null) || []).map((row) => mapProjectCommentWithPrivateImage(
     supabase,
@@ -2164,12 +2177,14 @@ export async function updateImplementationStatus(commentId: string, patch: {
 
 // Human mutations check current capability under the database privacy fence.
 export async function mutateProjectFeedback(projectKey: string, actorUserId: string, commentId: string, patch: {
+  expectedUpdatedAt?: string
   reviewStatus?: ReviewStatus
   implementationStatus?: ImplementationStatus
   claimedByAgentId?: string | null
   visibility?: CommentVisibility
 }) {
   const changes: Record<string, unknown> = {}
+  if (patch.expectedUpdatedAt !== undefined) changes.expected_updated_at = patch.expectedUpdatedAt
   if (patch.reviewStatus !== undefined) changes.status = toLegacyStatus(patch.reviewStatus)
   if (patch.implementationStatus !== undefined) changes.implementation_status = patch.implementationStatus
   if (patch.claimedByAgentId !== undefined) changes.claimed_by_agent_id = patch.claimedByAgentId

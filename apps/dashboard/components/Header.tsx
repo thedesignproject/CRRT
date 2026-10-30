@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { SuggestedProjects } from './SuggestedProjects'
 import type { User } from '@supabase/supabase-js'
 import type { ReactNode } from 'react'
@@ -5,7 +6,7 @@ import { cn } from '../lib/utils'
 import { asset, landingRoute, route } from '../lib/routes'
 import type { Project, ProjectKeyAvailability } from '../api'
 import type { StatusFilter } from '../lib/types'
-import { MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
+import { BotIcon, MoonIcon, PlusIcon, SearchIcon, SettingsIcon, ShieldIcon, SunIcon } from './icons'
 import { Spinner } from './primitives'
 import { Video } from 'lucide-react'
 import { AddProjectPopover } from './AddProjectPopover'
@@ -87,6 +88,7 @@ export function Header({
   superAdminActive,
   onOpenSuperAdmin,
 }: HeaderProps) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   return (
     <>
     <aside className="dashboard-navigation" aria-label="Workspace navigation">
@@ -184,6 +186,7 @@ export function Header({
       </nav>
 
       <nav className="dashboard-navigation-footer" aria-label="Workspace administration">
+        <a href={route('/mcp-auth')} className="dashboard-navigation-action"><BotIcon size={16} /><span>MCP connections</span></a>
         {!extensionCommentsActive && selectedProject && canManageProject && (
           <button type="button" onClick={onOpenSettings} aria-label="Project settings" aria-pressed={settingsActive} className={cn('dashboard-navigation-action', settingsActive && 'bg-accent text-foreground')}>
             <SettingsIcon size={16} />
@@ -212,9 +215,9 @@ export function Header({
         >
           <SearchIcon />
           <span className="hidden sm:block flex-1 text-left">Search Feedback…</span>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border bg-card text-[10px] font-mono text-muted-foreground">
+          {shortcutsEnabled && <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border border-border bg-card text-[10px] font-mono text-muted-foreground">
             <span className="text-[11px]">⌘</span>K
-          </kbd>
+          </kbd>}
         </button>
         <NotificationBell
           apiBase={apiBase}
