@@ -6,7 +6,7 @@ import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { InboxMoveUndo } from './components/InboxMoveUndo'
 import type { InboxUndoItem } from './api'
-import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
+import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
@@ -224,7 +224,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
   const [inboxUndo,setInboxUndo]=useState<{actor:string;projectId:string;items:InboxUndoItem[]}|null>(null)
-  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string; undoImplementation?: ImplStatus; undoToken?: string; undoAction?: 'reopen' | 'reject' }>>([])
+  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string; undoImplementation?: ImplStatus; undoToken?: string; undoAction?: 'reopen' | 'reject' | 'change' }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -341,44 +341,42 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     { all: 0, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 },
   ), [projectComments])
 
-  const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
+  const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus, implementation?: ImplStatus) => {
     clearReadyUndo()
+    const before = comments.find(c => c.id === id)
+    if (!before) return
+    const generation = bulkGeneration.current
     const request = Symbol(id)
     reviewRequests.current.set(id, request)
-    setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
+    setComments(prev => prev.map(c => c.id === id ? {
+      ...c, reviewStatus: status,
+      implementationStatus: implementation ?? c.implementationStatus,
+      claimedByAgentId: implementation === 'unassigned' ? null : c.claimedByAgentId,
+      updatedAt: new Date().toISOString(),
+    } : c))
     try {
-      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status))
-      if (reviewRequests.current.get(id) === request) await refreshComments()
+      const result = await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status, before.updatedAt, implementation, {captureUndo: true, preserveExternalWork: true}))
+      if (reviewRequests.current.get(id) === request && generation === bulkGeneration.current) {
+        if (result?.updatedAt) setComments(prev => prev.map(c => c.id === id ? {...c, updatedAt: result.updatedAt} : c))
+        if (result?.undoToken && result.updatedAt) setReadyUndo([{...before, undoVersion: result.updatedAt, undoToken: result.undoToken, undoAction: status === 'rejected' ? 'reject' : 'change'}])
+        if (implementation === undefined) await refreshComments()
+      }
     } catch (err) {
-      console.error('Failed to update review status:', err)
-      if (reviewRequests.current.get(id) === request) mutation.report(err)
-      if (reviewRequests.current.get(id) === request) await refreshComments()
+      console.error('Failed to update feedback status:', err)
+      if (reviewRequests.current.get(id) === request && generation === bulkGeneration.current) {
+        mutation.report(err)
+        await refreshComments()
+      }
     } finally {
       if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
     }
-  }, [accessToken, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+  }, [accessToken, comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
 
   const handleToggleDone = useCallback(async (id: string) => {
-    clearReadyUndo()
-    const current = comments.find((c) => c.id === id)
+    const current = comments.find(c => c.id === id)
     if (!current) return
-    const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
-    setComments((prev) => prev.map((c) => c.id === id
-      ? {
-          ...c,
-          implementationStatus: nextStatus,
-          claimedByAgentId: nextStatus === 'unassigned' ? null : c.claimedByAgentId,
-          updatedAt: new Date().toISOString(),
-        }
-      : c))
-    try {
-      await trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
-    } catch (err) {
-      console.error('Failed to update implementation status:', err)
-      mutation.report(err)
-      refreshComments()
-    }
-  }, [comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+    await handleReviewStatus(id, current.reviewStatus, current.implementationStatus === 'done' ? 'unassigned' : 'done')
+  }, [comments, handleReviewStatus])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
@@ -850,7 +848,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
         {inboxUndo && inboxUndo.actor === user.id && inboxUndo.projectId === selectedProject && canManageFeedback && <InboxMoveUndo key={`${user.id}:${inboxUndo.items[0].updatedAt}`} apiBase={API_BASE} accessToken={accessToken} projectId={inboxUndo.projectId} items={inboxUndo.items} onRestored={()=>{setInboxUndo(null);openExtensionComments()}} />}
         {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
-          <span>{readyUndo.length} {readyUndo[0].undoAction === 'reject' ? 'rejected. Linked issues unchanged' : readyUndo[0].undoAction === 'reopen' ? 'reopened' : `marked ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}.</span>
+          <span>{readyUndo.length} {readyUndo[0].undoAction === 'reject' ? 'rejected. Linked issues unchanged' : readyUndo[0].undoAction === 'reopen' ? 'reopened' : readyUndo[0].undoAction === 'change' ? 'updated' : `marked ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}.</span>
           <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo {readyUndo[0].undoAction ?? `mark ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}</button>
         </div>}
         </div>

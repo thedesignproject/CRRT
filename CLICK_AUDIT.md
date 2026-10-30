@@ -2,19 +2,26 @@
 
 Goal: every repeatable interaction takes at most two clicks; undo never costs more than doing. No silent state changes. Public APIs remain compatible.
 
-Count starts on the relevant surface with the task's items visible; navigation to that surface is audited separately. N means selected items. Text entry is not a click. Frequency weights (1–5) are estimates from the workflow, not telemetry; priority = clicks saved × frequency. This is an initial inventory, not an exhaustive completion claim.
+Count starts on the relevant surface with the task's items visible; navigation to that surface is audited separately. N means selected items. Text entry is not a click. Frequency weights (1–5) are estimates from the workflow, not telemetry; priority = clicks saved × frequency. The current inventory below supersedes the historical layer notes. It covers the reviewed dashboard and widget flows; provider authorization and irreversible operations retain their explicit boundaries.
 
 | Task / evidence | Clicks before | Target / after | Frequency | Priority (N=10) | Status |
 | --- | --- | --- | --- | --- | --- |
 | Dashboard: resolve visible list (App + CommentList) | Select → Select all → Actions → Mark done = 4 | Select all → Mark done = 2 | 5 | 10 | Implemented in first layer |
 | Dashboard: reopen done/accepted/rejected list (App) | Open each item and change state: at least 2N | Select all → Reopen = 2 | 4 | 72 | Implemented in first layer |
-| Undo dashboard Mark ready | At least 2N | Undo mark ready = 1 | 4 | 76 | Third layer; other bulk states remain pending |
-| Widget handoff accepts open comments (PremiumAgentBridge.confirmHandoff) | Send to agent mutates selection before prompt copy | Explicit approval copy + reversible action | 5 | TBD | Audit server mutation and undo semantics |
-| Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Code inspected; verify in browser |
+| Undo dashboard Mark ready | At least 2N | Undo mark ready = 1 | 4 | 76 | Implemented: approval, completion, Reopen and Reject Undo |
+| Widget handoff accepts open comments (PremiumAgentBridge.confirmHandoff) | Send to agent mutates selection before prompt copy | Explicit acceptance count; retry the same handoff without another mutation | 5 | TBD | Implemented #392; copying does not mutate status; cancelling active agent work is not implied |
+| Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Verified in widget tests and desktop/mobile browser |
 | Dashboard select arbitrary N items | Enter select mode + N clicks + action | N checkbox clicks + action; contiguous range: first + Shift-last + action | 5 | 5 (arbitrary), 45 (range) | Direct checkboxes and range implemented; arbitrary selection inherently depends on N |
-| Inbox select all + move to a project | Select → Select page → Select all matching → destination → Move = 5+ | Select all → Move to [project] = 2 | 4 | ≥12 | Merged #375/#377; Undo move pending |
+| Inbox select all + move to a project | Select → Select page → Select all matching → destination → Move = 5+ | Select all → Move to [project] = 2 | 4 | ≥12 | Two-click bulk move; one-click Undo in #389; individual moves covered by #393 |
 | Bulk Reject (App) | Originally 4; parent layer Select all → Actions → Reject = 3 | Select all → Reject = 2 | 3 | 3 vs parent | Implemented in second layer |
-| Project/filter/navigation/settings/export/audits/integrations | Not yet measured | ≤2 each | TBD | TBD | Inventory pending |
+| Project / Inbox / project settings / filters | Direct controls | 1 | — | — | Code reviewed: Header and CommentList |
+| Billing | User menu → Billing | 2 | — | — | Existing direct destination |
+| Project name / instructions / domains | Save or Add after entry; direct remove | 1 | — | — | ProjectSettings; entry/focus excluded from action count |
+| Membership / invitations | Role select; Invite after entry | 1–2; ownership transfer adds confirmation | — | — | Confirmation preserved; not advertised as reversible |
+| Export selected feedback | Integrations → provider → Create | Provider → Create = 2 | — | — | #390; draft review and provider authorization retained |
+| Launch product audit | Re-select project then Run | Current project preserved; Run = 1 after URL entry | — | — | #391; Cancel audit = 1; no automatic execution |
+| Connect integrations | Connect → account/repository choice + external consent | Provider-dependent | — | — | Explicit OAuth consent retained; not counted as a two-click flow |
+| Delete / revoke / disconnect | Explicit action and existing confirmations | No generic Undo | — | — | Requires a separate restore/provider contract; outside this status/move Undo stack |
 
 ## First layer design and evidence
 
@@ -106,3 +113,9 @@ Sending open feedback now says Accept & send to agent and explains exactly how m
 ## Nineteenth layer: single Inbox move Undo
 
 Individual Add to project now uses the same version-returning move contract as bulk assignment and exposes the same Undo in standalone Inbox or destination project. It retains the current item after a failure and clears selection after a successful move. Thirty-eight targeted tests and changed-line/branch coverage pass.
+
+## Final review: individual status changes and release boundaries
+
+Individual approval/rejection/completion now use the same version-fenced endpoint and signed snapshot as bulk Reopen/Reject. Undo restores the original implementation state and agent claim. Late results are guarded by request identity and project/account generation. Rejection preserves linked issues and says so before the action.
+
+Review order and manual checks are in `docs/reviews/click-audit-stack.md`. The historical paragraphs above describe each layer at its creation; their “pending” notes are not the current checklist. Widget changes require a subsequent npm release as described in `docs/npm-releases.md`; this stack does not publish a package or merge itself.

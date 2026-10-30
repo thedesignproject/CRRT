@@ -358,6 +358,7 @@ export function CommentDetail({
               >
                 <XIcon size={14} /> Reject
               </ActionBtn>
+              <span className="text-xs text-muted-foreground">Reject keeps linked issues unchanged.</span>
 
 
               </>}

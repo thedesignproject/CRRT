@@ -275,16 +275,16 @@ describe('<App /> GitHub issue wiring', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'select test comment' }))
     for (const key of ['a', 'd', 'm']) fireEvent.keyDown(window, { key })
-    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
-    expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(3))
+    expect(fixtures.updateImpl).not.toHaveBeenCalled()
 
     fixtures.updateReview.mockClear(); fixtures.updateImpl.mockClear()
     for (const name of ['command accept', 'command reject', 'command done']) {
       fireEvent.click(screen.getByRole('button', { name: 'search' }))
       fireEvent.click(screen.getByRole('button', { name }))
     }
-    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
-    expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(3))
+    expect(fixtures.updateImpl).not.toHaveBeenCalled()
   })
 
   it('optimistically clears the previous agent when reopening Done', async () => {
@@ -301,8 +301,8 @@ describe('<App /> GitHub issue wiring', () => {
 
     fireEvent.keyDown(window, { key: 'm' })
 
-    await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'unassigned',
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'accepted', '2026-01-01', 'unassigned', {captureUndo:true,preserveExternalWork:true},
     ))
     expect(screen.getByTestId('first-claim')).toHaveTextContent('none')
   })
@@ -471,7 +471,7 @@ describe('<App /> GitHub issue wiring', () => {
     await act(async () => resolveNewer())
     expect(fixtures.fn).toHaveBeenCalledTimes(1)
     await act(async () => rejectOlder(new Error('older failed')))
-    expect(error).toHaveBeenCalledWith('Failed to update review status:', expect.any(Error))
+    expect(error).toHaveBeenCalledWith('Failed to update feedback status:', expect.any(Error))
     expect(fixtures.fn).toHaveBeenCalledTimes(1)
   })
 
@@ -1034,12 +1034,12 @@ it.each(['loading','missing session','stale share','wrong project','empty state'
 })
 it('explains expired-plan write rejection, restores retained feedback and disables further writes',async()=>{
  fixtures.comments.push({id:'comment-1',projectId:'project-1',body:'Retained feedback',reviewStatus:'open',implementationStatus:'unassigned',createdAt:'2026-01-01',updatedAt:'2026-01-01'})
- fixtures.updateImpl.mockRejectedValueOnce(Object.assign(new Error('The owner needs an active Cloud plan. Feedback remains readable.'),{status:402,resource:'subscription'}))
+ fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('The owner needs an active Cloud plan. Feedback remains readable.'),{status:402,resource:'subscription'}))
  vi.spyOn(console,'error').mockImplementation(()=>{})
  render(<App/>);fireEvent.click(await screen.findByRole('button',{name:'select test comment'}));fireEvent.keyDown(window,{key:'m'})
  await screen.findByRole('alert');expect(screen.getByRole('alert')).toHaveTextContent('Feedback remains readable')
  expect(screen.getByTestId('detail')).toHaveAttribute('data-read-only','true')
- expect(fixtures.fn).toHaveBeenCalled();fireEvent.keyDown(window,{key:'m'});expect(fixtures.updateImpl).toHaveBeenCalledOnce()
+ expect(fixtures.fn).toHaveBeenCalled();fireEvent.keyDown(window,{key:'m'});expect(fixtures.updateReview).toHaveBeenCalledOnce()
 })
 
 
@@ -1174,7 +1174,7 @@ it.each(['success', 'failure'])('ignores a late Undo %s after a newer local stat
  fireEvent.click(undo)
  fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
  fireEvent.keyDown(window, { key: 'm' })
- await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledOnce())
+ await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(3))
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
  expect(screen.getByRole('button', { name: 'Mark done' })).toBeEnabled()
  const refreshCalls = fixtures.fn.mock.calls.length
@@ -1234,7 +1234,7 @@ it.each(['stay', 'navigate'])('waits for a newer write before reconciling invali
  let finishUndo!: () => void
  let finishWrite!: () => void
  fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
- fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
  fireEvent.click(undo)
  fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
  fireEvent.keyDown(window, { key: 'm' })
@@ -1270,7 +1270,7 @@ it.each(['stay', 'navigate'])('guards reconciliation data when another write sta
  await act(async () => finishUndo())
  expect(canApply()).toBe(true)
  let finishWrite!: () => void
- fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
  fireEvent.keyDown(window, { key: 'm' })
  expect(canApply()).toBe(false)
  if (navigation === 'navigate') fireEvent.click(screen.getByRole('button', { name: 'other project' }))
@@ -1352,4 +1352,35 @@ it('offers Inbox Undo in the destination project and returns to Inbox',async()=>
  fireEvent.click(await screen.findByRole('button',{name:'Undo move'}))
  await screen.findByText('extension page')
  expect(fixtures.restoreInbox).toHaveBeenCalledWith('https://crrt.ai/api','session-token','project-1',[{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])
+})
+
+
+it.each(['a', 'd', 'm'])('restores individual %s changes through a signed receipt', async key => {
+ fixtures.comments = [{...readyFeedback('comment-1'), reviewStatus:'open', claimedByAgentId:'original-agent'}]
+ fixtures.updateReview.mockResolvedValueOnce({updatedAt:'2026-10-30T12:00:00Z',undoToken:'signed-receipt'})
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name:'select test comment'}))
+ fireEvent.keyDown(window,{key})
+ const undo = await screen.findByRole('button',{name:key === 'd' ? 'Undo reject' : 'Undo change'})
+ expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api','session-token','comment-1',key === 'a' ? 'accepted' : key === 'd' ? 'rejected' : 'open',expect.any(String),key === 'm' ? 'done' : undefined,{captureUndo:true,preserveExternalWork:true})
+ if(key === 'd') expect(screen.getByText('1 rejected. Linked issues unchanged.')).toBeInTheDocument()
+ fireEvent.click(undo)
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-1','open',undefined,undefined,{undoToken:'signed-receipt'})
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+ expect(screen.getByTestId('first-claim')).toHaveTextContent('original-agent')
+})
+
+it.each(['success','failure'])('does not publish an individual action after navigating: %s', async outcome => {
+ fixtures.comments = [{...readyFeedback('comment-1'),reviewStatus:'open'}]
+ let finish!: () => void
+ fixtures.updateReview.mockImplementationOnce(() => new Promise((resolve,reject) => {finish = () => outcome === 'success' ? resolve({updatedAt:'version',undoToken:'receipt'}) : reject(new Error('late'))}))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'select test comment'}))
+ fireEvent.keyDown(window,{key:'a'})
+ fireEvent.click(screen.getByRole('button',{name:'other project'}))
+ const calls = fixtures.fn.mock.calls.length
+ await act(async () => finish())
+ expect(screen.queryByRole('button',{name:'Undo change'})).toBeNull()
+ expect(fixtures.fn).toHaveBeenCalledTimes(calls)
 })
