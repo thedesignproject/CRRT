@@ -444,7 +444,7 @@ function Setup({ state, tabAvailable, start, dispatch }: { state: typeof initial
 }
 
 function Review({ recording, screenUrl, cameraUrl, cameraSize, tab, setTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare, retryTranscript }: {
-  recording: LocalRecording; screenUrl: string; cameraUrl: string; cameraSize: CameraPreviewSize; tab: 'transcript' | 'agents'; setTab: (tab: 'transcript' | 'agents') => void; playbackMs: number; setPlaybackMs: (value: number) => void; cameraRef: React.RefObject<HTMLVideoElement | null>; copied: boolean; copyShare: () => Promise<void>
+  recording: LocalRecording; screenUrl: string; cameraUrl: string; cameraSize: CameraPreviewSize; tab: 'transcript' | 'agents'; setTab: (tab: 'transcript' | 'agents') => void; playbackMs: number; setPlaybackMs: (value: number) => void; cameraRef: { readonly current: HTMLVideoElement | null }; copied: boolean; copyShare: () => Promise<void>
   retryTranscript: () => Promise<void>
 }) {
   const player = useRef<HTMLVideoElement>(null)

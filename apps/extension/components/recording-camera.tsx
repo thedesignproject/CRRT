@@ -1,4 +1,3 @@
-import type { RefObject } from 'react'
 import { CameraOff, X } from 'lucide-react'
 import './recording-camera.css'
 
@@ -16,7 +15,7 @@ export function RecordingCamera({
   onSizeChange,
   onClose,
 }: {
-  videoRef: RefObject<HTMLVideoElement | null>
+  videoRef: { readonly current: HTMLVideoElement | null }
   size: CameraPreviewSize
   onSizeChange: (size: CameraPreviewSize) => void
   onClose: () => void

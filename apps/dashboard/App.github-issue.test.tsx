@@ -171,6 +171,17 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByText('recordings page')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'recordings' })).toHaveAttribute('aria-pressed', 'true')
   })
+  it('opens recordings directly without selecting a project or handling feedback shortcuts', async () => {
+    window.history.replaceState({}, '', '/?view=recordings')
+    render(<App />)
+    expect(await screen.findByText('recordings page')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'project' })).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    fireEvent.keyDown(window, { key: 'j' })
+    expect(screen.queryByText('command palette')).not.toBeInTheDocument()
+    expect(screen.getByText('recordings page')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'recordings' })).toHaveAttribute('aria-pressed', 'true')
+  })
   it('opens the feedback list on Open', async () => {
     render(<App />)
     expect(await screen.findByTestId('status-filter')).toHaveTextContent('open')
