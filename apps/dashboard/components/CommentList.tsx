@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { cn } from '../lib/utils'
 import { getDisplayStatus, isInactive } from '../lib/comment'
 import { timeAgo } from '../lib/format'
@@ -28,7 +28,7 @@ interface CommentListProps {
   exitBulkMode: () => void
   bulkSelectedIds: Set<string>
   toggleSelectAllVisible: () => void
-  toggleBulkSelect: (id: string) => void
+  toggleBulkSelect: (id: string, range?: string[]) => void
   commentsLoading: boolean
   commentsError: string | null
   selectedCommentId: string
@@ -41,7 +41,7 @@ type PersonalBulkControls = {
   exitBulkMode: () => void
   selectedCount: number
   isSelected: (id: string) => boolean
-  toggleBulkSelect: (id: string) => void
+  toggleBulkSelect: (id: string, range?: string[]) => void
   toggleSelectAllVisible: () => void
   allVisibleSelected: boolean
   allMatchingSelected: boolean
@@ -63,6 +63,16 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   const personalBulk = props.personal ? props.bulkControls : null
   const bulkMode = controls?.bulkMode ?? personalBulk?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
+  const selectionAnchor = useRef<string | null>(null)
+  function selectItem(id: string, extend: boolean, toggle: (id: string, range?: string[]) => void) {
+    const start = filteredComments.findIndex(c => c.id === selectionAnchor.current)
+    const end = filteredComments.findIndex(c => c.id === id)
+    const range = extend && start >= 0
+      ? filteredComments.slice(Math.min(start, end), Math.max(start, end) + 1).map(c => c.id)
+      : undefined
+    selectionAnchor.current = id
+    toggle(id, range)
+  }
   return (
     <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
       <div className="px-4 pt-4 pb-2.5 border-b border-border">
@@ -174,9 +184,17 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               const inactive = isInactive(comment)
 
               return (
+                <div key={comment.id} className="relative flex items-start">
+                  {(controls || personalBulk) && <input
+                    type="checkbox"
+                    aria-label={`Select feedback: ${comment.body}`}
+                    title="Shift-click to select a range"
+                    checked={isChecked}
+                    onChange={event => selectItem(comment.id, (event.nativeEvent as MouseEvent).shiftKey, (controls ?? personalBulk)!.toggleBulkSelect)}
+                    className="mt-4 ml-4 shrink-0 accent-foreground"
+                  />}
                 <button
                   type="button"
-                  key={comment.id}
                   aria-pressed={bulkMode ? isChecked : isActive}
                   onClick={() => bulkMode
                     ? (controls?.toggleBulkSelect ?? personalBulk?.toggleBulkSelect)?.(comment.id)
@@ -190,26 +208,10 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                      {bulkMode ? (
-                        <div className={cn(
-                          'w-[18px] h-[18px] rounded shrink-0 flex items-center justify-center border-2 transition-colors',
-                          isChecked ? 'bg-foreground border-foreground text-background' : 'border-muted-foreground/40'
-                        )} aria-hidden="true">
-                          {isChecked && (
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                          )}
-                        </div>
-                      ) : (
-                        <div
-                          className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
-                          style={{ background: comment.authorColor }}
-                          aria-hidden="true"
-                        >
-                          {comment.authorInitial}
-                        </div>
-                      )}
+                      <div
+                        className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
+                        style={{ background: comment.authorColor }} aria-hidden="true"
+                      >{comment.authorInitial}</div>
                       <span className="text-[13px] font-medium text-foreground">{comment.author}</span>
                     </div>
                     <span className="text-[10px] text-muted-foreground">{timeAgo(comment.createdAt)}</span>
@@ -256,6 +258,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     )}
                   </div>
                 </button>
+                </div>
               )
             })}
           </div>

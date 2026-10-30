@@ -34,3 +34,20 @@ describe('comment list visual refresh', () => {
     expect(document.querySelector('.overflow-y-auto')).toHaveClass('pb-24')
   })
 })
+
+it('selects directly and extends a visible range in either direction without opening feedback', () => {
+ const toggle = vi.fn(), open = vi.fn()
+ const props = { filteredComments: ['one','two','three'].map(id => ({...comment,id,body:id})), counts: { all: 3, open: 3, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), toggleBulkSelect: toggle, commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: open }
+ const view = render(<CommentList {...props} />)
+ fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: one'}), {shiftKey:true})
+ expect(toggle).toHaveBeenLastCalledWith('one',undefined)
+ fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: three'}), {shiftKey:true})
+ expect(toggle).toHaveBeenLastCalledWith('three',['one','two','three'])
+ fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: one'}), {shiftKey:true})
+ expect(toggle).toHaveBeenLastCalledWith('one',['one','two','three'])
+ fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: two'}))
+ expect(toggle).toHaveBeenLastCalledWith('two',undefined)
+ expect(open).not.toHaveBeenCalled()
+ view.rerender(<CommentList {...props} readOnly />)
+ expect(screen.queryByRole('checkbox')).toBeNull()
+})
