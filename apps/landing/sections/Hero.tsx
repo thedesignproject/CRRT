@@ -30,11 +30,10 @@ const FEEDBACK = [
 ] as const
 
 export function Hero({ authenticated }: { authenticated: boolean }) {
-  const [mediaReady, setMediaReady] = useState(false)
+  const [videoPlaying, setVideoPlaying] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   const revealVideo = () => {
-    setMediaReady(true)
     if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
 
     try {
@@ -46,15 +45,19 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
 
   return (
     <section id="product" className="landing-hero">
-      <div className={`landing-photo-stage ${mediaReady ? 'is-media-ready' : ''}`}>
+      <div className="landing-photo-stage">
         <Navigation authenticated={authenticated} />
         <div className="landing-photo-media">
+          <img className="landing-photo-image" src="/crrt-hero-portrait.jpg" alt="" aria-hidden="true" />
           <video
+            className={videoPlaying ? 'is-playing' : undefined}
             ref={videoRef}
             src="/crrt-hero.mp4"
             poster="/crrt-hero-portrait.jpg"
             aria-label="Close portrait of a person looking at a screen"
             onCanPlay={revealVideo}
+            onPlaying={() => setVideoPlaying(true)}
+            onError={() => setVideoPlaying(false)}
             muted
             loop
             playsInline

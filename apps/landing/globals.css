@@ -851,7 +851,7 @@
   overflow: hidden;
   border-radius: 0;
   color: white;
-  background: #332c2b;
+  background: var(--crrt-bg-deep);
   isolation: isolate;
 }
 .landing-photo-media {
@@ -871,6 +871,13 @@
   filter: saturate(.9) contrast(1.04);
   transform: scale(1.005);
 }
+.landing-photo-media > video {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity var(--crrt-duration-slow);
+}
+.landing-photo-media > video.is-playing { opacity: 1; }
 .landing-photo-shade {
   position: absolute;
   inset: 0;
@@ -898,12 +905,12 @@
 .landing-hero-cta:hover { border-color: var(--crrt-dashboard-orange); background: rgba(122,57,30,.52); transform: translateY(-1px); }
 .landing-hero-cta:focus-visible { outline: 2px solid white; outline-offset: 3px; }
 
-.landing-photo-stage.is-media-ready .landing-photo-media { animation: crrt-hero-media-in 1800ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage.is-media-ready .landing-photo-shade { animation: crrt-hero-fade-in 1600ms 80ms ease-out forwards; }
-.landing-photo-stage.is-media-ready .landing-navigation { animation: crrt-hero-soft-in 1300ms 220ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage.is-media-ready .landing-photo-copy h1 { animation: crrt-hero-soft-in 1400ms 420ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage.is-media-ready .landing-photo-copy > p { animation: crrt-hero-soft-in 1400ms 640ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage.is-media-ready .landing-hero-cta, .landing-photo-stage.is-media-ready .connect-agent button { animation: crrt-hero-soft-in 1400ms 840ms cubic-bezier(.22, 1, .36, 1) forwards; }
+.landing-photo-stage .landing-photo-media { animation: crrt-hero-media-in 1800ms cubic-bezier(.22, 1, .36, 1) forwards; }
+.landing-photo-stage .landing-photo-shade { animation: crrt-hero-fade-in 1600ms 80ms ease-out forwards; }
+.landing-photo-stage .landing-navigation { animation: crrt-hero-soft-in 1300ms 220ms cubic-bezier(.22, 1, .36, 1) forwards; }
+.landing-photo-stage .landing-photo-copy h1 { animation: crrt-hero-soft-in 1400ms 420ms cubic-bezier(.22, 1, .36, 1) forwards; }
+.landing-photo-stage .landing-photo-copy > p { animation: crrt-hero-soft-in 1400ms 640ms cubic-bezier(.22, 1, .36, 1) forwards; }
+.landing-photo-stage .landing-hero-cta, .landing-photo-stage .connect-agent button { animation: crrt-hero-soft-in 1400ms 840ms cubic-bezier(.22, 1, .36, 1) forwards; }
 
 .landing-floating-feedback { position: absolute; inset: 0; pointer-events: none; }
 .landing-glass-comment {
@@ -925,7 +932,7 @@
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
 }
-.landing-photo-stage.is-media-ready .landing-glass-comment {
+.landing-photo-stage .landing-glass-comment {
   animation: crrt-glass-reveal 1600ms var(--glass-delay, 2400ms) cubic-bezier(.22, 1, .36, 1) forwards,
              crrt-glass-float var(--float-duration, 10s) calc(var(--glass-delay, 2400ms) + 1600ms) ease-in-out infinite;
 }
@@ -954,7 +961,7 @@
   backdrop-filter: blur(24px) saturate(1.16);
   -webkit-backdrop-filter: blur(24px) saturate(1.16);
 }
-.landing-photo-stage.is-media-ready .landing-glass-widget {
+.landing-photo-stage .landing-glass-widget {
   animation: crrt-glass-reveal 1600ms 4200ms cubic-bezier(.22, 1, .36, 1) forwards,
              crrt-widget-float 9.8s 5800ms ease-in-out infinite;
 }
@@ -1326,16 +1333,16 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-photo-stage.is-media-ready .landing-photo-media,
-  .landing-photo-stage.is-media-ready .landing-photo-shade,
-  .landing-photo-stage.is-media-ready .landing-navigation,
-  .landing-photo-stage.is-media-ready .landing-photo-copy h1,
-  .landing-photo-stage.is-media-ready .landing-photo-copy > p,
-  .landing-photo-stage.is-media-ready .landing-hero-cta,
-  .landing-photo-stage.is-media-ready .connect-agent button,
-  .landing-photo-stage.is-media-ready .landing-glass-comment,
-  .landing-photo-stage.is-media-ready .landing-glass-widget { opacity: 1; scale: 1; translate: 0 0; filter: none; animation: none; transform: none; }
-  .landing-photo-stage.is-media-ready .landing-navigation { transform: translateX(-50%); }
+  .landing-photo-stage .landing-photo-media,
+  .landing-photo-stage .landing-photo-shade,
+  .landing-photo-stage .landing-navigation,
+  .landing-photo-stage .landing-photo-copy h1,
+  .landing-photo-stage .landing-photo-copy > p,
+  .landing-photo-stage .landing-hero-cta,
+  .landing-photo-stage .connect-agent button,
+  .landing-photo-stage .landing-glass-comment,
+  .landing-photo-stage .landing-glass-widget { opacity: 1; scale: 1; translate: 0 0; filter: none; animation: none; transform: none; }
+  .landing-photo-stage .landing-navigation { transform: translateX(-50%); }
   .landing-story-steps li { transition: none; }
   .landing-integrations-list article,
   .landing-integrations-list article > b,
