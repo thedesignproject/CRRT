@@ -1,0 +1,33 @@
+/* Capture reel: the section pins while the four capture methods pan past.
+   The active frame is centered; --reel-index arrives from React on each step. */
+/* The pinned frame already leaves room under the clips, so the section adds little more. */
+.landing-section.capture-reel { padding-block: 0; }
+.reel-track { position: relative; height: 1000vh; margin: 0 calc(-1 * var(--landing-shell-gutter)); }
+.reel-sticky { position: sticky; top: 0; display: flex; height: 100svh; flex-direction: column; justify-content: flex-start; gap: var(--crrt-space-9); padding: var(--crrt-space-9) 0 var(--crrt-space-7); overflow: hidden; }
+.reel-strip { --reel-frame: min(1080px, 80vw); --reel-gap: 56px; display: flex; width: max-content; gap: var(--reel-gap); margin: 0; padding: 0 calc((100vw - var(--reel-frame)) / 2); list-style: none; transform: translateX(calc(var(--reel-index, 0) * -1 * (var(--reel-frame) + var(--reel-gap)))); transition: transform 900ms cubic-bezier(.2, .8, .2, 1); will-change: transform; }
+
+.reel-frame { display: grid; width: var(--reel-frame); grid-template-columns: minmax(250px, 310px) minmax(0, 1fr); gap: 40px; align-items: center; opacity: .3; transform: scale(.94); transform-origin: 50% 50%; transition: opacity 500ms ease, transform 700ms cubic-bezier(.2, .8, .2, 1); }
+.reel-frame.is-active { opacity: 1; transform: none; }
+.reel-source { display: inline-flex; align-items: center; gap: 10px; color: var(--muted-foreground); font-size: 13px; }
+.reel-source em { padding: 4px 8px; border-radius: 99px; color: var(--foreground); background: var(--muted); font-size: 10px; font-style: normal; }
+.reel-frame-copy h3 { margin: 18px 0 14px; font: var(--landing-h3); letter-spacing: var(--landing-h3-track); text-wrap: balance; }
+.reel-frame-copy p { margin: 0 0 24px; color: var(--muted-foreground); font-size: 15px; line-height: 1.65; text-wrap: pretty; }
+.reel-frame-stage { min-width: 0; }
+
+/* A quiet review frame keeps every capture surface grounded in the page. */
+.reel-media { position: relative; display: grid; margin: 0; padding: var(--crrt-space-5); border: 1px solid var(--crrt-rule); border-radius: var(--crrt-marketing-radius-panel); background: var(--crrt-white); box-shadow: var(--crrt-shadow-md); }
+.reel-media video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: contain; border: 1px solid var(--crrt-rule); border-radius: var(--crrt-radius-3xl); background: var(--crrt-bg-warm); }
+
+@media (max-width: 760px) {
+  .reel-track { height: auto; }
+  .reel-sticky { position: static; height: auto; padding: 0; overflow: visible; }
+  .reel-strip { width: auto; gap: 18px; padding: 0 var(--landing-shell-gutter) 12px; overflow-x: auto; transform: none; scroll-snap-type: x mandatory; }
+  .reel-frame { width: 86vw; flex-shrink: 0; grid-template-columns: minmax(0, 1fr); gap: 20px; opacity: 1; transform: none; scroll-snap-align: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reel-strip, .reel-frame { transition: none; }
+}
+
+.reel-sticky > .ds-section-intro { padding-inline: var(--landing-shell-gutter); }
+@media (max-width: 760px) { .reel-sticky { padding-block: var(--crrt-space-9); } }

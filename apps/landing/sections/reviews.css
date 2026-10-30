@@ -1,0 +1,12 @@
+/* What people say: real comments, set the way comments are read — who, then
+   what they said. Small cards in a row, so the section stays a quiet aside. */
+.voices-intro h2 { max-width: 700px; margin: 0; color: var(--foreground); font: var(--landing-h2); letter-spacing: var(--landing-h2-track); text-wrap: balance; }
+
+.voices { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; max-width: 1120px; margin: 40px 0 0; padding: 0; list-style: none; }
+.voice { height: 100%; margin: 0; padding: 22px 24px; border: 1px solid var(--border); border-radius: 16px; background: var(--card); box-sizing: border-box; }
+.voice figcaption { display: flex; align-items: center; gap: 10px; color: var(--foreground); font-size: 14px; font-weight: 600; }
+.voice-avatar { display: grid; width: 30px; height: 30px; flex: 0 0 auto; place-items: center; border-radius: 50%; color: var(--crrt-dashboard-orange); background: color-mix(in srgb, var(--crrt-dashboard-orange) 11%, var(--card)); font-size: 12px; font-weight: 600; }
+.voice blockquote { margin: 14px 0 0; color: var(--foreground); font-size: 16px; line-height: 1.5; text-wrap: pretty; }
+
+.voice figcaption { flex-wrap: wrap; }
+.voice-example { flex-basis: 100%; color: var(--muted-foreground); font-weight: 400; font-size: var(--crrt-text-caption); }

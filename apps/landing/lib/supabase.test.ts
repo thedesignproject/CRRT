@@ -11,5 +11,14 @@ it('creates the landing auth client from the build-time Supabase configuration',
 
   const { supabase } = await import('./supabase')
 
-  expect(supabase.auth).toBeDefined()
+  expect(supabase?.auth).toBeDefined()
+})
+
+it('keeps the public landing available without auth configuration', async () => {
+  vi.stubGlobal('__CRRT_SUPABASE_URL__', '')
+  vi.stubGlobal('__CRRT_SUPABASE_ANON_KEY__', '')
+
+  const { supabase } = await import('./supabase')
+
+  expect(supabase).toBeNull()
 })
