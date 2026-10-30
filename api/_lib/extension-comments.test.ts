@@ -559,3 +559,15 @@ it.each([new Error('signing unavailable'),'offline'])('rolls back an ordinary ca
  expect(fake.value.rpc).toHaveBeenCalledWith('delete_actor_extension_feedback',{p_actor:'u',p_id:row.id})
  expect(fake.bucket.remove).toHaveBeenCalledWith(['u/a.png']);expect(fake.bucket.upload).not.toHaveBeenCalled()
 })
+
+it('returns committed assignment versions only when Undo is requested',async()=>{
+ const fake=client([{data:[{id:'c1',screenshot_storage_path:null}],error:null},{data:[{id:'c1',updated_at:'2026-10-30T12:00:00.123456Z'}],error:null}])
+ vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+ const result=await bulkAssignExtensionCommentsToProject('u1',{mode:'ids',ids:['c1']},'p','shared',true)
+ expect(fake.value.rpc).toHaveBeenCalledWith('assign_actor_inbox_feedback_with_versions',expect.objectContaining({p_actor:'u1'}))
+ expect(result.undoItems).toEqual([{id:'c1',updatedAt:'2026-10-30T12:00:00.123456Z'}])
+})
+it('does not fabricate Undo snapshots for assignments returning no rows',async()=>{
+ const fake=client([{data:[{id:'c1',screenshot_storage_path:null}],error:null},{data:null,error:null}]);vi.mocked(getServiceSupabase).mockReturnValue(fake.value as never)
+ expect((await bulkAssignExtensionCommentsToProject('u1',{mode:'ids',ids:['c1']},'p','shared',true)).undoItems).toEqual([])
+})
