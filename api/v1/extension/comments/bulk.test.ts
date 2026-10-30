@@ -101,3 +101,8 @@ it('defaults assignment visibility to shared', async () => {
   await call({ method: 'POST', headers: {}, body: { operation: 'assign', selection, projectId: 'project' } }, response)
   expect(bulkAssignExtensionCommentsToProject).toHaveBeenCalledWith('u', selection, 'project', 'shared')
 })
+it('opts in to committed move versions',async()=>{
+ vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@x.test'})
+ const response=res();await call({method:'POST',headers:{},body:{operation:'assign',selection,projectId:'p',captureUndo:true}},response)
+ expect(bulkAssignExtensionCommentsToProject).toHaveBeenCalledWith('u',selection,'p','shared',true)
+})

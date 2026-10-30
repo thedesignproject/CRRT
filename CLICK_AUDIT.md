@@ -82,3 +82,7 @@ Reopen now performs one atomic open/unassigned update and offers one-click Undo 
 ## Thirteenth layer: Inbox restore database prerequisite
 
 Add a compatible assignment RPC returning committed timestamps, plus an actor/owner/version-fenced inverse. Restore locks comments before checking agent-share and external-work references and refuses to detach feedback already in use. Concurrent Undo has one winner. Five real local Postgres tests pass (including wrong owner, revoked access, changed version and existing share), migration-source parity and Drizzle consistency pass. No shared database modified.
+
+## Fourteenth layer: opt-in Inbox move versions and restore API
+
+Bulk assignment can opt in to exact committed versions without changing legacy response behavior. The restore endpoint validates 1–500 UUID/timestamp pairs, current manage permission and authenticated actor identity. It reports skipped items separately; the RPC rechecks ownership, references and versions atomically. Full suite: 3,011 passed, 209 skipped; targeted tests and diff coverage 100%, TypeScript passed.
