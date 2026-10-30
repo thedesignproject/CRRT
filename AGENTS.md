@@ -1,30 +1,18 @@
-## Read order for agents
+# Agent instructions
 
-These instructions apply to any coding agent working in this repo, including Claude Code, Codex, and Cursor.
+Read only the guides relevant to the task:
 
-- Any change -> read `rules/engineering.md`.
-- UI or design changes -> read `rules/ux.md` and `branding/CRRT-DESIGN-SYSTEM.md`.
-- Data, schema, or API changes -> read `rules/security.md` and `db/DRIZZLE-GUIDE.md`.
-- Product or copy decisions -> read `rules/business.md`.
+- Always: [engineering rules](rules/engineering.md).
+- UI: [UX rules](rules/ux.md) and [design system](branding/CRRT-DESIGN-SYSTEM.md).
+- Data or APIs: [security rules](rules/security.md). For schema changes, also read the [database guide](db/DRIZZLE-GUIDE.md).
+- Product or copy: [business rules](rules/business.md).
+- After code changes: run the [diff coverage checks](.agents/skills/diff-coverage/SKILL.md).
 
-# Repo notes for AI agents
+## Ship widget changes to npm
 
-## Database changes
+Changes affecting the published widget need an npm release, not just a merge.
+Related PRs can share one release; dashboard/backend/landing-only changes do not need one.
 
-**ALL schema changes go through `db/schema.ts`.** Do not write hand-rolled SQL files. Do not edit existing migration files in `db/migrations/`.
-
-Read **`db/DRIZZLE-GUIDE.md`** before any schema change — it has the full rules, gotchas, and the rename-without-data-loss recipe. Quick command reference lives in `db/README.md`.
-
-Supabase client (`@supabase/supabase-js`) stays the runtime query layer. Do **not** migrate `api/` query call sites to Drizzle's query builder.
-
-## Legacy schema files
-
-`supabase/legacy/` is frozen historical record from before Drizzle. Do not add new files there. Do not run those SQLs against any environment.
-
-## Dashboard routing
-
-The dashboard ships under a base path (`/dashboard/`), so all in-app routes/links and public assets must be base-aware — use `route()`/`asset()` from `apps/dashboard/lib/routes.ts`, never hardcode absolute `/foo` paths.
-
-## Diff coverage
-
-After any code change, MUST invoke the repo-local `$diff-coverage` skill from `.agents/skills/diff-coverage` before handing work back. Both line and branch diff coverage against the current PR's base are required at 100%. For stacked PRs, validate every layer against the branch immediately below it, not against `trunk`.
+Update the version and changelog, merge the release PR, then **create and push its tag**.
+Follow [the release commands](docs/npm-releases.md). Only call it released after npm
+shows the new version. Customers must update their dependency and redeploy.
