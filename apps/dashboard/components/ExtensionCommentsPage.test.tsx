@@ -488,3 +488,18 @@ it.each([false, true])('ignores an old bulk deletion after switching account (fa
   expect(screen.queryByText('Old deletion failed')).toBeNull()
   expect(screen.queryByRole('toolbar')).toBeNull()
 })
+
+it('disables Inbox navigation shortcuts while retaining mouse navigation and Escape', async () => {
+  vi.stubGlobal('localStorage', { getItem: () => 'disabled' })
+  try {
+    await act(async () => { render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />) })
+    fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
+    for (const key of ['j', 'k', 'ArrowDown', 'ArrowUp', ' ']) fireEvent.keyDown(window, { key })
+    expect(screen.getByText('1/2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Next comment' }))
+    expect(screen.getByText('2/2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('toolbar')).toBeNull()
+  } finally { vi.unstubAllGlobals() }
+})

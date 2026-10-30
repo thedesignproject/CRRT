@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../src/lib/useKeyboardShortcuts'
 import { useFeedbackMutationError } from './hooks/useFeedbackMutationError'
 import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
@@ -103,6 +104,7 @@ export function App() {
 }
 
 function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
   useEffect(() => {
     const onFocus = () => { void refreshProjects() }
@@ -527,7 +529,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     function onKey(e: KeyboardEvent) {
       if (view === 'extension-comments') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (shortcutsEnabled && (e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
         setCmdOpen((v) => !v)
         return
@@ -543,6 +545,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         return
       }
 
+      if (!shortcutsEnabled) return
       const tag = (e.target as HTMLElement).tagName
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
@@ -562,7 +565,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
+  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)

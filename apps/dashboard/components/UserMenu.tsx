@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { useEffect, useRef, useState } from 'react'
 import { route } from '../lib/routes'
 import type { User } from '@supabase/supabase-js'
@@ -10,6 +11,7 @@ interface UserMenuProps {
 }
 
 export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProps) {
+  const [shortcutsEnabled, setShortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const [open, setOpen] = useState(false)
   const [billingEnabled, setBillingEnabled] = useState(false)
   useEffect(() => {
@@ -51,6 +53,17 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProp
           </div>
           <a href={route('/mcp-auth')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">MCP connections</a>
           {billingEnabled && <a href={route('/billing')} className="block px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors">Billing</a>}
+          <button
+            type="button"
+            role="switch"
+            aria-checked={shortcutsEnabled}
+            aria-label="Keyboard shortcuts"
+            title="Remembered in this browser. Escape still closes or cancels."
+            onClick={() => setShortcutsEnabled(!shortcutsEnabled)}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"
+          >
+            <span>Keyboard shortcuts</span><span>{shortcutsEnabled ? 'On' : 'Off'}</span>
+          </button>
           <button
             onClick={onSignOut}
             className="w-full text-left px-3 py-2 text-xs text-foreground hover:bg-accent transition-colors"

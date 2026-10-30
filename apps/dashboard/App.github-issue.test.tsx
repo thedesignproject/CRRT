@@ -237,6 +237,21 @@ describe('<App /> GitHub issue wiring', () => {
     expect(fixtures.updateImpl).not.toHaveBeenCalled()
   })
 
+  it('disables global dashboard shortcuts while retaining mouse search and Escape', async () => {
+    vi.mocked(window.localStorage.getItem).mockReturnValue('disabled')
+    render(<App />)
+    await screen.findByRole('button', { name: 'search' })
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(screen.queryByRole('button', { name: 'command accept' })).toBeNull()
+    for (const key of ['j', 'k', 'a', 'd', 'm', 's', 'ArrowDown', ' ']) fireEvent.keyDown(window, { key })
+    expect(fixtures.updateReview).not.toHaveBeenCalled()
+    expect(fixtures.updateImpl).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'search' }))
+    expect(screen.getByRole('button', { name: 'command accept' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('button', { name: 'command accept' })).toBeNull()
+  })
+
   it('runs review and completion actions for project managers', async () => {
     fixtures.comments.push({
       id: 'comment-1', projectId: 'project-1', pageUrl: 'https://example.com', selector: 'body', x: 10, y: 20,
