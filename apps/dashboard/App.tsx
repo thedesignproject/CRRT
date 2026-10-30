@@ -384,7 +384,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionError('')
   }, [])
 
-  const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject') => {
+  const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
     const ids = Array.from(bulkSelectedIds)
     const generation = bulkGeneration.current
     setBulkActionBusy(true)
@@ -399,6 +399,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setComments((prev) => prev.map((c) => {
       if (!idSet.has(c.id)) return c
       const ts = new Date().toISOString()
+      if (action === 'reopen') return { ...c, reviewStatus: 'open' as ReviewStatus, implementationStatus: 'unassigned' as ImplStatus, claimedByAgentId: null, updatedAt: ts }
       if (action === 'ready') return { ...c, reviewStatus: 'accepted' as ReviewStatus, updatedAt: ts }
       if (action === 'done') return { ...c, reviewStatus: 'accepted' as ReviewStatus, implementationStatus: 'done' as ImplStatus, updatedAt: ts }
       return { ...c, reviewStatus: 'rejected' as ReviewStatus, updatedAt: ts }
@@ -406,10 +407,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const calls = ids.map(async (id) => {
       if (action === 'ready') return apiUpdateReview(API_BASE, accessToken, id, 'accepted')
       if (action === 'reject') return apiUpdateReview(API_BASE, accessToken, id, 'rejected')
-      await Promise.all([
-        apiUpdateReview(API_BASE, accessToken, id, 'accepted'),
-        apiUpdateImpl(API_BASE, accessToken, id, 'done'),
+      const updates = await Promise.allSettled([
+        apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted'),
+        apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done'),
       ])
+      // A failed PATCH must not release the busy guard while its sibling still writes.
+      const failure = updates.find((update) => update.status === 'rejected')
+      if (failure) throw failure.reason
     })
 
     const results = await Promise.allSettled(calls)
@@ -507,6 +511,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       setBulkActionError('Select up to 500 comments at a time. Narrow the list or select comments individually.')
       return
     }
+    setBulkMode(true)
     setBulkSelectedIds((prev) => {
       const allSelected = visibleIds.every((id) => prev.has(id))
       return allSelected ? new Set() : new Set(visibleIds)
@@ -837,10 +842,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
             >
               {bulkActionBusy ? 'Working…' : allSelectedReady ? `Send to ${selectedAgentMeta.name}` : 'Mark ready'}
             </button>
+            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
+            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reopen') }}>Reopen</button>
             <details className="dashboard-bulk-menu">
               <summary aria-label="More bulk actions">Actions</summary>
               <div role="menu">
-                <button type="button" role="menuitem" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
                 <button type="button" role="menuitem" className="dashboard-bulk-danger" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reject') }}>Reject</button>
               </div>
             </details>

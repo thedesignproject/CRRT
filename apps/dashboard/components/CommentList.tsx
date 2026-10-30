@@ -113,7 +113,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>}
       </div>
 
-      {controls && bulkMode && (
+      {controls && (
         <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
           <button
             type="button"
