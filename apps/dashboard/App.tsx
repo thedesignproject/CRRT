@@ -844,12 +844,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
             </button>
             <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
             <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reopen') }}>Reopen</button>
-            <details className="dashboard-bulk-menu">
-              <summary aria-label="More bulk actions">Actions</summary>
-              <div role="menu">
-                <button type="button" role="menuitem" className="dashboard-bulk-danger" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reject') }}>Reject</button>
-              </div>
-            </details>
+            <button type="button" className="dashboard-bulk-secondary dashboard-bulk-danger" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reject') }}>Reject</button>
           </BulkActionBar>
         )}
       </div>

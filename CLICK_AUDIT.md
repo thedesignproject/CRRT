@@ -13,7 +13,7 @@ Count starts on the relevant surface with the task's items visible; navigation t
 | Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Code inspected; verify in browser |
 | Dashboard select arbitrary N items | Enter select mode + N clicks + action | Direct selection/keyboard range + action | 5 | TBD | Pending |
 | Inbox bulk action across pages (CommentList / ExtensionCommentsPage) | Select → Select page → Select all matching → action = 4+ | ≤2 | 4 | ≥8 | Pending |
-| Bulk Reject (App) | Select → Select all → Actions → Reject = 4 | ≤2 | 3 | 6 | Pending |
+| Bulk Reject (App) | Originally 4; parent layer Select all → Actions → Reject = 3 | Select all → Reject = 2 | 3 | 3 vs parent | Implemented in second layer |
 | Project/filter/navigation/settings/export/audits/integrations | Not yet measured | ≤2 each | TBD | TBD | Inventory pending |
 
 ## First layer design and evidence
@@ -26,3 +26,9 @@ Tests exercise done, accepted, and rejected batches, two-click selection/action 
 
 - Keep irreversible delete confirmation until a compatible restore mechanism exists; count and record it rather than silently weakening deletion safeguards.
 - Do not cancel an agent's active implementation merely to undo copying a prompt. Inspect claim/permission semantics before changing this flow.
+
+## Second layer: direct bulk Reject
+
+Replace the one-item Actions menu with the existing Reject button. The review endpoint, busy state, permissions, and partial-failure selection stay intact. Test the two-click path and verify implementation status is untouched; existing rejection failure/stale-project tests exercise the same direct control.
+
+Undo investigation: the implementation-status endpoint clears `claimedByAgentId` on `unassigned` and cannot restore a released claim. Exact undo for claimed items needs an explicit decision about restoring agent ownership and a concurrency-safe restore contract. This remains unresolved, not counted as complete. Undo of unclaimed/review-only batches remains actionable in a following layer.
