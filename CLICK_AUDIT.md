@@ -78,3 +78,7 @@ Product decision: a reversible dashboard Reject preserves linked issues and says
 ## Twelfth layer: bulk Reopen and Reject Undo
 
 Reopen now performs one atomic open/unassigned update and offers one-click Undo via the signed receipt, restoring the former agent claim. Bulk Reject explicitly preserves linked issues (visible toolbar text and success notice) and offers the same one-click Undo. Existing stale-project/request tracking, permission errors, partial failure selection and version-conflict handling remain in place. Both actions verified in browser at 1440/390px: Select all → action = 2 clicks; Undo = 1. Full suite 2,998 passed, TypeScript clean, diff coverage 100%. Single-comment legacy rejection remains an audit item; this layer changes bulk actions only.
+
+## Thirteenth layer: Inbox restore database prerequisite
+
+Add a compatible assignment RPC returning committed timestamps, plus an actor/owner/version-fenced inverse. Restore locks comments before checking agent-share and external-work references and refuses to detach feedback already in use. Concurrent Undo has one winner. Five real local Postgres tests pass (including wrong owner, revoked access, changed version and existing share), migration-source parity and Drizzle consistency pass. No shared database modified.
