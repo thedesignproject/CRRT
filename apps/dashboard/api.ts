@@ -850,14 +850,14 @@ export function updateCommentVisibility(
   })
 }
 
-export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus'], expectedUpdatedAt?: string, implementationStatus?: CommentRecord['implementationStatus']) {
-  return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
+export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus'], expectedUpdatedAt?: string, implementationStatus?: CommentRecord['implementationStatus'], undo?: { captureUndo?: boolean; preserveExternalWork?: boolean; undoToken?: string }) {
+  return requestJson<CommentRecord & { undoToken?: string }>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(accessToken),
     },
-    body: JSON.stringify({ reviewStatus, expectedUpdatedAt, implementationStatus }),
+    body: JSON.stringify({ reviewStatus, expectedUpdatedAt, implementationStatus, ...undo }),
   })
 }
 

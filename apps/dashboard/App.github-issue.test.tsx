@@ -317,7 +317,7 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected', '2026-01-01', undefined, {captureUndo:true,preserveExternalWork:true},
     ))
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalled())
   })
@@ -417,7 +417,7 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenLastCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected', expect.any(String), undefined, {captureUndo:true,preserveExternalWork:true},
     ))
   })
 
@@ -1049,10 +1049,10 @@ it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
  fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
- await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledTimes(2))
+ await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
  for (const id of ['comment-1', 'comment-2']) {
-  expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open')
-  expect(fixtures.updateImpl).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'unassigned')
+  expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open', '', 'unassigned', {captureUndo:true,preserveExternalWork:true})
+  expect(fixtures.updateImpl).not.toHaveBeenCalled()
  }
  expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
  expect(screen.getByTestId('first-claim')).toHaveTextContent('none')
@@ -1061,7 +1061,7 @@ it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together
 
 it('keeps failed reopen items selected for retry and reports partial failure', async () => {
  fixtures.comments.push(...['comment-1', 'comment-2'].map(id => ({ id, projectId: 'project-1', body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' })))
- fixtures.updateImpl.mockRejectedValueOnce(new Error('offline'))
+ fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
  fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
@@ -1069,31 +1069,19 @@ it('keeps failed reopen items selected for retry and reports partial failure', a
  expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
 
-it.each(['Reopen'])('waits for both %s updates before handling either failure', async (action) => {
- for (const failedUpdate of [fixtures.updateReview, fixtures.updateImpl]) {
-  const pendingUpdate = failedUpdate === fixtures.updateReview ? fixtures.updateImpl : fixtures.updateReview
-  let finishPending!: () => void
-  failedUpdate.mockRejectedValueOnce(new Error('offline'))
-  pendingUpdate.mockImplementationOnce(() => new Promise<void>(resolve => { finishPending = resolve }))
-  fixtures.comments.push({ id: 'comment-1', projectId: 'project-1', body: 'Feedback', reviewStatus: 'accepted', implementationStatus: 'done', claimedByAgentId: 'agent', createdAt: '', updatedAt: '' })
-  const view = render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
-  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
-  const refreshCalls = fixtures.fn.mock.calls.length
-  fireEvent.click(screen.getByRole('button', { name: action }))
-  await act(async () => { await Promise.resolve() })
-  expect(screen.getByRole('button', { name: action })).toBeDisabled()
-  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
-  expect(screen.queryByText('1 item could not be updated and remain selected.')).toBeNull()
-
-  await act(async () => { finishPending() })
-  await screen.findByText('1 item could not be updated and remain selected.')
-  expect(screen.getByRole('button', { name: action })).toBeEnabled()
-  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
-  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
-  view.unmount()
-  fixtures.comments.splice(0)
- }
+it('keeps Reopen busy until its atomic request settles', async () => {
+ let fail!: (error:Error)=>void
+ fixtures.updateReview.mockImplementationOnce(()=>new Promise((_,reject)=>{fail=reject}))
+ fixtures.comments=[{...readyFeedback('comment-1'),implementationStatus:'done'}]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button',{name:'Reopen'}))
+ expect(screen.getByRole('button',{name:'Reopen'})).toBeDisabled()
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+ await act(async()=>fail(new Error('offline')))
+ await screen.findByText('1 item could not be updated and remain selected.')
+ expect(screen.getByRole('button',{name:'Reopen'})).toBeEnabled()
 })
 
 it('rejects the visible list in two clicks without changing implementation status', async () => {
@@ -1103,7 +1091,7 @@ it('rejects the visible list in two clicks without changing implementation statu
  fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
  await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
  expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
- for (const id of ['comment-1', 'comment-2']) expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'rejected')
+ for (const id of ['comment-1', 'comment-2']) expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'rejected', '', undefined, {captureUndo:true,preserveExternalWork:true})
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })
 
@@ -1335,5 +1323,21 @@ it('retains only failed completion items and offers Undo for the successful ones
  fireEvent.click(screen.getByRole('button', {name:'Undo mark done'}))
  await screen.findByText('Previous statuses restored.')
  expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-2','open','2026-10-29T12:00:00.000Z','unassigned')
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it.each(['Reopen','Reject'])('restores previous states and ownership through signed Undo for %s',async action=>{
+ fixtures.comments=[{...readyFeedback('comment-1'),implementationStatus:'in_progress',claimedByAgentId:'agent'}]
+ fixtures.updateReview.mockResolvedValueOnce({updatedAt:'2026-10-30T12:01:00Z',undoToken:'signed-receipt'})
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ expect(screen.getByText('Reject keeps linked issues unchanged.')).toBeVisible()
+ fireEvent.click(screen.getByRole('button',{name:action}))
+ const undo=await screen.findByRole('button',{name:`Undo ${action.toLowerCase()}`})
+ fireEvent.click(undo)
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-1','accepted',undefined,undefined,{undoToken:'signed-receipt'})
+ expect(screen.getByTestId('first-claim')).toHaveTextContent('agent')
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })
