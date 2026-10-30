@@ -112,6 +112,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
       return
     }
     setError('')
+    setBulkMode(true)
+    setSelectedId(''); setEditing(false)
     setBulkSelection(next)
   }
 
@@ -286,8 +288,8 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
           toggleSelectAllVisible,
           allVisibleSelected,
           allMatchingSelected: bulkSelection.mode === 'all' && bulkSelection.excludedIds.size === 0,
-          canSelectAllMatching: allVisibleSelected && selectedCount < total,
-          selectAllMatching: () => { if (!busy) { setError(''); setBulkSelection({ mode: 'all', excludedIds: new Set() }) } },
+          canSelectAllMatching: !loading && total > 0,
+          selectAllMatching: () => { if (!busy) setBoundedSelection({ mode: 'all', excludedIds: new Set() }) },
           clearSelection: () => { if (!busy) setBulkSelection(emptySelection()) },
         }}
         footer={pages > 1 && <div className="flex items-center justify-center gap-3 border-t border-border px-4 py-3">

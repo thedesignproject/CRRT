@@ -503,3 +503,20 @@ it('disables Inbox navigation shortcuts while retaining mouse navigation and Esc
     expect(screen.queryByRole('toolbar')).toBeNull()
   } finally { vi.unstubAllGlobals() }
 })
+
+it('selects the entire Inbox in one click without entering selection mode or selecting a page', async () => {
+ render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+ fireEvent.click(await screen.findByRole('button', { name: 'Select all 21 in Inbox' }))
+ expect(screen.getByRole('toolbar')).toHaveTextContent('21 selected')
+ expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+ fireEvent.change(screen.getByRole('combobox'), { target: { value: 'store' } })
+ fireEvent.click(screen.getByRole('button', { name: 'Move' }))
+ await waitFor(() => expect(bulkAssignExtensionComments).toHaveBeenCalledWith('/api', 'token', { mode: 'all', excludedIds: [] }, 'store'))
+})
+it('selects only the current page directly and does not select unloaded items', async () => {
+ render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+ await screen.findByText('First comment')
+ fireEvent.click(screen.getByRole('button', { name: 'Select page' }))
+ expect(screen.getByRole('toolbar')).toHaveTextContent('2 selected')
+ expect(screen.queryByText('All 21 Inbox items are selected.')).toBeNull()
+})
