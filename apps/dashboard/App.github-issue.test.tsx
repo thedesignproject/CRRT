@@ -163,6 +163,17 @@ afterEach(() => {
   window.history.replaceState({}, '', '/')
 })
 
+it('deselects a directly selected feedback item without opening it', async () => {
+  fixtures.comments = [{id:'comment-1',projectId:'project-1',body:'Feedback',reviewStatus:'open',implementationStatus:'unassigned',claimedByAgentId:null,createdAt:'',updatedAt:''}]
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', {name:'toggle test comment'}))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+  fireEvent.click(screen.getByRole('button', {name:'toggle test comment'}))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:')
+  expect(screen.getByTestId('bulk-state')).not.toHaveTextContent('comment-1')
+  expect(fixtures.updateReview).not.toHaveBeenCalled()
+})
+
 describe('<App /> GitHub issue wiring', () => {
   it('opens the feedback list on Open', async () => {
     render(<App />)

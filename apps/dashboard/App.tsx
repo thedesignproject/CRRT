@@ -399,19 +399,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [accessToken, comments, mutation.report, trackFeedbackWrite])
 
-  const toggleBulkSelect = useCallback((id: string) => {
+  const toggleBulkSelect = useCallback((id: string, range: string[] = [id]) => {
     if (bulkActionBusy) return
-    if (!bulkSelectedIds.has(id) && bulkSelectedIds.size >= 500) {
+    const next = new Set(bulkSelectedIds)
+    for (const item of range) bulkSelectedIds.has(id) ? next.delete(item) : next.add(item)
+    if (next.size > 500) {
       setBulkActionError('Select up to 500 comments at a time.')
       return
     }
+    setBulkMode(true)
     setBulkActionError('')
-    setBulkSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    setBulkSelectedIds(next)
   }, [bulkActionBusy, bulkSelectedIds])
 
   const exitBulkMode = useCallback(() => {
