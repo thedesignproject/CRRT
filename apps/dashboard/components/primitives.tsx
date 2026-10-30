@@ -1,3 +1,4 @@
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { DISPLAY_STATUS_LABELS, type Comment } from '../lib/types'
@@ -47,12 +48,13 @@ export function ActionBtn({ children, variant, active, onClick, shortcut, disabl
   shortcut?: string
   disabled?: boolean
 }) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={shortcut ? `${shortcut}` : undefined}
+      title={shortcutsEnabled ? shortcut : undefined}
       className={cn(
         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
         'disabled:opacity-40 disabled:pointer-events-none btn-press',

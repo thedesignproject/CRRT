@@ -3682,3 +3682,14 @@ REVOKE ALL ON FUNCTION public.mcp_require_connection(uuid,uuid,text), public.mcp
 GRANT EXECUTE ON FUNCTION public.mcp_require_connection(uuid,uuid,text), public.mcp_prepare_work(uuid,uuid,text,uuid[],text,text,jsonb), public.mcp_work_operation(uuid,uuid,uuid,text,uuid,text,text,text,text), public.mcp_set_feedback_status(uuid,uuid,text,uuid,text,text,text,text) TO service_role;
 
 `;
+
+// Optional version check is evaluated while holding the same row lock as the
+// write. Legacy callers omit it; Undo callers must send the version they changed.
+export const feedbackVersionGuardSql = projectPrivacyActorSql
+  .slice(projectPrivacyActorSql.indexOf('CREATE FUNCTION public.mutate_actor_feedback('), projectPrivacyActorSql.indexOf('CREATE FUNCTION public.accept_actor_comment_if_open('))
+  .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+  .replace('IF NOT FOUND THEN RETURN; END IF;', `IF NOT FOUND THEN RETURN; END IF;
+  IF p_patch ? 'expected_updated_at' AND NOT EXISTS (
+    SELECT 1 FROM public.comments c WHERE c.id=p_comment AND c.project_id=p_project
+      AND c.updated_at = (p_patch->>'expected_updated_at')::timestamptz
+  ) THEN RAISE EXCEPTION 'status_conflict'; END IF;`)

@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.23] - 2026-10-29
+
+Scope: changes that ship in the published `@thedesignproject/crrt` package. Dashboard, API, extension, Storybook addon, and MCP work since `v0.3.22` moves on `trunk` and is not part of this tarball. No public API change — `src/index.ts` still exports only `FeedbackWidget`, with unchanged props — hence a patch release.
+
+### Fixed
+- Modified `C` keypresses no longer open feedback mode. `Cmd`/`Ctrl`/`Alt`/`Shift`+`C` are ignored, so browser and OS shortcuts such as copy pass through to the host app.
+- Screenshot capture supports modern CSS color functions (`oklab()` / `oklch()`). Capture now renders through `html2canvas-pro` 2.5.2, replacing the hand-rolled color-function parser that rewrote inline styles on a cloned document.
+- A comment POST rejected by a Cloud plan limit (HTTP 402/409 with `code: "plan_limit"`) now throws the server's error message instead of returning `null`, so the widget surfaces the limit instead of appearing to fail silently.
+
+### Changed
+- `html2canvas` is gone; screenshot capture bundles `html2canvas-pro` (dev dependency, inlined into `dist/`, not externalized).
+- Agent seat-limit copy now describes the plan's internal-user capacity rather than a fixed five-collaborator limit.
+
+### Added
+- Internal design-system primitives under `src/design-system/` (button, segmented control, section intro). Not part of the published entry point.
+
 ## [0.3.17] - 2026-08-13
 
 ### Added

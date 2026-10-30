@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { cn } from '../lib/utils'
 import { truncateUrl } from '../lib/format'
 import type { Comment } from '../lib/types'
@@ -38,6 +39,7 @@ export function CommandPalette({
   canManageFeedback = true,
   canOperateAgent = true,
 }: CommandPaletteProps) {
+  const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const [query, setQuery] = useState('')
   const [activeIdx, setActiveIdx] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -188,14 +190,14 @@ export function CommandPalette({
                       )}>
                         {item.label}
                       </p>
-                      {item.detail && (
+                      {item.detail && (shortcutsEnabled || item.type === 'comment') && (
                         <p className="text-[11px] text-muted-foreground truncate mt-0.5">
                           {item.detail}
                         </p>
                       )}
                     </div>
 
-                    {item.type === 'action' && item.detail ? (
+                    {item.type === 'action' && item.detail && shortcutsEnabled ? (
                       <kbd className="px-1.5 py-0.5 rounded border border-border bg-muted text-[10px] font-mono text-muted-foreground shrink-0">
                         {item.detail}
                       </kbd>
