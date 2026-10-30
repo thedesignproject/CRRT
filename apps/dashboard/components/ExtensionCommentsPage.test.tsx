@@ -100,7 +100,9 @@ describe('ExtensionCommentsPage', () => {
 
   })
 
-  it('moves an owned private comment into an accessible project in place', async () => {
+  it('moves an owned private comment with exact-version Undo', async () => {
+    vi.mocked(bulkAssignExtensionComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[],selectedTotal:1,undoItems:[{id:'c1',updatedAt:first.updatedAt}]})
+    vi.mocked(restoreInboxComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[]})
     vi.mocked(listExtensionComments)
       .mockResolvedValueOnce({ items: [first], page: 1, limit: 20, total: 1 })
       .mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 })
@@ -108,13 +110,16 @@ describe('ExtensionCommentsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
     fireEvent.change(screen.getByRole('combobox', { name: 'Project for comment' }), { target: { value: 'store' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add to project' }))
-    await waitFor(() => expect(assignExtensionComment).toHaveBeenCalledWith('/api', 'token', 'c1', 'store'))
+    await waitFor(() => expect(bulkAssignExtensionComments).toHaveBeenCalledWith('/api', 'token', { mode: 'ids', ids: ['c1'] }, 'store'))
     await screen.findByText('Your Inbox is empty.')
+    fireEvent.click(screen.getByRole('button', {name:'Undo move'}))
+    await waitFor(() => expect(restoreInboxComments).toHaveBeenCalledWith('/api','token','store',[{id:'c1',updatedAt:first.updatedAt}]))
+    expect(assignExtensionComment).not.toHaveBeenCalled()
   })
 
   it('keeps the comment selected when project assignment fails', async () => {
     vi.mocked(listExtensionComments).mockResolvedValue({ items: [first], page: 1, limit: 20, total: 1 })
-    vi.mocked(assignExtensionComment).mockRejectedValueOnce(new Error('assignment down'))
+    vi.mocked(bulkAssignExtensionComments).mockRejectedValueOnce(new Error('assignment down'))
     render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
     fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
 

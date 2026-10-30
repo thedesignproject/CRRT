@@ -102,3 +102,7 @@ Run audit carries the current project in a base-aware encoded URL. The launcher 
 ## Eighteenth layer: explicit widget handoff and recoverable prompts
 
 Sending open feedback now says Accept & send to agent and explains exactly how many open items are accepted. Record/display the committed handoff and refresh feedback before fetching prompts. A prompt-load failure therefore cannot hide acceptance; retry fetches prompts for the same session without another mutation. Copying only writes the clipboard (verified by tests). Existing agent claims are not cancelled by copying or retrying. Browser verified failure/retry at 1440/390px with the actual widget and simulated HTTP; targeted tests and diff coverage pass.
+
+## Nineteenth layer: single Inbox move Undo
+
+Individual Add to project now uses the same version-returning move contract as bulk assignment and exposes the same Undo in standalone Inbox or destination project. It retains the current item after a failure and clears selection after a successful move. Thirty-eight targeted tests and changed-line/branch coverage pass.
