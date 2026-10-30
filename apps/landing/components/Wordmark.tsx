@@ -18,13 +18,13 @@ export function Wordmark({ level = 'nav' }: { level?: 'nav' | 'display' }) {
         gap: s.gap,
       }}
     >
-      <span style={{ color: 'var(--crrt-white)', fontSize: s.mark, fontWeight: s.weight }}>
+      <span style={{ color: 'var(--foreground, var(--crrt-white))', fontSize: s.mark, fontWeight: s.weight }}>
         CRRT
       </span>
-      <span style={{ color: 'var(--crrt-ink-mute)', fontSize: s.prompt, fontWeight: s.weight }}>
+      <span style={{ color: 'var(--muted-foreground, var(--crrt-ink-mute))', fontSize: s.prompt, fontWeight: s.weight }}>
         .
       </span>
-      <span style={{ color: 'var(--crrt-ink-mute)', fontSize: s.prompt, fontWeight: s.weight }}>
+      <span style={{ color: 'var(--muted-foreground, var(--crrt-ink-mute))', fontSize: s.prompt, fontWeight: s.weight }}>
         {'>'}
       </span>
       <span

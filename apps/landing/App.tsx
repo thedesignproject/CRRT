@@ -3,39 +3,25 @@ import type { Session } from '@supabase/supabase-js'
 import { DASHBOARD_HREF } from './sections/Hero'
 import { MarketingPage } from './MarketingPage'
 import { EasterEgg } from './components/EasterEgg'
-import { ScrollRuler } from './components/ScrollRuler'
 import { useScrollProgress } from './lib/useScrollProgress'
 import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
+import { ThemeProvider } from '../../src/design-system'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
-
-const DEMO_PROJECT_SESSION_KEY = 'crrt:landing-demo-project-id'
-let fallbackProjectId: string | null = null
-
-function createDemoProjectId(prefix: string) {
-  const suffix = crypto.randomUUID?.() ?? Math.random().toString(36).slice(2)
-  return `${prefix}-${suffix}`
-}
-
-function getDemoProjectId(prefix: string) {
-  try {
-    const existing = sessionStorage.getItem(DEMO_PROJECT_SESSION_KEY)
-    if (existing) return existing
-    const next = createDemoProjectId(prefix)
-    sessionStorage.setItem(DEMO_PROJECT_SESSION_KEY, next)
-    return next
-  } catch {
-    fallbackProjectId ??= createDemoProjectId(prefix)
-    return fallbackProjectId
-  }
-}
+import { createDemoComments } from './lib/demoComments'
+import type { PersonalComments } from '../../src/components/FeedbackWidget/types'
 
 export function App() {
-  const apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api'
+  return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light"><RoutedApp /></ThemeProvider>
+}
+
+function RoutedApp() {
+  const apiBase = import.meta.env.VITE_API_BASE ?? '/api'
+  const [demoComments] = useState(createDemoComments)
 
   // /docs/* shows the docs surface. Anything else renders the marketing site.
   // SSR-safe: location is read only after mount.
@@ -56,15 +42,13 @@ export function App() {
     return <SupportPage />
   }
 
-  const projectId = getDemoProjectId(
-    import.meta.env.VITE_PROJECT_KEY ?? import.meta.env.VITE_PROJECT_ID ?? 'crrt-landing-demo',
-  )
+  const projectId = 'crrt-landing-demo'
 
   if (isDocs) {
     return (
       <>
         <DocsApp initialPath={initialPath} />
-        <FeedbackWidget apiBase={apiBase} projectId={projectId} />
+        <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
       </>
     )
   }
@@ -73,23 +57,29 @@ export function App() {
     return <ProductAuditWorkspace />
   }
 
-  return <MarketingSite apiBase={apiBase} projectId={projectId} stayOnMarketing={stayOnMarketing} />
+  return <MarketingSite apiBase={apiBase} projectId={projectId} stayOnMarketing={stayOnMarketing} demoComments={demoComments} />
 }
 
 function MarketingSite({
   apiBase,
   projectId,
   stayOnMarketing,
+  demoComments,
 }: {
   apiBase: string
   projectId: string
   stayOnMarketing: boolean
+  demoComments: PersonalComments
 }) {
   const [session, setSession] = useState<Session | null>(null)
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session))
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    const authClient = supabase
+    /* v8 ignore next -- production builds always configure Supabase */
+    if (!authClient) return
+
+    void authClient.auth.getSession().then(({ data }) => setSession(data.session))
+    const { data: subscription } = authClient.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
     })
     return () => subscription.subscription.unsubscribe()
@@ -101,9 +91,8 @@ function MarketingSite({
 
   return (
     <>
-      <ScrollRuler />
       <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
-      <FeedbackWidget apiBase={apiBase} projectId={projectId} />
+      <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
       <EasterEgg />
     </>
   )

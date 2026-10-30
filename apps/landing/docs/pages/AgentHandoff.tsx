@@ -70,7 +70,7 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
           Download the <a href="/openapi.json">OpenAPI 3.1 specification</a> for endpoint descriptions,
           request parameters, response schemas, and authentication. Start with the{' '}
           <a href="/llms.txt">CRRT agent guide</a> for when-to-use guidance.
-          No official CLI or MCP server is currently published; use an HTTP client such as curl.
+          Connect your coding agent through CRRT MCP, or use the HTTP API below for a scoped handoff.
         </P>
         <P>
           Get a scoped share token from a human-created agent handoff. Announce presence before
@@ -89,6 +89,14 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
 curl --fail-with-body \
   "https://crrt.ai/api/v1/agent/shares/$CRRT_SHARE_SLUG/state" \
   -H "Authorization: Bearer $CRRT_SHARE_TOKEN"`} />
+      </Section>
+
+      <Section>
+        <H2>Connect with MCP</H2>
+        <P>Use a compatible Streamable HTTP client with <InlineCode>https://crrt.ai/api/mcp/v1</InlineCode>. Sign in with your CRRT account and approve the requested permissions.</P>
+        <P>Ask your agent to list your projects, read accepted feedback, and get the full handoff context. With implementation permission it can claim work and report progress back to CRRT. Completed agent work is ready for human testing.</P>
+        <P>Project permissions still apply. Read-only connections cannot change feedback. Manage or revoke connections in <a href="/dashboard/mcp-auth">MCP settings</a>.</P>
+        <CodeBlock language="bash" code={'codex mcp add crrt --url https://crrt.ai/api/mcp/v1\ncodex mcp login crrt'} />
       </Section>
 
       <Section>

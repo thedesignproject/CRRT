@@ -37,6 +37,19 @@ export function SupportPage() {
       </Section>
 
       <Section>
+        <H2>Use local feedback or move it to Cloud</H2>
+        <P>
+          Without signing in, the extension keeps one local project with up to 50 current comments in this browser.
+          You can capture, edit, resolve, delete, and export them without sending them to CRRT Cloud.
+        </P>
+        <P>
+          To import, sign in, choose a shared project, select <Strong>Review local import</Strong>, verify the
+          destination, screenshots, and monthly quota impact, then confirm. Interrupted imports are safe to retry.
+          CRRT keeps local copies after verification until you separately choose <Strong>Delete imported local copies</Strong>.
+        </P>
+      </Section>
+
+      <Section>
         <H2>Common recovery paths</H2>
         <H3>Sign-in expired or failed</H3>
         <P>Open the extension and use <Strong>Sign in with CRRT</Strong> again. Complete the hosted flow in the window Chrome opens.</P>
@@ -57,6 +70,14 @@ export function SupportPage() {
         <P>
           A project admin reconnects the provider from project settings in the CRRT dashboard. A failed tracker send
           does not delete the original feedback; retry from the saved feedback after the connection is healthy.
+        </P>
+
+        <H3>Payment or subscription needs attention</H3>
+        <P>
+          The project owner opens <Strong>Billing &amp; usage</Strong> in the dashboard. Use <Strong>Manage billing</Strong>
+          to update the payment method, download invoices, cancel, or restore service through Stripe. During the
+          seven-day recovery period, existing work remains available. After paid access ends, existing Cloud data
+          remains readable and exportable while new paid operations stay blocked.
         </P>
       </Section>
 
