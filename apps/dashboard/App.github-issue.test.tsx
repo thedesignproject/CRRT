@@ -397,8 +397,8 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
     fireEvent.click(screen.getByRole('button', { name: 'Mark done' }))
-    await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'done',
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'accepted', '2026-01-01', 'done',
     ))
     await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
 
@@ -1058,7 +1058,7 @@ it('keeps failed reopen items selected for retry and reports partial failure', a
  expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
 
-it.each(['Reopen', 'Mark done'])('waits for both %s updates before handling either failure', async (action) => {
+it.each(['Reopen'])('waits for both %s updates before handling either failure', async (action) => {
  for (const failedUpdate of [fixtures.updateReview, fixtures.updateImpl]) {
   const pendingUpdate = failedUpdate === fixtures.updateReview ? fixtures.updateImpl : fixtures.updateReview
   let finishPending!: () => void
@@ -1107,9 +1107,9 @@ it('undoes bulk approval in one click and retries only failed restores', async (
  await screen.findByText('Some items could not be restored. Undo retries only those items.')
  expect(fixtures.updateReview).toHaveBeenCalledTimes(4)
  fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
- await screen.findByText('Previous review statuses restored.')
+ await screen.findByText('Previous statuses restored.')
  expect(fixtures.updateReview).toHaveBeenCalledTimes(5)
- expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'open', '2026-10-29T12:00:00.000Z')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'open', '2026-10-29T12:00:00.000Z', undefined)
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
 })
@@ -1122,9 +1122,9 @@ it('does not offer undo for failed approvals and clears it when changing project
  fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
  await screen.findByText('1 marked ready.')
  fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
- await screen.findByText('Previous review statuses restored.')
+ await screen.findByText('Previous statuses restored.')
  expect(fixtures.updateReview).toHaveBeenCalledTimes(3)
- expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-2', 'open', '2026-10-29T12:00:00.000Z')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-2', 'open', '2026-10-29T12:00:00.000Z', undefined)
  fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
  await screen.findByRole('button', { name: 'Undo mark ready' })
  fireEvent.click(screen.getByRole('button', { name: 'other project' }))
@@ -1156,7 +1156,7 @@ it('ignores a late undo response after changing project', async () => {
  expect(screen.getByRole('button', { name: 'Undo mark ready' })).toBeDisabled()
  fireEvent.click(screen.getByRole('button', { name: 'other project' }))
  await act(async () => finish())
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
 })
 
@@ -1179,7 +1179,7 @@ it.each(['success', 'failure'])('ignores a late Undo %s after a newer local stat
  const refreshCalls = fixtures.fn.mock.calls.length
  await act(async () => finish())
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
  expect(screen.queryByText('Some items could not be restored. Undo retries only those items.')).toBeNull()
  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
 })
@@ -1244,7 +1244,7 @@ it.each(['stay', 'navigate'])('waits for a newer write before reconciling invali
  await act(async () => finishWrite())
  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + (navigation === 'stay' ? 1 : 0))
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
 })
 
 it.each(['stay', 'navigate'])('guards reconciliation data when another write starts during the fetch (%s)', async (navigation) => {
@@ -1294,6 +1294,35 @@ it('discards the in-flight Undo snapshot and reconciles after Escape cancels bul
  await act(async () => finishUndo())
  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
+})
+
+
+it.each(['unassigned', 'claimed', 'in_progress', 'blocked', 'ready_for_testing'])('undoes completion back to %s without changing the agent claim', async (implementationStatus) => {
+ fixtures.comments = [{...readyFeedback('comment-1'), implementationStatus, claimedByAgentId:implementationStatus==='unassigned'?null:'agent-1', updatedAt:'2026-10-30T10:00:00Z'}]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name:'show all'}))
+ fireEvent.click(screen.getByRole('button', {name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name:'Mark done'}))
+ await screen.findByRole('button', {name:'Undo mark done'})
+ expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api','session-token','comment-1','accepted','2026-10-30T10:00:00Z','done')
+ fireEvent.click(screen.getByRole('button', {name:'Undo mark done'}))
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-1','accepted','2026-10-29T12:00:00.000Z',implementationStatus)
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+ expect(screen.getByTestId('first-claim')).toHaveTextContent(implementationStatus==='unassigned'?'none':'agent-1')
+})
+it('retains only failed completion items and offers Undo for the successful ones', async () => {
+ fixtures.comments = ['comment-1','comment-2'].map(id=>({...readyFeedback(id),reviewStatus:'open',updatedAt:'2026-10-30T10:00:00Z'}))
+ fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name:'Mark done'}))
+ await screen.findByText('1 item could not be updated and remain selected.')
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+ fireEvent.click(screen.getByRole('button', {name:'Undo mark done'}))
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-2','open','2026-10-29T12:00:00.000Z','unassigned')
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })

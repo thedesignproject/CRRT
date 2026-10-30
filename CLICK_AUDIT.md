@@ -60,3 +60,7 @@ Mark ready snapshots now retain the exact server-returned updatedAt (including s
 ## Next stack: atomic completion before Undo
 
 After merging #367–#379, start from trunk including reviewer fixes for pending writes and stale Undo. Mark done and Reopen still issue separate review/implementation requests, allowing half-applied changes. Extend the existing review endpoint with an optional implementationStatus requiring expectedUpdatedAt, and write both fields through one version-fenced mutation. Preserve existing review-only clients and claim clearing for unassigned. This prerequisite does not change clicks; it enables exact one-click Undo of completion in the next layer. Reopening previously claimed work and reversing external ticket closure remain unresolved.
+
+## Ninth layer: Undo Mark done
+
+Mark done now writes review and implementation together with the current server version, avoiding partial completion. Capture exact previous states only for successful changes and expose Undo mark done in the existing notice: Select all → Mark done = 2 clicks; Undo = 1. Restores use the returned server version and preserve agent ownership; stale versions are rejected rather than overwriting later work. Failed completion items remain selected, and failed undo items retain the existing retry behavior. Reopen, Reject, and Inbox move Undo remain pending for their distinct ownership/external-side-effect contracts.
