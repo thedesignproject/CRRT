@@ -199,7 +199,7 @@ export function Header({
       <h1 className="text-base font-medium tracking-tight">Workspace</h1>
       <div className="dashboard-tools">
         {agentAction}
-        <a href={route('/audits/new')} className="inline-flex px-3 py-1.5 rounded-md border border-border text-muted-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
+        <a href={route(`/audits/new${selectedProject ? `?project=${encodeURIComponent(selectedProject)}` : ''}`)} className="inline-flex px-3 py-1.5 rounded-md border border-border text-muted-foreground text-xs font-semibold hover:opacity-90 transition-opacity">Run audit</a>
         <button
           type="button"
           onClick={onOpenCmd}
