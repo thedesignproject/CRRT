@@ -1,8 +1,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api', () => ({ assignExtensionComment: vi.fn(), bulkAssignExtensionComments: vi.fn(), bulkDeleteExtensionComments: vi.fn(), deleteExtensionComment: vi.fn(), listExtensionComments: vi.fn(), updateExtensionComment: vi.fn(), getProjectGitHubStatus: vi.fn() }))
-import { assignExtensionComment, bulkAssignExtensionComments, bulkDeleteExtensionComments, deleteExtensionComment, getProjectGitHubStatus, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord, type Project } from '../api'
+vi.mock('../api', () => ({ restoreInboxComments: vi.fn(), assignExtensionComment: vi.fn(), bulkAssignExtensionComments: vi.fn(), bulkDeleteExtensionComments: vi.fn(), deleteExtensionComment: vi.fn(), listExtensionComments: vi.fn(), updateExtensionComment: vi.fn(), getProjectGitHubStatus: vi.fn() }))
+import { restoreInboxComments, assignExtensionComment, bulkAssignExtensionComments, bulkDeleteExtensionComments, deleteExtensionComment, getProjectGitHubStatus, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord, type Project } from '../api'
 import { ExtensionCommentsPage } from './ExtensionCommentsPage'
 
 const first: ExtensionCommentRecord = { id: 'c1', projectId: null, pageUrl: 'https://example.com/path?q=1', pageHostname: 'example.com', x: 12.34, y: 56.78, selector: '#target', body: 'First comment', screenshotUrl: 'https://signed/image', authorName: 'u@example.com', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }
@@ -19,6 +19,16 @@ beforeEach(() => {
   vi.mocked(deleteExtensionComment).mockResolvedValue()
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
+
+it('passes committed move versions to the destination Undo notice', async () => {
+  const onMoved = vi.fn()
+  const undoItems = [{id:'c1',updatedAt:first.updatedAt}]
+  vi.mocked(bulkAssignExtensionComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[],selectedTotal:1,undoItems})
+  render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} onMovedToProject={onMoved} />)
+  fireEvent.click(await screen.findByRole('checkbox', {name:'Select feedback: First comment'}))
+  fireEvent.click(screen.getByRole('button', {name:'Move to Storefront'}))
+  await waitFor(() => expect(onMoved).toHaveBeenCalledWith('store',['c1'],0,undoItems))
+})
 
 describe('ExtensionCommentsPage', () => {
   it('refills the current page after deletion crosses a pagination boundary', async () => {
@@ -525,4 +535,14 @@ it('moves all Inbox items to the chosen destination in two clicks and disables r
  expect(screen.getByRole('button', { name: 'Move to Storefront' })).toBeDisabled()
  expect(screen.getByRole('button', { name: 'Move to Second project' })).toBeDisabled()
  await act(async () => finish({ processedIds: ['c1'], skipped: [], selectedTotal: 21 }))
+})
+
+it('offers move Undo without a destination navigation callback',async()=>{
+ vi.mocked(bulkAssignExtensionComments).mockResolvedValue({processedIds:['c1'],selectedTotal:1,skipped:[],undoItems:[{id:'c1',updatedAt:first.updatedAt}]})
+ vi.mocked(restoreInboxComments).mockResolvedValue({processedIds:['c1'],skipped:[]})
+ render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+ fireEvent.click(await screen.findByRole('button',{name:'Select all 21 in Inbox'}))
+ fireEvent.click(screen.getByRole('button',{name:'Move to Storefront'}))
+ fireEvent.click(await screen.findByRole('button',{name:'Undo move'}))
+ await screen.findByText('Returned to Inbox.')
 })

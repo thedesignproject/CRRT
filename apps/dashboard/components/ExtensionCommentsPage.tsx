@@ -15,6 +15,8 @@ import { mapServerComment } from '../lib/comment'
 import { BulkActionBar, BulkDeleteDialog } from './BulkActionBar'
 import { CommentDetail } from './CommentDetail'
 import { CommentList } from './CommentList'
+import { InboxMoveUndo } from './InboxMoveUndo'
+import type { InboxUndoItem } from '../api'
 import { ActionBtn } from './primitives'
 
 type InboxSelection =
@@ -29,7 +31,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   apiBase: string
   accessToken: string
   projects?: Project[]
-  onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number) => void
+  onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => void
 }) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const mutationContext = useRef(0)
@@ -39,6 +41,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [moveUndo,setMoveUndo] = useState<{projectId:string;items:InboxUndoItem[]}|null>(null)
   const [selectedId, setSelectedId] = useState('')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -158,7 +161,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   useEffect(() => {
-    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject(''); setBusy(false)
+    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject(''); setBusy(false); setMoveUndo(null)
     return () => { mutationContext.current += 1 }
   }, [apiBase, accessToken])
 
@@ -234,9 +237,10 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
         return
       }
       if (onMovedToProject) {
-        onMovedToProject(projectId, result.processedIds, result.skipped.length)
+        onMovedToProject(projectId, result.processedIds, result.skipped.length, ...(result.undoItems ? [result.undoItems] as const : []))
         return
       }
+      setMoveUndo(result.undoItems?.length ? {projectId,items:result.undoItems} : null)
       const moved = new Set(result.processedIds)
       setItems((current) => current.filter((item) => !moved.has(item.id)))
       setTotal((value) => Math.max(0, value - result.processedIds.length))
@@ -276,6 +280,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
     {error && items.length > 0 && <div role="alert" className="border-b border-border bg-card px-4 py-2 text-xs text-status-rejected">{error}</div>}
     {notice && <div role="status" className="border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">{notice}</div>}
+      {moveUndo && <InboxMoveUndo key={moveUndo.items[0].updatedAt} apiBase={apiBase} accessToken={accessToken} projectId={moveUndo.projectId} items={moveUndo.items} onRestored={()=>{setMoveUndo(null);setNotice('Returned to Inbox.');setReload(value=>value+1)}} />}
     <main className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
       <CommentList personal filteredComments={comments} counts={{ all: total, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }}
         commentsLoading={loading} commentsError={items.length ? null : error} selectedCommentId={selectedId} setSelectedCommentId={select}
