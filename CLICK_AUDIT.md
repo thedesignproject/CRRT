@@ -8,7 +8,7 @@ Count starts on the relevant surface with the task's items visible; navigation t
 | --- | --- | --- | --- | --- | --- |
 | Dashboard: resolve visible list (App + CommentList) | Select → Select all → Actions → Mark done = 4 | Select all → Mark done = 2 | 5 | 10 | Implemented in first layer |
 | Dashboard: reopen done/accepted/rejected list (App) | Open each item and change state: at least 2N | Select all → Reopen = 2 | 4 | 72 | Implemented in first layer |
-| Undo dashboard bulk state change | At least 2N | Undo toast = 1 | 4 | 76 | Next |
+| Undo dashboard Mark ready | At least 2N | Undo mark ready = 1 | 4 | 76 | Third layer; other bulk states remain pending |
 | Widget handoff accepts open comments (PremiumAgentBridge.confirmHandoff) | Send to agent mutates selection before prompt copy | Explicit approval copy + reversible action | 5 | TBD | Audit server mutation and undo semantics |
 | Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Code inspected; verify in browser |
 | Dashboard select arbitrary N items | Enter select mode + N clicks + action | Direct selection/keyboard range + action | 5 | TBD | Pending |
@@ -32,3 +32,9 @@ Tests exercise done, accepted, and rejected batches, two-click selection/action 
 Replace the one-item Actions menu with the existing Reject button. The review endpoint, busy state, permissions, and partial-failure selection stay intact. Test the two-click path and verify implementation status is untouched; existing rejection failure/stale-project tests exercise the same direct control.
 
 Undo investigation: the implementation-status endpoint clears `claimedByAgentId` on `unassigned` and cannot restore a released claim. Exact undo for claimed items needs an explicit decision about restoring agent ownership and a concurrency-safe restore contract. This remains unresolved, not counted as complete. Undo of unclaimed/review-only batches remains actionable in a following layer.
+
+## Third layer: undo bulk approval
+
+Capture the previous review statuses for successfully approved items and offer a persistent one-click Undo. Failed restores remain available for retry; already-accepted and failed approvals are excluded. Undo never writes implementation status or agent ownership. Project/navigation changes, later local status actions, and starting a handoff discard the old snapshot. Refuse restores when the currently loaded review, implementation, or claim differs from the expected state.
+
+Remaining: server-side compare-and-set is needed to close the race with another reviewer/agent after the loaded-state check. Reject also asynchronously closes linked GitHub/Linear/Jira tickets (`review-status.ts` → `closeLinkedExternalWork`); restoring its review status alone is not full undo. Record both as incomplete instead of promising a generic reversible action.
