@@ -48,3 +48,7 @@ Browser verification at 1440px and 390px confirms one-click all-pages selection 
 ## Fifth layer: move selected Inbox items directly
 
 Replace the destination dropdown plus Move button with explicit Move to [project] buttons for eligible destinations. Whole-Inbox move becomes Select all → Move to [project] = 2 clicks; no default destination or implicit move on dropdown change. Destinations remain keyboard reachable in a horizontally scrollable group, and all are disabled while moving. Existing skipped-item, error, account-switch and destination-handoff logic stays in place. Reverse movement back to Inbox still needs a compatible API and remains pending.
+
+## Sixth layer: atomic version prerequisite for Undo
+
+Add an optional expectedUpdatedAt to the internal actor-bound mutation, checked inside its existing database row lock before any change. Two concurrent callers using the same version produce one success and one status_conflict; the losing write leaves the winner intact. Legacy calls and permissions remain unchanged. This layer does not reduce a UI click by itself: it is the compatibility-preserving prerequisite for safe one-click Undo. Endpoint and dashboard wiring are the next layer. Verified on a disposable local Postgres after applying the full migration chain.
