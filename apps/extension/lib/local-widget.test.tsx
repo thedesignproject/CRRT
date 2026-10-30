@@ -1,8 +1,9 @@
 import {cleanup,render,screen,waitFor}from'@testing-library/react'
 import {afterEach,expect,it,vi}from'vitest'
 const rendered=vi.hoisted(()=>vi.fn())
+const sendMessage=vi.hoisted(()=>vi.fn())
 vi.mock('../../../src/components/FeedbackWidget',()=>({FeedbackWidget:(props:unknown)=>{rendered(props);return <div>Widget</div>}}))
-vi.mock('wxt/browser',()=>({browser:{storage:{onChanged:{addListener:vi.fn(),removeListener:vi.fn()}}}}))
+vi.mock('wxt/browser',()=>({browser:{storage:{onChanged:{addListener:vi.fn(),removeListener:vi.fn()}},runtime:{sendMessage}}}))
 vi.mock('./comments-api',()=>({extensionSession:vi.fn(),listExtensionProjects:vi.fn(),createPageComment:vi.fn(),deletePageComment:vi.fn(),getExternalWorkDraft:vi.fn(),listPageComments:vi.fn(),listProjectComments:vi.fn(),sendExternalWork:vi.fn(),updatePageComment:vi.fn()}))
 import {extensionSession,listExtensionProjects}from'./comments-api'
 import {localComments}from'./local-feedback'
@@ -21,4 +22,17 @@ it('keeps local mode independent of a failed account lookup',async()=>{
  render(<ExtensionWidget activate={false} />)
  await waitFor(()=>expect(rendered).toHaveBeenCalledWith(expect.objectContaining({personalComments:localComments})))
  expect(listExtensionProjects).not.toHaveBeenCalled()
+})
+it('hands Record launch to the extension background and reports failures',async()=>{
+ vi.mocked(extensionSession).mockResolvedValue(null)
+ sendMessage.mockResolvedValueOnce({ok:true})
+ render(<ExtensionWidget activate={false} />)
+ await waitFor(()=>expect(rendered).toHaveBeenCalled())
+ const onRecord=(rendered.mock.lastCall?.[0] as {onRecord:()=>Promise<void>}).onRecord
+ await expect(onRecord()).resolves.toBeUndefined()
+ expect(sendMessage).toHaveBeenCalledWith({type:'record:open'})
+ sendMessage.mockResolvedValueOnce({ok:false,error:'blocked'})
+ await expect(onRecord()).rejects.toThrow('blocked')
+ sendMessage.mockResolvedValueOnce(undefined)
+ await expect(onRecord()).rejects.toThrow('Could not open CRRT Record')
 })

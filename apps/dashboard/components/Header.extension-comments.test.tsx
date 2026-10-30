@@ -42,6 +42,15 @@ describe('Header extension comments navigation', () => {
     expect(screen.getByRole('button', { name: 'Inbox' })).toHaveAttribute('aria-pressed', 'true')
   })
 
+  it('opens and highlights Recordings when the launcher is provided', () => {
+    const onOpenRecordings = vi.fn()
+    const view = render(<Header {...props} onOpenRecordings={onOpenRecordings} />)
+    fireEvent.click(screen.getByRole('button', { name: /Recordings/ }))
+    expect(onOpenRecordings).toHaveBeenCalledOnce()
+    view.rerender(<Header {...props} onOpenRecordings={onOpenRecordings} recordingsActive />)
+    expect(screen.getByRole('button', { name: /Recordings/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
   it('never highlights a project or shows its settings alongside Inbox', () => {
     const project = { publicKey: 'one', name: 'Project One', slug: 'one', allowedOrigins: [], createdAt: '', updatedAt: '' }
     const view = render(<Header {...props} projects={[project]} selectedProject="one" commentCount={3} />)

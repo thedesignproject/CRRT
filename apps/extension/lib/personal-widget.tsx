@@ -136,5 +136,8 @@ export function ExtensionWidget({ activate, page }: { activate: boolean; page?: 
   }, [activate, embeddedWidget, identity, page?.focusEmbedded, project?.publicKey])
   if (identity === undefined) return null
   if (embeddedWidget) return null
-  return <><style>{`button, textarea, input { font: inherit }`}</style><FeedbackWidget key={`${identity ?? 'signed-out'}:${project?.publicKey ?? 'private'}`} projectId={project?.publicKey ?? ''} personalComments={comments} viewerEmail={identity ?? undefined} page={page} /></>
+  return <><style>{`button, textarea, input { font: inherit }`}</style><FeedbackWidget key={`${identity ?? 'signed-out'}:${project?.publicKey ?? 'private'}`} projectId={project?.publicKey ?? ''} personalComments={comments} viewerEmail={identity ?? undefined} page={page} onRecord={async () => {
+    const response = await browser.runtime.sendMessage({ type: 'record:open' }) as { ok?: boolean; error?: string }
+    if (!response?.ok) throw new Error(response?.error || 'Could not open CRRT Record')
+  }} /></>
 }

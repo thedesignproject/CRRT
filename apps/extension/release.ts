@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { relative, resolve, sep } from 'node:path'
 
-export const STORE_PERMISSIONS = ['activeTab', 'identity', 'scripting', 'storage'] as const
+export const STORE_PERMISSIONS = ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'] as const
+export const STORE_OPTIONAL_HOST_PERMISSIONS = ['http://*/*', 'https://*/*'] as const
 export const STORE_ICON_SIZES = [16, 32, 48, 128] as const
 export const STORE_CSP = "script-src 'self'; object-src 'self'"
 
@@ -87,6 +88,7 @@ function validateManifest(manifest: JsonRecord, version: string, apiOrigin: stri
   requireValue(manifest.version === version, 'Manifest version must match the extension package')
   requireValue(sameStrings(stringArray(manifest.permissions, 'Manifest permissions'), STORE_PERMISSIONS), 'Manifest permissions exceed the reviewed set')
   requireValue(sameStrings(stringArray(manifest.host_permissions, 'Manifest host permissions'), [`${apiOrigin}/*`, `${supabaseOrigin}/*`]), 'Manifest host permissions exceed CRRT services')
+  requireValue(sameStrings(stringArray(manifest.optional_host_permissions, 'Manifest optional host permissions'), STORE_OPTIONAL_HOST_PERMISSIONS), 'Manifest optional host permissions exceed recording pages')
   requireValue(manifest.content_scripts === undefined, 'Persistent content scripts are not allowed')
   const csp = jsonRecord(manifest.content_security_policy, 'Manifest CSP')
   requireValue(csp.extension_pages === STORE_CSP, 'Manifest CSP must allow packaged code only')
@@ -100,7 +102,7 @@ function validateManifest(manifest: JsonRecord, version: string, apiOrigin: stri
   const resources = manifest.web_accessible_resources
   requireValue(Array.isArray(resources) && resources.length === 1, 'Only the private frame may be web-accessible')
   const resource = jsonRecord(resources[0], 'Web-accessible resource')
-  requireValue(sameStrings(stringArray(resource.resources, 'Web-accessible files'), ['private.html']), 'Only private.html may be web-accessible')
+  requireValue(sameStrings(stringArray(resource.resources, 'Web-accessible files'), ['private.html', 'record-controls.html']), 'Only private recording frames may be web-accessible')
   requireValue(sameStrings(stringArray(resource.matches, 'Web-accessible matches'), ['http://*/*', 'https://*/*']), 'Private frame matches must be explicit HTTP(S) pages')
 }
 
@@ -129,7 +131,7 @@ export function validateReleaseFiles(
   { version, apiBase, supabaseUrl }: { version: string; apiBase: string; supabaseUrl: string },
 ): ReleaseValidation {
   const names = [...files.keys()].sort()
-  for (const required of ['manifest.json', 'background.js', 'comment.js', 'popup.html', 'private.html']) {
+  for (const required of ['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html']) {
     requireValue(files.has(required), `Release is missing ${required}`)
   }
   requireValue(!names.some((path) => path.endsWith('.map') || path.includes('/.env') || path.startsWith('.env')), 'Release must not contain source maps or environment files')

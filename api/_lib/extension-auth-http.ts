@@ -14,7 +14,7 @@ export function setExtensionCors(req: VercelRequest, res: VercelResponse, method
   requireAllowedExtension(extensionId)
   res.setHeader('Access-Control-Allow-Origin', origin)
   res.setHeader('Access-Control-Allow-Methods', methods.join(', '))
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization')
   res.setHeader('Access-Control-Max-Age', '600')
   res.setHeader('Vary', 'Origin')
   return extensionId

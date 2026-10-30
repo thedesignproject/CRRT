@@ -212,6 +212,39 @@ describe('<FeedbackWidget />', () => {
     expect(roots.length).toBeGreaterThan(0)
   })
 
+  it('launches the extension recorder from the composer when an adapter is available', async () => {
+    mockFetch()
+    const onRecord = vi.fn().mockResolvedValue(undefined)
+    render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" onRecord={onRecord} />)
+    await enterCommentingMode()
+    const record = document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')
+    expect(record).not.toBeNull()
+    await act(async () => { fireEvent.click(record!) })
+    expect(onRecord).toHaveBeenCalledOnce()
+  })
+
+  it('shows the extension handoff when the recorder adapter rejects', async () => {
+    mockFetch()
+    const onRecord = vi.fn().mockRejectedValue(new Error('offline'))
+    render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" onRecord={onRecord} />)
+    await enterCommentingMode()
+    await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!) })
+    expect(document.body.textContent).toContain('Open the CRRT Chrome extension')
+  })
+
+  it('shows the extension handoff when the embedded widget cannot launch Record directly', async () => {
+    mockFetch()
+    const requested = vi.fn()
+    window.addEventListener('crrt:record-request', requested)
+    render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
+    await enterCommentingMode()
+    await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!) })
+    await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!) })
+    expect(requested).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).toContain('Open the CRRT Chrome extension')
+    window.removeEventListener('crrt:record-request', requested)
+  })
+
   it('preserves the existing dark theme by default', () => {
     mockFetch()
     render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)

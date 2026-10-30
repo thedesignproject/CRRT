@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { collectReleaseFiles, pngDimensions, readExtensionVersion, relativeReleasePath, releaseMetadata, STORE_CSP, STORE_ICON_SIZES, STORE_PERMISSIONS, validatePublicSupabaseKey, validateReleaseFiles } from './release'
+import { collectReleaseFiles, pngDimensions, readExtensionVersion, relativeReleasePath, releaseMetadata, STORE_CSP, STORE_ICON_SIZES, STORE_OPTIONAL_HOST_PERMISSIONS, STORE_PERMISSIONS, validatePublicSupabaseKey, validateReleaseFiles } from './release'
 
 // Synthetic JWTs: these carry no valid signature and cannot authenticate.
 function jwt(payload: unknown) {
@@ -26,11 +26,12 @@ function manifest(overrides: Record<string, unknown> = {}) {
     name: 'CRRT',
     version: '1.0.0',
     permissions: [...STORE_PERMISSIONS],
+    optional_host_permissions: [...STORE_OPTIONAL_HOST_PERMISSIONS],
     host_permissions: ['https://crrt.ai/*', 'https://project.supabase.co/*'],
     content_security_policy: { extension_pages: STORE_CSP },
     icons,
     action: { default_icon: icons },
-    web_accessible_resources: [{ resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] }],
+    web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] }],
     ...overrides,
   }
 }
@@ -40,8 +41,10 @@ function releaseFiles(overrides: Record<string, Uint8Array | string> = {}) {
     'manifest.json': JSON.stringify(manifest()),
     'background.js': 'const safe = true',
     'comment.js': 'const activate = true',
+    'offscreen.html': '<main>Offscreen CRRT media controller</main>',
     'popup.html': '<main>CRRT</main>',
     'private.html': '<main>Private CRRT UI</main>',
+    'record-controls.html': '<main>Private CRRT recording controls</main>',
     ...Object.fromEntries(STORE_ICON_SIZES.map((size) => [`icons/icon-${size}.png`, png(size)])),
     ...overrides,
   }
@@ -106,19 +109,20 @@ describe('extension Store release', () => {
     ['Manifest V3', { manifest_version: 2 }],
     ['version', { version: '2.0.0' }],
     ['permissions', { permissions: [...STORE_PERMISSIONS, 'tabs'] }],
+    ['optional host permissions', { optional_host_permissions: ['https://*/*'] }],
     ['host permissions', { host_permissions: ['https://*/*'] }],
     ['Persistent content scripts', { content_scripts: [] }],
     ['CSP', { content_security_policy: { extension_pages: "script-src 'self' 'unsafe-eval'" } }],
     ['Manifest must declare', { icons: { 16: 'wrong.png' } }],
     ['Manifest must declare', { action: { default_icon: { 16: 'wrong.png' } } }],
     ['web-accessible', { web_accessible_resources: [] }],
-    ['Only private.html', { web_accessible_resources: [{ resources: ['comment.js'], matches: ['http://*/*', 'https://*/*'] }] }],
-    ['matches', { web_accessible_resources: [{ resources: ['private.html'], matches: ['https://*/*'] }] }],
+    ['Only private recording frames', { web_accessible_resources: [{ resources: ['comment.js'], matches: ['http://*/*', 'https://*/*'] }] }],
+    ['matches', { web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['https://*/*'] }] }],
   ])('rejects an unsafe %s manifest', (message, change) => {
     expect(() => validateReleaseFiles(releaseFiles({ 'manifest.json': JSON.stringify(manifest(change)) }), options)).toThrow(message)
   })
 
-  it.each(['manifest.json', 'background.js', 'comment.js', 'popup.html', 'private.html'])('requires %s', (path) => {
+  it.each(['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html'])('requires %s', (path) => {
     const files = releaseFiles(); files.delete(path)
     expect(() => validateReleaseFiles(files, options)).toThrow(`missing ${path}`)
   })

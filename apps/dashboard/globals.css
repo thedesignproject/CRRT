@@ -482,3 +482,51 @@
   transform: scale(0.96);
   transition: transform 0.08s ease;
 }
+
+/* CRRT Record — frontend demo surface. The recorder remains in the extension;
+   this dashboard view demonstrates its library and launch handoff. */
+.recordings-new-dot { padding: 2px 5px; border-radius: var(--crrt-radius-pill); background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary); font-size: 8px; font-weight: 700; }
+.recordings-page { flex: 1; min-width: 0; overflow-y: auto; padding: 42px clamp(24px, 5vw, 72px) 80px; background: var(--background); }
+.recordings-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; }
+.recordings-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-size: 10px; font-weight: 650; }
+.recordings-hero h1 { margin: 9px 0 4px; color: var(--foreground); font-size: 40px; font-weight: 700; letter-spacing: -.045em; }
+.recordings-hero p { margin: 0; color: var(--muted-foreground); font-size: 13px; }
+.recordings-new { min-height: 42px; display: inline-flex; align-items: center; gap: 8px; padding: 0 14px; border-radius: var(--crrt-radius-lg); background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 700; }
+.recordings-new kbd { margin-left: 6px; padding: 3px 5px; border: 1px solid color-mix(in srgb, white 25%, transparent); border-radius: var(--crrt-radius-sm); background: color-mix(in srgb, black 10%, transparent); font: 9px var(--crrt-font-mono); }
+.recordings-filters { display: flex; gap: 5px; margin: 28px 0 24px; }
+.recordings-filters button { min-height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--crrt-radius-pill); color: var(--muted-foreground); font-size: 10px; font-weight: 650; }
+.recordings-filters button.active { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
+.recordings-grid { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)); gap: 14px; }
+.recording-card { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--crrt-radius-xl); background: var(--card); }
+.recording-thumb { position: relative; aspect-ratio: 16/9; overflow: hidden; display: grid; place-items: center; background: #ede8df; color: #333; }
+.recording-thumb.blue { background: #dbe2ef; }.recording-thumb.stone { background: #deddd8; }.recording-thumb.orange { background: #d46936; }.recording-thumb.green { background: #315b47; }.recording-thumb.dark { background: #19191b; }
+.recording-wireframe { width: 78%; height: 62%; display: grid; grid-template-columns: 1fr 1.1fr; grid-template-rows: auto 1fr; gap: 7px; }
+.recording-wireframe i { border-radius: 4px; background: rgba(255,255,255,.72); }
+.recording-wireframe i:first-child { grid-column: 1 / -1; height: 9px; }.recording-wireframe i:last-child { background: rgba(15,15,17,.88); }
+.recording-thumb > b { position: absolute; right: 10%; bottom: 18%; width: 36%; height: 20%; border: 2px solid #ff573d; border-radius: 50%; transform: rotate(-5deg); }
+.recording-avatar { position: absolute; left: 8px; bottom: 8px; display: grid; place-items: center; width: 25px; height: 25px; border: 2px solid var(--card); border-radius: 50%; background: #29292d; color: white; font-size: 8px; font-weight: 700; }
+.recording-thumb time { position: absolute; right: 7px; bottom: 7px; padding: 3px 5px; border-radius: 4px; background: rgba(0,0,0,.76); color: white; font: 8px var(--crrt-font-mono); }
+.recording-copy { display: grid; gap: 5px; padding: 11px; }
+.recording-copy > strong { overflow: hidden; color: var(--foreground); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.recording-copy > p { margin: 0; color: var(--muted-foreground); font-size: 9px; }
+.recording-copy > div { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.recording-status { padding: 3px 5px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); font-size: 8px; font-weight: 650; }
+.recording-status.fixed { background: var(--status-accepted-bg); color: var(--status-accepted); }.recording-status.agent-working { background: var(--status-in-progress-bg); color: var(--status-in-progress); }.recording-status.sent-to-claude-code { background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary); }.recording-status.live-session { background: color-mix(in srgb, var(--crrt-phosphor) 13%, transparent); color: var(--crrt-phosphor); }
+.recording-copy small { display: flex; align-items: center; gap: 4px; overflow: hidden; color: var(--muted-foreground); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.recordings-contract { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 28px; }
+.recordings-contract > div { display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 1px solid var(--border); border-radius: var(--crrt-radius-lg); color: var(--primary); }
+.recordings-contract span { display: grid; gap: 4px; }.recordings-contract strong { color: var(--foreground); font-size: 10px; }.recordings-contract small { color: var(--muted-foreground); font-size: 9px; line-height: 1.45; }
+.record-launcher-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.62); backdrop-filter: blur(8px); }
+.record-launcher { position: relative; width: min(430px, 100%); display: grid; justify-items: center; padding: 34px; border: 1px solid var(--border); border-radius: var(--crrt-radius-3xl); background: var(--popover); box-shadow: var(--crrt-shadow-md); text-align: center; }
+.record-launcher-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--crrt-radius-md); color: var(--muted-foreground); }
+.record-launcher-close:hover { background: var(--accent); color: var(--foreground); }
+.record-launcher-icon { display: grid; place-items: center; width: 54px; height: 54px; margin-bottom: 16px; border-radius: 50%; background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary); }
+.record-launcher h2 { margin: 0; font-size: 22px; letter-spacing: -.025em; }.record-launcher > p { max-width: 350px; margin: 9px 0 20px; color: var(--muted-foreground); font-size: 12px; line-height: 1.55; }
+.record-launcher-shortcut { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: var(--crrt-radius-lg); background: var(--background); }
+.record-launcher-shortcut > span { display: flex; gap: 5px; }.record-launcher-shortcut kbd { display: grid; place-items: center; min-width: 29px; height: 29px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--foreground); font: 11px var(--crrt-font-mono); box-shadow: 0 2px 0 var(--border); }
+.record-launcher-shortcut button { display: flex; align-items: center; gap: 6px; color: var(--primary); font-size: 10px; font-weight: 650; }
+.record-launcher ol { width: 100%; display: grid; gap: 9px; margin: 20px 0; padding: 0; list-style-position: inside; color: var(--muted-foreground); font-size: 11px; text-align: left; }.record-launcher li::marker { color: var(--primary); font-weight: 700; }
+.record-launcher-done { width: 100%; min-height: 40px; border-radius: var(--crrt-radius-lg); background: var(--primary); color: var(--primary-foreground); font-size: 11px; font-weight: 700; }
+.record-launcher > small { display: flex; align-items: center; gap: 5px; margin-top: 12px; color: var(--muted-foreground); font-size: 8px; }
+@media(max-width: 1050px){.recordings-grid{grid-template-columns:repeat(2,minmax(210px,1fr))}.recordings-contract{grid-template-columns:1fr}}
+@media(max-width: 720px){.recordings-page{padding:28px 18px 60px}.recordings-hero{align-items:flex-start;flex-direction:column}.recordings-grid{grid-template-columns:1fr}}
