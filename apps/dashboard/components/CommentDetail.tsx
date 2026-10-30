@@ -20,7 +20,6 @@ import {
 import { ActionBtn, Kbd } from './primitives'
 import { ProjectEmptyState } from './ProjectEmptyState'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
-import { ExternalWorkProviderDialog } from './ExternalWorkProviderDialog'
 
 const providerLabel = (provider: ExternalWorkProvider) =>
   provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'
@@ -146,7 +145,6 @@ export function CommentDetail({
   const [createdExternalWork, setCreatedExternalWork] = useState<Record<string, ExternalWorkRecord[]>>({})
   const [pendingRecovery, setPendingRecovery] = useState(false)
   const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
-  const [providerPickerOpen, setProviderPickerOpen] = useState(false)
   const [selectorOpen, setSelectorOpen] = useState(false)
   const issueRequests = useRef(new Map<string, symbol>())
   const syncRequests = useRef(new Set<string>())
@@ -196,7 +194,6 @@ export function CommentDetail({
     setIssueError(null)
     setSyncBusy(selectedId !== null && syncRequests.current.has(selectedId))
     setExternalWorkDraft(null)
-    setProviderPickerOpen(false)
     setSelectorOpen(false)
   }, [selectedId])
 
@@ -519,19 +516,12 @@ export function CommentDetail({
               {!personal && !readOnly && <span
                 className="relative inline-flex flex-wrap items-center gap-3 w-full pt-4 mt-2 border-t border-border group"
               >
-                <ActionBtn
-                  variant="neutral"
-                  onClick={() => setProviderPickerOpen(true)}
+                {(['github', 'linear', 'jira'] as const).map(provider => <ActionBtn
+                  key={provider} variant="neutral"
+                  onClick={() => { void prepareExternalWork(selectedComment, provider) }}
                   disabled={!selectedProject || selectedComment.reviewStatus === 'rejected' || issueBusy}
-                >
-                  <ExternalLinkIcon size={13} />
-                  {issueBusy
-                    ? 'Preparing issue…'
-                    : selectedComment.reviewStatus === 'rejected'
-                      ? 'Reopen to send'
-                      : 'Integrations…'}
-                </ActionBtn>
-                <span className="text-xs text-muted-foreground">GitHub · Linear · Jira</span>
+                ><ExternalLinkIcon size={13} /> Send to {providerLabel(provider)}</ActionBtn>)}
+                {selectedComment.reviewStatus === 'rejected' && <span className="text-xs text-muted-foreground">Reopen to send.</span>}
               </span>}
 
               {issueError && !externalWorkDraft && (
@@ -612,15 +602,7 @@ export function CommentDetail({
         onSubmit={handleExternalWorkSubmit}
         onResolve={pendingRecovery ? handleResolveExternalWork : undefined}
       />}
-      {providerPickerOpen && <ExternalWorkProviderDialog
-        onCancel={() => setProviderPickerOpen(false)}
-        onSelect={(provider) => {
-          setProviderPickerOpen(false)
-          // The picker is only mounted for a selected comment and is closed by
-          // the selection-change effect before a replacement render can use it.
-          void prepareExternalWork(selectedComment!, provider)
-        }}
-      />}
+
     </div>
   )
 }
