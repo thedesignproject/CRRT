@@ -222,13 +222,12 @@ export function PremiumAgentBridge({
       }, widgetSession)
       const nextShare = { slug: created.slug, token: created.token }
       if (context !== contextGeneration.current) return
-      const nextPrompts = await loadPrompts(apiBase, nextShare)
-      if (context !== contextGeneration.current) return
       generation.current++
       setShare(nextShare)
-      setPrompts(nextPrompts)
+      setPrompts(EMPTY_PROMPTS)
       setView('handoff')
       onFeedbackChanged?.()
+      await refreshHandoffPrompts(nextShare, context)
     } catch (error) {
       if (context !== contextGeneration.current) return
       if (error instanceof WidgetRequestError) {
@@ -238,6 +237,16 @@ export function PremiumAgentBridge({
         }
       }
       setMessage(error instanceof Error ? error.message : 'Could not create the Agent handoff.')
+    } finally { if (context === contextGeneration.current) setBusy(false) }
+  }
+
+  async function refreshHandoffPrompts(nextShare: {slug:string;token:string}, context = contextGeneration.current) {
+    setBusy(true); setMessage('')
+    try {
+      const nextPrompts = await loadPrompts(apiBase, nextShare)
+      if (context === contextGeneration.current) setPrompts(nextPrompts)
+    } catch {
+      if (context === contextGeneration.current) setMessage('Feedback is accepted and the handoff exists. Prompts could not load; retry below.')
     } finally { if (context === contextGeneration.current) setBusy(false) }
   }
 
@@ -327,8 +336,9 @@ export function PremiumAgentBridge({
                 })}
               </div>
             )}
+            {openSelected.length > 0 && <p style={{fontSize:12,color:'var(--fw-foreground-muted)'}}>Sending accepts {openSelected.length} open feedback item{openSelected.length === 1 ? '' : 's'}. Copying the prompt never marks work done.</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 16 }}>
-              <button type="button" disabled={busy || selectedIds.size === 0} onClick={() => { void confirmHandoff() }} style={primaryButtonStyle}>{busy ? 'Creating handoff…' : 'Send to agent'}</button>
+              <button type="button" disabled={busy || selectedIds.size === 0} onClick={() => { void confirmHandoff() }} style={primaryButtonStyle}>{busy ? 'Creating handoff…' : openSelected.length ? 'Accept & send to agent' : 'Send to agent'}</button>
               {openSelected.length > 0 && <button type="button" disabled={busy} onClick={() => { void mutate(openSelected.map((comment) => comment.id), 'accept') }} style={secondaryButtonStyle}>Accept selected</button>}
               {selected.length > 0 && <button type="button" disabled={busy} onClick={() => { void mutate(selected.map((comment) => comment.id), 'reject') }} style={secondaryButtonStyle}>Reject selected</button>}
               {resolvableSelected.length > 0 && <button type="button" disabled={busy} onClick={() => { void mutate(resolvableSelected.map((comment) => comment.id), 'resolve') }} style={secondaryButtonStyle}>Resolve selected</button>}
@@ -343,7 +353,8 @@ export function PremiumAgentBridge({
                 {copied === id ? <><Check size={14} aria-hidden="true" /> Copied</> : <><Copy size={14} aria-hidden="true" /> {label}</>}
               </button>)}
             </div>
-            <button type="button" onClick={() => { requestKey.current = null; setShare(null); setPrompts(EMPTY_PROMPTS); void refreshAccess(false) }} style={{ ...textButtonStyle, marginTop: 16 }}><RefreshCw size={13} aria-hidden="true" /> Start another handoff</button>
+            {!prompts['claude-code'] && <button type="button" disabled={busy} onClick={() => { void refreshHandoffPrompts(share) }} style={secondaryButtonStyle}>{busy ? 'Loading prompts…' : 'Retry loading prompts'}</button>}
+            <button type="button" disabled={busy} onClick={() => { requestKey.current = null; setShare(null); setPrompts(EMPTY_PROMPTS); void refreshAccess(false) }} style={{ ...textButtonStyle, marginTop: 16 }}><RefreshCw size={13} aria-hidden="true" /> Start another handoff</button>
             {message && <p role="alert" style={errorStyle}>{message}</p>}
           </>}
         </div>
