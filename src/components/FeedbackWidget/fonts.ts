@@ -1,3 +1,4 @@
+import figtreeFontUrl from './fonts/figtree-latin-wght-normal.woff2?url'
 import vt323FontUrl from './fonts/vt323.ttf?url'
 
 const FONT_STYLE_ID = 'crrt-widget-fonts'
@@ -9,6 +10,13 @@ export function ensureWidgetFonts() {
   const style = document.createElement('style')
   style.id = FONT_STYLE_ID
   style.textContent = `
+@font-face {
+  font-family: 'Figtree Variable';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('${figtreeFontUrl}') format('woff2');
+}
 @font-face {
   font-family: 'VT323';
   font-style: normal;

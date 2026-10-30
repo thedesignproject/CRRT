@@ -225,3 +225,17 @@
   outline: 2px solid var(--ring);
   outline-offset: 2px;
 }
+
+:root {
+  /* Landing glass surfaces; opt-in only, never applied to product UI. */
+  --crrt-marketing-radius-panel: 32px;
+  --crrt-marketing-radius-card: 24px;
+}
+
+:root {
+  /* Same optical material as the photo hero's comment cards. */
+  --crrt-marketing-smoked-glass: linear-gradient(135deg, rgba(255,255,255,.16), rgba(255,255,255,.07));
+  --crrt-marketing-smoked-edge: rgba(255,255,255,.2);
+  --crrt-marketing-smoked-shadow: 0 18px 50px rgba(14,8,8,.25), inset 0 1px rgba(255,255,255,.12);
+  --crrt-marketing-glass-stage: radial-gradient(ellipse at 80% 12%, #695b50 0%, transparent 50%), radial-gradient(ellipse at 0% 100%, #57534e 0%, transparent 52%), #302b28;
+}
