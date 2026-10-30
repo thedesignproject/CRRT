@@ -16,3 +16,7 @@ Related PRs can share one release; dashboard/backend/landing-only changes do not
 Update the version and changelog, merge the release PR, then **create and push its tag**.
 Follow [the release commands](docs/npm-releases.md). Only call it released after npm
 shows the new version. Customers must update their dependency and redeploy.
+
+## Customer widget updates
+
+When installing or updating CRRT in a customer project, check the installed npm version against the latest published release. Apply compatible updates within the authorized scope and run the project's relevant checks. For scheduled updates, follow the [widget update skill](apps/landing/public/widget-updates/SKILL.md): reuse existing automation, keep human review by default, and enable patch auto-merge only when explicitly requested. These instructions do not run a background schedule by themselves.
