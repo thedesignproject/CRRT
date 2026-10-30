@@ -18,6 +18,7 @@ function state(run: AuditRunResponse | null, error: string | null = null, events
 const props = { apiBase: '/api', accessToken: 'bearer', auditId }
 beforeEach(() => {
   vi.clearAllMocks()
+  window.history.replaceState({}, '', '/')
   auditState.current = state(baseRun)
   vi.mocked(listProjects).mockResolvedValue([{ publicKey: 'project', slug: 'project', name: 'Project', allowedOrigins: [], createdAt: now, updatedAt: now }])
 })
@@ -139,4 +140,14 @@ describe('dashboard Product Audit', () => {
     late.unmount(); reject(new Error('late'))
     await waitFor(() => expect(listProjects).toHaveBeenCalledTimes(2))
   })
+})
+
+it.each(['second','unknown'])('uses only an accessible requested audit project: %s',async requested=>{
+ const first={publicKey:'first',slug:'first',name:'First',allowedOrigins:[],createdAt:now,updatedAt:now}
+ vi.mocked(listProjects).mockResolvedValue([first,{...first,publicKey:'second',name:'Second'}])
+ window.history.replaceState({},'',`/?project=${requested}`)
+ render(<ProductAuditPage {...props} auditId="new" />)
+ await screen.findByRole('option',{name:'Second'})
+ expect(screen.getByLabelText('Project')).toHaveValue(requested==='second'?'second':'first')
+ expect(createAudit).not.toHaveBeenCalled()
 })
