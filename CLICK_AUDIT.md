@@ -52,3 +52,7 @@ Replace the destination dropdown plus Move button with explicit Move to [project
 ## Sixth layer: atomic version prerequisite for Undo
 
 Add an optional expectedUpdatedAt to the internal actor-bound mutation, checked inside its existing database row lock before any change. Two concurrent callers using the same version produce one success and one status_conflict; the losing write leaves the winner intact. Legacy calls and permissions remain unchanged. This layer does not reduce a UI click by itself: it is the compatibility-preserving prerequisite for safe one-click Undo. Endpoint and dashboard wiring are the next layer. Verified on a disposable local Postgres after applying the full migration chain.
+
+## Seventh layer: use the atomic fence in Undo
+
+Mark ready snapshots now retain the exact server-returned updatedAt (including sub-millisecond precision). Undo supplies that version through the existing review endpoint; malformed versions return 400, stale versions return 409 and discard the conflicting undo entry with an explicit explanation. Missing server versions never enable unfenced Undo. The database check from #378 closes the cross-tab/reviewer/agent race for approval Undo without adding clicks or changing legacy requests.

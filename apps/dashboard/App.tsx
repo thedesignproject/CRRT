@@ -128,6 +128,34 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
   const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
+  const feedbackScopeKey = JSON.stringify([accessToken, selectedProject, view])
+  const feedbackWrites = useRef({ key: feedbackScopeKey, version: 0, pending: new Set<Promise<unknown>>() })
+  if (feedbackWrites.current.key !== feedbackScopeKey) {
+    feedbackWrites.current = { key: feedbackScopeKey, version: 0, pending: new Set() }
+  }
+  useEffect(() => () => {
+    feedbackWrites.current = { ...feedbackWrites.current, pending: new Set() }
+  }, [])
+  const trackFeedbackWrite = useCallback(async <T,>(operation: Promise<T>) => {
+    const scope = feedbackWrites.current
+    scope.version++
+    scope.pending.add(operation)
+    try {
+      return await operation
+    } finally {
+      scope.pending.delete(operation)
+    }
+  }, [])
+  const reconcileFeedback = useCallback(async (scope: typeof feedbackWrites.current) => {
+    while (feedbackWrites.current === scope) {
+      while (scope.pending.size) await Promise.allSettled([...scope.pending])
+      if (feedbackWrites.current !== scope) return
+      const version = scope.version
+      await refreshComments(() => feedbackWrites.current === scope && scope.version === version)
+      // A write during the fetch invalidates its data; reconcile again once idle.
+      if (scope.version === version) return
+    }
+  }, [refreshComments])
   const reviewRequests = useRef(new Map<string, symbol>())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -193,7 +221,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
-  const [readyUndo, setReadyUndo] = useState<Comment[]>([])
+  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -316,7 +344,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     reviewRequests.current.set(id, request)
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
     try {
-      await apiUpdateReview(API_BASE, accessToken, id, status)
+      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status))
       if (reviewRequests.current.get(id) === request) await refreshComments()
     } catch (err) {
       console.error('Failed to update review status:', err)
@@ -325,7 +353,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
     }
-  }, [accessToken, refreshComments, mutation.report, clearReadyUndo])
+  }, [accessToken, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
 
   const handleToggleDone = useCallback(async (id: string) => {
     clearReadyUndo()
@@ -341,13 +369,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         }
       : c))
     try {
-      await apiUpdateImpl(API_BASE, accessToken, id, nextStatus)
+      await trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments, mutation.report, clearReadyUndo])
+  }, [comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
@@ -359,7 +387,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ? { ...comment, visibility }
       : comment))
     try {
-      await apiUpdateVisibility(API_BASE, accessToken, id, visibility)
+      await trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
     } catch (error) {
       if (previous) {
         setComments((current) => current.map((comment) => comment.id === id
@@ -369,7 +397,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       console.error('Failed to update feedback audience:', error)
       mutation.report(error)
     }
-  }, [accessToken, comments, mutation.report])
+  }, [accessToken, comments, mutation.report, trackFeedbackWrite])
 
   const toggleBulkSelect = useCallback((id: string) => {
     if (bulkActionBusy) return
@@ -419,11 +447,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       return { ...c, reviewStatus: 'rejected' as ReviewStatus, updatedAt: ts }
     }))
     const calls = ids.map(async (id) => {
-      if (action === 'ready') return apiUpdateReview(API_BASE, accessToken, id, 'accepted')
-      if (action === 'reject') return apiUpdateReview(API_BASE, accessToken, id, 'rejected')
+      if (action === 'ready') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted'))
+      if (action === 'reject') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'rejected'))
       const updates = await Promise.allSettled([
-        apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted'),
-        apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done'),
+        trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted')),
+        trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done')),
       ])
       // A failed PATCH must not release the busy guard while its sibling still writes.
       const failure = updates.find((update) => update.status === 'rejected')
@@ -444,7 +472,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
     }
     if (stillCurrent && generation === bulkGeneration.current) {
-      if (action === 'ready') setReadyUndo(previous.filter(c => !failedIds.includes(c.id)))
+      if (action === 'ready') setReadyUndo(previous.flatMap(c => {
+        const result = results[ids.indexOf(c.id)]
+        return result.status === 'fulfilled' && result.value && result.value.updatedAt ? [{ ...c, undoVersion: result.value.updatedAt }] : []
+      }))
       if (failedIds.length > 0) {
         setBulkMode(true)
         setBulkSelectedIds(action === 'ready' ? new Set(ids) : new Set(failedIds))
@@ -454,10 +485,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       }
     }
     if (generation === bulkGeneration.current) setBulkActionBusy(false)
-  }, [accessToken, comments, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report, clearReadyUndo])
+  }, [accessToken, comments, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
 
   const undoReady = async () => {
     const generation = bulkGeneration.current
+    const scope = feedbackWrites.current
     const request = Symbol('undo-ready')
     readyUndoRequest.current = request
     setBulkActionBusy(true)
@@ -465,18 +497,24 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const results = await Promise.allSettled(readyUndo.map(async (before) => {
       const current = comments.find(c => c.id === before.id)
       if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== before.implementationStatus || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
-      await apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus)
+      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion))
       if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
     }))
-    if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) return
+    if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) {
+      if (readyUndoRequest.current === request) clearReadyUndo()
+      await reconcileFeedback(scope)
+      return
+    }
     readyUndoRequest.current = null
     for (const result of results) {
       if (result.status === 'rejected') mutation.report(result.reason)
     }
-    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected')
+    const conflicts = new Set(results.flatMap((result, i) => result.status === 'rejected' && result.reason?.status === 409 ? [i] : []))
+    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i))
     setReadyUndo(remaining)
     setBulkActionBusy(false)
-    if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
+    if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
+    else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
     else setBulkTransitionNotice('Previous review statuses restored.')
     await refreshComments()
   }
