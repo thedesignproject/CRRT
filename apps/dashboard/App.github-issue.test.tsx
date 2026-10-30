@@ -1057,3 +1057,30 @@ it('keeps failed reopen items selected for retry and reports partial failure', a
  await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1'))
  expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
+
+it.each(['Reopen', 'Mark done'])('waits for both %s updates before handling either failure', async (action) => {
+ for (const failedUpdate of [fixtures.updateReview, fixtures.updateImpl]) {
+  const pendingUpdate = failedUpdate === fixtures.updateReview ? fixtures.updateImpl : fixtures.updateReview
+  let finishPending!: () => void
+  failedUpdate.mockRejectedValueOnce(new Error('offline'))
+  pendingUpdate.mockImplementationOnce(() => new Promise<void>(resolve => { finishPending = resolve }))
+  fixtures.comments.push({ id: 'comment-1', projectId: 'project-1', body: 'Feedback', reviewStatus: 'accepted', implementationStatus: 'done', claimedByAgentId: 'agent', createdAt: '', updatedAt: '' })
+  const view = render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
+  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
+  const refreshCalls = fixtures.fn.mock.calls.length
+  fireEvent.click(screen.getByRole('button', { name: action }))
+  await act(async () => { await Promise.resolve() })
+  expect(screen.getByRole('button', { name: action })).toBeDisabled()
+  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+  expect(screen.queryByText('1 item could not be updated and remain selected.')).toBeNull()
+
+  await act(async () => { finishPending() })
+  await screen.findByText('1 item could not be updated and remain selected.')
+  expect(screen.getByRole('button', { name: action })).toBeEnabled()
+  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+  view.unmount()
+  fixtures.comments.splice(0)
+ }
+})

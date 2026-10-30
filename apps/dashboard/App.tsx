@@ -407,10 +407,13 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     const calls = ids.map(async (id) => {
       if (action === 'ready') return apiUpdateReview(API_BASE, accessToken, id, 'accepted')
       if (action === 'reject') return apiUpdateReview(API_BASE, accessToken, id, 'rejected')
-      await Promise.all([
+      const updates = await Promise.allSettled([
         apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted'),
         apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done'),
       ])
+      // A failed PATCH must not release the busy guard while its sibling still writes.
+      const failure = updates.find((update) => update.status === 'rejected')
+      if (failure) throw failure.reason
     })
 
     const results = await Promise.allSettled(calls)
