@@ -109,7 +109,7 @@ export function RecordApp() {
   const tabId = Number(query.get('tabId')) || null
   const pageUrl = query.get('pageUrl') || undefined
   const pageTitle = query.get('pageTitle') || (pageUrl ? new URL(pageUrl).hostname : 'Untitled recording')
-  const [state, dispatch] = useReducer(recorderReducer, initialRecorderState)
+  const [state, dispatch] = useReducer(recorderReducer, { ...initialRecorderState, source: tabId === null ? 'window' : 'tab' })
   const stateRef = useRef(state)
   const captureRef = useRef<RecordingCapture | null>(null)
   const sessionRef = useRef<string | null>(null)

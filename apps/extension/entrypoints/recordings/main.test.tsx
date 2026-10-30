@@ -55,3 +55,12 @@ it('shows local captures in All and Mine but not client filters', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'From clients' }))
   expect(screen.queryByText('Local checkout')).toBeNull()
 })
+
+it.each([{ ok: false, error: 'Open failed' }, { ok: false }, undefined, 'rejected'])('shows launcher failures instead of ignoring them: %j', async (failure) => {
+  await import('./main')
+  await screen.findByRole('heading', { name: 'Recordings' })
+  if (failure === 'rejected') mocks.sendMessage.mockRejectedValueOnce('worker disconnected')
+  else mocks.sendMessage.mockResolvedValueOnce(failure)
+  fireEvent.click(screen.getByRole('button', { name: /New recording/ }))
+  expect(await screen.findByRole('alert')).toHaveTextContent(failure && typeof failure === 'object' && 'error' in failure ? 'Open failed' : 'Could not open the recorder')
+})

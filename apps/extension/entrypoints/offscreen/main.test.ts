@@ -20,8 +20,10 @@ vi.mock('../../lib/recording-store', () => ({ saveLocalRecording: mocks.saveReco
 vi.mock('../../lib/recording-transcription', () => ({ withRecordingTranscript: mocks.withTranscript }))
 
 function capture() {
+  const screenTrack = new EventTarget()
   return {
-    screenStream: {} as MediaStream, cameraStream: null, previewStream: {} as MediaStream,
+    screenTrack,
+    screenStream: { getVideoTracks: () => [screenTrack] } as unknown as MediaStream, cameraStream: null, previewStream: {} as MediaStream,
     setCameraEnabled: vi.fn(() => true),
     pause: vi.fn(), resume: vi.fn(),
     stop: vi.fn().mockResolvedValue({ screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']) }),
@@ -99,6 +101,9 @@ it('discards, restarts, and reports capture failures', async () => {
   start('non-error-failure')
   await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-error', error: 'Could not complete this recording.' })))
   mocks.listener!({ type: 'ignored', target: 'page' })
+  const ignored = vi.fn()
+  expect(mocks.listener!({ type: 'ignored', target: 'offscreen' }, {}, ignored)).toBeUndefined()
+  expect(ignored).not.toHaveBeenCalled()
 })
 
 it('checks permissions without acquiring a capture stream and fails closed on query errors', async () => {
@@ -142,4 +147,84 @@ it('cleans up and leaves countdown when a deferred encoder cannot start', async 
   await waitFor(() => expect(recording.stop).toHaveBeenCalled())
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-error', error: 'Encoder could not start' }))
   expect(mocks.saveRecording).not.toHaveBeenCalled()
+})
+
+it('finalizes Stop sharing exactly once even when Done arrives simultaneously', async () => {
+  const recording = capture()
+  mocks.startCapture.mockResolvedValue(recording)
+  await import('./main')
+  mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'ended', snapshot: { status: 'setup', source: 'window', cameraEnabled: true, microphoneEnabled: true } })
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  recording.screenTrack.dispatchEvent(new Event('ended'))
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', sessionId: 'ended', command: { kind: 'finish' } })
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-finished' })))
+  expect(recording.stop).toHaveBeenCalledOnce()
+  expect(mocks.withTranscript).toHaveBeenCalledOnce()
+  expect(mocks.saveRecording).toHaveBeenCalledTimes(2)
+  expect(mocks.sendMessage.mock.calls.filter(([message]) => message.type === 'record:offscreen-finished')).toHaveLength(1)
+})
+
+it('releases a capture ended during countdown and ignores ended events after cancellation', async () => {
+  const recording = capture()
+  mocks.startCapture.mockResolvedValue(recording)
+  await import('./main')
+  mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'countdown-ended', snapshot: { status: 'setup', source: 'window' } })
+  await waitFor(() => expect(recording.pause).toHaveBeenCalled())
+  recording.screenTrack.dispatchEvent(new Event('ended'))
+  await waitFor(() => expect(recording.stop).toHaveBeenCalled())
+  await act(async () => { await vi.advanceTimersByTimeAsync(4_000) })
+  expect(recording.resume).not.toHaveBeenCalled()
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-error', error: 'Screen sharing ended before recording started.' }))
+  expect(mocks.saveRecording).not.toHaveBeenCalled()
+  const next = capture(); mocks.startCapture.mockResolvedValue(next)
+  mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'cancelled', snapshot: { status: 'setup', source: 'tab' } })
+  await waitFor(() => expect(next.pause).toHaveBeenCalled())
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', sessionId: 'cancelled', command: { kind: 'cancel' } })
+  await waitFor(() => expect(next.stop).toHaveBeenCalled())
+  next.screenTrack.dispatchEvent(new Event('ended'))
+  expect(mocks.saveRecording).not.toHaveBeenCalled()
+})
+
+it('does not leak pending captures after cancel and refuses duplicate starts over an active session', async () => {
+  let resolve!: (value: ReturnType<typeof capture>) => void
+  const pending = new Promise<ReturnType<typeof capture>>((done) => { resolve = done })
+  mocks.startCapture.mockReturnValueOnce(pending)
+  await import('./main')
+  const start = { type: 'record:offscreen-start', target: 'offscreen', sessionId: 'pending', snapshot: { status: 'setup', source: 'window' } }
+  const respond = vi.fn()
+  mocks.listener!(start, {}, respond)
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', sessionId: 'pending', command: { kind: 'cancel' } })
+  const aborted = capture(); resolve(aborted)
+  await waitFor(() => expect(aborted.stop).toHaveBeenCalledOnce())
+  expect(respond).toHaveBeenCalledWith(expect.objectContaining({ ok: false }))
+  const recording = capture(); mocks.startCapture.mockResolvedValue(recording)
+  mocks.listener!(start)
+  await waitFor(() => expect(recording.pause).toHaveBeenCalled())
+  mocks.listener!(start, {}, respond)
+  await waitFor(() => expect(respond).toHaveBeenLastCalledWith(expect.objectContaining({ ok: false })))
+  expect(recording.stop).not.toHaveBeenCalled()
+})
+
+it('keeps the new capture active when an older transcription completes after cancellation', async () => {
+  let complete!: () => void
+  mocks.withTranscript.mockImplementationOnce((recording) => new Promise((resolve) => {
+    complete = () => resolve({ ...recording, status: 'ready' })
+  }))
+  await import('./main')
+  const start = (sessionId: string) => mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId, snapshot: { status: 'setup', source: 'tab' } })
+  start('older')
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'finish' } })
+  await waitFor(() => expect(mocks.withTranscript).toHaveBeenCalledOnce())
+  const cancelled = vi.fn()
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'cancel' } }, {}, cancelled)
+  await waitFor(() => expect(cancelled).toHaveBeenCalledWith({ ok: true }))
+  const next = capture()
+  mocks.startCapture.mockResolvedValue(next)
+  start('newer')
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  complete()
+  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-finished', sessionId: 'older' })))
+  mocks.listener!({ type: 'record:offscreen-command', target: 'offscreen', command: { kind: 'pause.toggle' } })
+  await waitFor(() => expect(next.pause).toHaveBeenCalledTimes(2))
 })

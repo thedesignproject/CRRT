@@ -43,6 +43,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
   const [snapshot, setSnapshot] = useState<RecordingSessionSnapshot | null>(null)
   const [draft, setDraft] = useState<RecordingPoint[]>([])
   const [pending, setPending] = useState(false)
+  const [commandError, setCommandError] = useState('')
   const [cameraAvailable, setCameraAvailable] = useState(false)
   const [cameraPreviewSize, setCameraPreviewSize] = useState<CameraPreviewSize>('medium')
   const draftRef = useRef<RecordingPoint[]>([])
@@ -56,7 +57,9 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
     /* v8 ignore next -- disabled Start/Done controls prevent a second exclusive DOM event */
     if (exclusive && exclusiveRef.current) return
     if (exclusive) { exclusiveRef.current = true; setPending(true) }
+    setCommandError('')
     try { await send({ type: 'record:surface-command', sessionId: id, command: value }) }
+    catch (error) { setCommandError(error instanceof Error ? error.message : 'Recording controls disconnected. Reopen the recorder to reconnect.') }
     finally {
       if (exclusive) { exclusiveRef.current = false; setPending(false) }
     }
@@ -165,7 +168,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
         <button className={snapshot.cameraEnabled ? '' : 'device-off'} aria-pressed={snapshot.cameraEnabled} onClick={() => { void command({ kind: 'camera.toggled' }) }}>{snapshot.cameraEnabled ? <Camera size={17} /> : <CameraOff size={17} />}<span>{snapshot.cameraEnabled ? 'Camera' : 'No camera'}</span><em>{snapshot.cameraEnabled ? 'ON' : 'OFF'}</em></button>
         <button onClick={() => { void command({ kind: 'microphone.toggled' }) }}><Mic size={17} /><span>Microphone</span><em>{snapshot.microphoneEnabled ? 'On' : 'Off'}</em></button>
       </div>
-      {snapshot.error && <p className="setup-error" role="alert">{snapshot.error}</p>}
+      {(commandError || snapshot.error) && <p className="setup-error" role="alert">{commandError || snapshot.error}</p>}
       <button className="start" disabled={pending} onClick={() => { void command({ kind: 'start' }, true) }}><Camera size={17} /><span>Start recording</span><kbd>3 sec</kbd></button>
     </section>
   </main>
@@ -185,6 +188,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
       void command({ kind: 'camera.toggled' })
     }} /> : null}
     {snapshot.microphoneEnabled && snapshot.status !== 'countdown' && <div className="transcript-chip" data-record-control><Mic size={12} /><span>Voice recording</span><em>Transcribed after Done</em></div>}
+    {commandError && <div className="surface-warning" role="alert" data-record-control>{commandError}</div>}
     {snapshot.warning && <div className="surface-warning" data-record-control>{snapshot.warning}</div>}
     {snapshot.status === 'countdown' && <div className="countdown"><strong>{snapshot.countdown}</strong><span>Get ready</span></div>}
     {snapshot.status === 'paused' && <div className="paused"><Pause size={22} fill="currentColor" /><strong>Paused</strong></div>}

@@ -12,7 +12,6 @@ const activeTabKey = (tabId: number) => `crrt:active-tab:${tabId}`
 type ActiveTabState = { origin: string; activationId: string; attemptId: string }
 const tabOperationTails = new Map<number, Promise<void>>()
 const recordingSessionKey = 'crrt:recording-session'
-const recordingSurfaceFrames = new Map<string, number>()
 
 async function recordingSession(): Promise<RecordingSessionDescriptor | null> {
   const stored = await browser.storage.session.get(recordingSessionKey)
@@ -74,23 +73,42 @@ async function currentWebTab() {
   return { id: tab.id, origin }
 }
 
-async function openRecorder() {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
-  if (typeof tab?.id !== 'number' || !webOrigin(tab.url)) throw new Error('Open a regular web page to start recording')
-  const previous = await recordingSession()
-  if (previous) await browser.tabs.sendMessage(previous.tabId, { type: 'record:overlay-remove', sessionId: previous.sessionId }).catch(() => undefined)
-  const descriptor: RecordingSessionDescriptor = {
-    sessionId: crypto.randomUUID(), revision: 1, tabId: tab.id,
-    snapshot: { ...initialRecorderState },
-  }
-  await storeRecordingSession(descriptor)
-  await injectRecordingSurface(tab.id)
-  return descriptor
+async function openRecorder(allowStandalone = false) {
+  // Serialize entry points so two rapid clicks cannot replace an unsaved session.
+  return withTabOperation(-1, async () => {
+    const previous = await recordingSession()
+    if (previous) {
+      const target = await browser.tabs.get(previous.controllerTabId ?? previous.tabId)
+      await browser.tabs.update(target.id!, { active: true })
+      if (typeof target.windowId === 'number') await browser.windows.update(target.windowId, { focused: true })
+      return previous
+    }
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
+    if (typeof tab?.id !== 'number' || !webOrigin(tab.url)) {
+      if (!allowStandalone) throw new Error('Open a regular web page to start recording')
+      await browser.windows.create({ url: browser.runtime.getURL('/record.html' as any), type: 'popup', width: 1180, height: 820 })
+      return
+    }
+    const descriptor: RecordingSessionDescriptor = {
+      sessionId: crypto.randomUUID(), revision: 1, tabId: tab.id,
+      snapshot: { ...initialRecorderState },
+    }
+    await storeRecordingSession(descriptor)
+    await injectRecordingSurface(tab.id)
+    return descriptor
+  })
 }
 
 function isExtensionPage(sender: unknown) {
   const url = (sender as { url?: string } | null)?.url
-  return typeof url === 'string' && new URL(url).origin === new URL(browser.runtime.getURL('/private.html')).origin
+  if (typeof url !== 'string') return false
+  const actual = new URL(url), expected = new URL(browser.runtime.getURL('/private.html'))
+  return actual.protocol === expected.protocol && actual.host === expected.host
+}
+
+function isRecordingSurface(current: RecordingSessionDescriptor, sender: unknown) {
+  const frameId = (sender as { frameId?: number } | null)?.frameId
+  return senderTab(sender)?.id === current.tabId && Number.isInteger(frameId) && frameId === current.surfaceFrameId
 }
 
 async function tabStreamId(tabId: unknown, sender: unknown) {
@@ -169,7 +187,7 @@ async function syncRecordingSession(sessionId: unknown, snapshot: unknown, sende
   if (!current || current.sessionId !== sessionId || current.controllerTabId !== controller.id || !snapshot || typeof snapshot !== 'object') throw new Error('Recording session unavailable')
   const next = { ...current, revision: current.revision + 1, snapshot: snapshot as RecordingSessionSnapshot }
   await storeRecordingSession(next)
-  const frameId = recordingSurfaceFrames.get(next.sessionId)
+  const frameId = next.surfaceFrameId
   /* v8 ignore next -- a not-yet-mounted surface simply receives the next state after ready */
   if (frameId !== undefined) await browser.tabs.sendMessage(next.tabId, { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot }, { frameId }).catch(() => undefined)
   return next.revision
@@ -187,29 +205,29 @@ async function readyRecordingSurface(sessionId: unknown, sender: unknown) {
   const current = await recordingSession()
   /* v8 ignore next -- surface identity validation is exercised with valid and invalid coordinates */
   if (!current || current.sessionId !== sessionId || tab?.id !== current.tabId || !Number.isInteger(frameId)) throw new Error('Invalid recording surface')
-  recordingSurfaceFrames.set(current.sessionId, frameId!)
+  await storeRecordingSession({ ...current, surfaceFrameId: frameId })
   return current.snapshot
 }
 
 async function recordingSurfaceLayout(message: any, sender: unknown) {
-  const current = await recordingSession(), frameId = (sender as { frameId?: number } | null)?.frameId
+  const current = await recordingSession()
   /* v8 ignore next -- legacy iframe layout validation remains as a compatibility boundary */
-  if (!current || current.sessionId !== message.sessionId || frameId !== recordingSurfaceFrames.get(current.sessionId)) throw new Error('Invalid recording surface')
+  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender)) throw new Error('Invalid recording surface')
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-interaction', sessionId: current.sessionId, tool: message.tool, rects: message.rects }, { frameId: 0 })
 }
 
 async function recordingSurfacePointer(message: any, sender: unknown) {
-  const current = await recordingSession(), frameId = (sender as { frameId?: number } | null)?.frameId
+  const current = await recordingSession()
   /* v8 ignore next -- representative invalid pointer messages cover the shared rejection path */
-  if (!current || current.sessionId !== message.sessionId || frameId !== recordingSurfaceFrames.get(current.sessionId)
+  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender)
     || typeof message.x !== 'number' || typeof message.y !== 'number') throw new Error('Invalid recording surface')
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-pointer', sessionId: current.sessionId, x: message.x, y: message.y }, { frameId: 0 })
 }
 
 async function recordingSurfaceCommand(message: any, sender: unknown) {
-  const current = await recordingSession(), frameId = (sender as { frameId?: number } | null)?.frameId
+  const current = await recordingSession()
   /* v8 ignore next -- protocol validation is unit-tested; malformed field combinations share this rejection */
-  if (!current || current.sessionId !== message.sessionId || frameId !== recordingSurfaceFrames.get(current.sessionId) || !isRecordingSurfaceCommand(message.command)) throw new Error('Invalid recording command')
+  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender) || !isRecordingSurfaceCommand(message.command)) throw new Error('Invalid recording command')
   const command = message.command
   /* v8 ignore next -- source selection is the same tested setup-snapshot path as the device toggles */
   if (command.kind === 'source.changed') return updateSetupSnapshot(current, { source: command.source })
@@ -269,7 +287,6 @@ async function startOffscreenRecording(current: RecordingSessionDescriptor) {
 async function cancelIntegratedRecording(current: RecordingSessionDescriptor) {
   await browser.runtime.sendMessage({ type: 'record:offscreen-command', target: 'offscreen', sessionId: current.sessionId, command: { kind: 'cancel' } }).catch(() => undefined)
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
-  recordingSurfaceFrames.delete(current.sessionId)
   await storeRecordingSession(null)
   await closePermissionWindow(current)
 }
@@ -314,7 +331,6 @@ async function stopRecordingSession(sessionId: unknown, sender: unknown) {
   /* v8 ignore next -- session ownership validation shares one defensive rejection path */
   if (!current || current.sessionId !== sessionId || current.controllerTabId !== controller.id || !Number.isInteger(current.controllerWindowId)) return false
   await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
-  recordingSurfaceFrames.delete(current.sessionId)
   await storeRecordingSession(null)
   await browser.windows.update(current.controllerWindowId!, { focused: true }).catch(() => undefined)
   await browser.tabs.update(current.controllerTabId!, { active: true }).catch(() => undefined)
@@ -484,7 +500,7 @@ export default defineBackground(() => {
         return { ok: true }
       }
       if ((message as { type?: unknown } | null)?.type === 'record:open') {
-        await openRecorder()
+        await openRecorder(isExtensionPage(sender))
         return { ok: true }
       }
       if ((message as { type?: unknown } | null)?.type === 'record:tab-stream') {
@@ -557,7 +573,6 @@ export default defineBackground(() => {
     if (changeInfo.url) void clearNavigatedTab(tabId, changeInfo.url)
     if (changeInfo.status === 'complete') void recordingSession().then(async (current) => {
       if (current?.tabId !== tabId) return
-      recordingSurfaceFrames.delete(current.sessionId)
       await injectRecordingSurface(tabId).catch(() => browser.runtime.sendMessage({
         type: 'record:controller-warning', sessionId: current.sessionId,
         warning: 'Recording continues, but controls and DOM context are unavailable on this page.',
@@ -566,6 +581,6 @@ export default defineBackground(() => {
   })
   browser.commands?.onCommand.addListener((command) => {
     /* v8 ignore next -- Chrome may dispatch other configured commands in future manifests */
-    if (command === 'start-recording') void openRecorder()
+    if (command === 'start-recording') void openRecorder(true)
   })
 })

@@ -207,12 +207,20 @@ export function buildRecordingAgentPayload(recording: LocalRecording) {
     if (!marks.length) lines.push('No marks captured.')
     return lines.join('\n').trim()
   }
+  const exportedMarks = new Set<string>()
   moments.forEach((segment, index) => {
     const nearest = nearestRecordingMark(recording.marks, (segment.startMs + segment.endMs) / 2)
     lines.push(`[${formatRecordingTime(segment.startMs)}] keyframe_${String(index + 1).padStart(2, '0')}.png${nearest ? `  ${nearest.type}` : ''}`)
+    if (nearest) exportedMarks.add(nearest.id)
     if (nearest?.target?.selector) lines.push(`  target: ${nearest.target.selector}`)
     if (nearest?.text) lines.push(`  note: "${nearest.text}"`)
     lines.push(`  "${segment.text}"`, '')
+  })
+  recording.marks.filter((mark) => !exportedMarks.has(mark.id)).sort((a, b) => a.atMs - b.atMs).forEach((mark, index) => {
+    lines.push(`[${formatRecordingTime(mark.atMs)}] keyframe_${String(moments.length + index + 1).padStart(2, '0')}.png  ${mark.type}`)
+    if (mark.target?.selector) lines.push(`  target: ${mark.target.selector}`)
+    if (mark.text) lines.push(`  note: "${mark.text}"`)
+    lines.push('')
   })
   return lines.join('\n').trim()
 }

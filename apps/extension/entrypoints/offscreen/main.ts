@@ -12,10 +12,12 @@ type Active = {
   pageTitle?: string
   state: RecorderState
   capture: RecordingCapture
+  finishing?: Promise<void>
   timer?: number
 }
 
 let active: Active | null = null
+let generation = 0
 
 function title(state: RecorderState, pageTitle?: string) {
   /* v8 ignore next -- fallbacks protect imported captures without page metadata */
@@ -33,8 +35,8 @@ function clearTimer(session: Active) {
 }
 
 async function begin(message: any) {
-  /* v8 ignore next -- concurrent starts discard the prior capture defensively */
-  if (active) await discard(active)
+  if (active) return false
+  const startingGeneration = ++generation
   const initial = { ...initialRecorderState, ...message.snapshot } as RecorderState
   const capture = await startRecordingCapture({
     source: initial.source,
@@ -43,9 +45,19 @@ async function begin(message: any) {
     tabStreamId: message.tabStreamId,
     deferRecording: true,
   })
+  if (generation !== startingGeneration) {
+    await capture.stop().catch(() => undefined)
+    return false
+  }
   capture.pause()
   let state = recorderReducer(initial, { type: 'countdown.started' })
   active = { sessionId: message.sessionId, pageUrl: message.pageUrl, pageTitle: message.pageTitle, state, capture }
+  const session = active
+  for (const track of capture.screenStream.getVideoTracks()) track.addEventListener('ended', () => {
+    if (active !== session) return
+    if (session.state.status === 'countdown') void fail(session.sessionId, new Error('Screen sharing ended before recording started.'))
+    else void finish(session).catch((error) => fail(session.sessionId, error))
+  }, { once: true })
   await emit(active.sessionId, sessionSnapshot(state))
   active.timer = window.setInterval(() => {
     /* v8 ignore next -- stale timer callbacks are ignored after disposal */
@@ -65,6 +77,7 @@ async function begin(message: any) {
     }
     void emit(message.sessionId, sessionSnapshot(active.state))
   }, 1_000)
+  return true
 }
 
 async function discard(session: Active) {
@@ -81,7 +94,11 @@ async function fail(sessionId: string, error: unknown) {
   return { ok: false, error: reason }
 }
 
-async function finish(session: Active) {
+function finish(session: Active) {
+  return session.finishing ??= saveFinishedRecording(session)
+}
+
+async function saveFinishedRecording(session: Active) {
   clearTimer(session)
   session.state = recorderReducer(session.state, { type: 'recording.finished', now: performance.now() })
   await emit(session.sessionId, sessionSnapshot(session.state))
@@ -107,11 +124,12 @@ async function finish(session: Active) {
   await saveLocalRecording(recording)
   const completed = await withRecordingTranscript(recording)
   await saveLocalRecording(completed)
-  active = null
+  if (active === session) active = null
   await browser.runtime.sendMessage({ type: 'record:offscreen-finished', target: 'background', sessionId: session.sessionId, recordingId: recording.id })
 }
 
 async function applyCommand(command: RecordingSurfaceCommand) {
+  if (command.kind === 'cancel') generation += 1
   const session = active
   /* v8 ignore next -- commands arriving after disposal are intentionally ignored */
   if (!session) return
@@ -146,10 +164,13 @@ browser.runtime.onMessage.addListener((message: any, _sender, respond) => {
     return true
   }
   if (message.type === 'record:offscreen-start') {
-    void begin(message).then(() => respond({ ok: true }), async (error) => {
+    void begin(message).then((started) => respond(started ? { ok: true } : { ok: false, error: 'Recording setup was cancelled or another recording is already active.' }), async (error) => {
       respond(await fail(message.sessionId, error))
     })
     return true
   }
-  if (message.type === 'record:offscreen-command') void applyCommand(message.command).catch((error) => fail(message.sessionId, error))
+  if (message.type === 'record:offscreen-command') {
+    void applyCommand(message.command).then(() => respond({ ok: true }), async (error) => respond(await fail(message.sessionId, error)))
+    return true
+  }
 })

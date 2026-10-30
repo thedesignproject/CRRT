@@ -203,3 +203,17 @@ it('fades completed marks and lets the user resize, hide, and restore the camera
   expect(screen.getByRole('button', { name: 'Camera preview settings' })).toBeInTheDocument()
   expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ command: { kind: 'camera.toggled' } }))
 })
+
+it('shows command errors in setup and while recording', async () => {
+  mocks.sendMessage.mockImplementation(async (message: { type: string }) => ({ ok: true, ...(message.type === 'record:surface-ready' ? { data: snapshot({ status: 'setup' }) } : {}) }))
+  const module = await import('./main')
+  render(<module.RecordControls />)
+  await screen.findByLabelText('CRRT Record setup')
+  mocks.sendMessage.mockResolvedValueOnce({ ok: false, error: 'Invalid recording command' })
+  fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Invalid recording command')
+  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:surface-state', sessionId: 's', snapshot: snapshot({ status: 'recording' }) }) })
+  mocks.sendMessage.mockRejectedValueOnce('worker disconnected')
+  fireEvent.click(screen.getByRole('button', { name: 'Draw' }))
+  expect(await screen.findByRole('alert')).toHaveTextContent('Reopen the recorder to reconnect')
+})

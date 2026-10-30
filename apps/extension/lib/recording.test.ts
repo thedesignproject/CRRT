@@ -127,3 +127,21 @@ it('clears marks and pause timing when retrying an interrupted recording', () =>
   const failed = { ...initialRecorderState, source: 'window' as const, cameraEnabled: false, status: 'failed' as const, durationMs: 9000, pausedMs: 4000, pausedAt: 5000, marks: [{ id: 'old', type: 'box' as const, atMs: 500, points: [] }] }
   expect(recorderReducer(failed, { type: 'countdown.started' })).toMatchObject({ status: 'countdown', source: 'window', cameraEnabled: false, durationMs: 0, pausedMs: 0, pausedAt: null, marks: [] })
 })
+
+it('exports every annotation alongside speech, including silence and multiple marks at one moment', () => {
+  const recording: LocalRecording = {
+    id: 'all-events', title: 'All events', source: 'tab', status: 'ready', durationMs: 20000,
+    createdAt: '2026-10-30T00:00:00Z', authorName: 'Tester', transcriptionStatus: 'ready',
+    transcript: [{ id: 'speech', startMs: 0, endMs: 2000, text: 'Check this button.' }],
+    marks: [
+      { id: 'silent', type: 'text', atMs: 15000, points: [{ x: 1, y: 1 }], text: 'Spacing during silence', target: { selector: '#silent' } },
+      { id: 'nearest', type: 'box', atMs: 1000, points: [{ x: 2, y: 2 }], target: { selector: '#nearest' } },
+      { id: 'other', type: 'text', atMs: 1100, points: [{ x: 3, y: 3 }], text: 'Second note', target: { selector: '#other' } },
+      { id: 'plain', type: 'arrow', atMs: 19000, points: [{ x: 4, y: 4 }] },
+    ],
+  }
+  const payload = buildRecordingAgentPayload(recording)
+  for (const text of ['Check this button.', '#nearest', '#silent', '#other', 'Spacing during silence', 'Second note', '[0:19]']) expect(payload).toContain(text)
+  expect(payload.indexOf('#other')).toBeLessThan(payload.indexOf('#silent'))
+  expect(payload.match(/#nearest/g)).toHaveLength(1)
+})

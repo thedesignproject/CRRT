@@ -132,7 +132,9 @@ describe('extension background', () => {
     expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['record-overlay.js'] })
 
     state.command?.('start-recording')
-    await vi.waitFor(() => expect(browser.scripting.executeScript).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(browser.tabs.update).toHaveBeenCalledWith(7, { active: true }))
+    expect(browser.scripting.executeScript).toHaveBeenCalledOnce()
+    delete state.session['crrt:recording-session']
     browser.tabs.query.mockResolvedValueOnce([{}])
     await expect(send({ type: 'record:open' })).resolves.toEqual({ ok: false, error: 'Open a regular web page to start recording' })
   })
@@ -617,4 +619,59 @@ it.each(['finish', 'cancel', 'error', 'tab-close'])('closes the temporary permis
     state.removed!(7)
   }
   await vi.waitFor(() => expect(browser.windows.remove).toHaveBeenCalledWith(99))
+})
+
+it('reopens an active session without replacing it, stopping capture, or losing its permission window', async () => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+  browser.tabs.get.mockResolvedValue({ id: 7, windowId: 2, url: 'https://example.com' })
+  await send({ type: 'record:open' })
+  const descriptor = state.session['crrt:recording-session'] as any
+  descriptor.snapshot.status = 'recording'
+  descriptor.snapshot.durationMs = 12000
+  descriptor.permissionWindowId = 99
+  const preserved = structuredClone(descriptor)
+  const initialInjections = browser.scripting.executeScript.mock.calls.length
+  await Promise.all([send({ type: 'record:open' }), send({ type: 'record:open' })])
+  expect(browser.scripting.executeScript).toHaveBeenCalledTimes(initialInjections)
+  expect(state.session['crrt:recording-session']).toEqual(preserved)
+  expect(browser.tabs.update).toHaveBeenCalledWith(7, { active: true })
+  expect(browser.windows.update).toHaveBeenCalledWith(2, { focused: true })
+  expect(browser.windows.remove).not.toHaveBeenCalled()
+  expect(browser.runtime.sendMessage).not.toHaveBeenCalled()
+  descriptor.controllerTabId = 9
+  browser.tabs.get.mockResolvedValue({ id: 9, windowId: 3, url: 'chrome-extension://extension-id/record.html' })
+  const injections = browser.scripting.executeScript.mock.calls.length
+  await send({ type: 'record:open' })
+  expect(browser.tabs.update).toHaveBeenLastCalledWith(9, { active: true })
+  expect(browser.scripting.executeScript).toHaveBeenCalledTimes(injections)
+})
+
+it('opens a standalone source picker from the library when no web tab is active', async () => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 9, url: 'chrome-extension://extension-id/recordings.html' }])
+  await expect(send({ type: 'record:open' }, { url: 'chrome-extension://extension-id/recordings.html' })).resolves.toEqual({ ok: true })
+  expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ url: 'chrome-extension://extension-id/record.html' }))
+  await expect(send({ type: 'record:open' }, { url: 'chrome-extension://another-extension/recordings.html' })).resolves.toMatchObject({ ok: false })
+})
+
+it('preserves surface authorization across worker restarts and rejects other tabs and frames', async () => {
+  ;(background as unknown as () => void)()
+  vi.mocked(isAuthMessage).mockReturnValue(false)
+  browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
+  await send({ type: 'record:open' })
+  const descriptor = state.session['crrt:recording-session'] as any
+  const surface = { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }
+  await send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)
+  expect(state.session['crrt:recording-session']).toMatchObject({ surfaceFrameId: 0 })
+  vi.resetModules()
+  const { default: worker } = await import('../entrypoints/background')
+  ;(worker as unknown as () => void)()
+  const command = { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }
+  await expect(send(command, surface)).resolves.toMatchObject({ ok: true })
+  for (const sender of [{ ...surface, tab: { id: 8 } }, { ...surface, frameId: 1 }, { ...surface, frameId: undefined }]) {
+    await expect(send(command, sender)).resolves.toMatchObject({ ok: false })
+  }
 })

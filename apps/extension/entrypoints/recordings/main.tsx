@@ -15,11 +15,19 @@ const demoCards = [
   { id: 'fixture-6', title: 'Dashboard chart colors', author: 'Dani · design', duration: '0:37', marks: '2 boxes · 1 note', tone: 'dark', status: 'Sent to Claude Code' },
 ]
 
-function openRecorder() { void browser.runtime.sendMessage({ type: 'record:open' }) }
-
 export function RecordingsApp() {
   const [recordings, setRecordings] = useState<LocalRecording[]>([])
   const [filter, setFilter] = useState('All')
+  const [error, setError] = useState('')
+  async function openRecorder() {
+    setError('')
+    try {
+      const response = await browser.runtime.sendMessage({ type: 'record:open' })
+      if (!response?.ok) throw new Error(response?.error || 'Could not open the recorder. Try again.')
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Could not open the recorder. Try again.')
+    }
+  }
   useEffect(() => { listLocalRecordings().then(setRecordings).catch(() => {}) }, [])
   const showLocal = filter === 'All' || filter === 'Mine'
   const visibleDemoCards = demoCards.filter((card) => {
@@ -35,7 +43,8 @@ export function RecordingsApp() {
       <div className="aside-bottom"><a>Settings</a><div className="profile"><span>TO</span><p>Tomás<small>Local demo</small></p></div></div>
     </aside>
     <section className="library">
-      <header><div><span className="eyebrow"><Sparkles size={12} /> CRRT Record</span><h1>Recordings</h1><p>Show it once. Your team watches it, your agent reads it.</p></div><button onClick={openRecorder}><Plus size={16} />New recording <kbd>⌥⇧R</kbd></button></header>
+      <header><div><span className="eyebrow"><Sparkles size={12} /> CRRT Record</span><h1>Recordings</h1><p>Show it once. Your team watches it, your agent reads it.</p></div><button onClick={() => { void openRecorder() }}><Plus size={16} />New recording <kbd>⌥⇧R</kbd></button></header>
+      {error && <p role="alert">{error}</p>}
       <div className="filters">{['All', 'Mine', 'From clients', 'Live sessions'].map((value) => <button key={value} className={filter === value ? 'active' : ''} onClick={() => setFilter(value)}>{value}</button>)}</div>
       {showLocal && recordings.length > 0 && <><h2>Your local captures</h2><div className="grid">{recordings.map((recording) => <button className="card" key={recording.id} onClick={() => location.assign(new URL(`/record.html?recording=${recording.id}`, browser.runtime.getURL('/private.html')).toString())}><div className="thumbnail actual">{recording.thumbnailDataUrl ? <img src={recording.thumbnailDataUrl} alt="" /> : <MonitorUp size={30} />}<span className="avatar">TO</span><time>{formatRecordingTime(recording.durationMs)}</time>{recording.marks.length > 0 && <i className="mark" />}</div><div className="card-copy"><strong>{recording.title}</strong><p>{recording.authorName} · just now</p><div><span className={`status ${recording.transcriptionStatus === 'failed' ? 'transcript-failed' : 'ready'}`}>{recording.transcriptionStatus === 'processing' ? 'Transcribing' : recording.transcriptionStatus === 'failed' ? 'Transcript failed' : 'Ready'}</span><small><Pin size={11} />{recording.marks.length} marks</small></div></div></button>)}</div></>}
       <div className="section-heading"><h2>{recordings.length ? 'Demo library' : 'Demo recordings'}</h2><span>Frontend fixtures</span></div>
