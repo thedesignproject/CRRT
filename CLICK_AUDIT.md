@@ -90,3 +90,7 @@ Bulk assignment can opt in to exact committed versions without changing legacy r
 ## Fifteenth layer: one-click Undo of Inbox bulk moves
 
 Bulk moves request exact committed versions and expose Undo in the destination project or the standalone Inbox view. One click restores in batches of 500; retries contain only unprocessed batches. Changed/shared items are reported separately. Account changes and unmount prevent stale UI updates. Desktop/mobile browser verified 21-item move in two clicks and Undo in one. Full suite: 3,018 pass, 209 skipped; types and diff coverage pass.
+
+## Sixteenth layer: direct external export destinations
+
+From a selected comment, Integrations → provider → Create issue took three clicks. Expose Send to GitHub / Linear / Jira directly, followed by the existing draft review/Create issue: two clicks. Keep provider permissions, rejected-feedback guard, duplicate-dispatch fence, existing-link behavior and explicit final creation. Browser verified using simulated HTTP (no actual external tickets), desktop/mobile; 51 targeted tests, TypeScript and diff coverage pass.
