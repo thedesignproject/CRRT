@@ -208,7 +208,7 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByTestId('status-filter')).toHaveTextContent('all')
     fireEvent.click(screen.getByRole('button', { name: 'create project' }))
     await waitFor(() => expect(fixtures.claimProject).toHaveBeenCalledWith('new-project', 'New project'))
-    expect(screen.getByTestId('status-filter')).toHaveTextContent('open')
+    await waitFor(() => expect(screen.getByTestId('status-filter')).toHaveTextContent('open'))
   })
 
   it('accepts a pending invitation and removes its continuation parameters', async () => {
