@@ -127,15 +127,16 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
     if (next) select(next.id)
   }
 
-  function toggleBulkSelect(id: string) {
+  function toggleBulkSelect(id: string, range: string[] = [id]) {
     if (busy) return
+    setBulkMode(true); setSelectedId(''); setEditing(false)
     if (bulkSelection.mode === 'all') {
       const excludedIds = new Set(bulkSelection.excludedIds)
-      if (excludedIds.has(id)) excludedIds.delete(id); else excludedIds.add(id)
+      for (const item of range) bulkSelection.excludedIds.has(id) ? excludedIds.delete(item) : excludedIds.add(item)
       setBoundedSelection({ mode: 'all', excludedIds })
     } else {
       const ids = new Set(bulkSelection.ids)
-      if (ids.has(id)) ids.delete(id); else ids.add(id)
+      for (const item of range) bulkSelection.ids.has(id) ? ids.delete(item) : ids.add(item)
       setBoundedSelection({ mode: 'ids', ids })
     }
   }
@@ -176,11 +177,11 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]') || event.metaKey || event.ctrlKey || event.altKey) return
-      if (busy) return
+      if (busy || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape' && bulkMode) {
         event.preventDefault(); exitBulkMode(); return
       }
+      if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]')) return
       if (!shortcutsEnabled || bulkMode) return
       if (['j', 'ArrowDown', ' ', 'k', 'ArrowUp'].includes(event.key)) {
         event.preventDefault(); navigate(event.key === 'k' || event.key === 'ArrowUp' ? -1 : 1)
