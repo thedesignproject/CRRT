@@ -1505,3 +1505,17 @@ it('offers Inbox Undo in the destination project and returns to Inbox',async()=>
  await screen.findByText('extension page')
  expect(fixtures.restoreInbox).toHaveBeenCalledWith('https://crrt.ai/api','session-token','project-1',[{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])
 })
+
+it('refreshes project feedback after a partial Inbox Undo while retaining the conflict notice',async()=>{
+ fixtures.restoreInbox.mockResolvedValue({processedIds:[],skipped:[{id:'moved-1',reason:'concurrent_change'}]})
+ window.history.replaceState({}, '', '/?view=extension-comments')
+ render(<App />)
+ fireEvent.click(screen.getByRole('button',{name:'continue undoable move'}))
+ const undo=await screen.findByRole('button',{name:'Undo move'})
+ const refreshCalls=fixtures.fn.mock.calls.length
+ fireEvent.click(undo)
+ await screen.findByText('1 items changed or are already in use and were not restored by this request. Review Inbox for the current result.')
+ await waitFor(()=>expect(fixtures.fn.mock.calls.length).toBeGreaterThanOrEqual(refreshCalls+2))
+ expect(screen.queryByText('extension page')).not.toBeInTheDocument()
+ expect(screen.getByRole('button',{name:'Back to Inbox'})).toBeInTheDocument()
+})

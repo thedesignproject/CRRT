@@ -280,7 +280,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
     {error && items.length > 0 && <div role="alert" className="border-b border-border bg-card px-4 py-2 text-xs text-status-rejected">{error}</div>}
     {notice && <div role="status" className="border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">{notice}</div>}
-      {moveUndo && <InboxMoveUndo key={moveUndo.items[0].updatedAt} apiBase={apiBase} accessToken={accessToken} projectId={moveUndo.projectId} items={moveUndo.items} onRestored={()=>{setMoveUndo(null);setNotice('Returned to Inbox.');setReload(value=>value+1)}} />}
+      {moveUndo && <InboxMoveUndo key={moveUndo.items[0].updatedAt} apiBase={apiBase} accessToken={accessToken} projectId={moveUndo.projectId} items={moveUndo.items} onProgress={()=>setReload(value=>value+1)} onRestored={()=>{setMoveUndo(null);setNotice('Returned to Inbox.');setReload(value=>value+1)}} />}
     <main className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
       <CommentList personal filteredComments={comments} counts={{ all: total, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }}
         commentsLoading={loading} commentsError={items.length ? null : error} selectedCommentId={selectedId} setSelectedCommentId={select}
