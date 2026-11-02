@@ -94,3 +94,7 @@ Bulk moves request exact committed versions and expose Undo in the destination p
 ## Sixteenth layer: direct external export destinations
 
 From a selected comment, Integrations → provider → Create issue took three clicks. Expose Send to GitHub / Linear / Jira directly, followed by the existing draft review/Create issue: two clicks. Keep provider permissions, rejected-feedback guard, duplicate-dispatch fence, existing-link behavior and explicit final creation. Browser verified using simulated HTTP (no actual external tickets), desktop/mobile; 51 targeted tests, TypeScript and diff coverage pass.
+
+## Seventeenth layer: preserve audit project context
+
+Run audit carries the current project in a base-aware encoded URL. The launcher selects it only after matching the authenticated project list; absent/unavailable keys retain the existing safe list default. No automatic audit or network mutation. Removes two dropdown clicks when auditing a non-first project. Fourteen targeted tests, TypeScript and 100% diff coverage pass; browser confirms desktop/mobile project selection and no automatic POST.
