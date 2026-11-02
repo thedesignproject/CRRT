@@ -177,11 +177,11 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]') || event.metaKey || event.ctrlKey || event.altKey) return
-      if (busy) return
+      if (busy || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape' && bulkMode) {
         event.preventDefault(); exitBulkMode(); return
       }
+      if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]')) return
       if (!shortcutsEnabled || bulkMode) return
       if (['j', 'ArrowDown', ' ', 'k', 'ArrowUp'].includes(event.key)) {
         event.preventDefault(); navigate(event.key === 'k' || event.key === 'ArrowUp' ? -1 : 1)
