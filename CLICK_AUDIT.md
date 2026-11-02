@@ -68,3 +68,9 @@ Mark done now writes review and implementation together with the current server 
 ## Tenth layer: direct selection and ranges
 
 Project feedback and Inbox expose native checkboxes without entering Select mode first. Shift-click extends selection over the current visible order; ranges respect the 500-item cap and Inbox all/exclusions semantics. Clicking the comment still opens it outside bulk mode. Arbitrary disconnected items require N selections; a contiguous range takes two selections regardless of N. Browser verified at 1440/390 px including completion and Undo. Full suite: 2,971 passed, TypeScript clean, diff line/branch coverage 100%.
+
+## Eleventh layer: server-authenticated Undo receipts
+
+Optional captureUndo returns a signed, one-hour receipt bound to actor, project, comment, exact post-write version, prior statuses and prior agent claim. Restore rechecks current permission and applies the signed snapshot through the existing database CAS. No client-supplied agent ownership is trusted. Missing signing configuration fails before mutation.
+
+Product decision: a reversible dashboard Reject preserves linked issues and says so explicitly. Automatically closing external issues cannot be fully undone safely without each provider's previous state and durable reconciliation; existing API callers retain their legacy close behavior. The new opt-in workflow avoids that side effect rather than claiming an external rollback occurred.
