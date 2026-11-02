@@ -326,8 +326,10 @@ describe('<PremiumAgentBridge />', () => {
   it('keeps the ready view stable when a silent refresh fails', async () => {
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
+    // Flush the ready-state effect before firing the event it subscribes to.
+    await act(async () => {})
     apiMocks.eligibility.mockRejectedValueOnce(new Error('background offline'))
-    window.dispatchEvent(new Event('focus'))
+    await act(async () => { window.dispatchEvent(new Event('focus')) })
     await waitFor(() => expect(apiMocks.eligibility).toHaveBeenCalledTimes(2))
     expect(document.body.textContent).toContain('Fix the headline')
     expect(document.body.textContent).not.toContain('background offline')

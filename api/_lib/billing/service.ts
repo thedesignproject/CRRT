@@ -138,14 +138,13 @@ export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro',
       pending=null
     }
     const payload: Stripe.Checkout.SessionCreateParams = pending ?? {
-      managed_payments: { enabled: false },
+      managed_payments: { enabled: cloud },
       customer: customerId, mode: 'subscription', line_items: [{ price, quantity: 1 }],
       client_reference_id: user.userId, subscription_data: { metadata: { crrt_user_id: user.userId },
         ...(cloud && !account.trial_used ? { trial_period_days: 14 } : {}),
       },
-      ...(cloud ? { payment_method_collection: 'always' as const, automatic_tax: { enabled: true },
-        billing_address_collection: 'required' as const, customer_update: { address: 'auto' as const },
-      } : {}),
+      // Managed Payments owns tax, payment-method collection and address updates.
+      // Keep persisted attempts above unchanged: retries must use their exact request/key.
       success_url: config.returnUrl, cancel_url: config.returnUrl,
       // Fixed on admission, never recomputed by a recovering worker. Thirty-five
       // minutes leaves room for Stripe's minimum thirty-minute creation window.
