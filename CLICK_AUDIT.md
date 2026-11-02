@@ -11,8 +11,8 @@ Count starts on the relevant surface with the task's items visible; navigation t
 | Undo dashboard Mark ready | At least 2N | Undo mark ready = 1 | 4 | 76 | Third layer; other bulk states remain pending |
 | Widget handoff accepts open comments (PremiumAgentBridge.confirmHandoff) | Send to agent mutates selection before prompt copy | Explicit approval copy + reversible action | 5 | TBD | Audit server mutation and undo semantics |
 | Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Code inspected; verify in browser |
-| Dashboard select arbitrary N items | Enter select mode + N clicks + action | Direct selection/keyboard range + action | 5 | TBD | Pending |
-| Inbox bulk action across pages (CommentList / ExtensionCommentsPage) | Select → Select page → Select all matching → action = 4+ | ≤2 | 4 | ≥8 | Pending |
+| Dashboard select arbitrary N items | Enter select mode + N clicks + action | N checkbox clicks + action; contiguous range: first + Shift-last + action | 5 | 5 (arbitrary), 45 (range) | Direct checkboxes and range implemented; arbitrary selection inherently depends on N |
+| Inbox select all + move to a project | Select → Select page → Select all matching → destination → Move = 5+ | Select all → Move to [project] = 2 | 4 | ≥12 | Merged #375/#377; Undo move pending |
 | Bulk Reject (App) | Originally 4; parent layer Select all → Actions → Reject = 3 | Select all → Reject = 2 | 3 | 3 vs parent | Implemented in second layer |
 | Project/filter/navigation/settings/export/audits/integrations | Not yet measured | ≤2 each | TBD | TBD | Inventory pending |
 
@@ -56,3 +56,53 @@ Add an optional expectedUpdatedAt to the internal actor-bound mutation, checked 
 ## Seventh layer: use the atomic fence in Undo
 
 Mark ready snapshots now retain the exact server-returned updatedAt (including sub-millisecond precision). Undo supplies that version through the existing review endpoint; malformed versions return 400, stale versions return 409 and discard the conflicting undo entry with an explicit explanation. Missing server versions never enable unfenced Undo. The database check from #378 closes the cross-tab/reviewer/agent race for approval Undo without adding clicks or changing legacy requests.
+
+## Next stack: atomic completion before Undo
+
+After merging #367–#379, start from trunk including reviewer fixes for pending writes and stale Undo. Mark done and Reopen still issue separate review/implementation requests, allowing half-applied changes. Extend the existing review endpoint with an optional implementationStatus requiring expectedUpdatedAt, and write both fields through one version-fenced mutation. Preserve existing review-only clients and claim clearing for unassigned. This prerequisite does not change clicks; it enables exact one-click Undo of completion in the next layer. Reopening previously claimed work and reversing external ticket closure remain unresolved.
+
+## Ninth layer: Undo Mark done
+
+Mark done now writes review and implementation together with the current server version, avoiding partial completion. Capture exact previous states only for successful changes and expose Undo mark done in the existing notice: Select all → Mark done = 2 clicks; Undo = 1. Restores use the returned server version and preserve agent ownership; stale versions are rejected rather than overwriting later work. Failed completion items remain selected, and failed undo items retain the existing retry behavior. Reopen, Reject, and Inbox move Undo remain pending for their distinct ownership/external-side-effect contracts.
+
+## Tenth layer: direct selection and ranges
+
+Project feedback and Inbox expose native checkboxes without entering Select mode first. Shift-click extends selection over the current visible order; ranges respect the 500-item cap and Inbox all/exclusions semantics. Clicking the comment still opens it outside bulk mode. Arbitrary disconnected items require N selections; a contiguous range takes two selections regardless of N. Browser verified at 1440/390 px including completion and Undo. Full suite: 2,971 passed, TypeScript clean, diff line/branch coverage 100%.
+
+## Eleventh layer: server-authenticated Undo receipts
+
+Optional captureUndo returns a signed, one-hour receipt bound to actor, project, comment, exact post-write version, prior statuses and prior agent claim. Restore rechecks current permission and applies the signed snapshot through the existing database CAS. No client-supplied agent ownership is trusted. Missing signing configuration fails before mutation.
+
+Product decision: a reversible dashboard Reject preserves linked issues and says so explicitly. Automatically closing external issues cannot be fully undone safely without each provider's previous state and durable reconciliation; existing API callers retain their legacy close behavior. The new opt-in workflow avoids that side effect rather than claiming an external rollback occurred.
+
+## Twelfth layer: bulk Reopen and Reject Undo
+
+Reopen now performs one atomic open/unassigned update and offers one-click Undo via the signed receipt, restoring the former agent claim. Bulk Reject explicitly preserves linked issues (visible toolbar text and success notice) and offers the same one-click Undo. Existing stale-project/request tracking, permission errors, partial failure selection and version-conflict handling remain in place. Both actions verified in browser at 1440/390px: Select all → action = 2 clicks; Undo = 1. Full suite 2,998 passed, TypeScript clean, diff coverage 100%. Single-comment legacy rejection remains an audit item; this layer changes bulk actions only.
+
+## Thirteenth layer: Inbox restore database prerequisite
+
+Add a compatible assignment RPC returning committed timestamps, plus an actor/owner/version-fenced inverse. Restore locks comments before checking agent-share and external-work references and refuses to detach feedback already in use. Concurrent Undo has one winner. Five real local Postgres tests pass (including wrong owner, revoked access, changed version and existing share), migration-source parity and Drizzle consistency pass. No shared database modified.
+
+## Fourteenth layer: opt-in Inbox move versions and restore API
+
+Bulk assignment can opt in to exact committed versions without changing legacy response behavior. The restore endpoint validates 1–500 UUID/timestamp pairs, current manage permission and authenticated actor identity. It reports skipped items separately; the RPC rechecks ownership, references and versions atomically. Full suite: 3,011 passed, 209 skipped; targeted tests and diff coverage 100%, TypeScript passed.
+
+## Fifteenth layer: one-click Undo of Inbox bulk moves
+
+Bulk moves request exact committed versions and expose Undo in the destination project or the standalone Inbox view. One click restores in batches of 500; retries contain only unprocessed batches. Changed/shared items are reported separately. Account changes and unmount prevent stale UI updates. Desktop/mobile browser verified 21-item move in two clicks and Undo in one. Full suite: 3,018 pass, 209 skipped; types and diff coverage pass.
+
+## Sixteenth layer: direct external export destinations
+
+From a selected comment, Integrations → provider → Create issue took three clicks. Expose Send to GitHub / Linear / Jira directly, followed by the existing draft review/Create issue: two clicks. Keep provider permissions, rejected-feedback guard, duplicate-dispatch fence, existing-link behavior and explicit final creation. Browser verified using simulated HTTP (no actual external tickets), desktop/mobile; 51 targeted tests, TypeScript and diff coverage pass.
+
+## Seventeenth layer: preserve audit project context
+
+Run audit carries the current project in a base-aware encoded URL. The launcher selects it only after matching the authenticated project list; absent/unavailable keys retain the existing safe list default. No automatic audit or network mutation. Removes two dropdown clicks when auditing a non-first project. Fourteen targeted tests, TypeScript and 100% diff coverage pass; browser confirms desktop/mobile project selection and no automatic POST.
+
+## Eighteenth layer: explicit widget handoff and recoverable prompts
+
+Sending open feedback now says Accept & send to agent and explains exactly how many open items are accepted. Record/display the committed handoff and refresh feedback before fetching prompts. A prompt-load failure therefore cannot hide acceptance; retry fetches prompts for the same session without another mutation. Copying only writes the clipboard (verified by tests). Existing agent claims are not cancelled by copying or retrying. Browser verified failure/retry at 1440/390px with the actual widget and simulated HTTP; targeted tests and diff coverage pass.
+
+## Nineteenth layer: single Inbox move Undo
+
+Individual Add to project now uses the same version-returning move contract as bulk assignment and exposes the same Undo in standalone Inbox or destination project. It retains the current item after a failure and clears selection after a successful move. Thirty-eight targeted tests and changed-line/branch coverage pass.

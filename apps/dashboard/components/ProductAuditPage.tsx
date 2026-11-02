@@ -31,7 +31,8 @@ function ProjectAuditLauncher({ apiBase, accessToken }: Props) {
     let active = true
     void listProjects(apiBase, accessToken).then((items) => {
       if (!active) return
-      setProjects(items); setProjectKey(items[0]?.publicKey ?? ''); setLoading(false)
+      const requested = new URLSearchParams(window.location.search).get('project')
+      setProjects(items); setProjectKey(items.find(item => item.publicKey === requested)?.publicKey ?? items[0]?.publicKey ?? ''); setLoading(false)
     }).catch((cause) => { if (active) { setError(cause instanceof Error ? cause.message : 'Could not load projects'); setLoading(false) } })
     return () => { active = false }
   }, [accessToken, apiBase])

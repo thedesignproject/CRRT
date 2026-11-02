@@ -1,0 +1,67 @@
+# Optional consumer template. Never check out PR code in this privileged workflow.
+name: CRRT patch auto-merge
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review]
+permissions: {}
+jobs:
+  enable:
+    if: >-
+      vars.CRRT_AUTO_UPDATE_PATCHES == 'true' &&
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.event.sender.login == 'dependabot[bot]' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2
+        id: metadata
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        if: >-
+          steps.metadata.outputs.dependency-names == '@thedesignproject/crrt' &&
+          steps.metadata.outputs.update-type == 'version-update:semver-patch'
+        with:
+          script: |
+            const { repository: repo } = await github.graphql(`
+              query($owner: String!, $name: String!, $number: Int!) {
+                repository(owner: $owner, name: $name) {
+                  autoMergeAllowed
+                  squashMergeAllowed
+                  defaultBranchRef {
+                    name
+                    branchProtectionRule {
+                      requiresStatusChecks
+                      requiredStatusCheckContexts
+                    }
+                  }
+                  pullRequest(number: $number) {
+                    id state isDraft headRefOid baseRefName
+                    author { __typename login }
+                    headRepository { nameWithOwner }
+                    autoMergeRequest { enabledAt }
+                  }
+                }
+              }`, { ...context.repo, name: context.repo.repo, number: context.payload.pull_request.number });
+            const pr = repo.pullRequest;
+            const base = repo.defaultBranchRef;
+            const protection = base?.branchProtectionRule;
+            if (!repo.autoMergeAllowed || !repo.squashMergeAllowed ||
+                !protection?.requiresStatusChecks || !protection.requiredStatusCheckContexts?.length ||
+                pr.state !== 'OPEN' || pr.isDraft || pr.autoMergeRequest ||
+                pr.author?.__typename !== 'Bot' || pr.author.login !== 'dependabot' ||
+                pr.headRepository?.nameWithOwner !== `${context.repo.owner}/${context.repo.repo}` ||
+                pr.baseRefName !== base.name || pr.headRefOid !== context.payload.pull_request.head.sha) {
+              core.notice('Keeping manual review: auto-merge prerequisites were not verified.');
+              return;
+            }
+            await github.graphql(`
+              mutation($id: ID!, $head: GitObjectID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $id, expectedHeadOid: $head, mergeMethod: SQUASH
+                }) { pullRequest { number } }
+              }`, { id: pr.id, head: pr.headRefOid });
+            core.notice('Patch auto-merge requested; required checks and reviews still apply.');

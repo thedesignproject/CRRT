@@ -43,6 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       selection,
       projectId,
       feedbackVisibilityForRole(access.role, requestedVisibility),
+      ...(req.body?.captureUndo === true ? [true] as const : []),
     )
     setCors(req, res, METHODS)
     return res.status(200).json(result)

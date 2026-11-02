@@ -4,6 +4,8 @@ import { WidgetAuthPage } from './components/WidgetAuthPage'
 import { useAccessReviewLink } from './hooks/useAccessReviewLink'
 import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { InboxMoveUndo } from './components/InboxMoveUndo'
+import type { InboxUndoItem } from './api'
 import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
@@ -223,7 +225,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
-  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string }>>([])
+  const [inboxUndo,setInboxUndo]=useState<{actor:string;projectId:string;items:InboxUndoItem[]}|null>(null)
+  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string; undoImplementation?: ImplStatus; undoToken?: string; undoAction?: 'reopen' | 'reject' }>>([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
@@ -361,6 +364,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     clearReadyUndo()
     const current = comments.find((c) => c.id === id)
     if (!current) return
+    const scope = feedbackWrites.current
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
     setComments((prev) => prev.map((c) => c.id === id
       ? {
@@ -371,25 +375,56 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         }
       : c))
     try {
-      await trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+      const operation = trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+      const version = scope.version
+      const updated = await operation
+      if (feedbackWrites.current === scope && scope.version === version) {
+        setComments((prev) => prev.map((c) => c.id === id ? {
+          ...c,
+          reviewStatus: updated.reviewStatus,
+          implementationStatus: updated.implementationStatus,
+          claimedByAgentId: updated.claimedByAgentId,
+          visibility: updated.visibility,
+          updatedAt: updated.updatedAt,
+        } : c))
+      } else {
+        await reconcileFeedback(scope)
+      }
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+  }, [accessToken, comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite, reconcileFeedback])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
   }, [handleReviewStatus])
 
   const handleVisibilityChange = useCallback(async (id: string, visibility: 'shared' | 'internal') => {
+    const scope = feedbackWrites.current
     const previous = comments.find((comment) => comment.id === id)?.visibility
     setComments((current) => current.map((comment) => comment.id === id
       ? { ...comment, visibility }
       : comment))
     try {
-      await trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+      const operation = trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+      const version = scope.version
+      const updated = await operation
+      if (feedbackWrites.current === scope && scope.version === version) {
+        setComments((current) => current.map((comment) => comment.id === id
+          ? {
+              ...comment,
+              reviewStatus: updated.reviewStatus,
+              implementationStatus: updated.implementationStatus,
+              claimedByAgentId: updated.claimedByAgentId,
+              visibility: updated.visibility,
+              updatedAt: updated.updatedAt,
+            }
+          : comment))
+      } else {
+        await reconcileFeedback(scope)
+      }
     } catch (error) {
       if (previous) {
         setComments((current) => current.map((comment) => comment.id === id
@@ -399,21 +434,19 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       console.error('Failed to update feedback audience:', error)
       mutation.report(error)
     }
-  }, [accessToken, comments, mutation.report, trackFeedbackWrite])
+  }, [accessToken, comments, mutation.report, trackFeedbackWrite, reconcileFeedback])
 
-  const toggleBulkSelect = useCallback((id: string) => {
+  const toggleBulkSelect = useCallback((id: string, range: string[] = [id]) => {
     if (bulkActionBusy) return
-    if (!bulkSelectedIds.has(id) && bulkSelectedIds.size >= 500) {
+    const next = new Set(bulkSelectedIds)
+    for (const item of range) bulkSelectedIds.has(id) ? next.delete(item) : next.add(item)
+    if (next.size > 500) {
       setBulkActionError('Select up to 500 comments at a time.')
       return
     }
+    setBulkMode(true)
     setBulkActionError('')
-    setBulkSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
+    setBulkSelectedIds(next)
   }, [bulkActionBusy, bulkSelectedIds])
 
   const exitBulkMode = useCallback(() => {
@@ -428,7 +461,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
     const ids = Array.from(bulkSelectedIds)
-    const previous = comments.filter(c => bulkSelectedIds.has(c.id) && c.reviewStatus !== 'accepted')
+    const previous = comments.filter(c => bulkSelectedIds.has(c.id) && (action === 'reopen' || action === 'reject' || c.reviewStatus !== 'accepted' || (action === 'done' && c.implementationStatus !== 'done')))
     clearReadyUndo()
     const generation = bulkGeneration.current
     setBulkActionBusy(true)
@@ -450,14 +483,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }))
     const calls = ids.map(async (id) => {
       if (action === 'ready') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted'))
-      if (action === 'reject') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'rejected'))
-      const updates = await Promise.allSettled([
-        trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, action === 'reopen' ? 'open' : 'accepted')),
-        trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, action === 'reopen' ? 'unassigned' : 'done')),
-      ])
-      // A failed PATCH must not release the busy guard while its sibling still writes.
-      const failure = updates.find((update) => update.status === 'rejected')
-      if (failure) throw failure.reason
+      if (action === 'done') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted', comments.find(c => c.id === id)?.updatedAt, 'done'))
+      return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id,
+        action === 'reject' ? 'rejected' : 'open', comments.find(c => c.id === id)?.updatedAt,
+        action === 'reopen' ? 'unassigned' : undefined, { captureUndo: true, preserveExternalWork: true }))
+
     })
 
     const results = await Promise.allSettled(calls)
@@ -474,9 +504,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
     }
     if (stillCurrent && generation === bulkGeneration.current) {
-      if (action === 'ready') setReadyUndo(previous.flatMap(c => {
+      setReadyUndo(previous.flatMap<typeof readyUndo[number]>(c => {
         const result = results[ids.indexOf(c.id)]
-        return result.status === 'fulfilled' && result.value && result.value.updatedAt ? [{ ...c, undoVersion: result.value.updatedAt }] : []
+        if (result.status !== 'fulfilled' || !result.value?.updatedAt) return []
+        if (action === 'reject' || action === 'reopen') return result.value.undoToken ? [{ ...c, undoVersion: result.value.updatedAt, undoToken: result.value.undoToken, undoAction: action }] : []
+        return [{ ...c, undoVersion: result.value.updatedAt, ...(action === 'done' ? { undoImplementation: c.implementationStatus } : {}) }]
       }))
       if (failedIds.length > 0) {
         setBulkMode(true)
@@ -498,9 +530,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionError('')
     const results = await Promise.allSettled(readyUndo.map(async (before) => {
       const current = comments.find(c => c.id === before.id)
-      if (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== before.implementationStatus || current.claimedByAgentId !== before.claimedByAgentId) throw new Error('Feedback changed. Refresh and review it before undoing.')
-      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion))
-      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus } : c))
+      if (!before.undoToken && (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== (before.undoImplementation === undefined ? before.implementationStatus : 'done') || current.claimedByAgentId !== before.claimedByAgentId)) throw new Error('Feedback changed. Refresh and review it before undoing.')
+      await trackFeedbackWrite(before.undoToken
+        ? apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, undefined, undefined, { undoToken: before.undoToken })
+        : apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion, before.undoImplementation))
+      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus, implementationStatus: before.undoToken ? before.implementationStatus : before.undoImplementation ?? c.implementationStatus, claimedByAgentId: before.undoToken ? before.claimedByAgentId : c.claimedByAgentId } : c))
     }))
     if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) {
       if (readyUndoRequest.current === request) clearReadyUndo()
@@ -512,12 +546,14 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (result.status === 'rejected') mutation.report(result.reason)
     }
     const conflicts = new Set(results.flatMap((result, i) => result.status === 'rejected' && result.reason?.status === 409 ? [i] : []))
-    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i))
+    const unavailable = new Set(results.flatMap((result, i) => result.status === 'rejected' && readyUndo[i].undoToken && result.reason?.status === 400 ? [i] : []))
+    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i) && !unavailable.has(i))
     setReadyUndo(remaining)
     setBulkActionBusy(false)
-    if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
+    if (unavailable.size) setBulkActionError('Undo expired or is no longer valid for some items. Refresh to review them.')
+    else if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
     else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
-    else setBulkTransitionNotice('Previous review statuses restored.')
+    else setBulkTransitionNotice('Previous statuses restored.')
     await refreshComments()
   }
 
@@ -721,16 +757,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
-  const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number) => {
+  const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => {
     setSelectedProject(projectKey)
     setView('feedback')
     setStatusFilter('open')
     setSelectedCommentId('')
+    setInboxUndo(undoItems?.length ? {actor:user.id,projectId:projectKey,items:undoItems} : null)
     setPendingBulkSelection({ projectKey, commentIds })
     setBulkSelectedIds(new Set(commentIds))
     setBulkMode(true)
     setBulkTransitionNotice(`${commentIds.length} Inbox item${commentIds.length === 1 ? '' : 's'} moved${skippedCount ? `; ${skippedCount} skipped` : ''}.`)
-  }, [])
+  }, [user.id])
 
   const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
@@ -861,9 +898,10 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       <>
         <div className="flex shrink-0 flex-col gap-2">
         {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
+        {inboxUndo && inboxUndo.actor === user.id && inboxUndo.projectId === selectedProject && canManageFeedback && <InboxMoveUndo key={`${user.id}:${inboxUndo.items[0].updatedAt}`} apiBase={API_BASE} accessToken={accessToken} projectId={inboxUndo.projectId} items={inboxUndo.items} onProgress={()=>{void reconcileFeedback(feedbackWrites.current);void refreshProjects()}} onRestored={()=>{setInboxUndo(null);openExtensionComments()}} />}
         {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
-          <span>{readyUndo.length} marked ready.</span>
-          <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo mark ready</button>
+          <span>{readyUndo.length} {readyUndo[0].undoAction === 'reject' ? 'rejected. Linked issues unchanged' : readyUndo[0].undoAction === 'reopen' ? 'reopened' : `marked ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}.</span>
+          <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo {readyUndo[0].undoAction ?? `mark ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}</button>
         </div>}
         </div>
       <div className="dashboard-feedback">
@@ -946,7 +984,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
             </button>
             <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
             <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reopen') }}>Reopen</button>
-            <button type="button" className="dashboard-bulk-secondary dashboard-bulk-danger" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reject') }}>Reject</button>
+            <button type="button" className="dashboard-bulk-secondary dashboard-bulk-danger" disabled={bulkActionBusy} title="Reject feedback only; linked issues stay unchanged" onClick={() => { void applyBulkAction('reject') }}>Reject</button>
+            <span className="text-xs text-muted-foreground">Reject keeps linked issues unchanged.</span>
           </BulkActionBar>
         )}
       </div>

@@ -31,7 +31,7 @@ const comments = [
 ]
 
 function button(label: string) {
-  const found = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.textContent?.includes(label))
+  const found = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.textContent?.includes(label) || (label === 'Send to agent' && item.textContent?.includes('Accept & send to agent')))
   if (!found) throw new Error(`Button not found: ${label}`)
   return found
 }
@@ -192,8 +192,8 @@ describe('<PremiumAgentBridge />', () => {
   })
 
   it.each([
-    [new Response('', { status: 500 }), 'Could not load the Agent prompt.'],
-    [new Response(JSON.stringify({ prompt: 42 }), { status: 200 }), 'Could not load the Agent prompt.'],
+    [new Response('', { status: 500 }), 'Feedback is accepted and the handoff exists. Prompts could not load; retry below.'],
+    [new Response(JSON.stringify({ prompt: 42 }), { status: 200 }), 'Feedback is accepted and the handoff exists. Prompts could not load; retry below.'],
   ])('reports invalid prompt responses %#', async (response, message) => {
     vi.mocked(fetch).mockResolvedValue(response)
     renderBridge()
@@ -388,7 +388,7 @@ it.each(['resolve', 'reject'] as const)('discards %s of delayed prompts after na
   })
   expect(document.body.textContent).not.toContain('Handoff ready')
   expect(document.body.textContent).not.toContain('Log in to continue')
-  expect(view.props.onFeedbackChanged).not.toHaveBeenCalled()
+  expect(view.props.onFeedbackChanged).toHaveBeenCalledOnce()
 })
 
 it.each(['resolve', 'reject'] as const)('discards a delayed mutation %s after navigation', async (outcome) => {
@@ -473,4 +473,25 @@ it('keeps a completed handoff visible after an upgrade, focus, and polling inter
   expect(button('Codex').disabled).toBe(false)
   await act(async () => { fireEvent.click(button('Codex')) })
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT codex')
+})
+
+it('discloses acceptance before handoff and retries prompt loading without another mutation',async()=>{
+ vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'))
+ const view=renderBridge()
+ await waitFor(()=>expect(document.body.textContent).toContain('Sending accepts 1 open feedback item.'))
+ expect(button('Accept & send to agent')).toBeEnabled()
+ await act(async()=>{fireEvent.click(button('Accept & send to agent'))})
+ expect(document.body.textContent).toContain('Feedback is accepted and the handoff exists.')
+ expect(view.props.onFeedbackChanged).toHaveBeenCalledOnce()
+ await act(async()=>{fireEvent.click(button('Retry loading prompts'))})
+ expect(apiMocks.createSession).toHaveBeenCalledOnce()
+ expect(apiMocks.mutate).not.toHaveBeenCalled()
+ await act(async()=>{fireEvent.click(button('Claude Code'))})
+ expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT claude-code')
+ expect(apiMocks.mutate).not.toHaveBeenCalled()
+})
+it('discloses the count when accepting multiple open items',async()=>{
+ apiMocks.eligibility.mockResolvedValue({state:'ready',comments:comments.slice(0,2).map(c=>({...c,reviewStatus:'open',implementationStatus:'unassigned'}))})
+ renderBridge()
+ await waitFor(()=>expect(document.body.textContent).toContain('Sending accepts 2 open feedback items.'))
 })

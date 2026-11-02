@@ -1,0 +1,10 @@
+# Consumer repository template; merge with existing configuration, never overwrite it.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: / # Adapt to the supported manifest/lockfile root.
+    schedule:
+      interval: daily # Weekdays; not immediate after publication.
+    allow:
+      - dependency-name: '@thedesignproject/crrt'
+    open-pull-requests-limit: 1

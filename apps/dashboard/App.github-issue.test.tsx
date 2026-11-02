@@ -15,6 +15,7 @@ const fixtures = vi.hoisted(() => ({
   commentsProjectId: 'project-1' as string | null,
   claimProject: vi.fn(),
   acceptInvite: vi.fn(),
+  restoreInbox: vi.fn(),
   updateImpl: vi.fn(),
   updateReview: vi.fn(),
   createShare: vi.fn(),
@@ -33,6 +34,7 @@ const fixtures = vi.hoisted(() => ({
 }))
 
 vi.mock('./api', () => ({
+  restoreInboxComments: fixtures.restoreInbox,
   acceptInvite: fixtures.acceptInvite,
   updateImplementationStatus: fixtures.updateImpl,
   updateReviewStatus: fixtures.updateReview,
@@ -104,9 +106,10 @@ vi.mock('./components/CommentDetail', () => ({
 }))
 vi.mock('./components/Header', () => ({ Header: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
 vi.mock('./components/CommentList', () => ({
-  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
+  CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null; updatedAt: string }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
     <span data-testid="first-claim">{props.filteredComments[0]?.claimedByAgentId ?? 'none'}</span>
+    <span data-testid="first-version">{props.filteredComments[0]?.updatedAt}</span>
     <span data-testid="bulk-state">{props.bulkMode ? `bulk:${[...props.bulkSelectedIds].join(',')}` : 'bulk:off'}</span>
     <button onClick={() => props.selectFilter('all')}>show all</button>
     <button onClick={props.enterBulkMode}>enter bulk</button>
@@ -123,7 +126,7 @@ vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenEx
 vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null }))
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
-vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
+vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number, undo?: Array<{id:string;updatedAt:string}>) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 0, [{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])}>continue undoable move</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
 vi.mock('./components/RecordingsPage', () => ({ RecordingsPage: () => <div>recordings page</div> }))
 vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onAction: (action: string) => void; canOperateAgent: boolean }) => <div>
   command palette
@@ -136,12 +139,24 @@ vi.mock('./components/CommandPalette', () => ({ CommandPalette: (props: { onActi
 
 import { App } from './App'
 
+function mutationResponse(id: string, patch: Record<string, unknown> = {}) {
+  return {
+    ...readyFeedback(id),
+    ...fixtures.comments.find(comment => comment.id === id),
+    updatedAt: '2026-10-29T12:00:00.000Z',
+    ...patch,
+  }
+}
+
 beforeEach(() => {
   window.history.replaceState({}, '', '/')
   fixtures.signedIn = true
   fixtures.acceptInvite.mockReset().mockResolvedValue(undefined)
   fixtures.claimProject.mockReset().mockResolvedValue({ publicKey: 'new-project' })
-  fixtures.updateImpl.mockReset().mockResolvedValue(undefined)
+  fixtures.updateImpl.mockReset().mockImplementation(async (_base, _token, id, implementationStatus) => mutationResponse(id, {
+    implementationStatus,
+    ...(implementationStatus === 'unassigned' ? {claimedByAgentId: null} : {}),
+  }))
   fixtures.updateReview.mockReset().mockResolvedValue({ updatedAt: '2026-10-29T12:00:00.000Z' })
   fixtures.createShare.mockReset().mockResolvedValue({ shareId: 'share-1', commentCount: 1 })
   fixtures.getPrompt.mockReset().mockResolvedValue({ prompt: 'Fix selected feedback' })
@@ -151,7 +166,7 @@ beforeEach(() => {
   fixtures.agentShareState = null
   fixtures.agentProject.mockReset()
   fixtures.agentComments.mockReset()
-  fixtures.updateVisibility.mockReset().mockResolvedValue(undefined)
+  fixtures.updateVisibility.mockReset().mockImplementation(async (_base, _token, id, visibility) => mutationResponse(id, {visibility}))
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
   fixtures.commentsProjectId = 'project-1'
   fixtures.comments.splice(0)
@@ -162,6 +177,17 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   window.history.replaceState({}, '', '/')
+})
+
+it('deselects a directly selected feedback item without opening it', async () => {
+  fixtures.comments = [{id:'comment-1',projectId:'project-1',body:'Feedback',reviewStatus:'open',implementationStatus:'unassigned',claimedByAgentId:null,createdAt:'',updatedAt:''}]
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', {name:'toggle test comment'}))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+  fireEvent.click(screen.getByRole('button', {name:'toggle test comment'}))
+  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:')
+  expect(screen.getByTestId('bulk-state')).not.toHaveTextContent('comment-1')
+  expect(fixtures.updateReview).not.toHaveBeenCalled()
 })
 
 describe('<App /> GitHub issue wiring', () => {
@@ -352,7 +378,7 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected', '2026-01-01', undefined, {captureUndo:true,preserveExternalWork:true},
     ))
     await waitFor(() => expect(fixtures.fn).toHaveBeenCalled())
   })
@@ -443,8 +469,8 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'enter bulk' }))
     fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
     fireEvent.click(screen.getByRole('button', { name: 'Mark done' }))
-    await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'done',
+    await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledWith(
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'accepted', '2026-01-01', 'done',
     ))
     await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
 
@@ -452,7 +478,7 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'toggle test comment' }))
     fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
     await waitFor(() => expect(fixtures.updateReview).toHaveBeenLastCalledWith(
-      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected',
+      'https://crrt.ai/api', 'session-token', 'comment-1', 'rejected', expect.any(String), undefined, {captureUndo:true,preserveExternalWork:true},
     ))
   })
 
@@ -1084,10 +1110,10 @@ it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together
  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1,comment-2')
  fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
- await waitFor(() => expect(fixtures.updateImpl).toHaveBeenCalledTimes(2))
+ await waitFor(() => expect(fixtures.updateReview).toHaveBeenCalledTimes(2))
  for (const id of ['comment-1', 'comment-2']) {
-  expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open')
-  expect(fixtures.updateImpl).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'unassigned')
+  expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'open', '', 'unassigned', {captureUndo:true,preserveExternalWork:true})
+  expect(fixtures.updateImpl).not.toHaveBeenCalled()
  }
  expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
  expect(screen.getByTestId('first-claim')).toHaveTextContent('none')
@@ -1096,7 +1122,7 @@ it.each(['done', 'accepted', 'rejected'])('reopens selected %s feedback together
 
 it('keeps failed reopen items selected for retry and reports partial failure', async () => {
  fixtures.comments.push(...['comment-1', 'comment-2'].map(id => ({ id, projectId: 'project-1', body: 'Feedback', reviewStatus: 'open', implementationStatus: 'unassigned', createdAt: '', updatedAt: '' })))
- fixtures.updateImpl.mockRejectedValueOnce(new Error('offline'))
+ fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
  render(<App />)
  fireEvent.click(await screen.findByRole('button', { name: 'select visible test comments' }))
  fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
@@ -1104,31 +1130,19 @@ it('keeps failed reopen items selected for retry and reports partial failure', a
  expect(screen.getByText('1 item could not be updated and remain selected.')).toBeInTheDocument()
 })
 
-it.each(['Reopen', 'Mark done'])('waits for both %s updates before handling either failure', async (action) => {
- for (const failedUpdate of [fixtures.updateReview, fixtures.updateImpl]) {
-  const pendingUpdate = failedUpdate === fixtures.updateReview ? fixtures.updateImpl : fixtures.updateReview
-  let finishPending!: () => void
-  failedUpdate.mockRejectedValueOnce(new Error('offline'))
-  pendingUpdate.mockImplementationOnce(() => new Promise<void>(resolve => { finishPending = resolve }))
-  fixtures.comments.push({ id: 'comment-1', projectId: 'project-1', body: 'Feedback', reviewStatus: 'accepted', implementationStatus: 'done', claimedByAgentId: 'agent', createdAt: '', updatedAt: '' })
-  const view = render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
-  fireEvent.click(screen.getByRole('button', { name: 'select visible test comments' }))
-  const refreshCalls = fixtures.fn.mock.calls.length
-  fireEvent.click(screen.getByRole('button', { name: action }))
-  await act(async () => { await Promise.resolve() })
-  expect(screen.getByRole('button', { name: action })).toBeDisabled()
-  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
-  expect(screen.queryByText('1 item could not be updated and remain selected.')).toBeNull()
-
-  await act(async () => { finishPending() })
-  await screen.findByText('1 item could not be updated and remain selected.')
-  expect(screen.getByRole('button', { name: action })).toBeEnabled()
-  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
-  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
-  view.unmount()
-  fixtures.comments.splice(0)
- }
+it('keeps Reopen busy until its atomic request settles', async () => {
+ let fail!: (error:Error)=>void
+ fixtures.updateReview.mockImplementationOnce(()=>new Promise((_,reject)=>{fail=reject}))
+ fixtures.comments=[{...readyFeedback('comment-1'),implementationStatus:'done'}]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button',{name:'Reopen'}))
+ expect(screen.getByRole('button',{name:'Reopen'})).toBeDisabled()
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+ await act(async()=>fail(new Error('offline')))
+ await screen.findByText('1 item could not be updated and remain selected.')
+ expect(screen.getByRole('button',{name:'Reopen'})).toBeEnabled()
 })
 
 it('rejects the visible list in two clicks without changing implementation status', async () => {
@@ -1138,7 +1152,7 @@ it('rejects the visible list in two clicks without changing implementation statu
  fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
  await waitFor(() => expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off'))
  expect(fixtures.updateReview).toHaveBeenCalledTimes(2)
- for (const id of ['comment-1', 'comment-2']) expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'rejected')
+ for (const id of ['comment-1', 'comment-2']) expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', id, 'rejected', '', undefined, {captureUndo:true,preserveExternalWork:true})
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
 })
 
@@ -1153,9 +1167,9 @@ it('undoes bulk approval in one click and retries only failed restores', async (
  await screen.findByText('Some items could not be restored. Undo retries only those items.')
  expect(fixtures.updateReview).toHaveBeenCalledTimes(4)
  fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
- await screen.findByText('Previous review statuses restored.')
+ await screen.findByText('Previous statuses restored.')
  expect(fixtures.updateReview).toHaveBeenCalledTimes(5)
- expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'open', '2026-10-29T12:00:00.000Z')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'open', '2026-10-29T12:00:00.000Z', undefined)
  expect(fixtures.updateImpl).not.toHaveBeenCalled()
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
 })
@@ -1168,9 +1182,9 @@ it('does not offer undo for failed approvals and clears it when changing project
  fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
  await screen.findByText('1 marked ready.')
  fireEvent.click(screen.getByRole('button', { name: 'Undo mark ready' }))
- await screen.findByText('Previous review statuses restored.')
+ await screen.findByText('Previous statuses restored.')
  expect(fixtures.updateReview).toHaveBeenCalledTimes(3)
- expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-2', 'open', '2026-10-29T12:00:00.000Z')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-2', 'open', '2026-10-29T12:00:00.000Z', undefined)
  fireEvent.click(screen.getByRole('button', { name: 'Mark ready' }))
  await screen.findByRole('button', { name: 'Undo mark ready' })
  fireEvent.click(screen.getByRole('button', { name: 'other project' }))
@@ -1202,7 +1216,7 @@ it('ignores a late undo response after changing project', async () => {
  expect(screen.getByRole('button', { name: 'Undo mark ready' })).toBeDisabled()
  fireEvent.click(screen.getByRole('button', { name: 'other project' }))
  await act(async () => finish())
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
 })
 
@@ -1225,7 +1239,7 @@ it.each(['success', 'failure'])('ignores a late Undo %s after a newer local stat
  const refreshCalls = fixtures.fn.mock.calls.length
  await act(async () => finish())
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
  expect(screen.queryByText('Some items could not be restored. Undo retries only those items.')).toBeNull()
  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
 })
@@ -1279,7 +1293,7 @@ it.each(['stay', 'navigate'])('waits for a newer write before reconciling invali
  let finishUndo!: () => void
  let finishWrite!: () => void
  fixtures.updateReview.mockImplementationOnce(() => new Promise<void>(resolve => { finishUndo = resolve }))
- fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fixtures.updateImpl.mockImplementationOnce(() => new Promise(resolve => { finishWrite = () => resolve(mutationResponse('comment-1', {implementationStatus: 'done', updatedAt: '2026-10-30T12:00:00.123456Z'})) }))
  fireEvent.click(undo)
  fireEvent.click(screen.getByRole('button', { name: 'select test comment' }))
  fireEvent.keyDown(window, { key: 'm' })
@@ -1290,7 +1304,7 @@ it.each(['stay', 'navigate'])('waits for a newer write before reconciling invali
  await act(async () => finishWrite())
  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + (navigation === 'stay' ? 1 : 0))
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
 })
 
 it.each(['stay', 'navigate'])('guards reconciliation data when another write starts during the fetch (%s)', async (navigation) => {
@@ -1315,7 +1329,7 @@ it.each(['stay', 'navigate'])('guards reconciliation data when another write sta
  await act(async () => finishUndo())
  expect(canApply()).toBe(true)
  let finishWrite!: () => void
- fixtures.updateImpl.mockImplementationOnce(() => new Promise<void>(resolve => { finishWrite = resolve }))
+ fixtures.updateImpl.mockImplementationOnce(() => new Promise(resolve => { finishWrite = () => resolve(mutationResponse('comment-1', {implementationStatus: 'done', updatedAt: '2026-10-30T12:00:00.123456Z'})) }))
  fireEvent.keyDown(window, { key: 'm' })
  expect(canApply()).toBe(false)
  if (navigation === 'navigate') fireEvent.click(screen.getByRole('button', { name: 'other project' }))
@@ -1340,6 +1354,214 @@ it('discards the in-flight Undo snapshot and reconciles after Escape cancels bul
  await act(async () => finishUndo())
  expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls + 1)
  expect(screen.queryByRole('button', { name: 'Undo mark ready' })).toBeNull()
- expect(screen.queryByText('Previous review statuses restored.')).toBeNull()
+ expect(screen.queryByText('Previous statuses restored.')).toBeNull()
  expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
+})
+
+
+it.each(['unassigned', 'claimed', 'in_progress', 'blocked', 'ready_for_testing'])('undoes completion back to %s without changing the agent claim', async (implementationStatus) => {
+ fixtures.comments = [{...readyFeedback('comment-1'), implementationStatus, claimedByAgentId:implementationStatus==='unassigned'?null:'agent-1', updatedAt:'2026-10-30T10:00:00Z'}]
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name:'show all'}))
+ fireEvent.click(screen.getByRole('button', {name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name:'Mark done'}))
+ await screen.findByRole('button', {name:'Undo mark done'})
+ expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api','session-token','comment-1','accepted','2026-10-30T10:00:00Z','done')
+ fireEvent.click(screen.getByRole('button', {name:'Undo mark done'}))
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-1','accepted','2026-10-29T12:00:00.000Z',implementationStatus)
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+ expect(screen.getByTestId('first-claim')).toHaveTextContent(implementationStatus==='unassigned'?'none':'agent-1')
+})
+it('retains only failed completion items and offers Undo for the successful ones', async () => {
+ fixtures.comments = ['comment-1','comment-2'].map(id=>({...readyFeedback(id),reviewStatus:'open',updatedAt:'2026-10-30T10:00:00Z'}))
+ fixtures.updateReview.mockRejectedValueOnce(new Error('offline'))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name:'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name:'Mark done'}))
+ await screen.findByText('1 item could not be updated and remain selected.')
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:comment-1')
+ fireEvent.click(screen.getByRole('button', {name:'Undo mark done'}))
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-2','open','2026-10-29T12:00:00.000Z','unassigned')
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it.each(['Reopen','Reject'])('restores previous states and ownership through signed Undo for %s',async action=>{
+ fixtures.comments=[{...readyFeedback('comment-1'),implementationStatus:'in_progress',claimedByAgentId:'agent'}]
+ fixtures.updateReview.mockResolvedValueOnce({updatedAt:'2026-10-30T12:01:00Z',undoToken:'signed-receipt'})
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button',{name:'show all'}))
+ fireEvent.click(screen.getByRole('button',{name:'select visible test comments'}))
+ expect(screen.getByText('Reject keeps linked issues unchanged.')).toBeVisible()
+ fireEvent.click(screen.getByRole('button',{name:action}))
+ const undo=await screen.findByRole('button',{name:`Undo ${action.toLowerCase()}`})
+ fireEvent.click(undo)
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api','session-token','comment-1','accepted',undefined,undefined,{undoToken:'signed-receipt'})
+ expect(screen.getByTestId('first-claim')).toHaveTextContent('agent')
+ expect(fixtures.updateImpl).not.toHaveBeenCalled()
+})
+
+it.each(['Reopen', 'Reject'])('discards an expired signed Undo for %s instead of offering retries', async action => {
+ fixtures.comments = [readyFeedback('comment-1')]
+ fixtures.updateReview.mockResolvedValueOnce({updatedAt: '2026-10-30T12:01:00Z', undoToken: 'expired-receipt'})
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
+ fireEvent.click(await screen.findByRole('button', {name: 'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name: action}))
+ const undo = await screen.findByRole('button', {name: `Undo ${action.toLowerCase()}`})
+ fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('Invalid or expired Undo'), {status: 400}))
+ fireEvent.click(undo)
+ await screen.findByText('Undo expired or is no longer valid for some items. Refresh to review them.')
+ expect(screen.queryByRole('button', {name: `Undo ${action.toLowerCase()}`})).toBeNull()
+ expect(screen.queryByText('Some items could not be restored. Undo retries only those items.')).toBeNull()
+})
+
+it('keeps only retryable signed Undo failures after expiry and version conflicts', async () => {
+ fixtures.comments = ['comment-1', 'comment-2', 'comment-3'].map(id => readyFeedback(id))
+ fixtures.updateReview.mockImplementation(async (_base, _token, id) => ({updatedAt: '2026-10-30T12:01:00Z', undoToken: `receipt-${id}`}))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
+ fireEvent.click(await screen.findByRole('button', {name: 'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name: 'Reject'}))
+ const undo = await screen.findByRole('button', {name: 'Undo reject'})
+ fixtures.updateReview.mockRejectedValueOnce(Object.assign(new Error('Invalid or expired Undo'), {status: 400}))
+  .mockRejectedValueOnce(Object.assign(new Error('Feedback changed'), {status: 409}))
+  .mockRejectedValueOnce(new Error('offline'))
+ fireEvent.click(undo)
+ await screen.findByText('Undo expired or is no longer valid for some items. Refresh to review them.')
+ const calls = fixtures.updateReview.mock.calls.length
+ fireEvent.click(screen.getByRole('button', {name: 'Undo reject'}))
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenCalledTimes(calls + 1)
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-3', 'accepted', undefined, undefined, {undoToken: 'receipt-comment-3'})
+})
+
+it.each(['audience', 'completion'] as const)('uses the exact server version for bulk completion after a successful %s change', async (change) => {
+ const version = '2026-10-30T12:34:56.123456Z'
+ fixtures.comments = [
+  {...readyFeedback('comment-1'), implementationStatus: change === 'completion' ? 'done' : 'unassigned'},
+  readyFeedback('comment-2'),
+ ]
+ const update = change === 'audience' ? fixtures.updateVisibility : fixtures.updateImpl
+ update.mockResolvedValueOnce(mutationResponse('comment-1', {
+  implementationStatus: 'unassigned', visibility: change === 'audience' ? 'internal' : 'shared', updatedAt: version,
+ }))
+ fixtures.updateReview.mockImplementation(async (_base, _token, id, _review, expectedUpdatedAt) => {
+  if (id === 'comment-1' && expectedUpdatedAt !== version) throw Object.assign(new Error('stale version'), {status: 409})
+  return {updatedAt: '2026-10-30T12:35:00.654321Z'}
+ })
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
+ fireEvent.click(screen.getByRole('button', {name: 'select test comment'}))
+ await act(async () => {
+  if (change === 'audience') fireEvent.click(screen.getByRole('button', {name: 'change audience'}))
+  else fireEvent.keyDown(window, {key: 'm'})
+ })
+ fireEvent.click(screen.getByRole('button', {name: 'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name: 'Mark done'}))
+ await screen.findByRole('button', {name: 'Undo mark done'})
+ expect(fixtures.updateReview).toHaveBeenCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'accepted', version, 'done')
+ expect(screen.getByTestId('bulk-state')).toHaveTextContent('bulk:off')
+ expect(screen.queryByText(/could not be updated/)).toBeNull()
+})
+
+it.each([
+ {change: 'audience', implementationStatus: 'blocked', claimedByAgentId: 'original-agent'},
+ {change: 'audience', implementationStatus: 'blocked', claimedByAgentId: 'new-agent'},
+ {change: 'completion', implementationStatus: 'unassigned', claimedByAgentId: null},
+] as const)('restores the authoritative state after $change and completion, preserving $claimedByAgentId', async ({change, implementationStatus, claimedByAgentId}) => {
+ const version = '2026-10-30T12:34:56.123456Z'
+ fixtures.comments = [{
+  ...readyFeedback('comment-1'),
+  implementationStatus: change === 'audience' ? 'in_progress' : 'done',
+  claimedByAgentId: 'original-agent',
+ }]
+ const update = change === 'audience' ? fixtures.updateVisibility : fixtures.updateImpl
+ update.mockResolvedValueOnce({
+  ...readyFeedback('comment-1'), reviewStatus: 'open', implementationStatus, claimedByAgentId,
+  visibility: 'internal', updatedAt: version,
+ })
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
+ fireEvent.click(screen.getByRole('button', {name: 'select test comment'}))
+ await act(async () => {
+  if (change === 'audience') fireEvent.click(screen.getByRole('button', {name: 'change audience'}))
+  else fireEvent.keyDown(window, {key: 'm'})
+ })
+ expect(screen.getByTestId('first-claim')).toHaveTextContent(claimedByAgentId ?? 'none')
+ expect(screen.getByTestId('detail')).toHaveTextContent(':internal')
+ fireEvent.click(screen.getByRole('button', {name: 'select visible test comments'}))
+ fireEvent.click(screen.getByRole('button', {name: 'Mark done'}))
+ fireEvent.click(await screen.findByRole('button', {name: 'Undo mark done'}))
+ await screen.findByText('Previous statuses restored.')
+ expect(fixtures.updateReview).toHaveBeenNthCalledWith(1, 'https://crrt.ai/api', 'session-token', 'comment-1', 'accepted', version, 'done')
+ expect(fixtures.updateReview).toHaveBeenLastCalledWith('https://crrt.ai/api', 'session-token', 'comment-1', 'open', '2026-10-29T12:00:00.000Z', implementationStatus)
+ expect(screen.getByTestId('first-claim')).toHaveTextContent(claimedByAgentId ?? 'none')
+})
+
+it.each(['audience', 'completion'] as const)('ignores a late %s version after switching project', async (change) => {
+ fixtures.comments = [readyFeedback('comment-1')]
+ let finish!: (value: {updatedAt: string}) => void
+ const update = change === 'audience' ? fixtures.updateVisibility : fixtures.updateImpl
+ update.mockReturnValueOnce(new Promise(resolve => {finish = resolve}))
+ const app = render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
+ fireEvent.click(screen.getByRole('button', {name: 'select test comment'}))
+ if (change === 'audience') fireEvent.click(screen.getByRole('button', {name: 'change audience'}))
+ else fireEvent.keyDown(window, {key: 'm'})
+ fireEvent.click(screen.getByRole('button', {name: 'other project'}))
+ fixtures.comments = [{...readyFeedback('comment-1'), projectId: 'project-2', updatedAt: '2026-10-31T12:00:00.987654Z'}]
+ fixtures.commentsProjectId = 'project-2'
+ app.rerender(<App />)
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finish({updatedAt: '2026-10-30T12:00:00.123456Z'}))
+ expect(screen.getByTestId('first-version')).toHaveTextContent('2026-10-31T12:00:00.987654Z')
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+})
+
+it.each(['audience', 'completion'] as const)('reconciles a late %s response after a newer write finishes', async (change) => {
+ fixtures.comments = [readyFeedback('comment-1')]
+ let finish!: (value: {updatedAt: string}) => void
+ let finishNewer!: () => void
+ const update = change === 'audience' ? fixtures.updateVisibility : fixtures.updateImpl
+ update.mockReturnValueOnce(new Promise(resolve => {finish = resolve}))
+ fixtures.updateReview.mockReturnValueOnce(new Promise<void>(resolve => {finishNewer = resolve}))
+ render(<App />)
+ fireEvent.click(await screen.findByRole('button', {name: 'show all'}))
+ fireEvent.click(screen.getByRole('button', {name: 'select test comment'}))
+ if (change === 'audience') fireEvent.click(screen.getByRole('button', {name: 'change audience'}))
+ else fireEvent.keyDown(window, {key: 'm'})
+ fireEvent.keyDown(window, {key: 'a'})
+ const refreshCalls = fixtures.fn.mock.calls.length
+ await act(async () => finish({updatedAt: '2026-10-30T12:00:00.123456Z'}))
+ expect(fixtures.fn).toHaveBeenCalledTimes(refreshCalls)
+ expect(screen.getByTestId('first-version')).not.toHaveTextContent('2026-10-30T12:00:00.123456Z')
+ await act(async () => finishNewer())
+ expect(fixtures.fn.mock.calls.length).toBeGreaterThan(refreshCalls)
+})
+
+it('offers Inbox Undo in the destination project and returns to Inbox',async()=>{
+ fixtures.restoreInbox.mockResolvedValue({processedIds:['moved-1'],skipped:[]})
+ window.history.replaceState({}, '', '/?view=extension-comments')
+ render(<App />)
+ fireEvent.click(screen.getByRole('button',{name:'continue undoable move'}))
+ fireEvent.click(await screen.findByRole('button',{name:'Undo move'}))
+ await screen.findByText('extension page')
+ expect(fixtures.restoreInbox).toHaveBeenCalledWith('https://crrt.ai/api','session-token','project-1',[{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])
+})
+
+it('refreshes project feedback after a partial Inbox Undo while retaining the conflict notice',async()=>{
+ fixtures.restoreInbox.mockResolvedValue({processedIds:[],skipped:[{id:'moved-1',reason:'concurrent_change'}]})
+ window.history.replaceState({}, '', '/?view=extension-comments')
+ render(<App />)
+ fireEvent.click(screen.getByRole('button',{name:'continue undoable move'}))
+ const undo=await screen.findByRole('button',{name:'Undo move'})
+ const refreshCalls=fixtures.fn.mock.calls.length
+ fireEvent.click(undo)
+ await screen.findByText('1 items changed or are already in use and were not restored by this request. Review Inbox for the current result.')
+ await waitFor(()=>expect(fixtures.fn.mock.calls.length).toBeGreaterThanOrEqual(refreshCalls+2))
+ expect(screen.queryByText('extension page')).not.toBeInTheDocument()
+ expect(screen.getByRole('button',{name:'Back to Inbox'})).toBeInTheDocument()
 })

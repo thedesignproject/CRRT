@@ -69,6 +69,7 @@ export type ExtensionCommentBulkSelection =
   | { mode: 'all'; excludedIds: string[] }
 
 export type ExtensionCommentBulkResult = {
+  undoItems?: Array<{ id: string; updatedAt: string }>
   processedIds: string[]
   skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed' }>
   selectedTotal: number
@@ -129,6 +130,7 @@ export async function bulkAssignExtensionCommentsToProject(
   selection: ExtensionCommentBulkSelection,
   projectId: string,
   visibility: 'shared' | 'internal' = 'shared',
+  captureUndo = false,
 ): Promise<ExtensionCommentBulkResult> {
   const rows = await resolveInboxBulkRows(userId, selection)
   const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows)
@@ -137,15 +139,17 @@ export async function bulkAssignExtensionCommentsToProject(
 
   const client = getServiceSupabase()
   const processedIds: string[] = []
+  const undoItems: Array<{id:string;updatedAt:string}> = []
   for (let offset = 0; offset < rows.length; offset += 500) {
     try {
-      const { data, error } = await client.rpc('assign_actor_inbox_feedback', {
+      const { data, error } = await client.rpc(captureUndo ? 'assign_actor_inbox_feedback_with_versions' : 'assign_actor_inbox_feedback', {
         p_actor: userId, p_project: projectId, p_ids: rows.slice(offset, offset + 500).map((row) => row.id), p_visibility: visibility,
       })
       if (error) {
         if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
         throw new Error(error.message)
       }
+      if (captureUndo) undoItems.push(...((data as Array<{id:string;updated_at:string}> | null) ?? []).map(row => ({id:row.id,updatedAt:row.updated_at})))
       processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
     } catch (error) {
       if (processedIds.length === 0) throw error
@@ -160,6 +164,7 @@ export async function bulkAssignExtensionCommentsToProject(
   }
   return {
     processedIds,
+    ...(captureUndo ? {undoItems} : {}),
     skipped,
     selectedTotal: selection.mode === 'ids' ? selection.ids.length : rows.length,
   }

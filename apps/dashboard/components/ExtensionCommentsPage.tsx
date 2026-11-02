@@ -1,7 +1,6 @@
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
-  assignExtensionComment,
   bulkAssignExtensionComments,
   bulkDeleteExtensionComments,
   deleteExtensionComment,
@@ -15,6 +14,8 @@ import { mapServerComment } from '../lib/comment'
 import { BulkActionBar, BulkDeleteDialog } from './BulkActionBar'
 import { CommentDetail } from './CommentDetail'
 import { CommentList } from './CommentList'
+import { InboxMoveUndo } from './InboxMoveUndo'
+import type { InboxUndoItem } from '../api'
 import { ActionBtn } from './primitives'
 
 type InboxSelection =
@@ -29,7 +30,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   apiBase: string
   accessToken: string
   projects?: Project[]
-  onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number) => void
+  onMovedToProject?: (projectId: string, movedIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => void
 }) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const mutationContext = useRef(0)
@@ -39,6 +40,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [moveUndo,setMoveUndo] = useState<{projectId:string;items:InboxUndoItem[]}|null>(null)
   const [selectedId, setSelectedId] = useState('')
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -127,15 +129,16 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
     if (next) select(next.id)
   }
 
-  function toggleBulkSelect(id: string) {
+  function toggleBulkSelect(id: string, range: string[] = [id]) {
     if (busy) return
+    setBulkMode(true); setSelectedId(''); setEditing(false)
     if (bulkSelection.mode === 'all') {
       const excludedIds = new Set(bulkSelection.excludedIds)
-      if (excludedIds.has(id)) excludedIds.delete(id); else excludedIds.add(id)
+      for (const item of range) bulkSelection.excludedIds.has(id) ? excludedIds.delete(item) : excludedIds.add(item)
       setBoundedSelection({ mode: 'all', excludedIds })
     } else {
       const ids = new Set(bulkSelection.ids)
-      if (ids.has(id)) ids.delete(id); else ids.add(id)
+      for (const item of range) bulkSelection.ids.has(id) ? ids.delete(item) : ids.add(item)
       setBoundedSelection({ mode: 'ids', ids })
     }
   }
@@ -157,7 +160,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   useEffect(() => {
-    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject(''); setBusy(false)
+    setBulkMode(false); setBulkSelection(emptySelection()); setConfirmBulkDelete(false); setTargetProject(''); setBusy(false); setMoveUndo(null)
     return () => { mutationContext.current += 1 }
   }, [apiBase, accessToken])
 
@@ -176,11 +179,11 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]') || event.metaKey || event.ctrlKey || event.altKey) return
-      if (busy) return
+      if (busy || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'Escape' && bulkMode) {
         event.preventDefault(); exitBulkMode(); return
       }
+      if ((event.target as HTMLElement).closest?.('input, textarea, select, [contenteditable="true"]')) return
       if (!shortcutsEnabled || bulkMode) return
       if (['j', 'ArrowDown', ' ', 'k', 'ArrowUp'].includes(event.key)) {
         event.preventDefault(); navigate(event.key === 'k' || event.key === 'ArrowUp' ? -1 : 1)
@@ -212,35 +215,29 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   }
 
   async function addToProject() {
-    setBusy(true); setError('')
-    try {
-      await assignExtensionComment(apiBase, accessToken, selectedId, targetProject)
-      setItems((current) => current.filter((item) => item.id !== selectedId))
-      setTotal((value) => Math.max(0, value - 1)); setSelectedId(''); setTargetProject('')
-      setReload((value) => value + 1)
-    } catch (reason) { setError(errorText(reason, 'Could not add comment to project')) }
-    finally { setBusy(false) }
+    await moveSelected(targetProject, { mode: 'ids', ids: [selectedId] })
   }
 
-  async function moveSelected(projectId: string) {
+  async function moveSelected(projectId: string, selection = bulkDescriptor) {
     const context = mutationContext.current
     setBusy(true); setError(''); setNotice('')
     try {
-      const result = await bulkAssignExtensionComments(apiBase, accessToken, bulkDescriptor, projectId)
+      const result = await bulkAssignExtensionComments(apiBase, accessToken, selection, projectId)
       if (context !== mutationContext.current) return
       if (result.processedIds.length === 0) {
         setError('No Inbox items were moved. Refresh and try again.')
         return
       }
       if (onMovedToProject) {
-        onMovedToProject(projectId, result.processedIds, result.skipped.length)
+        onMovedToProject(projectId, result.processedIds, result.skipped.length, ...(result.undoItems ? [result.undoItems] as const : []))
         return
       }
+      setMoveUndo(result.undoItems?.length ? {projectId,items:result.undoItems} : null)
       const moved = new Set(result.processedIds)
       setItems((current) => current.filter((item) => !moved.has(item.id)))
       setTotal((value) => Math.max(0, value - result.processedIds.length))
       setNotice(`${result.processedIds.length} moved${result.skipped.length ? `; ${result.skipped.length} skipped` : ''}.`)
-      exitBulkMode(); setReload((value) => value + 1)
+      setSelectedId(''); exitBulkMode(); setReload((value) => value + 1)
     } catch (reason) {
       if (context === mutationContext.current) setError(errorText(reason, 'Could not move selected Inbox items'))
     } finally { if (context === mutationContext.current) setBusy(false) }
@@ -275,6 +272,7 @@ export function ExtensionCommentsPage({ apiBase, accessToken, projects = [], onM
   return <section className="flex flex-1 min-h-0 flex-col overflow-hidden">
     {error && items.length > 0 && <div role="alert" className="border-b border-border bg-card px-4 py-2 text-xs text-status-rejected">{error}</div>}
     {notice && <div role="status" className="border-b border-border bg-card px-4 py-2 text-xs text-muted-foreground">{notice}</div>}
+      {moveUndo && <InboxMoveUndo key={moveUndo.items[0].updatedAt} apiBase={apiBase} accessToken={accessToken} projectId={moveUndo.projectId} items={moveUndo.items} onProgress={()=>setReload(value=>value+1)} onRestored={()=>{setMoveUndo(null);setNotice('Returned to Inbox.');setReload(value=>value+1)}} />}
     <main className="flex flex-1 min-h-0 flex-col md:flex-row overflow-hidden">
       <CommentList personal filteredComments={comments} counts={{ all: total, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }}
         commentsLoading={loading} commentsError={items.length ? null : error} selectedCommentId={selectedId} setSelectedCommentId={select}

@@ -1,8 +1,9 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../api', () => ({ assignExtensionComment: vi.fn(), bulkAssignExtensionComments: vi.fn(), bulkDeleteExtensionComments: vi.fn(), deleteExtensionComment: vi.fn(), listExtensionComments: vi.fn(), updateExtensionComment: vi.fn(), getProjectGitHubStatus: vi.fn() }))
-import { assignExtensionComment, bulkAssignExtensionComments, bulkDeleteExtensionComments, deleteExtensionComment, getProjectGitHubStatus, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord, type Project } from '../api'
+vi.mock('../api', () => ({ restoreInboxComments: vi.fn(), assignExtensionComment: vi.fn(), bulkAssignExtensionComments: vi.fn(), bulkDeleteExtensionComments: vi.fn(), deleteExtensionComment: vi.fn(), listExtensionComments: vi.fn(), updateExtensionComment: vi.fn(), getProjectGitHubStatus: vi.fn() }))
+import { restoreInboxComments, assignExtensionComment, bulkAssignExtensionComments, bulkDeleteExtensionComments, deleteExtensionComment, getProjectGitHubStatus, listExtensionComments, updateExtensionComment, type ExtensionCommentRecord, type Project } from '../api'
 import { ExtensionCommentsPage } from './ExtensionCommentsPage'
 
 const first: ExtensionCommentRecord = { id: 'c1', projectId: null, pageUrl: 'https://example.com/path?q=1', pageHostname: 'example.com', x: 12.34, y: 56.78, selector: '#target', body: 'First comment', screenshotUrl: 'https://signed/image', authorName: 'u@example.com', createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z' }
@@ -19,6 +20,34 @@ beforeEach(() => {
   vi.mocked(deleteExtensionComment).mockResolvedValue()
 })
 afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
+
+it.each([true, false])('cancels Inbox selection with Escape from a focused checkbox (shortcuts enabled: %s)', async (shortcutsEnabled) => {
+  if (!shortcutsEnabled) vi.stubGlobal('localStorage', {getItem: () => 'disabled'})
+  try {
+    const user = userEvent.setup()
+    render(<ExtensionCommentsPage apiBase="/api" accessToken="token" />)
+    const checkbox = await screen.findByRole('checkbox', {name: 'Select feedback: First comment'})
+    checkbox.focus()
+    await user.keyboard('[Space]')
+    expect(checkbox).toHaveFocus()
+    expect(checkbox).toBeChecked()
+    expect(screen.getByRole('toolbar', {name: 'Bulk actions for 1 selected item'})).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(checkbox).not.toBeChecked()
+    expect(screen.queryByRole('toolbar')).toBeNull()
+    expect(screen.getByRole('button', {name: 'Select'})).toBeInTheDocument()
+  } finally { vi.unstubAllGlobals() }
+})
+
+it('passes committed move versions to the destination Undo notice', async () => {
+  const onMoved = vi.fn()
+  const undoItems = [{id:'c1',updatedAt:first.updatedAt}]
+  vi.mocked(bulkAssignExtensionComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[],selectedTotal:1,undoItems})
+  render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} onMovedToProject={onMoved} />)
+  fireEvent.click(await screen.findByRole('checkbox', {name:'Select feedback: First comment'}))
+  fireEvent.click(screen.getByRole('button', {name:'Move to Storefront'}))
+  await waitFor(() => expect(onMoved).toHaveBeenCalledWith('store',['c1'],0,undoItems))
+})
 
 describe('ExtensionCommentsPage', () => {
   it('refills the current page after deletion crosses a pagination boundary', async () => {
@@ -90,7 +119,9 @@ describe('ExtensionCommentsPage', () => {
 
   })
 
-  it('moves an owned private comment into an accessible project in place', async () => {
+  it('moves an owned private comment with exact-version Undo', async () => {
+    vi.mocked(bulkAssignExtensionComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[],selectedTotal:1,undoItems:[{id:'c1',updatedAt:first.updatedAt}]})
+    vi.mocked(restoreInboxComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[]})
     vi.mocked(listExtensionComments)
       .mockResolvedValueOnce({ items: [first], page: 1, limit: 20, total: 1 })
       .mockResolvedValue({ items: [], page: 1, limit: 20, total: 0 })
@@ -98,13 +129,16 @@ describe('ExtensionCommentsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
     fireEvent.change(screen.getByRole('combobox', { name: 'Project for comment' }), { target: { value: 'store' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add to project' }))
-    await waitFor(() => expect(assignExtensionComment).toHaveBeenCalledWith('/api', 'token', 'c1', 'store'))
+    await waitFor(() => expect(bulkAssignExtensionComments).toHaveBeenCalledWith('/api', 'token', { mode: 'ids', ids: ['c1'] }, 'store'))
     await screen.findByText('Your Inbox is empty.')
+    fireEvent.click(screen.getByRole('button', {name:'Undo move'}))
+    await waitFor(() => expect(restoreInboxComments).toHaveBeenCalledWith('/api','token','store',[{id:'c1',updatedAt:first.updatedAt}]))
+    expect(assignExtensionComment).not.toHaveBeenCalled()
   })
 
   it('keeps the comment selected when project assignment fails', async () => {
     vi.mocked(listExtensionComments).mockResolvedValue({ items: [first], page: 1, limit: 20, total: 1 })
-    vi.mocked(assignExtensionComment).mockRejectedValueOnce(new Error('assignment down'))
+    vi.mocked(bulkAssignExtensionComments).mockRejectedValueOnce(new Error('assignment down'))
     render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
     fireEvent.click(await screen.findByRole('button', { name: /First comment/ }))
 
@@ -343,7 +377,9 @@ it('keeps selection and confirmation locked while deletion is pending', async ()
   fireEvent.click(screen.getByRole('button', { name: 'Select page' }))
   fireEvent.click(screen.getByRole('menuitem', { name: 'Delete selected' }))
   fireEvent.click(screen.getByRole('button', { name: 'Delete 2' }))
-  fireEvent.keyDown(window, { key: 'Escape' })
+  const checkbox = screen.getByRole('checkbox', {name: 'Select feedback: First comment'})
+  checkbox.focus()
+  fireEvent.keyDown(checkbox, { key: 'Escape' })
   fireEvent.click(screen.getAllByRole('button', { name: 'Cancel' })[0]!)
   fireEvent.click(screen.getByRole('button', { name: /First comment/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
@@ -525,4 +561,30 @@ it('moves all Inbox items to the chosen destination in two clicks and disables r
  expect(screen.getByRole('button', { name: 'Move to Storefront' })).toBeDisabled()
  expect(screen.getByRole('button', { name: 'Move to Second project' })).toBeDisabled()
  await act(async () => finish({ processedIds: ['c1'], skipped: [], selectedTotal: 21 }))
+})
+
+it('offers move Undo without a destination navigation callback',async()=>{
+ vi.mocked(bulkAssignExtensionComments).mockResolvedValue({processedIds:['c1'],selectedTotal:1,skipped:[],undoItems:[{id:'c1',updatedAt:first.updatedAt}]})
+ vi.mocked(restoreInboxComments).mockResolvedValue({processedIds:['c1'],skipped:[]})
+ render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+ fireEvent.click(await screen.findByRole('button',{name:'Select all 21 in Inbox'}))
+ fireEvent.click(screen.getByRole('button',{name:'Move to Storefront'}))
+ fireEvent.click(await screen.findByRole('button',{name:'Undo move'}))
+ await screen.findByText('Returned to Inbox.')
+})
+
+it('reloads standalone Inbox after a partial Undo without hiding the skipped-item notice',async()=>{
+ vi.mocked(bulkAssignExtensionComments).mockResolvedValueOnce({processedIds:['c1','c2'],selectedTotal:2,skipped:[],undoItems:[{id:'c1',updatedAt:first.updatedAt},{id:'c2',updatedAt:second.updatedAt}]})
+ vi.mocked(restoreInboxComments).mockResolvedValueOnce({processedIds:['c1'],skipped:[{id:'c2',reason:'concurrent_change'}]})
+ render(<ExtensionCommentsPage apiBase="/api" accessToken="token" projects={[project]} />)
+ fireEvent.click(await screen.findByRole('button',{name:'Select all 21 in Inbox'}))
+ fireEvent.click(screen.getByRole('button',{name:'Move to Storefront'}))
+ const undo=await screen.findByRole('button',{name:'Undo move'})
+ await waitFor(()=>expect(listExtensionComments).toHaveBeenCalledTimes(2))
+ vi.mocked(listExtensionComments).mockResolvedValue({items:[first],page:1,limit:20,total:20})
+ fireEvent.click(undo)
+ await screen.findByText('1 items changed or are already in use and were not restored by this request. Review Inbox for the current result.')
+ await screen.findByRole('heading',{name:'20 Inbox Items'})
+ expect(listExtensionComments).toHaveBeenCalledTimes(3)
+ expect(screen.queryByText('Returned to Inbox.')).not.toBeInTheDocument()
 })
