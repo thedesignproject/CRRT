@@ -4,13 +4,18 @@ import { resolve, join, dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { Window } from 'happy-dom'
 import TurndownService from 'turndown'
-import { publicPages } from './public-pages.ts'
+// Tests invoke this in a child process; always verify and emit the actual
+// production bundle, including removal of development-only content loaders.
+process.env.NODE_ENV = 'production'
+await import('./generate-resource-catalog.ts')
+const { publicPages } = await import('./public-pages.ts')
 
 const root = resolve(import.meta.dirname, '..')
 const dist = join(root, 'apps/landing/dist')
 const configFile = join(root, 'apps/landing/vite.config.ts')
 await build({ configFile })
 const template = await readFile(join(dist, 'index.html'), 'utf8')
+const manifest = JSON.parse(await readFile(join(dist, '.vite/manifest.json'), 'utf8')) as Record<string, { file: string; css?: string[]; imports?: string[] }>
 // Shared links and audit workspaces still boot from their original empty shell.
 await writeFile(join(dist, 'app-shell.html'), template)
 await build({ configFile, build: {
@@ -32,14 +37,39 @@ for (const page of publicPages) {
   const document = window.document
   document.write(template.replace('<div id="root"></div>', () => `<div id="root">${render(page.path)}</div>`))
   document.title = page.title
+  // Split route styles must be in the initial HTML, including without JS.
+  // Preload the same route modules without pulling in unrelated app surfaces.
+  const visited = new Set<string>()
+  const routeStyles = new Set<string>()
+  const routeModules = new Set<string>()
+  function collectEntry(key: string) {
+    if (visited.has(key)) return
+    visited.add(key)
+    const entry = manifest[key]
+    if (!entry) throw new Error(`Missing public route manifest entry: ${key}`)
+    for (const dependency of entry.imports ?? []) collectEntry(dependency)
+    for (const css of entry.css ?? []) routeStyles.add(css)
+    routeModules.add(entry.file)
+  }
+  collectEntry(page.path.startsWith('/resources') ? 'resources/ResourcesPage.tsx' : 'App.tsx')
+  for (const [rel, files] of [['stylesheet', routeStyles], ['modulepreload', routeModules]] as const) {
+    for (const file of files) {
+      if (document.querySelector(`link[rel="${rel}"][href="/${file}"]`)) continue
+      const link = document.createElement('link'); link.rel = rel; link.href = `/${file}`
+      if (rel === 'modulepreload') link.setAttribute('crossorigin', '')
+      document.head.append(link)
+    }
+  }
   document.querySelector('meta[name="description"]')!.setAttribute('content', page.description)
   const url = `https://crrt.ai${page.path}`
   const canonical = document.createElement('link')
   canonical.rel = 'canonical'; canonical.href = url; document.head.append(canonical)
-  for (const [property, content] of Object.entries({ 'og:title': page.title, 'og:description': page.description, 'og:url': url, 'og:image': 'https://crrt.ai/favicon.png', 'twitter:title': page.title, 'twitter:description': page.description, 'twitter:image': 'https://crrt.ai/favicon.png' })) {
+  const isResource = page.path.startsWith('/resources')
+  const image = isResource ? 'https://crrt.ai/resources-og.png' : 'https://crrt.ai/favicon.png'
+  for (const [property, content] of Object.entries({ 'og:title': page.title, 'og:description': page.description, 'og:url': url, 'og:image': image, 'og:type': page.path.startsWith('/resources/') ? 'article' : 'website', 'twitter:card': isResource ? 'summary_large_image' : 'summary', 'twitter:title': page.title, 'twitter:description': page.description, 'twitter:image': image })) {
     const existing = document.querySelector(`meta[property="${property}"],meta[name="${property}"]`)
     const meta = existing || document.createElement('meta')
-    if (!existing) meta.setAttribute('property', property)
+    if (!existing) meta.setAttribute(property.startsWith('twitter:') ? 'name' : 'property', property)
     meta.setAttribute('content', content); document.head.append(meta)
   }
   const alternate = document.createElement('link')

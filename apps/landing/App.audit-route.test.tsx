@@ -20,6 +20,7 @@ vi.mock('./product-audit/ProductAuditWorkspace', () => ({ ProductAuditWorkspace:
 vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing product audit</section> }))
 vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
 vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
+vi.mock('./resources/ResourcesPage', () => ({ ResourcesPage: () => <main>Public resource library</main> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
 
@@ -37,6 +38,13 @@ it('routes durable audit IDs to the live workspace', () => {
   window.history.pushState({}, '', '/audit/11111111-1111-4111-8111-111111111111')
   render(<App />)
   expect(screen.getByText('Live audit workspace')).toBeInTheDocument()
+})
+
+it.each(['/resources', '/resources/design-tokens-for-ai-prototypes/'])('routes %s to public resources without an auth redirect', async path => {
+  window.history.pushState({}, '', path)
+  render(<App />)
+  expect(await screen.findByText('Public resource library')).toBeInTheDocument()
+  expect(auth.getSession).not.toHaveBeenCalled()
 })
 
 it('routes direct privacy loads without mounting the marketing site', () => {
