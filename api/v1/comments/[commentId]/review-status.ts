@@ -4,7 +4,7 @@ import { z } from 'zod'
 import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
 import { createFeedbackEvent, findActiveSharesForComment, getComment, mutateProjectFeedback } from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
-import type { ReviewStatus } from '../../../_lib/status.js'
+import { IMPLEMENTATION_STATUSES, type ImplementationStatus, type ReviewStatus } from '../../../_lib/status.js'
 import { closeLinkedExternalWork } from '../../../_lib/external-work-sync.js'
 
 const VALID_STATUSES = new Set<ReviewStatus>(['open', 'accepted', 'rejected'])
@@ -20,6 +20,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const commentId = getStringQuery(req.query.commentId)
     const reviewStatus = req.body?.reviewStatus as ReviewStatus | undefined
     const expectedUpdatedAt = req.body?.expectedUpdatedAt
+    const implementationStatus = req.body?.implementationStatus as ImplementationStatus | undefined
+    if (implementationStatus !== undefined && (!IMPLEMENTATION_STATUSES.includes(implementationStatus) || expectedUpdatedAt === undefined)) return jsonError(req, res, 400, 'implementationStatus requires a valid status and expectedUpdatedAt')
     if (expectedUpdatedAt !== undefined && !VERSION_TIMESTAMP.safeParse(expectedUpdatedAt).success) return jsonError(req, res, 400, 'expectedUpdatedAt must be a timestamp')
 
     if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
@@ -31,20 +33,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
 
-    const comment = await mutateProjectFeedback(existing.projectId, user.userId, commentId, { reviewStatus, expectedUpdatedAt })
+    const comment = await mutateProjectFeedback(existing.projectId, user.userId, commentId, {
+      reviewStatus, expectedUpdatedAt,
+      ...(implementationStatus !== undefined ? { implementationStatus } : {}),
+      ...(implementationStatus === 'unassigned' ? { claimedByAgentId: null } : {}),
+    })
     if (!comment) return jsonError(req, res, 404, 'Comment not found')
     if (reviewStatus === 'rejected') {
       waitUntil(closeLinkedExternalWork(existing.projectId, commentId, comment.updatedAt).catch(() => undefined))
     }
     const activeShares = await findActiveSharesForComment(commentId)
-    await Promise.all(activeShares.map((share) => createFeedbackEvent({
+    await Promise.all(activeShares.map(async (share) => {
+      await createFeedbackEvent({
       shareId: share.id,
       commentId,
       actorType: 'reviewer',
       actorId: 'reviewer',
       eventType: 'comment.reviewed',
       payload: { reviewStatus },
-    })))
+      })
+      if (implementationStatus !== undefined) await createFeedbackEvent({
+        shareId: share.id, commentId, actorType: 'reviewer', actorId: 'reviewer',
+        eventType: 'comment.implementation_changed', payload: { implementationStatus },
+      })
+    }))
 
     setCors(req, res, ['PATCH', 'OPTIONS'])
     return res.status(200).json(comment)

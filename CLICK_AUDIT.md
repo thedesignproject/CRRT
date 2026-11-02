@@ -12,7 +12,7 @@ Count starts on the relevant surface with the task's items visible; navigation t
 | Widget handoff accepts open comments (PremiumAgentBridge.confirmHandoff) | Send to agent mutates selection before prompt copy | Explicit approval copy + reversible action | 5 | TBD | Audit server mutation and undo semantics |
 | Copy existing prompt (useAgentSession.copyPrompt / AgentBridgeModal) | 1; no done mutation found on current trunk | 1, no status change | 5 | 0 | Code inspected; verify in browser |
 | Dashboard select arbitrary N items | Enter select mode + N clicks + action | Direct selection/keyboard range + action | 5 | TBD | Pending |
-| Inbox bulk action across pages (CommentList / ExtensionCommentsPage) | Select → Select page → Select all matching → action = 4+ | ≤2 | 4 | ≥8 | Pending |
+| Inbox select all + move to a project | Select → Select page → Select all matching → destination → Move = 5+ | Select all → Move to [project] = 2 | 4 | ≥12 | Merged #375/#377; Undo move pending |
 | Bulk Reject (App) | Originally 4; parent layer Select all → Actions → Reject = 3 | Select all → Reject = 2 | 3 | 3 vs parent | Implemented in second layer |
 | Project/filter/navigation/settings/export/audits/integrations | Not yet measured | ≤2 each | TBD | TBD | Inventory pending |
 
@@ -56,3 +56,7 @@ Add an optional expectedUpdatedAt to the internal actor-bound mutation, checked 
 ## Seventh layer: use the atomic fence in Undo
 
 Mark ready snapshots now retain the exact server-returned updatedAt (including sub-millisecond precision). Undo supplies that version through the existing review endpoint; malformed versions return 400, stale versions return 409 and discard the conflicting undo entry with an explicit explanation. Missing server versions never enable unfenced Undo. The database check from #378 closes the cross-tab/reviewer/agent race for approval Undo without adding clicks or changing legacy requests.
+
+## Next stack: atomic completion before Undo
+
+After merging #367–#379, start from trunk including reviewer fixes for pending writes and stale Undo. Mark done and Reopen still issue separate review/implementation requests, allowing half-applied changes. Extend the existing review endpoint with an optional implementationStatus requiring expectedUpdatedAt, and write both fields through one version-fenced mutation. Preserve existing review-only clients and claim clearing for unassigned. This prerequisite does not change clicks; it enables exact one-click Undo of completion in the next layer. Reopening previously claimed work and reversing external ticket closure remain unresolved.
