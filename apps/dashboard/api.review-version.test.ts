@@ -14,3 +14,9 @@ it('sends both statuses and their expected version in one request', async () => 
  await updateReviewStatus('/api','session','c','accepted','2026-10-30T10:00:00Z','done')
  expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/v1/comments/c/review-status',expect.objectContaining({body:JSON.stringify({reviewStatus:'accepted',expectedUpdatedAt:'2026-10-30T10:00:00Z',implementationStatus:'done'})}))
 })
+
+it('sends an opaque Undo receipt without client-supplied ownership',async()=>{
+ const fetch=vi.fn().mockResolvedValue({ok:true,status:200,text:async()=>JSON.stringify({id:'c'})});vi.stubGlobal('fetch',fetch)
+ await updateReviewStatus('/api','session','c','open',undefined,undefined,{undoToken:'signed'})
+ expect(fetch).toHaveBeenCalledWith('/api/v1/comments/c/review-status',expect.objectContaining({body:JSON.stringify({reviewStatus:'open',undoToken:'signed'})}))
+})

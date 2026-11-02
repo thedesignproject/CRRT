@@ -74,3 +74,7 @@ Project feedback and Inbox expose native checkboxes without entering Select mode
 Optional captureUndo returns a signed, one-hour receipt bound to actor, project, comment, exact post-write version, prior statuses and prior agent claim. Restore rechecks current permission and applies the signed snapshot through the existing database CAS. No client-supplied agent ownership is trusted. Missing signing configuration fails before mutation.
 
 Product decision: a reversible dashboard Reject preserves linked issues and says so explicitly. Automatically closing external issues cannot be fully undone safely without each provider's previous state and durable reconciliation; existing API callers retain their legacy close behavior. The new opt-in workflow avoids that side effect rather than claiming an external rollback occurred.
+
+## Twelfth layer: bulk Reopen and Reject Undo
+
+Reopen now performs one atomic open/unassigned update and offers one-click Undo via the signed receipt, restoring the former agent claim. Bulk Reject explicitly preserves linked issues (visible toolbar text and success notice) and offers the same one-click Undo. Existing stale-project/request tracking, permission errors, partial failure selection and version-conflict handling remain in place. Both actions verified in browser at 1440/390px: Select all → action = 2 clicks; Undo = 1. Full suite 2,998 passed, TypeScript clean, diff coverage 100%. Single-comment legacy rejection remains an audit item; this layer changes bulk actions only.
