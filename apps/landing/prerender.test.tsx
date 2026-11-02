@@ -19,4 +19,12 @@ it('loads the canonical design tokens into HTML in development and production', 
   const [style] = plugin.transformIndexHtml()
   expect(style).toMatchObject({ tag: 'style', attrs: { 'data-source': 'crrt-tokens' }, injectTo: 'head-prepend' })
   expect(style.children).toContain('--crrt-carrot:')
+  expect(style.children).not.toContain('fonts.googleapis.com')
+  expect(style.children).not.toContain('display=swap')
+  const element = document.createElement('style')
+  element.textContent = style.children
+  document.head.append(element)
+  const root = [...element.sheet!.cssRules].find(rule => 'selectorText' in rule && rule.selectorText === ':root') as CSSStyleRule
+  expect(root.style.getPropertyValue('--crrt-dashboard-font')).toContain('Figtree Variable')
+  element.remove()
 })

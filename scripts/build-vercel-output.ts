@@ -5,7 +5,7 @@ import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { build } from '@vercel/node'
 import { FileFsRef, glob } from '@vercel/build-utils'
-import { publicPageRoutes, applicationFallbackRoutes } from './public-pages.js'
+import { publicPageRoutes, applicationFallbackRoutes, staticAssetRoutes } from './public-pages.js'
 import { buildPublicFunction } from './build-public-function.js'
 import { PRODUCT_AUDIT_WORKFLOW_ID } from '../workflows/product-audit-id.js'
 
@@ -144,6 +144,7 @@ workflowConfig.routes = [
   ...workflowConfig.routes,
   { src: '^(/api(?:/.*)?)$', dest: '/api-router?__audit_path=$1' },
   ...publicPageRoutes,
+  ...staticAssetRoutes,
   { handle: 'filesystem' },
   ...applicationFallbackRoutes,
 ]

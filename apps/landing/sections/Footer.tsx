@@ -7,10 +7,10 @@ const groups = [
   {
     label: 'Product',
     links: [
-      { label: 'How it works', href: '#how-it-works' },
-      { label: 'Install', href: '#install' },
-      { label: 'Pricing', href: '#pricing' },
-      { label: 'Integrations', href: '#integrations' },
+      { label: 'How it works', href: '/#how-it-works' },
+      { label: 'Install', href: '/#install' },
+      { label: 'Pricing', href: '/#pricing' },
+      { label: 'Integrations', href: '/#integrations' },
     ],
   },
   {
@@ -24,6 +24,7 @@ const groups = [
   {
     label: 'Resources',
     links: [
+      { label: 'Guides & resources', href: '/resources' },
       { label: 'Documentation', href: '/docs' },
       { label: 'Support', href: '/support' },
       { label: 'GitHub', href: 'https://github.com/thedesignproject/CRRT', external: true },
