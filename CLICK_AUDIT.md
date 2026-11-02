@@ -98,3 +98,7 @@ From a selected comment, Integrations → provider → Create issue took three c
 ## Seventeenth layer: preserve audit project context
 
 Run audit carries the current project in a base-aware encoded URL. The launcher selects it only after matching the authenticated project list; absent/unavailable keys retain the existing safe list default. No automatic audit or network mutation. Removes two dropdown clicks when auditing a non-first project. Fourteen targeted tests, TypeScript and 100% diff coverage pass; browser confirms desktop/mobile project selection and no automatic POST.
+
+## Eighteenth layer: explicit widget handoff and recoverable prompts
+
+Sending open feedback now says Accept & send to agent and explains exactly how many open items are accepted. Record/display the committed handoff and refresh feedback before fetching prompts. A prompt-load failure therefore cannot hide acceptance; retry fetches prompts for the same session without another mutation. Copying only writes the clipboard (verified by tests). Existing agent claims are not cancelled by copying or retrying. Browser verified failure/retry at 1440/390px with the actual widget and simulated HTTP; targeted tests and diff coverage pass.
