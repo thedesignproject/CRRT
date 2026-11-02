@@ -1,0 +1,65 @@
+name: Resource page quality
+
+on:
+  pull_request:
+    paths:
+      - 'apps/landing/**'
+      - 'branding/crrt/tokens.css'
+      - 'src/design-system/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/resources-quality.yml'
+  push:
+    branches: [trunk]
+    paths:
+      - 'apps/landing/**'
+      - 'branding/crrt/tokens.css'
+      - 'src/design-system/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'bun.lock'
+      - '.github/workflows/resources-quality.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: resource-quality-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [mobile, desktop]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Verify crawlable HTML, Markdown, metadata, and routing
+        run: bun run test -- scripts/public-pages.test.ts
+      - run: bun run build:landing
+      - name: Audit every resource page (median of three runs)
+        env:
+          LIGHTHOUSE_PROFILE: ${{ matrix.profile }}
+        run: bun run audit:resources --profile="$LIGHTHOUSE_PROFILE" --runs=3
+      - name: Save Lighthouse reports as workflow artifacts
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: resources-lighthouse-${{ matrix.profile }}
+          path: artifacts/lighthouse/${{ matrix.profile }}/
+          if-no-files-found: warn
+          retention-days: 14

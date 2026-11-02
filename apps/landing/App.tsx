@@ -9,6 +9,10 @@ import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
 import { ThemeProvider } from '../../src/design-system'
+import { ResourcesPage } from './resources/ResourcesPage'
+import { readResourceData } from './resources/readResourceData'
+import './globals.css'
+import './marketing-polish.css'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
@@ -33,6 +37,10 @@ function RoutedApp() {
     && new URLSearchParams(window.location.search).get('stay') === '1'
 
   useScrollProgress()
+
+  if (publicPath === '/resources' || publicPath.startsWith('/resources/')) {
+    return <ResourcesPage pathname={initialPath} article={readResourceData(initialPath)} />
+  }
 
   if (publicPath === '/privacy') {
     return <PrivacyPage />

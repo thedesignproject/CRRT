@@ -1,14 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { App } from './App'
+import { loadLandingApp } from './loadLandingApp'
 import '@fontsource-variable/figtree/wght.css'
 import '@fontsource/vt323/latin.css'
 import '../../src/design-system/styles.css'
-import './globals.css'
-import './marketing-polish.css'
+import './landing-shell.css'
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-)
+void loadLandingApp(window.location.pathname).then(app => {
+  const root = document.getElementById('root')!
+  const content = <React.StrictMode>{app}</React.StrictMode>
+  if (root.querySelector('.resources-shell')) ReactDOM.hydrateRoot(root, content)
+  else ReactDOM.createRoot(root).render(content)
+})

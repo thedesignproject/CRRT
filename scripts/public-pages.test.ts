@@ -5,7 +5,8 @@ import { readFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { Window } from 'happy-dom'
 import SwaggerParser from '@apidevtools/swagger-parser'
-import { publicPages, publicPageRoutes, applicationFallbackRoutes } from './public-pages'
+import { publicPages, publicPageRoutes, applicationFallbackRoutes, staticAssetRoutes } from './public-pages'
+import { resources, resourcePath } from '../apps/landing/resources/content'
 
 const root = resolve(import.meta.dirname, '..')
 const dist = resolve(root, 'apps/landing/dist')
@@ -44,6 +45,42 @@ describe('built public pages', () => {
     for (const script of window.document.querySelectorAll('script[src]')) expect(existsSync(resolve(dist, script.getAttribute('src')!.slice(1)))).toBe(true)
     window.happyDOM.abort()
   })
+
+  it('keeps lazy decorative figures out of the static server renderer', () => {
+    expect(read('resources/index.html')).not.toContain('<template')
+    expect(read('resources/index.html')).toContain('resource-figure')
+  })
+
+  it('keeps full article bodies out of the client JavaScript bundles', () => {
+    const manifest = JSON.parse(read('.vite/manifest.json'))
+    const scripts = Object.values(manifest).map((entry: any) => entry.file).filter((file: string) => file.endsWith('.js')).map((file: string) => read(file)).join('\n')
+    for (const resource of resources) expect(scripts.includes(resource.sections[0].paragraphs[0]), resource.slug).toBe(false)
+    const window = new Window()
+    window.document.write(read('resources/index.html'))
+    expect(window.document.getElementById('resource-page-data')).toBeNull()
+    window.happyDOM.abort()
+  })
+
+  it.each(publicPages)('ships route CSS and preload links in the initial HTML at $path', page => {
+    const manifest = JSON.parse(read('.vite/manifest.json'))
+    const entry = manifest[page.path.startsWith('/resources') ? 'resources/ResourcesPage.tsx' : 'App.tsx']
+    const html = read(page.path === '/' ? 'index.html' : `${page.path.slice(1)}/index.html`)
+    expect(html).toContain(`href="/${entry.file}"`)
+    for (const css of entry.css || []) expect(html).toContain(`href="/${css}"`)
+    expect(html).not.toContain('fonts.googleapis.com')
+    expect(html).not.toContain('fonts.gstatic.com')
+    if (page.path.startsWith('/resources')) {
+      expect(html).not.toContain(`href="/${manifest['App.tsx'].file}"`)
+      const window = new Window()
+      window.document.write(html)
+      const styles = [...window.document.querySelectorAll('link[rel="stylesheet"]')]
+        .map(link => read(link.getAttribute('href')!.slice(1))).join('\n')
+      expect(styles).not.toContain('.landing-glass-comment.is-left')
+      expect(styles).toContain('.landing-navigation')
+      expect(styles).toContain('.landing-footer')
+      window.happyDOM.abort()
+    }
+  })
   it('publishes a namespaced sitemap without requiring Git history', () => {
     const window = new Window()
     const doc = new window.DOMParser().parseFromString(read('sitemap.xml'), 'application/xml')
@@ -64,6 +101,30 @@ describe('built public pages', () => {
       expect(publicPages.some(page => page.path === path) || existsSync(resolve(dist, path.slice(1)))).toBe(true)
     }
   })
+
+  it.each(resources)('publishes accurate resource metadata, article markup, and a share image for $slug', resource => {
+    const window = new Window()
+    window.document.write(read(`${resourcePath(resource).slice(1)}/index.html`))
+    const doc = window.document
+    const schemas = [...doc.querySelectorAll('script[type="application/ld+json"]')].map(script => JSON.parse(script.textContent!))
+    expect(schemas.find(schema => schema['@type'] === 'Article')).toMatchObject({ headline: resource.title, mainEntityOfPage: `https://crrt.ai${resourcePath(resource)}`, author: { name: 'CRRT' } })
+    expect(schemas.find(schema => schema['@type'] === 'BreadcrumbList').itemListElement.at(-1).item).toBe(`https://crrt.ai${resourcePath(resource)}`)
+    expect(doc.querySelector('meta[property="og:type"]')!.getAttribute('content')).toBe('article')
+    expect(doc.querySelector('meta[property="og:image"]')!.getAttribute('content')).toBe('https://crrt.ai/resources-og.png')
+    expect(doc.querySelector('meta[name="twitter:card"]')!.getAttribute('content')).toBe('summary_large_image')
+    expect(existsSync(resolve(dist, 'resources-og.png'))).toBe(true)
+    expect(doc.querySelector('article')!.textContent).toContain(resource.answer)
+    expect(doc.querySelector('article')!.textContent).toContain('Written with AI assistance')
+    const serialized = JSON.parse(doc.getElementById('resource-page-data')!.textContent!)
+    expect(serialized).toEqual(resource)
+    expect(doc.querySelectorAll('#resource-page-data')).toHaveLength(1)
+    if (resource.tool) {
+      expect(schemas.find(schema => schema['@type'] === 'WebApplication')).toMatchObject({ name: resource.title, isAccessibleForFree: true })
+      expect(doc.getElementById('interactive-tool')).not.toBeNull()
+      expect(doc.querySelector('noscript')).not.toBeNull()
+    }
+    window.happyDOM.abort()
+  })
 })
 
 describe('routing boundaries', () => {
@@ -72,7 +133,7 @@ describe('routing boundaries', () => {
     expect(publicRoute.test(path)).toBe(true)
     expect(publicRoute.test(path === '/' ? path : path + '/')).toBe(true)
   })
-  it.each(['/api/v1/agent/shares/a/state', '/.well-known/workflow/v1/step', '/dashboard', '/dashboard/projects/a', '/audit/a', '/d/a', '/assets/app.js', '/docs/missing', '/docs-install'])('does not intercept %s', path => {
+  it.each(['/api/v1/agent/shares/a/state', '/.well-known/workflow/v1/step', '/dashboard', '/dashboard/projects/a', '/audit/a', '/d/a', '/assets/app.js', '/docs/missing', '/docs-install', '/resources/missing', '/resources-design-systems'])('does not intercept %s', path => {
     expect(publicRoute.test(path)).toBe(false)
   })
   it.each([['/privacy', '/app-shell.html'], ['/support/', '/app-shell.html'], ['/d/a', '/app-shell.html'], ['/dashboard', '/dashboard/index.html'], ['/dashboard/projects/a', '/dashboard/index.html'], ['/audit/a', '/app-shell.html'], ['/docs/missing', '/public-site?__public_path=$1']])('preserves the intended fallback for %s', (path, dest) => {
@@ -91,6 +152,10 @@ describe('routing boundaries', () => {
     expect(source.indexOf('...publicPageRoutes')).toBeLessThan(source.indexOf("{ handle: 'filesystem' }"))
     expect(source.indexOf('...applicationFallbackRoutes')).toBeGreaterThan(source.indexOf("{ handle: 'filesystem' }"))
     expect(source).toContain('await buildPublicFunction(root, output)')
+    expect(source.indexOf('...staticAssetRoutes')).toBeLessThan(source.indexOf("{ handle: 'filesystem' }"))
+    expect(staticAssetRoutes.find(route => new RegExp(route.src).test('/assets/app-123.js'))?.headers['Cache-Control']).toContain('immutable')
+    expect(staticAssetRoutes.find(route => new RegExp(route.src).test('/dashboard/assets/app-123.js'))?.headers['Cache-Control']).toContain('immutable')
+    expect(staticAssetRoutes.some(route => new RegExp(route.src).test('/resources'))).toBe(false)
   })
 })
 
