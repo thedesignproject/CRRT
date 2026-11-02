@@ -86,3 +86,7 @@ Add a compatible assignment RPC returning committed timestamps, plus an actor/ow
 ## Fourteenth layer: opt-in Inbox move versions and restore API
 
 Bulk assignment can opt in to exact committed versions without changing legacy response behavior. The restore endpoint validates 1–500 UUID/timestamp pairs, current manage permission and authenticated actor identity. It reports skipped items separately; the RPC rechecks ownership, references and versions atomically. Full suite: 3,011 passed, 209 skipped; targeted tests and diff coverage 100%, TypeScript passed.
+
+## Fifteenth layer: one-click Undo of Inbox bulk moves
+
+Bulk moves request exact committed versions and expose Undo in the destination project or the standalone Inbox view. One click restores in batches of 500; retries contain only unprocessed batches. Changed/shared items are reported separately. Account changes and unmount prevent stale UI updates. Desktop/mobile browser verified 21-item move in two clicks and Undo in one. Full suite: 3,018 pass, 209 skipped; types and diff coverage pass.

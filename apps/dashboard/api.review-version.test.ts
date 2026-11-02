@@ -20,3 +20,10 @@ it('sends an opaque Undo receipt without client-supplied ownership',async()=>{
  await updateReviewStatus('/api','session','c','open',undefined,undefined,{undoToken:'signed'})
  expect(fetch).toHaveBeenCalledWith('/api/v1/comments/c/review-status',expect.objectContaining({body:JSON.stringify({reviewStatus:'open',undoToken:'signed'})}))
 })
+it('sends Inbox restore versions without rounding',async()=>{
+ const {restoreInboxComments}=await import('./api')
+ const fetch=vi.fn().mockResolvedValue({ok:true,status:200,text:async()=>JSON.stringify({processedIds:[],skipped:[]})});vi.stubGlobal('fetch',fetch)
+ const items=[{id:'c',updatedAt:'2026-10-30T12:00:00.123456Z'}]
+ await restoreInboxComments('/api','t','p',items)
+ expect(fetch).toHaveBeenCalledWith('/api/v1/extension/comments/restore',expect.objectContaining({body:JSON.stringify({projectId:'p',items})}))
+})

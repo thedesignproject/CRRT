@@ -43,7 +43,7 @@ describe('extension comment dashboard API', () => {
     expect(fetch).toHaveBeenNthCalledWith(1, '/api/v1/extension/comments/bulk', expect.objectContaining({
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token' },
-      body: JSON.stringify({ operation: 'assign', selection, projectId: 'project' }),
+      body: JSON.stringify({ operation: 'assign', selection, projectId: 'project', captureUndo: true }),
     }))
     expect(fetch).toHaveBeenNthCalledWith(2, '/api/v1/extension/comments/bulk', expect.objectContaining({
       body: JSON.stringify({ operation: 'delete', selection }),
