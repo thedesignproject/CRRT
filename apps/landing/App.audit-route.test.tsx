@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const auth = vi.hoisted(() => ({
   getSession: vi.fn(),
@@ -61,15 +61,16 @@ it('keeps the landing page for non-audit routes', () => {
   expect(screen.getAllByRole('link', { name: 'Get started' })[0]).toBeInTheDocument()
 })
 
-it('recognizes an existing session, updates the nav, and redirects to the dashboard', async () => {
+it('keeps an existing session on the landing and offers explicit dashboard navigation', async () => {
   const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
   auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-1' } } } })
   render(<App />)
-  expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
-  await waitFor(() => expect(replace).toHaveBeenCalledWith('http://localhost:5173'))
+  expect(await screen.findByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', 'http://localhost:5173')
+  expect(screen.getByRole('heading', { name: /Humans give feedback/i })).toBeInTheDocument()
+  expect(replace).not.toHaveBeenCalled()
 })
 
-it('keeps the promo page visible for a signed-in user who opts to stay', async () => {
+it('preserves older stay links without requiring them', async () => {
   const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
   window.history.replaceState({}, '', '/?stay=1')
   auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-1' } } } })
@@ -79,11 +80,16 @@ it('keeps the promo page visible for a signed-in user who opts to stay', async (
   expect(replace).not.toHaveBeenCalled()
 })
 
-it('reacts to later auth changes and unsubscribes on unmount', () => {
+it('updates account navigation without redirecting on auth changes and unsubscribes', () => {
+  const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
   const view = render(<App />)
   expect(auth.listener).not.toBeNull()
   act(() => auth.listener?.('SIGNED_IN', { user: { id: 'user-1' } }))
   expect(screen.getByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+  expect(replace).not.toHaveBeenCalled()
+  act(() => auth.listener?.('SIGNED_OUT', null))
+  expect(screen.getAllByRole('link', { name: 'Get started' })[0]).toHaveAttribute('href', 'http://localhost:5173')
+  expect(replace).not.toHaveBeenCalled()
   view.unmount()
   expect(auth.unsubscribe).toHaveBeenCalledOnce()
 })
