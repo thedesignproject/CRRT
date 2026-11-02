@@ -359,6 +359,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     clearReadyUndo()
     const current = comments.find((c) => c.id === id)
     if (!current) return
+    const scope = feedbackWrites.current
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
     setComments((prev) => prev.map((c) => c.id === id
       ? {
@@ -369,25 +370,56 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         }
       : c))
     try {
-      await trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+      const operation = trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+      const version = scope.version
+      const updated = await operation
+      if (feedbackWrites.current === scope && scope.version === version) {
+        setComments((prev) => prev.map((c) => c.id === id ? {
+          ...c,
+          reviewStatus: updated.reviewStatus,
+          implementationStatus: updated.implementationStatus,
+          claimedByAgentId: updated.claimedByAgentId,
+          visibility: updated.visibility,
+          updatedAt: updated.updatedAt,
+        } : c))
+      } else {
+        await reconcileFeedback(scope)
+      }
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+  }, [accessToken, comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite, reconcileFeedback])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
   }, [handleReviewStatus])
 
   const handleVisibilityChange = useCallback(async (id: string, visibility: 'shared' | 'internal') => {
+    const scope = feedbackWrites.current
     const previous = comments.find((comment) => comment.id === id)?.visibility
     setComments((current) => current.map((comment) => comment.id === id
       ? { ...comment, visibility }
       : comment))
     try {
-      await trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+      const operation = trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+      const version = scope.version
+      const updated = await operation
+      if (feedbackWrites.current === scope && scope.version === version) {
+        setComments((current) => current.map((comment) => comment.id === id
+          ? {
+              ...comment,
+              reviewStatus: updated.reviewStatus,
+              implementationStatus: updated.implementationStatus,
+              claimedByAgentId: updated.claimedByAgentId,
+              visibility: updated.visibility,
+              updatedAt: updated.updatedAt,
+            }
+          : comment))
+      } else {
+        await reconcileFeedback(scope)
+      }
     } catch (error) {
       if (previous) {
         setComments((current) => current.map((comment) => comment.id === id
@@ -397,7 +429,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       console.error('Failed to update feedback audience:', error)
       mutation.report(error)
     }
-  }, [accessToken, comments, mutation.report, trackFeedbackWrite])
+  }, [accessToken, comments, mutation.report, trackFeedbackWrite, reconcileFeedback])
 
   const toggleBulkSelect = useCallback((id: string, range: string[] = [id]) => {
     if (bulkActionBusy) return
@@ -509,10 +541,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (result.status === 'rejected') mutation.report(result.reason)
     }
     const conflicts = new Set(results.flatMap((result, i) => result.status === 'rejected' && result.reason?.status === 409 ? [i] : []))
-    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i))
+    const unavailable = new Set(results.flatMap((result, i) => result.status === 'rejected' && readyUndo[i].undoToken && result.reason?.status === 400 ? [i] : []))
+    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i) && !unavailable.has(i))
     setReadyUndo(remaining)
     setBulkActionBusy(false)
-    if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
+    if (unavailable.size) setBulkActionError('Undo expired or is no longer valid for some items. Refresh to review them.')
+    else if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
     else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
     else setBulkTransitionNotice('Previous statuses restored.')
     await refreshComments()
