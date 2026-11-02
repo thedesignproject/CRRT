@@ -3728,3 +3728,28 @@ GRANT EXECUTE ON FUNCTION public.assign_actor_inbox_feedback_with_versions(uuid,
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
 `
+
+// Forward repair for 0048: keep Cloud quota admission ahead of comment locks,
+// and allow personal extension feedback without charging a NULL project owner.
+export const inboxRestoreCloudSql = [
+  cloudInboxAssignmentSql.slice(0, cloudInboxAssignmentSql.indexOf('--> statement-breakpoint'))
+    .replace('assign_actor_inbox_feedback(', 'assign_actor_inbox_feedback_with_versions(')
+    .replace('RETURNS TABLE(id uuid)', 'RETURNS TABLE(id uuid, updated_at timestamptz)')
+    .replace('RETURNING c.id;', 'RETURNING c.id,c.updated_at;'),
+  inboxRestoreSql.slice(inboxRestoreSql.indexOf('CREATE FUNCTION public.restore_actor_inbox_feedback('), inboxRestoreSql.indexOf('--> statement-breakpoint\nREVOKE ALL'))
+    .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+    .replace("  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');", `  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');
+  PERFORM public.cloud_require_write(public.cloud_owner(p_project));`),
+  cloudPlansSql.match(/CREATE FUNCTION public\.cloud_comment_guard\(\)[\s\S]*?\n\$\$;/)![0]
+    .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+    .replace('  IF NOT public.cloud_enabled() THEN RETURN NEW; END IF;', `  IF NOT public.cloud_enabled() THEN RETURN NEW; END IF;
+  IF NEW.source='extension' AND NEW.project_id IS NULL THEN
+    -- Returning to Inbox remains a write against the previous project owner;
+    -- new personal Inbox items do not consume a project's Cloud quota.
+    IF TG_OP='UPDATE' AND OLD.project_id IS NOT NULL THEN
+      PERFORM public.cloud_validate_write(public.cloud_owner(OLD.project_id));
+    END IF;
+    RETURN NEW;
+  END IF;`),
+  "NOTIFY pgrst, 'reload schema';",
+].join('\n--> statement-breakpoint\n')
