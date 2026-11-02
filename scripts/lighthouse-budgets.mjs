@@ -14,6 +14,18 @@ export const metricBudgets = {
 // These use the uncompressed local preview, so CDN compression cannot mask bloat.
 export const transferBudgets = { script: 450_000, stylesheet: 145_000 }
 
+/** Disjoint CI shards keep exhaustive audits within each job's time limit. */
+export function shardPaths(paths, shard) {
+  if (shard === undefined) return paths
+  const match = /^(\d+)\/(\d+)$/.exec(shard)
+  if (!match) throw new Error('--shard must use index/total, for example 1/8')
+  const index = Number(match[1]), total = Number(match[2])
+  if (index < 1 || total < 1 || index > total || total > 16) throw new Error('Invalid Lighthouse shard')
+  const selected = paths.filter((_, position) => position % total === index - 1)
+  if (!selected.length) throw new Error('Lighthouse shard selects no URLs')
+  return selected
+}
+
 export function median(values) {
   const sorted = [...values].sort((a, b) => a - b)
   const middle = Math.floor(sorted.length / 2)

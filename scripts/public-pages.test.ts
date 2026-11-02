@@ -139,7 +139,10 @@ describe('built public pages', () => {
 })
 
 describe('routing boundaries', () => {
-  const publicRoute = new RegExp(publicPageRoutes[0].src)
+  const publicRoute = { test: (path: string) => publicPageRoutes.some(route => 'dest' in route && new RegExp(route.src).test(path)) }
+  it('keeps deployment route expressions bounded as the library grows', () => {
+    for (const route of publicPageRoutes) expect(route.src.length).toBeLessThan(4096)
+  })
   it.each(publicPages)('negotiates only the known page $path', ({ path }) => {
     expect(publicRoute.test(path)).toBe(true)
     expect(publicRoute.test(path === '/' ? path : path + '/')).toBe(true)

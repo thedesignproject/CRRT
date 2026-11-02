@@ -12,7 +12,8 @@ export async function loadLandingApp(pathname: string) {
       const { resources } = await import('./resources/content')
       article = resources.find(resource => resourcePath(resource) === path)
     }
-    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage pathname={pathname} article={article} /></ThemeProvider>
+    const extraTool = article?.tool && !['contrast', 'units', 'feedback'].includes(article.tool) ? (await import('./resources/ExtendedResourceTools')).ExtendedResourceTools : undefined
+    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage extraTool={extraTool} pathname={pathname} article={article} /></ThemeProvider>
   }
   const { App } = await import('./App')
   return <App />

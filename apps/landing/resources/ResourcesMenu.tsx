@@ -29,7 +29,7 @@ export function ResourcesMenu() {
         <div className="resources-menu-intro">
           <span className="resource-eyebrow">The CRRT field guide</span>
           <p>Build with AI.<br />Keep your taste.</p>
-          <div className="resources-menu-tools"><span className="resource-eyebrow">Interactive tools</span>{resources.filter(resource => resource.tool).map(resource => <a key={resource.slug} href={resourcePath(resource)}>{resource.title}</a>)}</div>
+          <div className="resources-menu-tools"><span className="resource-eyebrow">Interactive tools</span>{resources.filter(resource => resource.tool).slice(0, 3).map(resource => <a key={resource.slug} href={resourcePath(resource)}>{resource.title}</a>)}</div>
           <a href="/resources">Explore all resources <ArrowRight size={16} aria-hidden="true" /></a>
         </div>
         {resourceTracks.map(track => <div className="resources-menu-track" key={track.id}>

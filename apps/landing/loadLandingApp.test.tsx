@@ -15,3 +15,13 @@ it.each(['/', '/docs/install', '/dashboard', '/resources-other'])('preserves the
   render(await loadLandingApp(path))
   expect(screen.getByText('Application surface')).toBeInTheDocument()
 })
+
+it('preloads the interactive module for extended utilities while retaining resource routing', async () => {
+  render(await loadLandingApp('/resources/hex-rgb-converter'))
+  expect(screen.getByText('Resource surface: /resources/hex-rgb-converter')).toBeInTheDocument()
+})
+
+it('loads the basic calculator without requesting the extended tool surface', async () => {
+  render(await loadLandingApp('/resources/text-contrast-checker'))
+  expect(screen.getByText('Resource surface: /resources/text-contrast-checker')).toBeInTheDocument()
+})
