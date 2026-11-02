@@ -12,12 +12,12 @@ const plans = [
     features: ['Unlimited projects and users', 'Unlimited comments and audits', 'Your infrastructure and data'],
   },
   {
-    key: 'pro', name: 'Pro', monthly: 19, yearly: 192, recommended: true,
+    key: 'pro', name: 'Pro', monthly: 18, yearly: 192, recommended: true,
     description: 'For teams turning feedback into fixes.',
     features: ['Private projects · 10 internal collaborators', 'Storybook review and component context', 'MCP connection and agent handoff', 'GitHub, Linear, and Jira integrations', 'Record agent handoff · private preview', '2,000 comments · 5 Product Audits / month', 'Unlimited guests'],
   },
   {
-    key: 'studio', name: 'Studio', monthly: 49, yearly: 492, includes: 'Pro',
+    key: 'studio', name: 'Studio', monthly: 54, yearly: 492, includes: 'Pro',
     description: 'For agencies managing multiple client projects.',
     features: ['50 projects · 25 internal collaborators', '10,000 comments / month', '30 Product Audits / month', 'Unlimited guests'],
   },
@@ -62,7 +62,7 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
       <header className="plan-intro">
         <h2>Choose how CRRT runs.</h2>
         <p>Self-host CRRT for free, or choose Cloud when you want it managed and ready for your team. Cloud plans start with a 14-day trial.</p>
-        <SegmentedControl label="Billing cycle" value={cycle} onChange={setCycle} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save 16%' }]} />
+        <SegmentedControl label="Billing cycle" value={cycle} onChange={setCycle} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save with yearly' }]} />
       </header>
       <div className="plan-grid">
         {plans.map((plan) => {
