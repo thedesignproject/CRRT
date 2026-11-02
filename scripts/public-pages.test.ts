@@ -42,7 +42,18 @@ describe('built public pages', () => {
     window.document.write(read('index.html'))
     const schema = JSON.parse(window.document.querySelector('script[type="application/ld+json"]')!.textContent!)
     expect(schema).toMatchObject({ '@context': 'https://schema.org', '@type': 'SoftwareApplication', name: 'CRRT', url: 'https://crrt.ai/' })
-    for (const script of window.document.querySelectorAll('script[src]')) expect(existsSync(resolve(dist, script.getAttribute('src')!.slice(1)))).toBe(true)
+    const scripts = [...window.document.querySelectorAll('script[src]')]
+    const analyticsUrl = 'https://www.googletagmanager.com/gtag/js?id=G-JQN2RFQPL3'
+    expect(scripts.filter(script => script.getAttribute('src') === analyticsUrl)).toHaveLength(1)
+    for (const script of scripts) {
+      const src = script.getAttribute('src')!
+      if (src === analyticsUrl) {
+        expect(script.hasAttribute('async')).toBe(true)
+      } else {
+        expect(src).toMatch(/^\/assets\//)
+        expect(existsSync(resolve(dist, src.slice(1)))).toBe(true)
+      }
+    }
     window.happyDOM.abort()
   })
 
