@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { restoreInboxComments, type InboxUndoItem } from '../api'
 
-export function InboxMoveUndo({ apiBase, accessToken, projectId, items, onRestored }: {
-  apiBase:string; accessToken:string; projectId:string; items:InboxUndoItem[]; onRestored:()=>void
+export function InboxMoveUndo({ apiBase, accessToken, projectId, items, onProgress, onRestored }: {
+  apiBase:string; accessToken:string; projectId:string; items:InboxUndoItem[]; onProgress:()=>void; onRestored:()=>void
 }) {
   const [remaining,setRemaining]=useState(items)
   const [busy,setBusy]=useState(false)
@@ -20,6 +20,7 @@ export function InboxMoveUndo({ apiBase, accessToken, projectId, items, onRestor
         conflicts+=result.skipped.length
         pending=pending.slice(500)
         setRemaining(pending);setSkipped(conflicts)
+        onProgress()
       }
       if(conflicts)setMessage(`${conflicts} items changed or are already in use and were not restored by this request. Review Inbox for the current result.`)
       else onRestored()
