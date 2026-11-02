@@ -359,6 +359,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     clearReadyUndo()
     const current = comments.find((c) => c.id === id)
     if (!current) return
+    const scope = feedbackWrites.current
     const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
     setComments((prev) => prev.map((c) => c.id === id
       ? {
@@ -369,25 +370,56 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         }
       : c))
     try {
-      await trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+      const operation = trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+      const version = scope.version
+      const updated = await operation
+      if (feedbackWrites.current === scope && scope.version === version) {
+        setComments((prev) => prev.map((c) => c.id === id ? {
+          ...c,
+          reviewStatus: updated.reviewStatus,
+          implementationStatus: updated.implementationStatus,
+          claimedByAgentId: updated.claimedByAgentId,
+          visibility: updated.visibility,
+          updatedAt: updated.updatedAt,
+        } : c))
+      } else {
+        await reconcileFeedback(scope)
+      }
     } catch (err) {
       console.error('Failed to update implementation status:', err)
       mutation.report(err)
       refreshComments()
     }
-  }, [comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+  }, [accessToken, comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite, reconcileFeedback])
 
   const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
     handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
   }, [handleReviewStatus])
 
   const handleVisibilityChange = useCallback(async (id: string, visibility: 'shared' | 'internal') => {
+    const scope = feedbackWrites.current
     const previous = comments.find((comment) => comment.id === id)?.visibility
     setComments((current) => current.map((comment) => comment.id === id
       ? { ...comment, visibility }
       : comment))
     try {
-      await trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+      const operation = trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+      const version = scope.version
+      const updated = await operation
+      if (feedbackWrites.current === scope && scope.version === version) {
+        setComments((current) => current.map((comment) => comment.id === id
+          ? {
+              ...comment,
+              reviewStatus: updated.reviewStatus,
+              implementationStatus: updated.implementationStatus,
+              claimedByAgentId: updated.claimedByAgentId,
+              visibility: updated.visibility,
+              updatedAt: updated.updatedAt,
+            }
+          : comment))
+      } else {
+        await reconcileFeedback(scope)
+      }
     } catch (error) {
       if (previous) {
         setComments((current) => current.map((comment) => comment.id === id
@@ -397,7 +429,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       console.error('Failed to update feedback audience:', error)
       mutation.report(error)
     }
-  }, [accessToken, comments, mutation.report, trackFeedbackWrite])
+  }, [accessToken, comments, mutation.report, trackFeedbackWrite, reconcileFeedback])
 
   const toggleBulkSelect = useCallback((id: string, range: string[] = [id]) => {
     if (bulkActionBusy) return
