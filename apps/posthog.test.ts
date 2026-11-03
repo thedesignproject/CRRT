@@ -19,6 +19,30 @@ async function load(mode = 'production', ssr = false, key = 'test-public-key', h
 }
 
 describe('PostHog browser initialization', () => {
+  it('redacts top-level identify attribution while preserving the event envelope', async () => {
+    await load()
+    const beforeSend = init.mock.calls[0][1].before_send
+    const timestamp = new Date('2026-11-03T00:00:00Z')
+    const event = {
+      event: '$identify', uuid: 'event-id', timestamp,
+      properties: { distinct_id: 'user-1', $current_url: 'https://crrt.ai/dashboard?invite=project#secret' },
+      $set: { email: 'user@example.com', $referrer: 'https://crrt.ai/?email=guest@example.com' },
+      $set_once: {
+        $initial_current_url: 'https://crrt.ai/dashboard/login?invite=project&email=guest%40example.com#secret',
+        $current_url: 'https://crrt.ai/dashboard?invite=project#secret',
+      },
+    }
+    expect(beforeSend(event)).toEqual({
+      event: '$identify', uuid: 'event-id', timestamp,
+      properties: { distinct_id: 'user-1', $current_url: 'https://crrt.ai/dashboard' },
+      $set: { email: 'user@example.com', $referrer: 'https://crrt.ai/' },
+      $set_once: {
+        $initial_current_url: 'https://crrt.ai/dashboard/login',
+        $current_url: 'https://crrt.ai/dashboard',
+      },
+    })
+    expect(event.timestamp).toBe(timestamp)
+  })
   it('redacts query strings and fragments from page, referrer, identity and nested link URLs', async () => {
     await load()
     const beforeSend = init.mock.calls[0][1].before_send

@@ -27,7 +27,12 @@ if (isPostHogConfigured) {
       api_host: apiHost,
       before_send: (event) => {
         if (event?.event === '$autocapture') return null
-        if (event) event.properties = redactUrls(event.properties) as typeof event.properties
+        if (event) {
+          // Identify attribution lives beside properties, not inside it.
+          for (const key of ['properties', '$set', '$set_once'] as const) {
+            if (event[key]) event[key] = redactUrls(event[key]) as typeof event.properties
+          }
+        }
         return event
       },
       capture_exceptions: {
