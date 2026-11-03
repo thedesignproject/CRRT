@@ -19,6 +19,28 @@ async function load(mode = 'production', ssr = false, key = 'test-public-key', h
 }
 
 describe('PostHog browser initialization', () => {
+  it('redacts query strings and fragments from page, referrer, identity and nested link URLs', async () => {
+    await load()
+    const beforeSend = init.mock.calls[0][1].before_send
+    const event = { properties: {
+      $current_url: 'https://crrt.ai/dashboard/login?invite=project&email=guest@example.com#secret',
+      $referrer: 'https://crrt.ai/?email=guest@example.com',
+      $set_once: { $initial_current_url: 'https://crrt.ai/#access_token=secret' },
+      $elements: [{ attr__href: '/dashboard/?invite=project#secret' }],
+      $pathname: '/dashboard/login',
+      count: 1,
+      empty: null,
+      url_count: 2,
+    } }
+    expect(beforeSend(event)).toEqual({ properties: {
+      $current_url: 'https://crrt.ai/dashboard/login',
+      $referrer: 'https://crrt.ai/',
+      $set_once: { $initial_current_url: 'https://crrt.ai/' },
+      $elements: [{ attr__href: '/dashboard/' }],
+      $pathname: '/dashboard/login', count: 1, empty: null, url_count: 2,
+    } })
+    expect(beforeSend(null)).toBeNull()
+  })
   it('initializes once with the configured ingestion host and error capture', async () => {
     expect((await load()).isPostHogConfigured).toBe(true)
     await import('./posthog')

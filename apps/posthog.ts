@@ -6,11 +6,27 @@ const isBrowser = !import.meta.env.SSR && import.meta.env.MODE === 'production'
 
 export let isPostHogConfigured = Boolean(isBrowser && apiKey && apiHost)
 
+// Include nested autocapture hrefs and initial/referrer properties as well as pageviews.
+function redactUrls(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactUrls)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+    key,
+    /url|referrer|href/i.test(key) && typeof item === 'string'
+      ? item.split(/[?#]/, 1)[0]
+      : redactUrls(item),
+  ]))
+}
+
 if (isPostHogConfigured) {
   try {
     posthog.init(apiKey, {
       capture_pageview: 'history_change',
       api_host: apiHost,
+      before_send: (event) => {
+        if (event) event.properties = redactUrls(event.properties) as typeof event.properties
+        return event
+      },
       capture_exceptions: {
         capture_unhandled_errors: true,
         capture_unhandled_rejections: true,

@@ -26,4 +26,6 @@ After review and merge to `trunk`, the existing GitHub deployment workflow build
 
 The integration records pageviews, SDK autocapture, unhandled browser errors, and explicit events for demo starts, project creation/invites, feedback review/completion, agent handoffs, external work creation, GitHub/Linear connection, and checkout starts. Explicit events omit feedback text, prompts, and AI completions. Authenticated identity includes user ID and email. Browser logs contain only the two explicit demo/project-created messages.
 
+Before events are sent, URL, referrer, and link properties (including nested initial URL properties) have query strings and fragments removed. Page paths remain available for analytics; invitation email parameters and URL tokens are excluded.
+
 Dashboard: https://us.posthog.com/project/705236/dashboard/2293290
