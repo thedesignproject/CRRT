@@ -10,7 +10,7 @@ export let isPostHogConfigured = Boolean(isBrowser && apiKey && apiHost)
 function redactUrls(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactUrls)
   if (value === null || typeof value !== 'object') return value
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+  return Object.fromEntries(Object.entries(value).filter(([key]) => key !== '$elements_chain' && key !== '$el_text').map(([key, item]) => [
     key,
     /url|referrer|href/i.test(key) && typeof item === 'string'
       ? item.split(/[?#]/, 1)[0]
@@ -22,8 +22,11 @@ if (isPostHogConfigured) {
   try {
     posthog.init(apiKey, {
       capture_pageview: 'history_change',
+      // Product actions are tracked explicitly; never collect feedback DOM content.
+      autocapture: false,
       api_host: apiHost,
       before_send: (event) => {
+        if (event?.event === '$autocapture') return null
         if (event) event.properties = redactUrls(event.properties) as typeof event.properties
         return event
       },
@@ -31,10 +34,6 @@ if (isPostHogConfigured) {
         capture_unhandled_errors: true,
         capture_unhandled_rejections: true,
         capture_console_errors: false,
-      },
-      logs: {
-        serviceName: 'crrt-web',
-        environment: import.meta.env.MODE,
       },
     })
   } catch {
@@ -54,5 +53,4 @@ export default {
   capture: safely((...args: Parameters<typeof posthog.capture>) => posthog.capture(...args)),
   identify: safely((...args: Parameters<typeof posthog.identify>) => posthog.identify(...args)),
   reset: safely(() => posthog.reset()),
-  logger: { info: safely((...args: Parameters<typeof posthog.logger.info>) => posthog.logger.info(...args)) },
 }

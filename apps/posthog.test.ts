@@ -27,6 +27,8 @@ describe('PostHog browser initialization', () => {
       $referrer: 'https://crrt.ai/?email=guest@example.com',
       $set_once: { $initial_current_url: 'https://crrt.ai/#access_token=secret' },
       $elements: [{ attr__href: '/dashboard/?invite=project#secret' }],
+      $elements_chain: 'a[href="https://storage.example/screenshot?token=secret"]',
+      $el_text: 'Private feedback body',
       $pathname: '/dashboard/login',
       count: 1,
       empty: null,
@@ -40,13 +42,16 @@ describe('PostHog browser initialization', () => {
       $pathname: '/dashboard/login', count: 1, empty: null, url_count: 2,
     } })
     expect(beforeSend(null)).toBeNull()
+    expect(beforeSend({ event: '$autocapture', properties: { $el_text: 'Private feedback' } })).toBeNull()
   })
   it('initializes once with the configured ingestion host and error capture', async () => {
     expect((await load()).isPostHogConfigured).toBe(true)
     await import('./posthog')
     expect(init).toHaveBeenCalledTimes(1)
+    expect(init.mock.calls[0][1]).not.toHaveProperty('logs')
     expect(init).toHaveBeenCalledWith('test-public-key', expect.objectContaining({
       api_host: 'https://us.i.posthog.com',
+      autocapture: false,
       capture_exceptions: { capture_unhandled_errors: true, capture_unhandled_rejections: true, capture_console_errors: false },
     }))
   })
@@ -68,10 +73,9 @@ it('keeps product actions working when analytics fails', async () => {
   expect(() => analytics.capture('project_created')).not.toThrow()
   analytics.identify('user-1')
   analytics.reset()
-  analytics.logger.info('project created')
   expect(sdk.identify).toHaveBeenCalledWith('user-1')
   expect(sdk.reset).toHaveBeenCalledOnce()
-  expect(sdk.logger.info).toHaveBeenCalledWith('project created')
+  expect(sdk.logger.info).not.toHaveBeenCalled()
 })
 
 it('does not send product events when disabled', async () => {
@@ -79,7 +83,6 @@ it('does not send product events when disabled', async () => {
   analytics.capture('project_created')
   analytics.identify('user-1')
   analytics.reset()
-  analytics.logger.info('project created')
   expect(sdk.capture).not.toHaveBeenCalled()
   expect(sdk.identify).not.toHaveBeenCalled()
   expect(sdk.reset).not.toHaveBeenCalled()

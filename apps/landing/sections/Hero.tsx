@@ -74,7 +74,6 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
           <div className="landing-hero-actions">
           <a className="landing-hero-cta" href="#try-crrt" onClick={(event) => {
             posthog.capture('live_demo_started')
-            posthog.logger.info('landing live demo started', { surface: 'hero' })
             tryCrrt(event)
           }}>
             <span><CarrotIcon size={28} /></span>

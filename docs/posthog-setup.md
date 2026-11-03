@@ -24,8 +24,8 @@ After review and merge to `trunk`, the existing GitHub deployment workflow build
 3. Sign in to the dashboard; confirm the authenticated user ID is identified. Sign out and confirm the identity resets.
 4. Perform a successful product action, such as copying the agent setup prompt, and confirm its event arrives.
 
-The integration records pageviews, SDK autocapture, unhandled browser errors, and explicit events for demo starts, project creation/invites, feedback review/completion, agent handoffs, external work creation, GitHub/Linear connection, and checkout starts. Explicit events omit feedback text, prompts, and AI completions. Authenticated identity includes user ID and email. Browser logs contain only the two explicit demo/project-created messages.
+The integration records pageviews, unhandled browser errors, and explicit events for demo starts, project creation/invites, feedback review/completion, agent handoffs, external work creation, GitHub/Linear connection, and checkout starts. Explicit events omit feedback text, prompts, and AI completions. Authenticated identity includes user ID and email. Interaction autocapture and structured browser logging are disabled to avoid collecting private feedback text or raw page URLs.
 
-Before events are sent, URL, referrer, and link properties (including nested initial URL properties) have query strings and fragments removed. Page paths remain available for analytics; invitation email parameters and URL tokens are excluded.
+Before events are sent, URL, referrer, and link properties (including nested initial URL properties) have query strings and fragments removed. Serialized DOM chains and captured element text are discarded as an additional safeguard. Page paths remain available for analytics; invitation email parameters and URL tokens are excluded.
 
 Dashboard: https://us.posthog.com/project/705236/dashboard/2293290

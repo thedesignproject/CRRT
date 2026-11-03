@@ -767,7 +767,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     try {
       const project = await claimProject(projectKey, name)
       posthog.capture('project_created')
-      posthog.logger.info('dashboard project created', { source: 'project_dialog' })
       setSelectedProject(project.publicKey)
       setView('feedback')
       setStatusFilter('open')
