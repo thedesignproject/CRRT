@@ -1,6 +1,6 @@
 export const CLOUD_PLANS = {
-  pro: { name: 'Cloud Pro', monthlyUsd: 19, yearlyUsd: 192, projects: 10, internal_users: 10, comments: 2000, product_audits: 5 },
-  studio: { name: 'Cloud Studio', monthlyUsd: 49, yearlyUsd: 492, projects: 50, internal_users: 25, comments: 10000, product_audits: 30 },
+  pro: { name: 'Cloud Pro', monthlyUsd: 18, yearlyUsd: 192, projects: 10, internal_users: 10, comments: 2000, product_audits: 5 },
+  studio: { name: 'Cloud Studio', monthlyUsd: 54, yearlyUsd: 492, projects: 50, internal_users: 25, comments: 10000, product_audits: 30 },
 } as const
 export type BillingCycle = 'monthly' | 'yearly'
 export type CloudPlan = keyof typeof CLOUD_PLANS

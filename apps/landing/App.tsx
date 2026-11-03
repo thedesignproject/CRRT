@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { DASHBOARD_HREF } from './sections/Hero'
 import { MarketingPage } from './MarketingPage'
 import { EasterEgg } from './components/EasterEgg'
 import { useScrollProgress } from './lib/useScrollProgress'
@@ -9,6 +8,10 @@ import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
 import { ThemeProvider } from '../../src/design-system'
+import { ResourcesPage } from './resources/ResourcesPage'
+import { readResourceData } from './resources/readResourceData'
+import './globals.css'
+import './marketing-polish.css'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
@@ -29,10 +32,12 @@ function RoutedApp() {
   const publicPath = initialPath.replace(/\/+$/, '')
   const isDocs = initialPath.startsWith('/docs')
   const isAudit = initialPath.startsWith('/audit/')
-  const stayOnMarketing = typeof window !== 'undefined'
-    && new URLSearchParams(window.location.search).get('stay') === '1'
 
   useScrollProgress()
+
+  if (publicPath === '/resources' || publicPath.startsWith('/resources/')) {
+    return <ResourcesPage pathname={initialPath} article={readResourceData(initialPath)} />
+  }
 
   if (publicPath === '/privacy') {
     return <PrivacyPage />
@@ -57,18 +62,16 @@ function RoutedApp() {
     return <ProductAuditWorkspace />
   }
 
-  return <MarketingSite apiBase={apiBase} projectId={projectId} stayOnMarketing={stayOnMarketing} demoComments={demoComments} />
+  return <MarketingSite apiBase={apiBase} projectId={projectId} demoComments={demoComments} />
 }
 
 function MarketingSite({
   apiBase,
   projectId,
-  stayOnMarketing,
   demoComments,
 }: {
   apiBase: string
   projectId: string
-  stayOnMarketing: boolean
   demoComments: PersonalComments
 }) {
   const [session, setSession] = useState<Session | null>(null)
@@ -84,10 +87,6 @@ function MarketingSite({
     })
     return () => subscription.subscription.unsubscribe()
   }, [])
-
-  useEffect(() => {
-    if (session && !stayOnMarketing) window.location.replace(DASHBOARD_HREF)
-  }, [session, stayOnMarketing])
 
   return (
     <>
