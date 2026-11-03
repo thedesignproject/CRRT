@@ -76,7 +76,8 @@ describe('built public pages', () => {
     const manifest = JSON.parse(read('.vite/manifest.json'))
     const entry = manifest[page.path.startsWith('/resources') ? 'resources/ResourcesPage.tsx' : 'App.tsx']
     const html = read(page.path === '/' ? 'index.html' : `${page.path.slice(1)}/index.html`)
-    expect(html).toContain(`href="/${entry.file}"`)
+    if (page.path.startsWith('/resources')) expect(html).not.toContain(`rel="modulepreload" href="/${entry.file}"`)
+    else expect(html).toContain(`href="/${entry.file}"`)
     for (const css of entry.css || []) expect(html).toContain(`href="/${css}"`)
     expect(html).not.toContain('fonts.googleapis.com')
     expect(html).not.toContain('fonts.gstatic.com')

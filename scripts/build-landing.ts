@@ -38,7 +38,8 @@ for (const page of publicPages) {
   document.write(template.replace('<div id="root"></div>', () => `<div id="root">${render(page.path)}</div>`))
   document.title = page.title
   // Split route styles must be in the initial HTML, including without JS.
-  // Preload the same route modules without pulling in unrelated app surfaces.
+  // Resource content paints before interactive modules are fetched; other
+  // application surfaces retain their eager module preload behavior.
   const visited = new Set<string>()
   const routeStyles = new Set<string>()
   const routeModules = new Set<string>()
@@ -52,7 +53,7 @@ for (const page of publicPages) {
     routeModules.add(entry.file)
   }
   collectEntry(page.path.startsWith('/resources') ? 'resources/ResourcesPage.tsx' : 'App.tsx')
-  for (const [rel, files] of [['stylesheet', routeStyles], ['modulepreload', routeModules]] as const) {
+  for (const [rel, files] of [['stylesheet', routeStyles], ['modulepreload', page.path.startsWith('/resources') ? new Set<string>() : routeModules]] as const) {
     for (const file of files) {
       if (document.querySelector(`link[rel="${rel}"][href="/${file}"]`)) continue
       const link = document.createElement('link'); link.rel = rel; link.href = `/${file}`
