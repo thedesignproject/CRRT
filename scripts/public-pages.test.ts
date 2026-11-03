@@ -76,7 +76,8 @@ describe('built public pages', () => {
     const manifest = JSON.parse(read('.vite/manifest.json'))
     const entry = manifest[page.path.startsWith('/resources') ? 'resources/ResourcesPage.tsx' : 'App.tsx']
     const html = read(page.path === '/' ? 'index.html' : `${page.path.slice(1)}/index.html`)
-    expect(html).toContain(`href="/${entry.file}"`)
+    if (page.path.startsWith('/resources')) expect(html).not.toContain(`rel="modulepreload" href="/${entry.file}"`)
+    else expect(html).toContain(`href="/${entry.file}"`)
     for (const css of entry.css || []) expect(html).toContain(`href="/${css}"`)
     expect(html).not.toContain('fonts.googleapis.com')
     expect(html).not.toContain('fonts.gstatic.com')
@@ -126,6 +127,9 @@ describe('built public pages', () => {
     expect(existsSync(resolve(dist, 'resources-og.png'))).toBe(true)
     expect(doc.querySelector('article')!.textContent).toContain(resource.answer)
     expect(doc.querySelector('article')!.textContent).toContain('Written with AI assistance')
+    const catalog = JSON.parse(doc.getElementById('resource-catalog-data')!.textContent!)
+    expect(catalog.length).toBeLessThanOrEqual(14)
+    for (const related of resource.related) expect(catalog.some((item: {slug: string}) => item.slug === related)).toBe(true)
     const serialized = JSON.parse(doc.getElementById('resource-page-data')!.textContent!)
     expect(serialized).toEqual(resource)
     expect(doc.querySelectorAll('#resource-page-data')).toHaveLength(1)
@@ -139,7 +143,10 @@ describe('built public pages', () => {
 })
 
 describe('routing boundaries', () => {
-  const publicRoute = new RegExp(publicPageRoutes[0].src)
+  const publicRoute = { test: (path: string) => publicPageRoutes.some(route => 'dest' in route && new RegExp(route.src).test(path)) }
+  it('keeps deployment route expressions bounded as the library grows', () => {
+    for (const route of publicPageRoutes) expect(route.src.length).toBeLessThan(4096)
+  })
   it.each(publicPages)('negotiates only the known page $path', ({ path }) => {
     expect(publicRoute.test(path)).toBe(true)
     expect(publicRoute.test(path === '/' ? path : path + '/')).toBe(true)

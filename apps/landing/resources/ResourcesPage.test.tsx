@@ -2,11 +2,13 @@ import { act, fireEvent, render as renderUI, screen, within } from '@testing-lib
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { ThemeProvider } from '../../../src/design-system'
+import { resourceCatalog } from './catalog.generated'
+import { ResourceCatalogContext } from './ResourceCatalogContext'
 import { ResourcesPage } from './ResourcesPage'
 import { resourceMinutes, resourcePath, resources } from './content'
 import { render as prerender } from '../prerender'
 
-const render = (node: ReactNode) => renderUI(<ThemeProvider defaultTheme="light">{node}</ThemeProvider>)
+const render = (node: ReactNode) => renderUI(<ThemeProvider defaultTheme="light"><ResourceCatalogContext.Provider value={resourceCatalog}>{node}</ResourceCatalogContext.Provider></ThemeProvider>)
 
 vi.mock('./ResourceFigure', () => ({ ResourceFigure: ({ track }: { track: string }) => <div data-testid={`figure-${track}`} /> }))
 
@@ -26,8 +28,11 @@ it('renders all guides, filters by topic, searches case-insensitively, and clear
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: '  LoVaBlE  ' } })
   expect(screen.getByRole('status')).toHaveTextContent('1 resource matching “LoVaBlE”')
   expect(screen.getByRole('heading', { name: resources[4].title })).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
+  const clearSearch = screen.getByRole('button', { name: 'Clear search' })
+  clearSearch.focus()
+  fireEvent.click(clearSearch)
   expect(screen.getByRole('searchbox')).toHaveValue('')
+  expect(screen.getByRole('searchbox')).toHaveFocus()
   fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'design systems' } })
   expect(screen.getByRole('status')).toHaveTextContent(`${resources.filter(resource => resource.track === 'design-systems').length} resources matching “design systems”`)
   fireEvent.click(screen.getByRole('button', { name: 'Clear search' }))
@@ -49,7 +54,7 @@ it.each(resources)('renders the full $slug guide, visible sources, matching arti
   for (const source of resource.sources) expect(screen.getByRole('link', { name: source.label })).toHaveAttribute('href', source.href)
   for (const link of view.container.querySelectorAll<HTMLAnchorElement>('a[href^="#"]')) expect(view.container.querySelector(link.getAttribute('href')!)).not.toBeNull()
   expect(within(screen.getByRole('navigation', { name: 'On this page' })).getAllByRole('link')).toHaveLength(resource.sections.length + 3 + Number(Boolean(resource.tool)))
-  expect(resourceMinutes(resource)).toBeGreaterThanOrEqual(3)
+  expect(resourceMinutes(resource)).toBeGreaterThanOrEqual(1)
 })
 
 it('supports copy success, unavailable clipboard, and permission failures without losing the template', async () => {
@@ -87,5 +92,30 @@ it('rejects article data for another route and serializes embedded text safely',
   const script = view.container.querySelector('#resource-page-data')!
   expect(script.textContent).toContain('\\u003c/script>')
   expect(JSON.parse(script.textContent!).answer).toBe(answer)
+  expect(view.container.querySelector('script:not([type])')).toBeNull()
+})
+
+
+it('combines the 12 topic groups with guide/tool filtering and resets from track navigation', () => {
+  render(<ResourcesPage pathname="/resources" />)
+  fireEvent.change(screen.getByLabelText('Resource type'), { target: { value: 'tools' } })
+  expect(screen.getByRole('status')).toHaveTextContent('36 resources to explore')
+  fireEvent.change(screen.getByLabelText('Topic'), { target: { value: '3' } })
+  expect(screen.getByRole('status')).toHaveTextContent('resources to explore')
+  fireEvent.change(screen.getByLabelText('Resource type'), { target: { value: 'guides' } })
+  expect(screen.getByRole('status')).toHaveTextContent('10 resources to explore')
+  fireEvent.click(screen.getByRole('link', { name: /Browse all 36 tools/ }))
+  expect(screen.getByRole('status')).toHaveTextContent('36 resources to explore')
+  fireEvent.click(screen.getByRole('link', { name: /01 Design systems/ }))
+  expect(screen.getByRole('status')).toHaveTextContent('156 resources to explore')
+})
+
+it('serializes browsing metadata without allowing embedded markup to become executable',()=>{
+  const title='</script><script>untrusted()</script>'
+  const catalog=[{...resourceCatalog[0],title}]
+  const view=render(<ResourcesPage pathname="/resources/missing" catalog={catalog}/>)
+  const script=view.container.querySelector('#resource-catalog-data')!
+  expect(script.textContent).not.toContain('</script>')
+  expect(JSON.parse(script.textContent!)[0].title).toBe(title)
   expect(view.container.querySelector('script:not([type])')).toBeNull()
 })

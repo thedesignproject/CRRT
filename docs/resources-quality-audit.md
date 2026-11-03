@@ -1,4 +1,6 @@
-# Resource quality audit — November 2, 2026
+# Initial 22-page resource quality audit — November 2, 2026
+
+Historical baseline for the first resource release. The complete 157-page expansion is documented in [full brief coverage](resources-full-brief.md); do not treat this initial table as an audit of the expanded library.
 
 Source: **Measured**, local production build, Lighthouse 13.6.0. All **22 resource URLs** were tested: the hub, 18 guides, and 3 interactive tools. The final validation uses one mobile and one desktop run per URL (44 audits). This is a pre-deployment lab audit, not production field data. CI remains configured for three runs per URL and profile.
 

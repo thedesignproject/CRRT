@@ -42,3 +42,14 @@ it('fails on missing measurements, runtime errors, or metric regressions', () =>
   invalid.audits['llms-txt'].score = 0
   expect(summarizeReports([invalid]).failures).toContain('agentic-browsing: llms-txt failed')
 })
+
+it('partitions every URL across disjoint exhaustive CI shards', async () => {
+  const { shardPaths } = await import('./lighthouse-budgets.mjs')
+  const paths=Array.from({length:157},(_,index)=>`/resources/example-${index}`)
+  const shards=Array.from({length:8},(_,index)=>shardPaths(paths,`${index+1}/8`))
+  expect(shardPaths(paths,undefined)).toEqual(paths)
+  expect(shards.flat().sort()).toEqual([...paths].sort())
+  expect(new Set(shards.flat()).size).toBe(paths.length)
+  for(const invalid of ['bad','0/8','9/8','1/0','1/17']) expect(()=>shardPaths(paths,invalid)).toThrow()
+  expect(()=>shardPaths(['/resources'],'2/8')).toThrow('selects no URLs')
+})

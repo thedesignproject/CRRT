@@ -1,5 +1,6 @@
 import { ThemeProvider } from '../../src/design-system/theme'
 import { readResourceData } from './resources/readResourceData'
+import { readResourceCatalog } from './resources/readResourceCatalog'
 import { resourcePath } from './resources/model'
 
 /** Leave prerendered content visible while loading only the requested surface. */
@@ -12,7 +13,10 @@ export async function loadLandingApp(pathname: string) {
       const { resources } = await import('./resources/content')
       article = resources.find(resource => resourcePath(resource) === path)
     }
-    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage pathname={pathname} article={article} /></ThemeProvider>
+    let catalog = readResourceCatalog()
+    if (!catalog && import.meta.env.DEV) catalog = (await import('./resources/catalog.generated')).resourceCatalog
+    const extraTool = article?.tool && !['contrast', 'units', 'feedback'].includes(article.tool) ? (await import('./resources/ExtendedResourceTools')).ExtendedResourceTools : undefined
+    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage catalog={catalog} extraTool={extraTool} pathname={pathname} article={article} /></ThemeProvider>
   }
   const { App } = await import('./App')
   return <App />

@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { publicPages } from '../apps/landing/lib/publicPages.ts'
-import { summarizeReports } from './lighthouse-budgets.mjs'
+import { summarizeReports, shardPaths } from './lighthouse-budgets.mjs'
 
 const exec = promisify(execFile)
 const require = createRequire(import.meta.url)
@@ -15,7 +15,7 @@ const profile = options.get('profile') ?? 'mobile'
 if (![1, 2, 3, 4, 5].includes(runs)) throw new Error('--runs must be between 1 and 5')
 if (!['mobile', 'desktop'].includes(profile)) throw new Error('--profile must be mobile or desktop')
 const allPaths = publicPages.filter(page => page.path.startsWith('/resources')).map(page => page.path)
-const paths = options.has('paths') ? options.get('paths').split(',') : allPaths
+const paths = shardPaths(options.has('paths') ? options.get('paths').split(',') : allPaths, options.get('shard'))
 if (!paths.length || paths.some(path => !allPaths.includes(path))) throw new Error('--paths must contain existing resource URLs')
 const port = options.get('port') ?? '4323'
 if (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535) throw new Error('Invalid --port')

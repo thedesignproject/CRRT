@@ -1,37 +1,46 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { ArrowDown, ArrowRight, Search, X } from 'lucide-react'
-import { Navigation } from '../sections/Hero'
+import { Navigation } from '../components/Navigation'
 import { Footer } from '../sections/Footer'
 import { CarrotIcon } from '../components/CarrotIcon'
-import { updatePublicMetadata } from '../lib/publicMetadata'
+import { applyPublicMetadata } from '../lib/applyPublicMetadata'
 import { ResourceFigure } from './ResourceFigure'
-import { resourceDate, resourceAuthor, resourceMinutes, resourcePath, resourceTracks, type Resource, type ResourceSummary, type ResourceTrack } from './model'
-import { resourceCatalog as resources } from './catalog.generated'
+import { resourceDate, resourceAuthor, resourceMinutes, resourcePath, resourceTracks, resourceCategories, type Resource, type ResourceSummary, type ResourceToolConfig, type ResourceTrack } from './model'
+import { ResourceCatalogContext, useResourceCatalog } from './ResourceCatalogContext'
 import { ResourceTool } from './ResourceTool'
 import './resources.css'
 
-export function ResourcesPage({ pathname, article }: { pathname: string; article?: Resource }) {
+export function ResourcesPage({ pathname, article, extraTool, catalog: suppliedCatalog }: { pathname: string; article?: Resource; catalog?: ResourceSummary[]; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>; config?: ResourceToolConfig}> }) {
+  const inheritedCatalog = useResourceCatalog()
+  const catalog = suppliedCatalog ?? inheritedCatalog
   const path = pathname.replace(/\/+$/, '')
   const resource = article && resourcePath(article) === path ? article : undefined
-  useEffect(() => { updatePublicMetadata(path) }, [path])
+  useEffect(() => { if (path === '/resources' || resource) applyPublicMetadata({ path, title: resource ? `${resource.seoTitle} | CRRT` : 'Design systems, agent workflows & AI prototyping | CRRT', description: resource ? resource.description : 'Practical guides and tools for designers and founders: review design systems, prototype with AI, and turn visual feedback into reviewed coding-agent fixes.' }) }, [path, resource])
 
-  return <div className="resources-shell">
+  return <ResourceCatalogContext.Provider value={catalog}><div className="resources-shell">
+    <script id="resource-catalog-data" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(catalog).replace(/</g, '\\u003c') }} />
     {resource && <script id="resource-page-data" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(resource).replace(/</g, '\\u003c') }} />}
     <a className="resource-skip" href="#resource-main">Skip to content</a>
     <header className="resource-site-header"><Navigation authenticated={false} /></header>
-    {path === '/resources' ? <ResourcesIndex /> : resource ? <ResourceArticle resource={resource} /> : <main id="resource-main" className="resource-not-found"><h1>Guide not found</h1><p>This resource doesn’t exist. Browse the library to find a guide.</p><a href="/resources">Back to resources <ArrowRight size={16} aria-hidden="true" /></a></main>}
+    {path === '/resources' ? <ResourcesIndex /> : resource ? <ResourceArticle resource={resource} extraTool={extraTool} /> : <main id="resource-main" className="resource-not-found"><h1>Guide not found</h1><p>This resource doesn’t exist. Browse the library to find a guide.</p><a href="/resources">Back to resources <ArrowRight size={16} aria-hidden="true" /></a></main>}
     <Footer />
-  </div>
+  </div></ResourceCatalogContext.Provider>
 }
 
 function ResourcesIndex() {
+  const resources = useResourceCatalog()
   const [query, setQuery] = useState('')
+  const searchInput = useRef<HTMLInputElement>(null)
   const [trackFilter, setTrackFilter] = useState<ResourceTrack | 'all'>('all')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [kindFilter, setKindFilter] = useState('all')
   const normalizedQuery = query.trim().toLowerCase()
   const matches = resources.filter(resource => (trackFilter === 'all' || resource.track === trackFilter)
-    && `${resource.title} ${resource.description} ${resource.track.replace(/-/g, ' ')} ${resource.takeaway}`.toLowerCase().includes(normalizedQuery))
+    && (categoryFilter === 'all' || resource.category === Number(categoryFilter))
+    && (kindFilter === 'all' || (kindFilter === 'tools' ? Boolean(resource.tool) : !resource.tool))
+    && `${resource.title} ${resource.track.replace(/-/g, ' ')} ${resource.takeaway}`.toLowerCase().includes(normalizedQuery))
   const featured = resources[2]
-  const reset = () => { setQuery(''); setTrackFilter('all') }
+  const reset = () => { setQuery(''); setTrackFilter('all'); setCategoryFilter('all'); setKindFilter('all') }
   const tools = resources.filter(resource => resource.tool)
 
   return <main id="resource-main">
@@ -55,7 +64,7 @@ function ResourcesIndex() {
       </a>)}
     </nav>
 
-    <section className="resource-tool-directory" aria-labelledby="resource-tools-title"><div><span className="resource-eyebrow">Use it in your next review</span><h2 id="resource-tools-title">Small tools. Clearer decisions.</h2><p>Check a pair, convert a value, or put a correction into words.</p></div><div className="resource-tool-directory-links">{tools.map(tool => <a key={tool.slug} href={resourcePath(tool)}><span className="resource-guide-meta">Interactive tool</span><h3>{tool.title}</h3><p>{tool.takeaway}</p><ArrowRight size={18} aria-hidden="true" /></a>)}</div></section>
+    <section className="resource-tool-directory" aria-labelledby="resource-tools-title"><div><span className="resource-eyebrow">Use it in your next review</span><h2 id="resource-tools-title">Small tools. Clearer decisions.</h2><p>Check a pair, compare images, or put a correction into words.</p><a className="resource-text-link" href="#library" onClick={() => { reset(); setKindFilter('tools') }}>Browse all {tools.length} tools <ArrowRight size={16} aria-hidden="true" /></a></div><div className="resource-tool-directory-links">{tools.slice(0, 3).map(tool => <a key={tool.slug} href={resourcePath(tool)}><span className="resource-guide-meta">Interactive tool</span><h3>{tool.title}</h3><p>{tool.takeaway}</p><ArrowRight size={18} aria-hidden="true" /></a>)}</div></section>
 
     <section className="resource-library" id="library" aria-labelledby="library-title">
       <div className="resource-library-heading"><div><span className="resource-eyebrow">A little reading. A better next build.</span><h2 id="library-title">From first draft to shipped.</h2></div><span>{resources.length - tools.length} guides / {tools.length} tools / 3 tracks</span></div>
@@ -64,8 +73,9 @@ function ResourcesIndex() {
           <button type="button" aria-pressed={trackFilter === 'all'} onClick={() => setTrackFilter('all')}>All resources <span>{resources.length}</span></button>
           {resourceTracks.map(track => <button type="button" key={track.id} aria-pressed={trackFilter === track.id} onClick={() => setTrackFilter(track.id)}>{track.label}</button>)}
         </div>
-        <div className="resource-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Search resources" placeholder="Find a guide…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}</div>
+        <div className="resource-search"><Search size={16} aria-hidden="true" /><input ref={searchInput} type="search" autoComplete="off" spellCheck={false} data-1p-ignore aria-label="Search resources" placeholder="Find a guide…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" onClick={() => { setQuery(''); searchInput.current!.focus() }} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}</div>
       </div>
+      <div className="resource-topic-controls"><label>Topic<select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="all">All 12 topics</option>{resourceCategories.map((label,index)=><option value={index} key={label}>{label}</option>)}</select></label><label>Resource type<select value={kindFilter} onChange={event => setKindFilter(event.target.value)}><option value="all">Guides and tools</option><option value="guides">Guides</option><option value="tools">Tools and templates</option></select></label></div>
       <p className="resource-results" role="status" aria-live="polite">{matches.length} {matches.length === 1 ? 'resource' : 'resources'}{normalizedQuery ? ` matching “${query.trim()}”` : ' to explore'}</p>
       {resourceTracks.map((track, index) => {
         const guides = matches.filter(resource => resource.track === track.id)
@@ -86,7 +96,8 @@ function ResourceRow({ resource, article = false }: { resource: ResourceSummary;
   return <a className="resource-guide" href={resourcePath(resource)}><div><span className="resource-guide-meta">{resource.tool ? 'Interactive tool' : 'Practical guide'} <span>·</span> {resource.minutes} min read</span><Heading>{resource.title}</Heading><p>{resource.takeaway}</p></div><ArrowRight size={20} aria-hidden="true" /></a>
 }
 
-function ResourceArticle({ resource }: { resource: Resource }) {
+function ResourceArticle({ resource, extraTool }: { resource: Resource; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>; config?: ResourceToolConfig}> }) {
+  const resources = useResourceCatalog()
   const track = resourceTracks.find(item => item.id === resource.track)!
   const related = resources.filter(item => resource.related.includes(item.slug))
   return <main id="resource-main" className="resource-article-main">
@@ -98,11 +109,11 @@ function ResourceArticle({ resource }: { resource: Resource }) {
     <div className="resource-article-layout">
       <aside className="resource-toc"><nav aria-label="On this page"><span className="resource-eyebrow">On this page</span>{resource.tool && <a href="#interactive-tool">Use the tool</a>}<a href="#quick-answer">The short answer</a>{resource.sections.map(section => <a key={section.id} href={`#${section.id}`}>{section.title}</a>)}<a href="#questions">Common questions</a><a href="#sources">Sources & further reading</a></nav><a className="resource-toc-back" href="/resources">← All resources</a></aside>
       <article className="resource-prose">
-        {resource.tool && <ResourceTool kind={resource.tool} />}
+        {resource.tool && <ResourceTool kind={resource.tool} config={resource.toolConfig} extraTool={extraTool} />}
         <section className="resource-answer" id="quick-answer"><h2>The short answer</h2><p>{resource.answer}</p></section>
         {resource.sections.map(section => <section id={section.id} key={section.id}><h2>{section.title}</h2>{section.paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}{section.code && <CopyableExample code={section.code} />}{section.items && <ul>{section.items.map(item => <li key={item}>{item}</li>)}</ul>}</section>)}
         <section id="questions"><h2>Common questions</h2>{resource.questions.map(item => <div className="resource-question" key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></div>)}</section>
-        <section className="resource-sources" id="sources"><h2>Sources & further reading</h2><ul>{resource.sources.map(source => <li key={source.href}><a href={source.href}>{source.label} <ArrowRight size={14} aria-hidden="true" /></a></li>)}</ul><p>Written with AI assistance. Tool references checked against the linked documentation on November 2, 2026. Examples are starter templates to adapt and review in your own project.</p></section>
+        <section className="resource-sources" id="sources"><h2>Sources & further reading</h2><ul>{resource.sources.map(source => <li key={source.href}><a href={source.href}>{source.label} <ArrowRight size={14} aria-hidden="true" /></a></li>)}</ul><p>Written with AI assistance. Sources are linked for further reading. Worked examples use fictional data and must be adapted and verified in your own project.</p></section>
       </article>
     </div>
     <section className="resource-related" aria-labelledby="related-heading"><span className="resource-eyebrow">Keep going</span><h2 id="related-heading">Put the next piece in place.</h2>{related.map(item => <ResourceRow article resource={item} key={item.slug} />)}</section>

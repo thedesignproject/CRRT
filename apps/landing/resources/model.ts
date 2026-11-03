@@ -1,3 +1,5 @@
+export const resourceToolKinds = ['hex-rgb','contrast','themes','token-map','similar-colors','units','type-scale','line-height','spacing','token-diff','overlay','before-after','crop','decoration','icon-alignment','state-matrix','stress-text','feedback','annotator','criteria','capture-format','review-request','prototype-checklist','triage','conflict','versions','change-summary','resolution','cycle-time','handoff','system-context','component-contract','decision','failed-fix','impact-map','guided-case'] as const
+export type ResourceToolKind = typeof resourceToolKinds[number]
 export const resourceTracks = [
   { id: 'design-systems', label: 'Design systems', description: 'Give every screen the same set of rules.', detail: 'Tokens, components, and consistency as your product grows.', figure: 'Exploded' },
   { id: 'agentic-workflows', label: 'Agentic workflows', description: 'Turn a sharp eye into a shipped fix.', detail: 'Clear feedback, bounded changes, and a review you can trust.', figure: 'Branches' },
@@ -12,6 +14,13 @@ export type ResourceSection = {
   items?: string[]
   code?: string
 }
+export type ResourceToolConfig = {
+  name: string
+  purpose: string
+  limit: string
+  fields?: [string, string][]
+  table?: {title: string; columns: string[]; rows: string[][]}
+}
 export type Resource = {
   slug: string
   track: ResourceTrack
@@ -24,13 +33,18 @@ export type Resource = {
   questions: { question: string; answer: string }[]
   sources: { label: string; href: string }[]
   related: string[]
-  tool?: 'contrast' | 'units' | 'feedback'
+  tool?: ResourceToolKind
+  briefId?: number
+  utilityId?: number
+  toolConfig?: ResourceToolConfig
 }
 
 export const resourceDate = '2026-11-02'
 export const resourceAuthor = { '@type': 'Organization', name: 'CRRT', url: 'https://crrt.ai/' }
 
-export type ResourceSummary = Omit<Resource, 'answer' | 'sections' | 'questions' | 'sources'> & { minutes: number }
+export const resourceCategories = ['Actionable visual feedback', 'Faster feedback loops', 'Design-to-prototype fidelity', 'Color, typography & tokens', 'Practical design systems', 'Agentic design systems', 'Feedback-to-agent handoff', 'Prototype review & generated UI', 'Storybook & component review', 'Verifying UI changes', 'Client & team reviews', 'Examples & comparisons'] as const
+
+export type ResourceSummary = Pick<Resource, 'slug' | 'track' | 'title' | 'takeaway' | 'tool' | 'briefId' | 'utilityId'> & { minutes: number; category: number }
 
 export const resourcePath = (resource: Pick<Resource, 'slug'>) => `/resources/${resource.slug}`
 

@@ -1,8 +1,9 @@
-import { useState } from 'react'
-import type { Resource } from './model'
+import { useState, type ComponentType } from 'react'
+import type { Resource, ResourceToolConfig } from './model'
 import { buildFeedbackBrief, convertCssUnits, parseHex, textContrast, type FeedbackFields } from './toolCalculations'
 
-export function ResourceTool({ kind }: { kind: NonNullable<Resource['tool']> }) {
+export function ResourceTool({ kind, config, extraTool: ExtraTool }: { kind: NonNullable<Resource['tool']>; config?: ResourceToolConfig; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>; config?: ResourceToolConfig}> }) {
+  if (!['contrast', 'units', 'feedback'].includes(kind)) return ExtraTool ? <ExtraTool kind={kind} config={config} /> : <section className="resource-tool" id="interactive-tool"><p>Reload this page to open its interactive tool. The instructions remain available below.</p></section>
   return <section className="resource-tool" id="interactive-tool" aria-label="Interactive tool">
     {kind === 'contrast' ? <ContrastChecker /> : kind === 'units' ? <UnitConverter /> : <FeedbackBuilder />}
     <noscript><p>Enable JavaScript to change the inputs and copy results. The worked example and instructions remain available below.</p></noscript>
@@ -80,7 +81,7 @@ function FeedbackBuilder() {
   </>
 }
 
-function ToolCopy({ text, label = 'Copy result' }: { text: string; label?: string }) {
+export function ToolCopy({ text, label = 'Copy result' }: { text: string; label?: string }) {
   const [feedback, setFeedback] = useState({ text: '', kind: 'idle' })
   const status = feedback.text === text ? feedback.kind : 'idle'
   async function copy() {

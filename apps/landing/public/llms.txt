@@ -40,6 +40,141 @@ A human must create the handoff and provide its share slug and scoped token. Ann
 - [Text contrast checker for UI color pairs](https://crrt.ai/resources/text-contrast-checker): Check a color pair and copy a precise review note.
 - [px to rem converter with an adjustable root size](https://crrt.ai/resources/px-to-rem-converter): Convert a value using the root size your project actually uses.
 - [Visual feedback brief builder](https://crrt.ai/resources/visual-feedback-brief-builder): Build a clear, copyable UI change request.
+- [What context belongs in a visual bug report?](https://crrt.ai/resources/what-context-belongs-in-a-visual-bug-report): Identify the exact target. Define a completion check.
+- [How to point to the right element on a crowded screen](https://crrt.ai/resources/how-to-point-to-the-right-element-on-a-crowded-screen): Distinguish repeated elements. Check that another person can find it.
+- [How to separate design preference from a usability problem](https://crrt.ai/resources/how-to-separate-design-preference-from-a-usability-problem): Write the observation without a judgment. Accept one outcome before handing it off.
+- [How to write acceptance criteria for a visual change](https://crrt.ai/resources/how-to-write-acceptance-criteria-for-a-visual-change): Start with the original failure. Record verification separately from intention.
+- [When should feedback include video instead of screenshots?](https://crrt.ai/resources/when-should-feedback-include-video-instead-of-screenshots): Decide what evidence the issue needs. Retest the behavior with equivalent evidence.
+- [How to report a bug that appears only after interaction](https://crrt.ai/resources/how-to-report-a-bug-that-appears-only-after-interaction): Reset to a known starting state. Verify the original path and recovery.
+- [How to turn conflicting stakeholder comments into a decision](https://crrt.ai/resources/how-to-turn-conflicting-stakeholder-comments-into-a-decision): Keep the original comments intact. Publish the accepted direction.
+- [How to request missing context without restarting a review](https://crrt.ai/resources/how-to-request-missing-context-without-restarting-a-review): Identify the missing decision input. Resume the same bounded task.
+- [How to triage a large feedback batch](https://crrt.ai/resources/how-to-triage-a-large-feedback-batch): Normalize the evidence. Create a reviewable next batch.
+- [How to merge duplicate feedback without losing evidence](https://crrt.ai/resources/how-to-merge-duplicate-feedback-without-losing-evidence): Compare the reproduction conditions. Verify all retained conditions.
+- [How to choose review-batch size for agent fixes](https://crrt.ai/resources/how-to-choose-review-batch-size-for-agent-fixes): Identify shared context. Adjust using actual review difficulty.
+- [How to keep feedback attached to the right prototype version](https://crrt.ai/resources/how-to-keep-feedback-attached-to-the-right-prototype-version): Name the reviewed artifact. Review with a stable comparison.
+- [How to write a review request people can act on immediately](https://crrt.ai/resources/how-to-write-a-review-request-people-can-act-on-immediately): State the decision the review supports. Close the request with a decision.
+- [How to collect asynchronous review without a long meeting](https://crrt.ai/resources/how-to-collect-asynchronous-review-without-a-long-meeting): Prepare an independent starting point. Publish a compact handback.
+- [How to tell reviewers what changed since their last visit](https://crrt.ai/resources/how-to-tell-reviewers-what-changed-since-their-last-visit): Start from accepted requests. Preserve a traceable response.
+- [How to close a feedback loop with evidence](https://crrt.ai/resources/how-to-close-a-feedback-loop-with-evidence): Restate the accepted outcome. Let the owner resolve the request.
+- [How to measure feedback cycle time honestly](https://crrt.ai/resources/how-to-measure-feedback-cycle-time-honestly): Define the events consistently. Interpret a comparable set of records.
+- [Why does my prototype look different from my design?](https://crrt.ai/resources/why-does-my-prototype-look-different-from-my-design): Match the reference conditions. Verify at another width.
+- [How to find typography mismatches in a prototype](https://crrt.ai/resources/how-to-find-typography-mismatches-in-a-prototype): Confirm the font actually loaded. Stress the corrected text.
+- [How to fix spacing drift without random pixel tweaks](https://crrt.ai/resources/how-to-fix-spacing-drift-without-random-pixel-tweaks): Name the relationship. Review content changes.
+- [How to translate Auto Layout intent into browser constraints](https://crrt.ai/resources/how-to-translate-auto-layout-intent-into-browser-constraints): Describe the intended relationship. Test the constraint with real content.
+- [How to preserve image crop and aspect ratio from design](https://crrt.ai/resources/how-to-preserve-image-crop-and-aspect-ratio-from-design): Verify the source asset. Check alternate dimensions.
+- [How to preserve icon alignment and visual weight](https://crrt.ai/resources/how-to-preserve-icon-alignment-and-visual-weight): Compare like roles. Review behavior as well as balance.
+- [Why do shadows, borders, and radii feel wrong in code?](https://crrt.ai/resources/why-do-shadows-borders-and-radii-feel-wrong-in-code): Match the surface context. Review states and neighboring surfaces.
+- [How to match desktop intent without breaking mobile](https://crrt.ai/resources/how-to-match-desktop-intent-without-breaking-mobile): State the desktop priorities. Compare both ends after the change.
+- [How to define “matches the design” before implementation](https://crrt.ai/resources/how-to-define-matches-the-design-before-implementation): Choose the authoritative reference. Review against the agreement.
+- [HEX vs RGB: convert colors without changing appearance](https://crrt.ai/resources/hex-vs-rgb-convert-colors-without-changing-appearance): Identify the supported input. Verify the applied color.
+- [How to check text contrast before sending design feedback](https://crrt.ai/resources/how-to-check-text-contrast-before-sending-design-feedback): Find the actual color pair. Recheck the implemented pair.
+- [How to move raw colors into semantic design tokens](https://crrt.ai/resources/how-to-move-raw-colors-into-semantic-design-tokens): Inventory values and uses. Verify meaning across themes.
+- [How to find near-duplicate colors in a token set](https://crrt.ai/resources/how-to-find-near-duplicate-colors-in-a-token-set): Collect a bounded color list. Verify any consolidation.
+- [How to convert px to rem with the right root size](https://crrt.ai/resources/how-to-convert-px-to-rem-with-the-right-root-size): Inspect the root size. Check resizing and content.
+- [How to preview a type scale on real UI content](https://crrt.ai/resources/how-to-preview-a-type-scale-on-real-ui-content): Choose a representative content set. Test the scale in the product.
+- [How to choose line height for dense product interfaces](https://crrt.ai/resources/how-to-choose-line-height-for-dense-product-interfaces): Use the real content shape. Stress the surrounding layout.
+- [How to map inconsistent spacing onto a shared scale](https://crrt.ai/resources/how-to-map-inconsistent-spacing-onto-a-shared-scale): Inventory relationships. Verify states and exceptions.
+- [How to review design-token changes before release](https://crrt.ai/resources/how-to-review-design-token-changes-before-release): Compare compatible inputs. Release with evidence.
+- [How to decide whether two buttons need one component](https://crrt.ai/resources/how-to-decide-whether-two-buttons-need-one-component): Compare the action contract. Verify both consumers.
+- [How to audit component drift across product screens](https://crrt.ai/resources/how-to-audit-component-drift-across-product-screens): Choose representative consumers. Verify the consolidation.
+- [How to document component behavior beyond appearance](https://crrt.ai/resources/how-to-document-component-behavior-beyond-appearance): Name the component’s job. Maintain the contract with changes.
+- [How to design empty, loading, error, and success states together](https://crrt.ai/resources/how-to-design-empty-loading-error-and-success-states-together): Map the task lifecycle. Repeat a real recovery path.
+- [How to keep design and code token names aligned](https://crrt.ai/resources/how-to-keep-design-and-code-token-names-aligned): Inventory names and roles. Check the rendered consumers.
+- [How to handle design-system exceptions without permanent drift](https://crrt.ai/resources/how-to-handle-design-system-exceptions-without-permanent-drift): Describe the uncovered need. Revisit when assumptions change.
+- [How to review a shared-component change across consumers](https://crrt.ai/resources/how-to-review-a-shared-component-change-across-consumers): Find known consumers. Record migration and gaps.
+- [How to retire duplicate components safely](https://crrt.ai/resources/how-to-retire-duplicate-components-safely): Compare the real contracts. Confirm removal conditions.
+- [How to turn repeated UI feedback into system improvements](https://crrt.ai/resources/how-to-turn-repeated-ui-feedback-into-system-improvements): Group the underlying observation. Review adoption.
+- [What makes a design system usable by coding agents?](https://crrt.ai/resources/what-makes-a-design-system-usable-by-coding-agents): Make the entry point discoverable. Evaluate the result.
+- [How to write a design-system brief an agent can follow](https://crrt.ai/resources/how-to-write-a-design-system-brief-an-agent-can-follow): Name the accepted task. Define the review evidence.
+- [How to make an agent reuse components instead of inventing them](https://crrt.ai/resources/how-to-make-an-agent-reuse-components-instead-of-inventing-them): Locate the existing pattern. Inspect the output.
+- [How to document interaction contracts for agents](https://crrt.ai/resources/how-to-document-interaction-contracts-for-agents): Map the public states. Verify the same paths.
+- [How to keep agent design context current as components change](https://crrt.ai/resources/how-to-keep-agent-design-context-current-as-components-change): Identify duplicated guidance. Review adoption.
+- [Which design rules belong in linters versus human review?](https://crrt.ai/resources/which-design-rules-belong-in-linters-versus-human-review): Separate rules from judgments. Evaluate enforcement on real changes.
+- [How to evaluate whether design-system context improves agent output](https://crrt.ai/resources/how-to-evaluate-whether-design-system-context-improves-agent-output): Define the task and comparison. Improve the missing context.
+- [How to turn approved visual feedback into an agent brief](https://crrt.ai/resources/how-to-turn-approved-visual-feedback-into-an-agent-brief): Confirm the decision. Require evidence of the result.
+- [What should an agent know before changing a UI component?](https://crrt.ai/resources/what-should-an-agent-know-before-changing-a-ui-component): Locate the component and contract. Define the evidence to return.
+- [How to break a large design change into reviewable tasks](https://crrt.ai/resources/how-to-break-a-large-design-change-into-reviewable-tasks): Define the final experience. Integrate and verify the flow.
+- [How to preserve constraints while rewriting vague feedback](https://crrt.ai/resources/how-to-preserve-constraints-while-rewriting-vague-feedback): Extract what is known. Confirm and verify the rewrite.
+- [How to pass screenshots and element context to an agent](https://crrt.ai/resources/how-to-pass-screenshots-and-element-context-to-an-agent): Capture the relevant state. Verify on the same path.
+- [How to handle ambiguous feedback before an agent starts](https://crrt.ai/resources/how-to-handle-ambiguous-feedback-before-an-agent-starts): Name the ambiguity. Update the accepted task.
+- [How to report an unsuccessful agent fix](https://crrt.ai/resources/how-to-report-an-unsuccessful-agent-fix): Recover the original expectation. Repeat the relevant checks.
+- [How to include verification steps in every agent task](https://crrt.ai/resources/how-to-include-verification-steps-in-every-agent-task): Start with reproduction. Require actual results.
+- [How to choose copied prompts versus connected feedback retrieval](https://crrt.ai/resources/how-to-choose-copied-prompts-versus-connected-feedback-retrieval): Identify the context needed. Verify the same outcome.
+- [How to distinguish a convincing mockup from a working flow](https://crrt.ai/resources/how-to-distinguish-a-convincing-mockup-from-a-working-flow): Identify the task boundary. Communicate prototype limits.
+- [How to review generated tables with realistic data](https://crrt.ai/resources/how-to-review-generated-tables-with-realistic-data): Choose representative fixtures. Verify the accepted correction.
+- [How to check navigation and back-button behavior in a prototype](https://crrt.ai/resources/how-to-check-navigation-and-back-button-behavior-in-a-prototype): Map the meaningful routes. Verify the full route sequence.
+- [How to spot placeholder content that distorts a design review](https://crrt.ai/resources/how-to-spot-placeholder-content-that-distorts-a-design-review): Inventory assumptions in the sample. Keep useful fixtures.
+- [How to test responsive behavior between standard breakpoints](https://crrt.ai/resources/how-to-test-responsive-behavior-between-standard-breakpoints): Start with the task and content. Repeat on the corrected build.
+- [How to prioritize prototype problems before a demo](https://crrt.ai/resources/how-to-prioritize-prototype-problems-before-a-demo): Define the demo path. Rehearse and disclose limits.
+- [Which component variants deserve their own review examples?](https://crrt.ai/resources/which-component-variants-deserve-their-own-review-examples): Inventory supported variation. Verify consumer fit.
+- [How to review light and dark component themes together](https://crrt.ai/resources/how-to-review-light-and-dark-component-themes-together): Pair equivalent examples. Verify consumers and switching.
+- [How to catch text overflow before components reach production](https://crrt.ai/resources/how-to-catch-text-overflow-before-components-reach-production): Select useful stress content. Verify interaction and enlargement.
+- [How to document feedback on a specific component state](https://crrt.ai/resources/how-to-document-feedback-on-a-specific-component-state): Identify the review example. Review the same state again.
+- [How to review component interactions as well as visuals](https://crrt.ai/resources/how-to-review-component-interactions-as-well-as-visuals): Choose meaningful sequences. Verify recovery and integration.
+- [How to review components with realistic data fixtures](https://crrt.ai/resources/how-to-review-components-with-realistic-data-fixtures): Define the shapes that matter. Reuse and maintain the examples.
+- [How to connect component feedback to affected product screens](https://crrt.ai/resources/how-to-connect-component-feedback-to-affected-product-screens): Find the affected usage. Close the shared change with evidence.
+- [How to keep a component review from becoming a redesign](https://crrt.ai/resources/how-to-keep-a-component-review-from-becoming-a-redesign): State the review boundary. Review the bounded result.
+- [How to assemble component context for a coding agent](https://crrt.ai/resources/how-to-assemble-component-context-for-a-coding-agent): Identify the implementation. Require a scoped response.
+- [What can screenshot comparison prove—and what can it miss?](https://crrt.ai/resources/what-can-screenshot-comparison-prove-and-what-can-it-miss): Control the comparison. Review baseline updates.
+- [How to distinguish intentional visual changes from regressions](https://crrt.ai/resources/how-to-distinguish-intentional-visual-changes-from-regressions): Recover the accepted intent. Accept the new reference explicitly.
+- [How to stabilize screenshots for reliable comparisons](https://crrt.ai/resources/how-to-stabilize-screenshots-for-reliable-comparisons): Fix the environment. Review the resulting evidence.
+- [How to review keyboard access after an agent UI change](https://crrt.ai/resources/how-to-review-keyboard-access-after-an-agent-ui-change): Start from a predictable location. Record actual results.
+- [How to review focus indicators across themes](https://crrt.ai/resources/how-to-review-focus-indicators-across-themes): Choose relevant focus states. Verify the accepted treatment.
+- [How to verify error messages help users recover](https://crrt.ai/resources/how-to-verify-error-messages-help-users-recover): Trigger an authentic failure state. Confirm completion.
+- [How to check layout after text zoom and content expansion](https://crrt.ai/resources/how-to-check-layout-after-text-zoom-and-content-expansion): Choose a representative flow. Verify the corrected task.
+- [How to inspect a shared-token change for visual regressions](https://crrt.ai/resources/how-to-inspect-a-shared-token-change-for-visual-regressions): Understand the token role. Record the release decision.
+- [How to reopen a resolved issue with useful evidence](https://crrt.ai/resources/how-to-reopen-a-resolved-issue-with-useful-evidence): Recover the previous decision. Verify before closing again.
+- [How to ask stakeholders the right questions at each stage](https://crrt.ai/resources/how-to-ask-stakeholders-the-right-questions-at-each-stage): Name the current decision. Return the decision.
+- [How to assign feedback ownership across design and engineering](https://crrt.ai/resources/how-to-assign-feedback-ownership-across-design-and-engineering): Classify the decision. Close with a reviewer decision.
+- [How to define review rounds without endless revisions](https://crrt.ai/resources/how-to-define-review-rounds-without-endless-revisions): Set the round’s purpose. Close and hand back.
+- [How to preserve decisions made in Slack during a UI review](https://crrt.ai/resources/how-to-preserve-decisions-made-in-slack-during-a-ui-review): Confirm what was decided. Maintain the result.
+- [How to hand feedback between time zones](https://crrt.ai/resources/how-to-hand-feedback-between-time-zones): State the current artifact. Preserve the response trail.
+- [How to distinguish product feedback from new project scope](https://crrt.ai/resources/how-to-distinguish-product-feedback-from-new-project-scope): Recover the agreement. Record and verify the accepted work.
+- [How to collect final design approval with traceable evidence](https://crrt.ai/resources/how-to-collect-final-design-approval-with-traceable-evidence): Freeze the review target. Preserve the accepted record.
+- [How to review several client projects without mixing context](https://crrt.ai/resources/how-to-review-several-client-projects-without-mixing-context): Name the project before the issue. Verify in the correct environment.
+- [How to share review examples without exposing client data](https://crrt.ai/resources/how-to-share-review-examples-without-exposing-client-data): Identify what must be preserved. Verify the shared version.
+- [Screenshot comments versus element-pinned feedback](https://crrt.ai/resources/screenshot-comments-versus-element-pinned-feedback): Compare the location evidence. Verify the outcome.
+- [Video feedback versus written feedback for interaction bugs](https://crrt.ai/resources/video-feedback-versus-written-feedback-for-interaction-bugs): Identify the hidden behavior. Use equivalent verification.
+- [Slack-only review versus feedback attached to a prototype](https://crrt.ai/resources/slack-only-review-versus-feedback-attached-to-a-prototype): Separate discussion from evidence. Close the loop.
+- [Manual prompts versus MCP feedback handoff](https://crrt.ai/resources/manual-prompts-versus-mcp-feedback-handoff): Compare freshness requirements. Verify after implementation.
+- [Design-first versus screenshot-only agent instructions](https://crrt.ai/resources/design-first-versus-screenshot-only-agent-instructions): Compare the information supplied. Review intent and result.
+- [Existing design system versus ad hoc styles in agent-built UI](https://crrt.ai/resources/existing-design-system-versus-ad-hoc-styles-in-agent-built-ui): Inspect the current task. Verify the consumers.
+- [One large agent request versus small reviewed changes](https://crrt.ai/resources/one-large-agent-request-versus-small-reviewed-changes): Name the final outcome. Verify integration.
+- [A worked light/dark design-system review from issue to fix](https://crrt.ai/resources/a-worked-light-dark-design-system-review-from-issue-to-fix): Capture paired states. Review the actual conditions.
+- [Inflight and CRRT: which prototype review workflow fits?](https://crrt.ai/resources/inflight-and-crrt-which-prototype-review-workflow-fits): Start with the real review task. Choose with explicit gaps.
+- [HEX / RGB converter](https://crrt.ai/resources/hex-rgb-converter): Convert opaque sRGB color notation while preserving channel values.
+- [Light / dark color preview](https://crrt.ai/resources/light-dark-color-preview): Preview the same text, surface, and action roles in two theme palettes.
+- [Color-to-token mapper](https://crrt.ai/resources/color-to-token-mapper): Assign editable semantic roles to your current color values and export a draft CSS token table.
+- [Similar-color finder](https://crrt.ai/resources/similar-color-finder): Highlight opaque color pairs within an explicit RGB channel-distance threshold.
+- [Type-scale playground](https://crrt.ai/resources/type-scale-playground): Compare heading, label, and body sizes using editable sample content.
+- [Line-height playground](https://crrt.ai/resources/line-height-playground): Compare two line-height settings on the same editable paragraph.
+- [Spacing-scale mapper](https://crrt.ai/resources/spacing-scale-mapper): Suggest nearby scale values for entered pixel measurements and let you override each mapping.
+- [Token-file diff](https://crrt.ai/resources/token-file-diff): Compare supported JSON token structures for added, removed, and changed values.
+- [Screenshot overlay](https://crrt.ai/resources/screenshot-overlay): Overlay two local screenshots with adjustable opacity and alignment controls.
+- [Before / after slider](https://crrt.ai/resources/before-after-slider): Move a keyboard-accessible divider between two local screenshots.
+- [Image-crop playground](https://crrt.ai/resources/image-crop-playground): Preview a local image inside an adjustable container with fit and focal-position controls.
+- [Shadow / border / radius playground](https://crrt.ai/resources/shadow-border-radius-playground): Adjust shadow, border, and radius values on a sample surface and copy the CSS.
+- [Icon-alignment playground](https://crrt.ai/resources/icon-alignment-playground): Compare icon size, gap, and alignment beside editable text.
+- [Component-state matrix](https://crrt.ai/resources/component-state-matrix): Record reviewed and missing component states in an editable matrix.
+- [Text stress-test generator](https://crrt.ai/resources/text-stress-test-generator): Generate fictional long, empty, repeated, and unbroken content for layout review.
+- [Screenshot annotator](https://crrt.ai/resources/screenshot-annotator): Load a local screenshot, adjust a rectangular marker, and add an exported note.
+- [Acceptance-criteria builder](https://crrt.ai/resources/acceptance-criteria-builder): Build a verification checklist around an accepted outcome and preserved behavior.
+- [Video-or-screenshot selector](https://crrt.ai/resources/video-or-screenshot-selector): Choose evidence format based on whether the issue is static, sequential, or timing-dependent.
+- [Review-request builder](https://crrt.ai/resources/review-request-builder): Draft a review invitation with task, build, known limits, questions, owner, and response window.
+- [Prototype review checklist](https://crrt.ai/resources/prototype-review-checklist): Build an editable review sheet for flows, states, responsive behavior, and recovery.
+- [Feedback triage worksheet](https://crrt.ai/resources/feedback-triage-worksheet): Organize feedback with evidence, impact, decision status, owner, and next action.
+- [Conflicting-feedback worksheet](https://crrt.ai/resources/conflicting-feedback-worksheet): Compare stakeholder requests by target, goal, evidence, option, and decision.
+- [Review-version tracker](https://crrt.ai/resources/review-version-tracker): Associate observations with reviewed and current builds plus verification status.
+- [Change-summary builder](https://crrt.ai/resources/change-summary-builder): Draft a reviewer update separating implemented changes from verified results.
+- [Fix-resolution card](https://crrt.ai/resources/fix-resolution-card): Create a resolution record with original outcome, implementation, evidence, checks, and reviewer decision.
+- [Feedback-cycle calculator](https://crrt.ai/resources/feedback-cycle-calculator): Calculate available wall-clock phases from explicitly entered UTC timestamps.
+- [Agent handoff builder](https://crrt.ai/resources/agent-handoff-builder): Assemble an accepted task packet with source evidence, constraints, boundaries, and verification.
+- [Design-system context builder](https://crrt.ai/resources/design-system-context-builder): Draft a discoverable design-system brief using actual source files, components, rules, and examples.
+- [Component contract builder](https://crrt.ai/resources/component-contract-builder): Document inputs, states, events, focus, recovery, and usage constraints.
+- [Design-decision template](https://crrt.ai/resources/design-decision-template): Record an approved design choice with reason, owner, scope, source, and revisit condition.
+- [Failed-fix report builder](https://crrt.ai/resources/failed-fix-report-builder): Describe the accepted request, attempted result, remaining failure, and next verification.
+- [Component-impact map](https://crrt.ai/resources/component-impact-map): List known component consumers, local constraints, review cases, and actual results.
+- [Guided before/after case](https://crrt.ai/resources/guided-light-dark-review): Explore a fictional paired-theme correction from observation to scoped decision and review.
 
 ## Access and formats
 

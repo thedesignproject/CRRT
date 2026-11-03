@@ -1,8 +1,11 @@
 import type { Resource } from './model.ts'
+import { fullBriefArticles } from './fullBriefArticles.ts'
+import { utilityResources } from './utilityContent.ts'
+import { briefTopics } from './brief.generated.ts'
 import { additionalResources } from './additionalContent.ts'
 export * from './model.ts'
 
-export const resources: Resource[] = [
+const initialResources: Resource[] = [
   {
     slug: 'design-tokens-for-ai-prototypes', track: 'design-systems',
     title: 'Design tokens for AI prototypes: start with one screen',
@@ -197,3 +200,9 @@ export const resources: Resource[] = [
   },
   ...additionalResources,
 ]
+
+export const resources: Resource[] = [...initialResources, ...fullBriefArticles, ...utilityResources].map(resource => {
+  const topic = briefTopics.find(topic => topic.slug === resource.slug)
+  const utilityId = resource.tool === 'contrast' ? 2 : resource.tool === 'units' ? 6 : resource.tool === 'feedback' ? 18 : resource.utilityId
+  return { ...resource, ...(topic ? { briefId: topic.id } : {}), ...(utilityId ? { utilityId } : {}) }
+})
