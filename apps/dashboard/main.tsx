@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { App } from './App'
+import '../posthog'
 import tokensRaw from '../../branding/crrt/tokens.css?raw'
 import './globals.css'
 import '@fontsource-variable/figtree/wght.css'

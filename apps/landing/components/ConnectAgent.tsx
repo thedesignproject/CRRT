@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 
@@ -6,7 +7,11 @@ const PROMPT = 'Set up CRRT for this agent. Fetch https://crrt.ai/get-started.md
 export function ConnectAgent() {
   const [status, setStatus] = useState('idle')
   async function copy() {
-    try { await navigator.clipboard.writeText(PROMPT); setStatus('copied') }
+    try {
+      await navigator.clipboard.writeText(PROMPT)
+      posthog.capture('agent_setup_prompt_copied')
+      setStatus('copied')
+    }
     catch { setStatus('error') }
   }
   return <div className="connect-agent" data-status={status}>

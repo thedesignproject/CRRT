@@ -1,3 +1,4 @@
+import posthog from '../posthog'
 import { useKeyboardShortcuts } from '../../src/lib/useKeyboardShortcuts'
 import { useFeedbackMutationError } from './hooks/useFeedbackMutationError'
 import { WidgetAuthPage } from './components/WidgetAuthPage'
@@ -348,6 +349,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
     try {
       await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status))
+      posthog.capture('feedback_review_status_changed', { review_status: status })
       if (reviewRequests.current.get(id) === request) await refreshComments()
     } catch (err) {
       console.error('Failed to update review status:', err)
@@ -376,6 +378,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       const operation = trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
       const version = scope.version
       const updated = await operation
+      if (nextStatus === 'done') posthog.capture('feedback_marked_done')
       if (feedbackWrites.current === scope && scope.version === version) {
         setComments((prev) => prev.map((c) => c.id === id ? {
           ...c,
@@ -715,6 +718,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setCopyStatus('copying')
     try {
       await copyPrompt(selectedAgentMeta.target)
+      posthog.capture('agent_handoff_copied', { agent: selectedAgentMeta.id })
       setCopyStatus('copied')
       window.setTimeout(() => setCopyStatus('idle'), 1600)
     } catch (err) {
@@ -762,6 +766,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setAddProjectBusy(true)
     try {
       const project = await claimProject(projectKey, name)
+      posthog.capture('project_created')
       setSelectedProject(project.publicKey)
       setView('feedback')
       setStatusFilter('open')

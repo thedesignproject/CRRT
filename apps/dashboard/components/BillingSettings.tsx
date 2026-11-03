@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUpRight, Check, CreditCard, RefreshCw } from 'lucide-react'
 import { getBillingSummary, runBillingAction, type BillingAction, type BillingPlan, type BillingPlanKey, type BillingSummary, type BillingUsageItem } from '../api'
@@ -138,7 +139,12 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
     try {
       const result = await runBillingAction(apiBase, accessToken, action, plan, state, cycle)
       if (request !== lifetime.current) return
-      if ('url' in result) window.location.assign(safeStripeUrl(result.url))
+      if ('url' in result) {
+        if (action === 'checkout' || action === 'change_plan') {
+          posthog.capture('billing_checkout_started', { action, plan, billing_cycle: cycle })
+        }
+        window.location.assign(safeStripeUrl(result.url))
+      }
       else setRefresh((value) => value + 1)
     } catch (reason) {
       if (action === 'checkout_state') continuationRef.current = null

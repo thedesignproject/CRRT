@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { ConnectAgent } from '../components/ConnectAgent'
 import { tryCrrt } from '../lib/tryCrrt'
 import { useRef, useState } from 'react'
@@ -71,7 +72,10 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
           <h1><span>Humans give feedback.</span>{' '}<span>Agents ship the fix.</span></h1>
           <p>Point to what needs changing. Give your coding agent the context to fix it. Review the result.</p>
           <div className="landing-hero-actions">
-          <a className="landing-hero-cta" href="#try-crrt" onClick={tryCrrt}>
+          <a className="landing-hero-cta" href="#try-crrt" onClick={(event) => {
+            posthog.capture('live_demo_started')
+            tryCrrt(event)
+          }}>
             <span><CarrotIcon size={28} /></span>
             Try it live
           </a>
