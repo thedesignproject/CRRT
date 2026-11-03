@@ -121,6 +121,14 @@ no implicit hosted consent. The authoritative transcript comes from background
 processing, not the account-free demo endpoint. The review polls processing and
 offers stage retry and server-authorized paid context generation.
 
+Both the dashboard owner player and extension review show stage-specific recovery.
+The worker's existing automatic retries run first (up to three attempts per stage).
+Only a retryable stage in `failed` state exposes a manual action: Retry video,
+Retry transcription, or Retry key moments. Public viewers see the status without
+owner actions. Retrying preserves playback, transcript data and successful stages;
+only the selected failed stage is queued again. Request errors retain the retry
+action, and buttons are disabled while the request is pending.
+
 The dashboard and extension library list actual owner recordings. The dashboard
 serves anonymous human playback at `/dashboard/recording#<capability>` and
 authenticated library playback at `/dashboard/recording?id=<recording UUID>`.
