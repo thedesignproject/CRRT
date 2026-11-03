@@ -1119,7 +1119,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Convert opaque sRGB color notation while preserving channel values.",
     "tool": "hex-rgb",
     "utilityId": 1,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1129,7 +1129,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Preview the same text, surface, and action roles in two theme palettes.",
     "tool": "themes",
     "utilityId": 3,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1139,7 +1139,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Assign editable semantic roles to your current color values and export a draft CSS token table.",
     "tool": "token-map",
     "utilityId": 4,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1149,7 +1149,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Highlight opaque color pairs within an explicit RGB channel-distance threshold.",
     "tool": "similar-colors",
     "utilityId": 5,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1159,7 +1159,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Compare heading, label, and body sizes using editable sample content.",
     "tool": "type-scale",
     "utilityId": 7,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1169,7 +1169,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Compare two line-height settings on the same editable paragraph.",
     "tool": "line-height",
     "utilityId": 8,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1179,7 +1179,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Suggest nearby scale values for entered pixel measurements and let you override each mapping.",
     "tool": "spacing",
     "utilityId": 9,
-    "minutes": 2,
+    "minutes": 1,
     "category": 2
   },
   {
@@ -1189,7 +1189,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Compare supported JSON token structures for added, removed, and changed values.",
     "tool": "token-diff",
     "utilityId": 10,
-    "minutes": 2,
+    "minutes": 1,
     "category": 3
   },
   {
@@ -1199,7 +1199,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Overlay two local screenshots with adjustable opacity and alignment controls.",
     "tool": "overlay",
     "utilityId": 11,
-    "minutes": 2,
+    "minutes": 1,
     "category": 2
   },
   {
@@ -1209,7 +1209,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Move a keyboard-accessible divider between two local screenshots.",
     "tool": "before-after",
     "utilityId": 12,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1219,7 +1219,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Preview a local image inside an adjustable container with fit and focal-position controls.",
     "tool": "crop",
     "utilityId": 13,
-    "minutes": 2,
+    "minutes": 1,
     "category": 2
   },
   {
@@ -1229,7 +1229,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Adjust shadow, border, and radius values on a sample surface and copy the CSS.",
     "tool": "decoration",
     "utilityId": 14,
-    "minutes": 2,
+    "minutes": 1,
     "category": 2
   },
   {
@@ -1239,7 +1239,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Compare icon size, gap, and alignment beside editable text.",
     "tool": "icon-alignment",
     "utilityId": 15,
-    "minutes": 2,
+    "minutes": 1,
     "category": 2
   },
   {
@@ -1249,7 +1249,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Record reviewed and missing component states in an editable matrix.",
     "tool": "state-matrix",
     "utilityId": 16,
-    "minutes": 2,
+    "minutes": 1,
     "category": 4
   },
   {
@@ -1259,7 +1259,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Generate fictional long, empty, repeated, and unbroken content for layout review.",
     "tool": "stress-text",
     "utilityId": 17,
-    "minutes": 2,
+    "minutes": 1,
     "category": 7
   },
   {
@@ -1269,7 +1269,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Load a local screenshot, adjust a rectangular marker, and add an exported note.",
     "tool": "annotator",
     "utilityId": 19,
-    "minutes": 2,
+    "minutes": 1,
     "category": 0
   },
   {
@@ -1279,7 +1279,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Build a verification checklist around an accepted outcome and preserved behavior.",
     "tool": "criteria",
     "utilityId": 20,
-    "minutes": 2,
+    "minutes": 1,
     "category": 0
   },
   {
@@ -1289,7 +1289,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Choose evidence format based on whether the issue is static, sequential, or timing-dependent.",
     "tool": "capture-format",
     "utilityId": 21,
-    "minutes": 2,
+    "minutes": 1,
     "category": 0
   },
   {
@@ -1299,7 +1299,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Draft a review invitation with task, build, known limits, questions, owner, and response window.",
     "tool": "review-request",
     "utilityId": 22,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1309,7 +1309,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Build an editable review sheet for flows, states, responsive behavior, and recovery.",
     "tool": "prototype-checklist",
     "utilityId": 23,
-    "minutes": 2,
+    "minutes": 1,
     "category": 7
   },
   {
@@ -1319,7 +1319,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Organize feedback with evidence, impact, decision status, owner, and next action.",
     "tool": "triage",
     "utilityId": 24,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1329,7 +1329,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Compare stakeholder requests by target, goal, evidence, option, and decision.",
     "tool": "conflict",
     "utilityId": 25,
-    "minutes": 2,
+    "minutes": 1,
     "category": 0
   },
   {
@@ -1339,7 +1339,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Associate observations with reviewed and current builds plus verification status.",
     "tool": "versions",
     "utilityId": 26,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1349,7 +1349,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Draft a reviewer update separating implemented changes from verified results.",
     "tool": "change-summary",
     "utilityId": 27,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1359,7 +1359,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Create a resolution record with original outcome, implementation, evidence, checks, and reviewer decision.",
     "tool": "resolution",
     "utilityId": 28,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1369,7 +1369,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Calculate available wall-clock phases from explicitly entered UTC timestamps.",
     "tool": "cycle-time",
     "utilityId": 29,
-    "minutes": 2,
+    "minutes": 1,
     "category": 1
   },
   {
@@ -1379,7 +1379,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Assemble an accepted task packet with source evidence, constraints, boundaries, and verification.",
     "tool": "handoff",
     "utilityId": 30,
-    "minutes": 2,
+    "minutes": 1,
     "category": 6
   },
   {
@@ -1389,7 +1389,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Draft a discoverable design-system brief using actual source files, components, rules, and examples.",
     "tool": "system-context",
     "utilityId": 31,
-    "minutes": 2,
+    "minutes": 1,
     "category": 5
   },
   {
@@ -1399,7 +1399,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Document inputs, states, events, focus, recovery, and usage constraints.",
     "tool": "component-contract",
     "utilityId": 32,
-    "minutes": 2,
+    "minutes": 1,
     "category": 4
   },
   {
@@ -1409,7 +1409,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Record an approved design choice with reason, owner, scope, source, and revisit condition.",
     "tool": "decision",
     "utilityId": 33,
-    "minutes": 2,
+    "minutes": 1,
     "category": 5
   },
   {
@@ -1419,7 +1419,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Describe the accepted request, attempted result, remaining failure, and next verification.",
     "tool": "failed-fix",
     "utilityId": 34,
-    "minutes": 2,
+    "minutes": 1,
     "category": 6
   },
   {
@@ -1429,7 +1429,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "List known component consumers, local constraints, review cases, and actual results.",
     "tool": "impact-map",
     "utilityId": 35,
-    "minutes": 2,
+    "minutes": 1,
     "category": 4
   },
   {
@@ -1439,7 +1439,7 @@ export const resourceCatalog: ResourceSummary[] = [
     "takeaway": "Explore a fictional paired-theme correction from observation to scoped decision and review.",
     "tool": "guided-case",
     "utilityId": 36,
-    "minutes": 2,
+    "minutes": 1,
     "category": 11
   }
 ]

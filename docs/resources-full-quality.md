@@ -49,3 +49,7 @@ The general CI suite passed React 18 and React 19 tests, type checks, diff cover
 The project-local AI for UI skills were applied to resource controls, keyboard focus, touch behavior, and rendering work. See [the UI review](resources-ui-review.md) for findings and verification. Three-run mobile checks on the updated hub, converter, and component-state matrix passed at 97/100/100/100, 100/100/100/100, and 100/100/100/100 respectively. The next exhaustive matrix remains a distinct CI check.
 
 The preceding complete matrix at `70dc8c8` passed 15 of 16 Lighthouse shards; its remaining hub failure was 94 performance and 228ms total blocking time. The new off-screen row layout optimization keeps every resource link in the HTML. No budget was relaxed.
+
+## Google policy and editorial readiness
+
+[The Google policy review](resources-google-policy-review.md) supersedes any interpretation of the lab scores as editorial approval. The full library still needs human claim checks, distinct-task/overlap decisions, and publication approval recorded in [the asset inventory](resources-editorial-review.csv). This pass removed an unsupported blanket reference-check statement and repeated utility instructions; it does not certify Google policy compliance or confirm the absence of manual actions.
