@@ -1,4 +1,4 @@
-import { useEffect, useState, type ComponentType } from 'react'
+import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { ArrowDown, ArrowRight, Search, X } from 'lucide-react'
 import { Navigation } from '../components/Navigation'
 import { Footer } from '../sections/Footer'
@@ -30,6 +30,7 @@ export function ResourcesPage({ pathname, article, extraTool, catalog: suppliedC
 function ResourcesIndex() {
   const resources = useResourceCatalog()
   const [query, setQuery] = useState('')
+  const searchInput = useRef<HTMLInputElement>(null)
   const [trackFilter, setTrackFilter] = useState<ResourceTrack | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [kindFilter, setKindFilter] = useState('all')
@@ -72,7 +73,7 @@ function ResourcesIndex() {
           <button type="button" aria-pressed={trackFilter === 'all'} onClick={() => setTrackFilter('all')}>All resources <span>{resources.length}</span></button>
           {resourceTracks.map(track => <button type="button" key={track.id} aria-pressed={trackFilter === track.id} onClick={() => setTrackFilter(track.id)}>{track.label}</button>)}
         </div>
-        <div className="resource-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Search resources" placeholder="Find a guide…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" onClick={() => setQuery('')} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}</div>
+        <div className="resource-search"><Search size={16} aria-hidden="true" /><input ref={searchInput} type="search" autoComplete="off" spellCheck={false} data-1p-ignore aria-label="Search resources" placeholder="Find a guide…" value={query} onChange={event => setQuery(event.target.value)} />{query && <button type="button" onClick={() => { setQuery(''); searchInput.current!.focus() }} aria-label="Clear search"><X size={14} aria-hidden="true" /></button>}</div>
       </div>
       <div className="resource-topic-controls"><label>Topic<select value={categoryFilter} onChange={event => setCategoryFilter(event.target.value)}><option value="all">All 12 topics</option>{resourceCategories.map((label,index)=><option value={index} key={label}>{label}</option>)}</select></label><label>Resource type<select value={kindFilter} onChange={event => setKindFilter(event.target.value)}><option value="all">Guides and tools</option><option value="guides">Guides</option><option value="tools">Tools and templates</option></select></label></div>
       <p className="resource-results" role="status" aria-live="polite">{matches.length} {matches.length === 1 ? 'resource' : 'resources'}{normalizedQuery ? ` matching “${query.trim()}”` : ' to explore'}</p>

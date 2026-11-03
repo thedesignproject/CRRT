@@ -43,3 +43,9 @@ The resource bootstrap now allows the complete prerendered document to paint bef
 After that change, three-run mobile retests passed on all five selected pages (the hub, the three CI failures, and the screenshot annotator), with 100 for performance, accessibility, best practices, and SEO throughout. The earlier broader local sample passed on all 49 mobile URLs and all 11 desktop URLs. Those samples cover every utility, one guide from each source category, and representative desktop layouts. The exhaustive matrix is rerun for the updated PR commit.
 
 The general CI suite passed React 18 and React 19 tests, type checks, diff coverage, builds, bundle limits, dependency audit, and schema checks. Its separate secret scanner flagged a historical mocked request UUID outside this change. No scanner exception has been applied; an explicit approval decision is pending because automatic approval review rejected changing the persistent ignore list.
+
+## AI for UI review
+
+The project-local AI for UI skills were applied to resource controls, keyboard focus, touch behavior, and rendering work. See [the UI review](resources-ui-review.md) for findings and verification. Three-run mobile checks on the updated hub, converter, and component-state matrix passed at 97/100/100/100, 100/100/100/100, and 100/100/100/100 respectively. The next exhaustive matrix remains a distinct CI check.
+
+The preceding complete matrix at `70dc8c8` passed 15 of 16 Lighthouse shards; its remaining hub failure was 94 performance and 228ms total blocking time. The new off-screen row layout optimization keeps every resource link in the HTML. No budget was relaxed.
