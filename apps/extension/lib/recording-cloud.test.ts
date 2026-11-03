@@ -1,5 +1,6 @@
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterAll, beforeEach, expect, it, vi } from 'vitest'
 import type { LocalRecording } from './recording'
+vi.hoisted(() => vi.stubEnv('WXT_API_BASE', 'https://record-api.test/api'))
 const mocks = vi.hoisted(() => ({ auth: vi.fn(), request: vi.fn(), upload: vi.fn(), multipart: vi.fn(), save: vi.fn(), get: vi.fn() }))
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage: mocks.auth } } }))
 vi.mock('../../../shared/record/client', () => ({ recordRequest: mocks.request }))
@@ -8,6 +9,7 @@ vi.mock('./recording-upload', () => ({ uploadRecordingArtifact: mocks.upload }))
 vi.mock('./recording-multipart', () => ({ uploadMultipart: mocks.multipart }))
 import { ownerRecordRequest, readRecordingPlayback, recordingManifest, recordingToken, syncRecording } from './recording-cloud'
 import { recordingManifestBytes } from './recording-manifest'
+afterAll(() => vi.unstubAllEnvs())
 const local = (): LocalRecording => ({ id: crypto.randomUUID(), title: 'Capture', source: 'tab', status: 'ready', durationMs: 3000, createdAt: '2026-10-30', authorName: 'You', transcript: [], transcriptionStatus: 'processing', screenBlob: new Blob(['video']), cameraBlob: new Blob(['camera']), audioBlob: new Blob(['audio']), hostedTranscription: true, marks: [{ id: crypto.randomUUID(), atMs: 1000, type: 'text', text: 'Note', pinNumber: 1, points: [{ x: 10, y: 50 }], target: { selector: '#save', pageUrl: 'https://page.test/secret?token=private' } }] })
 beforeEach(() => {
   vi.clearAllMocks(); mocks.get.mockResolvedValue(undefined)
@@ -103,9 +105,9 @@ it.each([null, { ok: false }, { ok: true }, { ok: true, data: {} }])('requires a
 })
 it('passes authenticated owner requests and playback to the shared client', async () => {
   await ownerRecordRequest('recordings/id', { title: 'Edit' }, 'PATCH')
-  expect(mocks.request).toHaveBeenLastCalledWith(undefined, 'recordings/id', 'owner-token', { title: 'Edit' }, 'PATCH')
+  expect(mocks.request).toHaveBeenLastCalledWith('https://record-api.test/api', 'recordings/id', 'owner-token', { title: 'Edit' }, 'PATCH')
   await readRecordingPlayback('id')
-  expect(mocks.request).toHaveBeenLastCalledWith(undefined, 'recordings/id/playback', 'owner-token', undefined, undefined)
+  expect(mocks.request).toHaveBeenLastCalledWith('https://record-api.test/api', 'recordings/id/playback', 'owner-token', undefined, undefined)
 })
 it('persists create/share and upload checkpoints before idempotent finalization', async () => {
   const input = local(), changed = vi.fn()
@@ -126,8 +128,8 @@ it('persists create/share and upload checkpoints before idempotent finalization'
   expect(result.cloud).toMatchObject({ id: 'server-id', shareId: 'share', finalized: true })
   expect(mocks.upload).toHaveBeenCalledTimes(3)
   expect(changed.mock.calls[0][0].cloud.shareId).toBe('share')
-  expect(mocks.request).toHaveBeenCalledWith(undefined, 'recordings', 'owner-token', expect.objectContaining({ clientKey: input.id, consent: { policyVersion: 'record-v1', hostedTranscription: true, provider: 'deepgram', language: 'multi' } }))
-  expect(mocks.request).toHaveBeenCalledWith(undefined, 'recordings/server-id/finalize', 'owner-token', result.cloud!.manifest)
+  expect(mocks.request).toHaveBeenCalledWith('https://record-api.test/api', 'recordings', 'owner-token', expect.objectContaining({ clientKey: input.id, consent: { policyVersion: 'record-v1', hostedTranscription: true, provider: 'deepgram', language: 'multi' } }))
+  expect(mocks.request).toHaveBeenCalledWith('https://record-api.test/api', 'recordings/server-id/finalize', 'owner-token', result.cloud!.manifest)
   mocks.request.mockClear(); mocks.upload.mockClear(); mocks.get.mockResolvedValue(result)
   await syncRecording(input, vi.fn())
   expect(mocks.upload).not.toHaveBeenCalled()
@@ -181,6 +183,6 @@ it('uses the multipart transport and authenticated per-part signer for R2', asyn
   })
   mocks.multipart.mockImplementation(async (_blob, _authorization, sign) => { await sign({ artifactId: 'artifact', uploadId: 'upload', partNumber: 1 }); complete = true })
   expect((await syncRecording(input, vi.fn())).cloud!.finalized).toBe(true)
-  expect(mocks.request).toHaveBeenCalledWith(undefined, 'recordings/server/upload-parts', 'owner-token', { artifactId: 'artifact', uploadId: 'upload', partNumber: 1 })
+  expect(mocks.request).toHaveBeenCalledWith('https://record-api.test/api', 'recordings/server/upload-parts', 'owner-token', { artifactId: 'artifact', uploadId: 'upload', partNumber: 1 })
   expect(mocks.upload).not.toHaveBeenCalled()
 })
