@@ -176,7 +176,9 @@ export function RecordApp() {
   const finish = useCallback(async () => {
     const capture = captureRef.current
     if (!capture || !['recording', 'paused'].includes(stateRef.current.status)) return
-    dispatch({ type: 'recording.finished', now: performance.now() })
+    const finished = { type: 'recording.finished' as const, now: performance.now() }
+    stateRef.current = recorderReducer(stateRef.current, finished)
+    dispatch(finished)
     try {
       const blobs = await capture.stop()
       captureRef.current = null
@@ -242,6 +244,7 @@ export function RecordApp() {
         microphoneEnabled: state.microphoneEnabled,
         tabStreamId,
         deferRecording: true,
+        onLimitReached: () => { void finish() },
       })
       captureRef.current = capture
       // Acquire every permission in the initiating gesture, then keep the
@@ -413,7 +416,7 @@ export function RecordApp() {
     </section>
     <RecordingMarkLimit count={state.marks.length} sizeLimited={state.annotationLimitReached} error={state.annotationError} />
     <div className="record-toolbar" aria-label="Recording controls">
-      <div className="record-clock"><i />{formatRecordingTime(state.durationMs)}</div>
+      <div className="record-clock"><i />{formatRecordingTime(state.durationMs)} / 5:00</div>
       <button className="icon-control" onClick={togglePause} aria-label={state.status === 'paused' ? 'Resume' : 'Pause'}>{state.status === 'paused' ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}</button>
       <button className="icon-control" onClick={() => { void restart() }} aria-label="Restart"><RotateCcw size={15} /></button>
       {!state.cameraEnabled && captureRef.current?.cameraStream ? <button className="icon-control" onClick={() => setCameraDuringRecording(true)} aria-label="Turn camera on" title="Turn camera on"><CameraOff size={15} /></button> : null}
@@ -446,6 +449,7 @@ function Setup({ hostedTranscription, setHostedTranscription, state, tabAvailabl
       </div>
       {state.error && <p className="setup-error" role="alert">{state.error}</p>}
       <button className="start-recording" onClick={start}><Video size={18} /><span>Start recording</span><kbd>3 sec</kbd></button>
+      <p>Up to 5 minutes. Recording stops and saves automatically.</p>
       <label className="record-transcription-consent"><input type="checkbox" checked={hostedTranscription} onChange={event => setHostedTranscription(event.target.checked)} /><span><strong>Transcribe audio with Deepgram</strong><small>Audio is sent for hosted processing; recordings stay private until shared.</small></span></label>
       <p className="privacy-note">Chrome will ask exactly what to share. Camera and microphone remain optional.</p>
     </section>

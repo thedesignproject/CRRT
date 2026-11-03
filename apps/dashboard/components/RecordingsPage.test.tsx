@@ -5,6 +5,15 @@ import { RecordingsPage } from './RecordingsPage'
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
 beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ recordings: [], next: null }))))
 
+it('deletes a cloud recording using the owner token', async () => {
+  vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ recordings: [{ id: 'one', title: 'Stored capture', state: 'ready', markCount: 0 }], next: null }))
+  render(<RecordingsPage apiBase="/api" accessToken="owner" />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete Stored capture' }))
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/recordings/one', expect.objectContaining({ method: 'DELETE', headers: expect.objectContaining({ Authorization: 'Bearer owner' }) })))
+  await waitFor(() => expect(screen.queryByText('Stored capture')).toBeNull())
+})
+
 it('opens uploaded recordings and passes the owner cursor when loading another page', async () => {
   vi.mocked(fetch).mockResolvedValueOnce(Response.json({ recordings: [{ id: 'one', title: 'Stored capture', state: 'ready', markCount: 0 }], next: 'one' })).mockResolvedValueOnce(Response.json({ recordings: [], next: null }))
   render(<RecordingsPage apiBase="/api" accessToken="owner" />)

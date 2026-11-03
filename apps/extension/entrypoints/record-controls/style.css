@@ -67,6 +67,7 @@ button:disabled { cursor: not-allowed; opacity: .36 }
 .device-options .device-off em { padding: 3px 5px; border: 1px solid color-mix(in srgb, var(--record-red) 45%, transparent); border-radius: var(--crrt-radius-md); background: color-mix(in srgb, var(--record-red) 12%, transparent); font-weight: 800 }
 .start { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 9px; width: calc(100% - 32px); min-height: 48px; margin: 0 16px 16px; padding: 0 14px; border-radius: var(--crrt-radius-lg); background: var(--crrt-carrot); color: var(--crrt-white); font-weight: 700; text-align: left }
 .start:hover { background: var(--crrt-carrot-deep) }
+.recording-limit { margin: 0 16px 16px; color: var(--crrt-ink-faint); font-size: 11px; line-height: 1.5; }
 .start kbd { padding: 4px 6px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--crrt-radius-md); font: 9px var(--crrt-font-mono) }
 .setup-error { margin: 0 16px 12px; color: var(--crrt-phosphor); font-size: 11px }
 .setup-consent { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 8px; margin: 0 16px 16px; color: var(--crrt-ink-faint); font-size: 12px; line-height: 1.5; cursor: pointer; }

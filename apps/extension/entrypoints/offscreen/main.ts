@@ -43,6 +43,9 @@ async function begin(message: any) {
     microphoneEnabled: initial.microphoneEnabled,
     tabStreamId: message.tabStreamId,
     deferRecording: true,
+    onLimitReached: () => {
+      if (active && active.sessionId === message.sessionId) void finish(active).catch(error => fail(message.sessionId, error))
+    },
   })
   if (generation !== startingGeneration) {
     await capture.stop().catch(() => undefined)
