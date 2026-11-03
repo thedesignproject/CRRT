@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { ProjectPrivacy } from './ProjectPrivacy'
 import { useEffect, useRef, useState } from 'react'
 import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
@@ -149,6 +150,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     setInviteBusy(true)
     try {
       await settings.invite(inviteEmail.trim().toLowerCase(), inviteRole)
+      posthog.capture('project_invite_sent', { role: inviteRole })
       setInviteEmail('')
       setInviteRole('guest')
     } catch (err) {
