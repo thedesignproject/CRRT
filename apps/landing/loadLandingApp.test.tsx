@@ -25,3 +25,15 @@ it('loads the basic calculator without requesting the extended tool surface', as
   render(await loadLandingApp('/resources/text-contrast-checker'))
   expect(screen.getByText('Resource surface: /resources/text-contrast-checker')).toBeInTheDocument()
 })
+
+it('uses an embedded catalog instead of loading a development fallback', async () => {
+  const script=document.createElement('script')
+  script.id='resource-catalog-data';script.type='application/json'
+  script.textContent=JSON.stringify([{slug:'example',title:'Example',takeaway:'A task',track:'design-systems',minutes:2,category:0}])
+  document.body.append(script)
+  try {
+    render(await loadLandingApp('/resources'))
+    expect(screen.getByText('Resource surface: /resources')).toBeInTheDocument()
+    expect(script.textContent).toContain('"slug":"example"')
+  } finally { script.remove() }
+})

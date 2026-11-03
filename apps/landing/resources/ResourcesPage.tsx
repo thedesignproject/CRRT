@@ -1,30 +1,34 @@
 import { useEffect, useState, type ComponentType } from 'react'
 import { ArrowDown, ArrowRight, Search, X } from 'lucide-react'
-import { Navigation } from '../sections/Hero'
+import { Navigation } from '../components/Navigation'
 import { Footer } from '../sections/Footer'
 import { CarrotIcon } from '../components/CarrotIcon'
 import { applyPublicMetadata } from '../lib/applyPublicMetadata'
 import { ResourceFigure } from './ResourceFigure'
-import { resourceDate, resourceAuthor, resourceMinutes, resourcePath, resourceTracks, resourceCategories, type Resource, type ResourceSummary, type ResourceTrack } from './model'
-import { resourceCatalog as resources } from './catalog.generated'
+import { resourceDate, resourceAuthor, resourceMinutes, resourcePath, resourceTracks, resourceCategories, type Resource, type ResourceSummary, type ResourceToolConfig, type ResourceTrack } from './model'
+import { ResourceCatalogContext, useResourceCatalog } from './ResourceCatalogContext'
 import { ResourceTool } from './ResourceTool'
 import './resources.css'
 
-export function ResourcesPage({ pathname, article, extraTool }: { pathname: string; article?: Resource; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>}> }) {
+export function ResourcesPage({ pathname, article, extraTool, catalog: suppliedCatalog }: { pathname: string; article?: Resource; catalog?: ResourceSummary[]; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>; config?: ResourceToolConfig}> }) {
+  const inheritedCatalog = useResourceCatalog()
+  const catalog = suppliedCatalog ?? inheritedCatalog
   const path = pathname.replace(/\/+$/, '')
   const resource = article && resourcePath(article) === path ? article : undefined
   useEffect(() => { if (path === '/resources' || resource) applyPublicMetadata({ path, title: resource ? `${resource.seoTitle} | CRRT` : 'Design systems, agent workflows & AI prototyping | CRRT', description: resource ? resource.description : 'Practical guides and tools for designers and founders: review design systems, prototype with AI, and turn visual feedback into reviewed coding-agent fixes.' }) }, [path, resource])
 
-  return <div className="resources-shell">
+  return <ResourceCatalogContext.Provider value={catalog}><div className="resources-shell">
+    <script id="resource-catalog-data" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(catalog).replace(/</g, '\\u003c') }} />
     {resource && <script id="resource-page-data" type="application/json" dangerouslySetInnerHTML={{ __html: JSON.stringify(resource).replace(/</g, '\\u003c') }} />}
     <a className="resource-skip" href="#resource-main">Skip to content</a>
     <header className="resource-site-header"><Navigation authenticated={false} /></header>
     {path === '/resources' ? <ResourcesIndex /> : resource ? <ResourceArticle resource={resource} extraTool={extraTool} /> : <main id="resource-main" className="resource-not-found"><h1>Guide not found</h1><p>This resource doesn’t exist. Browse the library to find a guide.</p><a href="/resources">Back to resources <ArrowRight size={16} aria-hidden="true" /></a></main>}
     <Footer />
-  </div>
+  </div></ResourceCatalogContext.Provider>
 }
 
 function ResourcesIndex() {
+  const resources = useResourceCatalog()
   const [query, setQuery] = useState('')
   const [trackFilter, setTrackFilter] = useState<ResourceTrack | 'all'>('all')
   const [categoryFilter, setCategoryFilter] = useState('all')
@@ -91,7 +95,8 @@ function ResourceRow({ resource, article = false }: { resource: ResourceSummary;
   return <a className="resource-guide" href={resourcePath(resource)}><div><span className="resource-guide-meta">{resource.tool ? 'Interactive tool' : 'Practical guide'} <span>·</span> {resource.minutes} min read</span><Heading>{resource.title}</Heading><p>{resource.takeaway}</p></div><ArrowRight size={20} aria-hidden="true" /></a>
 }
 
-function ResourceArticle({ resource, extraTool }: { resource: Resource; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>}> }) {
+function ResourceArticle({ resource, extraTool }: { resource: Resource; extraTool?: ComponentType<{kind: NonNullable<Resource['tool']>; config?: ResourceToolConfig}> }) {
+  const resources = useResourceCatalog()
   const track = resourceTracks.find(item => item.id === resource.track)!
   const related = resources.filter(item => resource.related.includes(item.slug))
   return <main id="resource-main" className="resource-article-main">
@@ -103,7 +108,7 @@ function ResourceArticle({ resource, extraTool }: { resource: Resource; extraToo
     <div className="resource-article-layout">
       <aside className="resource-toc"><nav aria-label="On this page"><span className="resource-eyebrow">On this page</span>{resource.tool && <a href="#interactive-tool">Use the tool</a>}<a href="#quick-answer">The short answer</a>{resource.sections.map(section => <a key={section.id} href={`#${section.id}`}>{section.title}</a>)}<a href="#questions">Common questions</a><a href="#sources">Sources & further reading</a></nav><a className="resource-toc-back" href="/resources">← All resources</a></aside>
       <article className="resource-prose">
-        {resource.tool && <ResourceTool kind={resource.tool} extraTool={extraTool} />}
+        {resource.tool && <ResourceTool kind={resource.tool} config={resource.toolConfig} extraTool={extraTool} />}
         <section className="resource-answer" id="quick-answer"><h2>The short answer</h2><p>{resource.answer}</p></section>
         {resource.sections.map(section => <section id={section.id} key={section.id}><h2>{section.title}</h2>{section.paragraphs.map(paragraph => <p key={paragraph}>{paragraph}</p>)}{section.code && <CopyableExample code={section.code} />}{section.items && <ul>{section.items.map(item => <li key={item}>{item}</li>)}</ul>}</section>)}
         <section id="questions"><h2>Common questions</h2>{resource.questions.map(item => <div className="resource-question" key={item.question}><h3>{item.question}</h3><p>{item.answer}</p></div>)}</section>

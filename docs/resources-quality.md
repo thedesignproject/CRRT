@@ -15,6 +15,8 @@ The default audits the resource hub and every guide and tool URL using the media
 
 ```sh
 bun run audit:resources --profile=desktop --runs=3
+# Reproduce one of the eight exhaustive CI shards:
+bun run audit:resources --profile=mobile --runs=3 --shard=1/8
 bun run audit:resources --runs=1 --paths=/resources,/resources/design-tokens-for-ai-prototypes
 ```
 
@@ -43,14 +45,14 @@ Lighthouse accessibility tests cover automated checks only. Continue reviewing k
 
 ## Continuous integration
 
-[The resource quality workflow](../.github/workflows/resources-quality.yml) runs on relevant pull requests, changes to trunk, and manual dispatch. Mobile and desktop jobs each audit every resource URL three times. Failures block the job. Reports are saved as GitHub workflow artifacts for 14 days, including on failure. The workflow is configured in this branch; it will run in GitHub when the branch is pushed through the normal review flow.
+[The resource quality workflow](../.github/workflows/resources-quality.yml) runs on relevant pull requests, changes to trunk, and manual dispatch. Mobile and desktop jobs each audit every resource URL three times across eight disjoint URL shards per profile. Failures block the job. Reports are saved as GitHub workflow artifacts for 14 days, including on failure. The workflow is configured in this branch; it will run in GitHub when the branch is pushed through the normal review flow.
 
 The workflow also runs `scripts/public-pages.test.ts`, which verifies substantive HTML and Markdown without JavaScript, unique document metadata, canonical links, sitemap coverage, structured data, route CSS in the initial HTML, local fonts, machine-readable links, routing boundaries, and real 404 handling through the public server tests in the main suite.
 
 ## Performance decisions
 
 - Resource URLs load their own surface rather than the dashboard/widget/application code. Prerendered content remains visible while the route module loads.
-- The generated client catalog contains metadata only. Each article hydrates from its own non-executable JSON data in the HTML, so expanding the library does not ship every article body to each visitor.
+- The complete browsing catalog is embedded in the hub’s non-executable JSON. Each article embeds only its navigation/related metadata, article body, and relevant tool configuration. A small generated menu supports other surfaces. This keeps unrelated content and utility configurations out of the resource JavaScript.
 - Resource pages hydrate their existing DOM instead of replacing the article after JavaScript arrives. Theme initialization matches the server markup, then restores the saved preference without overwriting it.
 - Split route styles and module preload links are emitted into the initial HTML. The page retains its layout when JavaScript is unavailable.
 - The existing Geist Mono brand font is self-hosted with `font-display: swap`. The landing no longer depends on Google Fonts requests. Figtree and VT323 remain self-hosted as before, and the original font licenses are retained.
@@ -72,7 +74,7 @@ After deployment, run Lighthouse against the live resource URLs, check indexabil
 
 ## Add or edit a resource
 
-Edit `apps/landing/resources/content.ts` or `additionalContent.ts`. Run `node scripts/generate-resource-catalog.ts` to refresh the metadata-only catalog and the practical-resource section of `llms.txt`; builds and the landing dev command also do this automatically. Commit the generated catalog with the authored content. A consistency test catches stale generated metadata.
+Edit the relevant authored file under `apps/landing/resources/`: `content.ts`, `additionalContent.ts`, `fullBriefArticles.ts`, or `utilityContent.ts`. Keep the source IDs in `brief.generated.ts` stable. Utility behavior and examples live in `ExtendedResourceTools.tsx` and `utilityDefinitions.ts`. Run `node scripts/generate-resource-catalog.ts` to refresh the metadata-only catalog and the practical-resource section of `llms.txt`; builds and the landing dev command also do this automatically. Commit the generated catalog with the authored content. A consistency test catches stale generated metadata.
 
 Each resource needs a unique slug and search title, substantive task-specific content, primary-source references, and valid related-resource links. Interactive tools retain an instructional article and worked example without JavaScript. Inputs and results stay in the browser; they are not submitted as feedback automatically.
 

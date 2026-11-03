@@ -8,7 +8,7 @@ export const utilityResources: Resource[] = utilityDefinitions.filter(item => ![
   const topic = briefTopics.find(topic => topic.id === item.topics[0])!
   const technical = item.id <= 10 || item.id === 14 || item.id === 15
   return {
-    utilityId: item.id, slug: item.slug, tool: item.kind,
+    utilityId: item.id, toolConfig: { name: item.name, purpose, limit, ...(worksheetSpecs[item.kind] ? { fields: worksheetSpecs[item.kind]!.fields } : {}), ...(tableSpecs[item.kind] ? { table: tableSpecs[item.kind] } : {}) }, slug: item.slug, tool: item.kind,
     track: technical ? 'design-systems' : item.id >= 22 && item.id <= 28 ? 'ai-prototyping' : 'agentic-workflows',
     title: item.name, seoTitle: item.name + ': preview, edit, and export',
     description: `${purpose} ${limit}`.slice(0, 155).replace(/\s+\S*$/, '') + '…',

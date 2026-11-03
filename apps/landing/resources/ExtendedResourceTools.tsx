@@ -1,23 +1,22 @@
 import { useState } from 'react'
 import { ArrowRight } from 'lucide-react'
-import type { ResourceToolKind } from './model'
-import { utilityDefinitions, worksheetSpecs, tableSpecs } from './utilityDefinitions'
+import type { ResourceToolKind, ResourceToolConfig } from './model'
 import { parseHex, textContrast } from './toolCalculations'
 import { colorConversion, similarColors, spacingSuggestions, tokenChanges, cyclePhases, markdownTable, annotatedSvg } from './extendedCalculations'
 import { ToolCopy } from './ResourceTool'
 
-export type ExtendedToolProps = { kind: ResourceToolKind }
-export function ExtendedResourceTools({ kind }: ExtendedToolProps) {
-  const definition=utilityDefinitions.find(item=>item.kind===kind)!
+export type ExtendedToolProps = { kind: ResourceToolKind; config?: ResourceToolConfig }
+export function ExtendedResourceTools({ kind, config }: ExtendedToolProps) {
+  if (!config) return <section id="interactive-tool"><p>Tool configuration is unavailable. Reload the page or use the guide below.</p></section>
   let tool
-  if (worksheetSpecs[kind]) tool=<DocumentBuilder kind={kind}/>
-  else if (tableSpecs[kind]) tool=<ReviewTable kind={kind}/>
+  if (config.fields) tool=<DocumentBuilder spec={{title:config.name,fields:config.fields}}/>
+  else if (config.table) tool=<ReviewTable spec={config.table}/>
   else if (['overlay','before-after','crop','annotator'].includes(kind)) tool=<ImageReview kind={kind}/>
   else if (kind==='cycle-time') tool=<CycleCalculator/>
   else if (kind==='capture-format') tool=<CaptureSelector/>
   else if (kind==='guided-case') tool=<GuidedCase/>
   else tool=<DesignPlayground kind={kind}/>
-  return <section className="resource-tool" id="interactive-tool" aria-label="Interactive tool"><h2>{definition.name}</h2><p>{definition.notes[0]}</p><p className="resource-tool-help">Prefilled content is fictional starter material to replace with your own inputs and evidence.</p>{tool}<p className="resource-tool-help">{definition.notes[2]} Entries and images stay on this page until you leave. Nothing is submitted automatically.</p><noscript><p>Enable JavaScript to edit the tool. The worked example and guide below remain readable.</p></noscript></section>
+  return <section className="resource-tool" id="interactive-tool" aria-label="Interactive tool"><h2>{config.name}</h2><p>{config.purpose}</p><p className="resource-tool-help">Prefilled content is fictional starter material to replace with your own inputs and evidence.</p>{tool}<p className="resource-tool-help">{config.limit} Entries and images stay on this page until you leave. Nothing is submitted automatically.</p><noscript><p>Enable JavaScript to edit the tool. The worked example and guide below remain readable.</p></noscript></section>
 }
 
 function ExportResult({text,filename='crrt-review.md',type='text/markdown'}:{text:string;filename?:string;type?:string}) {
@@ -29,14 +28,12 @@ function TextField({label,value,onChange,rows=3}:{label:string;value:string;onCh
 function Slider({label,value,onChange,min=0,max=100,step=1}:{label:string;value:number;onChange:(value:number)=>void;min?:number;max?:number;step?:number}) {
   return <label>{label}: {value}<input type="range" min={min} max={max} step={step} value={value} onChange={event=>onChange(Number(event.target.value))}/></label>
 }
-function DocumentBuilder({kind}:{kind:ResourceToolKind}) {
-  const spec=worksheetSpecs[kind]!
+function DocumentBuilder({spec}:{spec:{title:string;fields:[string,string][]}}) {
   const [values,setValues]=useState(spec.fields.map(([,value])=>value))
   const output=values[0].trim()?`# ${spec.title}\n\n`+spec.fields.map(([label],index)=>`## ${label}\n${values[index].trim() || '[Not provided]'}`).join('\n\n'):''
   return <><div className="resource-tool-fields">{spec.fields.map(([label],index)=><TextField key={label} label={label} value={values[index]} onChange={value=>setValues(current=>current.map((previous,i)=>i===index?value:previous))}/>)}</div><p className="resource-tool-help">Fictional starter values. Replace them with your actual accepted scope and evidence. Unfilled fields remain marked.</p><ExportResult text={output}/></>
 }
-function ReviewTable({kind}:{kind:ResourceToolKind}) {
-  const spec=tableSpecs[kind]!
+function ReviewTable({spec}:{spec:{title:string;columns:string[];rows:string[][]}}) {
   const [rows,setRows]=useState(spec.rows)
   const [active,setActive]=useState(0)
   const change=(column:number,value:string)=>setRows(previous=>previous.map((row,index)=>index===active?row.map((cell,i)=>i===column?value:cell):row))
@@ -59,7 +56,7 @@ function DesignPlayground({kind}:{kind:ResourceToolKind}) {
     controls=<TextField label="HEX or rgb(r, g, b)" value={input} onChange={setInput} rows={1}/>
     output=result?`${result.hex}\n${result.css}`:''
     error=result?'':'Enter opaque HEX or integer RGB channels from 0 to 255.'
-    preview=result&&<div className="resource-color-swatch" style={{backgroundColor:result.hex}} aria-label={`Color preview ${result.hex}`}/>
+    preview=result&&<div className="resource-color-swatch" role="img" style={{backgroundColor:result.hex}} aria-label={`Color preview ${result.hex}`}/>
   } else if(kind==='similar-colors') {
     const pairs=similarColors(input,a)
     controls=<><TextField label="Color list (up to 60 opaque HEX values)" value={input} onChange={setInput}/><Slider label="RGB distance threshold" value={a} onChange={setA} max={100}/></>
@@ -140,7 +137,7 @@ function ImageReview({kind}:{kind:ResourceToolKind}) {
   }
   const pair=kind==='overlay'||kind==='before-after'
   const output=kind==='crop'?`width: ${boxWidth}px;\nheight: ${boxHeight}px;\nobject-fit: ${fit};\nobject-position: ${x}% ${y}%;`:kind==='annotator'&&images[0]?annotatedSvg(images[0],note,x,y,width,height):`Comparison: ${kind}\n${kind==='overlay'?'Opacity':'Divider'}: ${mix}%\nAlignment offset: ${x-10}%, ${y-10}%\nEvidence: local images; record viewport and build separately.`
-  return <><p>Local PNG/JPEG/WebP files, up to 8 MB each. Match viewport, content, and state before interpreting differences.</p><div className="resource-tool-fields">{Array.from({length:pair?2:1},(_,index)=><label key={index}>{pair?(index===0?'Reference image':'Comparison image'):'Local image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event=>{void load(event.target.files?.[0],index)}}/></label>)}</div>{error&&<p role="status" className="resource-tool-error">{error}</p>}{pair?<><Slider label={kind==='overlay'?'Comparison opacity (%)':'Comparison divider (%)'} value={mix} onChange={setMix}/>{kind==='overlay'&&<><Slider label="Horizontal alignment" value={x} onChange={setX} max={20}/><Slider label="Vertical alignment" value={y} onChange={setY} max={20}/></>}</>:kind==='crop'?<><Slider label="Container width (px)" value={boxWidth} onChange={setBoxWidth} min={200} max={900}/><Slider label="Container height (px)" value={boxHeight} onChange={setBoxHeight} min={160} max={600}/><label>Image fit<select value={fit} onChange={event=>setFit(event.target.value as 'cover'|'contain')}><option value="cover">Cover</option><option value="contain">Contain</option></select></label><Slider label="Focal x (%)" value={x} onChange={setX}/><Slider label="Focal y (%)" value={y} onChange={setY}/></>:<><TextField label="Annotation note (export uses first 100 characters)" value={note} onChange={setNote} rows={2}/><Slider label="Marker x (%)" value={x} onChange={setX}/><Slider label="Marker y (%)" value={y} onChange={setY}/><Slider label="Marker width (%)" value={width} onChange={setWidth} min={1}/><Slider label="Marker height (%)" value={height} onChange={setHeight} min={1}/></>}
+  return <><p>Local PNG/JPEG/WebP files, up to 8 MB each. Match viewport, content, and state before interpreting differences.</p><div className="resource-tool-fields">{Array.from({length:pair?2:1},(_,index)=><label key={index}>{pair?(index===0?'Reference image':'Comparison image'):'Local image'}<input type="file" accept="image/png,image/jpeg,image/webp" onChange={event=>{void load(event.target.files?.[0],index)}}/></label>)}</div>{error&&<p role="status" className="resource-tool-error">{error}</p>}{pair?<><Slider label={kind==='overlay'?'Comparison opacity (%)':'Comparison divider (%)'} value={mix} onChange={setMix}/>{kind==='overlay'&&<><Slider label="Horizontal alignment" value={x} onChange={setX} max={20}/><Slider label="Vertical alignment" value={y} onChange={setY} max={20}/></>}</>:kind==='crop'?<><Slider label="Container width (px)" value={boxWidth} onChange={setBoxWidth} min={200} max={900}/><Slider label="Container height (px)" value={boxHeight} onChange={setBoxHeight} min={160} max={600}/><label>Image fit<select value={fit} onChange={event=>setFit(event.target.value as 'cover'|'contain')}><option value="cover">Cover</option><option value="contain">Contain</option></select></label><Slider label="Focal x (%)" value={x} onChange={setX}/><Slider label="Focal y (%)" value={y} onChange={setY}/></>:<><TextField label="Annotation note (export uses first 100 characters)" value={note} onChange={setNote} rows={2}/><Slider label="Marker x (%)" value={x} max={99} onChange={value=>{setX(value);setWidth(current=>Math.min(current,100-value))}}/><Slider label="Marker y (%)" value={y} max={99} onChange={value=>{setY(value);setHeight(current=>Math.min(current,100-value))}}/><Slider label="Marker width (%)" value={width} onChange={setWidth} min={1} max={100-x}/><Slider label="Marker height (%)" value={height} onChange={setHeight} min={1} max={100-y}/></>}
     <div className="resource-image-preview" style={kind==='crop'?{aspectRatio:`${boxWidth}/${boxHeight}`}:{aspectRatio:'4 / 3'}}>
       {!images[0]&&<p>Choose a local image to begin. Your file stays in this browser page.</p>}
       {images[0]&&<img src={images[0]} alt="Reference supplied for local review" style={kind==='crop'?{objectFit:fit,objectPosition:`${x}% ${y}%`}:{objectFit:'contain'}}/>}

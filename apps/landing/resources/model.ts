@@ -14,6 +14,13 @@ export type ResourceSection = {
   items?: string[]
   code?: string
 }
+export type ResourceToolConfig = {
+  name: string
+  purpose: string
+  limit: string
+  fields?: [string, string][]
+  table?: {title: string; columns: string[]; rows: string[][]}
+}
 export type Resource = {
   slug: string
   track: ResourceTrack
@@ -29,6 +36,7 @@ export type Resource = {
   tool?: ResourceToolKind
   briefId?: number
   utilityId?: number
+  toolConfig?: ResourceToolConfig
 }
 
 export const resourceDate = '2026-11-02'

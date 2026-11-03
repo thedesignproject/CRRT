@@ -9,6 +9,7 @@ import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
 import { ThemeProvider } from '../../src/design-system'
 import { ResourcesPage } from './resources/ResourcesPage'
+import { readResourceCatalog } from './resources/readResourceCatalog'
 import { readResourceData } from './resources/readResourceData'
 import './globals.css'
 import './marketing-polish.css'
@@ -36,7 +37,7 @@ function RoutedApp() {
   useScrollProgress()
 
   if (publicPath === '/resources' || publicPath.startsWith('/resources/')) {
-    return <ResourcesPage pathname={initialPath} article={readResourceData(initialPath)} />
+    return <ResourcesPage catalog={readResourceCatalog()} pathname={initialPath} article={readResourceData(initialPath)} />
   }
 
   if (publicPath === '/privacy') {

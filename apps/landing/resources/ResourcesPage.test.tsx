@@ -2,11 +2,13 @@ import { act, fireEvent, render as renderUI, screen, within } from '@testing-lib
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { ThemeProvider } from '../../../src/design-system'
+import { resourceCatalog } from './catalog.generated'
+import { ResourceCatalogContext } from './ResourceCatalogContext'
 import { ResourcesPage } from './ResourcesPage'
 import { resourceMinutes, resourcePath, resources } from './content'
 import { render as prerender } from '../prerender'
 
-const render = (node: ReactNode) => renderUI(<ThemeProvider defaultTheme="light">{node}</ThemeProvider>)
+const render = (node: ReactNode) => renderUI(<ThemeProvider defaultTheme="light"><ResourceCatalogContext.Provider value={resourceCatalog}>{node}</ResourceCatalogContext.Provider></ThemeProvider>)
 
 vi.mock('./ResourceFigure', () => ({ ResourceFigure: ({ track }: { track: string }) => <div data-testid={`figure-${track}`} /> }))
 
@@ -103,4 +105,14 @@ it('combines the 12 topic groups with guide/tool filtering and resets from track
   expect(screen.getByRole('status')).toHaveTextContent('36 resources to explore')
   fireEvent.click(screen.getByRole('link', { name: /01 Design systems/ }))
   expect(screen.getByRole('status')).toHaveTextContent('156 resources to explore')
+})
+
+it('serializes browsing metadata without allowing embedded markup to become executable',()=>{
+  const title='</script><script>untrusted()</script>'
+  const catalog=[{...resourceCatalog[0],title}]
+  const view=render(<ResourcesPage pathname="/resources/missing" catalog={catalog}/>)
+  const script=view.container.querySelector('#resource-catalog-data')!
+  expect(script.textContent).not.toContain('</script>')
+  expect(JSON.parse(script.textContent!)[0].title).toBe(title)
+  expect(view.container.querySelector('script:not([type])')).toBeNull()
 })

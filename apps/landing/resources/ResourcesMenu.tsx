@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowRight, ChevronDown } from 'lucide-react'
 import { resourcePath, resourceTracks } from './model'
-import { resourceCatalog as resources } from './catalog.generated'
+import { useResourceCatalog } from './ResourceCatalogContext'
 import './resources.css'
 
 export function ResourcesMenu() {
+  const resources = useResourceCatalog()
   const [open, setOpen] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)

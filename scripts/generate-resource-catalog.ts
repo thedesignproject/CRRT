@@ -11,6 +11,11 @@ await writeFile(new URL('../apps/landing/resources/publicResourcePages.generated
 await writeFile(new URL('../apps/landing/resources/catalog.generated.ts', import.meta.url),
   `// Generated from content.ts before builds. Do not edit by hand.\nimport type { ResourceSummary } from './model'\n\nexport const resourceCatalog: ResourceSummary[] = ${JSON.stringify(catalog, null, 2)}\n`)
 
+const selected = new Set(catalog.filter(item => item.tool).slice(0, 3).map(item => item.slug))
+for (const track of ['design-systems', 'agentic-workflows', 'ai-prototyping']) for (const item of catalog.filter(item => item.track === track && !item.tool).slice(0, 3)) selected.add(item.slug)
+await writeFile(new URL('../apps/landing/resources/menuCatalog.generated.ts', import.meta.url),
+  `// Generated navigation subset; complete catalogs are embedded in route HTML.\nimport type { ResourceSummary } from './model'\nexport const menuCatalog: ResourceSummary[] = ${JSON.stringify(catalog.filter(item => selected.has(item.slug)), null, 2)}\n`)
+
 const llmsPath = new URL('../apps/landing/public/llms.txt', import.meta.url)
 const llms = await readFile(llmsPath, 'utf8')
 const links = catalog.map(resource => `- [${resource.title}](https://crrt.ai/resources/${resource.slug}): ${resource.takeaway}`).join('\n')

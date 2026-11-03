@@ -1,8 +1,12 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
-import { ExtendedResourceTools } from './ExtendedResourceTools'
+import { ExtendedResourceTools as ToolSurface } from './ExtendedResourceTools'
 import { ResourceTool } from './ResourceTool'
+import { resources } from './content'
+import type { ResourceToolKind } from './model'
 import { utilityDefinitions, worksheetSpecs, tableSpecs } from './utilityDefinitions'
+
+function ExtendedResourceTools({kind}:{kind:ResourceToolKind}) { return <ToolSurface kind={kind} config={resources.find(resource=>resource.tool===kind)!.toolConfig}/> }
 
 afterEach(()=>vi.restoreAllMocks())
 const output=()=>screen.getByLabelText('Generated output')
@@ -170,3 +174,5 @@ it.each(['overlay','before-after','crop'] as const)('previews supplied local ima
   expect(output().textContent!.length).toBeGreaterThan(20)
   vi.unstubAllGlobals()
 })
+
+it('retains readable instructions when the tool configuration is missing',()=>{render(<ToolSurface kind="hex-rgb"/>);expect(screen.getByText(/Tool configuration is unavailable/)).toBeInTheDocument()})
