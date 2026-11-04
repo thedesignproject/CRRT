@@ -21,7 +21,7 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-slim
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
       DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}

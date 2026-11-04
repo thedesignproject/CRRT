@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest'
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, rm, copyFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { readFileSync } from 'node:fs'
@@ -13,6 +13,8 @@ it('launches deploy-build from the actual Vercel package alias', async () => {
   const root = await mkdtemp(join(tmpdir(), 'crrt-vercel-alias-test-'))
   roots.push(root)
   const project = JSON.parse(readFileSync('package.json', 'utf8'))
+  await mkdir(join(root, 'scripts'))
+  await copyFile('scripts/run-vercel-build.mjs', join(root, 'scripts/run-vercel-build.mjs'))
   await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: {
     'vercel-build': project.scripts['vercel-build'],
     'deploy-build': 'node marker.cjs',
@@ -21,6 +23,13 @@ it('launches deploy-build from the actual Vercel package alias', async () => {
   const result = spawnSync('bun', ['run', 'vercel-build'], { cwd: root, encoding: 'utf8', timeout: 15_000 })
   expect(result.error).toBeUndefined()
   expect(result.status, result.stderr).toBe(0)
+  expect(readFileSync(join(root, 'build-called.txt'), 'utf8')).toBe('build\n')
+  const nested = spawnSync('bun', ['run', 'vercel-build'], {
+    cwd: root, encoding: 'utf8', timeout: 15_000,
+    env: { ...process.env, CRRT_VERCEL_BUILD_ACTIVE: '1' },
+  })
+  expect(nested.status).not.toBe(0)
+  expect(nested.stderr).toContain('Recursive Vercel build prevented')
   expect(readFileSync(join(root, 'build-called.txt'), 'utf8')).toBe('build\n')
 })
 

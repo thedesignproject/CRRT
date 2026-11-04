@@ -13,6 +13,15 @@ and recognizes the generated Build Output API output. The package script uses
 the installed Bun binary to run `deploy-build`, avoiding a nested Bun download
 through `npx`/`bun x`. The managed builder selects Bun from the lockfile.
 
+Each nested API builder receives a temporary package manifest with `vercel-build`
+and `now-build` removed. `@vercel/node` searches parent package manifests for
+those hooks even when its build-command option is disabled; forwarding the
+deployment alias would recursively restart the entire project build. Dependency
+and patch declarations are preserved, and the actual project manifest is unchanged.
+The top-level alias also rejects recursive entry through an inherited environment
+marker, providing a second guard if a future builder forwards deployment hooks.
+The GitHub deployment trial has a five-minute timeout instead of fifteen.
+
 Dashboard build/output values are not the source of truth. The existing root
 command overrides remain for tools using the zero-config path; the explicit
 builder uses the `vercel-build` package script. No dashboard or variable changes
