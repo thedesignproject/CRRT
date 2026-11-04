@@ -58,7 +58,7 @@
     "db:seed": "bun db/seed.ts",
     "db:baseline": "bun db/baseline.ts",
     "deploy-build": "bun run cloud:check && bun run typecheck && bun run build:landing && vite build --config apps/dashboard/vite.config.ts && bun scripts/build-vercel-output.ts && bun run db:migrate",
-    "vercel-build": "npx --yes bun@1.4.0 run deploy-build",
+    "vercel-build": "bun run deploy-build",
     "build:landing": "node scripts/build-landing.ts",
     "preview:landing": "bun scripts/preview-public-site.ts",
     "audit:resources": "node scripts/lighthouse-resources.mjs",

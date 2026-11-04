@@ -2,10 +2,27 @@ import { afterEach, expect, it } from 'vitest'
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { verifyVercelOutput } from './verify-vercel-output.mjs'
 
 const roots: string[] = []
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
+
+it('launches deploy-build from the actual Vercel package alias', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'crrt-vercel-alias-test-'))
+  roots.push(root)
+  const project = JSON.parse(readFileSync('package.json', 'utf8'))
+  await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: {
+    'vercel-build': project.scripts['vercel-build'],
+    'deploy-build': 'node marker.cjs',
+  } }))
+  await writeFile(join(root, 'marker.cjs'), 'require("node:fs").appendFileSync("build-called.txt", "build\\n")')
+  const result = spawnSync('bun', ['run', 'vercel-build'], { cwd: root, encoding: 'utf8', timeout: 15_000 })
+  expect(result.error).toBeUndefined()
+  expect(result.status, result.stderr).toBe(0)
+  expect(readFileSync(join(root, 'build-called.txt'), 'utf8')).toBe('build\n')
+})
 
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'crrt-prebuilt-test-'))

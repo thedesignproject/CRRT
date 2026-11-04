@@ -10,7 +10,8 @@ functions plus the six functions from our custom packager.
 here because it disables default API discovery while retaining Vercel-managed
 builds and variables. The static builder calls the `vercel-build` package script
 and recognizes the generated Build Output API output. The package script uses
-the same pinned Bun version and `deploy-build` command as before.
+the installed Bun binary to run `deploy-build`, avoiding a nested Bun download
+through `npx`/`bun x`. The managed builder selects Bun from the lockfile.
 
 Dashboard build/output values are not the source of truth. The existing root
 command overrides remain for tools using the zero-config path; the explicit
