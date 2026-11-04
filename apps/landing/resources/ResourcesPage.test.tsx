@@ -81,6 +81,8 @@ it('shows a useful missing-guide page and renders index and articles during prer
   expect(prerender('/resources')).toContain('Build with AI.')
   expect(prerender(resourcePath(resources[0]))).toContain(resources[0].answer)
   expect(prerender('/resources')).toContain('CollectionPage')
+  expect(prerender('/resources/missing')).toContain('Guide not found')
+  expect(prerender(resourcePath(resources.find(resource => resource.tool)!))).toContain('id="interactive-tool"')
 })
 
 it('rejects article data for another route and serializes embedded text safely', () => {
