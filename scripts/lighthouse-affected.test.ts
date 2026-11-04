@@ -8,6 +8,77 @@ const all = ['/resources', ...resources.map(resource => `/resources/${resource.s
 const select = (files: string[], current = resources, previous = resources) => selectAffected({ files, current, previous }).paths
 const file = 'apps/landing/resources/content.ts'
 
+const manifest = JSON.parse(read('package.json'))
+const packageSelection = (before: unknown, after: unknown, files = ['package.json']) => selectAffected({
+  files, current: resources, previous: resources,
+  packageBefore: JSON.stringify(before), packageAfter: JSON.stringify(after),
+}).paths
+
+it.each(['vercel-build', 'now-build', 'deploy-build', 'cloud:check', 'db:migrate', 'test:coverage', 'test:diff-coverage'])('skips CI-only package command changes to %s', name => {
+  const current = structuredClone(manifest)
+  current.scripts[name] = 'updated deployment or CI command'
+  expect(packageSelection(manifest, current)).toEqual([])
+  expect(packageSelection(current, manifest)).toEqual([])
+  expect(packageSelection(manifest, current, ['package.json', 'apps/landing/resources/ResourceArtwork.tsx'])).toEqual(['/resources'])
+})
+
+it('ignores JSON formatting and object key order, while preserving array order', () => {
+  expect(packageSelection(manifest, Object.fromEntries(Object.entries(manifest).reverse()))).toEqual([])
+  const current = structuredClone(manifest)
+  current.files.reverse()
+  expect(packageSelection(manifest, current)).toEqual(all)
+})
+
+it.each(['dependencies', 'devDependencies', 'overrides', 'engines', 'packageManager'])('keeps package %s changes as full-audit inputs', key => {
+  expect(packageSelection(manifest, { ...manifest, [key]: { changed: 'value' } })).toEqual(all)
+})
+
+it.each(['build:landing', 'audit:resources', 'test', 'prebuild:landing', 'unknown-command'])('keeps build and unclassified script %s changes as full-audit inputs', name => {
+  const current = structuredClone(manifest)
+  current.scripts[name] = 'changed command'
+  expect(packageSelection(manifest, current)).toEqual(all)
+})
+
+it('protects CI aliases referenced by other commands in either revision, including indirect calls and dynamic commands', () => {
+  for (const command of ['bun run deploy-build', 'bun run helper', 'bun run $BUILD_COMMAND']) {
+    const before = structuredClone(manifest)
+    before.scripts['build:landing'] = command
+    before.scripts.helper = 'bun run deploy-build'
+    const after = structuredClone(before)
+    after.scripts['deploy-build'] = 'changed deployment'
+    expect(packageSelection(before, after)).toEqual(all)
+    after.scripts['build:landing'] = manifest.scripts['build:landing']
+    expect(packageSelection(before, after)).toEqual(all)
+  }
+})
+
+it('falls back for malformed, missing, or unexpected package data', () => {
+  for (const invalid of [null, [], {}, { scripts: [] }, { scripts: { test: 12 } }]) {
+    expect(packageSelection(manifest, invalid)).toEqual(all)
+  }
+  expect(selectAffected({ files: ['package.json'], current: resources, packageBefore: '{', packageAfter: '{}' }).paths).toEqual(all)
+})
+
+it('skips only explicit deployment helpers and keeps unknown scripts and shared changes conservative', () => {
+  const helpers = ['run-vercel-build.mjs', 'vercel-api-package.mjs', 'verify-vercel-output.mjs', 'build-vercel-output.ts', 'build-public-function.ts', 'check-cloud-deployment.ts'].map(name => `scripts/${name}`)
+  expect(select(helpers)).toEqual([])
+  expect(select([...helpers, 'apps/landing/resources/resources.css'])).toEqual(all)
+  expect(select(['scripts/new-deployment-helper.ts'])).toEqual(all)
+})
+
+it('reads package metadata from both revisions without executing it and falls back on missing history', () => {
+  const current = structuredClone(manifest)
+  current.scripts['vercel-build'] = 'throw new Error("must not execute")'
+  const calls: string[][] = []
+  const git = (args: string[]) => {
+    calls.push(args)
+    return args[0] === 'diff' ? 'package.json\0' : JSON.stringify(manifest)
+  }
+  expect(detectAffected({ base: 'base', read: path => path === 'package.json' ? JSON.stringify(current) : read(path), git }).paths).toEqual([])
+  expect(calls[1]).toEqual(['show', 'base:package.json'])
+  expect(detectAffected({ base: 'base', read, git: args => { if (args[0] === 'diff') return 'package.json\0'; throw new Error('missing base') } }).paths).toEqual(all)
+})
+
 it('assigns every affected URL to exactly one balanced shard, without empty runners', () => {
   expect(shardPaths([])).toEqual([])
   expect(shardPaths(['/resources'])).toEqual([{ number: 1, total: 1, paths: '/resources' }])

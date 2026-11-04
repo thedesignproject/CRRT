@@ -6,6 +6,33 @@ import { resourceMinutes } from '../apps/landing/resources/model.ts'
 
 const contentFiles = ['apps/landing/resources/content.ts', 'apps/landing/resources/additionalContent.ts']
 const resourceRoot = 'apps/landing/resources/'
+// These commands/files do not participate in the local static Lighthouse build.
+// Keep this list explicit: new scripts remain full-audit inputs by default.
+const ciScripts = ['vercel-build', 'now-build', 'deploy-build', 'cloud:check', 'db:migrate', 'test:coverage', 'test:diff-coverage']
+const deploymentFiles = [
+  'scripts/run-vercel-build.mjs', 'scripts/vercel-api-package.mjs',
+  'scripts/verify-vercel-output.mjs', 'scripts/build-vercel-output.ts',
+  'scripts/build-public-function.ts', 'scripts/check-cloud-deployment.ts',
+]
+
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]))
+  return value
+}
+
+function ciOnlyPackage(before, after) {
+  const manifests = [JSON.parse(before), JSON.parse(after)]
+  if (manifests.some(pkg => !pkg || typeof pkg !== 'object' || Array.isArray(pkg) || !pkg.scripts || typeof pkg.scripts !== 'object' || Array.isArray(pkg.scripts))) return false
+  const changed = ciScripts.filter(name => manifests[0].scripts[name] !== manifests[1].scripts[name])
+  // A CI alias referenced by any non-CI command might now affect the build.
+  // Check both revisions, including pre/post hooks, without executing commands.
+  if (manifests.some(pkg => Object.entries(pkg.scripts).some(([name, command]) =>
+    typeof command !== 'string' || (!ciScripts.includes(name) && changed.length > 0 && (command.includes('$') || changed.some(alias => command.includes(alias)))),
+  ))) return false
+  for (const pkg of manifests) for (const name of ciScripts) delete pkg.scripts[name]
+  return JSON.stringify(canonical(manifests[0])) === JSON.stringify(canonical(manifests[1]))
+}
 
 // Read data without executing code from either revision. New syntax or imports
 // deliberately force a full audit until the selector understands them.
@@ -61,14 +88,23 @@ function catalog(resources) {
 }
 
 /** Unknown production inputs audit everything; only known unrelated inputs skip. */
-export function selectAffected({ files, current, previous }) {
+export function selectAffected({ files, current, previous, packageBefore, packageAfter }) {
   const all = ['/resources', ...current.map(resource => `/resources/${resource.slug}`)]
   const selected = new Set()
   const reasons = []
   const full = reason => ({ paths: all, reasons: [reason] })
   for (const file of files) {
     if (/(^|\/)(__tests__|tests)\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || /\.(md|mdx)$/.test(file)) continue
-    if (contentFiles.includes(file)) {
+    if (file === 'package.json') {
+      try {
+        if (!ciOnlyPackage(packageBefore, packageAfter)) return full('Package dependencies, build commands, or unclassified settings changed')
+      } catch {
+        return full('Package comparison unavailable or invalid')
+      }
+      reasons.push('Only known CI/deployment package commands changed')
+    } else if (deploymentFiles.includes(file)) {
+      reasons.push('Deployment-only helper changed')
+    } else if (contentFiles.includes(file)) {
       if (!previous) return full('Base resource content unavailable')
       // Catalog bytes are shared by every resource page. A changed title,
       // ordering, reading time, etc. therefore affects all pages, not just links.
@@ -107,7 +143,9 @@ export function detectAffected({ base, head = 'HEAD', force = false, git, read }
     const files = git(['diff', '--name-only', '--no-renames', '-z', base, head]).split('\0').filter(Boolean)
     const previous = files.some(file => contentFiles.includes(file))
       ? readResources(file => git(['show', `${base}:${file}`])) : undefined
-    return selectAffected({ files, current, previous })
+    const packages = files.includes('package.json')
+      ? { packageBefore: git(['show', `${base}:package.json`]), packageAfter: read('package.json') } : {}
+    return selectAffected({ files, current, previous, ...packages })
   } catch (error) {
     return all(`Full audit fallback: ${error.message}`)
   }
