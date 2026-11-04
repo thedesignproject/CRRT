@@ -1,6 +1,6 @@
 # Resource Lighthouse checks
 
-The selector runs on GitHub's `ubuntu-slim`; audit shards run on Blacksmith
+The selector runs on GitHub's `ubuntu-latest`; audit shards run on Blacksmith
 4-vCPU Ubuntu runners:
 
 - **Lighthouse · affected pages** compares the checked-out PR merge result with
