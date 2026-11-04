@@ -1,6 +1,7 @@
 # Resource Lighthouse checks
 
-All jobs in `resources-quality.yml` run on Blacksmith 4-vCPU Ubuntu runners:
+The selector runs on GitHub's `ubuntu-slim`; audit shards run on Blacksmith
+4-vCPU Ubuntu runners:
 
 - **Lighthouse · affected pages** compares the checked-out PR merge result with
   the PR base SHA. Pushes compare against the event's previous SHA.
