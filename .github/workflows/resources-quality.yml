@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       run: ${{ steps.select.outputs.run }}
-      paths: ${{ steps.select.outputs.paths }}
+      shards: ${{ steps.select.outputs.shards }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -57,6 +57,7 @@ jobs:
         run: node scripts/lighthouse-affected.mjs
 
   lighthouse:
+    name: lighthouse (${{ matrix.profile }}, shard ${{ matrix.shard.number }}/${{ matrix.shard.total }})
     needs: affected
     # A failed selector must not silently suppress the audit. Empty paths then
     # use audit:resources' existing full-page default.
@@ -67,6 +68,7 @@ jobs:
       fail-fast: false
       matrix:
         profile: [mobile, desktop]
+        shard: ${{ fromJSON(needs.affected.result == 'success' && needs.affected.outputs.shards || '[{"number":1,"total":1,"paths":""}]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -84,7 +86,7 @@ jobs:
       - name: Audit affected resource pages (median of three runs)
         env:
           LIGHTHOUSE_PROFILE: ${{ matrix.profile }}
-          LIGHTHOUSE_PATHS: ${{ needs.affected.result == 'success' && needs.affected.outputs.paths || '' }}
+          LIGHTHOUSE_PATHS: ${{ needs.affected.result == 'success' && matrix.shard.paths || '' }}
         run: |
           args=(--profile="$LIGHTHOUSE_PROFILE" --runs=3)
           if [[ -n "$LIGHTHOUSE_PATHS" ]]; then args+=(--paths="$LIGHTHOUSE_PATHS"); fi
@@ -93,7 +95,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: resources-lighthouse-${{ matrix.profile }}
+          name: resources-lighthouse-${{ matrix.profile }}-shard-${{ matrix.shard.number }}
           path: artifacts/lighthouse/${{ matrix.profile }}/
           if-no-files-found: warn
           retention-days: 14

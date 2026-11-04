@@ -113,6 +113,16 @@ export function detectAffected({ base, head = 'HEAD', force = false, git, read }
   }
 }
 
+/** Each URL belongs to one runner per profile; its three audits stay together. */
+export function shardPaths(paths) {
+  const total = Math.min(3, paths.length)
+  return Array.from({ length: total }, (_, index) => ({
+    number: index + 1,
+    total,
+    paths: paths.filter((_, position) => position % total === index).join(','),
+  }))
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const result = detectAffected({
     base: process.env.LIGHTHOUSE_BASE,
@@ -121,8 +131,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     git: args => execFileSync('git', args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }),
     read: file => readFileSync(file, 'utf8'),
   })
-  console.log(JSON.stringify(result, null, 2))
-  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `paths=${result.paths.join(',')}\nrun=${result.paths.length > 0}\n`)
+  const shards = shardPaths(result.paths)
+  console.log(JSON.stringify({ ...result, shards }, null, 2))
+  // Empty output lets a failed/skipped selector use the workflow's one full
+  // audit fallback instead of constructing an invalid empty matrix.
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `shards=${shards.length ? JSON.stringify(shards) : ''}\nrun=${result.paths.length > 0}\n`)
   if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY,
-    `### Lighthouse affected pages\n\n${result.paths.length ? result.paths.map(path => `- \`${path}\``).join('\n') : 'No resource pages affected; both Lighthouse audits skipped.'}\n\n${result.reasons.join('\n\n')}\n`)
+    `### Lighthouse affected pages\n\n${result.paths.length ? result.paths.map(path => `- \`${path}\``).join('\n') : 'No resource pages affected; both Lighthouse audits skipped.'}\n\n${shards.length} parallel shard(s) per profile.\n\n${result.reasons.join('\n\n')}\n`)
 }

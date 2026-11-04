@@ -1,12 +1,29 @@
 import { expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { detectAffected, readResources, selectAffected } from './lighthouse-affected.mjs'
+import { detectAffected, readResources, selectAffected, shardPaths } from './lighthouse-affected.mjs'
 
 const read = (file: string) => readFileSync(file, 'utf8')
 const resources = readResources(read)
 const all = ['/resources', ...resources.map(resource => `/resources/${resource.slug}`)]
 const select = (files: string[], current = resources, previous = resources) => selectAffected({ files, current, previous }).paths
 const file = 'apps/landing/resources/content.ts'
+
+it('assigns every affected URL to exactly one balanced shard, without empty runners', () => {
+  expect(shardPaths([])).toEqual([])
+  expect(shardPaths(['/resources'])).toEqual([{ number: 1, total: 1, paths: '/resources' }])
+  for (let count = 1; count <= 40; count++) {
+    const paths = Array.from({ length: count }, (_, index) => `/resources/page-${index}`)
+    const shards = shardPaths(paths)
+    const groups = shards.map(shard => shard.paths.split(','))
+    expect(shards).toHaveLength(Math.min(3, count))
+    expect(groups.flat().sort()).toEqual([...paths].sort())
+    expect(new Set(groups.flat()).size).toBe(count)
+    expect(Math.max(...groups.map(group => group.length)) - Math.min(...groups.map(group => group.length))).toBeLessThanOrEqual(1)
+    expect(shards.map(shard => shard.number)).toEqual(Array.from({ length: shards.length }, (_, index) => index + 1))
+    expect(shards.every(shard => shard.total === shards.length)).toBe(true)
+  }
+  expect(shardPaths(all).map(shard => shard.paths.split(',').length)).toEqual([8, 7, 7])
+})
 
 it('reads every real resource, including the spread collection and calculators', () => {
   expect(resources).toHaveLength(21)

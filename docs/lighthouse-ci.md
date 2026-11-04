@@ -1,11 +1,18 @@
 # Resource Lighthouse checks
 
-`resources-quality.yml` exposes three checks:
+All jobs in `resources-quality.yml` run on Blacksmith 4-vCPU Ubuntu runners:
 
 - **Lighthouse · affected pages** compares the checked-out PR merge result with
   the PR base SHA. Pushes compare against the event's previous SHA.
-- **lighthouse (mobile)** and **lighthouse (desktop)** audit the selected URLs,
-  with three runs per URL and the existing median-based budgets.
+- **lighthouse (mobile, shard 1/3)** and the other profile/shard checks audit the
+  selected URLs, with three runs per URL and the existing median-based budgets.
+
+Each profile uses up to three separate runners, limited to the number of affected
+URLs. URLs are distributed evenly and occur exactly once per profile. Each
+runner audits its assigned URLs sequentially so Chrome audits do not compete on
+the same machine. A full 22-page audit uses 8/7/7 pages per profile: six audit
+checks plus the selector. One affected URL uses two audit checks plus the selector.
+Artifact names include the profile and shard number to avoid upload collisions.
 
 The selector writes its URL list and reasons to the job summary. If no pages
 are affected, both audit jobs are skipped before allocating runners. Workflow
