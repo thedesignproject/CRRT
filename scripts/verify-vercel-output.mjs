@@ -46,6 +46,8 @@ export async function verifyVercelOutput(root) {
   if (webhook < 0 || api <= webhook || fallback <= api) throw new Error('Required API routing order is missing')
   const stripe = JSON.parse(await readFile(join(output, 'functions/stripe-webhook.func/.vc-config.json'), 'utf8'))
   if (stripe.shouldAddHelpers !== false) throw new Error('Stripe raw-body handling must stay enabled')
+  const apiMetadata = JSON.parse(await readFile(join(output, 'functions/api-router.func/.vc-config.json'), 'utf8'))
+  if (apiMetadata.maxDuration !== 60 || stripe.maxDuration !== 60) throw new Error('API functions must preserve the 60-second duration limit')
   return functions
 }
 

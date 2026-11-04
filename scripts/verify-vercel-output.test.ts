@@ -17,7 +17,7 @@ async function fixture() {
     await writeFile(full, typeof value === 'string' ? value : JSON.stringify(value))
   }
   const names = ['api-router', 'stripe-webhook', 'public-site', '.well-known/workflow/v1/flow', '.well-known/workflow/v1/step', '.well-known/workflow/v1/webhook/[token]']
-  for (const name of names) await write(`functions/${name}.func/.vc-config.json`, { runtime: 'nodejs24.x', handler: 'index.js', shouldAddHelpers: name !== 'stripe-webhook' })
+  for (const name of names) await write(`functions/${name}.func/.vc-config.json`, { runtime: 'nodejs24.x', handler: 'index.js', shouldAddHelpers: name !== 'stripe-webhook', maxDuration: 60 })
   for (const file of ['index.html', 'app-shell.html', 'dashboard/index.html', 'resources/index.html']) await write('static/' + file, '<html>Built</html>')
   const routes = [
     { src: '^/api/v1/billing/webhook/?$', dest: '/stripe-webhook' },
@@ -63,4 +63,10 @@ it('rejects invalid output routing and loss of Stripe raw-body handling', async 
   await write('config.json', { version: 3, routes })
   await write('functions/stripe-webhook.func/.vc-config.json', { runtime: 'nodejs24.x', handler: 'index.js', shouldAddHelpers: true })
   await expect(verifyVercelOutput(root)).rejects.toThrow('Stripe raw-body')
+})
+
+it('rejects accidentally reducing the consolidated API duration limit', async () => {
+  const { root, write } = await fixture()
+  await write('functions/api-router.func/.vc-config.json', { runtime: 'nodejs24.x', handler: 'index.js', maxDuration: 10 })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('60-second duration')
 })

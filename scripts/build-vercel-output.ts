@@ -7,6 +7,7 @@ import { build } from '@vercel/node'
 import { FileFsRef, glob } from '@vercel/build-utils'
 import { publicPageRoutes, applicationFallbackRoutes, staticAssetRoutes } from './public-pages.js'
 import { buildPublicFunction } from './build-public-function.js'
+import { verifyVercelOutput } from './verify-vercel-output.mjs'
 import { PRODUCT_AUDIT_WORKFLOW_ID } from '../workflows/product-audit-id.js'
 
 const exec = promisify(execFile)
@@ -106,7 +107,7 @@ async function buildApiFunction(webhook = false) {
     }
     await writeFile(join(functionDirectory, '.vc-config.json'), JSON.stringify({
       runtime: lambda.runtime, handler: lambda.handler, launcherType: 'Nodejs',
-      architecture: lambda.architecture, memory: 128, maxDuration: 10,
+      architecture: lambda.architecture, memory: 128, maxDuration: 60,
       shouldAddHelpers: !webhook, shouldAddSourcemapSupport: true,
     }, null, 2))
   } finally {
@@ -149,3 +150,5 @@ workflowConfig.routes = [
   ...applicationFallbackRoutes,
 ]
 await writeFile(join(output, 'config.json'), JSON.stringify(workflowConfig, null, 2))
+const verifiedFunctions = await verifyVercelOutput(root)
+console.log(`Verified ${verifiedFunctions.length} deployment functions; using consolidated API output.`)
