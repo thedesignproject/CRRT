@@ -1,0 +1,66 @@
+import { afterEach, expect, it } from 'vitest'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { verifyVercelOutput } from './verify-vercel-output.mjs'
+
+const roots: string[] = []
+afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
+
+async function fixture() {
+  const root = await mkdtemp(join(tmpdir(), 'crrt-prebuilt-test-'))
+  roots.push(root)
+  const output = join(root, '.vercel/output')
+  async function write(path: string, value: unknown) {
+    const full = join(output, path)
+    await mkdir(join(full, '..'), { recursive: true })
+    await writeFile(full, typeof value === 'string' ? value : JSON.stringify(value))
+  }
+  const names = ['api-router', 'stripe-webhook', 'public-site', '.well-known/workflow/v1/flow', '.well-known/workflow/v1/step', '.well-known/workflow/v1/webhook/[token]']
+  for (const name of names) await write(`functions/${name}.func/.vc-config.json`, { runtime: 'nodejs24.x', handler: 'index.js', shouldAddHelpers: name !== 'stripe-webhook' })
+  for (const file of ['index.html', 'app-shell.html', 'dashboard/index.html', 'resources/index.html']) await write('static/' + file, '<html>Built</html>')
+  const routes = [
+    { src: '^/api/v1/billing/webhook/?$', dest: '/stripe-webhook' },
+    { src: '^(/api(?:/.*)?)$', dest: '/api-router?__audit_path=$1' },
+    { src: '^(/.*)$', dest: '/public-site?__public_path=$1' },
+  ]
+  await write('config.json', { version: 3, routes })
+  await write('diagnostics/workflows-manifest.json', { workflows: { source: { productAuditWorkflow: { workflowId: 'workflow//./workflows/product-audit//productAuditWorkflow' } } } })
+  return { root, output, write, routes }
+}
+
+it('accepts the consolidated API, raw-body webhook, public site, and three workflow functions', async () => {
+  const { root } = await fixture()
+  expect(await verifyVercelOutput(root)).toHaveLength(6)
+})
+
+it('rejects missing functions and unintended automatic per-route API outputs', async () => {
+  const { root, output, write } = await fixture()
+  await write('functions/api/v1/extra.func/.vc-config.json', { runtime: 'nodejs24.x', handler: 'index.js' })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Unexpected deployment functions')
+  await rm(join(output, 'functions/api'), { recursive: true })
+  await rm(join(output, 'functions/public-site.func'), { recursive: true })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Unexpected deployment functions')
+})
+
+it('rejects broken runtime metadata, workflow registration, and missing static entrypoints', async () => {
+  const { root, write, output } = await fixture()
+  await write('functions/api-router.func/.vc-config.json', { runtime: 'invalid', handler: 'index.js' })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Invalid Node function')
+  await write('functions/api-router.func/.vc-config.json', { runtime: 'nodejs24.x', handler: 'index.js' })
+  await write('diagnostics/workflows-manifest.json', {})
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Product Audit workflow missing')
+  await rm(join(output, 'static/dashboard/index.html'))
+  await expect(verifyVercelOutput(root)).rejects.toThrow()
+})
+
+it('rejects invalid output routing and loss of Stripe raw-body handling', async () => {
+  const { root, write, routes } = await fixture()
+  await write('config.json', { version: 2, routes })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Build Output API v3')
+  await write('config.json', { version: 3, routes: [...routes].reverse() })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('routing order')
+  await write('config.json', { version: 3, routes })
+  await write('functions/stripe-webhook.func/.vc-config.json', { runtime: 'nodejs24.x', handler: 'index.js', shouldAddHelpers: true })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Stripe raw-body')
+})

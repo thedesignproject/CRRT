@@ -20,10 +20,11 @@ jobs:
     if: >-
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-slim
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     env:
       DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DEPLOY_BRANCH: ${{ github.head_ref || github.ref_name }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
     steps:
@@ -47,10 +48,14 @@ jobs:
           ref: ${{ env.DEPLOY_SHA }}
           persist-credentials: false
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+
       - name: Install Bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.3.14
+          bun-version: 1.4.4
 
       - name: Install Vercel CLI
         run: bun add --global vercel@56.2.1
@@ -89,6 +94,29 @@ jobs:
 
           echo "directory=$SOURCE_DIR" >> "$GITHUB_OUTPUT"
 
+      - name: Pull Vercel build environment
+        id: build_environment
+        env:
+          IS_PRODUCTION: ${{ steps.target.outputs.production }}
+          SOURCE_DIR: ${{ steps.source.outputs.directory }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          set -euo pipefail
+          umask 077
+          if [ -z "${VERCEL_TOKEN:-}" ]; then
+            echo "::error::VERCEL_TOKEN must be configured"
+            exit 1
+          fi
+          TARGET=preview
+          if [ "$IS_PRODUCTION" = "true" ]; then TARGET=production; fi
+          ARGS=(pull --cwd "$SOURCE_DIR" --environment="$TARGET" --yes --token "$VERCEL_TOKEN")
+          if [ "$TARGET" = "preview" ]; then ARGS+=(--git-branch="$DEPLOY_BRANCH"); fi
+          vercel "${ARGS[@]}"
+          ENV_FILE="$SOURCE_DIR/.vercel/.env.$TARGET.local"
+          test -f "$ENV_FILE"
+          echo "file=$ENV_FILE" >> "$GITHUB_OUTPUT"
+          echo "target=$TARGET" >> "$GITHUB_OUTPUT"
+
       - name: Create GitHub deployment
         id: create_deployment
         uses: actions/github-script@v9
@@ -98,6 +126,7 @@ jobs:
           DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
           RUN_URL: ${{ env.RUN_URL }}
         with:
+          retries: 3
           script: |
             const production = process.env.IS_PRODUCTION === 'true';
             const { data: deployment } =
@@ -126,9 +155,22 @@ jobs:
               deployment_id: deployment.id,
               state: 'in_progress',
               log_url: process.env.RUN_URL,
-              description: 'Vercel is building the deployment.',
+              description: 'Blacksmith is building the Vercel deployment.',
               auto_inactive: false,
             });
+
+      - name: Build deployment once on Blacksmith
+        working-directory: ${{ steps.source.outputs.directory }}
+        env:
+          BUILD_ENV_FILE: ${{ steps.build_environment.outputs.file }}
+          VERCEL_ENV: ${{ steps.build_environment.outputs.target }}
+          VERCEL_GIT_COMMIT_SHA: ${{ env.DEPLOY_SHA }}
+          VERCEL_GIT_COMMIT_REF: ${{ env.DEPLOY_BRANCH }}
+        run: |
+          set -euo pipefail
+          bun install --frozen-lockfile
+          bun --env-file="$BUILD_ENV_FILE" run deploy-build
+          node scripts/verify-vercel-output.mjs
 
       - name: Deploy to Vercel
         id: vercel
@@ -147,11 +189,15 @@ jobs:
 
           ARGS=(
             deploy
+            --prebuilt
             --cwd "$SOURCE_DIR"
             --archive=tgz
             --token "$VERCEL_TOKEN"
             --yes
             --no-color
+            --meta "githubDeployment=1"
+            --meta "githubCommitRef=$DEPLOY_BRANCH"
+            --meta "githubCommitSha=$DEPLOY_SHA"
           )
           if [ "$IS_PRODUCTION" = "true" ]; then
             ARGS+=(--prod)
@@ -178,6 +224,7 @@ jobs:
           DEPLOY_ENVIRONMENT: ${{ steps.target.outputs.environment }}
           RUN_URL: ${{ env.RUN_URL }}
         with:
+          retries: 3
           script: |
             const deploymentId = Number(process.env.DEPLOYMENT_ID);
 
@@ -238,6 +285,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
           DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
         with:
+          retries: 3
           script: |
             const marker = '<!-- crrt-vercel-preview -->';
             const body = [
@@ -288,6 +336,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
           RUN_URL: ${{ env.RUN_URL }}
         with:
+          retries: 3
           script: |
             const status = {
               owner: context.repo.owner,
