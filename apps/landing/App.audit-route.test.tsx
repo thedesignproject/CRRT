@@ -1,5 +1,7 @@
 import { act, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import type { ReactNode } from 'react'
+import { resources, resourcePath } from './resources/content'
 const auth = vi.hoisted(() => ({
   getSession: vi.fn(),
   listener: null as null | ((event: string, session: { user: { id: string } } | null) => void),
@@ -20,7 +22,7 @@ vi.mock('./product-audit/ProductAuditWorkspace', () => ({ ProductAuditWorkspace:
 vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing product audit</section> }))
 vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
 vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
-vi.mock('./resources/ResourcesPage', () => ({ ResourcesPage: () => <main>Public resource library</main> }))
+vi.mock('./resources/ResourcesPage', () => ({ ResourcesPage: ({ children }: { children?: ReactNode }) => <div>Public resource library{children}</div> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
 
@@ -32,7 +34,22 @@ beforeEach(() => {
   auth.unsubscribe.mockReset()
 })
 
-afterEach(() => window.history.replaceState({}, '', '/'))
+afterEach(() => {
+  window.history.replaceState({}, '', '/')
+  document.getElementById('resource-page-data')?.remove()
+})
+
+it.each([resources[0], resources.find(resource => resource.tool)!])('preserves the $slug resource in the application fallback', resource => {
+  window.history.replaceState({}, '', resourcePath(resource))
+  const data = document.createElement('script')
+  data.id = 'resource-page-data'
+  data.type = 'application/json'
+  data.textContent = JSON.stringify(resource)
+  document.body.append(data)
+  render(<App />)
+  expect(Boolean(screen.queryByRole('region', { name: 'Interactive tool' }))).toBe(Boolean(resource.tool))
+  expect(auth.getSession).not.toHaveBeenCalled()
+})
 
 it('routes durable audit IDs to the live workspace', () => {
   window.history.pushState({}, '', '/audit/11111111-1111-4111-8111-111111111111')

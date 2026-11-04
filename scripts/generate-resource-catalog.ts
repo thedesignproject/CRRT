@@ -1,12 +1,16 @@
 import { readFile, writeFile } from 'node:fs/promises'
-import { resources, resourceMinutes } from '../apps/landing/resources/content.ts'
+import { resources, resourceMinutes, resourcePath } from '../apps/landing/resources/content.ts'
 
-const catalog = resources.map(({ answer, sections, questions, sources, ...metadata }) => ({
+const catalog = resources.map(({ answer, sections, questions, sources, related, seoTitle, ...metadata }) => ({
   ...metadata,
-  minutes: resourceMinutes({ ...metadata, answer, sections, questions, sources }),
+  minutes: resourceMinutes({ ...metadata, related, seoTitle, answer, sections, questions, sources }),
 }))
 await writeFile(new URL('../apps/landing/resources/catalog.generated.ts', import.meta.url),
   `// Generated from content.ts before builds. Do not edit by hand.\nimport type { ResourceSummary } from './model'\n\nexport const resourceCatalog: ResourceSummary[] = ${JSON.stringify(catalog, null, 2)}\n`)
+
+const pages = resources.map(resource => ({ path: resourcePath(resource), title: `${resource.seoTitle} | CRRT`, description: resource.description }))
+await writeFile(new URL('../apps/landing/lib/resourcePages.generated.ts', import.meta.url),
+  `// Generated from content.ts before builds. Do not edit by hand.\nexport const resourcePages = ${JSON.stringify(pages, null, 2)}\n`)
 
 const llmsPath = new URL('../apps/landing/public/llms.txt', import.meta.url)
 const llms = await readFile(llmsPath, 'utf8')
