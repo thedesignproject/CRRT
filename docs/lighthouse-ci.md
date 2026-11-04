@@ -32,13 +32,22 @@ other CI workflows are independent.
 - Shared styles, navigation, models, build tools, dependencies, workflow changes,
   and unclassified production inputs select all pages.
 - Test-only and documentation-only edits select no pages.
+- Known deployment helpers (Vercel output packaging, its build wrapper and
+  verification, public-function packaging, and cloud preflight) select no pages.
+  They are not used by the local static build audited by Lighthouse.
+- `package.json` changes are compared structurally against the base. Formatting
+  changes and edits limited to `vercel-build`, `now-build`, `deploy-build`,
+  `cloud:check`, `db:migrate`, `test:coverage`, and `test:diff-coverage` select no
+  pages. If another command references a changed alias in either revision, the
+  selector audits everything. Dependency, toolchain, landing-build, unknown
+  script, lockfile, and `vercel.json` changes still audit everything.
 
 These rules deliberately follow shared modules, not only changed filenames.
 When adding a dependency to a new surface, keep the selector's ownership rules
 in sync; if ownership is uncertain, retain the full-audit fallback.
 
 The selector reads resource literals without executing old revisions. Missing
-history or unsupported data syntax falls back to all current URLs. If the
+history, invalid package metadata, or unsupported data syntax falls back to all current URLs. If the
 selector job itself fails, the audit jobs still run with the audit script's
 full-list default, while the selector check remains failed.
 
