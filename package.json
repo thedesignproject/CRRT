@@ -64,7 +64,11 @@
     "audit:resources": "node scripts/lighthouse-resources.mjs",
     "cloud:configure": "bun scripts/configure-cloud-plans.ts",
     "cloud:check": "bun scripts/check-cloud-deployment.ts",
-    "test:mcp:local": "MCP_TEST_LOCAL=1 NODE_OPTIONS=--no-experimental-webstorage bun --env-file=.env.docker.local run test -- db/mcp-auth.integration.test.ts server/mcp/local.integration.test.ts server/mcp/actions.local.integration.test.ts"
+    "test:mcp:local": "MCP_TEST_LOCAL=1 NODE_OPTIONS=--no-experimental-webstorage bun --env-file=.env.docker.local run test -- db/mcp-auth.integration.test.ts server/mcp/local.integration.test.ts server/mcp/actions.local.integration.test.ts",
+    "test:visual": "bun scripts/chromatic/run.ts",
+    "test:visual:types": "tsc -p tests/visual/tsconfig.json",
+    "chromatic:local": "bun run test:visual && bun --env-file=.env.docker.local run chromatic",
+    "chromatic": "CHROMATIC_ARCHIVE_LOCATION=artifacts/chromatic-simple/captures chromatic --no-interactive --no-diagnostics-file --junit-report=artifacts/chromatic-simple/cloud.xml"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
@@ -125,7 +129,12 @@
     "vite": "^8.0.9",
     "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.4",
-    "wxt": "^0.21.4"
+    "wxt": "^0.21.4",
+    "@chromatic-com/playwright": "1.0.0",
+    "@playwright/test": "1.64.1",
+    "chromatic": "18.14.0",
+    "@fontsource/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0"
   },
   "overrides": {
     "devalue": "5.9.4",

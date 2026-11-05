@@ -106,6 +106,13 @@ it('skips unrelated applications, docs, tests, and empty changes', () => {
   expect(select(['api/feedback.ts', 'apps/dashboard/App.tsx', 'apps/extension/main.ts', 'docs/ci.md', 'README.md', 'scripts/public-pages.test.ts', 'src/__tests__/theme.ts'])).toEqual([])
 })
 
+it('skips gitignore-only changes without hiding affected pages or unknown root inputs', () => {
+  expect(select(['.gitignore'])).toEqual([])
+  expect(select(['.gitignore', 'apps/landing/resources/ResourceArtwork.tsx'])).toEqual(['/resources'])
+  expect(select(['.gitignore', 'bun.lock'])).toEqual(all)
+  expect(select(['.gitignore', 'unknown-root-config'])).toEqual(all)
+})
+
 it('selects the library, shared articles, and calculators separately', () => {
   expect(select(['apps/landing/resources/ResourceArtwork.tsx'])).toEqual(['/resources'])
   expect(select(['apps/landing/resources/ResourcesIndex.tsx', 'apps/landing/resources/ResourceFigure.tsx'])).toEqual(['/resources'])

@@ -94,6 +94,7 @@ export function selectAffected({ files, current, previous, packageBefore, packag
   const reasons = []
   const full = reason => ({ paths: all, reasons: [reason] })
   for (const file of files) {
+    if (file === '.gitignore') continue
     if (/(^|\/)(__tests__|tests)\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || /\.(md|mdx)$/.test(file)) continue
     if (file === 'package.json') {
       try {
