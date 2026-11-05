@@ -2,12 +2,10 @@ import { ConnectAgent } from '../components/ConnectAgent'
 import { tryCrrt } from '../lib/tryCrrt'
 import { useRef, useState } from 'react'
 import { Check, MessageCircle, Send } from 'lucide-react'
-import { NavLink, ThemeToggle } from '../../../src/design-system'
 import { CarrotIcon } from '../components/CarrotIcon'
-import { Wordmark } from '../components/Wordmark'
-import { ResourcesMenu } from '../resources/ResourcesMenu'
+import { Navigation } from '../components/Navigation'
 
-export const DASHBOARD_HREF = import.meta.env.DEV && !import.meta.env.SSR ? 'http://localhost:5173' : '/dashboard'
+export { Navigation, DASHBOARD_HREF } from '../components/Navigation'
 
 const FEEDBACK = [
   {
@@ -105,26 +103,5 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
         </aside>
       </div>
     </section>
-  )
-}
-
-export function Navigation({ authenticated }: { authenticated: boolean }) {
-  return (
-    <nav className="landing-navigation" aria-label="Main navigation">
-      <a href="/#product" aria-label="CRRT home" className="landing-navigation-brand"><Wordmark level="nav" /></a>
-      <div className="landing-navigation-links">
-        <NavLink href="/#how-it-works">How it works</NavLink>
-        <NavLink href="/#pricing">Pricing</NavLink>
-        <ResourcesMenu />
-        <NavLink href="/docs">Docs</NavLink>
-        <NavLink href="https://github.com/thedesignproject/CRRT">GitHub</NavLink>
-      </div>
-      <div className="landing-navigation-actions">
-        <ThemeToggle />
-        <a className="ds-button ds-button-primary ds-button-sm" href={DASHBOARD_HREF}>
-          {authenticated ? 'Dashboard' : 'Get started'}
-        </a>
-      </div>
-    </nav>
   )
 }

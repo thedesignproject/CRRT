@@ -30,7 +30,7 @@ export type Resource = {
 export const resourceDate = '2026-11-02'
 export const resourceAuthor = { '@type': 'Organization', name: 'CRRT', url: 'https://crrt.ai/' }
 
-export type ResourceSummary = Omit<Resource, 'answer' | 'sections' | 'questions' | 'sources'> & { minutes: number }
+export type ResourceSummary = Omit<Resource, 'answer' | 'sections' | 'questions' | 'sources' | 'related' | 'seoTitle'> & { minutes: number }
 
 export const resourcePath = (resource: Pick<Resource, 'slug'>) => `/resources/${resource.slug}`
 
