@@ -77,6 +77,11 @@ it passes automatically when there are no changes. Baselines never auto-accept.
 No runner polls or waits for a reviewer. Local uploads retain their nonzero exit
 code for unapproved differences.
 
+CI also uses `--force-rebuild` so rerunning a commit that already passed locally
+still emits a fresh JUnit report and native status. Chromatic's default shortcut
+for passed same-commit rebuilds exits before writing the report that the comment
+job requires. New commits already build normally; baseline approval stays manual.
+
 The existing project is linked to `thedesignproject/CRRT` using its existing valid
 GitHub access, with visual tests enabled. Native PR comments remain disabled;
 the workflow supplies one comment. That comment records the workflow result;
