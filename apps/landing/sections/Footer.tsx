@@ -1,5 +1,5 @@
 import { Wordmark } from '../components/Wordmark'
-import { DASHBOARD_HREF } from './Hero'
+import { DASHBOARD_HREF } from '../components/Navigation'
 
 const CHROME_HREF = import.meta.env.VITE_CHROME_EXTENSION_URL ?? '/support#extension'
 

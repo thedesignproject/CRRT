@@ -12,7 +12,21 @@ export async function loadLandingApp(pathname: string) {
       const { resources } = await import('./resources/content')
       article = resources.find(resource => resourcePath(resource) === path)
     }
-    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage pathname={pathname} article={article} /></ThemeProvider>
+    // Await the tool before hydration so its prerendered controls stay intact.
+    let content
+    if (path === '/resources') {
+      const { ResourcesIndex } = await import('./resources/ResourcesIndex')
+      content = <ResourcesIndex />
+    } else if (article) {
+      const { ResourceArticle } = await import('./resources/ResourceArticle')
+      let tool
+      if (article.tool) {
+        const { ResourceTool } = await import('./resources/ResourceTool')
+        tool = <ResourceTool kind={article.tool} />
+      }
+      content = <ResourceArticle resource={article} tool={tool} />
+    }
+    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage pathname={pathname} article={article}>{content}</ResourcesPage></ThemeProvider>
   }
   const { App } = await import('./App')
   return <App />
