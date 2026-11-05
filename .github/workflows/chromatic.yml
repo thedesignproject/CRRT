@@ -16,7 +16,7 @@ concurrency:
 jobs:
   visual:
     name: Visual screens
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 15
     outputs:
       local_result: ${{ steps.local.outcome }}
@@ -54,7 +54,9 @@ jobs:
           fi
           # Chromatic's required UI Tests status waits for human approval.
           # Finish the runner on visual changes; real build/test errors still fail.
-          bun run chromatic --exit-zero-on-changes
+          # Always produce this run's report/status, even after a manual upload
+          # passed the same commit (Chromatic otherwise exits before JUnit output).
+          bun run chromatic --exit-zero-on-changes --force-rebuild
       - name: Save reports and failure diagnostics
         if: always()
         uses: actions/upload-artifact@v7.0.2

@@ -59,10 +59,12 @@ baseline approval remains manual; visual differences do not automatically pass.
 ## Pull request automation
 
 `.github/workflows/chromatic.yml` runs on PR creation (including drafts), new PR
-commits, pushes to `trunk`, and manual dispatch. One `ubuntu-latest` visual job
+commits, pushes to `trunk`, and manual dispatch. One `blacksmith-4vcpu-ubuntu-2404` visual job
 runs the same capture/replay checks and uploads with the existing repository
-`CHROMATIC_PROJECT_TOKEN` secret. Start with standard GitHub-hosted runners; only
-consider Blacksmith if the measured visual job takes more than 90 seconds.
+`CHROMATIC_PROJECT_TOKEN` secret. The GitHub-hosted baseline took 3m 35s, above
+the 90-second threshold. The visual job now uses the same Blacksmith runner as
+React CI so its next run can measure the difference. Capture/replay workers and
+test coverage are unchanged; the report-only comment job remains GitHub-hosted.
 
 A separate job reads the reports without checking out PR code and updates one
 bot comment with the commit, snapshot/error/review counts, Chromatic link, and
@@ -76,6 +78,11 @@ Chromatic **UI Tests** check stays yellow/pending until the changes are accepted
 it passes automatically when there are no changes. Baselines never auto-accept.
 No runner polls or waits for a reviewer. Local uploads retain their nonzero exit
 code for unapproved differences.
+
+CI also uses `--force-rebuild` so rerunning a commit that already passed locally
+still emits a fresh JUnit report and native status. Chromatic's default shortcut
+for passed same-commit rebuilds exits before writing the report that the comment
+job requires. New commits already build normally; baseline approval stays manual.
 
 The existing project is linked to `thedesignproject/CRRT` using its existing valid
 GitHub access, with visual tests enabled. Native PR comments remain disabled;

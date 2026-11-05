@@ -60,6 +60,10 @@ const fixture = base.extend<{ capture: Capture; withOpener: boolean }>({
           try { animation.finish() } catch {}
         }
       })
+      if (info.title.startsWith('widget /') && (state.startsWith('sidebar') && state !== 'sidebar-empty' || state === 'tracker-picker')) {
+        await expect(page.locator('.fw-sidebar-card')).toHaveCount(3)
+        await expect.poll(() => page.locator('.fw-sidebar-card').evaluateAll(cards => cards.every(card => Number(getComputedStyle(card).opacity) >= 0.5)), 'Every feedback card remains visible after freezing animations').toBe(true)
+      }
       const fullPage = !/^(widget|extension)/.test(info.title) && !info.title.startsWith('public / home')
       const dir = 'artifacts/chromatic-simple/checkpoints'
       await mkdir(dir, { recursive: true })
