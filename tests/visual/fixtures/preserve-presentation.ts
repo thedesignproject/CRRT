@@ -2,6 +2,17 @@
 // empty longhands after a single longhand changes. rrweb replays that serialized
 // text, so preserve the affected computed values before taking either checkpoint.
 export function preservePresentation() {
+  // Persist entrance animations before both checkpoints. screenshot() temporarily
+  // finishes CSS animations, then restores them; rrweb can otherwise serialize a
+  // newly restarted, invisible first frame (notably the private-login overlay).
+  const animated = new Set<HTMLElement | SVGElement>()
+  for (const animation of document.getAnimations()) {
+    if (animation.effect?.getComputedTiming().iterations === Infinity) continue
+    const target = (animation.effect as KeyframeEffect | null)?.target
+    if (!(target instanceof HTMLElement || target instanceof SVGElement)) continue
+    try { animation.finish(); animation.commitStyles(); animated.add(target) } catch {}
+  }
+  for (const target of animated) target.style.setProperty('animation', 'none', 'important')
   // Document-level adopted sheets are not included by this rrweb version.
   for (const sheet of document.adoptedStyleSheets) { const style = document.createElement('style'); style.dataset.crrtAdopted = 'true'; style.textContent = [...sheet.cssRules].map(rule => rule.cssText).join('\n'); document.head.append(style) }
   // React may retain an initial checked attribute after the live property clears.
