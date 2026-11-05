@@ -1,0 +1,10 @@
+{
+  "$schema": "https://www.chromatic.com/config-file.schema.json",
+  "projectId": "Project:6aeae810ce4e3a1237160876",
+  "playwright": true,
+  "autoAcceptChanges": false,
+  "exitZeroOnChanges": false,
+  "exitOnceUploaded": false,
+  "buildCommand": "bun scripts/chromatic/build-archive.ts",
+  "outputDir": "artifacts/chromatic-simple/storybook"
+}
