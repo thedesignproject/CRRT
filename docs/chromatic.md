@@ -59,10 +59,12 @@ baseline approval remains manual; visual differences do not automatically pass.
 ## Pull request automation
 
 `.github/workflows/chromatic.yml` runs on PR creation (including drafts), new PR
-commits, pushes to `trunk`, and manual dispatch. One `ubuntu-latest` visual job
+commits, pushes to `trunk`, and manual dispatch. One `blacksmith-4vcpu-ubuntu-2404` visual job
 runs the same capture/replay checks and uploads with the existing repository
-`CHROMATIC_PROJECT_TOKEN` secret. Start with standard GitHub-hosted runners; only
-consider Blacksmith if the measured visual job takes more than 90 seconds.
+`CHROMATIC_PROJECT_TOKEN` secret. The GitHub-hosted baseline took 3m 35s, above
+the 90-second threshold. The visual job now uses the same Blacksmith runner as
+React CI so its next run can measure the difference. Capture/replay workers and
+test coverage are unchanged; the report-only comment job remains GitHub-hosted.
 
 A separate job reads the reports without checking out PR code and updates one
 bot comment with the commit, snapshot/error/review counts, Chromatic link, and
