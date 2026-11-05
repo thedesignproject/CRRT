@@ -13,7 +13,7 @@ input, select { width: 100%; border: 1px solid rgba(255,255,255,.16); border-rad
 input:focus-visible, select:focus-visible { border-color: #e8853d; box-shadow: 0 0 0 2px rgba(232,133,61,.2) }
 button { border: 0; font: inherit; cursor: pointer }
 button:disabled { cursor: wait; opacity: .6 }
-.primary { border-radius: 999px; background: #e8853d; color: #fff; min-height: 40px; padding: 0 18px; font-weight: 600 }
+.primary { border-radius: var(--crrt-radius-2xl); background: #e8853d; color: #fff; min-height: var(--crrt-space-9); padding: 0 18px; font-weight: 600 }
 .primary:hover { background: #b85f1f }
 .secondary { border: 1px solid rgba(255,255,255,.16); border-radius: 999px; background: transparent; color: #fff; min-height: 40px; padding: 0 18px; font-weight: 600 }
 .secondary:hover { border-color: #e8853d; color: #e8853d }
