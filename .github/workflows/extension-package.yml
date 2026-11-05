@@ -99,7 +99,7 @@ jobs:
           : "${CWS_EXTENSION_ID:?Set CWS_EXTENSION_ID in Actions variables}"
           : "${CWS_SERVICE_ACCOUNT:?Set CWS_SERVICE_ACCOUNT in Actions variables}"
           : "${CWS_SERVICE_ACCOUNT_KEY:?Set CWS_SERVICE_ACCOUNT_KEY in Actions secrets}"
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         if: github.event_name == 'push'
         with:
           name: crrt-extension-${{ github.ref_name }}
