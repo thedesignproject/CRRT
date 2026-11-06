@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, envDir, ''), ...process.env }
   return {
     root: __dirname,
+    cacheDir: path.resolve(envDir, 'node_modules/.vite-dashboard'),
     // Served as a sub-path of the landing site so both ship from one Vercel deploy.
     base: '/dashboard/',
     envDir,

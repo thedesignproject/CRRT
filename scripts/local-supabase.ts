@@ -1,7 +1,8 @@
 import { unlink } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
 import { getPrivilegedHeaders } from '../api/_lib/supabase.js'
 
-const root = new URL('../', import.meta.url).pathname
+const root = fileURLToPath(new URL('../', import.meta.url))
 const managedStart = '# >>> CRRT LOCAL SUPABASE >>>'
 const managedEnd = '# <<< CRRT LOCAL SUPABASE <<<'
 
@@ -117,8 +118,8 @@ async function smoke(status: Record<string, string>) {
 async function up() {
   run(['docker', 'info'])
   ensureNetwork()
-  runQuiet(['bunx', 'supabase', 'start', '--network-id', 'crrt-local', '-x', 'imgproxy'])
-  const status = captureJson(['bunx', 'supabase', 'status', '-o', 'json'])
+  runQuiet([process.execPath, 'x', 'supabase', 'start', '--network-id', 'crrt-local', '-x', 'imgproxy'])
+  const status = captureJson([process.execPath, 'x', 'supabase', 'status', '-o', 'json'])
   await writeLocalEnv(status)
   const env = { ...process.env, DATABASE_URL: status.DB_URL }
   run(['bun', 'run', 'db:migrate'], env)
@@ -130,12 +131,12 @@ async function up() {
 }
 
 const action = process.argv[2] || 'up'
-if (action === 'down') run(['bunx', 'supabase', 'stop'])
+if (action === 'down') run([process.execPath, 'x', 'supabase', 'stop'])
 else if (action === 'reset') {
-  run(['bunx', 'supabase', 'stop', '--no-backup'])
+  run([process.execPath, 'x', 'supabase', 'stop', '--no-backup'])
   await up()
 } else if (action === 'status') {
-  const status = captureJson(['bunx', 'supabase', 'status', '-o', 'json'])
+  const status = captureJson([process.execPath, 'x', 'supabase', 'status', '-o', 'json'])
   console.log(`API: ${status.API_URL}\nStudio: ${status.STUDIO_URL}\nMailpit: ${status.MAILPIT_URL}`)
 }
 else if (action === 'up') await up()
