@@ -1,0 +1,139 @@
+name: Chromatic
+
+on:
+  pull_request:
+  push:
+    branches: [trunk]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromatic-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  visual:
+    name: Visual screens
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    outputs:
+      local_result: ${{ steps.local.outcome }}
+      cloud_result: ${{ steps.cloud.outcome }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:visual:types
+      - name: Capture and replay selected screens
+        id: local
+        run: bun run test:visual
+      - name: Publish and compare with Chromatic
+        id: cloud
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+        env:
+          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
+          CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
+          CHROMATIC_SLUG: ${{ github.repository }}
+        run: |
+          if [[ -z "$CHROMATIC_PROJECT_TOKEN" ]]; then
+            echo '::error::CHROMATIC_PROJECT_TOKEN is missing'
+            exit 1
+          fi
+          # Chromatic's required UI Tests status waits for human approval.
+          # Finish the runner on visual changes; real build/test errors still fail.
+          # Always produce this run's report/status, even after a manual upload
+          # passed the same commit (Chromatic otherwise exits before JUnit output).
+          bun run chromatic --exit-zero-on-changes --force-rebuild
+      - name: Save reports and failure diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: chromatic-report
+          path: |
+            artifacts/chromatic-simple/results.json
+            artifacts/chromatic-simple/replays.json
+            artifacts/chromatic-simple/cloud.xml
+            artifacts/chromatic-simple/captures/**/test-failed-*.png
+            artifacts/chromatic-simple/captures/**/trace.zip
+            artifacts/chromatic-simple/captures/chromatic-archives/archive/errors.json
+            artifacts/chromatic-simple/replay-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  comment:
+    name: PR result
+    needs: visual
+    if: always() && !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-slim
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      pull-requests: write
+    steps:
+      # No checkout: this job reads report data, never executes PR code.
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: chromatic-report
+          path: chromatic-report
+      - uses: actions/github-script@v9
+        env:
+          LOCAL_RESULT: ${{ needs.visual.outputs.local_result }}
+          CLOUD_RESULT: ${{ needs.visual.outputs.cloud_result }}
+        with:
+          retries: 3
+          script: |
+            const fs = require('node:fs');
+            const marker = '<!-- crrt-chromatic -->';
+            const issue_number = context.payload.pull_request.number;
+            const sha = context.payload.pull_request.head.sha;
+            const { data: current } = await github.rest.pulls.get({ ...context.repo, pull_number: issue_number });
+            if (current.head.sha !== sha) { core.notice('Skipping stale Chromatic report'); return; }
+            const read = name => {
+              try { return fs.readFileSync(`chromatic-report/${name}`, 'utf8'); } catch { return ''; }
+            };
+            let expected = 0;
+            try { expected = JSON.parse(read('results.json')).stats.expected; } catch {}
+            const xml = read('cloud.xml');
+            const suite = xml.match(/<testsuite\b([^>]*)>/)?.[1] || '';
+            const count = name => {
+              const value = suite.match(new RegExp(`\\b${name}="(\\d+)"`))?.[1];
+              return value === undefined ? null : Number(value);
+            };
+            const total = count('tests'), errors = count('errors'), skipped = count('skipped');
+            const results = [...xml.matchAll(/name="result"\s+value="([^"]+)"/g)].map(match => match[1]);
+            const pending = results.filter(result => result === 'PENDING').length;
+            let buildUrl = '';
+            try {
+              const url = new URL((xml.match(/name="buildUrl"\s+value="([^"]+)"/)?.[1] || '').replaceAll('&amp;', '&'));
+              if (url.protocol === 'https:' && url.hostname === 'www.chromatic.com' && url.pathname === '/build' && url.searchParams.get('appId') === '6aeae810ce4e3a1237160876' && /^\d+$/.test(url.searchParams.get('number') || '')) buildUrl = url.href;
+            } catch {}
+            const localPassed = process.env.LOCAL_RESULT === 'success';
+            const complete = localPassed && process.env.CLOUD_RESULT === 'success' && Number.isSafeInteger(expected) && expected > 0 && total === expected && results.length === total && errors === 0 && skipped === 0 && count('failures') === pending && results.every(result => ['PASSED', 'ACCEPTED', 'PENDING'].includes(result)) && buildUrl;
+            const status = complete ? (pending ? 'Needs baseline review' : 'Passed') : 'Failed';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [marker, `### Chromatic — ${status}`, `Commit \`${sha.slice(0, 7)}\``,
+              `Local capture/replay: **${localPassed ? 'passed' : 'failed or incomplete'}**.`,
+              total === null ? 'No complete cloud report was produced.' : `${total} snapshots · ${errors ?? '?'} rendering errors · ${skipped ?? '?'} skipped · ${pending} pending baseline reviews.`,
+              complete && pending ? 'Approve changes in Chromatic to resolve its UI Tests check. This comment reflects the workflow run; the native check updates after approval.' : '',
+              [buildUrl && `[Review snapshots](${buildUrl})`, `[Workflow logs](${runUrl})`].filter(Boolean).join(' · ')
+            ].join('\n\n');
+            await core.summary.addRaw(body).write();
+            const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number, per_page: 100 });
+            const existing = comments.find(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker));
+            if (existing) await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
+            else await github.rest.issues.createComment({ ...context.repo, issue_number, body });
+            if (status === 'Failed') core.setFailed('Chromatic checks failed or the report is incomplete');

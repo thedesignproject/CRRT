@@ -21,7 +21,7 @@ jobs:
       github.event_name == 'push' ||
       github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-slim
-    timeout-minutes: 15
+    timeout-minutes: 5
     env:
       DEPLOY_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
@@ -98,6 +98,7 @@ jobs:
           DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
           RUN_URL: ${{ env.RUN_URL }}
         with:
+          retries: 3
           script: |
             const production = process.env.IS_PRODUCTION === 'true';
             const { data: deployment } =
@@ -178,6 +179,7 @@ jobs:
           DEPLOY_ENVIRONMENT: ${{ steps.target.outputs.environment }}
           RUN_URL: ${{ env.RUN_URL }}
         with:
+          retries: 3
           script: |
             const deploymentId = Number(process.env.DEPLOYMENT_ID);
 
@@ -238,6 +240,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
           DEPLOY_SHA: ${{ env.DEPLOY_SHA }}
         with:
+          retries: 3
           script: |
             const marker = '<!-- crrt-vercel-preview -->';
             const body = [
@@ -288,6 +291,7 @@ jobs:
           DEPLOYMENT_URL: ${{ steps.vercel.outputs.url }}
           RUN_URL: ${{ env.RUN_URL }}
         with:
+          retries: 3
           script: |
             const status = {
               owner: context.repo.owner,

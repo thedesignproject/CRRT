@@ -1,0 +1,31 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import { expect, it } from 'vitest'
+import { ResourcesMenu } from './ResourcesMenu'
+
+it('opens the directory, supports keyboard dismissal, and handles inside/outside focus and pointer events', () => {
+  const view = render(<div><ResourcesMenu /><button type="button">Outside</button></div>)
+  const trigger = screen.getByRole('button', { name: 'Resources' })
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(trigger)
+  expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  const link = screen.getByRole('link', { name: /Explore all resources/ })
+  fireEvent.pointerDown(link)
+  fireEvent.blur(trigger, { relatedTarget: link })
+  expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  fireEvent.keyDown(link, { key: 'ArrowDown' })
+  fireEvent.keyDown(link, { key: 'Escape' })
+  expect(trigger).toHaveFocus()
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(trigger)
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Outside' }))
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(trigger)
+  fireEvent.blur(link, { relatedTarget: screen.getByRole('button', { name: 'Outside' }) })
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(trigger)
+  fireEvent.click(trigger)
+  expect(trigger).toHaveAttribute('aria-expanded', 'false')
+  fireEvent.click(trigger)
+  view.unmount()
+  fireEvent.pointerDown(document.body)
+})

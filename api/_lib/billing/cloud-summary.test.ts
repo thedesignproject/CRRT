@@ -12,16 +12,16 @@ beforeEach(()=>{
   vi.mocked(stripeClient).mockReturnValue({prices:{retrieve}} as never)
   vi.mocked(billingSummary).mockResolvedValue({enabled:true} as never)
   vi.mocked(ownerEntitlements).mockResolvedValue({canWrite:true,status:'none'} as never)
-  retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_pro'?1900:4900,recurring:{interval:'month',interval_count:1}}))
+  retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_pro'?1800:5400,recurring:{interval:'month',interval_count:1}}))
 })
 afterEach(()=>vi.unstubAllEnvs())
 it('returns validated plan pricing with server-owned usage after reconciliation',async()=>{
-  expect(await cloudBillingSummary('owner')).toMatchObject({status:'none',testMode:true,plans:[{id:'pro',amount:'$19'},{id:'studio',amount:'$49'}],entitlements:{canWrite:true}})
+  expect(await cloudBillingSummary('owner')).toMatchObject({status:'none',testMode:true,plans:[{id:'pro',amount:'$18'},{id:'studio',amount:'$54'}],entitlements:{canWrite:true}})
   expect(billingSummary).toHaveBeenCalledWith('owner');expect(ownerEntitlements).toHaveBeenCalledWith('owner')
   vi.stubEnv('STRIPE_MODE','live');expect((await cloudBillingSummary('owner')).testMode).toBe(false)
 })
 it.each([{tax_behavior:'inclusive'},{active:false},{currency:'eur'},{unit_amount:999},{recurring:null},{recurring:{interval:'year',interval_count:1}},{recurring:{interval:'month',interval_count:2}}])('fails closed for a misconfigured price %j',async patch=>{
-  retrieve.mockResolvedValue({active:true,currency:'usd',unit_amount:1900,recurring:{interval:'month',interval_count:1},...patch})
+  retrieve.mockResolvedValue({active:true,currency:'usd',unit_amount:1800,recurring:{interval:'month',interval_count:1},...patch})
   await expect(cloudBillingSummary('owner')).rejects.toThrow('approved monthly catalog')
 })
 
@@ -33,6 +33,6 @@ it('returns annual account pricing with monthly resource allowances and supporte
     billingCycle: 'yearly', billingCycles: ['monthly','yearly'], actions: {checkoutState:true,changePlan:false},
     plans:[{id:'pro',amount:'$192',interval:'year',comments:2000},{id:'studio',amount:'$492',interval:'year',comments:10000}],
   })
-  retrieve.mockResolvedValue({ active: true, currency: 'usd', unit_amount: 1900, recurring: { interval: 'month', interval_count: 1 } })
+  retrieve.mockResolvedValue({ active: true, currency: 'usd', unit_amount: 1800, recurring: { interval: 'month', interval_count: 1 } })
   await expect(cloudBillingSummary('owner')).rejects.toThrow('approved yearly catalog')
 })

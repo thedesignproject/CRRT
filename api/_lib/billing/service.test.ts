@@ -236,17 +236,51 @@ it('accepts live events only for an explicitly configured live deployment',async
 })
 
 it.each(['pro','studio'] as const)('starts a payment-method-backed %s trial and never repeats it',async plan=>{
-  sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?4900:1900,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
+  sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?5400:1800,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
   vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud')
   vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
   await checkout(user,plan)
   expect(sdk.checkout.sessions.create).toHaveBeenLastCalledWith(expect.objectContaining({
-    line_items:[{price:'price_'+plan,quantity:1}],payment_method_collection:'always',automatic_tax:{enabled:true},billing_address_collection:'required',customer_update:{address:'auto'},
+    line_items:[{price:'price_'+plan,quantity:1}],managed_payments:{enabled:true},
     subscription_data:{metadata:{crrt_user_id:'user-a'},trial_period_days:14},
   }),expect.anything())
+  const payload = sdk.checkout.sessions.create.mock.lastCall![0]
+  for (const field of ['automatic_tax', 'payment_method_collection', 'customer_update', 'billing_address_collection']) {
+    expect(payload).not.toHaveProperty(field)
+  }
   account.trial_used=true;account.checkout_payload=null;account.checkout_session_id=null
   await checkout(user,plan)
   expect(sdk.checkout.sessions.create.mock.lastCall![0].subscription_data).not.toHaveProperty('trial_period_days')
+})
+
+it.each(['pro', 'studio'] as const)('creates Managed Payments yearly %s Checkout with the original metadata and trial', async plan => {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID', 'price_pro'); vi.stubEnv('STRIPE_STUDIO_PRICE_ID', 'price_studio')
+  vi.stubEnv('STRIPE_PRO_YEARLY_PRICE_ID', 'price_pro_year'); vi.stubEnv('STRIPE_STUDIO_YEARLY_PRICE_ID', 'price_studio_year')
+  sdk.prices.retrieve.mockImplementation(async id => ({ active: true, currency: 'usd', unit_amount: id === 'price_studio_year' ? 49200 : 19200, recurring: { interval: 'year', interval_count: 1 }, tax_behavior: 'exclusive' }))
+  await checkout(user, plan, 'yearly')
+  expect(sdk.checkout.sessions.create).toHaveBeenCalledWith(expect.objectContaining({
+    managed_payments: { enabled: true }, mode: 'subscription', customer: 'cus',
+    line_items: [{ price: `price_${plan}_year`, quantity: 1 }], client_reference_id: user.userId,
+    subscription_data: { metadata: { crrt_user_id: user.userId }, trial_period_days: 14 },
+  }), { idempotencyKey: 'crrt-checkout-attempt' })
+})
+
+it('replays an admitted standard Cloud request unchanged across the Managed Payments rollout', async () => {
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')
+  vi.stubEnv('STRIPE_PRO_PRICE_ID', 'price_pro'); vi.stubEnv('STRIPE_STUDIO_PRICE_ID', 'price_studio')
+  sdk.prices.retrieve.mockResolvedValue({ active: true, currency: 'usd', unit_amount: 1800, recurring: { interval: 'month', interval_count: 1 } })
+  account.customer_id = 'cus'
+  const pending: Stripe.Checkout.SessionCreateParams = {
+    managed_payments: { enabled: false }, customer: 'cus', mode: 'subscription',
+    line_items: [{ price: 'price_pro', quantity: 1 }], automatic_tax: { enabled: true },
+    payment_method_collection: 'always', customer_update: { address: 'auto' },
+    expires_at: Math.floor(Date.now() / 1000) + 2100,
+  }
+  account.checkout_payload = pending
+  await checkout(user, 'pro')
+  expect(sdk.checkout.sessions.create).toHaveBeenCalledWith(pending, { idempotencyKey: 'crrt-checkout-attempt' })
+  expect(save).not.toHaveBeenCalledWith(expect.objectContaining({ checkout_payload: expect.anything() }))
 })
 
 it('validates Cloud pricing before creating a customer or accepting a direct checkout request',async()=>{
@@ -302,7 +336,7 @@ it('preserves the same attempt when delayed first creation is below Stripe minim
 it('prevents charging legacy users for included Pro and allows a Studio upgrade',async()=>{
  vi.stubEnv('CRRT_DEPLOYMENT_MODE','cloud');vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
  account.is_legacy=true
- sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?4900:1900,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
+ sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?5400:1800,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
  await expect(checkout(user,'pro')).rejects.toThrow('included for legacy users')
  expect(sdk.customers.create).not.toHaveBeenCalled();expect(sdk.checkout.sessions.create).not.toHaveBeenCalled()
  await checkout(user,'studio')
@@ -319,7 +353,7 @@ function legacyPortalSetup() {
  vi.stubEnv('STRIPE_PRO_PRICE_ID','price_pro');vi.stubEnv('STRIPE_STUDIO_PRICE_ID','price_studio')
  vi.stubEnv('STRIPE_LEGACY_PORTAL_CONFIGURATION_ID','bpc_legacy')
  account.is_legacy=true;account.customer_id='cus'
- sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?4900:1900,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
+ sdk.prices.retrieve.mockImplementation(async id=>({active:true,currency:'usd',unit_amount:id==='price_studio'?5400:1800,recurring:{interval:'month',interval_count:1},tax_behavior:'exclusive'}))
  sdk.billingPortal.configurations.retrieve.mockResolvedValue(legacyPortalSettings)
 }
 function enterLegacyPortal(path:string) {

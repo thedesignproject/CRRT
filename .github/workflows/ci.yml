@@ -11,7 +11,7 @@ concurrency:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
       matrix:
@@ -119,4 +119,6 @@ jobs:
           sudo mv /tmp/gitleaks /usr/local/bin/
           gitleaks version
       - name: Scan for committed secrets
-        run: gitleaks detect --source . --redact --verbose --exit-code 1
+        # Scan this checkout's full ancestry, including historical secrets, without
+        # pulling unrelated fetched branches into every PR's result.
+        run: gitleaks detect --source . --log-opts=HEAD --redact --verbose --exit-code 1
