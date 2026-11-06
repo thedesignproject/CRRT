@@ -2,10 +2,10 @@ import { createServer } from 'node:http'
 import { readFile, stat } from 'node:fs/promises'
 import { resolve, join, extname } from 'node:path'
 import { publicResponse } from '../server/public-site.ts'
-import { publicPagePattern, applicationFallbackRoutes } from './public-pages.ts'
+import { publicPagePattern, applicationFallbackRoutes, staticAssetRoutes } from './public-pages.ts'
 
 const dist = resolve(import.meta.dirname, '../apps/landing/dist')
-const types: Record<string, string> = { '.html': 'text/html', '.md': 'text/markdown', '.txt': 'text/plain', '.json': 'application/json', '.xml': 'application/xml', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf' }
+const types: Record<string, string> = { '.html': 'text/html', '.md': 'text/markdown', '.txt': 'text/plain', '.json': 'application/json', '.xml': 'application/xml', '.css': 'text/css', '.js': 'application/javascript', '.svg': 'image/svg+xml', '.png': 'image/png', '.ttf': 'font/ttf', '.woff': 'font/woff', '.woff2': 'font/woff2' }
 const server = createServer(async (req, res) => {
   const path = new URL(req.url!, 'http://localhost').pathname
   let file = resolve(dist, '.' + decodeURIComponent(path))
@@ -13,7 +13,8 @@ const server = createServer(async (req, res) => {
     try {
       if ((await stat(file)).isDirectory()) file = join(file, 'index.html')
       const data = await readFile(file)
-      res.writeHead(200, { 'Content-Type': types[extname(file)] || 'application/octet-stream' })
+      const assetHeaders = staticAssetRoutes.find(route => new RegExp(route.src).test(path))?.headers
+      res.writeHead(200, { ...assetHeaders, 'Content-Type': types[extname(file)] || 'application/octet-stream' })
       res.end(req.method === 'HEAD' ? undefined : data); return
     } catch { /* Continue through application rewrites and the real 404. */ }
     const route = applicationFallbackRoutes.slice(0, -1).find(route => new RegExp(route.src).test(path))

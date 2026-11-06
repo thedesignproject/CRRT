@@ -34,6 +34,7 @@ diff = subprocess.check_output(
         ":(glob)server/**/*.ts", ":(glob)server/**/*.tsx",
     ],
     text=True,
+    encoding="utf-8",
 )
 
 changed = defaultdict(set)
@@ -49,7 +50,7 @@ for line in diff.split("\n"):
             for i in range(s, s + n):
                 changed[cur].add(i)
 
-with open(coverage_file) as f:
+with open(coverage_file, encoding="utf-8") as f:
     lcov = f.read()
 
 fail = False
@@ -57,7 +58,7 @@ for rec in lcov.split("end_of_record"):
     sf = re.search(r"SF:(.+)", rec)
     if not sf:
         continue
-    path = os.path.relpath(os.path.realpath(sf.group(1).strip()), os.path.realpath(os.getcwd()))
+    path = os.path.relpath(os.path.realpath(sf.group(1).strip()), os.path.realpath(os.getcwd())).replace(os.sep, "/")
     if path not in changed:
         continue
     by_line = defaultdict(list)
