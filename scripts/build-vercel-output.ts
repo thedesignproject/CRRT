@@ -4,9 +4,11 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
 import { build } from '@vercel/node'
-import { FileFsRef, glob } from '@vercel/build-utils'
-import { publicPageRoutes, applicationFallbackRoutes } from './public-pages.js'
+import { FileBlob, FileFsRef, glob } from '@vercel/build-utils'
+import { publicPageRoutes, applicationFallbackRoutes, staticAssetRoutes } from './public-pages.js'
 import { buildPublicFunction } from './build-public-function.js'
+import { verifyVercelOutput } from './verify-vercel-output.mjs'
+import { apiBuilderPackage } from './vercel-api-package.mjs'
 import { PRODUCT_AUDIT_WORKFLOW_ID } from '../workflows/product-audit-id.js'
 
 const exec = promisify(execFile)
@@ -80,6 +82,10 @@ async function buildApiFunction(webhook = false) {
       ignore: ['.git/**', '.vercel/**', '.workflow-data/**', 'coverage/**', 'node_modules/**'],
     })
     files['api/__vercel-router.ts'] = new FileFsRef({ fsPath: generated })
+    // @vercel/node searches parent manifests for deployment hooks even when
+    // considerBuildCommand is false. Keep only this temporary manifest free of
+    // those hooks so packaging an API cannot recursively deploy the project.
+    files['package.json'] = new FileBlob({ data: apiBuilderPackage(await readFile(join(root, 'package.json'), 'utf8')) })
     const result = await build({
       files, entrypoint: 'api/__vercel-router.ts', workPath: temporary, repoRootPath: temporary,
       config: {}, meta: {},
@@ -144,7 +150,10 @@ workflowConfig.routes = [
   ...workflowConfig.routes,
   { src: '^(/api(?:/.*)?)$', dest: '/api-router?__audit_path=$1' },
   ...publicPageRoutes,
+  ...staticAssetRoutes,
   { handle: 'filesystem' },
   ...applicationFallbackRoutes,
 ]
 await writeFile(join(output, 'config.json'), JSON.stringify(workflowConfig, null, 2))
+const verifiedFunctions = await verifyVercelOutput(root)
+console.log(`Verified ${verifiedFunctions.length} deployment functions; using consolidated API output.`)

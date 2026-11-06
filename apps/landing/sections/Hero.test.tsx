@@ -10,10 +10,12 @@ afterEach(() => {
 })
 
 it.each([
-  { dev: true, expected: 'http://localhost:5173' },
-  { dev: false, expected: '/dashboard' },
-])('uses the expected dashboard destination when DEV is $dev', async ({ dev, expected }) => {
+  { dev: true, ssr: false, expected: 'http://localhost:5173' },
+  { dev: false, ssr: false, expected: '/dashboard' },
+  { dev: true, ssr: true, expected: '/dashboard' },
+])('uses the expected dashboard destination when DEV is $dev and SSR is $ssr', async ({ dev, ssr, expected }) => {
   vi.stubEnv('DEV', dev)
+  vi.stubEnv('SSR', ssr)
   const { DASHBOARD_HREF } = await import('./Hero')
 
   expect(DASHBOARD_HREF).toBe(expected)
@@ -69,6 +71,19 @@ it('keeps the conversion navigation available after the intro', async () => {
   expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/thedesignproject/CRRT')
   expect(screen.queryByRole('link', { name: 'Capture anywhere' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Product' })).not.toBeInTheDocument()
+})
+
+it('preserves the navigation theme control, including its label and stored preference', async () => {
+  const { Navigation } = await import('../components/Navigation')
+  const { ThemeProvider } = await import('../../../src/design-system/theme')
+  localStorage.removeItem('navigation-test-theme')
+  render(<ThemeProvider storageKey="navigation-test-theme" defaultTheme="light"><Navigation authenticated={false} /></ThemeProvider>)
+  fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }))
+  expect(document.documentElement.dataset.theme).toBe('dark')
+  expect(localStorage.getItem('navigation-test-theme')).toBe('dark')
+  expect(screen.getByRole('button', { name: 'Switch to light mode' })).toHaveAttribute('title', 'Switch to light mode')
+  fireEvent.click(screen.getByRole('button', { name: 'Switch to light mode' }))
+  expect(document.documentElement.dataset.theme).toBe('light')
 })
 
 it('keeps the portrait and conversion content when video loading fails or stalls', async () => {

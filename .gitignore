@@ -22,3 +22,9 @@ supabase/.branches/_current_branch
 
 # Dependency links used by isolated local worktrees
 /node_modules
+
+# Local visual test output
+/test-results/
+/playwright-report/
+/build-storybook.log
+/build-archive.log
