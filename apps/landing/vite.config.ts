@@ -10,6 +10,7 @@ export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, envDir, ''), ...process.env }
   return {
     root: __dirname,
+    cacheDir: path.resolve(envDir, 'node_modules/.vite-landing'),
     envDir,
     plugins: [react(), tailwindcss(), {
       name: 'crrt-static-tokens',

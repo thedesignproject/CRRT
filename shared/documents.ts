@@ -20,7 +20,7 @@ const read = z.object({ id, accessToken: z.string().max(4096).optional() })
 const mutation = z.object({ id, key: z.uuid(), expectedVersion: version })
 const feedback = z.object({ id, key: z.uuid(), feedbackId: id, feedbackVersion: version })
 export const documentSchemas = {
-  list: z.object({ action: z.literal('list'), projectId: z.string().min(1).nullable().optional(), offset: z.number().int().min(0).max(100000).default(0) }).strict(),
+  list: z.object({ action: z.literal('list'), projectId: z.string().min(1).nullable().optional(), scope: z.enum(['all', 'mine']).optional(), offset: z.number().int().min(0).max(100000).default(0) }).strict(),
   read: read.extend({ action: z.literal('read'), shareKey: id.optional(), feedbackId: id.optional(), offset: z.number().int().min(0).default(0) }).strict(),
   unlock: z.object({ action: z.literal('unlock'), shareKey: id, password: z.string().max(128) }).strict(),
   history: read.extend({ action: z.literal('history'), offset: z.number().int().min(0).default(0) }).strict(),
@@ -110,6 +110,12 @@ export interface DocumentRevision {
   agent_id: string | null
   created_at: string
 }
+export interface DocumentProgress {
+  operation: 'claim' | 'start' | 'block' | 'complete'
+  summary: string
+  agentId: string
+  createdAt: string
+}
 export interface DocumentComment {
   id: string
   document_id: string
@@ -124,6 +130,7 @@ export interface DocumentComment {
   review_status: 'open' | 'accepted' | 'rejected'
   implementation_status: string
   claimed_by: string | null
+  progress_updates?: DocumentProgress[]
   version: number
   created_at: string
 }
