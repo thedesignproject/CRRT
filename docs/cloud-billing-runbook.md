@@ -16,10 +16,10 @@ Create active USD recurring prices for:
 
 | Product | Monthly price | Yearly price |
 | --- | ---: | ---: |
-| CRRT Pro | $19 | $192 |
-| CRRT Studio | $49 | $492 |
+| CRRT Pro | $18 | $192 |
+| CRRT Studio | $54 | $492 |
 
-Use distinct `price_…` IDs. Tax must not be included in the price. Configure Stripe Tax so automatic-tax Checkout can complete. Configure Customer Portal to expose only the intended Pro/Studio monthly and yearly prices, permit the desired plan changes and cancellation, and deliberately choose proration and billing-anchor behavior. Preserve the anchor for same-window plan changes so upgrades cannot reset consumed quotas.
+Use distinct `price_…` IDs. Tax must not be included in the price. Complete Managed Payments onboarding and assign an eligible SaaS tax code to both products. New Cloud Checkout sessions enable Managed Payments; do not enable standalone automatic tax in their requests. Configure Customer Portal to expose only the intended Pro/Studio monthly and yearly prices, permit the desired plan changes and cancellation, and deliberately choose proration and billing-anchor behavior. Preserve the anchor for same-window plan changes so upgrades cannot reset consumed quotas.
 
 Register the API webhook endpoint, `https://<api-host>/api/v1/billing/webhook`, for these events:
 
@@ -31,6 +31,20 @@ Register the API webhook endpoint, `https://<api-host>/api/v1/billing/webhook`, 
 - `invoice.payment_failed`
 
 Use that endpoint’s signing secret. For local sandbox testing, Stripe CLI may forward those events to the local API and supplies a separate local signing secret.
+
+### Managed Payments rollout and recovery
+
+New Cloud purchases use [Managed Payments](https://docs.stripe.com/payments/managed-payments/update-checkout). Community does not opt in. Complete onboarding separately in sandbox and live mode and assign an eligible SaaS tax category to Pro and Studio. The existing four recurring prices can be reused if they match the approved amounts and tax behavior. For this release, create new $18/$54 monthly prices: the earlier $19/$49 prices are immutable and fail backend catalog validation. Replace the monthly environment IDs and Portal selections together before publication. Annual prices remain $192/$492.
+
+The existing database schema and subscription/webhook reconciliation are reused; this change adds no migration. Existing standard subscriptions stay standard. Persisted Checkout payloads, keys and expiry deadlines are replayed unchanged, including old standard requests. Before announcing a fully Managed Payments launch, drain old attempts: an open session can be expired through Stripe, but an unknown create retains its original fixed request/key until its 35-minute deadline. Never rewrite an admitted payload or rotate its key prematurely to change payment mode.
+
+Managed Payments controls tax, payment methods and customer name/address updates. Cloud requests must omit `automatic_tax`, `payment_method_collection` and `customer_update`. Stripe's default Checkout payment-method collection applies to trials; verify the actual sandbox Checkout requires a payment method and grants the one-time 14-day trial on both cycles.
+
+Keep the standard Portal restricted to the intended prices with proration and end-of-period cancellation. Configure `STRIPE_LEGACY_PORTAL_CONFIGURATION_ID` as a separate active Portal configuration that disables subscription updates and allows cancellation at period end. Verify legacy Studio purchases, Portal entry and fallback to included Pro. Managed Payments also provides management through Link, outside our Portal configuration: verify its available plan-change controls cannot unexpectedly charge a legacy user for included Pro before launch. Sandbox purchases do not appear in the Link app, so that part needs live verification or confirmation from Stripe.
+
+Validate monthly/yearly Checkout, trial conversion and no repeated trials, plan/cycle changes, renewal, failed payments, cancellation, signed/duplicate webhooks, and retry recovery in the sandbox. Record any account eligibility or unsupported-parameter failures rather than falling back to standard Checkout. Receipt/payment-support communications come from Link; check customer-facing billing policies and support details accordingly. Managed Payments covers indirect tax only in supported countries; CRRT retains obligations outside that coverage and its ordinary business accounting obligations.
+
+Disabling Managed Payments for new requests later does not convert existing subscriptions. Customer authorization for a Managed Payments subscription does not authorize charges outside Managed Payments; consult Stripe before migrating existing subscriptions. A code rollback must preserve admitted payloads and cannot undo existing merchant-of-record relationships.
 
 ## 3. Set the server environment
 
@@ -46,6 +60,7 @@ STRIPE_PRO_PRICE_ID=<sandbox Pro monthly price ID>
 STRIPE_STUDIO_PRICE_ID=<sandbox Studio monthly price ID>
 STRIPE_PRO_YEARLY_PRICE_ID=<sandbox Pro yearly price ID>
 STRIPE_STUDIO_YEARLY_PRICE_ID=<sandbox Studio yearly price ID>
+STRIPE_LEGACY_PORTAL_CONFIGURATION_ID=<sandbox legacy portal configuration ID>
 BILLING_STATE_SECRET=<at least 32 random characters>
 STRIPE_RETURN_URL=https://<dashboard-host>/dashboard/billing
 DATABASE_URL=<direct connection for this environment's database>
@@ -67,7 +82,7 @@ This is read-only. It validates mode consistency and enabled Stripe configuratio
 
 Existing owners should sign in and open `/dashboard/billing`, then refresh billing status. Authenticated `GET /api/v1/billing` reconciles that owner’s current Stripe subscriptions and durable trial history; the browser redirect itself never grants access. Verify existing billing rows have the intended catalog plan and trusted current-period boundaries. Previous single-price subscriptions do not map automatically to Pro/Studio: decide and complete their transition before enabling enforcement. Review unowned projects and retained personal Cloud feedback before activation.
 
-In the sandbox, exercise a card-backed 14-day trial, cancellation/re-subscription without a second trial, upgrade/downgrade, renewal, failed payment, signed webhooks and duplicate delivery. Check quota boundaries, retained reads/exports after expiry, local extension capture and retry-safe import. Fix any unmapped prices or incomplete Tax/Portal settings before proceeding. A rejected/unknown Checkout attempt retains its fixed request/key until recovery or its 35-minute deadline.
+In the sandbox, exercise a card-backed 14-day trial, cancellation/re-subscription without a second trial, upgrade/downgrade, renewal, failed payment, signed webhooks and duplicate delivery. Check quota boundaries, retained reads/exports after expiry, local extension capture and retry-safe import. Fix any unmapped prices or incomplete Managed Payments/Portal settings before proceeding. A rejected/unknown Checkout attempt retains its fixed request/key until recovery or its 35-minute deadline.
 
 The database integration suite truncates fixtures. Run it only on a disposable local database, never on production or a shared environment.
 
@@ -94,7 +109,7 @@ Production setup checklist:
 - Set `STRIPE_PRO_YEARLY_PRICE_ID` and `STRIPE_STUDIO_YEARLY_PRICE_ID` to those new live price IDs. Each price has its own ID even when it belongs to an existing product. Configure both yearly variables together and retain the two monthly variables.
 - Generate a production-only `BILLING_STATE_SECRET` using `openssl rand -hex 32` and store it in the backend environment alongside the Stripe settings.
 - In the live Customer Portal configuration, enable the intended Pro/Studio monthly and yearly prices for subscription updates. Verify cancellation, proration and billing-anchor behavior as described in step 2.
-- Verify live Stripe Tax readiness, the six webhook event subscriptions from step 2, the live endpoint signing secret and the production dashboard return URL.
+- Verify live Managed Payments onboarding and product eligibility, the six webhook event subscriptions from step 2, the live endpoint signing secret and the production dashboard return URL.
 - Apply `0044_yearly_billing_windows.sql` through the normal migration pipeline before enabling annual Checkout, then deploy the backend with the new environment values. Verify annual Checkout, signed-out plan/cycle continuation and Portal switching before launch.
 
 Deploy, run the read-only preflight, reconcile production accounts, verify the backend and then perform the explicit quota activation step for that database. Complete the separately required retention/legal policy before launch. A failed publication must leave enforcement off; do not activate against an old backend.

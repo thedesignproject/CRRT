@@ -1,65 +1,3 @@
-@import "tailwindcss";
-
-/* Neutral body font (sans-serif Geist) — used in /docs pages where Geist Mono
-   reads too technical for long-form copy. Headings, labels, and section
-   markers keep the mono / VT323 brand fonts. */
-:root {
-  --crrt-font-body: 'Geist', system-ui, -apple-system, 'Segoe UI', sans-serif;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-
-  --color-tube-black: var(--crrt-bg-deep);
-  --color-tube-soft: var(--crrt-bg-deep-soft);
-  --color-phosphor-white: var(--crrt-white);
-  --color-ink-mute: var(--crrt-ink-mute);
-  --color-ink-faint: var(--crrt-ink-faint);
-  --color-carrot: var(--crrt-carrot);
-  --color-carrot-deep: var(--crrt-carrot-deep);
-  --color-phosphor: var(--crrt-phosphor);
-  --color-forest: var(--crrt-forest);
-  --color-rule-dark: var(--crrt-rule-dark);
-
-  --font-sans: var(--crrt-font-sans);
-  --font-mono: var(--crrt-font-mono);
-  --font-crt: var(--crrt-font-crt);
-}
-
-@layer base {
-  html {
-    scroll-behavior: smooth;
-  }
-  body {
-    background: var(--crrt-bg-deep);
-    color: var(--crrt-white);
-    font-family: var(--crrt-font-sans);
-    overflow-x: clip;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-  ::selection {
-    background: var(--crrt-carrot);
-    color: var(--crrt-bg-deep);
-  }
-}
-
 /* Pricing is a comparison surface, not three unrelated cards. The shared
    baseline and quiet rules make plan differences scannable in one pass. */
 .landing-pricing {
@@ -170,12 +108,6 @@
 .pill-md .carrot-chip { width: 28px; height: 28px; border-radius: 14px; }
 .pill-sm .carrot-chip { width: 24px; height: 24px; border-radius: 12px; }
 .pill-lg .carrot-chip { width: 36px; height: 36px; border-radius: 18px; }
-
-/* Cursor blink for the wordmark */
-.cursor-blink {
-  display: inline-block;
-  animation: crrt-cursor-blink 1060ms steps(1, end) infinite;
-}
 
 /* Demo-pin DROP — pin lands from above with a satisfying squash on impact.
  * Used by the FakeDashboard demo so each pin reads as "just dropped" instead
@@ -761,85 +693,13 @@
 }
 
 /* Revenue landing v2 — dashboard-led foundations with an editorial marketing layer. */
-:root {
-  --crrt-font-body: var(--crrt-dashboard-font);
-  --landing-page: var(--crrt-bg-deep);
-  --landing-soft: var(--crrt-bg-deep-soft);
-  --landing-shell-gutter: max(24px, calc((100vw - 1180px) / 2));
-}
-
-:root[data-theme='light'] {
-  --background: var(--crrt-dashboard-white);
-  --foreground: var(--crrt-dashboard-ink);
-  --card: var(--crrt-dashboard-white);
-  --card-foreground: var(--crrt-dashboard-ink);
-  --popover: var(--crrt-dashboard-white);
-  --popover-foreground: var(--crrt-dashboard-ink);
-  --muted: var(--crrt-dashboard-sidebar);
-  --muted-foreground: var(--crrt-dashboard-muted);
-  --secondary: var(--crrt-dashboard-sidebar);
-  --secondary-foreground: var(--crrt-dashboard-ink);
-  --border: var(--crrt-dashboard-border);
-  --input: var(--crrt-dashboard-border);
-  --primary: var(--crrt-dashboard-orange);
-  --primary-foreground: var(--crrt-dashboard-white);
-  --ring: var(--crrt-dashboard-orange);
-  --landing-page: var(--crrt-dashboard-white);
-  --landing-soft: color-mix(in srgb, var(--crrt-dashboard-white) 94%, var(--crrt-dashboard-sidebar));
-}
-
-@layer base {
-  body {
-    background: var(--background);
-    color: var(--foreground);
-    font-family: var(--crrt-dashboard-font);
-  }
-}
 
 .landing-hero,
 .landing-section,
-.landing-closing,
-.landing-footer {
+.landing-closing {
   color: var(--foreground);
   background: var(--landing-page);
 }
-
-.landing-navigation {
-  --foreground: #f8f5f2;
-  --muted-foreground: rgba(248, 245, 242, .62);
-  --card: rgba(18, 18, 18, .78);
-  --muted: rgba(255, 255, 255, .08);
-  --border: rgba(255, 255, 255, .11);
-  position: absolute;
-  top: clamp(28px, 6vh, 52px);
-  left: 50%;
-  z-index: 60;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  width: min(calc(100% - 40px), 806px);
-  min-height: 58px;
-  margin: 0;
-  padding: 8px 10px 8px 16px;
-  border: 1px solid rgba(255,255,255,.08);
-  border-radius: 17px;
-  color: var(--foreground);
-  background: rgba(23, 20, 19, .78);
-  box-shadow: 0 12px 36px rgba(0,0,0,.18), inset 0 1px rgba(255,255,255,.035);
-  transform: translateX(-50%);
-  backdrop-filter: blur(20px) saturate(1.08);
-  -webkit-backdrop-filter: blur(20px) saturate(1.08);
-  opacity: 0;
-  translate: 0 -8px;
-  filter: blur(3px);
-}
-.landing-navigation-brand { justify-self: start; text-decoration: none; }
-.landing-navigation-links { display: flex; align-items: center; gap: 24px; }
-.landing-navigation-actions { display: flex; justify-self: end; align-items: center; gap: 8px; }
-.landing-navigation .ds-nav-link { color: rgba(248,245,242,.6); }
-.landing-navigation .ds-nav-link:hover { color: white; }
-.landing-navigation .ds-icon-button { color: rgba(248,245,242,.7); background: rgba(8,8,8,.46); border-color: rgba(255,255,255,.1); }
-.landing-navigation .ds-icon-button:hover { color: white; background: rgba(255,255,255,.08); }
 
 .landing-hero { min-height: 100svh; padding: 0; overflow: clip; }
 
@@ -907,10 +767,9 @@
 
 .landing-photo-stage .landing-photo-media { animation: crrt-hero-media-in 1800ms cubic-bezier(.22, 1, .36, 1) forwards; }
 .landing-photo-stage .landing-photo-shade { animation: crrt-hero-fade-in 1600ms 80ms ease-out forwards; }
-.landing-photo-stage .landing-navigation { animation: crrt-hero-soft-in 1300ms 220ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage .landing-photo-copy h1 { animation: crrt-hero-soft-in 1400ms 420ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage .landing-photo-copy > p { animation: crrt-hero-soft-in 1400ms 640ms cubic-bezier(.22, 1, .36, 1) forwards; }
-.landing-photo-stage .landing-hero-cta, .landing-photo-stage .connect-agent button { animation: crrt-hero-soft-in 1400ms 840ms cubic-bezier(.22, 1, .36, 1) forwards; }
+  .landing-photo-stage .landing-photo-copy h1 { animation: crrt-hero-soft-in 1400ms 420ms cubic-bezier(.22, 1, .36, 1) forwards; }
+  .landing-photo-stage .landing-photo-copy > p { animation: crrt-hero-soft-in 1400ms 640ms cubic-bezier(.22, 1, .36, 1) forwards; }
+  .landing-photo-stage .landing-hero-cta, .landing-photo-stage .connect-agent button { animation: crrt-hero-soft-in 1400ms 840ms cubic-bezier(.22, 1, .36, 1) forwards; }
 
 .landing-floating-feedback { position: absolute; inset: 0; pointer-events: none; }
 .landing-glass-comment {
@@ -932,7 +791,7 @@
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
 }
-.landing-photo-stage .landing-glass-comment {
+  .landing-photo-stage .landing-glass-comment {
   animation: crrt-glass-reveal 1600ms var(--glass-delay, 2400ms) cubic-bezier(.22, 1, .36, 1) forwards,
              crrt-glass-float var(--float-duration, 10s) calc(var(--glass-delay, 2400ms) + 1600ms) ease-in-out infinite;
 }
@@ -961,7 +820,7 @@
   backdrop-filter: blur(24px) saturate(1.16);
   -webkit-backdrop-filter: blur(24px) saturate(1.16);
 }
-.landing-photo-stage .landing-glass-widget {
+  .landing-photo-stage .landing-glass-widget {
   animation: crrt-glass-reveal 1600ms 4200ms cubic-bezier(.22, 1, .36, 1) forwards,
              crrt-widget-float 9.8s 5800ms ease-in-out infinite;
 }
@@ -1219,27 +1078,7 @@
 .landing-closing .ds-button-secondary { color: var(--background); background: transparent; border-color: color-mix(in srgb, var(--background) 25%, transparent); }
 .landing-closing small { display: block; margin-top: 12px; color: color-mix(in srgb, var(--background) 60%, transparent); }
 
-.landing-footer { padding: clamp(72px, 8vw, 112px) var(--landing-shell-gutter) 38px; border-top: 1px solid var(--border); }
-.landing-footer-main { display: grid; grid-template-columns: minmax(260px, 1.55fr) repeat(3, minmax(130px, .72fr)); gap: clamp(42px, 7vw, 96px); }
-.landing-footer-brand p { max-width: 260px; margin: 24px 0 0; color: var(--muted-foreground); font-size: 14px; line-height: 1.55; }
-.landing-footer-main nav { display: flex; align-items: flex-start; flex-direction: column; gap: 11px; }
-.landing-footer-main nav > span, .landing-footer-social > div > span { margin-bottom: 8px; color: var(--muted-foreground); font: 550 11px/1 var(--crrt-font-mono); letter-spacing: .035em; }
-.landing-footer-main nav a { color: var(--foreground); font-size: 14px; font-weight: 550; text-decoration: none; }
-.landing-footer-main nav a:hover, .landing-footer-main nav a:focus-visible, .landing-footer-legal a:hover, .landing-footer-legal a:focus-visible { color: var(--crrt-dashboard-orange); }
-.landing-footer-social { display: flex; align-items: end; justify-content: space-between; gap: 24px; margin-top: clamp(72px, 9vw, 128px); padding-bottom: 42px; }
-.landing-footer-social > div { display: grid; gap: 10px; }
-.landing-footer-social > div > a { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid var(--border); border-radius: 50%; color: var(--muted-foreground); transition: color 180ms ease, border-color 180ms ease; }
-.landing-footer-social > div > a:hover { border-color: var(--foreground); color: var(--foreground); }
-.landing-footer-social p { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted-foreground); font-size: 12px; }
-.landing-footer-social p i { width: 7px; height: 7px; border-radius: 50%; background: #38a169; box-shadow: 0 0 0 4px rgba(56,161,105,.1); }
-.landing-footer-legal { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 22px; padding-top: 24px; border-top: 1px solid var(--border); color: var(--muted-foreground); font-size: 11px; }
-.landing-footer-legal a { color: inherit; text-decoration: none; }
-.landing-footer-legal > span:last-child { margin-left: auto; }
-.landing-footer-legal > span:last-child a { color: var(--foreground); font-weight: 600; }
-
 @media (max-width: 1120px) {
-  .landing-navigation { grid-template-columns: 1fr auto; }
-  .landing-navigation-links { display: none; }
   .landing-glass-comment.is-left { top: 48%; left: 3%; }
   .landing-glass-comment.is-right-top { top: 24%; right: 3%; }
   .landing-glass-comment.is-right-bottom { top: 62%; right: 3%; }
@@ -1270,8 +1109,6 @@
 }
 
 @media (max-width: 760px) {
-  .landing-navigation { top: 8px; width: calc(100% - 16px); padding-left: 12px; }
-  .landing-navigation-actions .ds-button { display: none; }
   .landing-hero { padding: 0; }
   .landing-photo-stage { width: 100%; min-height: 100svh; margin: 0; border-radius: 0; }
   .landing-photo-image, .landing-photo-media > video { object-position: 50% 52%; }
@@ -1321,28 +1158,17 @@
   .landing-integrations-output { padding: 22px; }
   .landing-closing { grid-template-columns: minmax(0, 1fr); align-items: start; }
   .landing-closing h2 { font-size: clamp(52px, 17vw, 78px); }
-  .landing-footer-main { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px 28px; }
-  .landing-footer-brand { grid-column: 1 / -1; }
-  .landing-footer-social { align-items: flex-start; flex-direction: column; margin-top: 72px; }
-  .landing-footer-legal > span:last-child { width: 100%; margin-left: 0; }
-}
-
-@media (max-width: 460px) {
-  .landing-footer-main { grid-template-columns: minmax(0, 1fr); }
-  .landing-footer-brand { grid-column: auto; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .landing-photo-stage .landing-photo-media,
   .landing-photo-stage .landing-photo-shade,
-  .landing-photo-stage .landing-navigation,
   .landing-photo-stage .landing-photo-copy h1,
   .landing-photo-stage .landing-photo-copy > p,
   .landing-photo-stage .landing-hero-cta,
   .landing-photo-stage .connect-agent button,
   .landing-photo-stage .landing-glass-comment,
   .landing-photo-stage .landing-glass-widget { opacity: 1; scale: 1; translate: 0 0; filter: none; animation: none; transform: none; }
-  .landing-photo-stage .landing-navigation { transform: translateX(-50%); }
   .landing-story-steps li { transition: none; }
   .landing-integrations-list article,
   .landing-integrations-list article > b,

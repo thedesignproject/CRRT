@@ -7,7 +7,7 @@ it('renders the shared marketing composition and existing documentation on the s
   expect(home).toContain('href="/docs"')
   expect(home).toContain('Humans give feedback.</span> <span>Agents ship the fix.')
   expect(home).toContain('https://github.com/thedesignproject/CRRT')
-  expect(home).toContain('Save 16%')
+  expect(home).toContain('Save with yearly')
   const docs = render('/docs/agent-handoff')
   expect(docs).toContain('CRRT developer resources')
   expect(docs).toContain('href="/openapi.json"')
@@ -19,4 +19,12 @@ it('loads the canonical design tokens into HTML in development and production', 
   const [style] = plugin.transformIndexHtml()
   expect(style).toMatchObject({ tag: 'style', attrs: { 'data-source': 'crrt-tokens' }, injectTo: 'head-prepend' })
   expect(style.children).toContain('--crrt-carrot:')
+  expect(style.children).not.toContain('fonts.googleapis.com')
+  expect(style.children).not.toContain('display=swap')
+  const element = document.createElement('style')
+  element.textContent = style.children
+  document.head.append(element)
+  const root = [...element.sheet!.cssRules].find(rule => 'selectorText' in rule && rule.selectorText === ':root') as CSSStyleRule
+  expect(root.style.getPropertyValue('--crrt-dashboard-font')).toContain('Figtree Variable')
+  element.remove()
 })

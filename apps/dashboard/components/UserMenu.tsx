@@ -1,6 +1,7 @@
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { useEffect, useRef, useState } from 'react'
 import { route } from '../lib/routes'
+import { billingAvailabilityOnce } from '../lib/billing-availability'
 import type { User } from '@supabase/supabase-js'
 
 interface UserMenuProps {
@@ -15,15 +16,12 @@ export function UserMenu({ user, onSignOut, apiBase, accessToken }: UserMenuProp
   const [open, setOpen] = useState(false)
   const [billingEnabled, setBillingEnabled] = useState(false)
   useEffect(() => {
-    if (!open) return
     let active = true
     setBillingEnabled(false)
-    fetch(`${apiBase}/v1/billing?availability=1`, { headers: { Authorization: `Bearer ${accessToken}` } })
-      .then(async (response) => { if (!response.ok) throw new Error('Unavailable'); return response.json() })
-      .then((value: { enabled: boolean }) => { if (active) setBillingEnabled(value.enabled === true) })
-      .catch(() => { /* Hide billing when availability cannot be checked. */ })
+    void billingAvailabilityOnce(apiBase, user.id, accessToken)
+      .then(enabled => { if (active) setBillingEnabled(enabled) })
     return () => { active = false }
-  }, [open, apiBase, accessToken])
+  }, [apiBase, user.id, accessToken])
   const ref = useRef<HTMLDivElement | null>(null)
   const initials = (user.email ?? '??').slice(0, 2).toUpperCase()
 
