@@ -16,7 +16,7 @@ This report is a local verification record, not a production acceptance claim.
 
 - Typecheck passed.
 - Full unit/coverage suite: 3,682 passed, 228 skipped. The skipped tests are not counted as verified.
-- Changed-line and changed-branch coverage: 100% against trunk and against `record/06-agent` for this follow-up PR. This does not establish independent coverage for each lower stack layer.
+- Changed-line and changed-branch coverage: 100% against trunk and against `record/06-agent` for this follow-up PR. After updating the complete stack, React 18/19 CI (including the mandatory differential coverage gate against each immediate base) passed independently on #350 and #399–404.
 - PostgreSQL 18.6 isolated on loopback: applied the complete migration journal through `0050_record_v1.sql`; all 14 Record integration tests passed. Minimal Supabase auth roles/schema/publication were provided as local fixtures. This verifies SQL transactions and migration behavior, not Supabase Auth/REST/Storage.
 - Drizzle metadata check passed.
 - Widget, dashboard and Chrome-extension production builds passed; the extension build used explicit non-secret CI environment fixtures.
@@ -25,8 +25,10 @@ This report is a local verification record, not a production acceptance claim.
 
 ## Remaining release gates
 
-- #350 is authored by the current GitHub account and needs another reviewer's approval. Trunk requires one approval, current status checks and an up-to-date base; do not bypass protection.
-- Each original stack layer still needs its own current CI and differential coverage results before merging. #404 currently reports conflicts with its immediate base; the integrated audit branch includes both histories, but the original remote PR is not yet repaired.
+- All branches are updated against current trunk and their immediate bases without force-pushing. The #404 lockfile conflict was resolved with the previously validated integrated lockfile. #399–404 have approvals on their updated heads. #416 is ready for review; the eight PRs are linked as native stack #405.
+- #350 and #416 are authored by the current GitHub account and need another reviewer's approval. Trunk requires one approval, current status checks and an up-to-date base; do not bypass protection. An attempted atomic stack merge was rejected for the outstanding approval and pending native `UI Tests` status; nothing was merged.
+- `UI Tests` awaits review of changed Chromatic baselines, while capture/replay and publishing pass. The browser-control surface was unavailable in this session, so no baseline approval was performed.
+- #350's first npm audit job failed while resolving an unavailable `@tailwindcss/oxide` version, before auditing. The same job passed on retry without changing dependencies.
 - Vercel API and CLI both denied access to the `designproject` team. Production environment, storage and deployment state have not been verified or modified.
 - Identify/provision the supervised, long-running FFmpeg worker and private storage. Keep `CRRT_RECORD_ENABLED` off until private upload, playback, cleanup and worker smoke tests pass.
 - Run the full local Supabase/R2 integration and real Chrome capture, permission, navigation and recovery acceptance flows. Docker is unavailable on this machine; SQL and mocked tests are not substitutes for those flows.
