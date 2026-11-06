@@ -14,8 +14,10 @@ it('records a forward Cloud repair without rewriting the applied Inbox migration
   expect(current.prevId).toBe(previous.id)
   expect(current.tables).toEqual(previous.tables)
   const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-  expect(journal.entries.at(-1)).toMatchObject({idx: 49, tag: '0049_inbox_restore_cloud_fences'})
-  expect(journal.entries.at(-1).when).toBeGreaterThan(journal.entries.at(-2).when)
+  const repair = journal.entries.find((entry: { idx: number }) => entry.idx === 49)
+  const inbox = journal.entries.find((entry: { idx: number }) => entry.idx === 48)
+  expect(repair).toMatchObject({idx: 49, tag: '0049_inbox_restore_cloud_fences'})
+  expect(repair.when).toBeGreaterThan(inbox.when)
 })
 
 // Never run against the app's database or a shared environment.
