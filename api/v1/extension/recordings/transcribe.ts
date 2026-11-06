@@ -3,6 +3,7 @@ import { ExtensionAuthContractError } from '../../../_lib/extension-auth-contrac
 import { extensionJsonError, setExtensionCors, setExtensionNoStore } from '../../../_lib/extension-auth-http.js'
 import { firstHeaderValue } from '../../../_lib/http.js'
 import { RecordingTranscriptionError, transcribeRecordingAudio } from '../../../_lib/recording-transcription.js'
+import { reserveTranscription, TranscriptionLimitError } from '../../../_lib/recording-transcription-limit.js'
 
 const methods = ['POST', 'OPTIONS']
 const MAX_AUDIO_BYTES = 4 * 1024 * 1024
@@ -29,6 +30,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return extensionJsonError(res, 405, 'Method not allowed')
+  // The account-free demo endpoint is deliberately unavailable by default.
+  // Production transcription runs from the consented, quota-controlled jobs.
+  if (process.env.RECORD_DEMO_TRANSCRIPTION_ENABLED !== 'true') return extensionJsonError(res, 503, 'Demo transcription is disabled. Use the recording upload API.')
   if (firstHeaderValue(req.headers['content-type'])?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/octet-stream') {
     return extensionJsonError(res, 415, 'Recording audio must be WebM.')
   }
@@ -40,9 +44,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!audio?.length || !isWebm(audio)) return extensionJsonError(res, 400, 'Recording audio is invalid.')
   if (audio.length > MAX_AUDIO_BYTES) return extensionJsonError(res, 413, 'Recording audio is too large.')
   try {
+    await reserveTranscription(req, audio.length)
     const transcript = await transcribeRecordingAudio(audio)
     return res.status(200).json({ transcript })
   } catch (error) {
+    if (error instanceof TranscriptionLimitError) return extensionJsonError(res, error.status, error.message)
     if (error instanceof RecordingTranscriptionError) return extensionJsonError(res, error.status, error.message)
     return extensionJsonError(res, 502, 'Recording transcription failed.')
   }

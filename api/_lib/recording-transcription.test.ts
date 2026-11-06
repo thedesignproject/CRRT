@@ -4,6 +4,14 @@ import { normalizeDeepgramTranscript, RecordingTranscriptionError, transcribeRec
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); delete process.env.DEEPGRAM_API_KEY; delete process.env.DEEPGRAM_API_BASE_URL })
 
 describe('recording transcription provider adapter', () => {
+  it('rejects malformed provider payloads and passes an explicitly selected language', async () => {
+    for (const value of [null, 'bad', {}, { results: null }, { results: 'bad' }]) {
+      await expect(transcribeRecordingAudio(new Uint8Array([1]), { apiKey: 'fake', fetch: vi.fn().mockResolvedValue(new Response(JSON.stringify(value))) })).rejects.toMatchObject({ status: 502 })
+    }
+    const request = vi.fn().mockResolvedValue(new Response(JSON.stringify({ results: {} })))
+    await transcribeRecordingAudio(new Uint8Array([1]), { apiKey: 'fake', language: 'es', fetch: request })
+    expect(String(request.mock.calls[0][0])).toContain('language=es')
+  })
   it('normalizes timestamped utterances and drops malformed provider rows', () => {
     expect(normalizeDeepgramTranscript({ results: {
       channels: [{ detected_language: 'es', alternatives: [{ transcript: 'fallback' }] }],
@@ -67,5 +75,18 @@ describe('recording transcription provider adapter', () => {
     const rejection = expect(pending).rejects.toMatchObject({ status: 504 })
     await vi.advanceTimersByTimeAsync(11)
     await rejection
+  })
+  it('propagates job cancellation to provider requests and refuses pre-cancelled dispatch', async () => {
+    const controller = new AbortController()
+    const request = vi.fn((_url: URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+    }))
+    const pending = transcribeRecordingAudio(new Uint8Array([1]), { apiKey: 'key', signal: controller.signal, fetch: request as typeof fetch })
+    const rejection = expect(pending).rejects.toMatchObject({ status: 499 })
+    controller.abort(); await rejection
+    expect(request.mock.calls[0][1]!.signal!.aborted).toBe(true)
+    request.mockClear()
+    await expect(transcribeRecordingAudio(new Uint8Array([1]), { apiKey: 'key', signal: controller.signal, fetch: request as typeof fetch })).rejects.toMatchObject({ status: 499 })
+    expect(request).not.toHaveBeenCalled()
   })
 })
