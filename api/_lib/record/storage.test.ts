@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ owned: vi.fn(), command: vi.fn(), from: vi.fn(), signed: vi.fn(), info: vi.fn(), list: vi.fn(), remove: vi.fn() }))
+const r2 = vi.hoisted(() => ({ authorize: vi.fn(), complete: vi.fn(), abort: vi.fn() }))
+vi.mock('./multipart.js', () => ({ authorizeMultipart: r2.authorize, completeMultipart: r2.complete }))
+vi.mock('./r2.js', () => ({ r2Storage: () => ({ abort: r2.abort, list: m.list, remove: m.remove }) }))
 vi.mock('./core.js', async original => ({ ...await original<typeof import('./core')>(), owned: m.owned, command: m.command,
   database: () => ({ from: m.from, storage: { from: () => ({ createSignedUploadUrl: m.signed, info: m.info, list: m.list, remove: m.remove }) } }) }))
 import { artifacts, authorizeUpload, checkPath, cleanupObjects, completeArtifact, deleteRecording, finalizeRecording, sourcePath } from './storage'
@@ -78,4 +81,17 @@ it('cleans private objects in bounded batches including uncommitted derived arti
   await expect(cleanupObjects(id)).rejects.toMatchObject({ status: 503 })
   m.list.mockResolvedValue({ data: [{ name: `${artifactId}.webm` }], error: null })
   await expect(cleanupObjects(id)).rejects.toMatchObject({ code: 'record_cleanup_pending' })
+})
+it('routes R2 uploads, completion and multipart cleanup through the recording provider', async () => {
+  const recording = { id, storage_provider: 'r2', storage_bucket: 'record-test', storage_prefix: `${actor}/${id}` }
+  m.owned.mockResolvedValue(recording)
+  r2.authorize.mockResolvedValue({ protocol: 's3-multipart' })
+  expect(await authorizeUpload(actor, id, declaration)).toEqual({ protocol: 's3-multipart' })
+  expect(r2.authorize).toHaveBeenCalledWith(actor, recording, artifactId)
+  r2.complete.mockResolvedValue({ data: { size: 20, contentType: 'video/webm' }, error: null })
+  expect(await completeArtifact(actor, id, artifactId)).toEqual({ artifactId, complete: true })
+  m.from.mockImplementation(table => query(table === 'recordings' ? recording : [{ ...artifact, multipart_id: 'upload' }, { ...artifact, multipart_id: null }]))
+  m.list.mockResolvedValue({ data: [], error: null })
+  await cleanupObjects(id)
+  expect(r2.abort).toHaveBeenCalledWith(artifact.path, 'upload')
 })

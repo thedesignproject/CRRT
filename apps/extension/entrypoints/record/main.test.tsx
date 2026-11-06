@@ -24,7 +24,8 @@ vi.mock('../../lib/recording-store', () => ({
   getLocalRecording: mocks.getRecording,
   saveLocalRecording: mocks.saveRecording,
 }))
-vi.mock('../../lib/recording-transcription', () => ({ withRecordingTranscript: mocks.withTranscript }))
+vi.mock('../../lib/recording-cloud', () => ({ syncRecording: (recording: unknown, changed: (r: unknown) => void) => mocks.withTranscript(recording).then((r: unknown) => { changed(r); return r }), ownerRecordRequest: mocks.withTranscript }))
+vi.mock('../../components/recording-cloud', () => ({ RecordingCloud: () => null, RecordingAgentContext: () => <p>Paid agent context</p> }))
 
 function mediaStream() {
   const track = { addEventListener: vi.fn(), stop: vi.fn(), kind: 'video' }
@@ -176,7 +177,7 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
   await screen.findByText('Capture ready')
-  expect(screen.getByText('This is the actual narration.')).toBeInTheDocument()
+  expect(screen.getByText(/Transcribing voice/)).toBeInTheDocument()
   expect(mocks.saveRecording).toHaveBeenCalled()
   expect(mocks.saveRecording.mock.calls[0]?.[0]).toMatchObject({ title: 'Needs more contrast' })
   const videos = document.querySelectorAll('video')
@@ -186,10 +187,9 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   expect(videos[1].currentTime).toBe(2)
   fireEvent.play(videos[0]); fireEvent.pause(videos[0])
   fireEvent.click(screen.getByRole('button', { name: 'For agents' }))
-  expect(await screen.findByText('Ready for Claude Code')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: /Copy for Claude Code/ }))
-  fireEvent.click(screen.getByRole('button', { name: /Copy link/ }))
-  await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(2))
+  expect(await screen.findByText('Paid agent context')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Copy browser-only link/ }))
+  await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1))
 })
 
 it('moves tab recording controls to the injected surface and accepts its commands', async () => {
@@ -406,42 +406,23 @@ it('retries a failed transcript from the locally retained audio', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Retry transcription' }))
   expect(await screen.findByText('Recovered speech.')).toBeInTheDocument()
   expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'processing' }))
-  expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'ready' }))
 })
 
-it('keeps transcripts and the local agent preview account-free', async () => {
+it('shows transcripts while routing agent actions to the paid control', async () => {
   mocks.getRecording.mockResolvedValue({
     id: 'free-transcript', title: 'Free transcript', source: 'tab', status: 'ready', durationMs: 1_000,
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [],
     transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Visible without an account.' }],
-    transcriptionStatus: 'ready', screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
+    transcriptionStatus: 'ready', hostedTranscription: true, screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
   })
   history.replaceState(null, '', '/record.html?recording=free-transcript')
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByText('Visible without an account.')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'For agents' }))
-  expect(await screen.findByText('Ready for Claude Code')).toBeInTheDocument()
-  expect(screen.getByText(/Visible without an account/)).toBeInTheDocument()
+  expect(await screen.findByText('Paid agent context')).toBeInTheDocument()
+  expect(screen.getByText('Paid agent context')).toBeInTheDocument()
   expect(mocks.sendMessage).not.toHaveBeenCalledWith({ type: 'auth:open-popup' })
-})
-
-it('reports clipboard failures without hiding the local agent payload', async () => {
-  mocks.getRecording.mockResolvedValue({
-    id: 'copy-failure', title: 'Copy failure', source: 'tab', status: 'ready', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
-    transcriptionStatus: 'ready', screenBlob: new Blob(['screen']),
-  })
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
-  history.replaceState(null, '', '/record.html?recording=copy-failure')
-  document.body.innerHTML = '<div id="root"></div>'
-  await import('./main')
-
-  fireEvent.click(await screen.findByRole('button', { name: 'For agents' }))
-  fireEvent.click(screen.getByRole('button', { name: 'Copy for Claude Code' }))
-
-  expect(await screen.findByText('Copy failed. Try again.')).toBeInTheDocument()
-  expect(screen.getByText(/No speech detected/)).toBeInTheDocument()
 })
 
 it('renders a processing transcript state honestly', async () => {
@@ -457,11 +438,38 @@ it('renders a processing transcript state honestly', async () => {
 
 it('renders a successful silent transcript without treating it as an error', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'silent', title: 'Silent', source: 'tab', status: 'ready', durationMs: 1_000,
+    hostedTranscription: true, id: 'silent', title: 'Silent', source: 'tab', status: 'ready', durationMs: 1_000,
     createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'ready',
   })
   history.replaceState(null, '', '/record.html?recording=silent')
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByText('No speech detected')).toBeInTheDocument()
+})
+
+it('requires explicit hosted transcription consent in setup', async () => {
+  await load()
+  const consent = screen.getByRole('checkbox')
+  expect(consent).not.toBeChecked()
+  fireEvent.click(consent)
+  expect(consent).toBeChecked()
+})
+
+it('shows declined hosted transcription without claiming that no speech was recorded', async () => {
+  mocks.getRecording.mockResolvedValue({ id: 'declined', title: 'No hosted consent', source: 'tab', status: 'ready', durationMs: 1000, createdAt: 'now', authorName: 'You', marks: [], transcript: [], transcriptionStatus: 'ready', hostedTranscription: false })
+  history.replaceState(null, '', '/record.html?recording=declined')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+  expect(await screen.findByText('Transcription off')).toBeInTheDocument()
+})
+
+it.each([false, true])('retries cloud transcription through the owner endpoint and reports failure=%s', async failure => {
+  mocks.getRecording.mockResolvedValue({ id: 'cloud-retry', title: 'Cloud retry', source: 'tab', status: 'ready', durationMs: 1000, createdAt: 'now', authorName: 'You', marks: [], transcript: [], transcriptionStatus: 'failed', audioBlob: new Blob(['audio']), cloud: { id: 'remote', finalized: true } })
+  history.replaceState(null, '', '/record.html?recording=cloud-retry')
+  document.body.innerHTML = '<div id="root"></div>'
+  await import('./main')
+  if (failure) mocks.withTranscript.mockRejectedValueOnce(new Error('Stage retry failed'))
+  fireEvent.click(await screen.findByRole('button', { name: 'Retry transcription' }))
+  await waitFor(() => expect(mocks.withTranscript).toHaveBeenCalledWith('recordings/remote/retry', { stage: 'transcription' }))
+  if (failure) expect(await screen.findByText('Stage retry failed')).toBeInTheDocument()
 })

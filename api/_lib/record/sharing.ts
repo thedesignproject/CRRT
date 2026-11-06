@@ -1,7 +1,8 @@
+import { recordObjectStorage } from './object-storage.js'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 import { z } from 'zod'
 import { allPages, checked, database, digest, initialShare, owned, parse, RecordError, summary, type RecordingRow } from './core.js'
-import { artifacts, checkPath, RECORD_BUCKET } from './storage.js'
+import { artifacts, checkPath } from './storage.js'
 
 export const shareToken = z.string().regex(/^(?:[A-Za-z0-9_-]{43}|v1\.[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}\.[A-Za-z0-9_-]{43})$/)
 function currentShare(row: RecordingRow) {
@@ -36,7 +37,7 @@ export async function playback(row: RecordingRow) {
   const media = mediaReady ? await artifacts(row.id) : []
   const signedArtifacts = await Promise.all(media.map(async artifact => {
     checkPath(row.id, artifact.path)
-    const signed = checked(await db.storage.from(RECORD_BUCKET).createSignedUrl(artifact.path, 300))
+    const signed = checked(await recordObjectStorage(row).signPlayback(artifact.path, 300))
     if (!signed) throw new RecordError('record_unavailable', 503, true)
     return { id: artifact.id, kind: artifact.kind, mime: artifact.mime, offsetMs: artifact.offset_ms,
       url: signed.signedUrl, expiresInSeconds: 300 }

@@ -13,6 +13,7 @@ export type RecordingRow = {
   failure: Failure | null; created_at: string; updated_at: string; deleted_at: string | null; cleaned_at: string | null;
   revision: number; reserved_bytes: number;
   storage_prefix: string;
+  storage_provider?: 'supabase' | 'r2'; storage_bucket?: string;
   media_metadata?: { width: number; height: number; durationMs: number } | null;
 }
 export const database = getServiceSupabase

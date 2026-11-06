@@ -3,6 +3,12 @@ import { initialRecorderState } from './recording'
 import { isRecordingSurfaceCommand, isRecordingTool, sessionSnapshot } from './recording-session'
 
 describe('recording session protocol', () => {
+  it('carries annotation capacity feedback to the integrated recording controls', () => {
+    expect(sessionSnapshot({ ...initialRecorderState, annotationLimitReached: true }).annotationLimitReached).toBe(true)
+    expect(sessionSnapshot({ ...initialRecorderState, annotationLimitReached: false }).annotationLimitReached).toBeUndefined()
+    expect(sessionSnapshot({ ...initialRecorderState, annotationError: 'Shorten your note' }).annotationError).toBe('Shorten your note')
+    expect(sessionSnapshot({ ...initialRecorderState, annotationError: null }).annotationError).toBeUndefined()
+  })
   it('recognizes supported tools and rejects other values', () => {
     expect(isRecordingTool('draw')).toBe(true)
     expect(isRecordingTool('zoom')).toBe(false)

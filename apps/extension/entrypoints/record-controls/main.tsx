@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPoi
 import { browser } from 'wxt/browser'
 import { ArrowUpRight, Box, Camera, CameraOff, Check, Eraser, Mic, Monitor, Pause, Pencil, Play, RotateCcw, ScreenShare, Square, Type, Undo2, X } from 'lucide-react'
 import { RecordingCamera, RestoreCameraButton, type CameraPreviewSize } from '../../components/recording-camera'
-import { formatRecordingTime, recordingMarkOpacity, type RecordingMark, type RecordingPoint, type RecordingTool } from '../../lib/recording'
+import { appendRecordingStroke, formatRecordingTime, recordingMarkOpacity, type RecordingStroke, type RecordingMark, type RecordingPoint, type RecordingTool } from '../../lib/recording'
+import { RecordingMarkLimit } from '../../components/recording-mark-limit'
 import type { RecordingSessionSnapshot, RecordingSurfaceCommand } from '../../lib/recording-session'
 import './style.css'
 
@@ -47,6 +48,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
   const [cameraAvailable, setCameraAvailable] = useState(false)
   const [cameraPreviewSize, setCameraPreviewSize] = useState<CameraPreviewSize>('medium')
   const draftRef = useRef<RecordingPoint[]>([])
+  const strokeRef = useRef<RecordingStroke>({ points: [], stride: 1, seen: 0 })
   const exclusiveRef = useRef(false)
   const cameraRef = useRef<HTMLVideoElement>(null)
   const cameraStreamRef = useRef<MediaStream | null>(null)
@@ -125,14 +127,14 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
     /* v8 ignore next -- pointer events cannot reach the annotation layer while it has pointer-events:none */
     if (!recording || snapshot.tool === 'pointer') return
     event.currentTarget.setPointerCapture(event.pointerId)
-    const points = [surfacePoint(event)]; draftRef.current = points; setDraft(points)
+    const points = [surfacePoint(event)]; draftRef.current = points; strokeRef.current = { points, stride: 1, seen: 1 }; setDraft(points)
   }
   const pointerMove = (event: ReactPointerEvent<SVGSVGElement>) => {
     /* v8 ignore next -- move events without an active gesture are ignored */
     if (!draftRef.current.length || !recording) return
     const next = surfacePoint(event)
     /* v8 ignore next -- both freehand and bounded tools are exercised through pointer tests */
-    const points = snapshot.tool === 'draw' ? [...draftRef.current, next] : [draftRef.current[0]!, next]
+    const points = snapshot.tool === 'draw' ? (strokeRef.current = appendRecordingStroke(strokeRef.current, next)).points : [draftRef.current[0]!, next]
     draftRef.current = points; setDraft(points)
   }
   const pointerUp = (event: ReactPointerEvent<SVGSVGElement>) => {
@@ -168,6 +170,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
         <button className={snapshot.cameraEnabled ? '' : 'device-off'} aria-pressed={snapshot.cameraEnabled} onClick={() => { void command({ kind: 'camera.toggled' }) }}>{snapshot.cameraEnabled ? <Camera size={17} /> : <CameraOff size={17} />}<span>{snapshot.cameraEnabled ? 'Camera' : 'No camera'}</span><em>{snapshot.cameraEnabled ? 'ON' : 'OFF'}</em></button>
         <button onClick={() => { void command({ kind: 'microphone.toggled' }) }}><Mic size={17} /><span>Microphone</span><em>{snapshot.microphoneEnabled ? 'On' : 'Off'}</em></button>
       </div>
+      <label className="setup-consent"><input type="checkbox" checked={snapshot.hostedTranscription === true} onChange={() => { void command({ kind: 'transcription.toggled' }) }} /><span><strong>Transcribe audio with Deepgram</strong><small>Audio is sent for hosted processing.</small></span></label>
       {(commandError || snapshot.error) && <p className="setup-error" role="alert">{commandError || snapshot.error}</p>}
       <button className="start" disabled={pending} onClick={() => { void command({ kind: 'start' }, true) }}><Camera size={17} /><span>Start recording</span><kbd>3 sec</kbd></button>
     </section>
@@ -188,8 +191,9 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
       void command({ kind: 'camera.toggled' })
     }} /> : null}
     {snapshot.microphoneEnabled && snapshot.status !== 'countdown' && <div className="transcript-chip" data-record-control><Mic size={12} /><span>Voice recording</span><em>Transcribed after Done</em></div>}
+    <RecordingMarkLimit count={snapshot.marks.length} sizeLimited={snapshot.annotationLimitReached} error={snapshot.annotationError} />
     {commandError && <div className="surface-warning" role="alert" data-record-control>{commandError}</div>}
-    {snapshot.warning && <div className="surface-warning" data-record-control>{snapshot.warning}</div>}
+    {snapshot.warning && !snapshot.annotationError && <div className="surface-warning" data-record-control>{snapshot.warning}</div>}
     {snapshot.status === 'countdown' && <div className="countdown"><strong>{snapshot.countdown}</strong><span>Get ready</span></div>}
     {snapshot.status === 'paused' && <div className="paused"><Pause size={22} fill="currentColor" /><strong>Paused</strong></div>}
     <div className="record-toolbar" data-record-control aria-label="Recording controls">

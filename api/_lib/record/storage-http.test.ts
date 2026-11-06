@@ -6,6 +6,9 @@ import upload from '../../v1/recordings/[id]/uploads'
 import complete from '../../v1/recordings/[id]/complete'
 import finalize from '../../v1/recordings/[id]/finalize'
 import item from '../../v1/recordings/[id]/index'
+const part = vi.hoisted(() => vi.fn())
+vi.mock('./multipart.js', () => ({ authorizePart: part }))
+import uploadPart from '../../v1/recordings/[id]/upload-parts'
 afterEach(() => vi.unstubAllEnvs())
 it('routes storage and deletion operations through owner authorization', async () => {
   vi.stubEnv('CRRT_RECORD_ENABLED', 'true')
@@ -16,4 +19,7 @@ it('routes storage and deletion operations through owner authorization', async (
     expect(res.status).toHaveBeenCalledWith(200)
   }
   for (const service of Object.values(services)) expect(service).toHaveBeenCalled()
+  const res: any = { setHeader: vi.fn(), status: vi.fn(), json: vi.fn() }; res.status.mockReturnValue(res)
+  await uploadPart({ method: 'POST', query: { id }, body: { artifactId: id, partNumber: 1 }, headers: {} } as any, res)
+  expect(part).toHaveBeenCalledWith('owner', id, { artifactId: id, partNumber: 1 })
 })
