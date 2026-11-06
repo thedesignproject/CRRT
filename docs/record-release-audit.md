@@ -20,6 +20,8 @@ This report is a local verification record, not a production acceptance claim.
 - PostgreSQL 18.6 isolated on loopback: applied the complete migration journal through `0050_record_v1.sql`; all 14 Record integration tests passed. Minimal Supabase auth roles/schema/publication were provided as local fixtures. This verifies SQL transactions and migration behavior, not Supabase Auth/REST/Storage.
 - Drizzle metadata check passed.
 - Widget, dashboard and Chrome-extension production builds passed; the extension build used explicit non-secret CI environment fixtures.
+- Visual suite: all 69 captures and all 69 archived replays passed. The source checkpoint now waits for font/layout settlement and identical consecutive screenshots before archival; comparison tolerances are unchanged. Visual TypeScript checks passed.
+- GitHub's secret scan initially flagged the literal mock `owner-token` in a test assertion. An exact historical fingerprint exception was added; the secret scan passed on the fix commit. No production credential was added or exposed.
 
 ## Remaining release gates
 
