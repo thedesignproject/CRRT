@@ -30,6 +30,7 @@ diff = subprocess.check_output(
         ":(glob)apps/extension/**/*.ts", ":(glob)apps/extension/**/*.tsx",
         ":(glob)apps/landing/**/*.ts", ":(glob)apps/landing/**/*.tsx",
         ":(glob)shared/product-audit/**/*.ts", ":(glob)shared/product-audit/**/*.tsx",
+        ":(glob)shared/record/**/*.ts", ":(glob)shared/record/**/*.tsx",
         ":(glob)workflows/**/*.ts", ":(glob)workflows/**/*.tsx",
         ":(glob)server/**/*.ts", ":(glob)server/**/*.tsx",
     ],

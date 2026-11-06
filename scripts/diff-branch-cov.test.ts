@@ -11,7 +11,7 @@ it('checks partial branches in top-level and nested files across every coverage 
     'src/index.ts', 'src/components/Widget.tsx', 'api/comments.ts',
     'apps/dashboard/api.ts', 'apps/dashboard/components/View.tsx',
     'apps/extension/entry.ts', 'apps/landing/App.tsx',
-    'shared/product-audit/model.ts', 'workflows/export.ts', 'server/index.ts',
+    'shared/product-audit/model.ts', 'shared/record/contracts.ts', 'workflows/export.ts', 'server/index.ts',
   ]
   const git = (...args: string[]) => execFileSync('git', args, { cwd: fixture, stdio: 'pipe' })
   try {
