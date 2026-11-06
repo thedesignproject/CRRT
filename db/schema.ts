@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import {
+  foreignKey,
   bigint,
   boolean,
   check,
@@ -4282,3 +4283,216 @@ export const mcpDashboardOperations = pgTable('mcp_dashboard_operations', {
 export const mcpDashboardReceiptsSql = `
 GRANT ALL ON public.mcp_dashboard_operations TO service_role;
 `;
+
+export const documents = pgTable('documents', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  projectId: text('project_id').references(() => projects.publicKey, { onDelete: 'set null' }),
+  accessMode: text('access_mode').notNull().default('private'),
+  title: text('title').notNull(),
+  body: text('body').notNull().default(''),
+  version: integer('version').notNull().default(1),
+  publishedRevision: integer('published_revision'),
+  shareKey: uuid('share_key').notNull().defaultRandom().unique(),
+  sharing: boolean('sharing').notNull().default(false),
+  passwordHash: text('password_hash'),
+  accessVersion: integer('access_version').notNull().default(1),
+  archived: boolean('archived').notNull().default(false),
+  createdBy: uuid('created_by').notNull().references(() => authUsers.id),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({ project: index('documents_project_updated').on(t.projectId, t.updatedAt),
+  access: check('documents_access', sql`${t.accessMode} in ('private','project','link','password') AND (${t.accessMode}<>'project' OR ${t.projectId} IS NOT NULL) AND (${t.accessMode}<>'password' OR ${t.passwordHash} IS NOT NULL)`),
+  size: check('documents_size', sql`length(${t.title}) between 1 and 200 AND octet_length(${t.body}) <= 262144`),
+  version: check('documents_version', sql`${t.version} > 0 AND ${t.accessVersion} > 0`),
+})).enableRLS()
+
+export const documentUnlockRequests = pgTable('document_unlock_requests', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
+  shareKey: uuid('share_key').notNull(),
+  browserProofHash: text('browser_proof_hash').notNull(),
+  pollProofHash: text('poll_proof_hash').notNull(),
+  accessToken: text('access_token'),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+}, t => ({ connection: index('document_unlock_requests_connection').on(t.connectionId) })).enableRLS()
+
+export const documentRevisions = pgTable('document_revisions', {
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  number: integer('number').notNull(),
+  title: text('title').notNull(),
+  body: text('body').notNull(),
+  summary: text('summary').notNull(),
+  actorId: uuid('actor_id').notNull().references(() => authUsers.id),
+  agentId: text('agent_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({ pk: primaryKey({ columns: [t.documentId, t.number] }),
+  number: check('document_revisions_number', sql`${t.number} > 0`),
+})).enableRLS()
+
+export const documentFeedback = pgTable('document_feedback', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  revision: integer('revision').notNull(),
+  parentId: uuid('parent_id'),
+  quote: text('quote').notNull().default(''),
+  prefix: text('prefix').notNull().default(''),
+  suffix: text('suffix').notNull().default(''),
+  target: jsonb('target'),
+  body: text('body').notNull(),
+  author: text('author').notNull(),
+  actorId: uuid('actor_id').references(() => authUsers.id),
+  reviewStatus: text('review_status').notNull().default('open'),
+  implementationStatus: text('implementation_status').notNull().default('unassigned'),
+  claimedBy: text('claimed_by'),
+  progressUpdates: jsonb('progress_updates').notNull().default(sql`'[]'::jsonb`),
+  version: integer('version').notNull().default(1),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({ document: index('document_feedback_document').on(t.documentId, t.createdAt),
+  identity: uniqueIndex('document_feedback_identity').on(t.id, t.documentId, t.revision),
+  revisionFk: foreignKey({ columns: [t.documentId,t.revision], foreignColumns: [documentRevisions.documentId,documentRevisions.number] }).onDelete('cascade'),
+  parentFk: foreignKey({ columns: [t.parentId,t.documentId,t.revision], foreignColumns: [t.id,t.documentId,t.revision] }).onDelete('cascade'),
+  review: check('document_feedback_review', sql`${t.reviewStatus} in ('open','accepted','rejected')`),
+  progress: check('document_feedback_progress', sql`${t.implementationStatus} in ('unassigned','in_progress','blocked','ready_for_testing','done')`),
+  size: check('document_feedback_size', sql`length(${t.body}) between 1 and 8000 AND length(${t.quote}) <= 2000 AND length(${t.author}) between 1 and 100`),
+})).enableRLS()
+
+export const documentOperations = pgTable('document_operations', {
+  key: text('key').primaryKey(),
+  documentId: uuid('document_id').notNull(),
+  projectId: text('project_id').references(() => projects.publicKey, { onDelete: 'set null' }),
+  ownerId: uuid('owner_id').notNull(),
+  actorId: uuid('actor_id'),
+  action: text('action').notNull(),
+  requestHash: text('request_hash').notNull(),
+  result: jsonb('result').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}).enableRLS()
+
+export const documentInvites = pgTable('document_invites', {
+  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+}, t => ({ pk: primaryKey({ columns: [t.documentId,t.email] }), email: check('document_invites_email', sql`length(${t.email}) between 3 and 254 AND ${t.email}=lower(${t.email})`) })).enableRLS()
+
+// Kept in the schema source alongside Drizzle's tables. Append this export to
+// this stack's one generated migration, never to an existing trunk migration.
+export const documentsSql = `
+GRANT ALL ON public.documents,public.document_revisions,public.document_feedback,public.document_operations,public.document_invites,public.document_unlock_requests TO service_role;
+--> statement-breakpoint
+CREATE FUNCTION public.document_project_removed() RETURNS trigger LANGUAGE plpgsql SET search_path='' AS $$
+BEGIN
+  IF NEW.project_id IS NULL AND NEW.access_mode='project' THEN
+    NEW.access_mode:='private'; NEW.sharing:=false; NEW.access_version:=OLD.access_version+1;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER document_project_removed BEFORE UPDATE OF project_id ON public.documents FOR EACH ROW EXECUTE FUNCTION public.document_project_removed();
+--> statement-breakpoint
+CREATE FUNCTION public.document_command(p_actor uuid,p_id uuid,p_action text,p_input jsonb,p_key text,p_hash text,p_access integer DEFAULT NULL)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE d public.documents; f public.document_feedback; r public.document_revisions;
+  m public.project_members; old public.document_operations; result jsonb; v_key text; n integer; v_role text; v_mode text; v_project text;
+BEGIN
+  v_key:=coalesce(p_actor::text,'guest') || ':' || p_id::text || ':' || p_key;
+  PERFORM pg_advisory_xact_lock(hashtextextended('document:' || p_id::text,0));
+  SELECT * INTO d FROM public.documents WHERE id=p_id;
+  SELECT * INTO old FROM public.document_operations WHERE key=v_key;
+  -- Match membership RPCs and FK cascades: projects before documents/members.
+  PERFORM 1 FROM public.projects WHERE public_key IN (d.project_id,old.project_id,p_input->>'projectId') ORDER BY public_key FOR SHARE;
+  SELECT * INTO d FROM public.documents WHERE id=p_id FOR UPDATE;
+  v_project:=coalesce(d.project_id,old.project_id,p_input->>'projectId');
+  SELECT * INTO m FROM public.project_members WHERE user_id=p_actor AND project_key=v_project FOR SHARE;
+  IF p_actor IS NOT NULL AND NOT EXISTS(SELECT 1 FROM auth.users WHERE id=p_actor AND deleted_at IS NULL AND (banned_until IS NULL OR banned_until<now())) THEN RAISE EXCEPTION 'forbidden'; END IF;
+  IF p_actor IS NOT NULL AND p_actor=coalesce(d.created_by,old.owner_id) THEN v_role:='admin';
+  ELSIF d.access_mode='project' OR (d.id IS NULL AND old.project_id IS NOT NULL) THEN v_role:=m.role;
+  ELSIF d.access_mode='private' AND EXISTS(SELECT 1 FROM public.document_invites i JOIN auth.users u ON lower(u.email)=i.email WHERE i.document_id=p_id AND u.id=p_actor) THEN v_role:='reader'; END IF;
+  IF p_action='create' AND old.key IS NULL THEN
+    IF p_actor IS NULL OR (v_project IS NOT NULL AND (m.role IS NULL OR m.role='guest')) THEN RAISE EXCEPTION 'forbidden'; END IF;
+    v_role:='admin';
+  END IF;
+  IF p_action='comment' THEN
+    IF v_role='guest' THEN RAISE EXCEPTION 'forbidden'; END IF;
+    IF v_role IS NULL AND (d.access_mode IN ('link','password') AND d.sharing AND NOT d.archived AND d.published_revision IS NOT NULL AND p_access=d.access_version) IS NOT TRUE THEN RAISE EXCEPTION 'forbidden'; END IF;
+  ELSIF v_role IS NULL OR v_role IN ('guest','reader') OR (p_action IN ('publish','sharing','archive','delete','assign','invite') AND v_role<>'admin') THEN RAISE EXCEPTION 'forbidden'; END IF;
+  IF old.key IS NOT NULL THEN
+    IF old.request_hash<>p_hash OR old.action<>p_action THEN RAISE EXCEPTION 'idempotency_conflict'; END IF;
+    RETURN old.result;
+  END IF;
+  IF p_action='create' THEN
+    IF d.id IS NOT NULL THEN RAISE EXCEPTION 'version_conflict'; END IF;
+    PERFORM public.cloud_require_write(coalesce(public.cloud_owner(v_project),p_actor));
+    INSERT INTO public.documents(id,project_id,title,body,created_by) VALUES(p_id,v_project,p_input->>'title',coalesce(p_input->>'body',''),p_actor) RETURNING * INTO d;
+  ELSE
+    IF d.id IS NULL THEN RAISE EXCEPTION 'document_not_found'; END IF;
+    PERFORM public.cloud_require_write(coalesce(public.cloud_owner(d.project_id),d.created_by));
+    IF p_action NOT IN ('comment','review','progress') AND d.version IS DISTINCT FROM (p_input->>'expectedVersion')::integer THEN RAISE EXCEPTION 'version_conflict'; END IF;
+    IF d.archived AND p_action NOT IN ('archive','delete') THEN RAISE EXCEPTION 'document_archived'; END IF;
+    CASE p_action
+    WHEN 'save' THEN UPDATE public.documents SET title=p_input->>'title',body=p_input->>'body' WHERE id=p_id;
+    WHEN 'publish' THEN
+      n:=coalesce(d.published_revision,0)+1;
+      INSERT INTO public.document_revisions(document_id,number,title,body,summary,actor_id,agent_id) VALUES(p_id,n,d.title,d.body,p_input->>'summary',p_actor,p_input->>'agentId');
+      UPDATE public.documents SET published_revision=n WHERE id=p_id;
+    WHEN 'restore' THEN
+      SELECT * INTO r FROM public.document_revisions WHERE document_id=p_id AND number=(p_input->>'revision')::integer;
+      IF NOT FOUND THEN RAISE EXCEPTION 'revision_not_found'; END IF;
+      UPDATE public.documents SET title=r.title,body=r.body WHERE id=p_id;
+    WHEN 'sharing' THEN
+      v_mode:=coalesce(p_input->>'accessMode',CASE WHEN (p_input->>'sharing')::boolean THEN CASE WHEN coalesce(p_input->>'passwordHash',d.password_hash) IS NULL THEN 'link' ELSE 'password' END ELSE 'private' END);
+      IF v_mode='project' AND d.project_id IS NULL THEN RAISE EXCEPTION 'forbidden'; END IF;
+      UPDATE public.documents SET access_mode=v_mode,sharing=v_mode<>'private',
+        password_hash=CASE WHEN v_mode<>'password' THEN NULL WHEN p_input ? 'passwordHash' THEN p_input->>'passwordHash' ELSE password_hash END,
+        access_version=access_version+1,share_key=CASE WHEN coalesce((p_input->>'rotateLink')::boolean,false) THEN gen_random_uuid() ELSE share_key END WHERE id=p_id;
+    WHEN 'assign' THEN
+      IF p_input->>'projectId' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.project_members WHERE project_key=p_input->>'projectId' AND user_id=p_actor AND role IN ('admin','member')) THEN RAISE EXCEPTION 'forbidden'; END IF;
+      UPDATE public.documents SET project_id=p_input->>'projectId',access_version=access_version+1 WHERE id=p_id;
+    WHEN 'invite' THEN
+      IF (p_input->>'remove')::boolean THEN DELETE FROM public.document_invites WHERE document_id=p_id AND email=lower(p_input->>'email');
+      ELSE INSERT INTO public.document_invites(document_id,email) VALUES(p_id,lower(p_input->>'email')) ON CONFLICT DO NOTHING; END IF;
+      UPDATE public.documents SET access_version=access_version+1 WHERE id=p_id;
+    WHEN 'archive' THEN UPDATE public.documents SET archived=(p_input->>'archived')::boolean,access_version=access_version+1 WHERE id=p_id;
+    WHEN 'delete' THEN DELETE FROM public.documents WHERE id=p_id;
+    WHEN 'comment' THEN
+      IF NOT EXISTS(SELECT 1 FROM public.document_revisions WHERE document_id=p_id AND number=(p_input->>'revision')::integer) THEN RAISE EXCEPTION 'revision_not_found'; END IF;
+      IF (v_role IS NULL OR v_role='reader') AND (p_input->>'revision')::integer<>d.published_revision AND p_input->>'parentId' IS NULL THEN RAISE EXCEPTION 'revision_not_found'; END IF;
+      IF p_input->>'parentId' IS NOT NULL AND NOT EXISTS(SELECT 1 FROM public.document_feedback WHERE id=(p_input->>'parentId')::uuid AND document_id=p_id AND parent_id IS NULL AND revision=(p_input->>'revision')::integer) THEN RAISE EXCEPTION 'feedback_not_found'; END IF;
+      INSERT INTO public.document_feedback(document_id,revision,parent_id,quote,prefix,suffix,target,body,author,actor_id)
+        VALUES(p_id,(p_input->>'revision')::integer,(p_input->>'parentId')::uuid,coalesce(p_input->>'quote',''),coalesce(p_input->>'prefix',''),coalesce(p_input->>'suffix',''),p_input->'target',p_input->>'body',p_input->>'author',p_actor) RETURNING * INTO f;
+    WHEN 'review','progress' THEN
+      SELECT * INTO f FROM public.document_feedback WHERE id=(p_input->>'feedbackId')::uuid AND document_id=p_id AND parent_id IS NULL FOR UPDATE;
+      IF NOT FOUND THEN RAISE EXCEPTION 'feedback_not_found'; END IF;
+      IF f.version IS DISTINCT FROM (p_input->>'feedbackVersion')::integer THEN RAISE EXCEPTION 'version_conflict'; END IF;
+      IF p_action='review' THEN UPDATE public.document_feedback SET review_status=p_input->>'reviewStatus',implementation_status=coalesce(p_input->>'implementationStatus','unassigned'),claimed_by=NULL,version=version+1 WHERE id=f.id;
+      ELSE
+        IF coalesce(p_input->>'agentId','') !~ '^[A-Za-z0-9_-]{1,64}$' THEN RAISE EXCEPTION 'claim_required'; END IF;
+        IF coalesce(p_input->>'operation','') NOT IN ('claim','start','block','complete') THEN RAISE EXCEPTION 'invalid_action'; END IF;
+        IF f.review_status<>'accepted' OR f.implementation_status IN ('done','ready_for_testing') THEN RAISE EXCEPTION 'feedback_not_eligible'; END IF;
+        IF f.claimed_by IS NOT NULL AND f.claimed_by<>p_input->>'agentId' THEN RAISE EXCEPTION 'claim_conflict'; END IF;
+        IF p_input->>'operation'<>'claim' AND f.claimed_by IS DISTINCT FROM p_input->>'agentId' THEN RAISE EXCEPTION 'claim_required'; END IF;
+        UPDATE public.document_feedback SET progress_updates=progress_updates || jsonb_build_array(jsonb_build_object('operation',p_input->>'operation','summary',p_input->>'summary','agentId',p_input->>'agentId','createdAt',clock_timestamp())),claimed_by=p_input->>'agentId',implementation_status=CASE p_input->>'operation' WHEN 'complete' THEN 'ready_for_testing' WHEN 'block' THEN 'blocked' ELSE 'in_progress' END,version=version+1 WHERE id=f.id;
+      END IF;
+    ELSE RAISE EXCEPTION 'invalid_action';
+    END CASE;
+    IF p_action NOT IN ('comment','review','progress','delete') THEN UPDATE public.documents SET version=version+1,updated_at=clock_timestamp() WHERE id=p_id RETURNING * INTO d; END IF;
+  END IF;
+  result:=jsonb_build_object('id',p_id,'version',d.version,'publishedRevision',d.published_revision,'feedbackId',f.id);
+  INSERT INTO public.document_operations(key,document_id,project_id,owner_id,actor_id,action,request_hash,result) VALUES(v_key,p_id,d.project_id,d.created_by,p_actor,p_action,p_hash,result);
+  RETURN result;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.document_command(uuid,uuid,text,jsonb,text,text,integer) FROM PUBLIC,anon,authenticated;
+GRANT EXECUTE ON FUNCTION public.document_command(uuid,uuid,text,jsonb,text,text,integer) TO service_role;
+--> statement-breakpoint
+CREATE FUNCTION public.document_revision_immutable() RETURNS trigger LANGUAGE plpgsql SET search_path='' AS $$
+BEGIN
+  IF TG_OP='UPDATE' OR EXISTS(SELECT 1 FROM public.documents WHERE id=OLD.document_id) THEN RAISE EXCEPTION 'published_revision_immutable'; END IF;
+  RETURN OLD;
+END;
+$$;
+CREATE TRIGGER document_revision_immutable BEFORE UPDATE OR DELETE ON public.document_revisions FOR EACH ROW EXECUTE FUNCTION public.document_revision_immutable();
+--> statement-breakpoint
+NOTIFY pgrst, 'reload schema';
+`;
+
