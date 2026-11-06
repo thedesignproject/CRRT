@@ -104,3 +104,11 @@ it('publishes explicit annotations and safe structured remediation for dashboard
     expect(result.structuredContent).toMatchObject({ code: 'idempotency_conflict', requestId: expect.any(String), retryable: false, retryAfter: null })
   } finally { await client.close() }
 })
+it('requires dashboard access and delivers large escaped document comparisons',async()=>{
+  const doc:ToolSpec={...spec,name:'compare',scope:'crrt:dashboard',annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},maxResultBytes:16777216}
+  const legacy=await connect([doc]);expect((await legacy.listTools()).tools).toHaveLength(0);await legacy.close()
+  vi.mocked(identity).mockResolvedValue({...actor,scope:'crrt:read crrt:implement crrt:review crrt:dashboard'})
+  const reader=await connect([doc]);expect((await reader.listTools()).tools[0]).toMatchObject({annotations:{readOnlyHint:true,destructiveHint:false}})
+  const large='\u0001'.repeat(262144*2);run.mockResolvedValue({value:large})
+  expect((await reader.callTool({name:'compare',arguments:{value:'test'}})).structuredContent).toEqual({value:large});await reader.close()
+})
