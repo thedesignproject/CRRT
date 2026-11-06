@@ -219,6 +219,28 @@ it('starts the local widget without signing in',async()=>{
  await waitFor(()=>expect(sendMessage).toHaveBeenCalledWith({type:'comment:activate'}))
 })
 
+it('opens CRRT Record without requiring sign-in',async()=>{
+ sendMessage.mockResolvedValue({ok:true,data:null})
+ const close=vi.spyOn(window,'close').mockImplementation(()=>{})
+ render(<Popup />)
+ const button=await screen.findByRole('button',{name:/Try CRRT Record/})
+ fireEvent.click(button)
+ await waitFor(()=>expect(sendMessage).toHaveBeenCalledWith({type:'record:open'}))
+ expect(close).toHaveBeenCalled()
+})
+
+it('reports CRRT Record launch failures',async()=>{
+ sendMessage.mockResolvedValueOnce({ok:true,data:null}).mockRejectedValueOnce(new Error('Recorder unavailable'))
+ render(<Popup />)
+ const record=await screen.findByRole('button',{name:/Try CRRT Record/})
+ fireEvent.click(record)
+ expect(await screen.findByRole('alert')).toHaveTextContent('Recorder unavailable')
+ await waitFor(()=>expect(record).not.toBeDisabled())
+ sendMessage.mockRejectedValueOnce('offline')
+ fireEvent.click(screen.getByRole('button',{name:/Try CRRT Record/}))
+ await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Could not open CRRT Record'))
+})
+
 it.each(['https://crrt.ai/dashboard','https://crrt.ai/dashboard/'])('resolves billing beneath the configured dashboard base %s',async base=>{
  vi.stubEnv('WXT_DASHBOARD_URL',base)
  sendMessage.mockResolvedValue({ok:true,data:null})
