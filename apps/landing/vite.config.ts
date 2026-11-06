@@ -15,7 +15,10 @@ export default defineConfig(({ mode }) => {
       name: 'crrt-static-tokens',
       transformIndexHtml() {
         return [{ tag: 'style', attrs: { 'data-source': 'crrt-tokens' },
-          children: readFileSync(path.resolve(__dirname, '../../branding/crrt/tokens.css'), 'utf8'),
+          // The landing self-hosts these fonts; retain the canonical tokens
+          // without their optional Google Fonts fallback for other consumers.
+          children: readFileSync(path.resolve(__dirname, '../../branding/crrt/tokens.css'), 'utf8')
+            .replace(/@import\s+url\([^)]*\)\s*;/g, ''),
           injectTo: 'head-prepend' as const }]
       },
     }],
@@ -35,6 +38,7 @@ export default defineConfig(({ mode }) => {
       strictPort: false,
     },
     build: {
+      manifest: true,
       outDir: 'dist',
       emptyOutDir: true,
     },

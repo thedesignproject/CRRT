@@ -5,7 +5,10 @@
       "check (react 18)",
       "check (react 19)",
       "audit",
-      "secrets"
+      "secrets",
+      "UI Tests",
+      "Visual screens",
+      "PR result"
     ]
   },
   "enforce_admins": false,

@@ -16,6 +16,31 @@ A human must create the handoff and provide its share slug and scoped token. Ann
 - [OpenAPI specification](https://crrt.ai/openapi.json): OpenAPI 3.1 contract for the existing authenticated agent share API.
 - [Design skill](https://crrt.ai/skill.md): Design guidance for UI-related handoffs only.
 
+## Practical resources
+
+- [Resource library](https://crrt.ai/resources): Practical guides and interactive tools for designers, founders, and product teams.
+- [Design tokens for AI prototypes: start with one screen](https://crrt.ai/resources/design-tokens-for-ai-prototypes): A small token file and a prompt your builder can reuse.
+- [How to document components for coding agents](https://crrt.ai/resources/document-components-for-coding-agents): A reusable component brief for your existing library.
+- [How to write visual feedback a coding agent can act on](https://crrt.ai/resources/visual-feedback-for-coding-agents): A copyable feedback template and a complete worked example.
+- [A UI review checklist for AI-generated apps](https://crrt.ai/resources/ui-review-checklist-ai-generated-apps): A practical review checklist for your next release.
+- [How to prototype with Lovable and review the result](https://crrt.ai/resources/lovable-prototype-review-workflow): A focused prototype brief and a repeatable refinement loop.
+- [How to prototype in v0 with your design system](https://crrt.ai/resources/v0-prototyping-with-your-design-system): A reusable v0 brief that keeps your existing system in view.
+- [How to report responsive UI issues precisely](https://crrt.ai/resources/report-responsive-ui-issues): A responsive issue report someone else can reproduce.
+- [How to run a focused 15-minute prototype review](https://crrt.ai/resources/focused-prototype-review): A short agenda that ends with decisions and clear ownership.
+- [How to compare a design frame with a browser screenshot](https://crrt.ai/resources/compare-design-to-browser): A comparison protocol that separates real drift from setup differences.
+- [How to review light and dark color themes together](https://crrt.ai/resources/review-light-and-dark-themes): A paired-theme review matrix with explicit checks.
+- [What belongs in a minimum viable design system?](https://crrt.ai/resources/minimum-viable-design-system): A small system you can apply and review in a real flow.
+- [How to record design decisions so coding agents preserve intent](https://crrt.ai/resources/design-decisions-for-coding-agents): A decision record that explains the reason behind a design rule.
+- [How to scope one visual fix for a coding agent](https://crrt.ai/resources/scope-a-visual-fix): A bounded implementation brief with a clear review point.
+- [How to find missing states in AI-generated forms](https://crrt.ai/resources/review-ai-generated-forms): A form-state matrix and a focused correction prompt.
+- [How to organize a Storybook design review](https://crrt.ai/resources/storybook-design-review): A component review plan that stays connected to the product.
+- [How to verify a UI fix before marking feedback resolved](https://crrt.ai/resources/verify-a-ui-fix): A resolution record that connects the change to its evidence.
+- [How to onboard a client to their first prototype review](https://crrt.ai/resources/client-prototype-review): A client review invitation with clear questions and boundaries.
+- [Visual feedback vs visual regression testing: when to use each](https://crrt.ai/resources/visual-feedback-vs-visual-regression): A practical way to combine human judgment with screenshot checks.
+- [Text contrast checker for UI color pairs](https://crrt.ai/resources/text-contrast-checker): Check a color pair and copy a precise review note.
+- [px to rem converter with an adjustable root size](https://crrt.ai/resources/px-to-rem-converter): Convert a value using the root size your project actually uses.
+- [Visual feedback brief builder](https://crrt.ai/resources/visual-feedback-brief-builder): Build a clear, copyable UI change request.
+
 ## Access and formats
 
 Send the share token as Authorization: Bearer <token>. Presence and operations also require a stable X-Agent-Id; operations require Idempotency-Key. Do not put tokens in public links or logs. Missing or invalid credentials return 401, missing shares return 404, and expired or revoked shares return 410.

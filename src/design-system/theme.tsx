@@ -30,10 +30,18 @@ export function applyTheme(theme: Theme) {
   meta?.setAttribute('content', theme === 'dark' ? '#0a0a0a' : '#ffffff')
 }
 
-export function ThemeProvider({ children, storageKey = STORAGE_KEY, defaultTheme }: { children: ReactNode; storageKey?: string; defaultTheme?: Theme }) {
-  const [theme, setThemeState] = useState<Theme>(() => preferredTheme(storageKey, defaultTheme))
+export function ThemeProvider({ children, storageKey = STORAGE_KEY, defaultTheme, hydrate = false }: { children: ReactNode; storageKey?: string; defaultTheme?: Theme; hydrate?: boolean }) {
+  // The first hydrated render must match the light server markup. Resolve the
+  // saved preference before persisting anything, so dark preferences survive.
+  const [theme, setThemeState] = useState<Theme>(() => hydrate ? 'light' : preferredTheme(storageKey, defaultTheme))
+  const [ready, setReady] = useState(!hydrate)
 
   useEffect(() => {
+    if (!ready) {
+      setThemeState(preferredTheme(storageKey, defaultTheme))
+      setReady(true)
+      return
+    }
     applyTheme(theme)
     try {
       localStorage.setItem(storageKey, theme)
@@ -41,7 +49,7 @@ export function ThemeProvider({ children, storageKey = STORAGE_KEY, defaultTheme
     } catch {
       // Theme still works for the current page when storage is unavailable.
     }
-  }, [theme, storageKey])
+  }, [theme, storageKey, ready, defaultTheme])
 
   const value = useMemo<ThemeContextValue>(() => ({
     theme,
