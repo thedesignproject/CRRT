@@ -40,6 +40,8 @@ import { McpAuthPage } from './components/McpAuthPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 import { RecordingSharePage } from './components/RecordingSharePage'
 import { RecordingsPage } from './components/RecordingsPage'
+import { DocumentUnlockPage } from './documents/DocumentUnlockPage'
+import { documentRoute } from './documents/DocumentRoute'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -79,6 +81,8 @@ export function App() {
   // Recovery can fail while another session is still signed in. Let the user
   // request a fresh link without being routed into the dashboard.
   if (pathname === '/forgot-password') return <LoginPage />
+  const sharedDocument = documentRoute(pathname, API_BASE, session?.access_token ?? null, user?.id ?? null)
+  if (sharedDocument) return sharedDocument
 
   if (pathname === '/recording' && !window.location.search) return <RecordingSharePage apiBase={API_BASE} />
 
@@ -89,6 +93,8 @@ export function App() {
       </div>
     )
   }
+
+  if (pathname === '/document-unlock') return <DocumentUnlockPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
   if (pathname === '/mcp-auth') return <McpAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
