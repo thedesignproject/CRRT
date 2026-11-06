@@ -5,6 +5,7 @@ import { ownerRecordRequest, readRecordingPlayback, syncRecording } from '../lib
 import { captureRecordingTitle, MAX_RECORDING_NOTE_LENGTH, type LocalRecording, type RecordingMark } from '../lib/recording'
 import { RecordingNoteEditor } from './recording-note-editor'
 import { saveLocalRecording } from '../lib/recording-store'
+import { RecordingRecovery, recordingAfterRetry, type RecoveryStage } from '../../../shared/record/Recovery'
 
 export function RecordingCloud({ recording, changed }: { recording: LocalRecording; changed: (recording: LocalRecording) => void }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('')
@@ -53,19 +54,19 @@ export function RecordingCloud({ recording, changed }: { recording: LocalRecordi
       setCopied(true)
     } catch { setError('Could not copy the link. Try again.') }
   }
-  async function retryProcessing() {
-    try { await ownerRecordRequest(`recordings/${recording.cloud!.id}/retry`, { stage: playback!.recording.failure!.stage }); setPlayback(undefined) }
-    catch (error) { setError((error as Error).message) }
+  async function retryProcessing(stage: RecoveryStage) {
+    await ownerRecordRequest(`recordings/${recording.cloud!.id}/retry`, { stage })
+    setPlayback(current => recordingAfterRetry(current, stage))
   }
   return <section className="review-summary" aria-label="Recording upload">
     <div><strong>{busy ? 'Uploading recording…' : playback ? `Recording ${playback.recording.state}` : recording.cloud?.finalized ? 'Recording processing' : 'Saved in this browser'}</strong>
-      <p>{recording.cloud?.finalized ? 'Your video is stored privately. Processing continues in the background.' : 'Your local copy stays available until the upload succeeds.'}</p>
+      <p>{recording.cloud?.finalized ? 'Your video is stored privately. Preparation status appears below.' : 'Your local copy stays available until the upload succeeds.'}</p>
       {error && <p role="alert">{error}</p>}
       {needsNoteRepair && <RecordingNoteEditor key={recording.id} marks={recording.marks} save={saveNotes} />}
       {!busy && !recording.cloud?.finalized && !needsNoteRepair && <button onClick={() => { void upload() }}>Retry upload</button>}
       {error.startsWith('Sign in') && <button onClick={() => { void browser.runtime.sendMessage({ type: 'auth:open-popup' }) }}>Sign in to CRRT</button>}
       {recording.cloud?.shareId && <button onClick={() => { void copyLink() }}>{copied ? 'Share link copied' : 'Copy share link'}</button>}
-      {playback?.recording.failure?.retryable && <button onClick={() => { void retryProcessing() }}>Retry processing</button>}
+      {playback && <RecordingRecovery stages={playback.stages} retry={retryProcessing} />}
     </div>
   </section>
 }

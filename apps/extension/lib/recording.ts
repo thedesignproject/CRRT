@@ -1,3 +1,5 @@
+import { MAX_RECORDING_DURATION_MS } from '../../../shared/record/limits'
+
 export type RecordingSource = 'tab' | 'window' | 'screen'
 export type RecordingTool = 'pointer' | 'draw' | 'arrow' | 'box' | 'text' | 'pin'
 export type RecordingStatus = 'setup' | 'countdown' | 'recording' | 'paused' | 'processing' | 'ready' | 'failed'
@@ -136,7 +138,7 @@ export const initialRecorderState: RecorderState = {
 function elapsed(state: RecorderState, now: number) {
   if (state.startedAt === null) return state.durationMs
   const end = state.pausedAt ?? now
-  return Math.max(0, end - state.startedAt - state.pausedMs)
+  return Math.min(MAX_RECORDING_DURATION_MS, Math.max(0, end - state.startedAt - state.pausedMs))
 }
 
 export function recorderReducer(state: RecorderState, action: RecorderAction): RecorderState {

@@ -30,6 +30,8 @@ it.each([
   ['ready', [], 'No transcript available'],
   ['failed', [], 'No transcript available'],
   ['processing', [{ stage: 'transcription', state: 'running', failure: null }], 'Transcript is on its way'],
+  ['failed', [{ stage: 'transcription', state: 'pending', failure: null }], 'Transcript is on its way'],
+  ['processing', [{ stage: 'transcription', state: 'done', failure: null }], 'No transcript available'],
   ['ready', [{ stage: 'transcription', state: 'failed', failure: null }], 'Transcription interrupted'],
 ])('explains an empty transcript for %s recordings', (state, stages, title) => {
   const value = { ...playback, recording: { ...playback.recording, state }, transcript: [], stages } as RecordingPlayback

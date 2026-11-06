@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.24] - Unreleased
+
+### Added
+- The feedback composer includes a Record action. Integrations can supply the optional `onRecord` callback to launch the Chrome-extension recorder; otherwise the widget dispatches `crrt:record-request` and displays instructions for opening the extension.
+
+This version is prepared for the Record stack and is not published until its release tag and npm publish workflow complete. Recording storage, processing, and the Chrome extension are deployed separately from the widget package.
+
 ## [0.3.23] - 2026-10-29
 
 Scope: changes that ship in the published `@thedesignproject/crrt` package. Dashboard, API, extension, Storybook addon, and MCP work since `v0.3.22` moves on `trunk` and is not part of this tarball. No public API change — `src/index.ts` still exports only `FeedbackWidget`, with unchanged props — hence a patch release.

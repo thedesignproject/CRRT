@@ -78,6 +78,16 @@ beforeEach(() => {
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); document.body.innerHTML = '' })
 
+it('automatically saves when the capture deadline fires', async () => {
+  await load()
+  expect(screen.getByText(/Up to 5 minutes/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  await act(async () => { mocks.startCapture.mock.calls[0]![0].onLimitReached() })
+  expect(mocks.saveRecording).toHaveBeenCalled()
+  expect(await screen.findByText('Capture ready')).toBeInTheDocument()
+})
+
 it('records, annotates, pauses, finishes, and exposes human and agent review', async () => {
   const helpers = await load()
   expect(helpers.sourceLabel('window')).toBe('Window')

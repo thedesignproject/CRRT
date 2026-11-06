@@ -1,0 +1,4 @@
+.recording-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.recording-delete { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border, var(--crrt-rule-dark-strong)); border-radius: var(--crrt-radius-lg); background: transparent; color: var(--foreground, var(--crrt-white)); font: inherit; font-size: 13px; cursor: pointer; }
+.recording-delete:disabled { opacity: .5; cursor: wait; }
+.recording-delete:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 2px; }

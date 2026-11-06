@@ -1,7 +1,8 @@
 import { fireEvent, screen } from '@testing-library/react'
-import { beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ sendMessage: vi.fn(), listRecordings: vi.fn(), cloudList: vi.fn() }))
+afterEach(() => vi.unstubAllGlobals())
 vi.mock('wxt/browser', () => ({ browser: { runtime: {
   sendMessage: mocks.sendMessage,
   getURL: (path: string) => `chrome-extension://test${path}`,
@@ -24,6 +25,15 @@ it('renders the real library and launches a new capture', async () => {
   expect(screen.queryByText('Checkout: pay button barely readable')).toBeNull()
   fireEvent.click(screen.getByRole('button', { name: /New recording/ }))
   expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'record:open' })
+})
+
+it('deletes uploaded recordings through the authenticated owner API', async () => {
+  vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
+  mocks.cloudList.mockResolvedValueOnce({ recordings: [{ id: 'cloud', title: 'Uploaded capture', state: 'ready', markCount: 1 }], next: null })
+  await import('./main')
+  fireEvent.click(await screen.findByRole('button', { name: 'Delete Uploaded capture' }))
+  expect(mocks.cloudList).toHaveBeenCalledWith('recordings/cloud', undefined, 'DELETE')
+  expect(await screen.findByRole('status')).toHaveTextContent('Recording deleted')
 })
 
 it('links uploaded captures to the owner player and paginates the server library', async () => {

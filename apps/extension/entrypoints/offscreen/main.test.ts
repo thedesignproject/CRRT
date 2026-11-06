@@ -43,6 +43,23 @@ beforeEach(() => {
 
 afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks() })
 
+it('saves automatically when capture reaches the limit and reports a failed save', async () => {
+  await import('./main')
+  mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'limit', snapshot: { status: 'setup', source: 'tab' } })
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  const { onLimitReached } = mocks.startCapture.mock.calls[0]![0]
+  await act(async () => { onLimitReached() })
+  expect(mocks.saveRecording).toHaveBeenCalledOnce()
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-finished' }))
+  onLimitReached()
+  expect(mocks.saveRecording).toHaveBeenCalledOnce()
+  mocks.saveRecording.mockRejectedValueOnce(new Error('Disk full'))
+  mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'failed-limit', snapshot: { status: 'setup', source: 'tab' } })
+  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
+  await act(async () => { mocks.startCapture.mock.calls[1]![0].onLimitReached() })
+  expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:offscreen-error', error: 'Disk full' }))
+})
+
 it('stages consented audio for authoritative backend processing without a demo provider call', async () => {
   await import('./main')
   mocks.listener!({ type: 'record:offscreen-start', target: 'offscreen', sessionId: 'consented', snapshot: { status: 'setup', source: 'tab', hostedTranscription: true } })

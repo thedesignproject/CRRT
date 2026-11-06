@@ -1,7 +1,32 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { RecordingLibrary, type RecordingPage } from './Library'
 const row = { id: 'one', title: 'Recording one', state: 'ready', markCount: 1, durationMs: 1500 } as RecordingPage['recordings'][number]
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+
+it('confirms deletion, keeps the card on failure, and removes it only after success', async () => {
+  const confirm = vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
+  vi.stubGlobal('confirm', confirm)
+  let complete!: () => void
+  const remove = vi.fn().mockRejectedValueOnce(new Error('Could not delete')).mockImplementationOnce(() => new Promise<void>(resolve => { complete = resolve }))
+  const load = vi.fn().mockResolvedValue({ recordings: [row], next: null })
+  render(<RecordingLibrary load={load} href={id => id} remove={remove} />)
+  const button = await screen.findByRole('button', { name: 'Delete Recording one' })
+  fireEvent.click(button)
+  expect(remove).not.toHaveBeenCalled()
+  expect(confirm).toHaveBeenCalledWith(expect.stringContaining('Local copies are kept'))
+  fireEvent.click(button)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not delete')
+  expect(screen.getByRole('link', { name: /Recording one/ })).toBeInTheDocument()
+  fireEvent.click(button)
+  expect(button).toBeDisabled()
+  expect(button).toHaveTextContent('Deleting…')
+  await act(async () => complete())
+  expect(remove).toHaveBeenLastCalledWith('one')
+  expect(screen.queryByRole('link', { name: /Recording one/ })).toBeNull()
+  expect(screen.getByRole('status')).toHaveTextContent('up to 26 hours')
+  expect(screen.queryByRole('alert')).toBeNull()
+})
 it('lists real recordings, paginates and reports pagination errors', async () => {
   const load = vi.fn().mockResolvedValueOnce({ recordings: [row], next: 'one' }).mockRejectedValueOnce(new Error('Offline')).mockResolvedValueOnce({ recordings: [{ ...row, id: 'two', title: 'Video only', durationMs: null }], next: null })
   render(<RecordingLibrary load={load} href={id => `/recording?id=${id}`} />)
