@@ -4,7 +4,7 @@ const signedIn = !['signed-out', 'disclosure', 'local-populated', 'local-limit',
 const session = signedIn ? { accessToken: 'visual-token', email: 'reviewer@example.test' } : null
 const count = state === 'local-limit' ? 50 : state === 'local-populated' || state.startsWith('import') || state === 'local-expanded' || state === 'injected-local' ? 3 : 0
 const storage: Record<string, unknown> = {
-  'crrt:disclosure-version': state === 'disclosure' ? undefined : 1,
+  'crrt:disclosure-version': state === 'disclosure' ? undefined : 3,
   'crrt:local-feedback-v1': { version: 1, name: 'Local feedback', comments: Array.from({ length: count }, (_, i) => ({ ...comments[i % 3], id: `local-${i}`, pageUrl: 'https://example.test/pricing', createdAt: fixedTime })) },
 }
 export const browser = {
