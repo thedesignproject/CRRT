@@ -54,6 +54,12 @@ const fixture = base.extend<{ capture: Capture; withOpener: boolean }>({
       await page.clock.pauseAt(await page.evaluate(() => Date.now() + 1000))
       await page.clock.runFor(100)
       await page.evaluate(preservePresentation)
+      // Freezing presentation can expose text or change its font. Resolve the
+      // resulting layout and font loads before the checkpoint and DOM archive.
+      await page.evaluate(async () => {
+        document.body.getBoundingClientRect()
+        await document.fonts.ready
+      })
       await page.clock.runFor(34)
       await page.evaluate(() => {
         for (const animation of document.getAnimations()) if (animation.effect?.getComputedTiming().iterations !== Infinity) {
@@ -68,7 +74,13 @@ const fixture = base.extend<{ capture: Capture; withOpener: boolean }>({
       const dir = 'artifacts/chromatic-simple/checkpoints'
       await mkdir(dir, { recursive: true })
       const name = checkpointName(info.title)
-      const png = await page.screenshot({ path: `${dir}/${name}.png`, fullPage, animations: 'disabled' })
+      let png = await page.screenshot({ path: `${dir}/${name}.png`, fullPage, animations: 'disabled' })
+      await expect.poll(async () => {
+        const next = await page.screenshot({ path: `${dir}/${name}.png`, fullPage, animations: 'disabled' })
+        const stable = next.equals(png)
+        png = next
+        return stable
+      }, { message: 'Source checkpoint must settle before archiving', timeout: 10_000 }).toBe(true)
       expect(png.readUInt32BE(16) * png.readUInt32BE(20), 'Chromatic snapshot pixel limit').toBeLessThanOrEqual(25_000_000)
       await page.evaluate(() => {
         document.documentElement.dataset.crrtWindowTop = String(scrollY)

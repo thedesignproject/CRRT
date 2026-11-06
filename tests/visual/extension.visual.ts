@@ -3,7 +3,7 @@ import { extensionStates } from './inventory'
 for (const state of extensionStates) {
   test(`extension / ${state}`, async ({ capture }) => {
     await capture('/extension', state, async page => {
-      await expect(page.getByRole('heading', { name: state === 'disclosure' ? 'Before you drop a carrot' : ['signed-out', 'auth-error'].includes(state) ? 'Sign in to CRRT' : 'Drop a carrot' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: state === 'disclosure' ? 'Before you drop a carrot' : ['signed-out', 'auth-error'].includes(state) ? 'Sign in to CRRT' : 'Drop a carrot', exact: true })).toBeVisible()
       if (state === 'auth-error') {
         await page.getByRole('button', { name: 'Sign in with CRRT' }).click()
         await expect(page.getByRole('alert')).toBeVisible()
