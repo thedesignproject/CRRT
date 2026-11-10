@@ -7,13 +7,13 @@ vi.mock('../../../shared/record/client', () => ({ recordRequest: mocks.request }
 vi.mock('./recording-store', () => ({ saveLocalRecording: mocks.save, getLocalRecording: mocks.get }))
 vi.mock('./recording-upload', () => ({ uploadRecordingArtifact: mocks.upload }))
 vi.mock('./recording-multipart', () => ({ uploadMultipart: mocks.multipart }))
-import { ownerRecordRequest, readRecordingPlayback, recordingManifest, recordingToken, syncRecording } from './recording-cloud'
+import { isMissingCloudRecording, ownerRecordRequest, readRecordingPlayback, recordingManifest, recordingToken, syncRecording } from './recording-cloud'
 import { recordingManifestBytes } from './recording-manifest'
 afterAll(() => vi.unstubAllEnvs())
 const local = (): LocalRecording => ({ id: crypto.randomUUID(), title: 'Capture', source: 'tab', status: 'ready', durationMs: 3000, createdAt: '2026-10-30', authorName: 'You', transcript: [], transcriptionStatus: 'processing', screenBlob: new Blob(['video']), cameraBlob: new Blob(['camera']), audioBlob: new Blob(['audio']), hostedTranscription: true, marks: [{ id: crypto.randomUUID(), atMs: 1000, type: 'text', text: 'Note', pinNumber: 1, points: [{ x: 10, y: 50 }], target: { selector: '#save', pageUrl: 'https://page.test/secret?token=private' } }] })
 beforeEach(() => {
   vi.clearAllMocks(); mocks.get.mockResolvedValue(undefined)
-  mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'owner-token' } })
+  mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'owner-token', userId: 'owner' } })
   mocks.save.mockResolvedValue(undefined); mocks.upload.mockResolvedValue(undefined)
   mocks.request.mockImplementation(async (_base, path) => {
     if (path === 'recordings') return { recording: { id: crypto.randomUUID(), authorId: 'owner' }, shareId: 'share' }
@@ -185,4 +185,106 @@ it('uses the multipart transport and authenticated per-part signer for R2', asyn
   expect((await syncRecording(input, vi.fn())).cloud!.finalized).toBe(true)
   expect(mocks.request).toHaveBeenCalledWith('https://record-api.test/api', 'recordings/server/upload-parts', 'owner-token', { artifactId: 'artifact', uploadId: 'upload', partNumber: 1 })
   expect(mocks.upload).not.toHaveBeenCalled()
+})
+
+it('marks a missing cloud copy deleted, preserves local media, and never recreates it automatically', async () => {
+  const input = local(), manifest = await recordingManifest(input), changed = vi.fn()
+  input.cloud = { id: 'deleted', authorId: 'owner', shareId: 'old-link', manifest, uploads: {}, finalized: true }
+  mocks.request.mockRejectedValue(Object.assign(new Error('Missing'), { status: 404, code: 'record_not_found' }))
+  const result = await syncRecording(input, changed)
+  expect(result.cloud).toMatchObject({ deleted: true, shareId: null })
+  expect(result.screenBlob).toBe(input.screenBlob)
+  expect(changed).toHaveBeenCalledWith(result)
+  expect(mocks.save).toHaveBeenCalledWith(result)
+  mocks.get.mockResolvedValue(result); mocks.request.mockClear()
+  await syncRecording(input, changed)
+  expect(mocks.request).not.toHaveBeenCalled()
+})
+
+it('preserves the replacement owner across a lost create response, account changes and retry', async () => {
+  const input = local(), manifest = await recordingManifest(input)
+  input.cloud = { id: 'deleted', authorId: 'owner', shareId: null, manifest, uploads: {}, finalized: true, deleted: true }
+  mocks.request.mockRejectedValueOnce(new Error('Lost create response'))
+  await expect(syncRecording(input, vi.fn(), true)).rejects.toThrow('Lost create response')
+  const staged = mocks.save.mock.calls[0][0] as LocalRecording
+  expect(staged.cloud).toBeUndefined()
+  expect(staged.cloudUploadOwnerId).toBe('owner')
+  expect(staged.cloudClientKey).toBeTruthy()
+  expect(staged.cloudClientKey).not.toBe(input.id)
+  expect(staged.screenBlob).toBe(input.screenBlob)
+  mocks.get.mockResolvedValue(staged)
+  const savesBeforeSwitch = mocks.save.mock.calls.length
+  for (const userId of ['account-b', undefined]) {
+    mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'other-account-token', userId } })
+    await expect(syncRecording(input, vi.fn())).rejects.toThrow('account that uploaded')
+    await expect(syncRecording(input, vi.fn(), true)).rejects.toThrow('account that uploaded')
+    expect(mocks.request).toHaveBeenCalledTimes(1)
+    expect(mocks.save).toHaveBeenCalledTimes(savesBeforeSwitch)
+    expect(staged.cloudUploadOwnerId).toBe('owner')
+  }
+  mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'owner-token', userId: 'owner' } })
+  mocks.request.mockImplementation(async (_base, path) => path === 'recordings' ? { recording: { id: 'replacement', authorId: 'owner' }, shareId: 'new-link' } : {})
+  const result = await syncRecording(input, vi.fn())
+  const creates = mocks.request.mock.calls.filter(call => call[1] === 'recordings')
+  expect(creates).toHaveLength(2)
+  expect(creates.map(call => call[3].clientKey)).toEqual([staged.cloudClientKey, staged.cloudClientKey])
+  expect(result.cloud).toMatchObject({ id: 'replacement', shareId: 'new-link', finalized: true })
+  expect(mocks.request.mock.calls.some(call => call[1].includes('/deleted'))).toBe(false)
+})
+
+it.each([new Error('Offline'), Object.assign(new Error('Denied'), { status: 403, code: 'record_forbidden' }), Object.assign(new Error('Unknown route'), { status: 404 }), Object.assign(new Error('Other failure'), { status: 404, code: 'other' }), null])('does not treat other errors as cloud deletion: %j', async error => {
+  expect(isMissingCloudRecording(error)).toBe(false)
+  const input = local(), manifest = await recordingManifest(input)
+  input.cloud = { id: 'server', authorId: 'owner', shareId: 'kept', manifest, uploads: {}, finalized: true }
+  mocks.request.mockRejectedValue(error)
+  await expect(syncRecording(input, vi.fn())).rejects.toBe(error)
+  expect(mocks.save).not.toHaveBeenCalled()
+  expect(input.cloud.shareId).toBe('kept')
+})
+
+it('does not create a replacement if persisting its new upload key fails', async () => {
+  const input = local(), manifest = await recordingManifest(input)
+  input.cloud = { id: 'deleted', authorId: 'owner', shareId: null, manifest, uploads: {}, finalized: true, deleted: true }
+  mocks.save.mockRejectedValueOnce(new Error('Disk full'))
+  await expect(syncRecording(input, vi.fn(), true)).rejects.toThrow('Disk full')
+  expect(mocks.request).not.toHaveBeenCalled()
+  expect(input.cloud.id).toBe('deleted')
+  expect(input.screenBlob!.size).toBeGreaterThan(0)
+})
+
+it('preserves account A’s cloud copy while signed into B and resumes it after switching back to A', async () => {
+  const input = local()
+  mocks.request.mockResolvedValue({ recording: { id: 'account-a-recording', authorId: 'owner' }, shareId: 'account-a-share' })
+  const uploaded = await syncRecording(input, vi.fn())
+  expect(uploaded.cloud!.finalized).toBe(true)
+  mocks.get.mockResolvedValue(uploaded)
+  mocks.request.mockClear(); mocks.save.mockClear()
+  mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'account-b-token', userId: 'account-b' } })
+  // The owner endpoint hides ownership mismatches behind the same missing-record
+  // error as deletion. It must never be used as deletion evidence for account B.
+  mocks.request.mockRejectedValue(Object.assign(new Error('Missing'), { status: 404, code: 'record_not_found' }))
+  const changed = vi.fn()
+  await expect(syncRecording(input, changed)).rejects.toThrow('account that uploaded')
+  expect(mocks.request).not.toHaveBeenCalled()
+  expect(mocks.save).not.toHaveBeenCalled()
+  expect(changed).not.toHaveBeenCalled()
+  expect(uploaded.cloud).toMatchObject({ id: 'account-a-recording', shareId: 'account-a-share', finalized: true })
+  expect(uploaded.cloud!.deleted).toBeUndefined()
+  mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'account-a-token', userId: 'owner' } })
+  mocks.request.mockResolvedValue({})
+  const restored = await syncRecording(input, changed)
+  expect(restored.cloud).toBe(uploaded.cloud)
+  expect(mocks.request).toHaveBeenCalledExactlyOnceWith('https://record-api.test/api', 'recordings/account-a-recording', 'account-a-token', undefined)
+  expect(mocks.save).not.toHaveBeenCalled()
+})
+
+it.each(['account-b', undefined])('does not replace a deleted cloud copy under a different or unknown account (%s)', async userId => {
+  const input = local(), manifest = await recordingManifest(input)
+  input.cloud = { id: 'deleted', authorId: 'owner', shareId: null, manifest, uploads: {}, finalized: true, deleted: true }
+  mocks.auth.mockResolvedValue({ ok: true, data: { accessToken: 'other-token', userId } })
+  await expect(syncRecording(input, vi.fn(), true)).rejects.toThrow('account that uploaded')
+  expect(mocks.request).not.toHaveBeenCalled()
+  expect(mocks.save).not.toHaveBeenCalled()
+  expect(input.cloud.id).toBe('deleted')
+  expect(input.cloudClientKey).toBeUndefined()
 })

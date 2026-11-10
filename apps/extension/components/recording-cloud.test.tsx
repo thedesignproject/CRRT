@@ -3,7 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { LocalRecording } from '../lib/recording'
 const mocks = vi.hoisted(() => ({ sync: vi.fn(), playback: vi.fn(), request: vi.fn(), send: vi.fn(), save: vi.fn() }))
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage: mocks.send } } }))
-vi.mock('../lib/recording-cloud', () => ({ syncRecording: mocks.sync, readRecordingPlayback: mocks.playback, ownerRecordRequest: mocks.request }))
+vi.mock('../lib/recording-cloud', () => ({ isMissingCloudRecording: (error: unknown) => error instanceof Error && 'code' in error && error.code === 'record_not_found', syncRecording: mocks.sync, readRecordingPlayback: mocks.playback, ownerRecordRequest: mocks.request }))
 vi.mock('../lib/recording-store', () => ({ saveLocalRecording: mocks.save }))
 import { RecordingAgentContext, RecordingCloud } from './recording-cloud'
 const recording = (finalized?: boolean): LocalRecording => ({ id: 'local', title: 'Video', source: 'tab', authorName: 'You', createdAt: 'now', status: 'ready', transcriptionStatus: 'processing', durationMs: 1000, marks: [], transcript: [], ...(finalized === undefined ? {} : { cloud: { id: 'remote', authorId: 'owner', shareId: 'capability', manifest: { version: 'record.v1', artifacts: [], events: [], durationMs: 1000 }, uploads: {}, finalized } }) })
@@ -160,4 +160,33 @@ it('surfaces backend entitlement and clipboard failures', async () => {
   vi.mocked(navigator.clipboard.writeText).mockRejectedValue(new Error('denied'))
   fireEvent.click(await screen.findByRole('button', { name: 'Copy for agent' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Copy failed')
+})
+
+it('keeps deleted captures local until an explicit fresh upload and hides stale sharing and agent actions', async () => {
+  const deleted = { ...recording(true), cloud: { ...recording(true).cloud!, deleted: true, shareId: null } }
+  mocks.sync.mockResolvedValue(deleted)
+  const changed = vi.fn(), view = render(<RecordingCloud recording={deleted} changed={changed} />)
+  expect(await screen.findByText('Cloud recording deleted')).toBeInTheDocument()
+  await waitFor(() => expect(mocks.sync).toHaveBeenCalledWith(deleted, changed, false))
+  expect(mocks.playback).not.toHaveBeenCalled()
+  expect(screen.queryByRole('button', { name: 'Copy share link' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Upload again' }))
+  await waitFor(() => expect(mocks.sync).toHaveBeenCalledWith(deleted, changed, true))
+  view.unmount()
+  render(<RecordingAgentContext recording={deleted} />)
+  expect(screen.getByRole('button', { name: 'Generate agent context' })).toBeDisabled()
+})
+
+it('detects cloud deletion during playback polling and clears obsolete playback', async () => {
+  const original = recording(true)
+  const deleted = { ...original, cloud: { ...original.cloud!, deleted: true, shareId: null } }
+  mocks.sync.mockImplementation(async (_input, changed) => { changed(deleted); return deleted })
+  mocks.playback.mockRejectedValue(Object.assign(new Error('Missing'), { code: 'record_not_found' }))
+  const changed = vi.fn()
+  const view = render(<RecordingCloud recording={original} changed={changed} />)
+  await waitFor(() => expect(mocks.sync).toHaveBeenCalledTimes(2))
+  expect(changed).toHaveBeenCalledWith(deleted)
+  view.rerender(<RecordingCloud recording={deleted} changed={changed} />)
+  expect(screen.getByText('Cloud recording deleted')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Copy share link' })).toBeNull()
 })

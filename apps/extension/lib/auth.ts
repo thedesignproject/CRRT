@@ -5,7 +5,7 @@ export type AuthMessage =
   | { type: 'auth:get' }
   | { type: 'auth:sign-out' }
 
-export type SessionSummary = { accessToken: string; email: string }
+export type SessionSummary = { accessToken: string; email: string; userId: string }
 
 const activeAuthOperations = new WeakSet<SupabaseClient>()
 
@@ -36,7 +36,7 @@ const extensionStorage: SupportedStorage = {
 
 function summarize(session: Session | null): SessionSummary | null {
   if (!session?.user.email) return null
-  return { accessToken: session.access_token, email: session.user.email }
+  return { accessToken: session.access_token, email: session.user.email, userId: session.user.id }
 }
 
 export function createExtensionSupabase() {

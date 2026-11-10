@@ -78,6 +78,8 @@ export type LocalRecording = {
   audioBlob?: Blob
   thumbnailDataUrl?: string
   hostedTranscription?: boolean
+  cloudClientKey?: string
+  cloudUploadOwnerId?: string
   cloud?: import('./recording-cloud').CloudRecording
 }
 

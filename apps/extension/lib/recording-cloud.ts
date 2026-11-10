@@ -1,4 +1,5 @@
 import { browser } from 'wxt/browser'
+import type { SessionSummary } from './auth'
 import { artifactSchema, manifestSchema, type Manifest } from '../../../shared/record/contracts'
 import { recordRequest, type RecordingPlayback, type RecordingSummary } from '../../../shared/record/client'
 import { boundedRecordingPoints, normalizeRecordingTitle, type LocalRecording } from './recording'
@@ -9,13 +10,16 @@ import { uploadMultipart, type MultipartAuthorization } from './recording-multip
 
 export type CloudRecording = {
   id: string; shareId: string | null; authorId: string; manifest: Manifest
-  uploads: Record<string, UploadCheckpoint>; finalized?: boolean
+  uploads: Record<string, UploadCheckpoint>; finalized?: boolean; deleted?: boolean
 }
 export const recordingApi = import.meta.env.WXT_API_BASE
-export async function recordingToken() {
+async function recordingSession() {
   const response = await browser.runtime.sendMessage({ type: 'auth:get' })
   if (!response?.ok || !response.data?.accessToken) throw new Error('Sign in to CRRT to upload recordings.')
-  return response.data.accessToken as string
+  return response.data as SessionSummary
+}
+export async function recordingToken() {
+  return (await recordingSession()).accessToken
 }
 export async function ownerRecordRequest<T>(path: string, body?: unknown, method?: string) {
   return recordRequest<T>(recordingApi, path, await recordingToken(), body, method)
@@ -39,24 +43,38 @@ export async function recordingManifest(recording: LocalRecording): Promise<Mani
 // One upload per recording in this document. Durable checkpoints survive reloads;
 // a Web Lock also serializes other recorder windows in Chrome.
 const active = new Map<string, Promise<LocalRecording>>()
-export function syncRecording(recording: LocalRecording, changed: (recording: LocalRecording) => void) {
+export function syncRecording(recording: LocalRecording, changed: (recording: LocalRecording) => void, reupload = false) {
   const existing = active.get(recording.id)
   if (existing) return existing
-  const run = async () => sync(await getLocalRecording(recording.id) || recording, changed)
+  const run = async () => sync(await getLocalRecording(recording.id) || recording, changed, reupload)
   const task = (navigator.locks ? navigator.locks.request(`crrt-record-upload:${recording.id}`, run) : run()).finally(() => active.delete(recording.id))
   active.set(recording.id, task)
   return task
 }
-async function sync(input: LocalRecording, changed: (recording: LocalRecording) => void) {
+async function sync(input: LocalRecording, changed: (recording: LocalRecording) => void, reupload: boolean) {
   let recording = input
-  const token = await recordingToken()
+  const session = await recordingSession()
+  const token = session.accessToken
+  // Owner reads intentionally hide both missing and other-account records with
+  // the same 404. Never persist deletion or replace an upload across accounts.
+  const uploadOwnerId = recording.cloud?.authorId ?? recording.cloudUploadOwnerId
+  if (uploadOwnerId && session.userId !== uploadOwnerId) {
+    throw new Error('Sign in to the account that uploaded this recording to manage its cloud copy.')
+  }
   const request = <T>(path: string, body?: unknown) => recordRequest<T>(recordingApi, path, token, body)
   const persist = async () => { recording = { ...recording }; await saveLocalRecording(recording); changed(recording) }
+  if (recording.cloud?.deleted) {
+    if (!reupload) { changed(recording); return recording }
+    // Persist the new key and owner before creating, so retries after a lost
+    // response stay bound to the same account and replacement recording.
+    recording = { ...recording, cloud: undefined, cloudClientKey: crypto.randomUUID(), cloudUploadOwnerId: recording.cloud.authorId }
+    await persist()
+  }
   if (!recording.cloud) {
     recording = { ...recording, title: normalizeRecordingTitle(recording.title) }
     const manifest = await recordingManifest(recording)
     const created = await request<{ recording: RecordingSummary; shareId: string | null }>('recordings', {
-      clientKey: recording.id, title: recording.title, source: recording.source,
+      clientKey: recording.cloudClientKey || recording.id, title: recording.title, source: recording.source,
       consent: { policyVersion: 'record-v1', hostedTranscription: recording.hostedTranscription === true, provider: 'deepgram', language: 'multi' },
     })
     recording = { ...recording, cloud: { id: created.recording.id, authorId: created.recording.authorId, shareId: created.shareId, manifest, uploads: {} } }
@@ -70,7 +88,13 @@ async function sync(input: LocalRecording, changed: (recording: LocalRecording) 
     cloud.manifest = compactRecordingManifest(cloud.manifest)
     await persist()
   }
-  await request(`recordings/${cloud.id}`)
+  try { await request(`recordings/${cloud.id}`) }
+  catch (error) {
+    if (!isMissingCloudRecording(error)) throw error
+    recording = { ...recording, cloud: { ...cloud, deleted: true, shareId: null } }
+    await persist()
+    return recording
+  }
   if (!cloud.finalized) {
     for (const artifact of cloud.manifest.artifacts) {
       const checkpoint = cloud.uploads[artifact.id] ??= {}
@@ -93,3 +117,7 @@ async function sync(input: LocalRecording, changed: (recording: LocalRecording) 
   return recording
 }
 export const readRecordingPlayback = (id: string) => ownerRecordRequest<RecordingPlayback>(`recordings/${id}/playback`)
+
+export function isMissingCloudRecording(error: unknown) {
+  return error instanceof Error && 'status' in error && error.status === 404 && 'code' in error && error.code === 'record_not_found'
+}

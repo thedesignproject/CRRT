@@ -45,12 +45,12 @@ describe('extension auth', () => {
   })
 
   it('gets and signs out while returning safe session summaries', async () => {
-    const session = { access_token: 'token', user: { email: 'u@example.com' } }
+    const session = { access_token: 'token', user: { id: 'user-1', email: 'u@example.com' } }
     const client = { auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session }, error: null }),
       signOut: vi.fn().mockResolvedValue({ error: null }),
     } }
-    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
+    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com', userId: 'user-1' })
     await expect(handleAuthMessage(client as never, { type: 'auth:sign-out' })).resolves.toBeNull()
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
     client.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null })
@@ -71,15 +71,15 @@ describe('extension auth', () => {
 
   it('allows concurrent widget session reads without reporting a competing sign-in', async () => {
     let finishRead!: (value: unknown) => void
-    const session = { access_token: 'token', user: { email: 'u@example.com' } }
+    const session = { access_token: 'token', user: { id: 'user-1', email: 'u@example.com' } }
     const result = { data: { session }, error: null }
     const client = { auth: { getSession: vi.fn()
       .mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve }))
       .mockResolvedValue(result),
     } }
     const first = handleAuthMessage(client as never, { type: 'auth:get' })
-    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
+    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com', userId: 'user-1' })
     finishRead(result)
-    await expect(first).resolves.toEqual({ accessToken: 'token', email: 'u@example.com' })
+    await expect(first).resolves.toEqual({ accessToken: 'token', email: 'u@example.com', userId: 'user-1' })
   })
 })

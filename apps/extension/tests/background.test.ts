@@ -438,7 +438,7 @@ describe('extension background', () => {
   it('routes auth, activation, unknown messages, and failures', async () => {
     ;(background as unknown as () => void)()
     vi.mocked(isAuthMessage).mockReturnValueOnce(true)
-    vi.mocked(handleAuthMessage).mockResolvedValueOnce({ email: 'u@example.com', accessToken: 't' })
+    vi.mocked(handleAuthMessage).mockResolvedValueOnce({ email: 'u@example.com', accessToken: 't', userId: 'user-1' })
     await expect(send({ type: 'auth:get' })).resolves.toMatchObject({ ok: true })
 
     vi.mocked(isAuthMessage).mockReturnValue(false)
@@ -455,9 +455,9 @@ describe('extension background', () => {
 
   it('runs hosted authentication in the background', async () => {
     ;(background as unknown as () => void)()
-    vi.mocked(startHostedSignIn).mockResolvedValueOnce({ email: 'u@example.com', accessToken: 'token' })
+    vi.mocked(startHostedSignIn).mockResolvedValueOnce({ email: 'u@example.com', accessToken: 'token', userId: 'user-1' })
     await expect(send({ type: 'auth:hosted-sign-in', intent: 'signup' })).resolves.toEqual({
-      ok: true, data: { email: 'u@example.com', accessToken: 'token' },
+      ok: true, data: { email: 'u@example.com', accessToken: 'token', userId: 'user-1' },
     })
     expect(startHostedSignIn).toHaveBeenCalledWith('client', 'signup')
   })

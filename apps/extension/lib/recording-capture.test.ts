@@ -310,3 +310,27 @@ it('records video only when neither the window nor microphone supplies audio', a
   expect(result.audioBlob).toBeUndefined()
   expect(silentDestination.getAudioTracks()[0]!.stop).toHaveBeenCalledOnce()
 })
+
+it('does not resume encoders when a late pause discovers the expired capture limit', async () => {
+  vi.useFakeTimers()
+  const now = vi.spyOn(performance, 'now').mockReturnValue(0)
+  const resumed = vi.spyOn(FakeRecorder.prototype, 'resume')
+  const onLimitReached = vi.fn()
+  class Audio {
+    createMediaStreamDestination() { return { stream: stream() } }
+    close = vi.fn()
+  }
+  const capture = await startRecordingCapture({ source: 'window', cameraEnabled: false, microphoneEnabled: false, onLimitReached }, {
+    mediaDevices: { getDisplayMedia: vi.fn().mockResolvedValue(stream(0, 1)) } as unknown as MediaDevices,
+    MediaRecorder: FakeRecorder as unknown as typeof MediaRecorder,
+    AudioContext: Audio as unknown as typeof AudioContext,
+    MediaStream: FakeMediaStream as unknown as typeof MediaStream,
+  })
+  now.mockReturnValue(300_001)
+  capture.pause()
+  capture.resume()
+  expect(onLimitReached).toHaveBeenCalledOnce()
+  expect(resumed).not.toHaveBeenCalled()
+  await capture.stop()
+  now.mockRestore(); resumed.mockRestore()
+})

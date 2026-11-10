@@ -168,9 +168,9 @@ export async function startRecordingCapture(
         return tracks.length > 0
       },
       pause: () => { deadline.pause(); apply('pause') },
-      resume: () => { apply('resume'); deadline.resume() },
+      resume: () => { if (deadline.resume()) apply('resume') },
       stop: () => stopping ??= (async () => {
-        deadline.pause()
+        deadline.stop()
         try {
           const [screenBlob, cameraBlob, audioBlob] = await Promise.all([primary.stop(), camera?.stop(), audio?.stop()])
           if (!screenBlob.size) throw new Error('No video was captured. Start a new recording and keep the selected window visible.')

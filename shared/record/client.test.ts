@@ -20,3 +20,8 @@ it('handles non-JSON failures', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('Unavailable', { status: 503 })))
   await expect(recordRequest('/api', 'recordings', null)).rejects.toThrow('503')
 })
+
+it('preserves structured missing-record errors for owner recovery without treating other failures as deletion', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(Response.json({ error: { code: 'record_not_found' } }, { status: 404 })))
+  await expect(recordRequest('/api', 'recordings/deleted', 'owner')).rejects.toMatchObject({ status: 404, code: 'record_not_found', message: expect.stringContaining('unavailable') })
+})
