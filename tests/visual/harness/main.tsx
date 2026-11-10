@@ -6,6 +6,7 @@ import '@fontsource-variable/figtree/wght.css'
 import '@fontsource/vt323/latin.css'
 import '../../../src/design-system/styles.css'
 import '../../../apps/landing/landing-shell.css'
+import './freeze-hero.css'
 import tokens from '../../../branding/crrt/tokens.css?raw'
 const style = document.createElement('style')
 style.textContent = tokens.replace(/@import\s+url\([^)]*\)\s*;/g, '')
