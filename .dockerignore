@@ -1,0 +1,10 @@
+.git
+node_modules
+.env*
+artifacts
+coverage
+dist
+.vercel
+.workflow-data
+supabase/.temp
+*.log

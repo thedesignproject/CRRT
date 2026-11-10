@@ -5,6 +5,7 @@ const rows = new Map<string, unknown>()
 let openFailure = false
 let requestFailure = false
 let transactionFailure = false
+let transactionAbort = false
 
 function request(result?: unknown, error?: Error) {
   const value: Record<string, unknown> = { result, error: error ?? null, onsuccess: null, onerror: null }
@@ -27,8 +28,8 @@ const database = {
   createObjectStore: vi.fn(), close: vi.fn(),
   transaction: vi.fn(() => {
     const tx: Record<string, unknown> = { objectStore: () => objectStore, oncomplete: null, onerror: null, error: new Error('transaction failed') }
-    queueMicrotask(() => {
-      const handler = transactionFailure ? tx.onerror : tx.oncomplete
+    setTimeout(() => {
+      const handler = transactionAbort ? tx.onabort : transactionFailure ? tx.onerror : tx.oncomplete
       if (typeof handler === 'function') handler({})
     })
     return tx
@@ -70,4 +71,11 @@ it('reports database, request, and transaction failures', async () => {
   await expect(store.getLocalRecording('x')).rejects.toThrow('get failed')
   requestFailure = false; transactionFailure = true
   await expect(store.getLocalRecording('x')).rejects.toThrow('transaction failed')
+})
+
+it('rejects an aborted transaction instead of reporting a durable save', async () => {
+  const store = await import('./recording-store')
+  transactionAbort = true
+  await expect(store.getLocalRecording('x')).rejects.toThrow('interrupted')
+  transactionAbort = false
 })

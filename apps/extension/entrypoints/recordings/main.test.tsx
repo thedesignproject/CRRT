@@ -1,33 +1,37 @@
 import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ sendMessage: vi.fn(), listRecordings: vi.fn() }))
+const mocks = vi.hoisted(() => ({ sendMessage: vi.fn(), listRecordings: vi.fn(), cloudList: vi.fn() }))
 vi.mock('wxt/browser', () => ({ browser: { runtime: {
   sendMessage: mocks.sendMessage,
   getURL: (path: string) => `chrome-extension://test${path}`,
 } } }))
+vi.mock('../../lib/recording-cloud', () => ({ ownerRecordRequest: mocks.cloudList }))
 vi.mock('../../lib/recording-store', () => ({ listLocalRecordings: mocks.listRecordings }))
 
 beforeEach(() => {
   vi.resetModules(); vi.clearAllMocks()
   document.body.innerHTML = '<div id="root"></div>'
   mocks.listRecordings.mockResolvedValue([])
+  mocks.cloudList.mockResolvedValue({ recordings: [], next: null })
+  vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5177/dashboard/')
   mocks.sendMessage.mockResolvedValue({ ok: true })
 })
 
-it('renders and filters demo recordings and launches a new capture', async () => {
+it('renders the real library and launches a new capture', async () => {
   await import('./main')
   expect(await screen.findByRole('heading', { name: 'Recordings' })).toBeInTheDocument()
-  expect(screen.getAllByText('Sent to Claude Code')).toHaveLength(2)
-  fireEvent.click(screen.getByRole('button', { name: 'Mine' }))
-  expect(screen.getByText('Empty states pass with the agent')).toBeInTheDocument()
   expect(screen.queryByText('Checkout: pay button barely readable')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'From clients' }))
-  expect(screen.getByText('Pricing page review before Friday')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Live sessions' }))
-  expect(screen.getByText('Live session')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /New recording/ }))
   expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'record:open' })
+})
+
+it('links uploaded captures to the owner player and paginates the server library', async () => {
+  mocks.cloudList.mockResolvedValueOnce({ recordings: [{ id: 'cloud', title: 'Uploaded capture', state: 'ready', markCount: 1 }], next: 'cloud' }).mockResolvedValueOnce({ recordings: [], next: null })
+  await import('./main')
+  expect(await screen.findByRole('link', { name: /Uploaded capture/ })).toHaveAttribute('href', 'http://127.0.0.1:5177/dashboard/recording?id=cloud')
+  fireEvent.click(screen.getByRole('button', { name: 'Load more recordings' }))
+  expect(mocks.cloudList).toHaveBeenCalledWith('recordings?before=cloud')
 })
 
 it('shows local captures in All and Mine but not client filters', async () => {
@@ -50,10 +54,7 @@ it('shows local captures in All and Mine but not client filters', async () => {
   expect(screen.getByText('Transcript failed')).toBeInTheDocument()
   expect(screen.getByText('Transcribing')).toBeInTheDocument()
   expect(screen.getByText('Ready')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Mine' }))
-  expect(screen.getByText('Local checkout')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'From clients' }))
-  expect(screen.queryByText('Local checkout')).toBeNull()
+
 })
 
 it.each([{ ok: false, error: 'Open failed' }, { ok: false }, undefined, 'rejected'])('shows launcher failures instead of ignoring them: %j', async (failure) => {

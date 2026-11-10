@@ -69,6 +69,11 @@ button:disabled { cursor: not-allowed; opacity: .36 }
 .start:hover { background: var(--crrt-carrot-deep) }
 .start kbd { padding: 4px 6px; border: 1px solid rgba(255,255,255,.2); border-radius: var(--crrt-radius-md); font: 9px var(--crrt-font-mono) }
 .setup-error { margin: 0 16px 12px; color: var(--crrt-phosphor); font-size: 11px }
+.setup-consent { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 8px; margin: 0 16px 16px; color: var(--crrt-ink-faint); font-size: 12px; line-height: 1.5; cursor: pointer; }
+.setup-consent input { appearance: auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--crrt-carrot); cursor: pointer; }
+.setup-consent input:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 3px; }
+.setup-consent strong { display: block; color: var(--crrt-white); font-size: 12px; font-weight: 500; }
+.setup-consent small { display: block; margin-top: 2px; font-size: 11px; }
 .annotation-layer { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; pointer-events: none }
 .record-surface:not(.tool-pointer) .annotation-layer { pointer-events: auto; cursor: crosshair }
 .transcript-chip { position: absolute; left: 50%; bottom: 80px; display: flex; align-items: center; gap: 7px; max-width: min(560px, calc(100vw - 340px)); min-height: 34px; padding: 7px 10px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-lg); background: rgba(24,24,24,.94); box-shadow: var(--crrt-shadow-pill); font-size: 11px; transform: translateX(-50%); backdrop-filter: blur(16px); pointer-events: auto }

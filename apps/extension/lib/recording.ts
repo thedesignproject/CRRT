@@ -6,6 +6,32 @@ export const RECORDING_MARK_VISIBLE_MS = 3_000
 export const RECORDING_MARK_FADE_MS = 250
 
 export type RecordingPoint = { x: number; y: number }
+export const MAX_RECORDING_MARKS = 500
+export const MAX_RECORDING_MARK_POINTS = 2048
+export const MAX_RECORDING_MARK_BYTES = 600_000
+export const MAX_RECORDING_NOTE_LENGTH = 2000
+export function normalizeRecordingTitle(value?: string) {
+  return value?.trim().slice(0, 240).replace(/[\uD800-\uDBFF]$/, '').trim() || 'Untitled recording'
+}
+export function captureRecordingTitle(marks: RecordingMark[], pageTitle?: string) {
+  return normalizeRecordingTitle(marks[0]?.text?.trim() || pageTitle)
+}
+export type RecordingStroke = { points: RecordingPoint[]; stride: number; seen: number }
+export function appendRecordingStroke(stroke: RecordingStroke, point: RecordingPoint): RecordingStroke {
+  // Keep samples on a fixed stride across the whole stroke plus its current
+  // endpoint. Double that stride only when the sample buffer becomes full.
+  const retained = stroke.seen > 0 && (stroke.seen - 1) % stroke.stride !== 0 ? stroke.points.slice(0, -1) : stroke.points
+  const points = [...retained, point]
+  return points.length > MAX_RECORDING_MARK_POINTS
+    ? { points: points.filter((_, i) => i % 2 === 0), stride: stroke.stride * 2, seen: stroke.seen + 1 }
+    : { points, stride: stroke.stride, seen: stroke.seen + 1 }
+}
+// Preserve the start/end and an evenly spaced representation of long strokes.
+// This also repairs older locally staged recordings before manifest validation.
+export function boundedRecordingPoints(points: RecordingPoint[], maxPoints = MAX_RECORDING_MARK_POINTS) {
+  if (points.length <= maxPoints) return points
+  return Array.from({ length: maxPoints }, (_, i) => points[Math.round(i * (points.length - 1) / (maxPoints - 1))]!)
+}
 
 export type RecordingMark = {
   id: string
@@ -49,6 +75,8 @@ export type LocalRecording = {
   cameraBlob?: Blob
   audioBlob?: Blob
   thumbnailDataUrl?: string
+  hostedTranscription?: boolean
+  cloud?: import('./recording-cloud').CloudRecording
 }
 
 export type RecorderState = {
@@ -56,6 +84,7 @@ export type RecorderState = {
   source: RecordingSource
   cameraEnabled: boolean
   microphoneEnabled: boolean
+  hostedTranscription: boolean
   countdown: number
   startedAt: number | null
   pausedAt: number | null
@@ -64,12 +93,15 @@ export type RecorderState = {
   tool: RecordingTool
   marks: RecordingMark[]
   error: string | null
+  annotationLimitReached?: boolean
+  annotationError?: string | null
 }
 
 export type RecorderAction =
   | { type: 'source.changed'; source: RecordingSource }
   | { type: 'camera.toggled' }
   | { type: 'microphone.toggled' }
+  | { type: 'transcription.toggled' }
   | { type: 'countdown.started'; seconds?: number }
   | { type: 'countdown.ticked' }
   | { type: 'recording.started'; now: number }
@@ -90,6 +122,7 @@ export const initialRecorderState: RecorderState = {
   source: 'tab',
   cameraEnabled: true,
   microphoneEnabled: true,
+  hostedTranscription: false,
   countdown: 3,
   startedAt: null,
   pausedAt: null,
@@ -116,12 +149,15 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
         : state
     case 'microphone.toggled':
       return state.status === 'setup' || state.status === 'failed' ? { ...state, microphoneEnabled: !state.microphoneEnabled } : state
+    case 'transcription.toggled':
+      return state.status === 'setup' || state.status === 'failed' ? { ...state, hostedTranscription: !state.hostedTranscription } : state
     case 'countdown.started':
       return state.status === 'setup' || state.status === 'failed' ? {
         ...initialRecorderState,
         source: state.source,
         cameraEnabled: state.cameraEnabled,
         microphoneEnabled: state.microphoneEnabled,
+        hostedTranscription: state.hostedTranscription,
         status: 'countdown', countdown: action.seconds ?? 3,
       } : state
     case 'countdown.ticked':
@@ -140,12 +176,17 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
       return state.status === 'recording' ? { ...state, durationMs: elapsed(state, action.now) } : state
     case 'tool.changed':
       return state.status === 'recording' || state.status === 'paused' ? { ...state, tool: action.tool } : state
-    case 'mark.added':
-      return state.status === 'recording' ? { ...state, marks: [...state.marks, action.mark] } : state
+    case 'mark.added': {
+      if (state.status !== 'recording' || state.marks.length >= MAX_RECORDING_MARKS) return state
+      if (action.mark.text && action.mark.text.length > MAX_RECORDING_NOTE_LENGTH) return { ...state, annotationError: 'Notes can contain up to 2,000 characters. Shorten the note and try again.' }
+      const marks = [...state.marks, { ...action.mark, points: boundedRecordingPoints(action.mark.points) }]
+      if (new TextEncoder().encode(JSON.stringify(marks)).length > MAX_RECORDING_MARK_BYTES) return { ...state, annotationLimitReached: true, annotationError: null }
+      return { ...state, marks, annotationLimitReached: false, annotationError: null }
+    }
     case 'mark.undone':
-      return state.status === 'recording' || state.status === 'paused' ? { ...state, marks: state.marks.slice(0, -1) } : state
+      return state.status === 'recording' || state.status === 'paused' ? { ...state, marks: state.marks.slice(0, -1), annotationLimitReached: false, annotationError: null } : state
     case 'marks.cleared':
-      return state.status === 'recording' || state.status === 'paused' ? { ...state, marks: [] } : state
+      return state.status === 'recording' || state.status === 'paused' ? { ...state, marks: [], annotationLimitReached: false, annotationError: null } : state
     case 'recording.finished':
       return state.status === 'recording' || state.status === 'paused'
         ? { ...state, status: 'processing', durationMs: elapsed(state, action.now), pausedAt: null, tool: 'pointer' }
@@ -155,7 +196,7 @@ export function recorderReducer(state: RecorderState, action: RecorderAction): R
     case 'recording.failed':
       return { ...state, status: 'failed', error: action.message }
     case 'recording.restarted':
-      return { ...initialRecorderState, source: state.source, cameraEnabled: state.cameraEnabled, microphoneEnabled: state.microphoneEnabled }
+      return { ...initialRecorderState, source: state.source, cameraEnabled: state.cameraEnabled, microphoneEnabled: state.microphoneEnabled, hostedTranscription: state.hostedTranscription }
     default:
       return state
   }

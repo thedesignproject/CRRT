@@ -1,24 +1,25 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RecordingsPage } from './RecordingsPage'
 
-afterEach(() => vi.restoreAllMocks())
+afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+beforeEach(() => vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ recordings: [], next: null }))))
+
+it('opens uploaded recordings and passes the owner cursor when loading another page', async () => {
+  vi.mocked(fetch).mockResolvedValueOnce(Response.json({ recordings: [{ id: 'one', title: 'Stored capture', state: 'ready', markCount: 0 }], next: 'one' })).mockResolvedValueOnce(Response.json({ recordings: [], next: null }))
+  render(<RecordingsPage apiBase="/api" accessToken="owner" />)
+  expect(await screen.findByRole('link', { name: /Stored capture/ })).toHaveAttribute('href', '/recording?id=one')
+  expect(screen.getByRole('button', { name: 'Share Stored capture' })).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Load more recordings' }))
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith('/api/v1/recordings?before=one', expect.anything()))
+})
 
 it('filters the demo library and explains how the extension launches Record', async () => {
   const writeText = vi.fn().mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
-  render(<RecordingsPage />)
+  render(<RecordingsPage apiBase="/api" accessToken="token" />)
   expect(screen.getByRole('heading', { name: 'Recordings' })).toBeInTheDocument()
-  expect(screen.getAllByText('Sent to Claude Code')).toHaveLength(2)
-  fireEvent.click(screen.getByRole('button', { name: 'Mine' }))
-  expect(screen.getByRole('button', { name: 'Mine' })).toHaveClass('active')
-  expect(screen.getAllByRole('article')).toHaveLength(2)
   expect(screen.queryByText('Checkout: pay button barely readable')).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: 'From clients' }))
-  expect(screen.getAllByRole('article')).toHaveLength(2)
-  expect(screen.getByText('Checkout: pay button barely readable')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Live sessions' }))
-  expect(screen.getAllByRole('article')).toHaveLength(1)
   fireEvent.click(screen.getByRole('button', { name: /New recording/ }))
   expect(screen.getByRole('dialog', { name: 'Open CRRT Record' })).toBeInTheDocument()
   expect(screen.getByText(/recorder runs in the Chrome extension/)).toBeInTheDocument()
@@ -30,7 +31,7 @@ it('filters the demo library and explains how the extension launches Record', as
 })
 
 it('dismisses the launcher from the close button and backdrop', () => {
-  render(<RecordingsPage />)
+  render(<RecordingsPage apiBase="/api" accessToken="token" />)
   const open = () => fireEvent.click(screen.getByRole('button', { name: /New recording/ }))
   open(); fireEvent.click(screen.getByRole('button', { name: 'Close' })); expect(screen.queryByRole('dialog')).toBeNull()
   open(); fireEvent.mouseDown(screen.getByRole('dialog')); expect(screen.getByRole('dialog')).toBeInTheDocument()

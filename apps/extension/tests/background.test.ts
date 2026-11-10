@@ -152,14 +152,17 @@ describe('extension background', () => {
     await expect(send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)).resolves.toMatchObject({ ok: true, data: { status: 'setup' } })
     await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }, surface)).resolves.toEqual({ ok: true })
     await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'microphone.toggled' } }, surface)).resolves.toEqual({ ok: true })
+    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'transcription.toggled' } }, surface)).resolves.toEqual({ ok: true })
+    expect((state.session['crrt:recording-session'] as any).snapshot.hostedTranscription).toBe(true)
     await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'start' } }, surface)).resolves.toEqual({ ok: true })
     expect(browser.offscreen.createDocument).toHaveBeenCalledWith(expect.objectContaining({ url: 'chrome-extension://extension-id/offscreen.html' }))
     expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
       type: 'record:offscreen-start', sessionId: descriptor.sessionId, tabStreamId: 'stream-7', pageTitle: 'Checkout',
     }))
 
-    const recording = { ...descriptor.snapshot, status: 'recording', countdown: 0, durationMs: 2_000 }
+    const recording = { ...descriptor.snapshot, hostedTranscription: true, status: 'recording', countdown: 0, durationMs: 2_000 }
     await send({ type: 'record:offscreen-state', target: 'background', sessionId: descriptor.sessionId, snapshot: recording })
+    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'transcription.toggled' } }, surface)).resolves.toMatchObject({ ok: false, error: 'Transcription consent is locked after capture starts.' })
     expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:surface-state', snapshot: recording }), { frameId: 0 })
     await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }, surface)
     expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith({ type: 'record:offscreen-command', target: 'offscreen', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } })
@@ -174,6 +177,11 @@ describe('extension background', () => {
     }))
     await send({ type: 'record:offscreen-restart', target: 'background', sessionId: descriptor.sessionId })
     expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'record:offscreen-start', sessionId: descriptor.sessionId }))
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ snapshot: expect.objectContaining({ hostedTranscription: true, durationMs: 0, marks: [] }) }))
+    const restart = state.session['crrt:recording-session'] as any
+    await send({ type: 'record:offscreen-state', target: 'background', sessionId: descriptor.sessionId, snapshot: { ...restart.snapshot, hostedTranscription: false } })
+    await send({ type: 'record:offscreen-restart', target: 'background', sessionId: descriptor.sessionId })
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ snapshot: expect.objectContaining({ hostedTranscription: false }) }))
     await send({ type: 'record:offscreen-finished', target: 'background', sessionId: descriptor.sessionId, recordingId: 'recording-1' })
     expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining('recording=recording-1') }))
     expect(state.session).not.toHaveProperty('crrt:recording-session')

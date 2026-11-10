@@ -496,9 +496,18 @@
 .recordings-filters { display: flex; gap: 5px; margin: 28px 0 24px; }
 .recordings-filters button { min-height: 30px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--crrt-radius-pill); color: var(--muted-foreground); font-size: 10px; font-weight: 650; }
 .recordings-filters button.active { border-color: var(--foreground); background: var(--foreground); color: var(--background); }
-.recordings-grid { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)); gap: 14px; }
-.recording-card { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--crrt-radius-xl); background: var(--card); }
-.recording-thumb { position: relative; aspect-ratio: 16/9; overflow: hidden; display: grid; place-items: center; background: #ede8df; color: #333; }
+.recordings-grid { display: grid; grid-template-columns: repeat(3, minmax(210px, 1fr)); gap: 24px; margin-top: 28px; }
+.recording-card { display: block; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--crrt-radius-xl); background: var(--card); text-decoration: none; }
+.recording-card:hover { border-color: var(--muted-foreground); }
+.recording-composed-player:fullscreen { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 16px; background: var(--background); }
+.recording-composed-player video::-webkit-media-controls-fullscreen-button { display: none; }
+.recording-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+.recording-thumb { position: relative; aspect-ratio: 16/9; overflow: hidden; display: grid; place-items: center; background: var(--muted); color: var(--muted-foreground); }
+.recording-thumb > img { width: 100%; height: 100%; object-fit: cover; }
+.recording-preview-placeholder { display: grid; justify-items: center; gap: 12px; font-size: 12px; }
+.recording-play { position: absolute; display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--crrt-radius-pill); background: var(--card); color: var(--foreground); opacity: 0; }
+.recording-card:hover .recording-play, .recording-card:focus-visible .recording-play { opacity: 1; }
+.recording-duration { position: absolute; right: 12px; bottom: 12px; padding: 4px 8px; border-radius: var(--crrt-radius-sm); background: var(--foreground); color: var(--background); font: 12px var(--crrt-font-mono); }
 .recording-thumb.blue { background: #dbe2ef; }.recording-thumb.stone { background: #deddd8; }.recording-thumb.orange { background: #d46936; }.recording-thumb.green { background: #315b47; }.recording-thumb.dark { background: #19191b; }
 .recording-wireframe { width: 78%; height: 62%; display: grid; grid-template-columns: 1fr 1.1fr; grid-template-rows: auto 1fr; gap: 7px; }
 .recording-wireframe i { border-radius: 4px; background: rgba(255,255,255,.72); }
@@ -506,11 +515,14 @@
 .recording-thumb > b { position: absolute; right: 10%; bottom: 18%; width: 36%; height: 20%; border: 2px solid #ff573d; border-radius: 50%; transform: rotate(-5deg); }
 .recording-avatar { position: absolute; left: 8px; bottom: 8px; display: grid; place-items: center; width: 25px; height: 25px; border: 2px solid var(--card); border-radius: 50%; background: #29292d; color: white; font-size: 8px; font-weight: 700; }
 .recording-thumb time { position: absolute; right: 7px; bottom: 7px; padding: 3px 5px; border-radius: 4px; background: rgba(0,0,0,.76); color: white; font: 8px var(--crrt-font-mono); }
-.recording-copy { display: grid; gap: 5px; padding: 11px; }
-.recording-copy > strong { overflow: hidden; color: var(--foreground); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.recording-copy > p { margin: 0; color: var(--muted-foreground); font-size: 9px; }
+.recording-copy { display: grid; gap: 12px; padding: 16px; }
+.recording-copy > strong { overflow: hidden; color: var(--foreground); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.recording-copy > p { display: flex; align-items: center; gap: 12px; margin: 0; color: var(--muted-foreground); font-size: 12px; }
 .recording-copy > div { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
-.recording-status { padding: 3px 5px; border-radius: 4px; background: var(--muted); color: var(--muted-foreground); font-size: 8px; font-weight: 650; }
+.recording-status { padding: 4px 8px; border-radius: var(--crrt-radius-sm); background: var(--muted); color: var(--muted-foreground); font-size: 11px; font-weight: 600; }
+.recording-status[data-state="ready"] { background: var(--status-accepted-bg); color: var(--status-accepted); }
+.recording-status[data-state="failed"] { background: var(--destructive); color: var(--primary-foreground); }
+.recordings-load-more { display: block; margin: 24px auto 0; padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--crrt-radius-lg); color: var(--foreground); font-size: 13px; }
 .recording-status.fixed { background: var(--status-accepted-bg); color: var(--status-accepted); }.recording-status.agent-working { background: var(--status-in-progress-bg); color: var(--status-in-progress); }.recording-status.sent-to-claude-code { background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary); }.recording-status.live-session { background: color-mix(in srgb, var(--crrt-phosphor) 13%, transparent); color: var(--crrt-phosphor); }
 .recording-copy small { display: flex; align-items: center; gap: 4px; overflow: hidden; color: var(--muted-foreground); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .recordings-contract { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 28px; }

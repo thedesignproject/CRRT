@@ -1,7 +1,10 @@
 import { artifactSchema, manifestSchema, type ArtifactDeclaration } from './contracts.js'
 import { allPages, canonical, checked, command, database, digest, limit, owned, parse, RecordError, type RecordingRow } from './core.js'
 
-export const RECORD_BUCKET = 'record-media'
+import { recordObjectStorage, resumableAuthorization } from './object-storage.js'
+import { authorizeMultipart, completeMultipart } from './multipart.js'
+import { r2Storage } from './r2.js'
+export { RECORD_BUCKET } from './object-storage.js'
 export type ArtifactRow = { id: string; recording_id: string; kind: string; path: string; mime: string; bytes: number; sha256: string; offset_ms: number; verified_at: string | null }
 export function sourcePath(owner: string, recording: string, artifact: Pick<ArtifactDeclaration, 'id'>) {
   return `${owner}/${recording}/${artifact.id}.webm`
@@ -19,23 +22,20 @@ export async function authorizeUpload(actor: string, id: string, body: unknown) 
   const artifact = parse(artifactSchema, body)
   const path = sourcePath(actor, id, artifact)
   await command(actor, id, 'upload', { artifact: { ...artifact, path }, byteLimit: limit('RECORD_MAX_STORAGE_BYTES', 5_368_709_120) })
-  const signed = checked(await database().storage.from(RECORD_BUCKET).createSignedUploadUrl(path, { upsert: false }))
+  if (recording.storage_provider === 'r2') return authorizeMultipart(actor, recording, artifact.id)
+  const signed = checked(await recordObjectStorage(recording).signUpload(path))
   if (!signed) throw new RecordError('record_unavailable', 503, true)
   // Mint first, then recheck ownership/deletion. A returned token therefore
   // predates any later deletion's two-hour cleanup grace.
   await owned(actor, id)
-  const endpoint = new URL('/storage/v1/upload/resumable/sign', process.env.SUPABASE_URL).href
-  return { version: 'record.v1', recordingId: recording.id, artifactId: artifact.id, path, bucket: RECORD_BUCKET,
-    protocol: 'tus', endpoint, headers: { 'x-signature': signed.token },
-    metadata: { bucketName: RECORD_BUCKET, objectName: path, contentType: artifact.mime },
-    chunkSize: 6 * 1024 * 1024, expiresInSeconds: 7200, upsert: false }
+  return { version: 'record.v1', recordingId: recording.id, artifactId: artifact.id, path, ...resumableAuthorization(path, artifact.mime, signed.token) }
 }
 export async function completeArtifact(actor: string, id: string, artifactId: string) {
-  await owned(actor, id)
+  const recording = await owned(actor, id)
   const declared = (await artifacts(id)).find(a => a.id === artifactId)
   if (!declared) throw new RecordError('record_not_found', 404)
   checkPath(id, declared.path)
-  const info = await database().storage.from(RECORD_BUCKET).info(declared.path)
+  const info = recording.storage_provider === 'r2' ? await completeMultipart(recording, declared) : await recordObjectStorage(recording).inspect(declared.path)
   if (info.error) throw new RecordError('record_upload_incomplete', 409, true)
   if (info.data.size !== declared.bytes || info.data.contentType !== declared.mime) throw new RecordError('record_artifact_mismatch', 409)
   await command(actor, id, 'complete', { artifactId })
@@ -62,17 +62,25 @@ export async function deleteRecording(actor: string, id: string) {
   return { id, deleted: true, cleanupWithinHours: 26 }
 }
 export async function cleanupObjects(id: string) {
-  const recording = checked(await database().from('recordings').select('storage_prefix').eq('id', id).maybeSingle())
+  const recording = checked(await database().from('recordings').select('storage_prefix,storage_provider,storage_bucket').eq('id', id).maybeSingle()) as RecordingRow | null
   if (!recording) throw new RecordError('record_not_found', 404)
   const prefix = recording.storage_prefix as string
   checkPath(id, `${prefix}/${id}.jpg`)
+  const storage = recordObjectStorage(recording)
+  if (recording.storage_provider === 'r2') {
+    for (const artifact of await artifacts(id)) {
+      checkPath(id, artifact.path)
+      const upload = (artifact as ArtifactRow & { multipart_id?: string }).multipart_id
+      if (upload) await r2Storage(recording.storage_bucket!).abort(artifact.path, upload)
+    }
+  }
   for (let page = 0; page < 20; page++) {
-    const objects = checked(await database().storage.from(RECORD_BUCKET).list(prefix, { limit: 100 }))
+    const objects = checked(await storage.list(prefix, 100))
     if (!objects) throw new RecordError('record_unavailable', 503, true)
     if (!objects.length) break
     const paths = objects.map(object => `${prefix}/${object.name}`)
     paths.forEach(path => checkPath(id, path))
-    checked(await database().storage.from(RECORD_BUCKET).remove(paths))
+    checked(await storage.remove(paths))
     if (page === 19) throw new RecordError('record_cleanup_pending', 503, true)
   }
 }

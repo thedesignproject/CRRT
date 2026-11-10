@@ -1,3 +1,4 @@
+import { recordObjectStorage } from './object-storage.js'
 import { createHash } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { createReadStream, createWriteStream, existsSync } from 'node:fs'
@@ -7,7 +8,7 @@ import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { checked, database, digest, RecordError, type RecordingRow } from './core.js'
-import { checkPath, RECORD_BUCKET, type ArtifactRow } from './storage.js'
+import { checkPath, type ArtifactRow } from './storage.js'
 
 export type DerivedArtifact = { id: string; kind: 'thumbnail' | 'keyframe' | 'crop'; path: string; mime: string; bytes: number; sha256: string }
 export type MediaOutput = { metadata?: { durationMs: number; width: number; height: number }; artifacts: DerivedArtifact[]; keyframes: { id: string; eventId: string; atMs: number; artifactId: string; cropArtifactId?: string }[] }
@@ -31,9 +32,9 @@ async function run(binary: string, args: string[], signal: AbortSignal) {
     child.on('close', code => { clearTimeout(timeout); if (code === 0) resolve(output); else reject(new RecordError('record_media_invalid', 422)) })
   })
 }
-async function download(artifact: ArtifactRow, directory: string, signal: AbortSignal) {
+async function download(artifact: ArtifactRow, directory: string, signal: AbortSignal, recording: RecordingRow) {
   checkPath(artifact.recording_id, artifact.path)
-  const signed = checked(await database().storage.from(RECORD_BUCKET).createSignedUrl(artifact.path, 600))
+  const signed = checked(await recordObjectStorage(recording).signPlayback(artifact.path, 600))
   if (!signed) throw new RecordError('record_unavailable', 503, true)
   const response = await fetch(signed.signedUrl, { signal })
   if (!response.ok || !response.body) throw new RecordError('record_media_download', 503, true)
@@ -45,19 +46,19 @@ async function download(artifact: ArtifactRow, directory: string, signal: AbortS
   if (hash.digest('hex') !== artifact.sha256) throw new RecordError('record_artifact_mismatch', 422)
   return path
 }
-export async function saveDerived(recording: string, source: ArtifactRow, key: string, kind: DerivedArtifact['kind'], bytes: Uint8Array, guard: { signal: AbortSignal; check: () => Promise<void> }): Promise<DerivedArtifact> {
+export async function saveDerived(recording: string, source: ArtifactRow, key: string, kind: DerivedArtifact['kind'], bytes: Uint8Array, guard: { signal: AbortSignal; check: () => Promise<void>; storage?: RecordingRow }): Promise<DerivedArtifact> {
   const id = derivedId(recording, key)
   const path = `${source.path.slice(0, source.path.lastIndexOf('/'))}/${id}.jpg`
   checkPath(recording, path)
-  const bucket = database().storage.from(RECORD_BUCKET)
+  const bucket = recordObjectStorage(guard.storage)
   if (guard.signal.aborted) throw new RecordError('record_job_cancelled', 409)
   await guard.check()
-  const authorization = checked(await bucket.createSignedUploadUrl(path, { upsert: false }))
+  const authorization = checked<{ signedUrl: string; headers?: Record<string, string> } | null>(await bucket.signUpload(path))
   if (!authorization) throw new RecordError('record_unavailable', 503, true)
   // Recheck after minting, so any usable token predates deletion's grace.
   await guard.check()
   const response = await fetch(authorization.signedUrl, { method: 'PUT', body: Buffer.from(bytes),
-    headers: { 'Content-Type': 'image/jpeg' }, signal: AbortSignal.any([guard.signal, AbortSignal.timeout(60_000)]) })
+    headers: { 'Content-Type': 'image/jpeg', ...authorization.headers }, signal: AbortSignal.any([guard.signal, AbortSignal.timeout(60_000)]) })
   if (!response.ok) {
     // An expired worker can have completed this exact immutable object. Never
     // overwrite it: reuse only when the bytes match this derivation.
@@ -74,7 +75,7 @@ export const ffmpegProcessor: MediaProcessor = {
     try {
       const screen = artifacts.find(a => a.kind === 'screen')
       if (!screen || !recording.manifest || !recording.duration_ms) throw new RecordError('record_manifest_missing', 422)
-      const captured = await download(screen, directory, signal)
+      const captured = await download(screen, directory, signal, recording)
       // Live MediaRecorder chunks can omit Duration/Cues. Stream-copy once to
       // compute duration and write an index, without re-encoding source media.
       const source = join(directory, 'indexed.mkv')
@@ -84,7 +85,7 @@ export const ffmpegProcessor: MediaProcessor = {
       if (!Number.isFinite(durationMs) || Math.abs(durationMs - recording.duration_ms) > 2000 || !metadata.streams.some((s: any) => s.codec_type === 'video')) throw new RecordError('record_duration_mismatch', 422)
       // Verify auxiliary tracks independently; a bad camera must not silently
       // turn into an externally playable, unverified artifact.
-      for (const artifact of artifacts.filter(a => a.kind !== 'screen')) await download(artifact, directory, signal)
+      for (const artifact of artifacts.filter(a => a.kind !== 'screen')) await download(artifact, directory, signal, recording)
       const video = metadata.streams.find((s: any) => s.codec_type === 'video')
       const output: MediaOutput = { metadata: { durationMs, width: video.width, height: video.height }, artifacts: [], keyframes: [] }
       async function image(atMs: number, key: string, kind: DerivedArtifact['kind'], crop?: { x: number; y: number; width: number; height: number }) {
@@ -106,7 +107,7 @@ export const ffmpegProcessor: MediaProcessor = {
         if (!existsSync(destination)) await run('ffmpeg', ['-v', 'error', '-y', ...seek, '-noaccurate_seek', ...frame], signal)
         const bytes = await readFile(destination)
         if (bytes.length > 2_097_152) throw new RecordError('record_derivation_too_large', 422)
-        const artifact = await saveDerived(recording.id, screen!, key, kind, bytes, { signal, check: checkWrite })
+        const artifact = await saveDerived(recording.id, screen!, key, kind, bytes, { signal, check: checkWrite, storage: recording })
         output.artifacts.push(artifact)
         return artifact.id
       }
@@ -124,7 +125,7 @@ export const ffmpegProcessor: MediaProcessor = {
     try {
       const artifact = artifacts.find(a => a.kind === 'audio') || artifacts.find(a => a.kind === 'screen')
       if (!artifact) throw new RecordError('record_manifest_missing', 422)
-      const captured = await download(artifact, directory, signal)
+      const captured = await download(artifact, directory, signal, recording)
       const source = join(directory, 'indexed.mkv')
       // Index live WebM before measuring duration, including silent tails.
       await run('ffmpeg', ['-v', 'error', '-y', '-protocol_whitelist', 'file', '-f', 'matroska', '-i', captured, '-map', '0', '-c', 'copy', '-f', 'matroska', source], signal)

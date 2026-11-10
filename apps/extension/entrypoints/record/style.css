@@ -1,6 +1,16 @@
 @import "../../../../branding/crrt/tokens.css";
 
+.record-transcription-consent { display: grid; grid-template-columns: 16px minmax(0, 1fr); align-items: start; gap: 8px; color: var(--crrt-ink-faint); font-size: 12px; line-height: 1.5; cursor: pointer; }
+.record-transcription-consent input { appearance: auto; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--crrt-carrot); cursor: pointer; }
+.record-transcription-consent input:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 3px; }
+.record-transcription-consent strong { display: block; color: var(--crrt-white); font-size: 12px; font-weight: 500; }
+.record-transcription-consent small { display: block; margin-top: 2px; font-size: 11px; }
+
 :root { color-scheme: dark; font-family: var(--crrt-font-sans); background: #0c0c0d; color: #fff; --record-red: #ff573d }
+.record-stage .surface-warning { position: absolute; z-index: 3; top: 64px; left: 16px; right: 16px; padding: 8px 12px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-lg); background: var(--crrt-bg-deep-soft); color: var(--crrt-phosphor); font-size: 13px; }
+.recording-note-repair { display: grid; gap: 12px; margin-top: 16px; }
+.recording-note-repair label { display: grid; gap: 8px; }
+.recording-note-repair textarea { box-sizing: border-box; width: 100%; resize: vertical; padding: 8px; border: 1px solid var(--crrt-rule-dark-strong); border-radius: var(--crrt-radius-md); background: var(--crrt-bg-deep-soft); color: var(--crrt-white); font: inherit; }
 * { box-sizing: border-box }
 html, body, #root { min-width: 720px; min-height: 100%; margin: 0 }
 button { border: 0; font: inherit; cursor: pointer }

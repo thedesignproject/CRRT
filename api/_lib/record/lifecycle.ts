@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { librarySummaries } from './library-previews.js'
+import { newRecordingStorage } from './object-storage.js'
 import { createSchema, projectSchema, titleSchema, uuid } from './contracts.js'
 import { checked, command, database, digest, canonical, initialShare, limit, owned, parse, RecordError, rpc, summary, type RecordingRow } from './core.js'
 
@@ -7,7 +9,7 @@ export async function createRecording(actor: string, body: unknown) {
   const id = randomUUID()
   const token = initialShare(id, input.clientKey)
   const row = await rpc<RecordingRow>('record_create', { p_actor: actor, p_id: id,
-    p_input: { ...input, requestHash: digest(canonical(input)), shareHash: digest(token) },
+    p_input: { ...input, ...newRecordingStorage(), requestHash: digest(canonical(input)), shareHash: digest(token) },
     p_limit: limit('RECORD_MAX_RECORDINGS', 25) })
   const current = initialShare(row.id, row.client_key)
   return { recording: summary(row), shareId: digest(current) === row.share_hash ? current : null }
@@ -22,7 +24,7 @@ export async function listRecordings(actor: string, query: Record<string, unknow
     .order('created_at', { ascending: false }).order('id', { ascending: false }).limit(51)
   if (cursor) request = request.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.lt.${cursor.id})`)
   const rows = checked(await request) as RecordingRow[]
-  return { recordings: rows.slice(0, 50).map(summary), next: rows.length > 50 ? rows[49].id : null }
+  return { recordings: await librarySummaries(rows.slice(0, 50)), next: rows.length > 50 ? rows[49].id : null }
 }
 export async function readRecording(actor: string, id: string) { return { recording: summary(await owned(actor, id)) } }
 export async function updateRecording(actor: string, id: string, body: unknown) {

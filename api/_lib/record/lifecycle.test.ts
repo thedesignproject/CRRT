@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), query: vi.fn(), result: { data: null as any, error: null as any } }))
 vi.mock('../supabase.js', () => ({ getServiceSupabase: () => ({ rpc: mocks.rpc, from: mocks.query }) }))
+vi.mock('./library-previews.js', async () => ({ librarySummaries: async (rows: any[]) => rows.map((await import('./core')).summary) }))
 import { attachRecording, createRecording, listRecordings, readRecording, updateRecording } from './lifecycle'
 import { allPages, canonical, checked, digest, initialShare, limit, owned, parse, RecordError, summary } from './core'
 import { uuid } from './contracts'
