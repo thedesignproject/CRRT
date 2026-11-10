@@ -11,3 +11,5 @@ ce21623d3c63d88d7d0eb008a481c4fa92d3f76d:branding/crrt/components/FeedbackPanel.
 ce21623d3c63d88d7d0eb008a481c4fa92d3f76d:branding/crrt/logos/README.md:generic-api-key:14
 # Historical idempotency UUID fixture, not a credential. Keep other findings enabled.
 4ae9e498d4d9151620508cb599afca4731f5f41a:api/_lib/record/agent.test.ts:generic-api-key:8
+# Mocked owner-token assertion in the Record recovery UI test; not a credential.
+acded5fa341fe4f61c1b43d7bc88711580268b06:apps/dashboard/components/RecordingSharePage.test.tsx:generic-api-key:154

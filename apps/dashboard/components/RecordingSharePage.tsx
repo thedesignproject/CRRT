@@ -7,6 +7,7 @@ import { RecordingMarks } from './RecordingMarks'
 import { RecordingShareButton } from './RecordingShareButton'
 import { RecordingTranscript, recordingTime } from './RecordingTranscript'
 import { RecordingVideoCanvas } from './RecordingVideoCanvas'
+import { RecordingRecovery, recordingAfterRetry, type RecoveryStage } from '../../../shared/record/Recovery'
 import './recording-detail.css'
 
 export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; ownerToken?: string }) {
@@ -87,6 +88,10 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
     const result = await recordRequest<{ recording: RecordingSummary }>(apiBase, `recordings/${encodeURIComponent(ownerId!)}`, ownerToken!, { title }, 'PATCH')
     setPlayback(current => current ? { ...current, recording: { ...current.recording, title: result.recording.title } } : current)
   }
+  async function retry(stage: RecoveryStage) {
+    await recordRequest(apiBase, `recordings/${encodeURIComponent(ownerId!)}/retry`, ownerToken!, { stage })
+    setPlayback(current => recordingAfterRetry(current, stage))
+  }
   const durationMs = playback?.recording.durationMs || 0
   const duration = Math.floor(durationMs / 1000)
   const Container = ownerToken ? 'section' : 'main'
@@ -104,7 +109,7 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
         {ownerToken && <span><LockKeyhole size={14} aria-hidden="true" />Your recording</span>}
         {playback.recording.state !== 'ready' && <span className="recording-status" data-state={playback.recording.state}>{{ recording: 'Recording in progress', uploading: 'Uploading video…', processing: 'Processing recording…', failed: 'Processing failed' }[playback.recording.state]}</span>}
       </div>
-      {playback.recording.failure && <p className="recording-detail-notice">Processing failed. The owner can retry processing.</p>}
+      <RecordingRecovery stages={playback.stages.filter(job => job.stage !== 'transcription')} retry={ownerToken ? retry : undefined} />
       <div className="recording-detail-grid"><div className="recording-detail-main">
       {screen ? <div ref={composition} className="recording-composed-player recording-player">
         <div className="recording-player-stage" style={{ maxWidth: fullscreen ? `calc((100dvh - 8rem) * ${videoAspect})` : `calc(65dvh * ${videoAspect})` }}>
@@ -128,13 +133,13 @@ export function RecordingSharePage({ apiBase, ownerToken }: { apiBase: string; o
         </div>
         {fullscreenError && <p role="alert" className="recording-player-error">{fullscreenError}</p>}
         {mediaError && <p role="alert" className="recording-player-error">{mediaError}</p>}
-      </div> : <div className="recording-playback-pending"><Film size={32} strokeWidth={1.5} aria-hidden="true" /><h2>Your recording is being prepared</h2><p>Playback will appear when uploading and media processing finish.</p></div>}
+      </div> : <div className="recording-playback-pending"><Film size={32} strokeWidth={1.5} aria-hidden="true" /><h2>{playback.recording.state === 'failed' ? 'Your video is not ready' : 'Your recording is being prepared'}</h2><p>Playback will appear when uploading and video preparation finish.</p></div>}
       <section aria-label="Timeline marks" className="recording-moments"><div className="recording-section-heading"><h2>Key moments</h2><span>{playback.events.length}</span></div><div className="recording-moment-list">{playback.events.map(event => <button type="button" key={event.id} onClick={() => seek(event.atMs)}><time>{recordingTime(event.atMs)}</time><span>{event.mark?.type || event.kind}</span></button>)}{playback.events.length === 0 && <p>No marks were added to this recording.</p>}</div></section>
       <section aria-label="Keyframes" className="recording-keyframes">{playback.keyframes.map(frame => {
         const image = playback.artifacts.find(a => a.id === frame.artifact_id)
         return image && <button type="button" key={frame.id} onClick={() => seek(frame.at_ms)}><img src={image.url} alt={`Keyframe at ${Math.floor(frame.at_ms / 1000)} seconds`} referrerPolicy="no-referrer" /><time>{recordingTime(frame.at_ms)}</time></button>
       })}</section>
-      </div><RecordingTranscript playback={playback} atMs={playbackMs} seek={seek} /></div>
+      </div><RecordingTranscript playback={playback} atMs={playbackMs} seek={seek} retry={ownerToken ? retry : undefined} /></div>
     </>}
   </Container>
 }

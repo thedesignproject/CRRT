@@ -1,8 +1,9 @@
 import { z } from 'zod'
+import { MAX_RECORDING_DURATION_MS } from './limits'
 
 export const contractVersion = 'record.v1' as const
 export const uuid = z.uuid().transform(value => value.toLowerCase())
-export const clock = z.number().int().min(0).max(3_600_000)
+export const clock = z.number().int().min(0).max(MAX_RECORDING_DURATION_MS)
 const title = z.string().trim().min(1).max(240)
 export const consentSchema = z.object({
   policyVersion: z.literal('record-v1'),

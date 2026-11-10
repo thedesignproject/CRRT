@@ -173,6 +173,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
       <label className="setup-consent"><input type="checkbox" checked={snapshot.hostedTranscription === true} onChange={() => { void command({ kind: 'transcription.toggled' }) }} /><span><strong>Transcribe audio with Deepgram</strong><small>Audio is sent for hosted processing.</small></span></label>
       {(commandError || snapshot.error) && <p className="setup-error" role="alert">{commandError || snapshot.error}</p>}
       <button className="start" disabled={pending} onClick={() => { void command({ kind: 'start' }, true) }}><Camera size={17} /><span>Start recording</span><kbd>3 sec</kbd></button>
+      <p className="recording-limit">Up to 5 minutes. Stops and saves automatically.</p>
     </section>
   </main>
 
@@ -199,7 +200,7 @@ export function RecordControls({ id = sessionId }: { id?: string }) {
     <div className="record-toolbar" data-record-control aria-label="Recording controls">
       {/* v8 ignore next -- browser confirmation cancellation has no state transition */}
       <button className="icon cancel" title="Discard recording" onClick={() => { if (window.confirm('Discard this recording?')) void command({ kind: 'cancel' }) }} aria-label="Discard recording"><X size={16} /></button>
-      <div className="clock"><i />{formatRecordingTime(snapshot.durationMs)}</div>
+      <div className="clock"><i />{formatRecordingTime(snapshot.durationMs)} / 5:00</div>
       {/* v8 ignore next -- paused and recording render paths are both exercised; duplicate ternaries share the same state */}
       <button className="icon" title={snapshot.status === 'paused' ? 'Resume' : 'Pause'} onClick={() => { void command({ kind: 'pause.toggle' }) }} aria-label={snapshot.status === 'paused' ? 'Resume' : 'Pause'}>{snapshot.status === 'paused' ? <Play size={15} fill="currentColor" /> : <Pause size={15} fill="currentColor" />}</button>
       <button className="icon" title="Restart" onClick={() => { if (window.confirm('Restart this recording?')) void command({ kind: 'restart' }) }} aria-label="Restart"><RotateCcw size={15} /></button>

@@ -1,4 +1,5 @@
 import type { RecordingSource } from './recording'
+import { recordingDeadline } from './recording-deadline'
 
 export type RecordingCaptureOptions = {
   source: RecordingSource
@@ -6,6 +7,7 @@ export type RecordingCaptureOptions = {
   microphoneEnabled: boolean
   tabStreamId?: string
   deferRecording?: boolean
+  onLimitReached?: () => void
 }
 
 export type RecordingCapture = {
@@ -150,6 +152,12 @@ export async function startRecordingCapture(
       }
     }
 
+    const deadline = recordingDeadline(() => {
+      apply('pause')
+      options.onLimitReached?.()
+    })
+    if (!options.deferRecording) deadline.resume()
+
     return {
       screenStream,
       cameraStream,
@@ -159,9 +167,10 @@ export async function startRecordingCapture(
         for (const track of tracks) track.enabled = enabled
         return tracks.length > 0
       },
-      pause: () => apply('pause'),
-      resume: () => apply('resume'),
+      pause: () => { deadline.pause(); apply('pause') },
+      resume: () => { if (deadline.resume()) apply('resume') },
       stop: () => stopping ??= (async () => {
+        deadline.stop()
         try {
           const [screenBlob, cameraBlob, audioBlob] = await Promise.all([primary.stop(), camera?.stop(), audio?.stop()])
           if (!screenBlob.size) throw new Error('No video was captured. Start a new recording and keep the selected window visible.')

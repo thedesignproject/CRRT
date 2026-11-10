@@ -1,0 +1,5 @@
+.recording-recovery { margin: 12px 0; font-size: 13px; line-height: 1.5; }
+.recording-recovery p { margin: 0 0 8px; }
+.recording-recovery button { padding: 8px 12px; border: 1px solid var(--border, var(--crrt-rule-dark-strong)); border-radius: var(--crrt-radius-lg); background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.recording-recovery button:disabled { opacity: .5; cursor: wait; }
+.recording-recovery button:focus-visible { outline: 2px solid var(--crrt-carrot); outline-offset: 2px; }

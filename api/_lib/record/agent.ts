@@ -1,4 +1,5 @@
 import { recordObjectStorage } from './object-storage.js'
+import { MAX_RECORDING_DURATION_MS } from '../../../shared/record/limits.js'
 import { getAccount } from '../billing/store.js'
 import { eligibleAgentPriceIds, hasAgentEntitlement, resolveWidgetAgentAccess } from '../billing/agent-entitlement.js'
 import { isCloud } from '../billing/plans.js'
@@ -23,7 +24,7 @@ export async function recordCapabilities(actor: string) {
   return { version: 'record.v1', humanPlayback: true, humanSharing: true,
     agent: { allowed: agent, reason: agent ? null : 'record_upgrade_required', projectAccessCheckedOnRequest: true },
     limits: { recordings: limit('RECORD_MAX_RECORDINGS', 25), storageBytes: limit('RECORD_MAX_STORAGE_BYTES', 5_368_709_120),
-      durationMs: 3_600_000, agentPayloadsPerDay: limit('RECORD_MAX_PAYLOADS_PER_DAY', 100) },
+      durationMs: MAX_RECORDING_DURATION_MS, agentPayloadsPerDay: limit('RECORD_MAX_PAYLOADS_PER_DAY', 100) },
     usage: await rpc('record_usage_summary', { p_actor: actor }) }
 }
 export async function agentPayload(actor: string, id: string, body: unknown) {

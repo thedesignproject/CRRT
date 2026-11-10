@@ -39,7 +39,10 @@ timeline, with pauses excluded. Screen starts at zero; camera/audio offsets are
 nonnegative. Transcript offsets are applied once by the worker. Events have
 stable UUIDs and contiguous zero-based sequence numbers; sort by time, retaining
 sequence as the tie-break. At most 500 events, one artifact per source kind,
-one hour per recording and 1 GiB per source artifact are accepted. Annotation
+five minutes per recording and 1 GiB per source artifact are accepted. Capture stops
+and saves automatically after five minutes of recorded time, excluding pauses.
+Owners can delete cloud recordings from either library; local copies are retained.
+The existing cleanup worker releases quota after file cleanup (up to 26 hours). Annotation
 points/crops/bounds are normalized; capture and viewport dimensions use pixels.
 Window/screen manifests must omit DOM targets. Marks do not create carrots.
 Hash-router paths (`#/checkout` and `#!/checkout`) remain identifiable; their
@@ -117,6 +120,14 @@ transcription requires the explicit Deepgram checkbox; older local captures have
 no implicit hosted consent. The authoritative transcript comes from background
 processing, not the account-free demo endpoint. The review polls processing and
 offers stage retry and server-authorized paid context generation.
+
+Both the dashboard owner player and extension review show stage-specific recovery.
+The worker's existing automatic retries run first (up to three attempts per stage).
+Only a retryable stage in `failed` state exposes a manual action: Retry video,
+Retry transcription, or Retry key moments. Public viewers see the status without
+owner actions. Retrying preserves playback, transcript data and successful stages;
+only the selected failed stage is queued again. Request errors retain the retry
+action, and buttons are disabled while the request is pending.
 
 The dashboard and extension library list actual owner recordings. The dashboard
 serves anonymous human playback at `/dashboard/recording#<capability>` and

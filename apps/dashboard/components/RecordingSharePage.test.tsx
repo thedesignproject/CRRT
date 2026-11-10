@@ -130,12 +130,32 @@ it('opens anonymous share state without sending an owner token, and seeks transc
   view.unmount(); expect(document.querySelector('meta[name=referrer]')).toBeNull()
 })
 it('shows early links and failed processing without requiring playable artifacts', async () => {
-  mocks.request.mockResolvedValue({ ...state(false), recording: { title: '', state: 'failed', failure: { retryable: true } } })
+  mocks.request.mockResolvedValue({ ...state(false), recording: { title: '', state: 'failed', failure: { retryable: true } }, stages: [{ stage: 'metadata', state: 'failed', failure: { retryable: true } }] })
   render(<RecordingSharePage apiBase="/api" />)
-  expect(await screen.findByText(/owner can retry/)).toBeInTheDocument()
+  expect(await screen.findByText('We couldn’t prepare your video.')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Retry video' })).toBeNull()
   expect(screen.getByText(/Playback will appear/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /Narration/ }))
   fireEvent.click(within(screen.getByRole('region', { name: 'Timeline marks' })).getAllByRole('button')[0])
+})
+
+it.each(['metadata', 'transcription'])('retries only the owner’s failed %s stage without removing available playback', async stage => {
+  history.replaceState(null, '', '/dashboard/recording?id=owned')
+  const value = { ...state(stage === 'transcription'), transcript: [], stages: [{ stage, state: 'failed', failure: { stage, retryable: true } }] }
+  mocks.request.mockResolvedValue(value)
+  render(<RecordingSharePage apiBase="/api" ownerToken="owner-token" />)
+  const label = stage === 'transcription' ? 'Retry transcription' : 'Retry video'
+  const button = await screen.findByRole('button', { name: label })
+  const video = document.querySelector('video')
+  let resolve!: () => void
+  mocks.request.mockImplementationOnce(() => new Promise<void>(r => { resolve = r }))
+  fireEvent.click(button)
+  expect(screen.getByRole('button', { name: 'Retrying…' })).toBeDisabled()
+  expect(mocks.request).toHaveBeenLastCalledWith('/api', 'recordings/owned/retry', 'owner-token', { stage })
+  await act(async () => resolve())
+  expect(screen.queryByRole('button', { name: label })).toBeNull()
+  expect(document.querySelector('video')).toBe(video)
+  if (stage === 'transcription') expect(video).toBeInTheDocument()
 })
 
 it('keeps derived frames readable before primary playback becomes available', async () => {

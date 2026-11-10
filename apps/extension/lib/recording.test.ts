@@ -197,6 +197,25 @@ it('retries a failed capture without requiring the launcher to be reopened', () 
   expect(recorderReducer(retry, { type: 'recording.started', now: 100 })).toMatchObject({ status: 'recording', startedAt: 100 })
 })
 
+it('exports bare marks and unmatched speech without inventing target or note context', () => {
+  const recording: LocalRecording = {
+    id: 'bare', title: 'Visual review', source: 'screen', status: 'ready', durationMs: 20000,
+    createdAt: '2026-10-30T00:00:00Z', authorName: 'Tester', transcriptionStatus: 'ready',
+    transcript: [], marks: [{ id: 'draw', type: 'draw', atMs: 15000, points: [{ x: 10, y: 20 }] }],
+  }
+  const marksOnly = buildRecordingAgentPayload(recording)
+  expect(marksOnly).toContain('[0:15] keyframe_01.png  draw')
+  expect(marksOnly).not.toContain('target:')
+  expect(marksOnly).not.toContain('note:')
+  const speech = buildRecordingAgentPayload({ ...recording,
+    transcript: [{ id: 'speech', startMs: 0, endMs: 1000, text: 'Review this screen.' }],
+  })
+  expect(speech).toContain('[0:00] keyframe_01.png\n  "Review this screen."')
+  expect(speech).toContain('[0:15] keyframe_02.png  draw')
+  expect(speech).not.toContain('target:')
+  expect(speech).not.toContain('note:')
+})
+
 it('clears marks and pause timing when retrying an interrupted recording', () => {
   const failed = { ...initialRecorderState, source: 'window' as const, cameraEnabled: false, status: 'failed' as const, durationMs: 9000, pausedMs: 4000, pausedAt: 5000, marks: [{ id: 'old', type: 'box' as const, atMs: 500, points: [] }] }
   expect(recorderReducer(failed, { type: 'countdown.started' })).toMatchObject({ status: 'countdown', source: 'window', cameraEnabled: false, durationMs: 0, pausedMs: 0, pausedAt: null, marks: [] })

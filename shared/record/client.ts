@@ -32,7 +32,7 @@ export async function recordRequest<T>(base: string, path: string, token: string
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
     const code = payload.error?.code
-    throw new Error(response.status === 401 ? 'Sign in to CRRT to upload recordings.' : messages[code] || `Recording request failed (${response.status}). Retry when your connection is restored.`)
+    throw Object.assign(new Error(response.status === 401 ? 'Sign in to CRRT to upload recordings.' : messages[code] || `Recording request failed (${response.status}). Retry when your connection is restored.`), { status: response.status, code })
   }
   return response.json()
 }
