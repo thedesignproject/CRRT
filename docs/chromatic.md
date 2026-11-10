@@ -67,17 +67,31 @@ React CI so its next run can measure the difference. Capture/replay workers and
 test coverage are unchanged; the report-only comment job remains GitHub-hosted.
 
 A separate job reads the reports without checking out PR code and updates one
-bot comment with the commit, snapshot/error/review counts, Chromatic link, and
-workflow logs. It skips stale PR heads. Fork and Dependabot PRs run local checks
+bot comment with the commit, direct target branch, snapshot/error counts, Chromatic links, and
+workflow logs. It skips stale PR heads and bases. Fork and Dependabot PRs run local checks
 without the upload secret or comment-writing permission.
 
 The upload step uses `--exit-zero-on-changes`: Actions finishes successfully when
 only visual approval is outstanding. Build errors, rendering failures, failed
-local comparisons, and incomplete reports still fail. The separate native
-Chromatic **UI Tests** check stays yellow/pending until the changes are accepted;
-it passes automatically when there are no changes. Baselines never auto-accept.
-No runner polls or waits for a reviewer. Local uploads retain their nonzero exit
-code for unapproved differences.
+local comparisons, and incomplete reports still fail. The native **UI Review**
+check is the visual approval gate. It compares snapshots from the PR head with
+snapshots at the merge base of its actual GitHub target branch. In a stack,
+each PR must target the branch directly below it, so inherited changes are not
+repeated in every layer. The base snapshots do not need baseline approval.
+
+All branches build independently. No runner polls, sleeps, or waits for a base
+build or a reviewer, and there are no automatic baseline approvals. Both sides
+must have a Chromatic build before UI Review can compare them; a missing base
+build must be published rather than replaced with a `trunk` comparison. For a
+missing historical merge-base build, follow Chromatic's patch-build instructions.
+Keep stacked branches rebased when their parents move.
+
+**UI Tests** still reports differences against approved baselines and can show
+changes inherited from lower stack layers. It is informational, not a required
+merge check. The workflow comment deliberately reports upload completeness,
+not a UI Review result or UI Tests baseline-review counts. Use the native
+**UI Review** check for the current PR changeset and approval state.
+Local uploads retain their nonzero exit code for unapproved baseline differences.
 
 CI also uses `--force-rebuild` so rerunning a commit that already passed locally
 still emits a fresh JUnit report and native status. Chromatic's default shortcut
@@ -90,34 +104,32 @@ the workflow supplies one comment. That comment records the workflow result;
 Chromatic updates its native check after approval without rerunning Actions.
 Reports and failure diagnostics are retained for seven days.
 
-### Activate the required approval gate when publishing
+### Activate UI Review before switching the required gate
 
-The yellow check blocks merging only when required by GitHub branch protection.
-Enable the exact native **UI Tests** context after the first published workflow
-has reported it on the PR head. Preserve existing required checks and protection
-settings; do not replace the live rule with the legacy bootstrap script (which
-targets `main`, while this repository uses `trunk`). Require the Actions
-**Visual screens** and **PR result** checks too, so capture/upload/report failures
-cannot be bypassed by an older successful native result.
-These three contexts are recorded in `scripts/branch-protection.json`; apply only
-the additional check requirements to the live rule, preserving its other values.
+Enable UI Review in the Chromatic project's Manage screen and complete its
+GitHub App integration. Verify a real PR receives the native **UI Review**
+status, including one targeting another PR branch. Then replace only the exact
+**UI Tests** requirement with **UI Review** on `trunk` and protected stack bases.
+Preserve the other required checks, their app bindings, and all other branch
+protection settings. Keep **Visual screens** and **PR result** required so
+capture/upload/report failures cannot be bypassed by an older native result.
+The desired contexts are recorded in `scripts/branch-protection.json`; do not
+apply the legacy bootstrap script, which targets `main` and replaces the rule.
 
-Do not activate these requirements on `trunk` before the workflow is available
-there: open parent CI PRs (#408/#409/#411) cannot emit the new checks and would
-wait indefinitely. For the first stacked PR, protect its immediate base with
-the new checks; carry them to `trunk` when the workflow lands there. Fork and
-Dependabot uploads are deliberately skipped, so their native check will remain
-pending until an authorized maintainer runs the head on a same-repository branch.
-Do not bypass visual approval with an automatic skipped/passed status.
+Until Chromatic emits **UI Review**, leave the live **UI Tests** requirement in
+place. Requiring a status that is not enabled would leave PRs pending indefinitely.
 
-Live Actions execution and comment delivery still require publishing the branch
-and opening its PR. These local changes do not push code or alter branch rules.
+On November 10, 2026, the GitHub App integration was installed and the Reviews
+page confirmed it was synced with GitHub. The live required context was switched
+from **UI Tests** to **UI Review** on `trunk` and `test/chromatic-screens`, preserving
+the other requirements and their app bindings. Existing reviews without builds
+show **Awaiting activity**; the next PR build must supply their snapshots. A new
+stacked PR comparison has not yet been verified against the installed integration.
 
-Before publishing, recheck the CI stack (#408 → #409 → #411). While it remains
-open, base the Chromatic PR on `ci/blacksmith-prebuilt-deploy` (#411); after it
-merges, use the updated `trunk`. Preserve its Vercel build hook and runner setup.
-The local branch is aligned with #411, and all 69 captures/replays pass on that
-base. Build 9 below verifies the archive on this base with the GitHub integration.
+Fork and Dependabot uploads are deliberately skipped, so their native check
+will remain pending until an authorized maintainer runs the head on a
+same-repository branch. Do not bypass visual approval with an automatic
+skipped/passed status.
 
 ## Verified cloud run
 

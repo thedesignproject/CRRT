@@ -6,7 +6,7 @@
       "check (react 19)",
       "audit",
       "secrets",
-      "UI Tests",
+      "UI Review",
       "Visual screens",
       "PR result"
     ]

@@ -34,6 +34,7 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
+      - run: node --test scripts/chromatic/workflow.checks.cjs
       - run: bunx playwright install --with-deps chromium
       - run: bun run test:visual:types
       - name: Capture and replay selected screens
@@ -52,8 +53,9 @@ jobs:
             echo '::error::CHROMATIC_PROJECT_TOKEN is missing'
             exit 1
           fi
-          # Chromatic's required UI Tests status waits for human approval.
-          # Finish the runner on visual changes; real build/test errors still fail.
+          # UI Review compares this PR with its actual target branch, using raw
+          # snapshots at their merge base. Base baseline approval is not needed.
+          # UI Tests is informational; rendering/build errors still fail here.
           # Always produce this run's report/status, even after a manual upload
           # passed the same commit (Chromatic otherwise exits before JUnit output).
           bun run chromatic --exit-zero-on-changes --force-rebuild
@@ -101,7 +103,8 @@ jobs:
             const issue_number = context.payload.pull_request.number;
             const sha = context.payload.pull_request.head.sha;
             const { data: current } = await github.rest.pulls.get({ ...context.repo, pull_number: issue_number });
-            if (current.head.sha !== sha) { core.notice('Skipping stale Chromatic report'); return; }
+            const base = context.payload.pull_request.base;
+            if (current.head.sha !== sha || current.base.ref !== base.ref || current.base.sha !== base.sha) { core.notice('Skipping stale Chromatic report'); return; }
             const read = name => {
               try { return fs.readFileSync(`chromatic-report/${name}`, 'utf8'); } catch { return ''; }
             };
@@ -123,13 +126,16 @@ jobs:
             } catch {}
             const localPassed = process.env.LOCAL_RESULT === 'success';
             const complete = localPassed && process.env.CLOUD_RESULT === 'success' && Number.isSafeInteger(expected) && expected > 0 && total === expected && results.length === total && errors === 0 && skipped === 0 && count('failures') === pending && results.every(result => ['PASSED', 'ACCEPTED', 'PENDING'].includes(result)) && buildUrl;
-            const status = complete ? (pending ? 'Needs baseline review' : 'Passed') : 'Failed';
+            // JUnit describes UI Tests, not the PR's UI Review changeset. Pending
+            // baseline tests must not be presented as changes in this PR layer.
+            const status = complete ? 'Upload complete' : 'Failed';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [marker, `### Chromatic — ${status}`, `Commit \`${sha.slice(0, 7)}\``,
+              `PR #${issue_number} targets \`${base.ref}\` (\`${base.sha.slice(0, 7)}\`).`,
               `Local capture/replay: **${localPassed ? 'passed' : 'failed or incomplete'}**.`,
-              total === null ? 'No complete cloud report was produced.' : `${total} snapshots · ${errors ?? '?'} rendering errors · ${skipped ?? '?'} skipped · ${pending} pending baseline reviews.`,
-              complete && pending ? 'Approve changes in Chromatic to resolve its UI Tests check. This comment reflects the workflow run; the native check updates after approval.' : '',
-              [buildUrl && `[Review snapshots](${buildUrl})`, `[Workflow logs](${runUrl})`].filter(Boolean).join(' · ')
+              total === null ? 'No complete cloud report was produced.' : `${total} snapshots · ${errors ?? '?'} rendering errors · ${skipped ?? '?'} skipped.`,
+              complete ? 'Use the native UI Review check to review changes against this PR\'s target branch at their merge base. Base snapshots do not need baseline approval. UI Tests baseline differences are informational and may include changes inherited from lower layers.' : '',
+              [`[UI Review](https://www.chromatic.com/reviews?appId=6aeae810ce4e3a1237160876)`, buildUrl && `[Build snapshots](${buildUrl})`, `[Workflow logs](${runUrl})`].filter(Boolean).join(' · ')
             ].join('\n\n');
             await core.summary.addRaw(body).write();
             const comments = await github.paginate(github.rest.issues.listComments, { ...context.repo, issue_number, per_page: 100 });
