@@ -1,0 +1,25 @@
+/* Imported only by the Chromatic harness. The source capture uses reduced
+   motion, but the DOM archive does not carry that browser preference. Preserve
+   the hero's fully revealed, stationary state in both capture and cloud replay. */
+.landing-photo-stage .landing-navigation,
+.landing-photo-stage .landing-photo-media,
+.landing-photo-stage .landing-photo-shade,
+.landing-photo-stage .landing-photo-copy h1,
+.landing-photo-stage .landing-photo-copy > p,
+.landing-photo-stage .landing-hero-cta,
+.landing-photo-stage .connect-agent button,
+.landing-photo-stage .landing-glass-comment,
+.landing-photo-stage .landing-glass-widget {
+  opacity: 1 !important;
+  scale: 1 !important;
+  translate: 0 0 !important;
+  transform: none !important;
+  filter: none !important;
+  animation: none !important;
+  transition: none !important;
+}
+
+/* Centering is structural; keep it while removing the navigation entrance. */
+.landing-photo-stage .landing-navigation {
+  transform: translateX(-50%) !important;
+}

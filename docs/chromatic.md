@@ -158,3 +158,11 @@ on the tested commit, confirming the linked project's native status delivery.
 Local replay comparisons wait for stable consecutive frames. The renderer also
 waits for layout/fonts after finishing entrance animations, preventing a cold
 font-load frame from being used as the final checkpoint.
+
+The visual harness imports `tests/visual/harness/freeze-hero.css` to keep the
+homepage hero fully revealed and stationary. This stylesheet is included in
+the archived snapshot, so replay does not depend on reduced-motion browser
+preferences. It is never imported by the production website. Homepage replay
+checks run with both reduced motion and normal motion, preserving the same
+source checkpoint and requiring visible feedback cards to have no animation
+or transition.
