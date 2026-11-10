@@ -53,8 +53,8 @@ bun run chromatic:local
 
 This first repeats all local checks, then uses `CHROMATIC_PROJECT_TOKEN` from the
 ignored `.env.docker.local` to upload to the existing CRRT project. Capture/build
-steps do not load that environment file. Never commit the token. Chromatic's
-baseline approval remains manual; visual differences do not automatically pass.
+steps do not load that environment file. Never commit the token. Visual approval
+is handled by UI Review against the PR's target branch.
 
 ## Pull request automation
 
@@ -86,20 +86,25 @@ build must be published rather than replaced with a `trunk` comparison. For a
 missing historical merge-base build, follow Chromatic's patch-build instructions.
 Keep stacked branches rebased when their parents move.
 
-**UI Tests** still reports differences against approved baselines and can show
-changes inherited from lower stack layers. It is informational, not a required
-merge check. The workflow comment deliberately reports upload completeness,
-not a UI Review result or UI Tests baseline-review counts. Use the native
-**UI Review** check for the current PR changeset and approval state.
-Local uploads retain their nonzero exit code for unapproved baseline differences.
+**UI Tests is disabled completely** in the Chromatic project's Manage → Automate
+settings (**Visual tests: Disabled**, **UI Review: Enabled**). This is a persistent
+project setting shared by every branch, including future PRs and `trunk` builds;
+it is not a per-branch CLI flag. Future builds do not publish a separate
+**UI Tests** check or require approved baselines. Existing statuses on older
+commits may remain visible; they are not required checks.
+
+Snapshot captures are still necessary for UI Review and remain validated by
+**Visual screens** and **PR result**. The workflow comment reports upload
+completeness; use the native **UI Review** check for the current PR changeset
+and approval state. Do not re-enable Visual tests when configuring this project.
 
 CI also uses `--force-rebuild` so rerunning a commit that already passed locally
 still emits a fresh JUnit report and native status. Chromatic's default shortcut
 for passed same-commit rebuilds exits before writing the report that the comment
-job requires. New commits already build normally; baseline approval stays manual.
+job requires. New commits already build normally; UI Review owns visual approval.
 
 The existing project is linked to `thedesignproject/CRRT` using its existing valid
-GitHub access, with visual tests enabled. Native PR comments remain disabled;
+GitHub access, with UI Review enabled and visual tests disabled. Native PR comments remain disabled;
 the workflow supplies one comment. That comment records the workflow result;
 Chromatic updates its native check after approval without rerunning Actions.
 Reports and failure diagnostics are retained for seven days.
@@ -122,9 +127,12 @@ place. Requiring a status that is not enabled would leave PRs pending indefinite
 On November 10, 2026, the GitHub App integration was installed and the Reviews
 page confirmed it was synced with GitHub. The live required context was switched
 from **UI Tests** to **UI Review** on `trunk` and `test/chromatic-screens`, preserving
-the other requirements and their app bindings. Existing reviews without builds
-show **Awaiting activity**; the next PR build must supply their snapshots. A new
-stacked PR comparison has not yet been verified against the installed integration.
+the other requirements and their app bindings. Visual tests were subsequently
+disabled in the project to stop the redundant baseline-approval workflow.
+PR #417's UI Review passed with 69 snapshots and no changes against `trunk`.
+Existing reviews without builds show **Awaiting activity**; the next PR build
+must supply their snapshots. A new stacked PR comparison has not yet been
+verified against the installed integration.
 
 Fork and Dependabot uploads are deliberately skipped, so their native check
 will remain pending until an authorized maintainer runs the head on a

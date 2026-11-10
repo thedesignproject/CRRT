@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const { resolve } = require('node:path');
 
-// Execute the report script from the workflow itself. Its JUnit input describes
-// UI Tests; it must never label those inherited differences as PR review work.
+// Execute the report script from the workflow itself. Snapshot capture results
+// must never be presented as the PR's UI Review verdict.
 const root = resolve(__dirname, '../..');
 const workflow = readFileSync(resolve(root, '.github/workflows/chromatic.yml'), 'utf8').replaceAll('\r\n', '\n');
 const script = workflow.split('          script: |\n')[1].split('\n').map(line => line.slice(12)).join('\n');
@@ -43,9 +43,10 @@ test('pending inherited baselines do not request repeat approval or claim UI Rev
   assert.match(body, /native UI Review check/);
   assert.match(body, /Base snapshots do not need baseline approval/);
   assert.doesNotMatch(body, /Needs baseline review|pending baseline reviews|Chromatic — Passed/);
+  assert.doesNotMatch(body, /UI Tests/);
 });
 
-test('passing UI Tests still reports upload completion, not a UI Review verdict', async () => {
+test('successful snapshots report upload completion, not a UI Review verdict', async () => {
   const { bodies: [body], failed } = await report({ result: 'PASSED' });
   assert.deepEqual(failed, []);
   assert.match(body, /Upload complete/);

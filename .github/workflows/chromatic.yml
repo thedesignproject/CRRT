@@ -55,7 +55,8 @@ jobs:
           fi
           # UI Review compares this PR with its actual target branch, using raw
           # snapshots at their merge base. Base baseline approval is not needed.
-          # UI Tests is informational; rendering/build errors still fail here.
+          # Visual tests are disabled in the project; only UI Review is enabled.
+          # Snapshot capture/rendering/build errors still fail this job.
           # Always produce this run's report/status, even after a manual upload
           # passed the same commit (Chromatic otherwise exits before JUnit output).
           bun run chromatic --exit-zero-on-changes --force-rebuild
@@ -126,15 +127,15 @@ jobs:
             } catch {}
             const localPassed = process.env.LOCAL_RESULT === 'success';
             const complete = localPassed && process.env.CLOUD_RESULT === 'success' && Number.isSafeInteger(expected) && expected > 0 && total === expected && results.length === total && errors === 0 && skipped === 0 && count('failures') === pending && results.every(result => ['PASSED', 'ACCEPTED', 'PENDING'].includes(result)) && buildUrl;
-            // JUnit describes UI Tests, not the PR's UI Review changeset. Pending
-            // baseline tests must not be presented as changes in this PR layer.
+            // JUnit validates snapshot capture completeness. Only the native
+            // UI Review check reports the PR changeset and its approval state.
             const status = complete ? 'Upload complete' : 'Failed';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [marker, `### Chromatic — ${status}`, `Commit \`${sha.slice(0, 7)}\``,
               `PR #${issue_number} targets \`${base.ref}\` (\`${base.sha.slice(0, 7)}\`).`,
               `Local capture/replay: **${localPassed ? 'passed' : 'failed or incomplete'}**.`,
               total === null ? 'No complete cloud report was produced.' : `${total} snapshots · ${errors ?? '?'} rendering errors · ${skipped ?? '?'} skipped.`,
-              complete ? 'Use the native UI Review check to review changes against this PR\'s target branch at their merge base. Base snapshots do not need baseline approval. UI Tests baseline differences are informational and may include changes inherited from lower layers.' : '',
+              complete ? 'Use the native UI Review check to review changes against this PR\'s target branch at their merge base. Base snapshots do not need baseline approval.' : '',
               [`[UI Review](https://www.chromatic.com/reviews?appId=6aeae810ce4e3a1237160876)`, buildUrl && `[Build snapshots](${buildUrl})`, `[Workflow logs](${runUrl})`].filter(Boolean).join(' · ')
             ].join('\n\n');
             await core.summary.addRaw(body).write();
