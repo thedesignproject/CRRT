@@ -2,6 +2,7 @@ import { metadataPath } from '../server/mcp/http.js'
 type QueryValue = string | string[]
 
 type LocalRequest = {
+  socket: { remoteAddress: string | undefined }
   method?: string
   headers: Record<string, string>
   query: Record<string, QueryValue>
@@ -108,7 +109,7 @@ const port = Number(process.env.LOCAL_API_PORT ?? 3001)
 Bun.serve({
   hostname: '127.0.0.1',
   port,
-  async fetch(request) {
+  async fetch(request, server) {
     const url = new URL(request.url)
     if (request.method === 'GET' && ['/skill.md', '/openapi.json'].includes(url.pathname)) return new Response(Bun.file(new URL(`../apps/landing/public${url.pathname}`, import.meta.url)))
     url.pathname = metadataPath(url.pathname)
@@ -124,6 +125,7 @@ Bun.serve({
       })
 
       const localRequest: LocalRequest = {
+        socket: { remoteAddress: server.requestIP(request)?.address },
         method: request.method,
         headers: Object.fromEntries(request.headers.entries()),
         query,

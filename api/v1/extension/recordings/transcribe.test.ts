@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+vi.mock('../../../_lib/recording-transcription-limit.js', async original => ({ ...await original<typeof import('../../../_lib/recording-transcription-limit.js')>(), reserveTranscription: vi.fn() }))
 
 vi.mock('../../../_lib/recording-transcription.js', async () => {
   const actual = await vi.importActual<typeof import('../../../_lib/recording-transcription.js')>('../../../_lib/recording-transcription.js')
@@ -7,6 +8,7 @@ vi.mock('../../../_lib/recording-transcription.js', async () => {
 
 import handler from './transcribe.js'
 import { RecordingTranscriptionError, transcribeRecordingAudio } from '../../../_lib/recording-transcription.js'
+import { reserveTranscription, TranscriptionLimitError } from '../../../_lib/recording-transcription-limit.js'
 
 const extensionId = 'abcdefghijklmnopabcdefghijklmnop'
 const origin = `chrome-extension://${extensionId}`
@@ -28,15 +30,35 @@ function request(overrides: Record<string, unknown> = {}) {
 const call = (req: unknown, res: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
+  vi.mocked(reserveTranscription).mockReset().mockResolvedValue(undefined)
+  vi.stubEnv('RECORD_DEMO_TRANSCRIPTION_ENABLED', 'true')
   process.env.EXTENSION_ALLOWED_IDS = extensionId
   vi.mocked(transcribeRecordingAudio).mockReset().mockResolvedValue({ source: 'deepgram:nova-3', language: 'es', segments: [] })
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   if (originalAllowed === undefined) delete process.env.EXTENSION_ALLOWED_IDS
   else process.env.EXTENSION_ALLOWED_IDS = originalAllowed
 })
 
 describe('recording transcription endpoint', () => {
+  it('reserves quota before dispatch and never calls the provider when limited/unavailable', async () => {
+    for (const status of [429, 503] as const) {
+      vi.mocked(reserveTranscription).mockRejectedValueOnce(new TranscriptionLimitError(status, 'Quota blocked'))
+      const res = response(); await call(request(), res)
+      expect(res).toMatchObject({ statusCode: status, body: { error: 'Quota blocked' } })
+      expect(transcribeRecordingAudio).not.toHaveBeenCalled()
+    }
+    const res = response(); await call(request(), res)
+    expect(res.statusCode).toBe(200)
+    expect(reserveTranscription).toHaveBeenLastCalledWith(expect.anything(), webm.length)
+    expect(vi.mocked(reserveTranscription).mock.invocationCallOrder.slice(-1)[0]).toBeLessThan(vi.mocked(transcribeRecordingAudio).mock.invocationCallOrder.slice(-1)[0])
+  })
+  it('disables the anonymous demo route unless deliberately enabled', async () => {
+    vi.stubEnv('RECORD_DEMO_TRANSCRIPTION_ENABLED', '')
+    const res = response(); await call(request(), res); expect(res.statusCode).toBe(503)
+    expect(transcribeRecordingAudio).not.toHaveBeenCalled()
+  })
   it('allows exact-origin preflight and returns transcription without an account', async () => {
     let res = response()
     await call(request({ method: 'OPTIONS', body: undefined }), res)
