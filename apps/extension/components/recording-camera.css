@@ -1,0 +1,95 @@
+.recording-camera {
+  position: absolute;
+  left: var(--crrt-space-7, 24px);
+  bottom: 82px;
+  width: 112px;
+  aspect-ratio: 1;
+  pointer-events: auto;
+  transition: width var(--crrt-duration-default, 220ms) ease;
+}
+
+.recording-camera.camera-size-small { width: 72px; }
+.recording-camera.camera-size-medium { width: 112px; }
+.recording-camera.camera-size-large { width: 160px; }
+
+.recording-camera-preview {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: hidden;
+  padding: 0;
+  border: 3px solid var(--record-red);
+  border-radius: var(--crrt-radius-full, 50%);
+  background: var(--crrt-bg-deep-soft);
+  box-shadow: var(--crrt-shadow-pill);
+}
+
+.recording-camera-preview video {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transform: scaleX(-1);
+}
+
+.recording-camera-preview > span {
+  position: absolute;
+  inset: auto 0 var(--crrt-space-3, 8px);
+  color: var(--crrt-ink-faint);
+  font-size: 9px;
+  text-align: center;
+}
+
+.recording-camera-menu {
+  position: absolute;
+  left: calc(100% + var(--crrt-space-3, 8px));
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--crrt-space-2, 4px);
+  padding: var(--crrt-space-2, 4px);
+  border: 1px solid var(--crrt-rule-dark-strong);
+  border-radius: var(--crrt-radius-lg);
+  background: var(--crrt-bg-deep-soft);
+  box-shadow: var(--crrt-shadow-pill);
+  opacity: 0;
+  transform: translateX(-4px);
+  visibility: hidden;
+  transition: opacity var(--crrt-duration-fast, 150ms) ease, transform var(--crrt-duration-fast, 150ms) ease, visibility var(--crrt-duration-fast, 150ms) ease;
+}
+
+.recording-camera:hover .recording-camera-menu,
+.recording-camera:focus-within .recording-camera-menu {
+  opacity: 1;
+  transform: translateX(0);
+  visibility: visible;
+}
+
+.recording-camera-menu > div { display: flex; gap: var(--crrt-space-1, 2px); }
+.recording-camera-menu button {
+  min-width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--crrt-space-2, 4px);
+  padding: 0 var(--crrt-space-3, 8px);
+  border-radius: var(--crrt-radius-md);
+  background: transparent;
+  color: var(--crrt-ink-faint);
+  font-size: 10px;
+}
+.recording-camera-menu button:hover,
+.recording-camera-menu button[aria-pressed="true"] { background: var(--crrt-rule-dark); color: var(--crrt-white); }
+.recording-camera-menu .camera-close { border-left: 1px solid var(--crrt-rule-dark-strong); border-radius: 0 var(--crrt-radius-md) var(--crrt-radius-md) 0; }
+
+@media (max-width: 660px) {
+  .recording-camera.camera-size-medium { width: 82px; }
+  .recording-camera.camera-size-large { width: 112px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .recording-camera,
+  .recording-camera-menu { transition: none; }
+}
