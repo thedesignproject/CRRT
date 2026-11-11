@@ -3,9 +3,8 @@ import { z } from 'zod'
 import { getServiceSupabase } from '../supabase.js'
 import type { Failure, Manifest, RecordingState } from './contracts.js'
 
-export class RecordError extends Error {
-  constructor(public code: string, public status: number, public retryable = false) { super(code) }
-}
+import { RecordError } from '../domain-errors.js'
+export { RecordError } from '../domain-errors.js'
 export type RecordingRow = {
   id: string; owner_id: string; project_key: string | null; client_key: string; share_hash: string;
   title: string; source: 'tab' | 'window' | 'screen'; state: RecordingState; duration_ms: number | null;

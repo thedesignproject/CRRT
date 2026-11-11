@@ -21,6 +21,7 @@ type GitHubAppSignedPayload = {
   nonce: string
   iat: number
   exp: number
+  mcpFlow?: { connectionId: string; requestKey: string }
 }
 
 export type GitHubAppInstallState = GitHubAppSignedPayload & {
@@ -130,7 +131,7 @@ function validateSignedPayload<T extends GitHubAppSignedPayload>(
 }
 
 export function createGitHubAppInstallState(
-  input: Pick<GitHubAppInstallState, 'projectKey' | 'userId' | 'origin'>,
+  input: Pick<GitHubAppInstallState, 'projectKey' | 'userId' | 'origin'> & Pick<GitHubAppSignedPayload, 'mcpFlow'>,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload: GitHubAppInstallState = {
@@ -207,7 +208,7 @@ export function createGitHubAppInstallationToken(
 }
 
 export function createGitHubAppSetupAuthState(
-  input: Pick<GitHubAppSetupAuthState, 'projectKey' | 'userId' | 'origin' | 'installationId'>,
+  input: Pick<GitHubAppSetupAuthState, 'projectKey' | 'userId' | 'origin' | 'installationId'> & Pick<GitHubAppSignedPayload, 'mcpFlow'>,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload: GitHubAppSetupAuthState = {
@@ -222,7 +223,7 @@ export function createGitHubAppSetupAuthState(
 }
 
 export function createGitHubAppReuseAuthState(
-  input: Pick<GitHubAppReuseAuthState, 'projectKey' | 'userId' | 'origin' | 'installationRef'>,
+  input: Pick<GitHubAppReuseAuthState, 'projectKey' | 'userId' | 'origin' | 'installationRef'> & Pick<GitHubAppSignedPayload, 'mcpFlow'>,
   nowSeconds = Math.floor(Date.now() / 1000),
 ) {
   const payload: GitHubAppReuseAuthState = {
