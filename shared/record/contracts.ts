@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_RECORDING_DURATION_MS } from './limits'
+import { MAX_RECORDING_DURATION_MS } from './limits.js'
 
 export const contractVersion = 'record.v1' as const
 export const uuid = z.uuid().transform(value => value.toLowerCase())

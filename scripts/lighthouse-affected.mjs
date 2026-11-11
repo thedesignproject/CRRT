@@ -10,6 +10,7 @@ const resourceRoot = 'apps/landing/resources/'
 // Keep this list explicit: new scripts remain full-audit inputs by default.
 const ciScripts = ['vercel-build', 'now-build', 'deploy-build', 'cloud:check', 'db:migrate', 'test:coverage', 'test:diff-coverage']
 const deploymentFiles = [
+  'vercel.json', 'scripts/lighthouse-affected.mjs',
   'scripts/run-vercel-build.mjs', 'scripts/vercel-api-package.mjs',
   'scripts/verify-vercel-output.mjs', 'scripts/build-vercel-output.ts',
   'scripts/build-public-function.ts', 'scripts/check-cloud-deployment.ts',
@@ -94,7 +95,9 @@ export function selectAffected({ files, current, previous, packageBefore, packag
   const reasons = []
   const full = reason => ({ paths: all, reasons: [reason] })
   for (const file of files) {
-    if (file === '.gitignore') continue
+    // Record contracts are used by the API, dashboard, and extension, not the
+    // public resource build. Ignore only this known unrelated shared domain.
+    if (file === '.gitignore' || file === '.gitleaksignore' || file.startsWith('shared/record/')) continue
     if (/(^|\/)(__tests__|tests)\//.test(file) || /\.(test|spec)\.[cm]?[jt]sx?$/.test(file) || /\.(md|mdx)$/.test(file)) continue
     if (file === 'package.json') {
       try {
