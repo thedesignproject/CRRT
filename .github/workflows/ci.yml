@@ -69,6 +69,32 @@ jobs:
             exit 1
           fi
 
+  mcp-integration:
+    runs-on: ubuntu-latest
+    name: MCP OAuth, dashboard parity and permissions
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: Start isolated local Supabase and apply migrations
+        run: bun run local:up
+      - name: Exercise real MCP OAuth, RLS, dashboard upgrades and writes
+        run: bun run test:mcp:local
+      - name: Build and verify packaged MCP function
+        run: |
+          bun run build:landing
+          bun run build:dashboard
+          bun scripts/build-vercel-output.ts
+          bunx -p node@24 node --env-file=.env.docker.local scripts/verify-mcp-package.mjs
+      - name: Stop local services
+        if: always()
+        run: bunx supabase stop
+
   drizzle:
     runs-on: ubuntu-latest
     name: drizzle (snapshot consistency)

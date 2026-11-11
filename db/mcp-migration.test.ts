@@ -17,3 +17,15 @@ it('serializes conflicting retries before reading the request hash or comment', 
   expect(routine.indexOf("crrt-mcp-op:")).toBeLessThan(routine.indexOf('SELECT * INTO feedback'))
   expect(routine.indexOf("crrt-mcp-op:")).toBeLessThan(routine.indexOf("mcpRequestHash"))
 })
+
+it('ships additive dashboard upgrade and retry tables with schema-sourced privileged routines', async () => {
+  const { mcpDashboardUpgradeSql, mcpDashboardReceiptsSql } = await import('./schema')
+  const upgrade = readFileSync('db/migrations/0051_mcp_dashboard.sql', 'utf8')
+  expect(upgrade).toContain(mcpDashboardUpgradeSql.trim())
+  expect(upgrade).toContain('ENABLE ROW LEVEL SECURITY')
+  expect(upgrade).not.toMatch(/CREATE POLICY/)
+  expect(upgrade).toContain(mcpDashboardReceiptsSql.trim())
+  expect(upgrade).toContain('CREATE TABLE "mcp_dashboard_operations"')
+  const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
+  expect(journal.entries.filter((row: { idx: number }) => row.idx >= 51).map((row: { tag: string }) => row.tag)).toEqual(['0051_mcp_dashboard'])
+})
