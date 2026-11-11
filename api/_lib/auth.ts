@@ -3,6 +3,7 @@ import { getBearerToken, getReviewerToken, jsonError } from './http.js'
 import { getProjectMember } from './store.js'
 import { getServiceSupabase, getSupabase } from './supabase.js'
 import { canProject, effectiveProjectRole, type ProjectCapability, type ProjectRole } from './project-capabilities.js'
+import { trustedUser } from './trusted-user.js'
 
 export type AuthenticatedUser = { userId: string; email: string }
 
@@ -127,6 +128,8 @@ export async function requireUser(
   req: VercelRequest,
   res: VercelResponse,
 ): Promise<AuthenticatedUser | null> {
+  const internal = trustedUser(req)
+  if (internal) return internal
   const token = getBearerToken(req)
   if (!token) {
     jsonError(req, res, 401, 'Unauthorized')

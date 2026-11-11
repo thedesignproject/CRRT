@@ -106,3 +106,10 @@ describe('api/v1/github/setup', () => {
     expect(res.statusCode).toBe(500)
   })
 })
+
+it('preserves signed MCP flow identity through the GitHub installation redirect', async () => {
+  vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce({projectKey:'p',userId:'u',origin:'https://app.example',mcpFlow:{connectionId:'connection',requestKey:'flow'}} as never)
+  const res=mockRes();await call({method:'GET',query:{installation_id:'123',state:'signed-state'},headers:{}},res)
+  expect(res.statusCode).toBe(302)
+  expect(createGitHubAppSetupAuthState).toHaveBeenCalledWith(expect.objectContaining({mcpFlow:{connectionId:'connection',requestKey:'flow'}}))
+})

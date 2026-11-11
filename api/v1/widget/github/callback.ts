@@ -22,6 +22,7 @@ import {
   verifyWidgetGithubState,
   widgetCallbackHtml,
 } from '../../../_lib/widget-github-auth.js'
+import { completeMcpGithubFlow } from '../../../_lib/mcp-github-flow.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed } from '../../../_lib/http.js'
 
 function html(res: VercelResponse, body: string) {
@@ -68,6 +69,12 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
       expectedConnectionVersion,
     })
 
+    if (verifiedState.mcpFlow) {
+      await completeMcpGithubFlow(verifiedState.mcpFlow, verifiedState.userId, verifiedState.projectKey, { installationToken, repositories })
+      html(res, '<!doctype html><title>GitHub verified</title><p>GitHub verified. Return to your agent to select a repository and finish connecting.</p>')
+      return true
+    }
+
     html(res, widgetCallbackHtml(verifiedState.origin, {
       type: 'crrt:github-app-install',
       ok: true,
@@ -98,6 +105,10 @@ async function handleGitHubAppSetupCallback(res: VercelResponse, code: string, s
       'github_app_install_forbidden',
     ].includes(error.message)
     if (!known) console.error('GitHub App callback failed')
+    if (verifiedState.mcpFlow) {
+      html(res, '<!doctype html><title>GitHub verification failed</title><p>GitHub verification could not finish. Return to your agent and retry the connection.</p>')
+      return true
+    }
     html(res, widgetCallbackHtml(verifiedState.origin, {
       type: 'crrt:github-app-install',
       ok: false,

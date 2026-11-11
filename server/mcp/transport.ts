@@ -5,7 +5,8 @@ import { audit } from './audit.js'
 import { authFailure, config, ensure, identity, hasScope, ALL_SCOPES, reserve, McpError, type McpIdentity } from './auth.js'
 
 export type ToolSpec = {
-  name: string; description: string; scope?: 'crrt:implement' | 'crrt:review'
+  name: string; description: string; scope?: 'crrt:implement' | 'crrt:review' | 'crrt:dashboard'
+  annotations?: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean }
   input: z.ZodType<Record<string, unknown>>; output: z.ZodType<Record<string, unknown>>
   run: (input: Record<string, unknown>, actor: McpIdentity) => Promise<Record<string, unknown>>
 }
@@ -22,7 +23,7 @@ export function mcpHandler(tools: ToolSpec[]) {
         })
         for (const spec of tools.filter(tool => !tool.scope || hasScope(actor!, tool.scope))) server.registerTool(spec.name, {
           description: spec.description, inputSchema: spec.input, outputSchema: spec.output,
-          annotations: { readOnlyHint: !spec.scope, destructiveHint: spec.scope === 'crrt:review', idempotentHint: true, openWorldHint: false },
+          annotations: spec.annotations ?? { readOnlyHint: !spec.scope, destructiveHint: spec.scope === 'crrt:review', idempotentHint: !spec.scope, openWorldHint: false },
         }, async input => {
           try {
             await reserve(`tool:${actor!.user_id}`, 120)
@@ -33,11 +34,14 @@ export function mcpHandler(tools: ToolSpec[]) {
             return result
           } catch (error) {
             audit(requestId, spec.name, actor, started, undefined, error)
-            return { isError: true, content: [{ type: 'text' as const, text: error instanceof McpError ? error.code === 'rate_limited' ? 'rate_limited: retry after 60 seconds' : error.code : 'tool_unavailable' }] }
+            const code = error instanceof McpError ? error.code : 'tool_unavailable'
+            return { isError: true, structuredContent: { code, requestId, retryable: code === 'rate_limited', retryAfter: code === 'rate_limited' ? 60 : null,
+              action: 'For dashboard permissions use connection_status and request_dashboard_access. For conflicts, unknown write outcomes or oversized results, inspect current state and narrow/paginate reads; do not blindly retry mutations.' },
+              content: [{ type: 'text' as const, text: code === 'rate_limited' ? 'rate_limited: retry after 60 seconds' : code }] }
           }
         })
         return server
-      }, { responseMode: 'json', maxRequestBodySize: 16384 })
+      }, { responseMode: 'json', maxRequestBodySize: 262144 })
       try {
         // Fully consume finite legacy SSE responses before disposing their instance.
         const response = await handler.fetch(request)

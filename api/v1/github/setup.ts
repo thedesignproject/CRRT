@@ -26,6 +26,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       userId: verifiedState.userId,
       origin: verifiedState.origin,
       installationId,
+      ...(verifiedState.mcpFlow ? { mcpFlow: verifiedState.mcpFlow } : {}),
     })
     const authorizeUrl = buildGitHubAuthorizeUrl(setupAuthState)
     setCors(req, res, ['GET', 'OPTIONS'])
