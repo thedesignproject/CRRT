@@ -8,7 +8,7 @@
     "deploymentEnabled": false
   },
   "builds": [
-    { "src": "package.json", "use": "@vercel/static-build@26.0.1" }
+    { "src": "package.json", "use": "@vercel/static-build@27.0.0" }
   ],
   "crons": [
     { "path": "/api/v1/internal/mcp-cleanup", "schedule": "23 3 * * *" },

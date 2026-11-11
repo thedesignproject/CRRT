@@ -66,6 +66,19 @@ it('skips only explicit deployment helpers and keeps unknown scripts and shared 
   expect(select(['scripts/new-deployment-helper.ts'])).toEqual(all)
 })
 
+it('skips Record contracts, secret-scan exceptions, and deployment configuration without hiding resource changes', () => {
+  const files = [
+    'shared/record/contracts.ts', 'shared/record/limits.ts',
+    'scripts/record-contracts-node.test.ts', '.gitleaksignore', 'vercel.json',
+    'scripts/lighthouse-affected.mjs', 'scripts/lighthouse-affected.test.ts',
+    'docs/vercel-managed-build.md',
+  ]
+  expect(select(files)).toEqual([])
+  expect(select([...files, 'apps/landing/resources/ResourceArtwork.tsx'])).toEqual(['/resources'])
+  expect(select([...files, 'apps/landing/resources/resources.css'])).toEqual(all)
+  expect(select([...files, 'shared/new-input.ts'])).toEqual(all)
+})
+
 it('reads package metadata from both revisions without executing it and falls back on missing history', () => {
   const current = structuredClone(manifest)
   current.scripts['vercel-build'] = 'throw new Error("must not execute")'

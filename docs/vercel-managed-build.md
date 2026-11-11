@@ -5,11 +5,15 @@ Build Output API v3 output in `.vercel/output`. Automatic API discovery previous
 also compiled every `api/**/*.ts` route, producing 92 functions: 86 per-route API
 functions plus the six functions from our custom packager.
 
-`vercel.json` now selects one explicit `@vercel/static-build@26.0.1` builder for
+`vercel.json` now selects one explicit `@vercel/static-build@27.0.0` builder for
 `package.json`. This is Vercel's legacy `builds` configuration: it is deliberate
 here because it disables default API discovery while retaining Vercel-managed
-builds and variables. The static builder calls the `vercel-build` package script
-and recognizes the generated Build Output API output. The package script uses
+builds and variables. The builder's exact build-utils peer matches Vercel's
+`15.3.0` builder environment. The former `26.0.1` pin required `15.2.1` and failed
+npm peer resolution before the application build could start.
+
+The static builder calls the `vercel-build` package script and recognizes the
+generated Build Output API output. The package script uses
 the installed Bun binary to run `deploy-build`, avoiding a nested Bun download
 through `npx`/`bun x`. The managed builder selects Bun from the lockfile.
 
