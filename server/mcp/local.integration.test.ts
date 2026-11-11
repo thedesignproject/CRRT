@@ -118,10 +118,10 @@ suite('real MCP client → HTTP → CRRT services → local Docker', () => {
     expect(tokens!.access_token).toMatch(/^crrt_mcp_/)
     await pending.close()
   })
-  it('initializes, discovers exactly four read-only tools, and reads filtered projects and feedback', async () => {
+  it('initializes, discovers scoped feedback tools and dashboard upgrade entry points, and reads filtered projects and feedback', async () => {
     const client = await connect(), listed = await client.listTools()
-    expect(listed.tools.map(tool => tool.name).sort()).toEqual(['get_feedback', 'get_handoff_context', 'list_feedback', 'list_projects'])
-    expect(listed.tools.every(tool => tool.annotations?.readOnlyHint && !tool.annotations?.destructiveHint)).toBe(true)
+    expect(listed.tools.map(tool => tool.name).sort()).toEqual(['connection_status', 'get_feedback', 'get_handoff_context', 'list_dashboard_operations', 'list_feedback', 'list_projects', 'request_dashboard_access', 'run_dashboard_operation'])
+    expect(listed.tools.filter(tool => ['get_feedback', 'get_handoff_context', 'list_feedback', 'list_projects'].includes(tool.name)).every(tool => tool.annotations?.readOnlyHint && !tool.annotations?.destructiveHint)).toBe(true)
     const projects = (await call(client, 'list_projects', { limit: 1 })).structuredContent as Record<string, unknown>
     expect(projects.nextCursor).toBeTypeOf('string')
     expect((await call(client, 'list_projects', { limit: 1, cursor: projects.nextCursor })).isError).not.toBe(true)

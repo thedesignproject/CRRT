@@ -89,3 +89,13 @@ it('labels existing read-only grants separately from approved updates', async ()
   expect(screen.getByText('Connected · Read-only')).toBeInTheDocument()
   expect(screen.getByText('Connected · Approved updates')).toBeInTheDocument()
 })
+
+it('discloses and labels the full dashboard suite at initial consent and in connection settings', async () => {
+  fetcher.mockImplementationOnce(() => reply({ name: 'Full client', redirectUri: 'http://localhost/callback', scope: 'crrt:read crrt:implement crrt:review crrt:dashboard' }))
+  const view = mount(); await screen.findByText('Full client')
+  expect(screen.getByText(/Full dashboard access:/)).toHaveTextContent('billing flows')
+  view.unmount()
+  window.history.replaceState({}, '', '/mcp-auth')
+  fetcher.mockImplementationOnce(() => reply({ connections: [{ id: 'full', scope: 'crrt:read crrt:implement crrt:review crrt:dashboard', mcp_clients: { name: 'Full client' } }] }))
+  mount(); await screen.findByText('Connected · Full dashboard access')
+})

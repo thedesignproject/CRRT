@@ -189,7 +189,7 @@ The HTTPS identifier is test metadata; no deployment or external request is made
 
 ## Scoped implementation and reviewer tools
 
-New connections request all three scopes by default; clients may explicitly request
+The initial implementation release requested all three original scopes by default; clients may explicitly request
 read-only access. Existing read-only grants never acquire writes during refresh.
 Reauthorize to approve additional scopes. Tools are discovered only within the grant.
 
@@ -273,3 +273,99 @@ retries the original request. The fixture is scoped to its random feedback ID
 and all temporary database objects are removed. Public event privacy checks
 remain unchanged and pass. All seven layers passed full regression coverage,
 typecheck and 100% changed-line/branch gates again; the local API was restarted.
+
+## Dashboard suite and connection upgrades
+
+The MCP server also exposes dashboard operations through the same authenticated
+handlers used by the dashboard. `list_dashboard_operations` lists the supported
+operations; call it with `operation` to inspect that operation's query fields and
+body contract. `run_dashboard_operation` executes an allowlisted operation. It
+cannot select arbitrary URLs, methods, headers, database queries or actor IDs.
+
+The `dashboard-v1` bundle adds `crrt:dashboard` alongside read, implementation and
+review scopes. New connections request the whole bundle at initial consent.
+Existing connections keep their current scopes until their owner explicitly
+approves an upgrade. Full-suite approval does not override project membership,
+ownership, private feedback visibility, super-admin requirements, plans, quotas
+or feature flags. It does not activate continuous implementation or authorize
+automatic merge/deployment.
+
+For an existing connection:
+
+1. Call `connection_status` to inspect the effective grant.
+2. Call `request_dashboard_access` if full dashboard access is needed. A dashboard
+   operation attempted without it also returns `permission_upgrade_required`
+   with the same flow's approval URL.
+3. Explain the complete upgrade once. Open the returned URL in the system browser
+   if the client supports doing so; otherwise provide a clickable link. The user
+   signs into the owning account and approves or declines the complete suite.
+4. Call `request_dashboard_access` with its `requestId` to inspect the outcome.
+   Use bounded checks while awaiting the user; a closed tab is not approval.
+5. After approval, refresh the original task's state and continue. The connection
+   ID/configuration stays intact and existing credentials resolve the updated
+   grant. Refresh credentials retain it. No reinstall or disconnect is required.
+
+Clients can cache tool discovery. Use supported refresh controls, or clearly
+explain a required reload/new conversation without repeating setup or promising
+that every host automatically resumes conversations. Expired/revoked credentials
+still require the client's normal authentication recovery.
+
+MCP tool requests allow up to 256 KiB so dashboard bulk selections are not
+constrained by the former 16 KiB envelope. OAuth requests retain their 16 KiB
+limit; tool results retain their 128 KiB limit and support paginated reads.
+
+Writes require `userRequested:true` and a 16–128 character `idempotencyKey`.
+Feedback and project instructions are not proof of a human request. Retry the
+identical operation/query/body using the same key. A stored retry never reexecutes a write. Setup results (Storybook codes, share
+capabilities and audit IDs) are recovered only after current resource access is
+revalidated; billing URLs remain bound to the same account. Ordinary write
+receipts return the recorded outcome and require a current resource read. Record
+context can be paged from its saved result only while its ownership, entitlement,
+project and revision remain valid. Changed content with
+the same key fails. A reserved operation with an unknown outcome is not replayed;
+inspect/reconcile its resource before taking another action. Retry receipts are
+encrypted because dashboard results may contain share capabilities.
+
+The suite covers project/settings/export, feedback/inbox/bulk/undo, repository
+configuration, members/invitations/domain access, GitHub/Linear/Jira/Storybook,
+external-work dispatch/recovery, feedback shares, notifications, Record,
+Product Audit, billing entry points and super-admin views. MCP connection listing
+and revocation use `manage_mcp_connections` with the same account boundary.
+Operation availability follows the installed backend version; the live catalog
+is authoritative. Large array results can be read with `resultPage` (optional
+array path `field`, `offset`, and `limit`), returning `nextOffset`. Nested paths
+such as `payload.transcript` are supported. The quota-counted Record context POST
+is a semantic read: reuse its body `requestKey` and outer `idempotencyKey` across
+pages to charge/generate once, with ownership, plan, project and revision
+revalidated on recovery. Signed image references are renewed without charging
+for another context payload. OAuth/payment entry, account credential changes and visual
+capture still require the appropriate browser flow. A returned authorization,
+installation or checkout URL is a next step, not evidence of completion.
+
+Local schema additions are combined in migration `0051_mcp_dashboard.sql`. The real local protocol test
+upgrades a read-only connection in place, renames a project, checks another domain,
+recovers a lost-response retry, rotates tokens and reconnects without losing the
+approved bundle. SQL tests cover ownership, duplicate decisions, expiry,
+revocation, concurrent request deduplication and privileged function access.
+
+CI now runs the Docker-backed MCP suites and `scripts/verify-mcp-package.mjs`.
+The packaged smoke verifies metadata, the authentication challenge, OAuth,
+tool discovery, and an authenticated dashboard write through the built Node
+function using disposable local fixtures. It never targets production.
+
+
+For GitHub repository setup, `repository.installations` returns `flowId` and
+browser URLs bound to the current MCP connection, user and project. Open one URL
+in the system browser, then read `repository.completion` with `projectId` and
+`flowId`. After GitHub verification, it returns the verified repository choices
+and short-lived installation proof needed by `repository.update`. No dashboard
+opener, copied credentials or popup message is required. The flow expires after
+ten minutes and results are encrypted at rest; another connection cannot read it.
+
+
+Cached recovery enforces the same Record enablement guard as fresh API reads,
+including before image renewal and before returning recovered context. Disabled
+Record returns `record_disabled` (503, nonretryable). Known Record and Storybook
+recovery errors preserve their domain code, HTTP status and retryability, so
+plan requirements, access changes and deleted resources are not mislabeled as
+`tool_unavailable`. Unexpected exceptions remain sanitized.
