@@ -3810,7 +3810,7 @@ export const mcpCodes = pgTable('mcp_codes', {
 }, t => ({
   expiry: index('mcp_codes_expiry').on(t.expiresAt),
   hashCheck: check('mcp_codes_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$' and ${t.stateHash} ~ '^[0-9a-f]{64}$'`),
-  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review')`),
+  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`),
   challengeCheck: check('mcp_codes_challenge', sql`${t.challenge} ~ '^[A-Za-z0-9_-]{43}$'`),
   lifetime: check('mcp_codes_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`),
 })).enableRLS()
@@ -3826,7 +3826,7 @@ export const mcpConnections = pgTable('mcp_connections', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   user: index('mcp_connections_user').on(t.userId),
-  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review')`),
+  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`),
   lifetime: check('mcp_connections_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '30 days'`),
 })).enableRLS()
 
@@ -4197,3 +4197,88 @@ export const inboxRestoreCloudSql = [
   END IF;`),
   "NOTIFY pgrst, 'reload schema';",
 ].join('\n--> statement-breakpoint\n')
+
+// In-place dashboard permission upgrades. A request is not a credential: the
+// owning dashboard account must approve it, and the live connection is rechecked.
+export const mcpPermissionUpgrades = pgTable('mcp_permission_upgrades', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
+  bundle: text('bundle').notNull().default('dashboard-v1'),
+  state: text('state').notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull().default(sql`now() + interval '10 minutes'`),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+}, t => ({
+  connection: index('mcp_permission_upgrades_connection').on(t.connectionId),
+  bundleCheck: check('mcp_permission_upgrades_bundle', sql`${t.bundle} = 'dashboard-v1'`),
+  stateCheck: check('mcp_permission_upgrades_state', sql`${t.state} in ('pending','approved','declined')`),
+  lifetime: check('mcp_permission_upgrades_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '10 minutes'`),
+})).enableRLS()
+
+export const mcpDashboardUpgradeSql = `
+CREATE FUNCTION public.mcp_request_dashboard_upgrade(p_connection uuid,p_actor uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE request public.mcp_permission_upgrades;
+BEGIN
+  PERFORM public.mcp_require_connection(p_connection,p_actor,'crrt:read');
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-mcp-upgrade:'||p_connection::text,0));
+  SELECT * INTO request FROM public.mcp_permission_upgrades WHERE connection_id=p_connection
+    AND state='pending' AND expires_at>clock_timestamp() ORDER BY created_at DESC LIMIT 1;
+  IF NOT FOUND THEN
+    INSERT INTO public.mcp_permission_upgrades(connection_id) VALUES(p_connection) RETURNING * INTO request;
+  END IF;
+  RETURN to_jsonb(request);
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.mcp_decide_dashboard_upgrade(p_request uuid,p_actor uuid,p_decision text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE request public.mcp_permission_upgrades; connection public.mcp_connections; client_name text;
+BEGIN
+  IF p_decision NOT IN ('inspect','approve','deny') THEN RAISE EXCEPTION 'invalid_decision'; END IF;
+  -- Lock the connection first, matching revocation and credential refresh.
+  SELECT c.* INTO connection FROM public.mcp_connections c JOIN public.mcp_permission_upgrades r ON r.connection_id=c.id
+    WHERE r.id=p_request AND c.user_id=p_actor FOR UPDATE OF c;
+  IF NOT FOUND THEN RAISE EXCEPTION 'upgrade_unavailable'; END IF;
+  PERFORM public.mcp_require_connection(connection.id,p_actor,'crrt:read');
+  SELECT * INTO request FROM public.mcp_permission_upgrades WHERE id=p_request FOR UPDATE;
+  SELECT name INTO client_name FROM public.mcp_clients WHERE id=connection.client_id;
+  IF request.state='pending' AND request.expires_at<=clock_timestamp() THEN
+    RETURN jsonb_build_object('state','expired','name',client_name,'bundle',request.bundle);
+  END IF;
+  IF request.state='pending' AND p_decision<>'inspect' THEN
+    IF p_decision='approve' THEN
+      UPDATE public.mcp_connections SET scope='crrt:read crrt:implement crrt:review crrt:dashboard' WHERE id=connection.id;
+    END IF;
+    UPDATE public.mcp_permission_upgrades SET state=CASE WHEN p_decision='approve' THEN 'approved' ELSE 'declined' END,
+      decided_at=clock_timestamp() WHERE id=request.id RETURNING * INTO request;
+  END IF;
+  RETURN jsonb_build_object('state',request.state,'name',client_name,'bundle',request.bundle,'expiresAt',request.expires_at);
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.mcp_request_dashboard_upgrade(uuid,uuid),public.mcp_decide_dashboard_upgrade(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.mcp_request_dashboard_upgrade(uuid,uuid),public.mcp_decide_dashboard_upgrade(uuid,uuid,text) TO service_role;
+--> statement-breakpoint
+GRANT ALL ON public.mcp_permission_upgrades TO service_role;
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
+`;
+
+// Durable retry receipts. A reserved operation without a receipt is deliberately
+// not replayed: a process may have stopped after an external side effect.
+export const mcpDashboardOperations = pgTable('mcp_dashboard_operations', {
+  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
+  requestKey: text('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  response: jsonb('response'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  pk: primaryKey({ columns: [t.connectionId, t.requestKey] }),
+  shape: check('mcp_dashboard_operations_shape', sql`${t.requestKey} ~ '^[A-Za-z0-9_-]{16,128}$' and ${t.requestHash} ~ '^[0-9a-f]{64}$'`),
+})).enableRLS()
+
+export const mcpDashboardReceiptsSql = `
+GRANT ALL ON public.mcp_dashboard_operations TO service_role;
+`;
