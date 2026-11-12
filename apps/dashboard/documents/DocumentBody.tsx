@@ -1,8 +1,12 @@
 import { useMemo, useRef } from 'react'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import type { ClickTarget } from '../../../src/components/FeedbackWidget/types'
+import { buildTextRangeAnchor } from '../../../src/lib/textAnchor'
+import { conversationSelector, positionAt } from '../../../src/components/FeedbackWidget/conversation'
 
 export type DocumentQuote = { quote: string; prefix: string; suffix: string }
+export type DocumentSelection = DocumentQuote & { selectionTarget?: ClickTarget; revision?: number }
 export function documentHtml(source: string) {
   return DOMPurify.sanitize(marked.parse(source, { async: false }), {
     USE_PROFILES: { html: true },
@@ -21,7 +25,7 @@ export function quoteMatches(source: string, anchor: DocumentQuote) {
   }
   return matches === 1
 }
-export function DocumentBody({ source, onQuote }: { source: string; onQuote?: (quote: DocumentQuote) => void }) {
+export function DocumentBody({ source, onQuote }: { source: string; onQuote?: (quote: DocumentSelection) => void }) {
   const root = useRef<HTMLDivElement>(null)
   const html = useMemo(() => documentHtml(source), [source])
   function capture() {
@@ -36,7 +40,13 @@ export function DocumentBody({ source, onQuote }: { source: string; onQuote?: (q
     before.setEnd(range.startContainer, range.startOffset)
     const start = before.toString().length,
       text = root.current!.textContent!
-    onQuote({ quote, prefix: text.slice(Math.max(0, start - 64), start), suffix: text.slice(start + quote.length, start + quote.length + 64) })
+    const built = buildTextRangeAnchor(range, { getSelector: element => conversationSelector(element, '.document-prose'), url: window.location.href })!
+    const point = {
+      x: (built.midpointClient.x + window.scrollX) / Math.max(document.documentElement.scrollWidth, window.innerWidth) * 100,
+      y: (built.midpointClient.y + window.scrollY) / Math.max(document.documentElement.scrollHeight, window.innerHeight) * 100,
+    }
+    const target = positionAt({ ...point, selector: built.anchor.containerSelector, url: window.location.href, targetType: 'text_range', anchor: built.anchor }, built.midpointClient.x, built.midpointClient.y)
+    onQuote({ quote, prefix: text.slice(Math.max(0, start - 64), start), suffix: text.slice(start + quote.length, start + quote.length + 64), selectionTarget: target })
   }
   return <div ref={root} className="document-prose" onMouseUp={capture} onKeyUp={capture} dangerouslySetInnerHTML={{ __html: html }} />
 }

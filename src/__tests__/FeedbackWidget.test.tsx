@@ -4065,4 +4065,15 @@ describe('<FeedbackWidget />', () => {
       expect(document.querySelector('textarea')).not.toBeNull()
     })
   })
+  it('keeps the composer recoverable when a request rejects with a non-Error value', async () => {
+    mockFetch(async () => { throw 'offline' })
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+    const { textarea, getSendButton } = await enterCommentingMode()
+    fireEvent.change(textarea, { target: { value: 'Keep my draft' } })
+    fireEvent.click(getSendButton())
+    await waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not save comment'))
+    expect(textarea).toHaveValue('Keep my draft')
+  })
+
 })

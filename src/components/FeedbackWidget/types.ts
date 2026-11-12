@@ -16,6 +16,60 @@ export interface FeedbackWidgetProps {
   page?: WidgetPage
   /** Launch the Chrome-extension recorder. Embedded widgets omit this and show the shortcut handoff. */
   onRecord?: () => void | Promise<void>
+  /** Host-owned feedback data for the standard launcher, pins, composer, and sidebar. */
+  conversation?: FeedbackConversationProps
+}
+
+export interface ConversationDraft {
+  body: string
+  author: string
+  reply: { id: string; version: number; author: string } | null
+  target?: FeedbackPosition
+}
+
+export interface FeedbackPosition {
+  selector: string
+  x: number
+  y: number
+  elementX: number
+  elementY: number
+}
+
+export interface ConversationComment {
+  id: string
+  parentId: string | null
+  version: number
+  body: string
+  author: string
+  quote: string
+  createdAt: string
+  target?: FeedbackPosition | null
+  contextLabel?: string
+  reviewStatus: ReviewStatus
+  implementationStatus: string
+  progressUpdates?: { createdAt: string; agentId: string; operation: string; summary: string }[]
+}
+
+export interface FeedbackConversationProps {
+  /** Restrict capture to the host's content rather than its surrounding controls. */
+  containerSelector?: string
+  feedback: ConversationComment[]
+  selection: string
+  /** Actual range captured by the host, avoiding ambiguous text searches. */
+  selectionTarget?: ClickTarget
+  onClearSelection(): void
+  onComment(input: { body: string; author: string; parentId?: string; version?: number; target?: FeedbackPosition }): Promise<void>
+  onReview?(comment: ConversationComment, status: 'accepted' | 'rejected', done?: boolean): void
+  authorName?: string
+  onPendingChange?(pending: boolean): void
+  onDiscard?(): void
+  disabled?: boolean
+  draftLocked?: boolean
+  initialDraft?: ConversationDraft
+  onDraftChange?(draft: ConversationDraft | null): void
+  concealed?: boolean
+  readOnly?: boolean
+  errorMessage(error: unknown): string
 }
 
 export interface WidgetPage {
@@ -75,6 +129,8 @@ export interface ClickTarget {
   url: string
   targetType?: CommentTargetType
   anchor?: TextRangeAnchor
+  elementX?: number
+  elementY?: number
 }
 
 export interface Comment {
@@ -94,4 +150,6 @@ export interface Comment {
   authorName?: string
   targetType?: CommentTargetType
   anchor?: TextRangeAnchor | null
+  elementX?: number
+  elementY?: number
 }
