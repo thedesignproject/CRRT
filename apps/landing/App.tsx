@@ -9,6 +9,9 @@ import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
 import { ThemeProvider } from '../../src/design-system'
 import { ResourcesPage } from './resources/ResourcesPage'
+import { ResourceTool } from './resources/ResourceTool'
+import { ResourceArticle } from './resources/ResourceArticle'
+import { ResourcesIndex } from './resources/ResourcesIndex'
 import { readResourceData } from './resources/readResourceData'
 import './globals.css'
 import './marketing-polish.css'
@@ -36,7 +39,8 @@ function RoutedApp() {
   useScrollProgress()
 
   if (publicPath === '/resources' || publicPath.startsWith('/resources/')) {
-    return <ResourcesPage pathname={initialPath} article={readResourceData(initialPath)} />
+    const article = readResourceData(initialPath)
+    return <ResourcesPage pathname={initialPath} article={article}>{publicPath === '/resources' ? <ResourcesIndex /> : article && <ResourceArticle resource={article} tool={article.tool && <ResourceTool kind={article.tool} />} />}</ResourcesPage>
   }
 
   if (publicPath === '/privacy') {

@@ -106,7 +106,7 @@ async function completeHostedSignIn(client: SupabaseClient, intent: HostedAuthMe
       if (verified.error || verified.data.user?.id !== result.user.id) {
         throw verified.error ?? new Error('Could not verify the CRRT account')
       }
-      return { accessToken: data.session.access_token, email: result.user.email }
+      return { accessToken: data.session.access_token, email: result.user.email, userId: data.session.user.id }
     } catch (error) {
       // setSession persists before returning, so every rejected post-save check
       // must clear the session while this attempt still owns the client.

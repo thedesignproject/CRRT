@@ -14,6 +14,10 @@ vi.mock('../../../../_lib/widget-github-auth.js', () => ({
   buildGitHubAuthorizeUrl: vi.fn((state: string) => `https://github.com/login/oauth/authorize?state=${state}`),
 }))
 
+vi.mock('../../../../_lib/trusted-user.js', () => ({ trustedUser: vi.fn() }))
+vi.mock('../../../../_lib/mcp-github-flow.js', () => ({ startMcpGithubFlow: vi.fn() }))
+import { trustedUser } from '../../../../_lib/trusted-user.js'
+import { startMcpGithubFlow } from '../../../../_lib/mcp-github-flow.js'
 import handler from './install.js'
 import { requireUser } from '../../../../_lib/auth.js'
 import { buildGitHubAppInstallUrl, createGitHubAppInstallState, createGitHubAppReuseAuthState } from '../../../../_lib/github-app.js'
@@ -35,6 +39,7 @@ const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
+  vi.mocked(trustedUser).mockReset(); vi.mocked(startMcpGithubFlow).mockReset()
   vi.mocked(requireUser).mockReset()
   vi.mocked(buildGitHubAppInstallUrl).mockClear()
   vi.mocked(createGitHubAppInstallState).mockClear()
@@ -147,4 +152,16 @@ describe('api/v1/projects/[projectId]/github/install', () => {
     expect(JSON.stringify(res.body)).not.toContain('installationId')
     expect(res.headers['Cache-Control']).toBe('no-store')
   })
+})
+
+it('binds installation and reuse browser states to a retrievable MCP flow', async () => {
+  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'a@b.c'})
+  vi.mocked(getProjectMember).mockResolvedValue({role:'admin'} as never)
+  vi.mocked(listGitHubUserInstallations).mockResolvedValue([{id:'installation'}] as never)
+  vi.mocked(trustedUser).mockReturnValue({userId:'u',email:'a@b.c',mcpConnectionId:'connection'})
+  vi.mocked(startMcpGithubFlow).mockResolvedValue({flowId:'flow',expiresAt:'later'})
+  const res=mockRes();await call({method:'GET',query:{projectId:'p'},headers:{}},res)
+  expect(res.body).toMatchObject({flowId:'flow',expiresAt:'later'})
+  expect(createGitHubAppInstallState).toHaveBeenCalledWith(expect.objectContaining({mcpFlow:{connectionId:'connection',requestKey:'flow'}}))
+  expect(createGitHubAppReuseAuthState).toHaveBeenCalledWith(expect.objectContaining({mcpFlow:{connectionId:'connection',requestKey:'flow'}}))
 })

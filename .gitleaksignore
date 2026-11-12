@@ -9,3 +9,10 @@ ce21623d3c63d88d7d0eb008a481c4fa92d3f76d:branding/crrt/components/DropCarrotButt
 ce21623d3c63d88d7d0eb008a481c4fa92d3f76d:branding/crrt/components/FeedbackBadge.meta.ts:generic-api-key:103
 ce21623d3c63d88d7d0eb008a481c4fa92d3f76d:branding/crrt/components/FeedbackPanel.meta.ts:generic-api-key:137
 ce21623d3c63d88d7d0eb008a481c4fa92d3f76d:branding/crrt/logos/README.md:generic-api-key:14
+# Historical idempotency UUID fixture, not a credential. Keep other findings enabled.
+4ae9e498d4d9151620508cb599afca4731f5f41a:api/_lib/record/agent.test.ts:generic-api-key:8
+# Mocked owner-token assertion in the Record recovery UI test; not a credential.
+acded5fa341fe4f61c1b43d7bc88711580268b06:apps/dashboard/components/RecordingSharePage.test.tsx:generic-api-key:154
+# The same reviewed fixtures after their PRs were squash-merged into trunk.
+a632a69c759eb582a69dd26318eeb7d9ce4ba96e:api/_lib/record/agent.test.ts:generic-api-key:8
+9f611771e76331e052ca14af78350c7770658d73:apps/dashboard/components/RecordingSharePage.test.tsx:generic-api-key:154

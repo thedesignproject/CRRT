@@ -2,11 +2,16 @@ import { act, fireEvent, render as renderUI, screen, within } from '@testing-lib
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 import { ThemeProvider } from '../../../src/design-system'
-import { ResourcesPage } from './ResourcesPage'
+import { ResourcesPage as ResourceShell } from './ResourcesPage'
+import { ResourceArticle } from './ResourceArticle'
+import { ResourcesIndex } from './ResourcesIndex'
+import type { Resource } from './model'
+import { ResourceTool } from './ResourceTool'
 import { resourceMinutes, resourcePath, resources } from './content'
 import { render as prerender } from '../prerender'
 
 const render = (node: ReactNode) => renderUI(<ThemeProvider defaultTheme="light">{node}</ThemeProvider>)
+const ResourcesPage = ({ pathname, article }: { pathname: string; article?: Resource }) => <ResourceShell pathname={pathname} article={article}>{pathname.replace(/\/+$/, '') === '/resources' ? <ResourcesIndex /> : article && <ResourceArticle resource={article} tool={article.tool && <ResourceTool kind={article.tool} />} />}</ResourceShell>
 
 vi.mock('./ResourceFigure', () => ({ ResourceFigure: ({ track }: { track: string }) => <div data-testid={`figure-${track}`} /> }))
 
@@ -76,6 +81,8 @@ it('shows a useful missing-guide page and renders index and articles during prer
   expect(prerender('/resources')).toContain('Build with AI.')
   expect(prerender(resourcePath(resources[0]))).toContain(resources[0].answer)
   expect(prerender('/resources')).toContain('CollectionPage')
+  expect(prerender('/resources/missing')).toContain('Guide not found')
+  expect(prerender(resourcePath(resources.find(resource => resource.tool)!))).toContain('id="interactive-tool"')
 })
 
 it('rejects article data for another route and serializes embedded text safely', () => {

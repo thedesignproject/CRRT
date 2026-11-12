@@ -1,7 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const sdk = vi.hoisted(() => ({ init: vi.fn(), capture: vi.fn(), identify: vi.fn(), reset: vi.fn(), logger: { info: vi.fn() } }))
 const init = sdk.init
+beforeEach(() => vi.doMock('posthog-js', () => ({ default: sdk })))
 vi.mock('posthog-js', () => ({ default: sdk }))
 
 afterEach(() => {
@@ -15,7 +16,9 @@ async function load(mode = 'production', ssr = false, key = 'test-public-key', h
   vi.stubEnv('SSR', ssr)
   vi.stubEnv('VITE_POSTHOG_KEY', key)
   vi.stubEnv('VITE_POSTHOG_HOST', host)
-  return import('./posthog')
+  const module = await import('./posthog')
+  await module.postHogReady
+  return module
 }
 
 describe('PostHog browser initialization', () => {
@@ -118,5 +121,47 @@ it('disables analytics if SDK initialization fails', async () => {
   const { default: analytics, isPostHogConfigured } = await load()
   expect(isPostHogConfigured).toBe(false)
   analytics.capture('project_created')
+  expect(sdk.capture).not.toHaveBeenCalled()
+})
+
+
+it('preserves identity and event order while the SDK downloads, including failed calls', async () => {
+  let release!: (module: { default: typeof sdk }) => void
+  vi.doMock('posthog-js', () => new Promise(resolve => { release = resolve }))
+  vi.stubEnv('MODE', 'production')
+  vi.stubEnv('SSR', false)
+  vi.stubEnv('VITE_POSTHOG_KEY', 'test-public-key')
+  vi.stubEnv('VITE_POSTHOG_HOST', 'https://us.i.posthog.com')
+  const module = await import('./posthog')
+  const calls: string[] = []
+  sdk.identify.mockImplementationOnce(() => { calls.push('identify') })
+  sdk.capture.mockImplementationOnce(() => { throw new Error('capture failed') })
+  sdk.reset.mockImplementationOnce(() => { calls.push('reset') })
+  module.default.identify('user-1')
+  module.default.capture('project_created')
+  module.default.reset()
+  expect(sdk.identify).not.toHaveBeenCalled()
+  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  release({ default: sdk })
+  await module.postHogReady
+  expect(calls).toEqual(['identify', 'reset'])
+  expect(sdk.capture).toHaveBeenCalledWith('project_created')
+})
+
+it('disables analytics and drops queued actions when downloading fails', async () => {
+  let reject!: (error: Error) => void
+  vi.doMock('posthog-js', () => new Promise((_resolve, fail) => { reject = fail }))
+  vi.stubEnv('MODE', 'production')
+  vi.stubEnv('SSR', false)
+  vi.stubEnv('VITE_POSTHOG_KEY', 'test-public-key')
+  vi.stubEnv('VITE_POSTHOG_HOST', 'https://us.i.posthog.com')
+  const module = await import('./posthog')
+  module.default.identify('user-1')
+  await vi.waitFor(() => expect(reject).toBeTypeOf('function'))
+  reject(new Error('network failed'))
+  await module.postHogReady
+  expect(module.isPostHogConfigured).toBe(false)
+  module.default.capture('project_created')
+  expect(sdk.identify).not.toHaveBeenCalled()
   expect(sdk.capture).not.toHaveBeenCalled()
 })

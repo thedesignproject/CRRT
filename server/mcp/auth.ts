@@ -5,11 +5,14 @@ import { createProof, hashProof, pkceChallenge } from '../../api/_lib/extension-
 import { getNonPersistentSupabase, getServiceSupabase } from '../../api/_lib/supabase.js'
 
 export const SCOPE = 'crrt:read'
-export const SCOPES = [SCOPE, 'crrt:implement', 'crrt:review'] as const
+export const DASHBOARD_SCOPE = 'crrt:dashboard'
+export const DASHBOARD_BUNDLE = 'dashboard-v1'
+export const SCOPES = [SCOPE, 'crrt:implement', 'crrt:review', DASHBOARD_SCOPE] as const
 export const ALL_SCOPES = SCOPES.join(' ')
 export function normalizeScope(raw: string) {
   const scopes = raw.split(' ')
   ensure(scopes.includes(SCOPE) && scopes.every(scope => (SCOPES as readonly string[]).includes(scope)), 400, 'invalid_scope')
+  if (scopes.includes(DASHBOARD_SCOPE)) return ALL_SCOPES
   return SCOPES.filter(scope => scopes.includes(scope)).join(' ')
 }
 const scopeSchema = z.string().transform(normalizeScope)
@@ -98,7 +101,7 @@ export async function oauth(request: Request, requestId?: string): Promise<Respo
     const { origin, resource } = config()
     const url = new URL(request.url)
     const candidate = url.pathname.split('/').pop()!
-    if (['metadata', 'resource', 'authorize', 'register', 'consent', 'connections', 'token', 'revoke'].includes(candidate)) action = candidate
+    if (['metadata', 'resource', 'authorize', 'register', 'consent', 'connections', 'token', 'revoke', 'dashboard-upgrade'].includes(candidate)) action = candidate
     if (request.method === 'GET' && action === 'metadata') return json({
       issuer: origin, authorization_endpoint: `${origin}/api/mcp/oauth/authorize`,
       token_endpoint: `${origin}/api/mcp/oauth/token`, registration_endpoint: `${origin}/api/mcp/oauth/register`,
@@ -151,6 +154,13 @@ export async function oauth(request: Request, requestId?: string): Promise<Respo
       }
       return json({ redirectUrl: redirect.href })
     }
+    if (action === 'dashboard-upgrade') {
+      const user = await dashboardUser(request)
+      userId = user.id
+      await reserve(`upgrade:${user.id}`, 30)
+      const { decideDashboardAccess } = await import('./dashboard-access.js')
+      return json(await decideDashboardAccess(input, user.id))
+    }
     if (action === 'connections') {
       const user = await dashboardUser(request)
       userId = user.id
@@ -193,9 +203,10 @@ export async function oauth(request: Request, requestId?: string): Promise<Respo
       connection = await checked(await getServiceSupabase().rpc('mcp_refresh', { ...args, p_hash: hash }))
     }
     ensure(connection, 400, 'invalid_grant')
-    const issued = await checked(await getServiceSupabase().from('mcp_credentials').select('expires_at').eq('hash', args.p_access).maybeSingle())
+    const issued = await checked(await getServiceSupabase().from('mcp_credentials').select('expires_at,mcp_connections!inner(scope)').eq('hash', args.p_access).maybeSingle())
     const expiresAt = issued?.expires_at
     ensure(typeof expiresAt === 'string' && Number.isFinite(Date.parse(expiresAt)), 503, 'storage_unavailable')
+    grantedScope = normalizeScope(z.object({ scope: z.string() }).parse(issued!.mcp_connections).scope)
     const expiresIn = Math.max(0, Math.min(900, Math.floor((Date.parse(expiresAt) - Date.now()) / 1000)))
     return json({ access_token: access, refresh_token: refresh, token_type: 'Bearer', expires_in: expiresIn, scope: grantedScope })
   } catch (error) {

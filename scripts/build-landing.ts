@@ -9,6 +9,7 @@ import TurndownService from 'turndown'
 process.env.NODE_ENV = 'production'
 await import('./generate-resource-catalog.ts')
 const { publicPages } = await import('./public-pages.ts')
+const { resources, resourcePath } = await import('../apps/landing/resources/content.ts')
 
 const root = resolve(import.meta.dirname, '..')
 const dist = join(root, 'apps/landing/dist')
@@ -52,6 +53,10 @@ for (const page of publicPages) {
     routeModules.add(entry.file)
   }
   collectEntry(page.path.startsWith('/resources') ? 'resources/ResourcesPage.tsx' : 'App.tsx')
+  if (page.path.startsWith('/resources')) {
+    collectEntry(page.path === '/resources' ? 'resources/ResourcesIndex.tsx' : 'resources/ResourceArticle.tsx')
+    if (resources.find(resource => resourcePath(resource) === page.path)?.tool) collectEntry('resources/ResourceTool.tsx')
+  }
   for (const [rel, files] of [['stylesheet', routeStyles], ['modulepreload', routeModules]] as const) {
     for (const file of files) {
       if (document.querySelector(`link[rel="${rel}"][href="/${file}"]`)) continue

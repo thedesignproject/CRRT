@@ -26,6 +26,15 @@ ul { display: grid; gap: 8px; margin: 0; padding-left: 20px; color: #a8a29a; fon
 .context p { display: flex; justify-content: space-between; gap: 16px; color: #fff; font-size: 12px; overflow-wrap: anywhere; text-align: right }
 .context span { color: #a8a29a }
 .notice { color: #ffb000; font-size: 12px; line-height: 1.45 }
+.product-actions { display: grid; gap: 10px }
+.record-action { display: grid; grid-template-columns: 28px 1fr auto; align-items: center; gap: 10px; border: 1px solid rgba(232,133,61,.55); border-radius: 10px; background: rgba(232,133,61,.08); color: #fff; min-height: 58px; padding: 9px 12px; text-align: left }
+.record-action:hover { border-color: #e8853d; background: rgba(232,133,61,.14) }
+.record-action:focus-visible { outline: 2px solid #e8853d; outline-offset: 2px }
+.record-action-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #e8853d; color: #0a0a0a; font-size: 10px; box-shadow: 0 0 0 4px rgba(232,133,61,.14) }
+.record-action span { display: grid; gap: 2px }
+.record-action strong { font-size: 13px }
+.record-action small { color: #a8a29a; font-size: 11px }
+.record-action em { color: #a8a29a; font: normal 10px "JetBrains Mono", monospace }
 
 .local-workspace { display: grid; gap: var(--crrt-space-4); border-top: 1px solid var(--crrt-rule-dark); padding-top: var(--crrt-space-5); min-width: 0 }
 .local-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--crrt-space-3) }

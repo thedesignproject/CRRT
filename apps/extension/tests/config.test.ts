@@ -11,6 +11,12 @@ const production = {
 
 afterEach(() => vi.unstubAllEnvs())
 
+it('adds only the configured private media origin for direct R2 uploads', () => {
+  const env = { ...production, WXT_RECORD_STORAGE_ORIGIN: 'https://account.r2.cloudflarestorage.com' }
+  expect(extensionManifest({ mode: 'production' }, env).host_permissions).toContain('https://account.r2.cloudflarestorage.com/*')
+  expect(() => extensionManifest({ mode: 'production' }, { ...env, WXT_RECORD_STORAGE_ORIGIN: 'https://storage.test/path' })).toThrow('must be an origin')
+})
+
 it('builds the extension with its canonical icon and declared permissions', () => {
   expect((config.vite as () => unknown)()).toEqual({ build: { assetsInlineLimit: Infinity } })
   const manifest = extensionManifest({ mode: 'production' }, production)
@@ -18,17 +24,19 @@ it('builds the extension with its canonical icon and declared permissions', () =
   expect((config.manifest as (environment: { mode: string }) => unknown)({ mode: 'production' })).toEqual(manifest)
   expect(manifest).toMatchObject({
     version: JSON.parse(readFileSync('apps/extension/package.json', 'utf8')).version,
-    permissions: ['activeTab', 'identity', 'scripting', 'storage'],
+    permissions: ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
     host_permissions: ['https://crrt.ai/*', 'https://project-ref.supabase.co/*'],
     icons: extensionIcons,
     action: { default_icon: extensionIcons },
+    commands: { 'start-recording': { suggested_key: { default: 'Alt+Shift+R', mac: 'Alt+Shift+R' }, description: 'Start a CRRT recording' } },
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
   })
   for (const path of Object.values(extensionIcons)) expect(existsSync(`apps/extension/public/${path}`)).toBe(true)
   expect(manifest.host_permissions).not.toContain('http://*/*')
   expect(manifest.host_permissions).not.toContain('https://*/*')
   expect(manifest.web_accessible_resources).toEqual([
-    { resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] },
+    { resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] },
   ])
   expect(existsSync('apps/extension/entrypoints/autoload.content.ts')).toBe(false)
 })

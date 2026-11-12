@@ -2,6 +2,7 @@ import { metadataPath } from '../server/mcp/http.js'
 type QueryValue = string | string[]
 
 type LocalRequest = {
+  socket: { remoteAddress: string | undefined }
   method?: string
   headers: Record<string, string>
   query: Record<string, QueryValue>
@@ -45,6 +46,11 @@ function buildRoute(file: string): Route {
 const routes = routeFiles
   .map(buildRoute)
   .sort((left, right) => left.parameterNames.length - right.parameterNames.length)
+
+const rawBodyRoutes = new Set([
+  'api/v1/billing/webhook.ts',
+  'api/v1/extension/recordings/transcribe.ts',
+])
 
 function addQueryValue(query: Record<string, QueryValue>, key: string, value: string) {
   const current = query[key]
@@ -103,7 +109,7 @@ const port = Number(process.env.LOCAL_API_PORT ?? 3001)
 Bun.serve({
   hostname: '127.0.0.1',
   port,
-  async fetch(request) {
+  async fetch(request, server) {
     const url = new URL(request.url)
     if (request.method === 'GET' && ['/skill.md', '/openapi.json'].includes(url.pathname)) return new Response(Bun.file(new URL(`../apps/landing/public${url.pathname}`, import.meta.url)))
     url.pathname = metadataPath(url.pathname)
@@ -119,10 +125,11 @@ Bun.serve({
       })
 
       const localRequest: LocalRequest = {
+        socket: { remoteAddress: server.requestIP(request)?.address },
         method: request.method,
         headers: Object.fromEntries(request.headers.entries()),
         query,
-        body: await parseBody(request, route.file === 'api/v1/billing/webhook.ts'),
+        body: await parseBody(request, rawBodyRoutes.has(route.file)),
       }
       const localResponse = createResponseAdapter()
       const module = await import(new URL(`../${route.file}`, import.meta.url).href)

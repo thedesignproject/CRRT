@@ -28,7 +28,7 @@ describe('extension auth HTTP boundary', () => {
     expect(res.headers).toMatchObject({
       'Access-Control-Allow-Origin': `chrome-extension://${extensionId}`,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       'Access-Control-Max-Age': '600',
       Vary: 'Origin',
     })

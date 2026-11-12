@@ -123,7 +123,7 @@ describe('hosted extension authentication flow', () => {
     }), { status: 200 }))
     const auth = client()
 
-    await expect(startHostedSignIn(auth as never, 'signin')).resolves.toEqual({ accessToken: 'access', email: 'u@example.com' })
+    await expect(startHostedSignIn(auth as never, 'signin')).resolves.toEqual({ accessToken: 'access', email: 'u@example.com', userId: 'user-1' })
     expect(browser.identity.launchWebAuthFlow).toHaveBeenCalledWith({ url: expect.stringContaining('/dashboard/extension-auth?'), interactive: true })
     expect(auth.auth.setSession).toHaveBeenCalledWith({ access_token: 'access', refresh_token: 'refresh' })
     expect(auth.auth.getUser).toHaveBeenCalledOnce()

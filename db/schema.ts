@@ -17,6 +17,450 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core'
 
+// These functions accompany the generated Record migration. Runtime callers
+// remain on Supabase RPC; only service_role may invoke these transactions.
+export const recordSql = `
+CREATE FUNCTION public.record_refresh_state(p_id uuid) RETURNS void LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE failed jsonb;
+BEGIN
+  SELECT failure INTO failed FROM public.recording_jobs WHERE recording_id=p_id AND stage<>'cleanup' AND state='failed' ORDER BY stage LIMIT 1;
+  IF FOUND THEN UPDATE public.recordings SET state='failed',failure=failed WHERE id=p_id;
+  ELSIF EXISTS(SELECT 1 FROM public.recording_jobs WHERE recording_id=p_id AND stage='alignment' AND state='done') THEN
+    UPDATE public.recordings SET state='ready',failure=NULL WHERE id=p_id;
+  ELSE UPDATE public.recordings SET state='processing',failure=NULL WHERE id=p_id; END IF;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_owner_deleted() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+BEGIN
+  NEW.deleted_at:=coalesce(NEW.deleted_at,now()); NEW.updated_at:=now(); NEW.revision:=OLD.revision+1;
+  INSERT INTO public.recording_jobs(recording_id,stage,available_at) VALUES(NEW.id,'cleanup',now()+interval '2 hours')
+    ON CONFLICT(recording_id,stage) DO NOTHING;
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER record_owner_deleted BEFORE UPDATE OF owner_id ON public.recordings
+  FOR EACH ROW WHEN (OLD.owner_id IS NOT NULL AND NEW.owner_id IS NULL) EXECUTE FUNCTION public.record_owner_deleted();
+--> statement-breakpoint
+CREATE FUNCTION public.record_create(p_actor uuid,p_id uuid,p_input jsonb,p_limit integer) RETURNS jsonb
+LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE r public.recordings;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_actor::text,5959));
+  SELECT * INTO r FROM public.recordings WHERE owner_id=p_actor AND client_key=(p_input->>'clientKey')::uuid;
+  IF FOUND THEN
+    IF r.request_hash<>p_input->>'requestHash' OR r.deleted_at IS NOT NULL THEN RAISE EXCEPTION 'record_conflict'; END IF;
+    RETURN to_jsonb(r);
+  END IF;
+  IF (SELECT count(*) FROM public.recordings WHERE owner_id=p_actor AND cleaned_at IS NULL)>=p_limit THEN
+    RAISE EXCEPTION 'record_quota';
+  END IF;
+  INSERT INTO public.recordings(id,owner_id,storage_prefix,client_key,request_hash,share_hash,title,source,consent,storage_provider,storage_bucket)
+    VALUES(p_id,p_actor,p_actor::text||'/'||p_id::text,(p_input->>'clientKey')::uuid,p_input->>'requestHash',p_input->>'shareHash',
+      p_input->>'title',p_input->>'source',p_input->'consent',coalesce(p_input->>'storageProvider','supabase'),coalesce(p_input->>'storageBucket','record-media')) RETURNING * INTO r;
+  INSERT INTO public.recording_usage(recording_id,actor_id,request_key,resource,amount)
+    VALUES(r.id,p_actor,r.client_key,'recording',1);
+  RETURN to_jsonb(r);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_command(p_actor uuid,p_id uuid,p_action text,p_input jsonb DEFAULT '{}') RETURNS jsonb
+LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE r public.recordings; a jsonb; total bigint; project text; artifact public.recording_artifacts; derived bigint;
+BEGIN
+  -- The same owner lock serializes quota reservations across their recordings.
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_actor::text,5959));
+  SELECT * INTO r FROM public.recordings WHERE id=p_id AND owner_id=p_actor AND deleted_at IS NULL FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'record_not_found'; END IF;
+  IF p_action='title' THEN
+    UPDATE public.recordings SET title=p_input->>'title' WHERE id=p_id;
+  ELSIF p_action='project' THEN
+    project:=p_input->>'projectKey';
+    IF project IS NOT NULL THEN
+      PERFORM 1 FROM public.project_members m JOIN public.projects p ON p.public_key=m.project_key
+        WHERE m.project_key=project AND m.user_id=p_actor AND m.role IN ('admin','member')
+        AND (NOT p.widget_private OR p.feedback_access='team' OR m.role='admin') FOR SHARE OF m,p;
+      IF NOT FOUND THEN RAISE EXCEPTION 'record_forbidden'; END IF;
+    END IF;
+    UPDATE public.recordings SET project_key=project WHERE id=p_id;
+  ELSIF p_action='share' THEN
+    UPDATE public.recordings SET share_hash=p_input->>'shareHash' WHERE id=p_id;
+  ELSIF p_action='upload' THEN
+    IF r.manifest_hash IS NOT NULL THEN RAISE EXCEPTION 'record_conflict'; END IF;
+    a:=p_input->'artifact';
+    IF EXISTS(SELECT 1 FROM public.recording_artifacts WHERE id=(a->>'id')::uuid) THEN
+      IF NOT EXISTS(SELECT 1 FROM public.recording_artifacts WHERE id=(a->>'id')::uuid AND recording_id=p_id
+        AND path=a->>'path' AND bytes=(a->>'bytes')::bigint AND sha256=a->>'sha256' AND mime=a->>'mime'
+        AND kind=a->>'kind' AND offset_ms=(a->>'offsetMs')::integer) THEN RAISE EXCEPTION 'record_conflict'; END IF;
+    ELSE
+      SELECT coalesce(sum(reserved_bytes),0) INTO total FROM public.recordings WHERE owner_id=p_actor AND cleaned_at IS NULL;
+      -- Storage signatures bind the object path, not its declared byte length.
+      -- Reserve the bucket's full 1 GiB object limit until HEAD verifies the
+      -- immutable object, so lying about size cannot bypass account quotas.
+      IF total+1073741824>(p_input->>'byteLimit')::bigint THEN RAISE EXCEPTION 'record_quota'; END IF;
+      IF (SELECT count(*) FROM public.recording_artifacts WHERE recording_id=p_id)>=32 THEN RAISE EXCEPTION 'record_quota'; END IF;
+      INSERT INTO public.recording_artifacts(id,recording_id,kind,path,mime,bytes,sha256,offset_ms)
+        VALUES((a->>'id')::uuid,p_id,a->>'kind',a->>'path',a->>'mime',(a->>'bytes')::bigint,a->>'sha256',(a->>'offsetMs')::integer);
+      UPDATE public.recordings SET reserved_bytes=reserved_bytes+1073741824 WHERE id=p_id;
+      INSERT INTO public.recording_usage(recording_id,actor_id,request_key,resource,amount)
+        VALUES(p_id,p_actor,(a->>'id')::uuid,'storage_bytes',(a->>'bytes')::bigint);
+    END IF;
+    UPDATE public.recordings SET state='uploading' WHERE id=p_id;
+  ELSIF p_action='complete' THEN
+    SELECT * INTO artifact FROM public.recording_artifacts WHERE recording_id=p_id AND id=(p_input->>'artifactId')::uuid FOR UPDATE;
+    IF NOT FOUND THEN RAISE EXCEPTION 'record_not_found'; END IF;
+    IF artifact.verified_at IS NOT NULL THEN RETURN to_jsonb(r); END IF;
+    UPDATE public.recording_artifacts SET verified_at=now() WHERE id=artifact.id;
+    UPDATE public.recordings SET reserved_bytes=reserved_bytes-1073741824+artifact.bytes WHERE id=p_id;
+  ELSIF p_action='finalize' THEN
+    IF r.manifest_hash IS NOT NULL THEN
+      IF r.manifest_hash<>p_input->>'manifestHash' THEN RAISE EXCEPTION 'record_conflict'; END IF;
+      RETURN to_jsonb(r);
+    END IF;
+    derived:=2097152*(1+jsonb_array_length(p_input->'manifest'->'events')+
+      (SELECT count(*) FROM jsonb_array_elements(p_input->'manifest'->'events') e WHERE e ? 'crop'));
+    SELECT coalesce(sum(reserved_bytes),0) INTO total FROM public.recordings WHERE owner_id=p_actor AND cleaned_at IS NULL;
+    IF total+derived>coalesce((p_input->>'byteLimit')::bigint,5368709120) THEN RAISE EXCEPTION 'record_quota'; END IF;
+    IF NOT EXISTS(SELECT 1 FROM public.recording_artifacts WHERE recording_id=p_id AND kind='screen')
+      OR EXISTS(SELECT 1 FROM public.recording_artifacts WHERE recording_id=p_id AND verified_at IS NULL) THEN
+      RAISE EXCEPTION 'record_upload_incomplete';
+    END IF;
+    IF (SELECT jsonb_agg(jsonb_build_object('id',id,'kind',kind,'mime',mime,'bytes',bytes,'sha256',sha256,'offsetMs',offset_ms) ORDER BY id)
+          FROM public.recording_artifacts WHERE recording_id=p_id AND kind IN ('screen','camera','audio'))
+      IS DISTINCT FROM (SELECT jsonb_agg(entry ORDER BY (entry->>'id')::uuid) FROM jsonb_array_elements(p_input->'manifest'->'artifacts') entry) THEN
+      RAISE EXCEPTION 'record_artifact_mismatch';
+    END IF;
+    INSERT INTO public.recording_events(recording_id,id,sequence,kind,at_ms,data)
+      SELECT p_id,(e->>'id')::uuid,(e->>'sequence')::integer,e->>'kind',(e->>'atMs')::integer,e
+      FROM jsonb_array_elements(p_input->'manifest'->'events') e;
+    UPDATE public.recordings SET state='processing',manifest_hash=p_input->>'manifestHash',
+      manifest=p_input->'manifest',duration_ms=(p_input->'manifest'->>'durationMs')::integer,
+      derivation_reserved_bytes=derived,reserved_bytes=reserved_bytes+derived WHERE id=p_id;
+    INSERT INTO public.recording_jobs(recording_id,stage) VALUES(p_id,'metadata'),(p_id,'transcription'),(p_id,'alignment');
+  ELSIF p_action='retry' THEN
+    IF NOT EXISTS(SELECT 1 FROM public.recording_jobs WHERE recording_id=p_id AND stage=p_input->>'stage'
+      AND state='failed' AND (failure->>'retryable')::boolean) THEN RAISE EXCEPTION 'record_conflict'; END IF;
+    UPDATE public.recording_jobs SET state='pending',attempts=0,failure=NULL,available_at=now()
+      WHERE recording_id=p_id AND stage=p_input->>'stage';
+    PERFORM public.record_refresh_state(p_id);
+  ELSIF p_action='delete' THEN
+    UPDATE public.recordings SET deleted_at=now() WHERE id=p_id;
+    INSERT INTO public.recording_jobs(recording_id,stage,available_at) VALUES(p_id,'cleanup',now()+interval '2 hours')
+      ON CONFLICT(recording_id,stage) DO NOTHING;
+  ELSE RAISE EXCEPTION 'record_invalid'; END IF;
+  UPDATE public.recordings SET revision=revision+1,updated_at=now() WHERE id=p_id RETURNING * INTO r;
+  RETURN to_jsonb(r);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_claim(p_stage text,p_lease uuid) RETURNS jsonb LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE j public.recording_jobs;
+BEGIN
+  SELECT q.* INTO j FROM public.recording_jobs q JOIN public.recordings r ON r.id=q.recording_id
+    WHERE q.stage=p_stage AND (q.state='pending' OR (q.state='running' AND q.lease_until<now()))
+      AND q.available_at<=now() AND (p_stage='cleanup' OR (r.deleted_at IS NULL AND r.owner_id IS NOT NULL))
+      AND (p_stage<>'alignment' OR NOT EXISTS(SELECT 1 FROM public.recording_jobs deps
+        WHERE deps.recording_id=q.recording_id AND deps.stage IN ('metadata','transcription') AND deps.state<>'done'))
+    ORDER BY q.available_at,q.recording_id LIMIT 1 FOR UPDATE OF q SKIP LOCKED;
+  IF NOT FOUND THEN RETURN NULL; END IF;
+  UPDATE public.recording_jobs SET state='running',attempts=attempts+1,lease_token=p_lease,lease_until=now()+interval '5 minutes'
+    WHERE recording_id=j.recording_id AND stage=j.stage RETURNING * INTO j;
+  RETURN to_jsonb(j);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_finish(p_id uuid,p_stage text,p_lease uuid,p_output jsonb,p_failure jsonb DEFAULT NULL)
+RETURNS boolean LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE r public.recordings; j public.recording_jobs; a jsonb; owner uuid; added bigint;
+BEGIN
+  SELECT owner_id INTO owner FROM public.recordings WHERE id=p_id;
+  IF owner IS NOT NULL THEN PERFORM pg_advisory_xact_lock(hashtextextended(owner::text,5959)); END IF;
+  SELECT * INTO r FROM public.recordings WHERE id=p_id FOR UPDATE;
+  SELECT * INTO j FROM public.recording_jobs WHERE recording_id=p_id AND stage=p_stage AND state='running'
+    AND lease_token=p_lease AND lease_until>now() FOR UPDATE;
+  IF NOT FOUND OR (r.deleted_at IS NOT NULL AND p_stage<>'cleanup') THEN RETURN false; END IF;
+  IF p_failure IS NOT NULL THEN
+    UPDATE public.recording_jobs SET state=CASE WHEN p_stage='cleanup' OR ((p_failure->>'retryable')::boolean AND attempts<3) THEN 'pending' ELSE 'failed' END,
+      failure=p_failure,available_at=now()+make_interval(secs=>least(3600,30*power(2,least(attempts,7))::integer)),lease_token=NULL,lease_until=NULL
+      WHERE recording_id=p_id AND stage=p_stage RETURNING * INTO j;
+    IF p_stage<>'cleanup' THEN PERFORM public.record_refresh_state(p_id); END IF;
+    RETURN true;
+  END IF;
+  IF p_stage='metadata' THEN
+    SELECT coalesce(sum((entry->>'bytes')::bigint),0) INTO added FROM jsonb_array_elements(p_output->'artifacts') entry;
+    IF added>r.derivation_reserved_bytes OR (SELECT coalesce(sum(reserved_bytes),0) FROM public.recordings WHERE owner_id=owner AND cleaned_at IS NULL)-r.derivation_reserved_bytes+added>(p_output->>'byteLimit')::bigint THEN
+      RAISE EXCEPTION 'record_quota';
+    END IF;
+    FOR a IN SELECT * FROM jsonb_array_elements(p_output->'artifacts') LOOP
+      INSERT INTO public.recording_artifacts(id,recording_id,kind,path,mime,bytes,sha256,verified_at)
+        VALUES((a->>'id')::uuid,p_id,a->>'kind',a->>'path',a->>'mime',(a->>'bytes')::bigint,a->>'sha256',now());
+      INSERT INTO public.recording_usage(recording_id,actor_id,request_key,resource,amount)
+        VALUES(p_id,owner,(a->>'id')::uuid,'storage_bytes',(a->>'bytes')::bigint);
+    END LOOP;
+    INSERT INTO public.recording_keyframes(recording_id,id,event_id,at_ms,artifact_id,crop_artifact_id)
+      SELECT p_id,(f->>'id')::uuid,(f->>'eventId')::uuid,(f->>'atMs')::integer,(f->>'artifactId')::uuid,(f->>'cropArtifactId')::uuid
+      FROM jsonb_array_elements(p_output->'keyframes') f;
+    UPDATE public.recordings SET media_metadata=p_output->'metadata',reserved_bytes=reserved_bytes-r.derivation_reserved_bytes+added,derivation_reserved_bytes=0 WHERE id=p_id;
+  ELSIF p_stage='transcription' THEN
+    INSERT INTO public.recording_transcript_segments(recording_id,id,start_ms,end_ms,text,provider,language)
+      SELECT p_id,s->>'id',(s->>'startMs')::integer,(s->>'endMs')::integer,s->>'text',p_output->>'source',p_output->>'language'
+      FROM jsonb_array_elements(p_output->'segments') s;
+  ELSIF p_stage='alignment' THEN
+    UPDATE public.recording_keyframes k SET segment_ids=coalesce((SELECT jsonb_agg(s.id ORDER BY s.start_ms,s.id)
+      FROM public.recording_transcript_segments s WHERE s.recording_id=p_id AND k.at_ms BETWEEN greatest(0,s.start_ms-3000) AND s.end_ms+3000),'[]'::jsonb)
+      WHERE k.recording_id=p_id;
+  ELSIF p_stage='cleanup' THEN
+    IF r.deleted_at IS NULL THEN RETURN false; END IF;
+    DELETE FROM public.recording_events WHERE recording_id=p_id;
+    DELETE FROM public.recording_keyframes WHERE recording_id=p_id;
+    DELETE FROM public.recording_transcript_segments WHERE recording_id=p_id;
+    DELETE FROM public.recording_artifacts WHERE recording_id=p_id;
+    UPDATE public.recordings SET cleaned_at=coalesce(cleaned_at,now()),manifest=NULL,consent=NULL,media_metadata=NULL,project_key=NULL,brain_references='[]',reserved_bytes=0,derivation_reserved_bytes=0,title='Deleted recording' WHERE id=p_id;
+  END IF;
+  UPDATE public.recording_jobs SET state='done',failure=NULL,lease_token=NULL,lease_until=NULL,
+    available_at=CASE WHEN p_stage='cleanup' THEN now()+interval '1 hour' ELSE available_at END WHERE recording_id=p_id AND stage=p_stage;
+  IF p_stage<>'cleanup' THEN PERFORM public.record_refresh_state(p_id); END IF;
+  RETURN true;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_sweep() RETURNS integer LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE affected integer;
+BEGIN
+  UPDATE public.recordings SET deleted_at=now() WHERE deleted_at IS NULL AND
+    (owner_id IS NULL OR (manifest_hash IS NULL AND abandoned_at<now()))
+    AND id IN (SELECT id FROM public.recordings WHERE deleted_at IS NULL AND (owner_id IS NULL OR (manifest_hash IS NULL AND abandoned_at<now())) LIMIT 1000);
+  INSERT INTO public.recording_jobs(recording_id,stage,available_at)
+    SELECT id,'cleanup',greatest(deleted_at+interval '2 hours',updated_at+interval '2 hours') FROM public.recordings
+    WHERE deleted_at IS NOT NULL AND cleaned_at IS NULL ON CONFLICT(recording_id,stage) DO NOTHING;
+  GET DIAGNOSTICS affected=ROW_COUNT;
+  -- Keep the immutable prefix after clearing artifact metadata. Reconcile
+  -- tombstones too, so an externally delayed storage write cannot be orphaned.
+  UPDATE public.recording_jobs SET state='pending',available_at=now() WHERE stage='cleanup' AND state='done' AND available_at<=now()
+    AND recording_id IN (SELECT q.recording_id FROM public.recording_jobs q JOIN public.recordings r ON r.id=q.recording_id
+      WHERE q.stage='cleanup' AND q.state='done' AND q.available_at<=now() AND r.deleted_at IS NOT NULL AND r.cleaned_at IS NOT NULL
+      ORDER BY q.available_at,q.recording_id LIMIT 1000);
+  RETURN affected;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_charge_payload(p_actor uuid,p_id uuid,p_key uuid,p_limit integer,p_revision integer,p_project text,p_prices text[] DEFAULT NULL) RETURNS void
+LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE r public.recordings; sponsor uuid; billing public.billing_accounts;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_actor::text,5959));
+  SELECT * INTO r FROM public.recordings WHERE id=p_id AND owner_id=p_actor AND deleted_at IS NULL FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'record_not_found'; END IF;
+  IF r.revision IS DISTINCT FROM p_revision OR r.project_key IS DISTINCT FROM p_project THEN RAISE EXCEPTION 'record_conflict'; END IF;
+  sponsor:=p_actor;
+  IF r.project_key IS NOT NULL THEN
+    PERFORM public.lock_feedback_actor(r.project_key,p_actor,'agent:operate');
+    SELECT user_id INTO sponsor FROM public.project_members WHERE project_key=r.project_key AND is_owner FOR SHARE;
+    IF sponsor IS NULL THEN RAISE EXCEPTION 'record_forbidden'; END IF;
+  END IF;
+  IF p_prices IS NOT NULL THEN
+    SELECT * INTO billing FROM public.billing_accounts WHERE user_id=sponsor FOR SHARE;
+    IF NOT FOUND OR NOT (coalesce(billing.is_legacy,false) OR coalesce((billing.plan IN ('pro','studio') AND billing.price_id=ANY(p_prices)
+      AND billing.period_start<=now() AND billing.period_end>now()
+      AND (billing.subscription_status IN ('active','trialing') OR (billing.subscription_status='past_due' AND billing.grace_until>now()))),false)) THEN
+      RAISE EXCEPTION 'record_upgrade_required';
+    END IF;
+  END IF;
+  IF EXISTS(SELECT 1 FROM public.recording_usage WHERE recording_id=p_id AND actor_id=p_actor AND request_key=p_key AND resource='agent_payload') THEN RETURN; END IF;
+  IF (SELECT count(*) FROM public.recording_usage WHERE actor_id=p_actor AND resource='agent_payload' AND created_at>=date_trunc('day',now()))>=p_limit THEN RAISE EXCEPTION 'record_quota'; END IF;
+  INSERT INTO public.recording_usage(recording_id,actor_id,request_key,resource,amount) VALUES(p_id,p_actor,p_key,'agent_payload',1);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.record_usage_summary(p_actor uuid) RETURNS jsonb LANGUAGE sql STABLE SET search_path='' AS $$
+  SELECT jsonb_build_object('recordings',(SELECT count(*) FROM public.recordings WHERE owner_id=p_actor AND cleaned_at IS NULL),
+    'storageBytes',(SELECT coalesce(sum(reserved_bytes),0) FROM public.recordings WHERE owner_id=p_actor AND cleaned_at IS NULL),
+    'agentPayloadsToday',(SELECT count(*) FROM public.recording_usage WHERE actor_id=p_actor AND resource='agent_payload' AND created_at>=date_trunc('day',now())));
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.record_create(uuid,uuid,jsonb,integer),public.record_command(uuid,uuid,text,jsonb),
+  public.record_claim(text,uuid),public.record_finish(uuid,text,uuid,jsonb,jsonb),public.record_sweep(),public.record_charge_payload(uuid,uuid,uuid,integer,integer,text,text[]),public.record_usage_summary(uuid),public.record_refresh_state(uuid),public.record_owner_deleted()
+  FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.record_create(uuid,uuid,jsonb,integer),public.record_command(uuid,uuid,text,jsonb),
+  public.record_claim(text,uuid),public.record_finish(uuid,text,uuid,jsonb,jsonb),public.record_sweep(),public.record_charge_payload(uuid,uuid,uuid,integer,integer,text,text[]),public.record_usage_summary(uuid),public.record_refresh_state(uuid)
+  TO service_role;
+--> statement-breakpoint
+GRANT ALL ON public.recordings,public.recording_artifacts,public.recording_events,public.recording_keyframes,
+  public.recording_transcript_segments,public.recording_jobs,public.recording_usage TO service_role;
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
+`;
+
+// Record is independent of comments. Source objects survive failed processing
+// and account deletion until a durable cleanup job has removed private media.
+export const recordings = pgTable('recordings', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerId: uuid('owner_id').references(() => authUsers.id, { onDelete: 'set null' }),
+  storagePrefix: text('storage_prefix').notNull(),
+  storageProvider: text('storage_provider').notNull().default('supabase'),
+  storageBucket: text('storage_bucket').notNull().default('record-media'),
+  projectKey: text('project_key').references(() => projects.publicKey, { onDelete: 'set null' }),
+  clientKey: uuid('client_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  shareHash: text('share_hash').notNull().unique(),
+  title: text('title').notNull(),
+  source: text('source').notNull(),
+  state: text('state').notNull().default('recording'),
+  durationMs: integer('duration_ms'),
+  manifestHash: text('manifest_hash'),
+  manifest: jsonb('manifest'),
+  mediaMetadata: jsonb('media_metadata'),
+  consent: jsonb('consent'),
+  failure: jsonb('failure'),
+  brainReferences: jsonb('brain_references').notNull().default(sql`'[]'::jsonb`),
+  revision: integer('revision').notNull().default(0),
+  reservedBytes: bigint('reserved_bytes', { mode: 'number' }).notNull().default(0),
+  derivationReservedBytes: bigint('derivation_reserved_bytes', { mode: 'number' }).notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  abandonedAt: timestamp('abandoned_at', { withTimezone: true }).notNull().default(sql`now()+interval '24 hours'`),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  cleanedAt: timestamp('cleaned_at', { withTimezone: true }),
+}, t => ({
+  client: uniqueIndex('recordings_owner_client').on(t.ownerId, t.clientKey),
+  library: index('recordings_library').on(t.ownerId, t.createdAt),
+  cleanup: index('recordings_cleanup').on(t.deletedAt, t.abandonedAt),
+  source: check('recordings_source', sql`${t.source} in ('tab','window','screen')`),
+  state: check('recordings_state', sql`${t.state} in ('recording','uploading','processing','ready','failed')`),
+  duration: check('recordings_duration', sql`${t.durationMs} >= 0`),
+  bytes: check('recordings_bytes', sql`${t.reservedBytes} >= 0`),
+  storage: check('recordings_storage_provider', sql`${t.storageProvider} in ('supabase','r2')`),
+})).enableRLS()
+
+export const recordingArtifacts = pgTable('recording_artifacts', {
+  id: uuid('id').primaryKey(),
+  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
+  kind: text('kind').notNull(),
+  path: text('path').notNull().unique(),
+  mime: text('mime').notNull(),
+  bytes: bigint('bytes', { mode: 'number' }).notNull(),
+  sha256: text('sha256').notNull(),
+  offsetMs: integer('offset_ms').notNull().default(0),
+  verifiedAt: timestamp('verified_at', { withTimezone: true }),
+  multipartId: text('multipart_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  recording: index('recording_artifacts_recording').on(t.recordingId),
+  bytes: check('recording_artifacts_bytes', sql`${t.bytes}>0`),
+  offset: check('recording_artifacts_offset', sql`${t.offsetMs}>=0`),
+  kind: check('recording_artifacts_kind', sql`${t.kind} in ('screen','camera','audio','keyframe','crop','thumbnail')`),
+})).enableRLS()
+
+export const recordingEvents = pgTable('recording_events', {
+  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
+  id: uuid('id').notNull(),
+  sequence: integer('sequence').notNull(),
+  kind: text('kind').notNull(),
+  atMs: integer('at_ms').notNull(),
+  data: jsonb('data').notNull(),
+}, t => ({
+  pk: primaryKey({ columns: [t.recordingId, t.id] }),
+  sequence: uniqueIndex('recording_events_sequence').on(t.recordingId, t.sequence),
+  clock: check('recording_events_clock', sql`${t.atMs}>=0 AND ${t.sequence}>=0`),
+  kind: check('recording_events_kind', sql`${t.kind} in ('mark','click','route')`),
+})).enableRLS()
+
+export const recordingTranscriptSegments = pgTable('recording_transcript_segments', {
+  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
+  id: text('id').notNull(),
+  startMs: integer('start_ms').notNull(),
+  endMs: integer('end_ms').notNull(),
+  text: text('text').notNull(),
+  provider: text('provider').notNull(),
+  language: text('language').notNull(),
+}, t => ({
+  pk: primaryKey({ columns: [t.recordingId, t.id] }),
+  clock: check('recording_transcript_clock', sql`${t.startMs}>=0 AND ${t.endMs}>=${t.startMs}`),
+})).enableRLS()
+
+export const recordingKeyframes = pgTable('recording_keyframes', {
+  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
+  id: uuid('id').notNull(),
+  eventId: uuid('event_id'),
+  atMs: integer('at_ms').notNull(),
+  artifactId: uuid('artifact_id').notNull().references(() => recordingArtifacts.id, { onDelete: 'cascade' }),
+  cropArtifactId: uuid('crop_artifact_id').references(() => recordingArtifacts.id, { onDelete: 'set null' }),
+  segmentIds: jsonb('segment_ids').notNull().default(sql`'[]'::jsonb`),
+}, t => ({
+  pk: primaryKey({ columns: [t.recordingId, t.id] }),
+  clock: check('recording_keyframes_clock', sql`${t.atMs}>=0`),
+})).enableRLS()
+
+export const recordingJobs = pgTable('recording_jobs', {
+  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
+  stage: text('stage').notNull(),
+  state: text('state').notNull().default('pending'),
+  attempts: integer('attempts').notNull().default(0),
+  leaseToken: uuid('lease_token'),
+  leaseUntil: timestamp('lease_until', { withTimezone: true }),
+  availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+  failure: jsonb('failure'),
+}, t => ({
+  pk: primaryKey({ columns: [t.recordingId, t.stage] }),
+  queue: index('recording_jobs_queue').on(t.state, t.availableAt),
+  stage: check('recording_jobs_stage', sql`${t.stage} in ('metadata','transcription','alignment','cleanup')`),
+  state: check('recording_jobs_state', sql`${t.state} in ('pending','running','done','failed')`),
+})).enableRLS()
+
+export const recordingUsage = pgTable('recording_usage', {
+  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
+  actorId: uuid('actor_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  requestKey: uuid('request_key').notNull(),
+  resource: text('resource').notNull(),
+  amount: bigint('amount', { mode: 'number' }).notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  pk: primaryKey({ columns: [t.recordingId, t.actorId, t.requestKey, t.resource] }),
+  resource: check('recording_usage_resource', sql`${t.resource} in ('recording','storage_bytes','agent_payload')`),
+  amount: check('recording_usage_amount', sql`${t.amount}>=0`),
+})).enableRLS()
+
+export const recordingTranscriptionLimits = pgTable('recording_transcription_limits', {
+  identity: text('identity').primaryKey(),
+  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+  requests: integer('requests').notNull().default(0),
+  bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+}, t => ({
+  identity: check('recording_transcription_identity', sql`${t.identity} = 'global' or ${t.identity} ~ '^[a-f0-9]{64}$'`),
+  usage: check('recording_transcription_usage', sql`${t.requests} >= 0 and ${t.bytes} >= 0`),
+})).enableRLS()
+
+// One short transaction reserves both budgets before provider dispatch. No
+// refund: failures/timeouts/crashes may still incur provider spend.
+export const recordTranscriptionSql = `
+CREATE FUNCTION public.reserve_record_transcription(p_client text,p_bytes bigint,p_client_requests integer,p_client_bytes bigint,p_global_requests integer,p_global_bytes bigint) RETURNS boolean
+LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE g public.recording_transcription_limits; c public.recording_transcription_limits;
+  hour_start timestamptz:=date_trunc('hour',now(),'UTC'); day_start timestamptz:=date_trunc('day',now(),'UTC');
+BEGIN
+  IF p_client IS NULL OR p_client !~ '^[a-f0-9]{64}$' OR p_bytes IS NULL OR p_bytes<1 OR p_bytes>33554432
+    OR p_client_requests IS NULL OR p_client_requests<1 OR p_client_bytes IS NULL OR p_client_bytes<1
+    OR p_global_requests IS NULL OR p_global_requests<1 OR p_global_bytes IS NULL OR p_global_bytes<1 THEN
+    RAISE EXCEPTION 'record_transcription_invalid';
+  END IF;
+  PERFORM pg_advisory_xact_lock(hashtextextended('record-transcription-budget',5959));
+  INSERT INTO public.recording_transcription_limits(identity,window_start) VALUES('global',day_start) ON CONFLICT DO NOTHING;
+  SELECT * INTO g FROM public.recording_transcription_limits WHERE identity='global' FOR UPDATE;
+  IF g.window_start<>day_start THEN g.requests:=0; g.bytes:=0; END IF;
+  IF g.requests>=p_global_requests OR p_bytes>p_global_bytes-g.bytes THEN RETURN false; END IF;
+  INSERT INTO public.recording_transcription_limits(identity,window_start) VALUES(p_client,hour_start) ON CONFLICT DO NOTHING;
+  SELECT * INTO c FROM public.recording_transcription_limits WHERE identity=p_client FOR UPDATE;
+  IF c.window_start<>hour_start THEN c.requests:=0; c.bytes:=0; END IF;
+  IF c.requests>=p_client_requests OR p_bytes>p_client_bytes-c.bytes THEN RETURN false; END IF;
+  UPDATE public.recording_transcription_limits SET window_start=day_start,requests=g.requests+1,bytes=g.bytes+p_bytes WHERE identity='global';
+  UPDATE public.recording_transcription_limits SET window_start=hour_start,requests=c.requests+1,bytes=c.bytes+p_bytes WHERE identity=p_client;
+  DELETE FROM public.recording_transcription_limits WHERE identity<>'global' AND window_start<hour_start-interval '1 day';
+  RETURN true;
+END $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.reserve_record_transcription(text,bigint,integer,bigint,integer,bigint) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.reserve_record_transcription(text,bigint,integer,bigint,integer,bigint) TO service_role;
+--> statement-breakpoint
+GRANT ALL ON public.recording_transcription_limits TO service_role;
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
+`
+
 // Row Level Security: every table below has RLS enabled with NO permissive
 // policy (migration 0004_enable_rls), i.e. deny-all for the `anon` /
 // `authenticated` roles. This is required because the publishable (anon) key
@@ -3366,7 +3810,7 @@ export const mcpCodes = pgTable('mcp_codes', {
 }, t => ({
   expiry: index('mcp_codes_expiry').on(t.expiresAt),
   hashCheck: check('mcp_codes_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$' and ${t.stateHash} ~ '^[0-9a-f]{64}$'`),
-  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review')`),
+  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`),
   challengeCheck: check('mcp_codes_challenge', sql`${t.challenge} ~ '^[A-Za-z0-9_-]{43}$'`),
   lifetime: check('mcp_codes_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`),
 })).enableRLS()
@@ -3382,7 +3826,7 @@ export const mcpConnections = pgTable('mcp_connections', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, t => ({
   user: index('mcp_connections_user').on(t.userId),
-  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review')`),
+  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`),
   lifetime: check('mcp_connections_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '30 days'`),
 })).enableRLS()
 
@@ -3753,3 +4197,88 @@ export const inboxRestoreCloudSql = [
   END IF;`),
   "NOTIFY pgrst, 'reload schema';",
 ].join('\n--> statement-breakpoint\n')
+
+// In-place dashboard permission upgrades. A request is not a credential: the
+// owning dashboard account must approve it, and the live connection is rechecked.
+export const mcpPermissionUpgrades = pgTable('mcp_permission_upgrades', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
+  bundle: text('bundle').notNull().default('dashboard-v1'),
+  state: text('state').notNull().default('pending'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull().default(sql`now() + interval '10 minutes'`),
+  decidedAt: timestamp('decided_at', { withTimezone: true }),
+}, t => ({
+  connection: index('mcp_permission_upgrades_connection').on(t.connectionId),
+  bundleCheck: check('mcp_permission_upgrades_bundle', sql`${t.bundle} = 'dashboard-v1'`),
+  stateCheck: check('mcp_permission_upgrades_state', sql`${t.state} in ('pending','approved','declined')`),
+  lifetime: check('mcp_permission_upgrades_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '10 minutes'`),
+})).enableRLS()
+
+export const mcpDashboardUpgradeSql = `
+CREATE FUNCTION public.mcp_request_dashboard_upgrade(p_connection uuid,p_actor uuid)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE request public.mcp_permission_upgrades;
+BEGIN
+  PERFORM public.mcp_require_connection(p_connection,p_actor,'crrt:read');
+  PERFORM pg_advisory_xact_lock(hashtextextended('crrt-mcp-upgrade:'||p_connection::text,0));
+  SELECT * INTO request FROM public.mcp_permission_upgrades WHERE connection_id=p_connection
+    AND state='pending' AND expires_at>clock_timestamp() ORDER BY created_at DESC LIMIT 1;
+  IF NOT FOUND THEN
+    INSERT INTO public.mcp_permission_upgrades(connection_id) VALUES(p_connection) RETURNING * INTO request;
+  END IF;
+  RETURN to_jsonb(request);
+END;
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.mcp_decide_dashboard_upgrade(p_request uuid,p_actor uuid,p_decision text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE request public.mcp_permission_upgrades; connection public.mcp_connections; client_name text;
+BEGIN
+  IF p_decision NOT IN ('inspect','approve','deny') THEN RAISE EXCEPTION 'invalid_decision'; END IF;
+  -- Lock the connection first, matching revocation and credential refresh.
+  SELECT c.* INTO connection FROM public.mcp_connections c JOIN public.mcp_permission_upgrades r ON r.connection_id=c.id
+    WHERE r.id=p_request AND c.user_id=p_actor FOR UPDATE OF c;
+  IF NOT FOUND THEN RAISE EXCEPTION 'upgrade_unavailable'; END IF;
+  PERFORM public.mcp_require_connection(connection.id,p_actor,'crrt:read');
+  SELECT * INTO request FROM public.mcp_permission_upgrades WHERE id=p_request FOR UPDATE;
+  SELECT name INTO client_name FROM public.mcp_clients WHERE id=connection.client_id;
+  IF request.state='pending' AND request.expires_at<=clock_timestamp() THEN
+    RETURN jsonb_build_object('state','expired','name',client_name,'bundle',request.bundle);
+  END IF;
+  IF request.state='pending' AND p_decision<>'inspect' THEN
+    IF p_decision='approve' THEN
+      UPDATE public.mcp_connections SET scope='crrt:read crrt:implement crrt:review crrt:dashboard' WHERE id=connection.id;
+    END IF;
+    UPDATE public.mcp_permission_upgrades SET state=CASE WHEN p_decision='approve' THEN 'approved' ELSE 'declined' END,
+      decided_at=clock_timestamp() WHERE id=request.id RETURNING * INTO request;
+  END IF;
+  RETURN jsonb_build_object('state',request.state,'name',client_name,'bundle',request.bundle,'expiresAt',request.expires_at);
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.mcp_request_dashboard_upgrade(uuid,uuid),public.mcp_decide_dashboard_upgrade(uuid,uuid,text) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.mcp_request_dashboard_upgrade(uuid,uuid),public.mcp_decide_dashboard_upgrade(uuid,uuid,text) TO service_role;
+--> statement-breakpoint
+GRANT ALL ON public.mcp_permission_upgrades TO service_role;
+--> statement-breakpoint
+NOTIFY pgrst,'reload schema';
+`;
+
+// Durable retry receipts. A reserved operation without a receipt is deliberately
+// not replayed: a process may have stopped after an external side effect.
+export const mcpDashboardOperations = pgTable('mcp_dashboard_operations', {
+  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
+  requestKey: text('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  response: jsonb('response'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  pk: primaryKey({ columns: [t.connectionId, t.requestKey] }),
+  shape: check('mcp_dashboard_operations_shape', sql`${t.requestKey} ~ '^[A-Za-z0-9_-]{16,128}$' and ${t.requestHash} ~ '^[0-9a-f]{64}$'`),
+})).enableRLS()
+
+export const mcpDashboardReceiptsSql = `
+GRANT ALL ON public.mcp_dashboard_operations TO service_role;
+`;

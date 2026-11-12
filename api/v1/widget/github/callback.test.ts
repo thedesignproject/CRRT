@@ -24,6 +24,8 @@ vi.mock('../../../_lib/widget-github-auth.js', () => ({
   widgetCallbackHtml: vi.fn((origin, message) => `html:${origin}:${JSON.stringify(message)}`),
 }))
 
+vi.mock('../../../_lib/mcp-github-flow.js', () => ({ completeMcpGithubFlow: vi.fn() }))
+import { completeMcpGithubFlow } from '../../../_lib/mcp-github-flow.js'
 import handler from './callback.js'
 import {
   assertGitHubUserInstallationAccess,
@@ -64,6 +66,7 @@ const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
+  vi.mocked(completeMcpGithubFlow).mockReset().mockResolvedValue(undefined)
   vi.mocked(assertGitHubUserInstallationAccess).mockReset().mockResolvedValue({
     id: '7', login: 'acme', type: 'Organization',
   })
@@ -328,4 +331,20 @@ describe('api/v1/widget/github/callback', () => {
     expect(exchangeGitHubCode).not.toHaveBeenCalled()
     expect(createGitHubAppInstallationToken).not.toHaveBeenCalled()
   })
+})
+
+it('persists verified repository choices for a terminal-launched browser without posting credentials to an opener', async () => {
+  vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValueOnce({projectKey:'p',userId:'u',origin:'https://app.example',installationId:'123',mcpFlow:{connectionId:'connection',requestKey:'flow'}} as never)
+  const res=mockRes();await call({method:'GET',query:{code:'code',state:'state'},headers:{}},res)
+  expect(completeMcpGithubFlow).toHaveBeenCalledWith({connectionId:'connection',requestKey:'flow'},'u','p',{installationToken:'installation-token',repositories:[{fullName:'acme/widgets'}]})
+  expect(String(res.body)).toContain('Return to your agent')
+  expect(String(res.body)).not.toContain('installation-token')
+})
+
+it('shows a useful terminal-flow failure without relying on a browser opener', async () => {
+  vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValueOnce({projectKey:'p',userId:'u',origin:'https://app.example',installationId:'123',mcpFlow:{connectionId:'connection',requestKey:'flow'}} as never)
+  vi.mocked(completeMcpGithubFlow).mockRejectedValueOnce(new Error('unavailable'))
+  const res=mockRes();await call({method:'GET',query:{code:'code',state:'state'},headers:{}},res)
+  expect(String(res.body)).toContain('could not finish')
+  expect(String(res.body)).not.toContain('installation-token')
 })

@@ -19,7 +19,7 @@ import './style.css'
 
 type Response = { ok: true; data?: unknown } | { ok: false; error: string }
 
-async function send(message: AuthMessage | HostedAuthMessage | { type: 'comment:activate' }) {
+async function send(message: AuthMessage | HostedAuthMessage | { type: 'comment:activate' } | { type: 'record:open' }) {
   const response = await browser.runtime.sendMessage(message) as Response
   if (!response?.ok) throw new Error(response?.error || 'Extension background is unavailable')
   return response.data
@@ -93,6 +93,13 @@ export function Popup() {
     finally { setBusy(false) }
   }
 
+  async function record() {
+    setBusy(true); setError('')
+    try { await send({ type: 'record:open' }); window.close() }
+    catch (e) { setError(e instanceof Error ? e.message : 'Could not open CRRT Record') }
+    finally { setBusy(false) }
+  }
+
   async function chooseProject(publicKey: string) {
     const next = projects.find((project) => project.publicKey === publicKey) ?? null
     const selection = next ? {
@@ -132,10 +139,14 @@ export function Popup() {
       {pageState === 'ambiguous' && !activeProject && <p className="notice">More than one project matches this page. Choose the destination.</p>}
       {pageState === 'none' && projects.length === 0 && <p className="notice">No shared projects yet. You can still leave private feedback.</p>}
       {pageState === 'restricted' && <p className="notice">Open a regular website to start commenting.</p>}
-      <button className="primary" disabled={busy || !pageUrl} onClick={activate}>Start commenting</button>
+      <div className="product-actions">
+        <button className="record-action" disabled={busy} onClick={record}><span className="record-action-icon">●</span><span><strong>Record</strong><small>Screen, voice and marks</small></span><em>⌥⇧R</em></button>
+        <button className="primary" disabled={busy || !pageUrl} onClick={activate}>Start commenting</button>
+      </div>
       <div className="row"><a href={`${import.meta.env.WXT_DASHBOARD_URL}?view=extension-comments`} target="_blank" rel="noopener noreferrer">Dashboard</a><button className="link" disabled={busy} onClick={signOut}>Sign out</button></div>
     </> : <div className="auth-actions">
       <p className="muted">Try local feedback without an account, or sign in to connect Cloud or your self-hosted instance. Your password stays out of the extension.</p>
+      <button className="record-action" disabled={busy} onClick={record}><span className="record-action-icon">●</span><span><strong>Try CRRT Record</strong><small>Screen, voice and marks</small></span><em>⌥⇧R</em></button>
       <button className="secondary" disabled={busy || !pageUrl} onClick={activate}>Try local feedback</button>
       <button className="primary" disabled={busy} onClick={() => { void signIn('signin') }}>Sign in with CRRT</button>
       <button className="secondary" disabled={busy} onClick={() => { void signIn('signup') }}>Create account</button>
@@ -154,6 +165,8 @@ function Disclosure({ busy, error, onContinue }: { busy: boolean; error: string;
       <li>We read the current URL to find an authorized project.</li>
       <li>Page content and screenshots are captured only after your feedback action.</li>
       <li>The microphone starts only when you press it and Chrome supports speech input.</li>
+      <li>Record captures only the tab, window, or screen you explicitly choose. Camera and microphone remain optional.</li>
+      <li>When recording a tab, CRRT asks for access to recorded pages so controls, marks, and DOM context can remain available while you navigate.</li>
       <li>Project feedback is shared with project collaborators. Private feedback stays yours.</li>
       <li>A requested tracker draft may use the configured model. No issue is sent until an authorized collaborator confirms it.</li>
     </ul>

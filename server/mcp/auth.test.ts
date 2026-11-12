@@ -19,7 +19,7 @@ const callback = 'http://localhost:8765/callback'
 const code = createProof(), verifier = createProof(), credential = `crrt_mcp_${createProof()}`
 const params = { client_id: id, redirect_uri: callback, response_type: 'code', code_challenge: pkceChallenge(verifier), code_challenge_method: 'S256', state: 'state', scope: 'crrt:read', resource }
 const ok = (data: unknown = null) => ({ data, error: null })
-const issued = () => ok({ expires_at: new Date(Date.now() + 900_000).toISOString() })
+const issued = (scope = 'crrt:read') => ok({ expires_at: new Date(Date.now() + 900_000).toISOString(), mcp_connections: { scope } })
 const app = () => ok({ id, name: 'Test client', redirect_uris: [callback] })
 const user = () => fake.getUser.mockResolvedValue({ data: { user: { id, email: 'a@test.local' } }, error: null })
 async function call(action: string, body?: unknown, headers: Record<string, string> = {}) {
@@ -237,7 +237,8 @@ it('accepts only literal loopback HTTP callbacks in production with exact regist
 })
 
 it('grants only consented scopes and preserves them on refresh', async () => {
-  expect(normalizeScope('crrt:review crrt:read crrt:implement')).toBe(ALL_SCOPES)
+  expect(normalizeScope('crrt:review crrt:read crrt:implement')).toBe('crrt:read crrt:implement crrt:review')
+  expect(normalizeScope('crrt:read crrt:dashboard')).toBe(ALL_SCOPES)
   for (const scope of ['', 'crrt:implement', 'crrt:read admin', 'crrt:read  crrt:review']) expect(() => normalizeScope(scope)).toThrow('invalid_scope')
   expect(hasScope({ user_id: id, email: '', connection_id: id }, 'crrt:implement')).toBe(false)
   expect(hasScope({ user_id: id, email: '', connection_id: id, scope: ALL_SCOPES }, 'crrt:review')).toBe(true)
@@ -246,7 +247,7 @@ it('grants only consented scopes and preserves them on refresh', async () => {
   fake.results.push(ok(true), app(), ok())
   await call('consent', { ...params, scope: ALL_SCOPES, decision: 'approve' }, { authorization: 'Bearer session' })
   expect(fake.calls).toContainEqual(['insert', expect.objectContaining({ scope: ALL_SCOPES })])
-  fake.results.push(app(), ok({ hash: 'known', scope: ALL_SCOPES }), ok(true), ok(id), issued())
+  fake.results.push(app(), ok({ hash: 'known', scope: ALL_SCOPES }), ok(true), ok(id), issued(ALL_SCOPES))
   expect((await call('token', { ...params, scope: ALL_SCOPES, grant_type: 'authorization_code', code, code_verifier: verifier })).data.scope).toBe(ALL_SCOPES)
   fake.results.push(app(), ok({ hash: 'known', mcp_connections: { scope: 'crrt:read' } }), ok(true), ok(id), issued())
   expect((await call('token', { client_id: id, resource, grant_type: 'refresh_token', refresh_token: credential, scope: ALL_SCOPES })).data.scope).toBe('crrt:read')
@@ -259,7 +260,7 @@ it('reports the actual issued lifetime near connection expiry and fails closed o
   const now = Date.now(), clock = vi.spyOn(Date, 'now').mockReturnValue(now)
   try {
     for (const [remaining, expected] of [[60, 60], [0, 0], [1800, 900]]) {
-      fake.results.push(app(), ok({ hash: 'known', mcp_connections: { scope: 'crrt:read' } }), ok(true), ok(id), ok({ expires_at: new Date(now + remaining * 1000).toISOString() }))
+      fake.results.push(app(), ok({ hash: 'known', mcp_connections: { scope: 'crrt:read' } }), ok(true), ok(id), ok({ expires_at: new Date(now + remaining * 1000).toISOString(), mcp_connections: { scope: 'crrt:read' } }))
       expect((await call('token', { client_id: id, resource, grant_type: 'refresh_token', refresh_token: credential })).data.expires_in).toBe(expected)
     }
     for (const row of [null, { expires_at: 'invalid' }, { expires_at: 123 }]) {
@@ -294,4 +295,21 @@ it('audits OAuth outcomes without credentials, callback queries, or private erro
     expect(events.every(event => typeof event.requestId === 'string' && typeof event.latencyMs === 'number')).toBe(true)
     expect(JSON.stringify(events)).not.toMatch(/private|crrt_mcp_|redirect_uri|code_challenge/)
   } finally { log.mockRestore() }
+})
+
+it('requires dashboard login for upgrades and delegates only validated decisions', async () => {
+  expect((await call('dashboard-upgrade', { requestId: id, decision: 'inspect' })).response.status).toBe(401)
+  user()
+  fake.results.push(ok(true), ok({ state: 'approved', name: 'Test client', bundle: 'dashboard-v1' }))
+  expect((await call('dashboard-upgrade', { requestId: id, decision: 'approve' }, { authorization: 'Bearer session' })).data).toMatchObject({ state: 'approved', scope: ALL_SCOPES })
+  expect(fake.calls).toContainEqual(['mcp_decide_dashboard_upgrade', { p_request: id, p_actor: id, p_decision: 'approve' }])
+})
+
+it('reports the effective post-rotation grant when approval commits during refresh', async () => {
+  // The preflight read sees read-only. Approval commits before the locked
+  // rotation finishes, so the credential's joined connection now has all scopes.
+  fake.results.push(app(), ok({ hash: 'known', mcp_connections: { scope: 'crrt:read' } }), ok(true), ok(id), issued(ALL_SCOPES))
+  const result = await call('token', { client_id: id, resource, grant_type: 'refresh_token', refresh_token: credential })
+  expect(result.data.scope).toBe(ALL_SCOPES)
+  expect(fake.calls).toContainEqual(['select', 'expires_at,mcp_connections!inner(scope)'])
 })

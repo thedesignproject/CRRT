@@ -15,7 +15,7 @@ import { useAuth } from './hooks/useAuth'
 import { useSuperAdmin } from './hooks/useSuperAdmin'
 import { getDisplayStatus, isInactive, mapServerComment } from './lib/comment'
 import { applyDashboardTheme, getDashboardTheme } from './lib/theme'
-import { relPath } from './lib/routes'
+import { relPath, route } from './lib/routes'
 import { billingPlanSelection } from './lib/access-review-link'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { BillingPage } from './components/BillingPage'
@@ -39,6 +39,8 @@ import { Spinner } from './components/primitives'
 import { ProductAuditPage } from './components/ProductAuditPage'
 import { McpAuthPage } from './components/McpAuthPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
+import { RecordingSharePage } from './components/RecordingSharePage'
+import { RecordingsPage } from './components/RecordingsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -79,6 +81,8 @@ export function App() {
   // request a fresh link without being routed into the dashboard.
   if (pathname === '/forgot-password') return <LoginPage />
 
+  if (pathname === '/recording' && !window.location.search) return <RecordingSharePage apiBase={API_BASE} />
+
   if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -116,9 +120,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [refreshProjects])
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments'>(() =>
-    new URLSearchParams(window.location.search).get('view') === 'extension-comments' ? 'extension-comments' : 'feedback',
-  )
+  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording'>(() => {
+    if (relPath(window.location.pathname) === '/recording') return 'recording'
+    const requested = new URLSearchParams(window.location.search).get('view')
+    return requested === 'extension-comments' || requested === 'recordings' ? requested : 'feedback'
+  })
+  useEffect(() => {
+    if (view === 'recording' || relPath(window.location.pathname) !== '/recording') return
+    const query = view === 'recordings' ? '?view=recordings' : view === 'extension-comments' ? '?view=extension-comments' : ''
+    window.history.replaceState(null, '', `${route('/')}${query}`)
+    window.dispatchEvent(new PopStateEvent('popstate'))
+  }, [view])
   const openAccessReview = useCallback((project: string) => {
     setSelectedProject(project)
     setView('settings')
@@ -270,7 +282,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   useEffect(() => {
-    if (view !== 'extension-comments' && !selectedProject && projects.length > 0) {
+    if (view !== 'extension-comments' && view !== 'recordings' && view !== 'recording' && !selectedProject && projects.length > 0) {
       setSelectedProject(current => current || projects[0].publicKey)
     }
   }, [projects, selectedProject, view])
@@ -650,7 +662,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (view === 'extension-comments') return
+      if (view === 'extension-comments' || view === 'recordings') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
       if (shortcutsEnabled && (e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -749,6 +761,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
+  const openRecordings = useCallback(() => {
+    setView('recordings')
+    setSelectedCommentId('')
+    setPendingCommentSelection(null)
+    setPendingBulkSelection(null)
+    setBulkTransitionNotice('')
+    setCmdOpen(false)
+    exitBulkMode()
+  }, [exitBulkMode])
+
   const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => {
     setSelectedProject(projectKey)
     setView('feedback')
@@ -796,7 +818,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   // mark the flag so the welcome doesn't reappear if they cancel out of
   // the create-project modal.
   const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
-  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments'
+  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments' && view !== 'recordings' && view !== 'recording'
 
   if (showWelcome) {
     return (
@@ -853,6 +875,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
         extensionCommentsActive={view === 'extension-comments'}
+        onOpenRecordings={openRecordings}
+        recordingsActive={view === 'recordings' || view === 'recording'}
         apiBase={API_BASE}
         accessToken={accessToken}
         onProjectsChanged={refreshProjects}
@@ -869,8 +893,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       <main className="dashboard-main">
       {accessReviewNotice}
       {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
-      {view === 'extension-comments' ? (
+      {view === 'recording' ? (
+        <div className="min-h-0 flex-1 overflow-y-auto"><RecordingSharePage apiBase={API_BASE} ownerToken={accessToken} /></div>
+      ) : view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
+      ) : view === 'recordings' ? (
+        <RecordingsPage apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'super-admin' && superadmin ? (
         <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
       ) : view === 'settings' && activeProject ? (

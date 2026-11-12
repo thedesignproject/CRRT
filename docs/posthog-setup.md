@@ -1,5 +1,7 @@
 # PostHog web analytics
 
+The SDK loads asynchronously only when configured. Identity changes and product events are queued in order during loading; a failed SDK download disables analytics without interrupting the app.
+
 The landing site and dashboard initialize PostHog from `apps/posthog.ts` in production builds when both environment variables are present. Development, tests, and server rendering do not send events. Missing configuration or SDK failures leave product actions working.
 
 ## Configure Vercel before merging

@@ -1,4 +1,8 @@
-import posthog from 'posthog-js'
+import type posthog from 'posthog-js'
+
+type SDK = typeof posthog
+let client: SDK | undefined
+const pending: Array<(sdk: SDK) => void> = []
 
 const apiKey = import.meta.env.VITE_POSTHOG_KEY
 const apiHost = import.meta.env.VITE_POSTHOG_HOST
@@ -18,9 +22,10 @@ function redactUrls(value: unknown): unknown {
   ]))
 }
 
-if (isPostHogConfigured) {
-  try {
-    posthog.init(apiKey, {
+// Do not download analytics in unconfigured builds or block application startup.
+export const postHogReady = isPostHogConfigured
+  ? import('posthog-js').then(({ default: sdk }) => {
+    sdk.init(apiKey, {
       capture_pageview: 'history_change',
       // Product actions are tracked explicitly; never collect feedback DOM content.
       autocapture: false,
@@ -41,21 +46,28 @@ if (isPostHogConfigured) {
         capture_console_errors: false,
       },
     })
-  } catch {
+    client = sdk
+    for (const action of pending.splice(0)) action(sdk)
+  }).catch(() => {
     isPostHogConfigured = false
-  }
-}
+    pending.length = 0
+  })
+  : Promise.resolve()
 
 // Analytics is optional and must not interrupt a successful product action.
-function safely<T extends unknown[]>(action: (...args: T) => unknown) {
+function safely<T extends unknown[]>(action: (sdk: SDK, ...args: T) => unknown) {
   return (...args: T): void => {
     if (!isPostHogConfigured) return
-    try { action(...args) } catch { /* Keep analytics failures out of product flows. */ }
+    const run = (sdk: SDK) => {
+      try { action(sdk, ...args) } catch { /* Keep analytics failures out of product flows. */ }
+    }
+    if (client) run(client)
+    else pending.push(run)
   }
 }
 
 export default {
-  capture: safely((...args: Parameters<typeof posthog.capture>) => posthog.capture(...args)),
-  identify: safely((...args: Parameters<typeof posthog.identify>) => posthog.identify(...args)),
-  reset: safely(() => posthog.reset()),
+  capture: safely((sdk, ...args: Parameters<SDK['capture']>) => sdk.capture(...args)),
+  identify: safely((sdk, ...args: Parameters<SDK['identify']>) => sdk.identify(...args)),
+  reset: safely((sdk) => sdk.reset()),
 }

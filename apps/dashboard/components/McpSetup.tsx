@@ -52,13 +52,13 @@ export function McpSetup({ apiBase }: { apiBase: string }) {
     <aside className="space-y-6 py-1">
       <div className="space-y-3">
         <span className="inline-flex items-center gap-2 text-sm font-semibold"><ShieldIcon size={16} /> Permissions you approve</span>
-        <p className="text-sm leading-6 text-muted-foreground">New connections request access to read your projects and feedback, claim accepted feedback, and report implementation progress.</p>
+        <p className="text-sm leading-6 text-muted-foreground">New connections request the full dashboard suite in one approval, including projects, feedback, members, integrations, recordings, and billing flows. Your existing roles and plan limits still apply.</p>
         <p className="text-sm leading-6 text-muted-foreground">You can also ask your client to change review or completion status. These changes require your explicit request and current project permissions.</p>
       </div>
       <div className="space-y-3 border-t border-border pt-6">
         <span className="inline-flex items-center gap-2 text-sm font-semibold"><BotIcon size={16} /> One connection, your projects</span>
         <p className="text-sm leading-6 text-muted-foreground">MCP lets compatible tools work with your CRRT feedback. You choose the project in your conversation.</p>
-        <p className="text-sm leading-6 text-muted-foreground">Existing read-only connections stay read-only until reauthorized. You can disconnect any client below, then connect again to approve new permissions.</p>
+        <p className="text-sm leading-6 text-muted-foreground">Existing connections keep their permissions. Ask your agent to request full dashboard access for one approval covering the complete suite. No reinstall or disconnection is needed.</p>
       </div>
     </aside>
   </div>

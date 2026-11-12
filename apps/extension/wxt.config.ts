@@ -8,7 +8,7 @@ export const extensionIcons = {
   128: 'icons/icon-128.png',
 } as const
 type ServiceName = 'api' | 'dashboard' | 'supabase'
-type ExtensionBuildEnvironment = Partial<Record<'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL' | 'WXT_DEPLOYMENT_MODE', string>>
+type ExtensionBuildEnvironment = Partial<Record<'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL' | 'WXT_DEPLOYMENT_MODE' | 'WXT_RECORD_STORAGE_ORIGIN', string>>
 
 function serviceUrl(raw: string | undefined, variable: string, mode: string): URL {
   if (!raw?.trim()) throw new Error(`${variable} is required to build the CRRT extension`)
@@ -62,18 +62,27 @@ export function extensionManifest(
   const api = configuredUrl(environment, 'WXT_API_BASE', 'api', mode)
   configuredUrl(environment, 'WXT_DASHBOARD_URL', 'dashboard', mode)
   const supabase = configuredUrl(environment, 'WXT_SUPABASE_URL', 'supabase', mode)
+  const media = environment.WXT_RECORD_STORAGE_ORIGIN ? serviceUrl(environment.WXT_RECORD_STORAGE_ORIGIN, 'WXT_RECORD_STORAGE_ORIGIN', mode) : null
+  if (media && media.pathname !== '/') throw new Error('WXT_RECORD_STORAGE_ORIGIN must be an origin')
   return {
     name: 'CRRT',
-    description: 'Drop visual feedback on any page and share it with your CRRT projects.',
+    description: 'Comment or record your screen, voice, and visual context for people and agents.',
     version: readExtensionVersion(),
-    permissions: ['activeTab', 'identity', 'scripting', 'storage'],
-    host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`])],
+    permissions: ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'],
+    optional_host_permissions: ['http://*/*', 'https://*/*'],
+    host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`, ...(media ? [`${media.origin}/*`] : [])])],
     // This only lets the explicitly injected, isolated iframe load on a chosen HTTP(S) page.
     // It does not grant CRRT persistent access to those pages.
-    web_accessible_resources: [{ resources: ['private.html'], matches: ['http://*/*', 'https://*/*'] }],
+    web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] }],
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
     icons: extensionIcons,
     action: { default_title: 'CRRT', default_icon: extensionIcons },
+    commands: {
+      'start-recording': {
+        suggested_key: { default: 'Alt+Shift+R', mac: 'Alt+Shift+R' },
+        description: 'Start a CRRT recording',
+      },
+    },
   }
 }
 

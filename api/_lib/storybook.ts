@@ -29,9 +29,7 @@ const feedbackInput = z.object({
 })
 type Connection = { id: string; project_key: string; created_by: string; expires_at: string; claimed_at: string | null; revoked_at: string | null }
 const columns = 'id,project_key,created_by,expires_at,claimed_at,revoked_at'
-class StorybookError extends Error {
-  constructor(public status: number, public code: string, message: string) { super(message) }
-}
+import { StorybookError } from './domain-errors.js'
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value)
   if (!result.success) throw new StorybookError(400, 'invalid_request', 'Invalid Storybook request')
@@ -60,7 +58,7 @@ async function feedbackMember(projectKey: string, userId: string) {
   if (!member || member.feedbackAllowed === false) failAccess()
   return member!
 }
-async function ownerAccess(projectKey: string, userId: string) {
+export async function ownerAccess(projectKey: string, userId: string) {
   const member = await feedbackMember(projectKey, userId)
   if (!member.isOwner) failAccess()
   await agentAccess(projectKey, userId)
