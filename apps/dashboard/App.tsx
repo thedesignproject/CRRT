@@ -42,6 +42,8 @@ import { RecordingSharePage } from './components/RecordingSharePage'
 import { RecordingsPage } from './components/RecordingsPage'
 import { DocumentUnlockPage } from './documents/DocumentUnlockPage'
 import { documentRoute } from './documents/DocumentRoute'
+import { DocumentRecoveryProvider } from './documents/DocumentRecovery'
+import { DocumentsPage } from './documents/DocumentsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -63,6 +65,10 @@ function markOnboarded() {
 }
 
 export function App() {
+  return <DocumentRecoveryProvider><AppRoutes /></DocumentRecoveryProvider>
+}
+
+function AppRoutes() {
   const { session, user, loading: authLoading, signOut } = useAuth()
   const [pathname, setPathname] = useState(typeof window === 'undefined' ? '/' : relPath(window.location.pathname))
 
@@ -104,7 +110,8 @@ export function App() {
     return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
   }
 
-  if (!session || !user) return <LoginPage />
+  if (!session || !user) return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
+  if (pathname === '/documents') return <DocumentsPage key={user.id} userId={user.id} apiBase={API_BASE} session={session.access_token} author={user.email ?? 'Project member'} />
 
   const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined
   const initialPlan = billingPlanSelection(window.location.search)

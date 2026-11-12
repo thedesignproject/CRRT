@@ -24,3 +24,14 @@ it('handles empty and unavailable history and ignores completion after unmount',
   for(const fail of [false,true]){let resolve!:(v:object)=>void,reject!:(e:Error)=>void;request.mockImplementationOnce(()=>new Promise((a,b)=>{resolve=a;reject=b}));const pending=render(<DocumentHistory document={initial} apiBase="/api" session="s" disabled={false} onRestore={vi.fn()}/>);pending.unmount();await act(async()=>{if(fail)reject(new Error());else resolve({revisions:[]})})}
   request.mockResolvedValueOnce({revisions:[revision]});render(<DocumentHistory document={{...initial,archived:true}} apiBase="/api" session="s" disabled={false} onRestore={vi.fn()}/>);await screen.findByText('Revision 1 · Initial');expect(screen.queryByText('Restore to draft')).not.toBeInTheDocument()
 })
+
+it.each(['success','failure'])('does not report a stale comparison %s after leaving history',async outcome=>{
+  request.mockResolvedValueOnce({revisions:[revision]});const onError=vi.fn(),view=render(<DocumentHistory document={initial} apiBase="/api" session="s" disabled={false} onRestore={vi.fn()} onError={onError}/>);await screen.findByText(/Revision 1/)
+  let resolve!:(v:object)=>void,reject!:(e:Error)=>void;request.mockImplementationOnce(()=>new Promise((a,b)=>{resolve=a;reject=b}));fireEvent.click(screen.getByText('Compare with draft'));view.unmount();await act(async()=>{if(outcome==='failure')reject(new Error('No access'));else resolve({comparison:{before:'Secret',after:'Private'}})});expect(onError).not.toHaveBeenCalled()
+})
+
+it.each(['success','failure'])('ignores previous-session history comparison %s after reauthorization',async outcome=>{
+  request.mockResolvedValueOnce({revisions:[revision]});const onError=vi.fn(),props={document:initial,apiBase:'/api',disabled:false,onRestore:vi.fn(),onError},view=render(<DocumentHistory {...props} session="old"/>);await screen.findByText(/Revision 1/)
+  let resolve!:(v:object)=>void,reject!:(e:Error)=>void;request.mockImplementationOnce(()=>new Promise((a,b)=>{resolve=a;reject=b}));fireEvent.click(screen.getByText('Compare with draft'));request.mockResolvedValueOnce({revisions:[{...revision,number:2}]});view.rerender(<DocumentHistory {...props} session="new"/>);await screen.findByText(/Revision 2/)
+  await act(async()=>{if(outcome==='failure')reject(new Error('Old token rejected'));else resolve({comparison:{before:'Stale secret',after:'Stale draft'}})});expect(onError).not.toHaveBeenCalled();expect(screen.queryByText('Stale secret')).not.toBeInTheDocument();expect(screen.getByText('Compare with draft')).toBeEnabled()
+})

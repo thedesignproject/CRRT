@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Starting a whole-document note or a new point clears an abandoned passage, so feedback is saved against the intended target. Pending submissions retain their original selection.
 - Hosted feedback preserves the actual captured text range and content-relative selector, including repeated text and nested paragraphs.
-- Document reader confirmations respect newer session and access decisions.
+- Document reader confirmations respect newer session and access decisions; the workspace Feedback tab displays the published body for pinning while keeping unpublished edits separate.
 
 This version is prepared locally. Publishing still requires the release PR, release tag, and successful npm workflow.
 

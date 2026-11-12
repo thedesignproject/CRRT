@@ -77,6 +77,9 @@ Props:
 | `apiBase` | `string` | no | Base URL of the backend that serves the widget API. Defaults to `https://crrt.ai/api`. Override to point at a self-hosted deployment. |
 | `theme` | `'light' \| 'dark' \| 'system'` | no | Widget appearance. Defaults to `dark`; `system` follows `prefers-color-scheme`. |
 | `disabled` | `boolean` | no | When `true`, the widget renders nothing — no UI, no listeners, no API calls. Defaults to `false`. Useful for turning the widget off per environment (e.g. production). |
+| `conversation` | `FeedbackConversationProps` | no | Connect host-owned feedback, replies, review actions, and draft recovery to the standard CRRT launcher, pins, composer, and sidebar. Skips project API requests. |
+
+Hosted documents import `FeedbackWidget` directly from this repository's `src/index.ts`, the same entry point built for npm. Documents use the standard widget UI from `src/components/FeedbackWidget/index.tsx`; changes to that implementation apply here too. The dashboard's `DocumentThreads` is only a data and revision adapter; it must not grow its own feedback UI. See [hosted conversation integration](docs/widget-conversations.md).
 
 ### Guest feedback and CRRT login
 
