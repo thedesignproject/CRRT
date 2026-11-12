@@ -21,3 +21,13 @@
 .document-prose table { display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; }.document-prose th, .document-prose td { padding:var(--crrt-space-3) var(--crrt-space-4); border:1px solid var(--border); text-align:left; }
 .document-prose hr { border-top:1px solid var(--border); }
 @media(max-width:800px) { .document-reader-layout { grid-template-columns:minmax(0,1fr); }.document-header, .document-title, .document-reading-surface { padding:var(--crrt-space-5); } }
+.document-page { min-height:100dvh; background:var(--background); color:var(--foreground); }
+.document-workspace { display:grid; grid-template-columns:280px minmax(0,1fr); min-height:calc(100dvh - 144px); max-width:1600px; margin:auto; }
+.document-library { background:var(--card); border-right:1px solid var(--border); min-width:0; }
+.document-library-item { display:flex; align-items:center; gap:var(--crrt-space-4); width:100%; padding:var(--crrt-space-4) var(--crrt-space-5); text-align:left; border-bottom:1px solid var(--border); }
+.document-library-item:hover, .document-library-item[aria-current="page"] { background:var(--accent); }.document-library-item svg { flex-shrink:0; color:var(--muted-foreground); }
+.document-source { min-height:400px; font-family:var(--crrt-font-mono); line-height:1.8; resize:vertical; }
+.document-tab { padding:var(--crrt-space-2) var(--crrt-space-4); border-radius:var(--crrt-radius-md); color:var(--muted-foreground); font-size:13px; font-weight:500; }.document-tab[aria-pressed="true"] { background:var(--accent); color:var(--foreground); }
+.document-comparison { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:var(--crrt-space-5); }.document-comparison pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:13px; font-family:var(--crrt-font-mono); padding:var(--crrt-space-5); border:1px solid var(--border); border-radius:var(--crrt-radius-md); background:var(--muted); }
+.document-page :is(button,a,input,select,textarea,summary):focus-visible { outline:2px solid var(--ring); outline-offset:2px; }.document-page button:disabled { opacity:.45; cursor:not-allowed; }
+@media(max-width:800px) { .document-workspace { grid-template-columns:minmax(0,1fr); }.document-library { border-right:0; border-bottom:1px solid var(--border); }.document-comparison { grid-template-columns:minmax(0,1fr); } }
