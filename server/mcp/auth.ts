@@ -76,7 +76,7 @@ export async function identity(header: string | null): Promise<McpIdentity> {
   ensure(rows.length === 1, 401, 'invalid_token')
   return rows[0]
 }
-async function dashboardUser(request: Request) {
+export async function dashboardUser(request: Request) {
   const value = request.headers.get('authorization') ?? ''
   ensure(/^Bearer \S+$/.test(value), 401, 'login_required')
   const { data, error } = await getNonPersistentSupabase().auth.getUser(value.slice(7))

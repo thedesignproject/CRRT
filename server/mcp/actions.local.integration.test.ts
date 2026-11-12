@@ -83,7 +83,7 @@ const enabled = process.env.MCP_TEST_LOCAL === '1'
     await sql.end(); vi.unstubAllEnvs()
   })
   it('exposes writes only for granted scopes and filters completed items before pagination', async () => {
-    expect((await client.listTools()).tools).toHaveLength(13)
+    expect((await client.listTools()).tools).toHaveLength(31)
     const read = (await connect('crrt:read')).connected
     expect((await read.listTools()).tools).toHaveLength(8)
     await expect(call('set_feedback_status', {}, read)).rejects.toThrow('not found')
@@ -119,7 +119,7 @@ const enabled = process.env.MCP_TEST_LOCAL === '1'
     await resumed.connect(new StreamableHTTPClientTransport(new URL(resource), { requestInit: { headers: { authorization: `Bearer ${refreshed.access_token}` } } }))
     clients.push(resumed)
     expect((await call('connection_status', {}, resumed)).structuredContent).toMatchObject({ connectionId: before.structuredContent!.connectionId, dashboardAccess: 'approved' })
-    expect((await resumed.listTools()).tools).toHaveLength(13)
+    expect((await resumed.listTools()).tools).toHaveLength(31)
   })
   it('keeps dashboard role and private feedback boundaries after full-suite consent', async () => {
     const email = `mcp-guest-${randomUUID()}@test.local`, password = `Local-${randomUUID()}!`
