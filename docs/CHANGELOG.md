@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.25] - Unreleased
+
+### Added
+- `FeedbackWidget` supports an optional `conversation` data adapter for its standard launcher, pins, composer, and sidebar; it supports host-owned feedback, replies, review actions, and in-memory draft recovery. Hosted documents import this package's source entry point, so shared widget UI changes apply to documents without copying components or updating a second widget dependency.
+- Exported TypeScript types describe the widget props and conversation adapter.
+
+### Changed
+- Hosted document feedback uses the existing widget UI. Pin positions are persisted relative to the clicked element and preserved through reloads, layout changes, and in-memory draft recovery.
+
+### Fixed
+- Starting a whole-document note or a new point clears an abandoned passage, so feedback is saved against the intended target. Pending submissions retain their original selection.
+- Hosted feedback preserves the actual captured text range and content-relative selector, including repeated text and nested paragraphs.
+- Document reader confirmations respect newer session and access decisions.
+
+This version is prepared locally. Publishing still requires the release PR, release tag, and successful npm workflow.
+
 ## [0.3.24] - Unreleased
 
 ### Added

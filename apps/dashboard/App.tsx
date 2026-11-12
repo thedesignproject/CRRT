@@ -81,7 +81,7 @@ export function App() {
   // Recovery can fail while another session is still signed in. Let the user
   // request a fresh link without being routed into the dashboard.
   if (pathname === '/forgot-password') return <LoginPage />
-  const sharedDocument = documentRoute(pathname, API_BASE, session?.access_token ?? null, user?.id ?? null)
+  const sharedDocument = documentRoute(pathname, API_BASE, session?.access_token ?? null, user?.id ?? null, user?.email ?? '')
   if (sharedDocument) return sharedDocument
 
   if (pathname === '/recording' && !window.location.search) return <RecordingSharePage apiBase={API_BASE} />

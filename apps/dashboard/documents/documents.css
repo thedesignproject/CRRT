@@ -1,13 +1,11 @@
 .document-header { display:flex; align-items:center; justify-content:space-between; gap:var(--crrt-space-5); min-height:64px; padding:var(--crrt-space-5) var(--crrt-space-7); border-bottom:1px solid var(--border); background:var(--card); }
 .document-title { max-width:1280px; margin:auto; padding:var(--crrt-space-7); border-bottom:1px solid var(--border); }
-.document-reader-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(300px,360px); max-width:1280px; margin:auto; min-height:calc(100dvh - 240px); }
+.document-reader-layout { display:grid; grid-template-columns:minmax(0,1fr); max-width:1280px; margin:auto; min-height:calc(100dvh - 240px); }
 .document-reading-surface { min-width:0; padding:var(--crrt-space-7); }
-.document-conversation { min-width:0; border-left:1px solid var(--border); background:var(--card); }
 .document-input { display:block; width:100%; padding:var(--crrt-space-3) var(--crrt-space-4); border:1px solid var(--border); border-radius:var(--crrt-radius-md); background:var(--background); color:var(--foreground); font:inherit; font-size:14px; }
 .document-input:focus-visible, .document-text-button:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
 .document-text-button { display:inline-flex; align-items:center; gap:var(--crrt-space-2); font-size:12px; font-weight:600; color:var(--muted-foreground); }
 .document-text-button:hover { color:var(--foreground); }
-.document-quote { border-left:2px solid var(--border); padding-left:var(--crrt-space-4); margin-bottom:var(--crrt-space-4); font-size:13px; color:var(--muted-foreground); overflow-wrap:anywhere; white-space:pre-wrap; }
 .document-prose { max-width:72ch; margin:auto; font-size:15px; line-height:1.8; overflow-wrap:anywhere; }
 .document-prose > * + * { margin-top:var(--crrt-space-5); }
 .document-prose h1, .document-prose h2, .document-prose h3, .document-prose h4 { font-weight:600; line-height:1.4; letter-spacing:-.02em; }
@@ -22,4 +20,4 @@
 .document-prose blockquote { border-left:2px solid var(--border); padding-left:var(--crrt-space-5); color:var(--muted-foreground); }
 .document-prose table { display:block; max-width:100%; overflow-x:auto; border-collapse:collapse; font-size:14px; }.document-prose th, .document-prose td { padding:var(--crrt-space-3) var(--crrt-space-4); border:1px solid var(--border); text-align:left; }
 .document-prose hr { border-top:1px solid var(--border); }
-@media(max-width:800px) { .document-reader-layout { grid-template-columns:minmax(0,1fr); }.document-conversation { border-left:0; border-top:1px solid var(--border); }.document-header, .document-title, .document-reading-surface { padding:var(--crrt-space-5); } }
+@media(max-width:800px) { .document-reader-layout { grid-template-columns:minmax(0,1fr); }.document-header, .document-title, .document-reading-surface { padding:var(--crrt-space-5); } }
