@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { detectAffected, readResources, selectAffected, shardPaths } from './lighthouse-affected.mjs'
 
 const read = (file: string) => readFileSync(file, 'utf8')
@@ -195,4 +195,106 @@ it('falls back on missing history, content parsing errors, or unfamiliar syntax'
     '\nexport { resources }',
   ]) expect(() => readResources(path => read(path) + extra)).toThrow()
   expect(() => readResources(path => read(path).replace("slug: 'design-tokens-for-ai-prototypes'", "slug: execute()"))).toThrow()
+})
+
+
+it('skips document contracts and local/MCP verification helpers without hiding widget edits',()=>{
+  const files=['shared/documents.ts','scripts/local-api.ts','scripts/local-supabase.ts','scripts/verify-mcp-package.mjs']
+  expect(select(files)).toEqual([])
+  expect(select([...files,'src/components/FeedbackWidget/index.tsx'])).toEqual(all)
+})
+
+it('skips document-only development dependencies and release version metadata',()=>{
+  const after=structuredClone(manifest)
+  after.version='99.0.0'
+  for(const name of ['jsdom','@types/jsdom','dompurify','marked'])after.devDependencies[name]='99.0.0'
+  expect(packageSelection(manifest,after)).toEqual([])
+  expect(packageSelection(after,manifest)).toEqual([])
+  expect(packageSelection(manifest,after,['package.json','src/components/FeedbackWidget/index.tsx'])).toEqual(all)
+  expect(packageSelection(manifest,{...after,dependencies:{...after.dependencies,marked:'99.0.0'}})).toEqual(all)
+})
+
+const locked=(name:string,metadata:object={})=>[`${name}@1.0.0`,'',metadata,`integrity-${name}`]
+const lock=(roots:object,packages:object,extra:object={})=>JSON.stringify({lockfileVersion:3,configVersion:1,workspaces:{'':{devDependencies:roots}},packages,...extra})
+const lockSelection=(before:string,after:string,files=['bun.lock'])=>selectAffected({files,current:resources,lockBefore:before,lockAfter:after}).paths
+const beforeLock=()=>lock({vite:'1',consumer:'1'},{vite:locked('vite',{optionalPeers:['jsdom'],peerDependencies:{jsdom:'*'}}),consumer:locked('consumer',{dependencies:{url:'1'}}),url:locked('url')})
+const documentLock=()=>lock({vite:'1',consumer:'1',jsdom:'1',marked:'1'},{vite:locked('vite',{optionalPeers:['jsdom'],peerDependencies:{jsdom:'*'}}),consumer:locked('consumer',{dependencies:{url:'1'}}),'consumer/url':locked('url'),url:locked('url-new'),jsdom:locked('jsdom',{dependencies:{url:'2'}}),marked:locked('marked')})
+
+it('ignores exclusively document dependencies despite harmless dependency hoisting',()=>{
+  expect(lockSelection(beforeLock(),documentLock())).toEqual([])
+  expect(lockSelection(documentLock(),beforeLock())).toEqual([])
+  expect(lockSelection(beforeLock(),documentLock(),['bun.lock','apps/landing/resources/ResourceArticle.tsx'])).toEqual(all.slice(1))
+})
+
+it('audits changed shared versions, integrity, overrides, root constraints, and peer resolutions',()=>{
+  for(const change of [
+    (value:any)=>{value.packages['consumer/url'][0]='url@2.0.0'},
+    (value:any)=>{value.packages['consumer/url'][3]='different-integrity'},
+    (value:any)=>{value.overrides={url:'2'}},
+    (value:any)=>{value.workspaces[''].devDependencies.consumer='2'},
+    (value:any)=>{value.packages.consumer[2].peerDependencies={url:'2'};delete value.packages['consumer/url']},
+  ]){
+    const value=JSON.parse(documentLock());change(value)
+    expect(lockSelection(beforeLock(),JSON.stringify(value))).toEqual(all)
+  }
+  for(const field of ['dependencies','optionalDependencies']){
+    const before=JSON.parse(documentLock())
+    before.packages.consumer[2]={ [field]:{jsdom:'1'},peerDependencies:{jsdom:'1'},optionalPeers:['jsdom'] }
+    const after=structuredClone(before);after.packages.jsdom[0]='jsdom@2.0.0'
+    expect(lockSelection(JSON.stringify(before),JSON.stringify(after))).toEqual(all)
+  }
+})
+
+it('preserves distinct dependency contexts and cycles instead of erasing peer changes',()=>{
+  const value={a:locked('a',{dependencies:{nested:'1'}}),b:locked('b',{dependencies:{nested:'1'}}),'a/nested':locked('nested',{dependencies:{leaf:'1'}}),'b/nested':locked('nested',{dependencies:{leaf:'1'}}),'a/leaf':locked('leaf'), 'b/leaf':locked('other-leaf',{dependencies:{b:'1'}})}
+  const before=lock({a:'1',b:'1'},value)
+  expect(lockSelection(before,before)).toEqual([])
+  const after=structuredClone(value);[after['a/leaf'],after['b/leaf']]=[after['b/leaf'],after['a/leaf']]
+  expect(lockSelection(before,lock({a:'1',b:'1'},after))).toEqual(all)
+})
+
+it('retains full audits for unknown or incomplete lockfiles and unresolved required dependencies',()=>{
+  for(const source of ['{','{}',lock({}, {},{lockfileVersion:4}),lock({missing:'1'},{}),lock({broken:'1'},{broken:[]}),lock({a:'1'},{a:locked('a',{dependencies:{missing:'1'}})})]){
+    expect(lockSelection(beforeLock(),source)).toEqual(all)
+    expect(lockSelection(source,beforeLock())).toEqual(all)
+  }
+  const optional=lock({a:'1'},{a:locked('a',{optionalDependencies:{absent:'1'}})})
+  expect(lockSelection(optional,optional)).toEqual([])
+  for(const entry of [{},[],[1,'',{},'hash'],['a',1,{},'hash'],['a','',null,'hash'],['a','','metadata','hash'],['a','',[],'hash'],['a','',{},1]]){
+    expect(lockSelection(beforeLock(),lock({broken:'1'},{broken:entry}))).toEqual(all)
+  }
+})
+
+it('ignores only literal landing cache paths, retaining other build changes and unsafe expressions',()=>{
+  const before="export default () => ({\n  root: __dirname,\n})\n"
+  const after=before.replace('  root:',"  cacheDir: path.resolve(envDir, 'node_modules/.vite-landing'),\n  root:")
+  const pick=(a:string,b:string)=>selectAffected({files:['apps/landing/vite.config.ts'],current:resources,viteBefore:a,viteAfter:b}).paths
+  expect(pick(before,after)).toEqual([]);expect(pick(after,before)).toEqual([])
+  expect(pick(after,after.replace('.vite-landing','.vite-another'))).toEqual([])
+  expect(pick(before,after.replace('__dirname','otherRoot'))).toEqual(all)
+  expect(pick(before,after.replace("'node_modules/.vite-landing'",'execute()'))).toEqual(all)
+  expect(pick(before,after.replace('.vite-landing','../outside'))).toEqual(all)
+  expect(select(['apps/landing/vite.config.ts'])).toEqual(all)
+})
+
+it('reads lockfiles and Vite configuration from both revisions without executing either',()=>{
+  const before="export default () => ({\n})\n",after="export default () => ({\n  cacheDir: path.resolve(envDir, 'node_modules/.vite-landing'),\n})\n"
+  const sources:Record<string,string>={'bun.lock':documentLock(),'apps/landing/vite.config.ts':after}
+  const previous:Record<string,string>={'bun.lock':beforeLock(),'apps/landing/vite.config.ts':before}
+  const result=detectAffected({base:'base',read:path=>sources[path]??read(path),git:args=>args[0]==='diff'?'bun.lock\0apps/landing/vite.config.ts\0':previous[args[1].slice('base:'.length)]})
+  expect(result.paths).toEqual([])
+})
+
+it('keeps the ignored document packages outside landing, widget, and build-script imports',()=>{
+  function inspect(directory:string){
+    for(const entry of readdirSync(directory,{withFileTypes:true})){
+      const path=directory+'/'+entry.name
+      if(entry.isDirectory()){
+        if(!['dist','node_modules','__tests__','tests'].includes(entry.name))inspect(path)
+      }else if(/\.[cm]?[jt]sx?$/.test(path)&&!(/\.(test|spec)\./.test(path))){
+        expect(read(path),path).not.toMatch(/\b(?:from\s+|import\s*(?:\(\s*)?|require\s*\(\s*)['"](?:jsdom|@types\/jsdom|dompurify|marked)(?:['"/])/)
+      }
+    }
+  }
+  for(const root of ['apps/landing','src','scripts'])inspect(root)
 })
