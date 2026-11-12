@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { disconnectLinear, getLinearIntegration, selectLinearTeam, type ProjectTrackerIntegration } from '../api'
 import { cn } from '../lib/utils'
@@ -25,8 +26,10 @@ export function LinearIntegrationSettings({ apiBase, accessToken, projectKey }: 
       const message = event.data as { type?: string; ok?: boolean; projectKey?: string }
       if (message.type !== 'crrt:linear-connect' || message.projectKey !== projectKey) return
       popup.current = null; setBusy(false)
-      if (message.ok) void load()
-      else setError('Linear authorization could not be completed.')
+      if (message.ok) {
+        posthog.capture('linear_workspace_connected')
+        void load()
+      } else setError('Linear authorization could not be completed.')
     }
     window.addEventListener('message', onMessage)
     return () => window.removeEventListener('message', onMessage)

@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
@@ -251,6 +252,7 @@ export function CommentDetail({
       const remembered = externalWorkRecord(provider, result)
       if (!remembered) throw new Error('missing_external_work_identity')
       rememberExternalWork(commentId, remembered)
+      posthog.capture('external_work_created', { provider })
       setExternalWorkDraft(null)
       if (provider !== 'github') openExternalWork(remembered)
     } catch (error) {

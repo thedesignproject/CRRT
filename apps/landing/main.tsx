@@ -1,6 +1,7 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { loadLandingApp } from './loadLandingApp'
+import '../posthog'
 import '@fontsource-variable/figtree/wght.css'
 import '@fontsource/vt323/latin.css'
 import '../../src/design-system/styles.css'

@@ -13,6 +13,7 @@ const fixtures = vi.hoisted(() => ({
   }] as Array<Record<string, unknown>>,
   comments: [] as Array<Record<string, unknown>>,
   commentsProjectId: 'project-1' as string | null,
+  capture: vi.fn(),
   claimProject: vi.fn(),
   acceptInvite: vi.fn(),
   restoreInbox: vi.fn(),
@@ -32,6 +33,8 @@ const fixtures = vi.hoisted(() => ({
   superadmin: false,
   signedIn: true,
 }))
+
+vi.mock('../posthog', () => ({ default: { capture: fixtures.capture, logger: { info: vi.fn() } } }))
 
 vi.mock('./api', () => ({
   restoreInboxComments: fixtures.restoreInbox,
@@ -118,7 +121,7 @@ vi.mock('./components/CommentList', () => ({
     <button onClick={() => props.setSelectedCommentId('comment-1')}>select test comment</button>
   </>,
 }))
-vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onClose: () => void; projectComments: Array<{id:string;implementationStatus:string}>; agentConnected:boolean }) => <aside data-testid="agent-sidebar"><span data-testid="agent-queue">{props.agentConnected ? props.projectComments.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span><button onClick={props.onClose}>close agent sidebar</button></aside> }))
+vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onCopySessionLink: () => void; onClose: () => void; projectComments: Array<{id:string;implementationStatus:string}>; agentConnected:boolean }) => <aside data-testid="agent-sidebar"><button onClick={props.onCopySessionLink}>copy session prompt</button><span data-testid="agent-queue">{props.agentConnected ? props.projectComments.map(c => `${c.id}:${c.implementationStatus}`).join(',') : 'disconnected'}</span><button onClick={props.onClose}>close agent sidebar</button></aside> }))
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
@@ -161,6 +164,7 @@ beforeEach(() => {
   fixtures.createShare.mockReset().mockResolvedValue({ shareId: 'share-1', commentCount: 1 })
   fixtures.getPrompt.mockReset().mockResolvedValue({ prompt: 'Fix selected feedback' })
   fixtures.beginCheckout.mockReset().mockResolvedValue({ url: 'https://checkout.example/session' })
+  fixtures.capture.mockReset()
   fixtures.fn.mockReset()
   fixtures.agentSession = null
   fixtures.agentShareState = null
@@ -1564,4 +1568,14 @@ it('refreshes project feedback after a partial Inbox Undo while retaining the co
  await waitFor(()=>expect(fixtures.fn.mock.calls.length).toBeGreaterThanOrEqual(refreshCalls+2))
  expect(screen.queryByText('extension page')).not.toBeInTheDocument()
  expect(screen.getByRole('button',{name:'Back to Inbox'})).toBeInTheDocument()
+})
+
+it('records an agent handoff only after copying the session prompt succeeds', async () => {
+  fixtures.comments = [readyFeedback('comment-1')]
+  fixtures.agentSession = { shareId: 'active-share' }
+  render(<App />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Agents, 1 ready' }))
+  expect(fixtures.capture).not.toHaveBeenCalledWith('agent_handoff_copied', expect.anything())
+  fireEvent.click(screen.getByRole('button', { name: 'copy session prompt' }))
+  await waitFor(() => expect(fixtures.capture).toHaveBeenCalledWith('agent_handoff_copied', { agent: expect.any(String) }))
 })

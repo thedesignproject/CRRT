@@ -1,3 +1,4 @@
+import posthog from '../../posthog'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   connectProjectGitHubRepo,
@@ -171,6 +172,7 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
     setError(null)
     try {
       const updated = await connectProjectGitHubRepo(apiBase, accessToken, projectKey, selectedRepo, installationToken)
+      posthog.capture('github_repository_connected')
       setConfig(updated)
       setInstallationToken(null)
       setRepos([])
