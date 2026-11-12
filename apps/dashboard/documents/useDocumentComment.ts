@@ -3,15 +3,19 @@ import type { DocumentInput, DocumentResult } from '../../../shared/documents'
 import { documentRequest, DocumentRequestError } from './client'
 
 type Input = Omit<Extract<DocumentInput, { action: 'comment' }>, 'action' | 'key'>
-type Operation = { fingerprint: string; key: string; input: Input; principal: string | null; anonymous: boolean; feedbackId?: string }
-export function useDocumentComment(apiBase: string, session: string | null, userId: string | null) {
+export type DocumentCommentOperation = { fingerprint: string; key: string; input: Input; principal: string | null; anonymous: boolean; feedbackId?: string }
+export function useDocumentComment(apiBase: string, session: string | null, userId: string | null, recovery?: { initialOperation?: DocumentCommentOperation; onOperation: (operation: DocumentCommentOperation, event: 'started' | 'pending' | 'discarded' | 'confirmed') => void }) {
+  const observer = useRef(recovery)
+  observer.current = recovery
   const auth = useRef({ session, userId })
   auth.current = { session, userId }
-  const operation = useRef<Operation | undefined>(undefined)
-  const [locked, setLocked] = useState(false)
+  const operation = useRef<DocumentCommentOperation | undefined>(recovery?.initialOperation)
+  const [locked, setLocked] = useState(Boolean(recovery?.initialOperation))
   const hasPending = useCallback(() => Boolean(operation.current), [])
   const discard = useCallback(() => {
+    const previous = operation.current
     operation.current = undefined
+    if (previous) observer.current?.onOperation(previous, 'discarded')
     setLocked(false)
   }, [])
   async function submit(input: Input, onConfirmationRead?: (principal: { session: string | null; userId: string | null }) => void): Promise<DocumentResult> {
@@ -20,6 +24,7 @@ export function useDocumentComment(apiBase: string, session: string | null, user
     if (!operation.current) {
       if (session && !userId) throw new DocumentRequestError('feedback_account_changed')
       operation.current = { fingerprint, key: crypto.randomUUID(), input: { ...draft, revision }, principal: userId, anonymous: !session }
+      observer.current?.onOperation(operation.current, 'started')
     }
     const pending = operation.current
     if (pending.fingerprint !== fingerprint) throw new DocumentRequestError('feedback_draft_changed')
@@ -29,6 +34,7 @@ export function useDocumentComment(apiBase: string, session: string | null, user
       try {
         const result = await documentRequest(apiBase, pending.anonymous ? null : session, { ...pending.input, action: 'comment', key: pending.key, shareKey, accessToken })
         pending.feedbackId = result.feedbackId
+        observer.current?.onOperation(pending, 'pending')
       } catch (error) {
         if (error instanceof DocumentRequestError && error.code === 'revision_not_found') discard()
         throw error
@@ -37,6 +43,7 @@ export function useDocumentComment(apiBase: string, session: string | null, user
     const reader = auth.current
     onConfirmationRead?.(reader)
     const result = await documentRequest(apiBase, reader.session, { action: 'read', id: input.id, ...(shareKey ? { shareKey, accessToken } : {}), feedbackId: pending.feedbackId })
+    observer.current?.onOperation(pending, 'confirmed')
     discard()
     return result
   }

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useLayoutEffect, useState } from 'react'
+import type { EditorDraft } from './DocumentRecovery'
 import { Upload } from 'lucide-react'
 import type { DocumentView } from '../../../shared/documents'
 
@@ -9,7 +10,9 @@ export function DocumentEditor({
   onSave,
   onDirty,
   conflict = false,
-  onDiscard
+  onDiscard,
+  initialDraft,
+  onDraftChange
 }: {
   document: DocumentView
   disabled: boolean
@@ -17,14 +20,24 @@ export function DocumentEditor({
   onSave: (title: string, body: string) => Promise<boolean>
   onDirty: (dirty: boolean) => void
   conflict?: boolean
+  initialDraft?: EditorDraft
+  onDraftChange?: (draft: EditorDraft | null) => void
   onDiscard?: () => void
 }) {
-  const [title, setTitle] = useState(document.title),
-    [body, setBody] = useState(document.body),
-    [paused, setPaused] = useState(false),
+  const [title, setTitle] = useState(initialDraft?.title ?? document.title),
+    [body, setBody] = useState(initialDraft?.body ?? document.body),
+    [paused, setPaused] = useState(Boolean(initialDraft)),
+    [edited, setEdited] = useState(Boolean(initialDraft)),
     [fileError, setFileError] = useState('')
   const dirty = title.trim() !== document.title || body !== document.body || conflict
   const recovering = dirty && (!document.canEdit || document.archived)
+  useLayoutEffect(() => {
+    if (!dirty) setEdited(false)
+    onDraftChange?.(dirty && edited ? { title, body } : null)
+  }, [dirty, edited, title, body, onDraftChange])
+  useLayoutEffect(() => {
+    if (!edited) { setTitle(document.title); setBody(document.body) }
+  }, [edited, document.title, document.body])
   useEffect(() => {
     if (conflict) setPaused(true)
   }, [conflict])
@@ -41,21 +54,23 @@ export function DocumentEditor({
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
   useEffect(() => {
-    if (!dirty || !title.trim() || disabled || loading || paused || !document.canEdit || document.archived) return
+    if (!dirty || !edited || !title.trim() || disabled || loading || paused || !document.canEdit || document.archived) return
     const timer = setTimeout(() => {
       void onSave(title.trim(), body).then((saved) => {
         if (!saved) setPaused(true)
       })
     }, 1200)
     return () => clearTimeout(timer)
-  }, [title, body, dirty, disabled, loading, paused, document.canEdit, document.archived, onSave])
+  }, [title, body, dirty, edited, disabled, loading, paused, document.canEdit, document.archived, onSave])
   async function importFile(file: File) {
     if (file.size > 262144 || !/\.(md|markdown|txt)$/i.test(file.name)) {
       setFileError('Choose a Markdown or text file smaller than 256 KiB.')
       return
     }
     try {
-      setBody(await file.text())
+      const imported = await file.text()
+      setEdited(true)
+      setBody(imported)
       setFileError('')
     } catch {
       setFileError('Could not read this file. Try again.')
@@ -109,7 +124,7 @@ export function DocumentEditor({
           maxLength={200}
           readOnly={!document.canEdit || document.archived}
           disabled={loading || ((!document.canEdit || document.archived) && !recovering)}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setEdited(true); setTitle(e.target.value) }}
         />
       </label>
       <label className="block text-xs font-medium">
@@ -120,7 +135,7 @@ export function DocumentEditor({
           readOnly={!document.canEdit || document.archived}
           disabled={loading || ((!document.canEdit || document.archived) && !recovering)}
           maxLength={262144}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={(e) => { setEdited(true); setBody(e.target.value) }}
           placeholder="Write or paste your document here…"
         />
       </label>
@@ -132,6 +147,7 @@ export function DocumentEditor({
               className="dashboard-bulk-primary"
               disabled={disabled || loading || !dirty || !title.trim()}
               onClick={() => {
+                setEdited(true)
                 setPaused(false)
                 void onSave(title.trim(), body).then((saved) => {
                   if (!saved) setPaused(true)
@@ -146,6 +162,7 @@ export function DocumentEditor({
             className="dashboard-bulk-secondary"
             disabled={disabled || loading || !dirty}
             onClick={() => {
+              setEdited(false)
               setTitle(document.title)
               setBody(document.body)
               setPaused(false)
