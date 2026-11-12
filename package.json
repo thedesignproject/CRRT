@@ -120,6 +120,7 @@
     "drizzle-orm": "^0.45.2",
     "happy-dom": "^20.9.0",
     "html2canvas-pro": "2.5.2",
+    "jsdom": "^31.0.0",
     "lighthouse": "13.6.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
