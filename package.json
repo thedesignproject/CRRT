@@ -85,6 +85,7 @@
     "@modelcontextprotocol/server": "2.4.0",
     "@supabase/supabase-js": "^2.49.4",
     "@vercel/sandbox": "^3.1.0",
+    "@vercel/speed-insights": "^2.1.0",
     "framer-motion": "^12.38.0",
     "ipaddr.js": "1.9.1",
     "lucide-react": "^1.8.0",
