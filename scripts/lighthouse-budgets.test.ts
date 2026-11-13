@@ -23,6 +23,23 @@ it('uses the median of repeated runs and rejects a genuine score regression', ()
   expect(summarizeReports(reports).failures).toContain('performance: 70 < 95')
 })
 
+it.each([
+  { values: [210, 223.4534249999997, 240], fails: false },
+  { values: [250, 250, 250], fails: false },
+  { values: [250.01, 250.01, 250.01], fails: true },
+  { values: [100, 120, 800], fails: false },
+  { values: [100, 300, 800], fails: true },
+])('applies TBT headroom to the median of $values (fails: $fails)', ({ values, fails }) => {
+  const reports = values.map(value => {
+    const measurement = report()
+    measurement.audits['total-blocking-time'].numericValue = value
+    return measurement
+  })
+  const result = summarizeReports(reports)
+  expect(result.metrics['total-blocking-time']).toBe(median(values))
+  expect(result.failures).toEqual(fails ? [`total-blocking-time: ${median(values)} > 250`] : [])
+})
+
 it('fails on missing measurements, runtime errors, or metric regressions', () => {
   expect(() => summarizeReports([])).toThrow('No Lighthouse reports')
   const missing = { categories: {}, audits: {}, runtimeError: { message: 'Load failed' } }

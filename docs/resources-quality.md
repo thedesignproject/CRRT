@@ -29,7 +29,7 @@ The runner starts and stops its own production preview on port 4323. Override wi
 | Best practices | 100/100 automated score |
 | SEO | 100/100 automated score |
 | Largest Contentful Paint | At most 2,500 ms |
-| Total Blocking Time | At most 200 ms |
+| Total Blocking Time | At most 250 ms (200 ms target plus 50 ms CI headroom) |
 | Cumulative Layout Shift | At most 0.1 |
 | Downloaded scripts | At most 450,000 bytes |
 | Downloaded stylesheets | At most 145,000 bytes |
@@ -43,7 +43,11 @@ Lighthouse accessibility tests cover automated checks only. Continue reviewing k
 
 ## Continuous integration
 
-[The resource quality workflow](../.github/workflows/resources-quality.yml) runs on relevant pull requests, changes to trunk, and manual dispatch. Mobile and desktop jobs each audit every resource URL three times. Failures block the job. Reports are saved as GitHub workflow artifacts for 14 days, including on failure. The workflow is configured in this branch; it will run in GitHub when the branch is pushed through the normal review flow.
+[The resource quality workflow](../.github/workflows/resources-quality.yml) runs every Monday at 03:17 UTC (08:47 IST) on `trunk`, and supports manual dispatch with `trunk` selected. It does not run on pull requests or pushes. One mobile job and one desktop job each audit every resource URL three times, without sharding or affected-page selection. Failures fail the workflow. Reports are saved as GitHub workflow artifacts for 14 days, including on failure. These triggers take effect after the workflow is merged into `trunk`. Remove any required Lighthouse PR checks from branch protection when enabling this schedule.
+
+The TBT gate includes 50 ms of CI timing headroom: [run 42848060216](https://github.com/thedesignproject/CRRT/actions/runs/42848060216/attempts/1) failed at a 223 ms mobile median on `/resources/review-ai-generated-forms`, despite a passing 96/100 performance score, then passed at the same commit on retry. The 200 ms target remains the goal; the 250 ms gate avoids failing on that small variation. The 95/100 performance gate and all other budgets remain unchanged.
+
+The audit uses standard GitHub-hosted Ubuntu 24.04 runners instead of Blacksmith. Standard hosted-runner compute is free while CRRT remains a public repository; report storage is accounted for separately. The audit is scheduled monitoring, so faster paid runners are unnecessary.
 
 The workflow also runs `scripts/public-pages.test.ts`, which verifies substantive HTML and Markdown without JavaScript, unique document metadata, canonical links, sitemap coverage, structured data, route CSS in the initial HTML, local fonts, machine-readable links, routing boundaries, and real 404 handling through the public server tests in the main suite.
 
