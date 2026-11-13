@@ -18,6 +18,7 @@ import './marketing-polish.css'
 
 import { FeedbackWidget } from '@widget/components/FeedbackWidget'
 import { supabase } from './lib/supabase'
+import { VoiceCommentPrototype } from './voice-prototype/VoiceCommentPrototype'
 import { createDemoComments } from './lib/demoComments'
 import type { PersonalComments } from '../../src/components/FeedbackWidget/types'
 
@@ -35,6 +36,7 @@ function RoutedApp() {
   const publicPath = initialPath.replace(/\/+$/, '')
   const isDocs = initialPath.startsWith('/docs')
   const isAudit = initialPath.startsWith('/audit/')
+  const voicePrototype = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('voice') === '1'
 
   useScrollProgress()
 
@@ -66,17 +68,19 @@ function RoutedApp() {
     return <ProductAuditWorkspace />
   }
 
-  return <MarketingSite apiBase={apiBase} projectId={projectId} demoComments={demoComments} />
+  return <MarketingSite apiBase={apiBase} projectId={projectId} demoComments={demoComments} voicePrototype={voicePrototype} />
 }
 
 function MarketingSite({
   apiBase,
   projectId,
   demoComments,
+  voicePrototype,
 }: {
   apiBase: string
   projectId: string
   demoComments: PersonalComments
+  voicePrototype: boolean
 }) {
   const [session, setSession] = useState<Session | null>(null)
 
@@ -95,7 +99,7 @@ function MarketingSite({
   return (
     <>
       <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
-      <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
+      {voicePrototype ? <VoiceCommentPrototype /> : <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />}
       <EasterEgg />
     </>
   )
