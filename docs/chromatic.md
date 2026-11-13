@@ -22,8 +22,8 @@ adapter resource-error reports stop the archive build and upload.
 
 ## Scope
 
-The explicit selection is in `tests/visual/inventory.ts`: 66 primary captures plus
-three mobile checks, for 69 total.
+The explicit selection is in `tests/visual/inventory.ts`: 71 primary captures plus
+four mobile checks, for 75 total.
 
 | Surface | Captures | Examples |
 | --- | ---: | --- |
@@ -33,6 +33,7 @@ three mobile checks, for 69 total.
 | Widget Agent | 4 | Ready, handoff, upgrade, service error |
 | Extension popup | 8 | Disclosure, sign-in, project selection, restricted page, local feedback, import error |
 | Storybook addon | 3 | Connected, sign-in required, offline |
+| Voice prototype | 6 | Composer, recording, attached audio, expanded transcript, microphone blocked; mobile attached audio |
 
 There is one primary theme/viewport per surface. Add another only when it exercises
 a distinct layout. Articles share one template baseline instead of repeating the
@@ -44,6 +45,11 @@ The extension cases render the real popup source with browser API fixtures. They
 do not test installing an extension or Chrome's background/permission lifecycle.
 Normal unit and integration tests remain responsible for behavior beyond this
 selected visual inventory. Adding a visual case is an explicit inventory change.
+
+Voice snapshots exercise the real opt-in prototype with deterministic microphone, audio-level,
+recorder, and speech-recognition fixtures. They verify presentation and local replay;
+unit/integration tests cover behavior, and a physical microphone is still needed to
+validate a browser vendor's speech service.
 
 ## Manual upload
 

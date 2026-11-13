@@ -15,10 +15,11 @@ export const widgetStates = ['idle', 'launcher', 'selecting', 'composer-filled',
 export const widgetAgentStates = ['ready', 'handoff', 'upgrade_required', 'error']
 export const extensionStates = ['disclosure', 'signed-out', 'signed-in', 'auth-error', 'ambiguous', 'restricted', 'local-expanded', 'import-error']
 export const addonStates = ['ready', 'authentication_required', 'offline_error']
-export const mobileScreens = ['public / home', 'dashboard / feedback', 'widget / sidebar']
+export const voiceStates = ['composer', 'recording', 'attached', 'transcript', 'mic-blocked']
+export const mobileScreens = ['public / home', 'dashboard / feedback', 'widget / sidebar', 'voice / attached']
 export const inventory = {
   public: [...publicScreens.map(s => s.id), ...auditStates.map(s => `audit-${s}`)],
   dashboard: [...dashboardStates, ...authHandoffStates, ...auditStates.map(s => `audit-${s}`)],
   widget: widgetStates, 'widget-agent': widgetAgentStates,
-  extension: extensionStates, addon: addonStates,
+  extension: extensionStates, addon: addonStates, voice: voiceStates,
 }

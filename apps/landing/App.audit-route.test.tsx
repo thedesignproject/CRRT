@@ -23,6 +23,7 @@ vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing
 vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
 vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
 vi.mock('./resources/ResourcesPage', () => ({ ResourcesPage: ({ children }: { children?: ReactNode }) => <div>Public resource library{children}</div> }))
+vi.mock('./voice-prototype/VoiceCommentPrototype', () => ({ VoiceCommentPrototype: () => <div>Voice comment prototype</div> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
 
@@ -117,4 +118,14 @@ it('updates account navigation without redirecting on auth changes and unsubscri
   expect(replace).not.toHaveBeenCalled()
   view.unmount()
   expect(auth.unsubscribe).toHaveBeenCalledOnce()
+})
+
+it('opens the voice prototype on the landing page without redirecting an authenticated reviewer', async () => {
+  const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+  window.history.replaceState({}, '', '/?voice=1')
+  auth.getSession.mockResolvedValueOnce({ data: { session: { user: { id: 'user-1' } } } })
+  render(<App />)
+  expect(screen.getByText('Voice comment prototype')).toBeInTheDocument()
+  expect(await screen.findByRole('link', { name: 'Dashboard' })).toBeInTheDocument()
+  expect(replace).not.toHaveBeenCalled()
 })

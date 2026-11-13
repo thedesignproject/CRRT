@@ -332,6 +332,7 @@ function FeedbackWidgetInner({
   viewerEmail: suppliedViewerEmail,
   page,
   onRecord,
+  prototype,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
   const [shortcutsEnabled, setShortcutsEnabled] = useKeyboardShortcuts('widget')
   useEffect(() => {
@@ -714,22 +715,22 @@ function FeedbackWidgetInner({
   }, [mode])
 
   // --- Send comment ---
-  const handleSend = useCallback(async () => {
-    if (!comment.trim() || !target || sendingRef.current || screenshotCapturing) return
-    setSpeechStopSignal((signal) => signal + 1)
+  const handleSend = useCallback(async (override?: { body: string }) => {
+    const commentText = (override?.body ?? comment).trim()
+    if (!commentText || !target || sendingRef.current || screenshotCapturing) return false
 
     if (!authorNameRef.current || (privateProject && !personalComments)) {
       pendingSendAfterName.current = true
       setNameInput('')
       setShowNameModal(true)
-      return
+      return false
     }
 
+    setSpeechStopSignal((signal) => signal + 1)
     sendingRef.current = true
     setSending(true)
     setApiError('')
 
-    const commentText = comment.trim()
     const targetData = { ...target }
 
     try {
@@ -760,7 +761,7 @@ function FeedbackWidgetInner({
       }
 
       const data = await (personalComments ? personalComments.create(payload) : postComment(apiBase, payload, () => { setPrivateProject(true); setShowNameModal(true); pendingSendAfterName.current = true }))
-      if (!data) return
+      if (!data) return false
 
       const newComment: Comment = {
         id: data.id ?? crypto.randomUUID(),
@@ -795,9 +796,11 @@ function FeedbackWidgetInner({
       clearImage()
       setMode('selecting')
       setSidebarOpen(false)
+      return true
     } catch (err) {
       setApiError(err instanceof Error ? err.message : 'Could not save comment')
       console.warn('[FeedbackWidget] API error:', err)
+      return false
     } finally {
       sendingRef.current = false
       setSending(false)
@@ -1020,7 +1023,7 @@ function FeedbackWidgetInner({
   const popoverStyle = (): React.CSSProperties => {
     if (!target) return { display: 'none' }
     const pad = 16
-    const popW = 300
+    const popW = Math.min(340, window.innerWidth - 32)
     const popH = 300
     const { fixedX, fixedY } = pagePoint(target.x, target.y)
     let leftFixed = fixedX + pad
@@ -1033,23 +1036,29 @@ function FeedbackWidgetInner({
       position: 'fixed',
       left: leftFixed,
       top: topFixed,
+      maxHeight: window.innerHeight - topFixed - pad,
       zIndex: 2147483646,
     }
   }
 
   const pinPopoverStyle = (c: Comment): React.CSSProperties => {
     const pad = 16
-    const popW = 280
+    const popW = Math.min(300, window.innerWidth - 32)
+    const popH = prototype ? 420 : 280
     const { fixedX, fixedY } = pagePoint(c.x, c.y)
     let leftFixed = fixedX + pad
     let topFixed = fixedY - 20
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
     if (leftFixed < pad) leftFixed = pad
     if (topFixed < pad) topFixed = fixedY + 40
+    topFixed = Math.max(pad, Math.min(topFixed, window.innerHeight - popH - pad))
     return {
       position: 'fixed',
       left: leftFixed,
       top: topFixed,
+      maxWidth: 'calc(100vw - 32px)',
+      maxHeight: window.innerHeight - topFixed - pad,
+      overflowY: 'auto',
       zIndex: 2147483646,
     }
   }
@@ -1179,14 +1188,28 @@ function FeedbackWidgetInner({
               display: 'flex',
               flexDirection: 'column',
               width: 340,
+              maxWidth: 'calc(100vw - 32px)',
               background: 'var(--fw-surface)',
               border: '1px solid var(--fw-contrast-06)',
               borderRadius: 14,
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
               boxShadow: '0 12px 32px rgba(10, 10, 10, 0.4), 0 2px 8px rgba(10, 10, 10, 0.2)',
-              overflow: 'hidden',
+              overflow: 'auto',
             }}
           >
+            {prototype ? prototype.composer({
+              target, imagePreviewUrl, screenshotStatus,
+              removeScreenshot: clearImage,
+              cancel: () => {
+                clearNativeSelection()
+                setTarget(null)
+                setComment('')
+                clearImage()
+                setSending(false)
+                setMode('selecting')
+              },
+              submit: (body) => handleSend({ body }),
+            }) : <>
             {/* Header: time pill (Phosphor amber) + location chip (Carrot tint) */}
             <div style={{
               display: 'flex',
@@ -1426,7 +1449,7 @@ function FeedbackWidgetInner({
                   Cancel
                 </button>
                 <button
-                  onClick={handleSend}
+                  onClick={() => { void handleSend() }}
                   disabled={sendDisabled}
                   aria-label="Send"
                   style={{
@@ -1459,6 +1482,7 @@ function FeedbackWidgetInner({
               </div>
             </div>
             {recordHint && <div role="status" style={{ margin: '-4px 10px 9px', padding: '8px 10px', borderRadius: 7, border: '1px solid rgba(232,133,61,.28)', background: 'rgba(232,133,61,.08)', color: 'var(--fw-foreground-muted)', fontSize: 11, lineHeight: 1.4 }}><strong style={{ color: 'var(--fw-foreground)' }}>Open the CRRT Chrome extension</strong><br />Choose Record or press ⌥⇧R. The recorder runs in the extension so Chrome can capture safely.</div>}
+            </>}
           </div>
         </>
       )}
@@ -1695,7 +1719,7 @@ function FeedbackWidgetInner({
                           />
                         )}
                         <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--fw-foreground-soft)', marginBottom: bodyMarginBottom }}>
-                          {c.body}
+                          {prototype ? prototype.commentBody(c) : c.body}
                         </div>
                       </>
                     )}
@@ -2091,7 +2115,7 @@ function FeedbackWidgetInner({
                           wordBreak: 'break-word',
                         }}
                       >
-                        {c.body}
+                        {prototype ? prototype.commentBody(c) : c.body}
                       </div>
                       {c.imageUrl && (
                         <img

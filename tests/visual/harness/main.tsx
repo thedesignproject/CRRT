@@ -15,7 +15,10 @@ document.documentElement.dataset.theme = theme
 localStorage.setItem('dashboard-theme', theme)
 localStorage.setItem('crrt-landing-theme', theme)
 const path = location.pathname
-if (path.startsWith('/widget-agent')) {
+if (path.startsWith('/voice')) {
+  const { VoiceHarness } = await import('./voice')
+  createRoot(document.getElementById('root')!).render(<VoiceHarness />)
+} else if (path.startsWith('/widget-agent')) {
   const { WidgetAgentHarness } = await import('./widget-agent')
   createRoot(document.getElementById('root')!).render(<WidgetAgentHarness />)
 } else if (path.startsWith('/widget')) {

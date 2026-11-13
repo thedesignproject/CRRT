@@ -1,8 +1,15 @@
+import type { ReactNode } from 'react'
+import type { ScreenshotCaptureStatus } from '../../lib/screenshotCapture'
 import type { TextRangeAnchor } from '../../lib/textAnchor'
 import type { ScreenshotFocusRect } from '../../lib/screenshotCapture'
 
 export interface FeedbackWidgetProps {
   projectId: string
+  /** @internal Local prototype rendering; selection, positioning and pins stay owned by the widget. */
+  prototype?: {
+    composer(context: PrototypeComposerContext): ReactNode
+    commentBody(comment: Comment): ReactNode
+  }
   apiBase?: string
   /** Visual theme. `system` follows the browser's preferred color scheme. */
   theme?: 'light' | 'dark' | 'system'
@@ -94,4 +101,13 @@ export interface Comment {
   authorName?: string
   targetType?: CommentTargetType
   anchor?: TextRangeAnchor | null
+}
+
+export interface PrototypeComposerContext {
+  target: ClickTarget
+  imagePreviewUrl: string | null
+  screenshotStatus: ScreenshotCaptureStatus
+  removeScreenshot(): void
+  cancel(): void
+  submit(body: string): Promise<boolean>
 }
