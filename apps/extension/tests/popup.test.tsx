@@ -21,7 +21,11 @@ vi.mock('../lib/disclosure', () => ({
 }))
 
 document.body.innerHTML = '<div id="root"></div>'
+// RTL has already imported the real client. Stub only the entrypoint's automatic
+// mount so it cannot leave an unmanaged concurrent root behind between tests.
+vi.doMock('react-dom/client', () => ({ createRoot: () => ({ render: () => {} }) }))
 const { Popup } = await import('../entrypoints/popup/main')
+vi.doUnmock('react-dom/client')
 
 beforeEach(() => {
   sendMessage.mockReset()
