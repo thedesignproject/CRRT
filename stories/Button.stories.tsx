@@ -11,7 +11,7 @@ function ButtonDocs() {
     <section aria-label="Component documentation"><h2>What it does</h2><p>{buttonMeta.description}</p>
       <h3>When to use</h3><ul>{buttonMeta.whenToUse.map(text => <li key={text}>{text}</li>)}</ul>
       <h3>When to avoid</h3><ul>{buttonMeta.whenNotToUse.map(text => <li key={text}>{text}</li>)}</ul>
-      <h3>Accessibility</h3><ul>{buttonMeta.accessibility.map(text => <li key={text}>{text}</li>)}</ul>
+      <h3>Accessibility and interaction</h3><ul>{buttonMeta.accessibility.map(text => <li key={text}>{text}</li>)}</ul>
       <h3>Widget usage</h3><p>Record and Cancel use secondary small buttons. Send uses a primary small button. The widget injects the same button stylesheet that this Storybook uses, with its own isolated surface tokens.</p>
       <h3>Design tokens</h3><p>{buttonMeta.tokens.map(token => <code key={token} style={{ marginRight: 8 }}>{token}</code>)}</p>
       <h3>Usage examples</h3>{buttonMeta.examples.map(code => <pre key={code}><code>{code}</code></pre>)}
