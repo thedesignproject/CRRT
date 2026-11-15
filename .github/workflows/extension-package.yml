@@ -67,7 +67,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: crrt-extension-${{ github.ref_name }}
+          name: crrt-extension-${{ github.run_id }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
@@ -103,7 +103,7 @@ jobs:
       - uses: actions/download-artifact@v4
         if: github.event_name == 'push'
         with:
-          name: crrt-extension-${{ github.ref_name }}
+          name: crrt-extension-${{ github.run_id }}
           path: artifacts/
       - id: auth
         name: Authenticate with service account JSON
