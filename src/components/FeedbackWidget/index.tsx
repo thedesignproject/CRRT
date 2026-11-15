@@ -1,3 +1,4 @@
+import { Button } from '../../design-system/components/button'
 import { useKeyboardShortcuts } from '../../lib/useKeyboardShortcuts'
 import { useWidgetLogin } from './useWidgetLogin'
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -1380,25 +1381,15 @@ function FeedbackWidgetInner({
                   stopSignal={speechStopSignal}
                   disabled={sending}
                 />
-                <button
-                  type="button"
-                  onClick={() => { void openRecord() }}
-                  aria-label="Record screen"
-                  title="Record screen, voice and marks"
-                  style={{
-                    position: 'relative', height: 28, display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '0 8px', borderRadius: 9999, border: '1px solid rgba(232,133,61,.35)',
-                    background: 'rgba(232,133,61,.08)', color: '#E8853D', cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: 11, fontWeight: 650,
-                  }}
-                >
+                <Button tone="secondary" size="sm" onClick={() => { void openRecord() }}
+                  aria-label="Record screen" title="Record screen, voice and marks" style={{ position: 'relative' }}>
                   <Video size={13} /><span>Record</span>
                   <span style={{ position: 'absolute', right: -3, top: -5, width: 6, height: 6, borderRadius: '50%', background: '#E8853D', boxShadow: '0 0 0 2px var(--fw-surface-card)' }} />
-                </button>
+                </Button>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <button
+                <Button tone="secondary" size="sm"
                   onClick={() => {
                     clearNativeSelection()
                     setTarget(null)
@@ -1407,55 +1398,16 @@ function FeedbackWidgetInner({
                     setSending(false)
                     setMode('selecting')
                   }}
-                  style={{
-                    height: 30,
-                    padding: '0 12px',
-                    borderRadius: 9999,
-                    background: 'transparent',
-                    border: '1px solid var(--fw-contrast-08)',
-                    color: 'var(--fw-foreground-muted)',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'background 150ms ease, color 150ms ease',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-04)'; e.currentTarget.style.color = 'var(--fw-foreground)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' }}
                 >
                   Cancel
-                </button>
-                <button
-                  onClick={handleSend}
-                  disabled={sendDisabled}
-                  aria-label="Send"
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 6,
-                    height: 30,
-                    padding: '0 14px',
-                    borderRadius: 9999,
-                    border: '1px solid ' + (sendDisabled ? 'var(--fw-contrast-06)' : '#B85F1F'),
-                    background: sendDisabled ? 'var(--fw-contrast-04)' : '#E8853D',
-                    color: sendDisabled ? 'var(--fw-foreground-faint)' : '#FFFFFF',
-                    fontSize: 13,
-                    fontWeight: 500,
-                    cursor: sendDisabled ? 'default' : 'pointer',
-                    fontFamily: 'inherit',
-                    transition: 'background 150ms ease',
-                  }}
-                  /* v8 ignore next 2 */
-                  onMouseEnter={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#B85F1F' }}
-                  onMouseLeave={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#E8853D' }}
-                >
+                </Button>
+                <Button tone="primary" size="sm" onClick={handleSend} disabled={sendDisabled} aria-label="Send">
                   <span>Send</span>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12" />
                     <polyline points="12 5 19 12 12 19" />
                   </svg>
-                </button>
+                </Button>
               </div>
             </div>
             {recordHint && <div role="status" style={{ margin: '-4px 10px 9px', padding: '8px 10px', borderRadius: 7, border: '1px solid rgba(232,133,61,.28)', background: 'rgba(232,133,61,.08)', color: 'var(--fw-foreground-muted)', fontSize: 11, lineHeight: 1.4 }}><strong style={{ color: 'var(--fw-foreground)' }}>Open the CRRT Chrome extension</strong><br />Choose Record or press ⌥⇧R. The recorder runs in the extension so Chrome can capture safely.</div>}

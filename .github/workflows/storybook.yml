@@ -1,0 +1,55 @@
+name: Component Storybook
+on:
+  pull_request:
+  push:
+    branches: [trunk]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: component-storybook-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  catalog:
+    name: Component catalog
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run build-storybook
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:storybook
+      - name: Publish component snapshots
+        if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
+        env:
+          CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_STORYBOOK_PROJECT_TOKEN }}
+          CHROMATIC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          CHROMATIC_BRANCH: ${{ github.head_ref || github.ref_name }}
+          CHROMATIC_SLUG: ${{ github.repository }}
+        run: |
+          if [[ -z "$CHROMATIC_PROJECT_TOKEN" ]]; then
+            echo '::notice::Component cloud snapshots need a separate Chromatic Storybook project and CHROMATIC_STORYBOOK_PROJECT_TOKEN. Local catalog checks still ran; no cloud approval is implied.'
+            exit 0
+          fi
+          bun run chromatic:storybook
+      - name: Save component Storybook and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: component-storybook
+          path: |
+            storybook-static/
+            artifacts/storybook-results.json
+            artifacts/storybook-tests/
+          retention-days: 7

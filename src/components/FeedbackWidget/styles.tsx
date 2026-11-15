@@ -1,6 +1,20 @@
+import buttonCss from '../../design-system/components/button.css?raw'
+
+const widgetButtonCss = buttonCss.replace(/\.ds-button/g, '[data-fw-crrt] .ds-button')
+
 export function FeedbackWidgetStyles() {
   return (
-    <style>{`
+    <style>{`${widgetButtonCss}
+        [data-fw-crrt] .ds-button {
+          --crrt-dashboard-font: Inter, -apple-system, BlinkMacSystemFont, sans-serif;
+          --foreground: var(--fw-foreground);
+          --card: var(--fw-surface);
+          --border: var(--fw-contrast-08);
+          --muted: var(--fw-contrast-04);
+          --muted-foreground: var(--fw-foreground-muted);
+          --ring: #c24c12;
+        }
+
         [data-fw-crrt] {
           color-scheme: dark;
           --fw-surface: #181818;

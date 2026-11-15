@@ -4,8 +4,8 @@ export const buttonMeta: ComponentMeta = {
   name: 'Button', description: 'Token-bound action control for primary, secondary, and quiet actions.', status: 'beta', category: 'action',
   whenToUse: ['Use for actions that change state or start a flow.', 'Use primary tone for the single dominant action in a region.'],
   whenNotToUse: ['Do not use for navigation; use NavLink instead.'], semanticTags: ['button', 'cta', 'action'],
-  tokens: ['--primary', '--foreground', '--border', '--ring'], accessibility: ['Uses a native button and visible focus.'],
-  examples: ['<Button>Start 14-day trial</Button>', '<Button tone="secondary">Add to Chrome</Button>'],
+  tokens: ['--crrt-dashboard-orange', '--crrt-dashboard-white', '--crrt-dashboard-font', '--crrt-radius-xl', '--crrt-duration-fast', '--foreground', '--card', '--border', '--muted', '--muted-foreground', '--ring'], accessibility: ['Uses a native button and visible focus.'],
+  examples: ['<Button>Start 14-day trial</Button>', '<Button tone="secondary">Add to Chrome</Button>', '<Button tone="secondary" size="sm">Cancel</Button>', '<Button size="sm">Send</Button>'],
 }
 
 export const iconButtonMeta: ComponentMeta = {

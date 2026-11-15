@@ -1,35 +1,11 @@
-.ds-button,
+@import "./components/button.css";
+
 .ds-icon-button,
 .ds-nav-link,
 .ds-segmented button {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
-
-.ds-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid transparent;
-  border-radius: var(--crrt-radius-xl);
-  font: 650 14px/1 var(--crrt-dashboard-font);
-  cursor: pointer;
-  transition: background-color var(--crrt-duration-fast), border-color var(--crrt-duration-fast), color var(--crrt-duration-fast), transform 80ms;
-}
-.ds-button:hover { transform: translateY(-1px); }
-.ds-button:active { transform: translateY(0) scale(.985); }
-.ds-button:disabled { cursor: wait; opacity: .6; transform: none; }
-.ds-button-primary { color: var(--crrt-dashboard-white); background: var(--crrt-dashboard-orange); border-color: var(--crrt-dashboard-orange); }
-.ds-button-primary:hover { background: color-mix(in srgb, var(--crrt-dashboard-orange) 86%, black); }
-.ds-button-secondary { color: var(--foreground); background: var(--card); border-color: var(--border); }
-.ds-button-secondary:hover { background: var(--muted); }
-.ds-button-quiet { color: var(--muted-foreground); background: transparent; }
-.ds-button-quiet:hover { color: var(--foreground); background: var(--muted); }
-.ds-button-sm { min-height: 34px; padding-inline: 12px; font-size: 13px; }
-.ds-button-lg { min-height: 50px; padding-inline: 20px; font-size: 15px; }
 
 .ds-icon-button {
   display: inline-grid;
@@ -46,7 +22,6 @@
 }
 .ds-icon-button:hover { color: var(--foreground); background: var(--muted); }
 
-.ds-button:focus-visible,
 .ds-icon-button:focus-visible,
 .ds-nav-link:focus-visible,
 .ds-segmented button:focus-visible {

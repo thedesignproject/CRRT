@@ -15,7 +15,7 @@ export default defineConfig({
     setupFiles: ['./src/__tests__/setup.ts'],
     // Nested packages own their test runners and CI. In particular, the
     // Storybook addon's `.mjs` suites use `node:test`, not Vitest.
-    exclude: [...configDefaults.exclude, 'packages/**'],
+    exclude: [...configDefaults.exclude, 'packages/**', 'tests/storybook/**'],
     coverage: {
       reporter: ['text', 'text-summary', 'lcov'],
       include: ['apps/posthog.ts', 'src/**/*.{ts,tsx}', 'api/**/*.ts', 'apps/dashboard/**/*.{ts,tsx}', 'apps/landing/**/*.{ts,tsx}', 'apps/extension/**/*.{ts,tsx}', 'shared/product-audit/**/*.{ts,tsx}', 'shared/record/**/*.{ts,tsx}', 'workflows/**/*.ts', 'server/**/*.ts'],
