@@ -3,6 +3,9 @@ export function FeedbackWidgetStyles() {
     <style>{`
         [data-fw-crrt] {
           color-scheme: dark;
+          --crrt-record-background: #00B6D5E6;
+          --crrt-record-border: #00B0ED59;
+          --crrt-record-foreground: #FFFFFF;
           --fw-surface: #181818;
           --fw-surface-deep: #0A0A0A;
           --fw-surface-solid: #0D0D0D;

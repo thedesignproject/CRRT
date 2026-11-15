@@ -1387,13 +1387,12 @@ function FeedbackWidgetInner({
                   title="Record screen, voice and marks"
                   style={{
                     position: 'relative', height: 28, display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '0 8px', borderRadius: 9999, border: '1px solid rgba(232,133,61,.35)',
-                    background: 'rgba(232,133,61,.08)', color: '#E8853D', cursor: 'pointer',
+                    padding: '0 8px', borderRadius: 9999, border: '1px solid var(--crrt-record-border)',
+                    background: 'var(--crrt-record-background)', color: 'var(--crrt-record-foreground)', cursor: 'pointer',
                     fontFamily: 'inherit', fontSize: 11, fontWeight: 650,
                   }}
                 >
                   <Video size={13} /><span>Record</span>
-                  <span style={{ position: 'absolute', right: -3, top: -5, width: 6, height: 6, borderRadius: '50%', background: '#E8853D', boxShadow: '0 0 0 2px var(--fw-surface-card)' }} />
                 </button>
               </div>
 
