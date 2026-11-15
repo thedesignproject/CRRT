@@ -20,12 +20,21 @@ it('serializes conflicting retries before reading the request hash or comment', 
 
 it('ships additive dashboard upgrade and retry tables with schema-sourced privileged routines', async () => {
   const { mcpDashboardUpgradeSql, mcpDashboardReceiptsSql } = await import('./schema')
-  const upgrade = readFileSync('db/migrations/0051_mcp_dashboard.sql', 'utf8')
+  const upgrade = readFileSync('db/migrations/0051_mcp_dashboard.sql', 'utf8').replace(/\r\n/g, '\n')
   expect(upgrade).toContain(mcpDashboardUpgradeSql.trim())
   expect(upgrade).toContain('ENABLE ROW LEVEL SECURITY')
   expect(upgrade).not.toMatch(/CREATE POLICY/)
   expect(upgrade).toContain(mcpDashboardReceiptsSql.trim())
   expect(upgrade).toContain('CREATE TABLE "mcp_dashboard_operations"')
   const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-  expect(journal.entries.filter((row: { idx: number }) => row.idx >= 51).map((row: { tag: string }) => row.tag)).toEqual(['0051_mcp_dashboard'])
+  expect(journal.entries.filter((row: { idx: number }) => row.idx === 51).map((row: { tag: string }) => row.tag)).toEqual(['0051_mcp_dashboard'])
+})
+
+it('adds documents without changing the existing dashboard permission schema', () => {
+  const before = JSON.parse(readFileSync('db/migrations/meta/0051_snapshot.json', 'utf8'))
+  const after = JSON.parse(readFileSync('db/migrations/meta/0052_snapshot.json', 'utf8'))
+  for (const table of ['public.mcp_codes', 'public.mcp_connections']) expect(after.tables[table]).toEqual(before.tables[table])
+  const migration = readFileSync('db/migrations/0052_hosted_documents.sql', 'utf8')
+  expect(migration).not.toContain('ALTER TABLE "mcp_')
+  expect(migration).not.toContain('crrt:documents:')
 })
