@@ -3,10 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const sdk = vi.hoisted(() => ({ init: vi.fn(), capture: vi.fn(), identify: vi.fn(), reset: vi.fn(), logger: { info: vi.fn() } }))
 const init = sdk.init
 beforeEach(() => vi.doMock('posthog-js', () => ({ default: sdk })))
-vi.mock('posthog-js', () => ({ default: sdk }))
 
 afterEach(() => {
   vi.unstubAllEnvs()
+  vi.doUnmock('posthog-js')
   vi.resetModules()
   vi.clearAllMocks()
 })
@@ -127,7 +127,12 @@ it('disables analytics if SDK initialization fails', async () => {
 
 it('preserves identity and event order while the SDK downloads, including failed calls', async () => {
   let release!: (module: { default: typeof sdk }) => void
-  vi.doMock('posthog-js', () => new Promise(resolve => { release = resolve }))
+  let started!: () => void
+  const downloadStarted = new Promise<void>(resolve => { started = resolve })
+  vi.doMock('posthog-js', () => new Promise(resolve => {
+    release = resolve
+    started()
+  }))
   vi.stubEnv('MODE', 'production')
   vi.stubEnv('SSR', false)
   vi.stubEnv('VITE_POSTHOG_KEY', 'test-public-key')
@@ -141,7 +146,7 @@ it('preserves identity and event order while the SDK downloads, including failed
   module.default.capture('project_created')
   module.default.reset()
   expect(sdk.identify).not.toHaveBeenCalled()
-  await vi.waitFor(() => expect(release).toBeTypeOf('function'))
+  await downloadStarted
   release({ default: sdk })
   await module.postHogReady
   expect(calls).toEqual(['identify', 'reset'])
@@ -150,14 +155,19 @@ it('preserves identity and event order while the SDK downloads, including failed
 
 it('disables analytics and drops queued actions when downloading fails', async () => {
   let reject!: (error: Error) => void
-  vi.doMock('posthog-js', () => new Promise((_resolve, fail) => { reject = fail }))
+  let started!: () => void
+  const downloadStarted = new Promise<void>(resolve => { started = resolve })
+  vi.doMock('posthog-js', () => new Promise((_resolve, fail) => {
+    reject = fail
+    started()
+  }))
   vi.stubEnv('MODE', 'production')
   vi.stubEnv('SSR', false)
   vi.stubEnv('VITE_POSTHOG_KEY', 'test-public-key')
   vi.stubEnv('VITE_POSTHOG_HOST', 'https://us.i.posthog.com')
   const module = await import('./posthog')
   module.default.identify('user-1')
-  await vi.waitFor(() => expect(reject).toBeTypeOf('function'))
+  await downloadStarted
   reject(new Error('network failed'))
   await module.postHogReady
   expect(module.isPostHogConfigured).toBe(false)
