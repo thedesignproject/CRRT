@@ -83,11 +83,11 @@ export function collectReleaseFiles(root: string, paths: string[]): Map<string, 
   return new Map(paths.map((path) => [path.split(sep).join('/'), readFileSync(resolve(root, path))]))
 }
 
-function validateManifest(manifest: JsonRecord, version: string, apiOrigin: string, supabaseOrigin: string): void {
+function validateManifest(manifest: JsonRecord, version: string, apiOrigin: string, supabaseOrigin: string, storageOrigin?: string): void {
   requireValue(manifest.manifest_version === 3, 'Release must use Manifest V3')
   requireValue(manifest.version === version, 'Manifest version must match the extension package')
   requireValue(sameStrings(stringArray(manifest.permissions, 'Manifest permissions'), STORE_PERMISSIONS), 'Manifest permissions exceed the reviewed set')
-  requireValue(sameStrings(stringArray(manifest.host_permissions, 'Manifest host permissions'), [`${apiOrigin}/*`, `${supabaseOrigin}/*`]), 'Manifest host permissions exceed CRRT services')
+  requireValue(sameStrings(stringArray(manifest.host_permissions, 'Manifest host permissions'), [...new Set([`${apiOrigin}/*`, `${supabaseOrigin}/*`, ...(storageOrigin ? [`${storageOrigin}/*`] : [])])]), 'Manifest host permissions exceed CRRT services')
   requireValue(sameStrings(stringArray(manifest.optional_host_permissions, 'Manifest optional host permissions'), STORE_OPTIONAL_HOST_PERMISSIONS), 'Manifest optional host permissions exceed recording pages')
   requireValue(manifest.content_scripts === undefined, 'Persistent content scripts are not allowed')
   const csp = jsonRecord(manifest.content_security_policy, 'Manifest CSP')
@@ -128,7 +128,7 @@ function validateBundleText(path: string, bytes: Uint8Array): void {
 
 export function validateReleaseFiles(
   files: ReleaseFiles,
-  { version, apiBase, supabaseUrl }: { version: string; apiBase: string; supabaseUrl: string },
+  { version, apiBase, supabaseUrl, storageOrigin }: { version: string; apiBase: string; supabaseUrl: string; storageOrigin?: string },
 ): ReleaseValidation {
   const names = [...files.keys()].sort()
   for (const required of ['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html']) {
@@ -140,7 +140,11 @@ export function validateReleaseFiles(
   const manifest = jsonRecord(JSON.parse(new TextDecoder().decode(manifestBytes)), 'Manifest')
   const apiOrigin = new URL(apiBase).origin
   const supabaseOrigin = new URL(supabaseUrl).origin
-  validateManifest(manifest, version, apiOrigin, supabaseOrigin)
+  if (storageOrigin) {
+    const url = new URL(storageOrigin)
+    requireValue(url.protocol === 'https:' && url.origin === storageOrigin, 'Recording storage must be an exact HTTPS origin')
+  }
+  validateManifest(manifest, version, apiOrigin, supabaseOrigin, storageOrigin)
   for (const size of STORE_ICON_SIZES) {
     const path = `icons/icon-${size}.png`
     const icon = files.get(path)

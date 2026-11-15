@@ -54,6 +54,20 @@ function releaseFiles(overrides: Record<string, Uint8Array | string> = {}) {
 const options = { version: '1.0.0', apiBase: 'https://crrt.ai/api', supabaseUrl: 'https://project.supabase.co' }
 
 describe('extension Store release', () => {
+  it('allows only the explicitly configured recording storage origin', () => {
+    const storageOrigin = 'https://account.r2.cloudflarestorage.com'
+    const files = releaseFiles({ 'manifest.json': JSON.stringify(manifest({
+      host_permissions: ['https://crrt.ai/*', 'https://project.supabase.co/*', `${storageOrigin}/*`],
+    })) })
+    expect(() => validateReleaseFiles(files, { ...options, storageOrigin })).not.toThrow()
+    expect(() => validateReleaseFiles(files, options)).toThrow('host permissions')
+    expect(() => validateReleaseFiles(files, { ...options, storageOrigin: 'https://other.example' })).toThrow('host permissions')
+    for (const invalid of ['http://storage.example', 'https://storage.example/bucket', 'https://storage.example/']) {
+      expect(() => validateReleaseFiles(files, { ...options, storageOrigin: invalid })).toThrow('exact HTTPS origin')
+    }
+    expect(() => validateReleaseFiles(releaseFiles(), { ...options, storageOrigin: 'https://project.supabase.co' })).not.toThrow()
+  })
+
   it('accepts only public Supabase key types', () => {
     expect(() => validatePublicSupabaseKey('sb_publishable_ci_build_fixture')).not.toThrow()
     expect(() => validatePublicSupabaseKey(jwt({ role: 'anon' }))).not.toThrow()
