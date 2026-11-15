@@ -1,6 +1,6 @@
 import { useKeyboardShortcuts } from '../../lib/useKeyboardShortcuts'
 import { useWidgetLogin } from './useWidgetLogin'
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Bot, MessageCircle, PanelRightOpen, Video, X } from 'lucide-react'
 import { getSelector } from '../../lib/getSelector'
 import { buildTextRangeAnchor } from '../../lib/textAnchor'
@@ -21,6 +21,7 @@ import { TextRangeQuote } from './quote'
 import { listenForWidgetEvent } from './events'
 import { SpeechInputButton } from './voice'
 import { SelectorFrame } from './SelectorFrame'
+import { ConversationDetails, conversationComments, conversationSelector, conversationTarget, hostedComments, positionAt, positionedPoint, savedPosition } from './conversation'
 
 function clearNativeSelection() {
   window.getSelection()?.removeAllRanges()
@@ -71,17 +72,20 @@ function LauncherAction({
   subtitle,
   shortcut,
   onClick,
+  disabled,
 }: {
   icon: ReactNode
   title: string
   subtitle: string
   shortcut?: string
   onClick: () => void
+  disabled?: boolean
 }) {
   return (
     <button
       type="button"
       role="menuitem"
+      disabled={disabled}
       onClick={onClick}
       style={{
         width: '100%',
@@ -332,6 +336,7 @@ function FeedbackWidgetInner({
   viewerEmail: suppliedViewerEmail,
   page,
   onRecord,
+  conversation,
 }: Omit<FeedbackWidgetProps, 'disabled'>) {
   const [shortcutsEnabled, setShortcutsEnabled] = useKeyboardShortcuts('widget')
   useEffect(() => {
@@ -341,7 +346,8 @@ function FeedbackWidgetInner({
   const [mode, setMode] = useState<Mode>('idle')
   const widgetRef = useRef<HTMLDivElement>(null)
   const [target, setTarget] = useState<ClickTarget | null>(null)
-  const [comment, setComment] = useState('')
+  const [comment, setComment] = useState(conversation?.initialDraft?.body ?? '')
+  const [reply, setReply] = useState(conversation?.initialDraft?.reply ?? null)
   const [sending, setSending] = useState(false)
   const [speechStopSignal, setSpeechStopSignal] = useState(0)
   const [apiError, setApiError] = useState('')
@@ -366,7 +372,7 @@ function FeedbackWidgetInner({
   useEffect(() => () => { if (recordHintTimer.current) window.clearTimeout(recordHintTimer.current) }, [])
 
   const widgetLogin = useWidgetLogin(apiBase, projectId)
-  const personalComments = suppliedPersonalComments ?? widgetLogin.comments
+  const personalComments = suppliedPersonalComments ?? (conversation ? hostedComments : widgetLogin.comments)
   const viewerEmail = suppliedViewerEmail ?? widgetLogin.session?.displayName
   const [privateProject, setPrivateProject] = useState(false)
   useEffect(() => { setPrivateProject(false) }, [apiBase, projectId])
@@ -375,6 +381,11 @@ function FeedbackWidgetInner({
   const [showNameModal, setShowNameModal] = useState(false)
   const [nameInput, setNameInput] = useState('')
   useEffect(() => {
+    if (conversation) {
+      const name = conversation.authorName || conversation.initialDraft?.author || null
+      if (conversation.authorName) setShowNameModal(false)
+      authorNameRef.current = name; setAuthorName(name); return
+    }
     if (personalComments) {
       const name = viewerEmail || 'You'
       authorNameRef.current = name; setAuthorName(name); return
@@ -388,18 +399,18 @@ function FeedbackWidgetInner({
         setAuthorName(stored)
       }
     } catch {}
-  }, [personalComments, viewerEmail, privateProject])
+  }, [personalComments, viewerEmail, privateProject, conversation?.authorName])
 
   function saveAuthorName(name: string) {
     const trimmed = name.trim()
     if (!trimmed) return
     authorNameRef.current = trimmed
     setAuthorName(trimmed)
-    try { localStorage.setItem(AUTHOR_NAME_KEY, trimmed) } catch {}
+    if (!conversation) { try { localStorage.setItem(AUTHOR_NAME_KEY, trimmed) } catch {} }
   }
 
   function openNameEditor() {
-    if (suppliedPersonalComments) return
+    if (suppliedPersonalComments || conversation?.authorName) return
     setNameInput(authorNameRef.current ?? '')
     setShowNameModal(true)
   }
@@ -547,7 +558,7 @@ function FeedbackWidgetInner({
     toBase64: encodeImage,
   } = useScreenshotCapture(page?.capture)
   const screenshotCapturing = screenshotStatus === 'capturing'
-  const sendDisabled = !comment.trim() || sending || screenshotCapturing
+  const sendDisabled = !comment.trim() || sending || screenshotCapturing || Boolean(conversation?.disabled || conversation?.readOnly)
 
   useEffect(() => {
     page?.selecting(mode === 'selecting')
@@ -568,9 +579,9 @@ function FeedbackWidgetInner({
     setTarget(null); setComment(''); clearImage(); setMode('idle'); setSelectedPin(null); setAgentOpen(false)
   }, [page?.url])
 
-  const pagePoint = (x: number, y: number) => page
+  const pagePoint = (x: number, y: number, position: ClickTarget | Comment) => conversation && positionedPoint(position) || (page
     ? { fixedX: x / 100 * page.width - page.scrollX, fixedY: y / 100 * page.height - page.scrollY }
-    : fromPagePercentFixed(x, y)
+    : fromPagePercentFixed(x, y))
 
   const feedbackContextGeneration = useRef(0)
   useEffect(() => {
@@ -578,8 +589,36 @@ function FeedbackWidgetInner({
     return () => { feedbackContextGeneration.current++ }
   }, [apiBase, projectId, currentUrl, widgetLogin.session])
 
+  useEffect(() => {
+    if (!conversation) return
+    setComments(conversationComments(conversation, projectId))
+  }, [conversation?.feedback, projectId])
+  useEffect(() => {
+    if (!conversation?.selection || conversation.readOnly || conversation.draftLocked || sending || mode === 'selecting') return
+    setTarget(conversationTarget(conversation.selection, conversation.containerSelector, conversation.selectionTarget)); setReply(null); setSidebarOpen(false); setMode('commenting')
+    if (!authorNameRef.current) setShowNameModal(true)
+  }, [conversation?.selection, conversation?.selectionTarget])
+  useEffect(() => {
+    if (!conversation?.initialDraft?.body) return
+    setTarget(conversation.initialDraft.target ? { ...conversation.initialDraft.target, url: currentUrl } : conversationTarget('', conversation.containerSelector)); setMode('commenting')
+  }, [])
+  useLayoutEffect(() => {
+    conversation?.onDraftChange?.(comment ? { body: comment, author: authorName ?? '', reply, ...(target && !reply ? { target: savedPosition(target) } : {}) } : null)
+  }, [comment, authorName, reply, target, conversation?.onDraftChange])
+  useEffect(() => {
+    conversation?.onPendingChange?.(Boolean(comment) || sending)
+  }, [comment, sending, conversation?.onPendingChange])
+  useEffect(() => () => conversation?.onPendingChange?.(false), [conversation?.onPendingChange])
+  useEffect(() => {
+    if (!conversation || !comment) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [Boolean(conversation), Boolean(comment)])
+
   // --- Fetch comments on mount ---
   useEffect(() => {
+    if (conversation) return
     let cancelled = false
     let refreshVersion = 0
     const request = personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) })
@@ -602,7 +641,7 @@ function FeedbackWidgetInner({
   }, [projectId, apiBase, personalComments, currentUrl])
 
   useEffect(() => {
-    if (!personalComments || !sidebarOpen) return
+    if (conversation || !personalComments || !sidebarOpen) return
     let cancelled = false
     const timer = window.setInterval(() => {
       void personalComments.list(currentUrl).then((fresh) => {
@@ -623,6 +662,9 @@ function FeedbackWidgetInner({
     }
   }, [mode, textHover])
 
+  const captureBlocked = Boolean(conversation?.readOnly || conversation?.disabled || conversation?.draftLocked)
+  useEffect(() => { if (captureBlocked && mode === 'selecting') setMode('idle') }, [captureBlocked, mode])
+
   // --- Handle element click / text selection in selecting mode ---
   useEffect(() => {
     if (mode !== 'selecting' || page) return
@@ -631,6 +673,7 @@ function FeedbackWidgetInner({
       const el = e.target as HTMLElement
       if (el.closest?.(`[${WIDGET_ATTR}]`)) return
 
+      if (conversation && !el.closest(conversation.containerSelector ?? 'body')) return
       e.preventDefault()
       e.stopPropagation()
       setShowSelectingHint(false)
@@ -642,7 +685,7 @@ function FeedbackWidgetInner({
       const sel = window.getSelection()
       if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
         const built = buildTextRangeAnchor(sel.getRangeAt(0), {
-          getSelector,
+          getSelector: conversation ? (element) => conversationSelector(element, conversation.containerSelector ?? 'body') : getSelector,
           url: window.location.href,
           viewport: {
             width: window.innerWidth,
@@ -657,14 +700,15 @@ function FeedbackWidgetInner({
             built.midpointClient.x + window.scrollX,
             built.midpointClient.y + window.scrollY,
           )
-          setTarget({
+          const selectedTarget: ClickTarget = {
             selector: built.anchor.containerSelector,
             x: pct.x,
             y: pct.y,
             url: window.location.href,
             targetType: 'text_range',
             anchor: built.anchor,
-          })
+          }
+          setTarget(conversation ? positionAt(selectedTarget, built.midpointClient.x, built.midpointClient.y) : selectedTarget)
 
           if (!authorNameRef.current) {
             setShowNameModal(true)
@@ -677,15 +721,17 @@ function FeedbackWidgetInner({
       }
 
       const pct = toPagePercent(e.pageX, e.pageY)
-      setTarget({
-        selector: getSelector(el),
+      conversation?.onClearSelection()
+      const clickedTarget: ClickTarget = {
+        selector: conversation ? conversationSelector(el, conversation.containerSelector ?? 'body') : getSelector(el),
         x: pct.x,
         y: pct.y,
         url: window.location.href,
-      })
+      }
+      setTarget(conversation ? positionAt(clickedTarget, e.clientX, e.clientY) : clickedTarget)
 
       const rect = el.getBoundingClientRect()
-      captureImage({
+      if (!conversation) captureImage({
         left: rect.left,
         top: rect.top,
         width: rect.width,
@@ -704,7 +750,7 @@ function FeedbackWidgetInner({
     return () => {
       window.removeEventListener('click', onClick, true)
     }
-  }, [mode])
+  }, [mode, conversation?.readOnly, conversation?.disabled, conversation?.draftLocked, conversation?.containerSelector])
 
   // --- Auto-focus textarea ---
   useEffect(() => {
@@ -715,7 +761,7 @@ function FeedbackWidgetInner({
 
   // --- Send comment ---
   const handleSend = useCallback(async () => {
-    if (!comment.trim() || !target || sendingRef.current || screenshotCapturing) return
+    if (!comment.trim() || !target || sendingRef.current || screenshotCapturing || conversation?.disabled || conversation?.readOnly) return
     setSpeechStopSignal((signal) => signal + 1)
 
     if (!authorNameRef.current || (privateProject && !personalComments)) {
@@ -733,6 +779,11 @@ function FeedbackWidgetInner({
     const targetData = { ...target }
 
     try {
+      if (conversation) {
+        await conversation.onComment({ body: commentText, author: authorNameRef.current!, ...(reply ? { parentId: reply.id, version: reply.version } : { target: savedPosition(targetData) }) })
+        setComment(''); setReply(null); setTarget(null); setMode('idle'); setSidebarOpen(true); conversation.onClearSelection()
+        return
+      }
       const payload: Record<string, unknown> = {
         projectKey: projectId,
         pageUrl: targetData.url,
@@ -796,13 +847,13 @@ function FeedbackWidgetInner({
       setMode('selecting')
       setSidebarOpen(false)
     } catch (err) {
-      setApiError(err instanceof Error ? err.message : 'Could not save comment')
+      setApiError(conversation ? conversation.errorMessage(err) : err instanceof Error ? err.message : 'Could not save comment')
       console.warn('[FeedbackWidget] API error:', err)
     } finally {
       sendingRef.current = false
       setSending(false)
     }
-  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments, privateProject])
+  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments, privateProject, conversation, reply])
 
   useEffect(() => {
     if (!widgetLogin.session || !resumeAfterLogin.current) return
@@ -815,7 +866,7 @@ function FeedbackWidgetInner({
   }, [widgetLogin.session, handleSend])
 
   const openAgentBridge = useCallback(() => {
-    if (suppliedPersonalComments) return
+    if (suppliedPersonalComments || conversation) return
     setLauncherOpen(false)
     setSidebarOpen(false)
     if (agentOpen) {
@@ -823,7 +874,7 @@ function FeedbackWidgetInner({
       return
     }
     setAgentOpen(true)
-  }, [agentOpen, suppliedPersonalComments])
+  }, [agentOpen, suppliedPersonalComments, Boolean(conversation)])
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
@@ -838,7 +889,9 @@ function FeedbackWidgetInner({
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
+          if (conversation && comment) return
           clearNativeSelection()
+          conversation?.onClearSelection()
           setTarget(null)
           setComment('')
           clearImage()
@@ -889,10 +942,12 @@ function FeedbackWidgetInner({
       }
     }
     return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
-  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal])
+  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment])
 
   function exitFeedbackMode() {
+    if (conversation && comment) { setMode('commenting'); return }
     clearNativeSelection()
+    conversation?.onClearSelection()
     setMode('idle')
     setShowSelectingHint(false)
     setTarget(null)
@@ -903,7 +958,9 @@ function FeedbackWidgetInner({
   }
 
   function enterFeedbackMode() {
+    if (conversation?.readOnly || conversation?.disabled || conversation?.draftLocked) return
     clearNativeSelection()
+    conversation?.onClearSelection()
     setSidebarOpen(false)
     setLauncherOpen(false)
     if (!selectingHintShown) {
@@ -1020,9 +1077,9 @@ function FeedbackWidgetInner({
   const popoverStyle = (): React.CSSProperties => {
     if (!target) return { display: 'none' }
     const pad = 16
-    const popW = 300
+    const popW = conversation ? Math.min(340, window.innerWidth - 32) : 300
     const popH = 300
-    const { fixedX, fixedY } = pagePoint(target.x, target.y)
+    const { fixedX, fixedY } = pagePoint(target.x, target.y, target)
     let leftFixed = fixedX + pad
     let topFixed = fixedY + pad
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
@@ -1040,7 +1097,7 @@ function FeedbackWidgetInner({
   const pinPopoverStyle = (c: Comment): React.CSSProperties => {
     const pad = 16
     const popW = 280
-    const { fixedX, fixedY } = pagePoint(c.x, c.y)
+    const { fixedX, fixedY } = pagePoint(c.x, c.y, c)
     let leftFixed = fixedX + pad
     let topFixed = fixedY - 20
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
@@ -1054,9 +1111,9 @@ function FeedbackWidgetInner({
     }
   }
 
-  const allRecentComments = useMemo(() => comments.filter((c) => (
+  const allRecentComments = useMemo(() => conversation ? conversationComments(conversation, projectId) : comments.filter((c) => (
     new Date(c.createdAt) >= COMMENT_CUTOFF
-  )), [comments])
+  )), [comments, conversation?.feedback, projectId])
   const visibleComments = useMemo(() => allRecentComments.filter((c) => {
     return samePage(c.pageUrl, currentUrl)
   }), [allRecentComments, currentUrl])
@@ -1161,8 +1218,10 @@ function FeedbackWidgetInner({
               inset: 0,
               zIndex: 2147483645,
               background: 'rgba(0, 0, 0, 0.05)',
+              pointerEvents: conversation ? 'none' : undefined,
             }}
             onClick={() => {
+              if (conversation && comment) return
               clearNativeSelection()
               setTarget(null)
               setComment('')
@@ -1179,12 +1238,14 @@ function FeedbackWidgetInner({
               display: 'flex',
               flexDirection: 'column',
               width: 340,
+              maxWidth: conversation ? 'calc(100vw - 32px)' : undefined,
               background: 'var(--fw-surface)',
               border: '1px solid var(--fw-contrast-06)',
               borderRadius: 14,
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
               boxShadow: '0 12px 32px rgba(10, 10, 10, 0.4), 0 2px 8px rgba(10, 10, 10, 0.2)',
-              overflow: 'hidden',
+              overflow: conversation ? 'auto' : 'hidden',
+              maxHeight: conversation ? 'calc(100dvh - 32px)' : undefined,
             }}
           >
             {/* Header: time pill (Phosphor amber) + location chip (Carrot tint) */}
@@ -1255,10 +1316,19 @@ function FeedbackWidgetInner({
               </span>
             </div>
 
+            {conversation && <div style={{ padding: '0 14px 8px', fontSize: 12, color: 'var(--fw-foreground-muted)' }}>
+              {conversation.readOnly || conversation.concealed ? 'Your access changed. Copy or discard your preserved feedback.' : reply ? `Replying to ${reply.author} · revision ${reply.version}` : 'Leave feedback'}
+              {reply && !conversation.concealed && <button type="button" aria-label="Cancel reply" disabled={sending || conversation.disabled || conversation.draftLocked} onClick={() => setReply(null)}>×</button>}
+              {conversation.selection && !reply && !conversation.concealed && <button type="button" aria-label="Clear selected passage" disabled={sending || conversation.disabled || conversation.draftLocked} onClick={() => { conversation.onClearSelection(); setTarget({ ...target, anchor: undefined }) }}>×</button>}
+            </div>}
             {/* Textarea */}
             <div style={{ padding: '0 14px 4px' }}>
               <textarea
                 ref={textareaRef}
+                aria-label={conversation ? (reply ? 'Reply' : 'Leave feedback') : undefined}
+                maxLength={conversation ? 8000 : undefined}
+                readOnly={conversation?.readOnly}
+                disabled={conversation ? (!conversation.readOnly && Boolean(sending || conversation.disabled || conversation.draftLocked)) : undefined}
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
@@ -1284,7 +1354,7 @@ function FeedbackWidgetInner({
               />
             </div>
 
-            {target.anchor && (
+            {target.anchor && !conversation?.concealed && (
               <TextRangeQuote
                 text={target.anchor.selectedText}
                 style={{ margin: '0 14px 8px' }}
@@ -1351,6 +1421,8 @@ function FeedbackWidgetInner({
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 8,
               padding: '8px 10px 10px',
               borderTop: '1px solid var(--fw-contrast-06)',
               marginTop: 4,
@@ -1399,13 +1471,15 @@ function FeedbackWidgetInner({
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <button
+                  disabled={sending || conversation?.disabled}
                   onClick={() => {
+                    if (conversation) { conversation.onDiscard?.(); conversation.onClearSelection(); setReply(null); setApiError('') }
                     clearNativeSelection()
                     setTarget(null)
                     setComment('')
                     clearImage()
                     setSending(false)
-                    setMode('selecting')
+                    setMode(conversation ? 'idle' : 'selecting')
                   }}
                   style={{
                     height: 30,
@@ -1423,12 +1497,12 @@ function FeedbackWidgetInner({
                   onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-04)'; e.currentTarget.style.color = 'var(--fw-foreground)' }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' }}
                 >
-                  Cancel
+                  {conversation ? 'Discard feedback' : 'Cancel'}
                 </button>
                 <button
                   onClick={handleSend}
                   disabled={sendDisabled}
-                  aria-label="Send"
+                  aria-label={conversation ? (reply ? 'Send reply' : 'Add feedback') : 'Send'}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -1450,7 +1524,7 @@ function FeedbackWidgetInner({
                   onMouseEnter={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#B85F1F' }}
                   onMouseLeave={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#E8853D' }}
                 >
-                  <span>Send</span>
+                  {conversation ? (sending ? 'Sending…' : reply ? 'Send reply' : 'Add feedback') : <span>Send</span>}
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12" />
                     <polyline points="12 5 19 12 12 19" />
@@ -1465,7 +1539,7 @@ function FeedbackWidgetInner({
 
       {/* New comment pin at clicked position */}
       {mode === 'commenting' && target && (() => {
-        const { fixedX, fixedY } = pagePoint(target.x, target.y)
+        const { fixedX, fixedY } = pagePoint(target.x, target.y, target)
         return (
           <div
             {...{ [WIDGET_ATTR]: '' }}
@@ -1486,9 +1560,9 @@ function FeedbackWidgetInner({
 
       {/* Persisted comment pins */}
       {pinsVisible && filteredComments.map((c, i) => {
-        if (!liveCommentIds.has(c.id)) return null
-        const point = pagePoint(c.x, c.y)
-        const pinPos = page ? { left: point.fixedX, top: point.fixedY } : getElementFixedPos(c.selector, c.x, c.y)
+        if (!liveCommentIds.has(c.id) || (conversation && !conversation.feedback.find(item => item.id === c.id)?.target)) return null
+        const point = pagePoint(c.x, c.y, c)
+        const pinPos = page || conversation ? { left: point.fixedX, top: point.fixedY } : getElementFixedPos(c.selector, c.x, c.y)
         if (!pinPos) return null
         const pinNumber = filteredComments.length - i
         const isSelected = selectedPin === c.id
@@ -1734,6 +1808,7 @@ function FeedbackWidgetInner({
           right: 0,
           bottom: 0,
           width: 340,
+          maxWidth: conversation ? '100vw' : undefined,
           zIndex: 2147483647,
           background: 'var(--fw-surface-deep)',
           transform: sidebarOpen ? 'translateX(0)' : 'translateX(100%)',
@@ -1788,8 +1863,9 @@ function FeedbackWidgetInner({
           </button>
         </div>
 
+        {conversation?.readOnly && <p style={{ padding: '12px 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>View-only access</p>}
         {/* Agent CTA — visible path into agent flow, not only Shift+A. */}
-        {!suppliedPersonalComments && <div
+        {!suppliedPersonalComments && !conversation && <div
           style={{
             padding: '14px 16px 12px',
             borderBottom: '1px solid var(--fw-contrast-04)',
@@ -2046,7 +2122,6 @@ function FeedbackWidgetInner({
                       </button>}
                     </div>
                   </div>
-
                   {/* Body */}
                   {isEditing ? (
                     <div onClick={(e) => e.stopPropagation()}>
@@ -2112,6 +2187,11 @@ function FeedbackWidgetInner({
                       )}
                     </>
                   )}
+
+                  {conversation && <ConversationDetails conversation={conversation} comment={conversation.feedback.find(item => item.id === c.id)!} disabled={sending || Boolean(conversation.disabled)} onReply={() => {
+                    setReply({ id: c.id, version: conversation.feedback.find(item => item.id === c.id)!.version, author: c.authorName! }); setTarget(conversationTarget('', conversation.containerSelector)); setSidebarOpen(false); setSelectedPin(null); setMode('commenting')
+                    if (!authorNameRef.current) setShowNameModal(true)
+                  }} />}
 
                   {/* Dropdown menu */}
                   {isMenuOpen && (
@@ -2262,6 +2342,7 @@ function FeedbackWidgetInner({
           >
             <LauncherAction
               icon={<MessageCircle size={17} />}
+              disabled={Boolean(conversation?.readOnly || conversation?.disabled || conversation?.draftLocked)}
               title="Drop comment"
               subtitle="Pin feedback on the page"
               shortcut={shortcutsEnabled ? "C" : undefined}
@@ -2270,6 +2351,11 @@ function FeedbackWidgetInner({
                 enterFeedbackMode()
               }}
             />
+            {conversation && <LauncherAction icon={<MessageCircle size={17} />} title="Add note" subtitle="Feedback on the whole document" disabled={Boolean(conversation.readOnly || conversation.disabled || conversation.draftLocked)} onClick={() => {
+              clearNativeSelection(); conversation.onClearSelection()
+              setLauncherOpen(false); setReply(null); setTarget(conversationTarget('', conversation.containerSelector)); setMode('commenting')
+              if (!authorNameRef.current) setShowNameModal(true)
+            }} />}
             <LauncherAction
               icon={<PanelRightOpen size={17} />}
               title="Open sidebar"
@@ -2448,7 +2534,7 @@ function FeedbackWidgetInner({
           onCancel={handleNameCancel}
           existingName={authorNameRef.current}
           loginRequired={privateProject}
-          onLogin={() => { resumeAfterLogin.current = true; void widgetLogin.login() }}
+          onLogin={conversation ? undefined : () => { resumeAfterLogin.current = true; void widgetLogin.login() }}
           onLogout={widgetLogin.logout}
           signedIn={Boolean(widgetLogin.session)}
           busy={widgetLogin.busy}

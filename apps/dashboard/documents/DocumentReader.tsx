@@ -1,17 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { LockKeyhole, RefreshCw } from 'lucide-react'
 import type { DocumentResult } from '../../../shared/documents'
 import { asset, route } from '../lib/routes'
 import { Spinner } from '../components/primitives'
 import { documentRequest, documentMessage, DocumentRequestError, mergeFeedback } from './client'
-import { DocumentBody, quoteMatches, type DocumentQuote } from './DocumentBody'
+import { DocumentBody, quoteMatches, type DocumentQuote, type DocumentSelection } from './DocumentBody'
 import { useDocumentComment } from './useDocumentComment'
 import { DocumentThreads } from './DocumentThreads'
 import './documents.css'
 
-const emptyQuote: DocumentQuote = { quote: '', prefix: '', suffix: '' }
-export function DocumentReader({ apiBase, shareKey, session = null, userId = null }: { apiBase: string; shareKey: string; session?: string | null; userId?: string | null }) {
+const emptyQuote: DocumentSelection = { quote: '', prefix: '', suffix: '' }
+export function DocumentReader({ apiBase, shareKey, session = null, userId = null, authorName = '' }: { apiBase: string; shareKey: string; session?: string | null; userId?: string | null; authorName?: string }) {
   const [denied, setDenied] = useState(false)
+  const deniedRef = useRef(false)
   const [loadedUser, setLoadedUser] = useState<string | null>(userId)
   const [data, setData] = useState<DocumentResult>(),
     [error, setError] = useState<unknown>(),
@@ -26,12 +27,19 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
     selectionRevision = useRef<number | null>(null),
     updates = useRef(0)
   const reportError = useCallback((error: unknown) => {
-    if (error instanceof DocumentRequestError && ['Unauthorized', 'forbidden', 'login_required', 'document_not_found', 'password_required', 'incorrect_password'].includes(error.code)) setDenied(true)
+    if (error instanceof DocumentRequestError && ['Unauthorized', 'forbidden', 'login_required', 'document_not_found', 'password_required', 'incorrect_password'].includes(error.code)) {
+      deniedRef.current = true
+      updates.current++
+      setDenied(true)
+    }
     setError(error)
   }, [])
   const principal = useRef({ userId })
   if (principal.current.userId !== userId) principal.current = { userId }
   const feedback = useDocumentComment(apiBase, session, userId)
+  const context = useMemo(() => ({ apiBase, shareKey, session, userId, grant }), [apiBase, shareKey, session, userId, grant])
+  const currentContext = useRef(context)
+  currentContext.current = context
   const request = useCallback((input: object, signal?: AbortSignal) => documentRequest(apiBase, session, input, signal), [apiBase, session])
   useEffect(() => {
     let active = true
@@ -42,6 +50,7 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
     Promise.all(Array.from({ length: pages.current }, (_, page) => request({ action: 'read', id: shareKey, shareKey, accessToken: grant, offset: page * 50 }, controller.signal)))
       .then((results) => {
         if (active && generation === updates.current) {
+          deniedRef.current = false
           setDenied(false)
           setLoadedUser(userId)
           updates.current++
@@ -84,20 +93,33 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
     }
   }
   async function comment(input: { body: string; author: string; parentId?: string; revision?: number } & DocumentQuote) {
-    const startedAs = principal.current
+    let confirmedIn = context
+    let generation = updates.current
     setSending(true)
     try {
       if (!feedback.hasPending() && input.quote && selectionRevision.current !== data!.document!.publishedRevision && !quoteMatches(data!.document!.body, input))
         throw new DocumentRequestError('selection_changed')
-      const updated = await feedback.submit({ ...input, id: data!.document!.id, revision: input.revision ?? data!.document!.publishedRevision!, shareKey, accessToken: grant })
+      const updated = await feedback.submit({ ...input, id: data!.document!.id, revision: input.revision ?? data!.document!.publishedRevision!, shareKey, accessToken: grant }, (reader) => {
+        const current = currentContext.current
+        if (reader.session === current.session && reader.userId === current.userId && apiBase === current.apiBase && shareKey === current.shareKey && grant === current.grant) {
+          confirmedIn = current
+          generation = updates.current
+        }
+      })
+      if (currentContext.current !== confirmedIn || generation !== updates.current) {
+        if (!deniedRef.current) setRefresh((n) => n + 1)
+        return
+      }
+      deniedRef.current = false
       setDenied(false)
+      setLoadedUser(confirmedIn.userId)
+      setLoading(false)
       updates.current++
-      if (principal.current !== startedAs) setRefresh((n) => n + 1)
       setData((current) => ({ ...current, document: updated.document, feedback: mergeFeedback(current!.feedback!, updated.feedback!) }))
       setError(undefined)
     } catch (error) {
-      if (principal.current === startedAs) reportError(error)
-      else setRefresh((n) => n + 1)
+      if (currentContext.current === confirmedIn && generation === updates.current) reportError(error)
+      else if (!deniedRef.current) setRefresh((n) => n + 1)
       throw error
     } finally {
       setSending(false)
@@ -149,7 +171,7 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
               )}
             </div>
             <h1 className="break-words text-2xl font-semibold tracking-tight">{data.document.title}</h1>
-            <p className="mt-3 text-sm text-muted-foreground">Select text to leave feedback. Changes stay connected to this document.</p>
+            <p className="mt-3 text-sm text-muted-foreground">{data.document.canComment ? 'Select text to leave feedback. Changes stay connected to this document.' : 'You have view-only access to this document.'}</p>
           </div>}
           {error && (
             <p role="alert" className="px-6 py-3 text-sm text-status-rejected">
@@ -196,6 +218,7 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
             </div>
             <div>
               <DocumentThreads
+                authorName={authorName}
                 disabled={sending || loading || busy}
                 draftLocked={feedback.locked}
                 onDiscard={() => {
@@ -211,7 +234,7 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
                 readOnly={concealed || !data.document.canComment}
                 onComment={comment}
               />
-              {!concealed && data.nextOffset !== null && (
+              {!concealed && data.document.canComment && data.nextOffset !== null && (
                 <button type="button" className="document-text-button m-6" disabled={busy || loading || sending} onClick={() => void more()}>
                   Load more feedback
                 </button>

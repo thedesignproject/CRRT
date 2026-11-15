@@ -14,7 +14,7 @@ export function useDocumentComment(apiBase: string, session: string | null, user
     operation.current = undefined
     setLocked(false)
   }, [])
-  async function submit(input: Input): Promise<DocumentResult> {
+  async function submit(input: Input, onConfirmationRead?: (principal: { session: string | null; userId: string | null }) => void): Promise<DocumentResult> {
     const { revision, accessToken, shareKey, ...draft } = input
     const fingerprint = JSON.stringify(draft)
     if (!operation.current) {
@@ -34,7 +34,9 @@ export function useDocumentComment(apiBase: string, session: string | null, user
         throw error
       }
     }
-    const result = await documentRequest(apiBase, auth.current.session, { action: 'read', id: input.id, ...(shareKey ? { shareKey, accessToken } : {}), feedbackId: pending.feedbackId })
+    const reader = auth.current
+    onConfirmationRead?.(reader)
+    const result = await documentRequest(apiBase, reader.session, { action: 'read', id: input.id, ...(shareKey ? { shareKey, accessToken } : {}), feedbackId: pending.feedbackId })
     discard()
     return result
   }
