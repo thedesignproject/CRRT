@@ -32,6 +32,7 @@ const validation = validateReleaseFiles(collectReleaseFiles(unpackedRoot, walk(u
   version,
   apiBase: process.env.WXT_API_BASE!,
   supabaseUrl: process.env.WXT_SUPABASE_URL!,
+  storageOrigin: process.env.WXT_RECORD_STORAGE_ORIGIN || undefined,
 })
 const sourceZip = readdirSync(outputRoot)
   .filter((name) => name.endsWith(`-${version}-chrome.zip`))
