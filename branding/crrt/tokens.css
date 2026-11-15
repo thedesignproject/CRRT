@@ -42,6 +42,11 @@
   --crrt-phosphor-green:  #33FF33;
   --crrt-forest:          #1F3A2F;
 
+  /* Record action — approved Paper treatment. */
+  --crrt-record-background: #00B6D5E6;
+  --crrt-record-border:     #00B0ED59;
+  --crrt-record-foreground: #FFFFFF;
+
   /* Workflow status */
   --crrt-status-ready-for-testing:    var(--crrt-phosphor);
   --crrt-status-ready-for-testing-bg: rgba(255, 176, 0, 0.12);

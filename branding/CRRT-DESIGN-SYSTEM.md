@@ -31,6 +31,14 @@ CRRT.AI is a visual feedback widget. The brand operates as **pixel-CRT** — a p
 
 ## 2. Tokens
 
+### Record action exception — approved November 2026
+
+The widget's Record button uses the approved Paper cyan-blue treatment:
+`--crrt-record-background` (`#00B6D5E6`), `--crrt-record-border` (`#00B0ED59`),
+and `--crrt-record-foreground` (`#FFFFFF`) in both themes. The icon and label
+are white; the former orange notification dot is removed. This exception is
+limited to the Record button; other widget actions retain their existing colors.
+
 All tokens live in [`branding/crrt/tokens.css`](./crrt/tokens.css). **Never deviate from these values.** If a new token is needed, add it to the source first, then to this document.
 
 ### 2.1 Color — raw palette
