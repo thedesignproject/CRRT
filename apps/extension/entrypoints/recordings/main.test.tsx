@@ -1,8 +1,20 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
-const mocks = vi.hoisted(() => ({ sendMessage: vi.fn(), listRecordings: vi.fn(), cloudList: vi.fn() }))
-afterEach(() => vi.unstubAllGlobals())
+const mocks = vi.hoisted(() => ({ sendMessage: vi.fn(), listRecordings: vi.fn(), cloudList: vi.fn(), roots: [] as import('react-dom/client').Root[] }))
+vi.mock('react-dom/client', async (importOriginal) => {
+  const original = await importOriginal<typeof import('react-dom/client')>()
+  return { ...original, createRoot: (...args: Parameters<typeof original.createRoot>) => {
+    const root = original.createRoot(...args)
+    mocks.roots.push(root)
+    return root
+  } }
+})
+afterEach(async () => {
+  await act(async () => { for (const root of mocks.roots.splice(0)) root.unmount() })
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
 vi.mock('wxt/browser', () => ({ browser: { runtime: {
   sendMessage: mocks.sendMessage,
   getURL: (path: string) => `chrome-extension://test${path}`,
