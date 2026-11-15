@@ -1,37 +1,51 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DocumentResult, DocumentView } from '../../../shared/documents'
 import { documentRequest, documentMessage } from './client'
 import { Spinner } from '../components/primitives'
 
-export function DocumentHistory({ document, apiBase, session, disabled, onRestore }: { document: DocumentView; apiBase: string; session: string; disabled: boolean; onRestore: (revision: number) => void }) {
+export function DocumentHistory({ document, apiBase, session, disabled, onRestore, onError }: { document: DocumentView; apiBase: string; session: string; disabled: boolean; onRestore: (revision: number) => void; onError?: (error: unknown) => void }) {
   const [data, setData] = useState<DocumentResult>(),
     [comparison, setComparison] = useState<DocumentResult['comparison']>(),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false)
+  const mounted = useRef(true),
+    generation = useRef(0)
   useEffect(() => {
+    generation.current++
+    setBusy(false)
+    mounted.current = true
     let active = true
     documentRequest(apiBase, session, { action: 'history', id: document.id })
       .then((result) => {
         if (active) setData(result)
       })
       .catch((error) => {
-        if (active) setError(documentMessage(error))
+        if (active) {
+          setError(documentMessage(error))
+          onError?.(error)
+        }
       })
     return () => {
       active = false
+      mounted.current = false
     }
-  }, [apiBase, session, document.id])
+  }, [apiBase, session, document.id, onError])
   async function load(action: 'history' | 'compare', fields: object) {
+    const startedAt = generation.current
     setBusy(true)
     setError('')
     try {
       const result = await documentRequest(apiBase, session, { action, id: document.id, ...fields })
+      if (!mounted.current || generation.current !== startedAt) return
       if (action === 'compare') setComparison(result.comparison)
       else setData((current) => ({ ...result, revisions: [...current!.revisions!, ...result.revisions!] }))
     } catch (error) {
-      setError(documentMessage(error))
+      if (mounted.current && generation.current === startedAt) {
+        setError(documentMessage(error))
+        onError?.(error)
+      }
     } finally {
-      setBusy(false)
+      if (mounted.current && generation.current === startedAt) setBusy(false)
     }
   }
   return (

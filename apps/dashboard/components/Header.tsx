@@ -186,6 +186,7 @@ export function Header({
       </nav>
 
       <nav className="dashboard-navigation-footer" aria-label="Workspace administration">
+        <a href={route(`/documents?project=${encodeURIComponent(selectedProject)}`)} className="dashboard-navigation-action"><span>Documents</span></a>
         <a href={route('/mcp-auth')} className="dashboard-navigation-action"><BotIcon size={16} /><span>MCP connections</span></a>
         {!extensionCommentsActive && selectedProject && canManageProject && (
           <button type="button" onClick={onOpenSettings} aria-label="Project settings" aria-pressed={settingsActive} className={cn('dashboard-navigation-action', settingsActive && 'bg-accent text-foreground')}>

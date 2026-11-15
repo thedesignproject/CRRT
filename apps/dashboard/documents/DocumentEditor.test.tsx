@@ -57,3 +57,10 @@ it.each([false,true])('preserves downgraded drafts as selectable readonly text, 
 it('preserves later typing when a refreshed readonly response follows a save acknowledgement',()=>{
   const view=editor();fireEvent.change(screen.getByLabelText('Markdown'),{target:{value:'Saved checkpoint plus later typing'}});view.rerender(<DocumentEditor document={{...initial,body:'Saved checkpoint',version:2,canEdit:false}} disabled={false} onSave={vi.fn()} onDirty={onDirty}/>);expect(screen.getByLabelText('Markdown')).toHaveValue('Saved checkpoint plus later typing');expect(screen.getByLabelText('Markdown')).toHaveProperty('readOnly',true);expect(screen.getByLabelText('Markdown')).toBeEnabled();expect(screen.getByText('Discard changes')).toBeEnabled()
 })
+
+it('caches user edits but never mistakes a server-only refresh for an unsaved recovery draft',async()=>{
+  const remember=vi.fn(),save=vi.fn().mockResolvedValue(false),props={disabled:false,onSave:save,onDirty:vi.fn(),onDraftChange:remember},view=render(<DocumentEditor {...props} document={initial}/>);expect(remember).toHaveBeenLastCalledWith(null)
+  view.rerender(<DocumentEditor {...props} document={{...initial,body:'Changed on server',version:2}}/>);expect(remember).toHaveBeenLastCalledWith(null);fireEvent.change(screen.getByLabelText('Markdown'),{target:{value:'My own edit'}});expect(remember).toHaveBeenLastCalledWith({title:'Proposal',body:'My own edit'})
+  view.rerender(<DocumentEditor {...props} document={{...initial,body:'My own edit',version:3}}/>);expect(remember).toHaveBeenLastCalledWith(null);view.rerender(<DocumentEditor {...props} document={{...initial,body:'Another server edit',version:4}}/>);expect(remember).toHaveBeenLastCalledWith(null)
+  expect(screen.getByLabelText('Markdown')).toHaveValue('Another server edit');expect(save).not.toHaveBeenCalled();fireEvent.change(screen.getByLabelText('Markdown'),{target:{value:'New local work'}});expect(remember).toHaveBeenLastCalledWith({title:'Proposal',body:'New local work'});fireEvent.click(screen.getByText('Discard changes'));expect(remember).toHaveBeenLastCalledWith(null)
+})
