@@ -5,6 +5,7 @@ vi.mock('./transport.js', () => ({ mcpHandler: vi.fn() }))
 import { oauth } from './auth.js'
 import { mcpHandler } from './transport.js'
 import { mcpHttp, metadataPath, nodeMcp } from './http.js'
+import unlockRoute from '../../api/mcp/document-unlock.js'
 import mcpRoute from '../../api/mcp/v1.js'
 import oauthRoute from '../../api/mcp/oauth/[action].js'
 const transport = vi.fn()
@@ -67,4 +68,23 @@ it('correlates origin-denial security events with the response request ID', asyn
     expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ event: 'crrt.mcp.security', requestId: response.headers.get('x-request-id'), action: 'http', userId: null, failureCategory: 'origin_not_allowed' })
     expect(JSON.stringify(log.mock.calls)).not.toContain('private-origin')
   } finally { log.mockRestore() }
+})
+
+it('routes browser unlock through the authenticated, no-store HTTP boundary',async()=>{
+  const denied=await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/document-unlock',{method:'POST',body:'{}'}));expect(denied.status).toBe(401);expect(denied.headers.get('cache-control')).toBe('no-store')
+  const res={code:200,body:'',status(n:number){this.code=n;return this},setHeader(){},send(v:string){this.body=v}};await unlockRoute({method:'GET',headers:{},query:{}} as never,res as never);expect(res.code).toBe(405)
+})
+
+it('preserves CORS on browser unlock errors only for allowed origins', async () => {
+  vi.stubEnv('MCP_BROWSER_ORIGINS', 'http://127.0.0.1:5173')
+  for (const origin of ['http://127.0.0.1:3001', 'http://127.0.0.1:5173', 'https://untrusted.test']) {
+    const response = await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/document-unlock', { method: 'POST', headers: { origin }, body: '{}' }))
+    const allowed = origin !== 'https://untrusted.test'
+    expect(response.status).toBe(allowed ? 401 : 403)
+    expect(await response.json()).toEqual({ error: allowed ? 'login_required' : 'origin_not_allowed' })
+    expect(response.headers.get('access-control-allow-origin')).toBe(allowed ? origin : null)
+    expect(response.headers.get('vary')).toBe('Origin')
+    expect(response.headers.get('access-control-expose-headers')).toContain('X-Request-Id')
+    expect(response.headers.get('cache-control')).toBe('no-store')
+  }
 })

@@ -7,6 +7,7 @@ import { authFailure, config, ensure, identity, hasScope, ALL_SCOPES, reserve, M
 export type ToolSpec = {
   name: string; description: string; scope?: 'crrt:implement' | 'crrt:review' | 'crrt:dashboard'
   annotations?: { readOnlyHint: boolean; destructiveHint: boolean; idempotentHint: boolean; openWorldHint: boolean }
+  maxResultBytes?: number
   input: z.ZodType<Record<string, unknown>>; output: z.ZodType<Record<string, unknown>>
   run: (input: Record<string, unknown>, actor: McpIdentity) => Promise<Record<string, unknown>>
 }
@@ -29,7 +30,7 @@ export function mcpHandler(tools: ToolSpec[]) {
             await reserve(`tool:${actor!.user_id}`, 120)
             const payload = spec.output.parse(await spec.run(input, actor!))
             const result = { structuredContent: payload, content: [{ type: 'text' as const, text: JSON.stringify(payload) }] }
-            ensure(Buffer.byteLength(JSON.stringify(result)) <= 131072, 413, 'result_too_large')
+            ensure(Buffer.byteLength(JSON.stringify(result)) <= (spec.maxResultBytes ?? 131072), 413, 'result_too_large')
             audit(requestId, spec.name, actor, started, payload)
             return result
           } catch (error) {
@@ -41,7 +42,7 @@ export function mcpHandler(tools: ToolSpec[]) {
           }
         })
         return server
-      }, { responseMode: 'json', maxRequestBodySize: 262144 })
+      }, { responseMode: 'json', maxRequestBodySize: 2097152 })
       try {
         // Fully consume finite legacy SSE responses before disposing their instance.
         const response = await handler.fetch(request)
