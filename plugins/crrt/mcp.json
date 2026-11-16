@@ -1,0 +1,19 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "crrt": {
+      "type": "streamable-http",
+      "url": "https://crrt.ai/api/mcp/v1",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": { "mode": "dcr" },
+            "baseScopes": ["crrt:read"],
+            "defaultScopes": ["crrt:read", "crrt:implement"]
+          }
+        }
+      }
+    }
+  }
+}
