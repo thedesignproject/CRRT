@@ -1,5 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const bootstrap = vi.hoisted(() => ({ root: undefined as { unmount: () => void } | undefined }))
+vi.mock('react-dom/client', async importOriginal => {
+  const actual = await importOriginal<typeof import('react-dom/client')>()
+  return { ...actual, createRoot: (...args: Parameters<typeof actual.createRoot>) => {
+    const root = actual.createRoot(...args)
+    bootstrap.root ??= root
+    return root
+  } }
+})
 
 vi.mock('../lib/local-workspace-panel',()=>({LocalWorkspacePanel:({billingUrl}:{billingUrl:string})=><a href={billingUrl}>Local billing</a>}))
 const sendMessage = vi.fn()
@@ -21,7 +31,12 @@ vi.mock('../lib/disclosure', () => ({
 }))
 
 document.body.innerHTML = '<div id="root"></div>'
-const { Popup } = await import('../entrypoints/popup/main')
+// The entrypoint mounts immediately. Finish and dispose that bootstrap render
+// before individual tests reset its mocks and render their own popup.
+hasAcceptedDisclosure.mockResolvedValue(false)
+let Popup: typeof import('../entrypoints/popup/main')['Popup']
+await act(async () => { ({ Popup } = await import('../entrypoints/popup/main')) })
+act(() => bootstrap.root!.unmount())
 
 beforeEach(() => {
   sendMessage.mockReset()
