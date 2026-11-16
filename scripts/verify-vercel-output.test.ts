@@ -51,7 +51,11 @@ async function fixture() {
     { src: '^(/.*)$', dest: '/public-site?__public_path=$1' },
   ]
   await write('config.json', { version: 3, routes })
-  await write('diagnostics/workflows-manifest.json', { workflows: { source: { productAuditWorkflow: { workflowId: 'workflow//./workflows/product-audit//productAuditWorkflow' } } } })
+  await write('diagnostics/workflows-manifest.json', { workflows: { source: {
+    productAuditWorkflow: { workflowId: 'workflow//./workflows/product-audit//productAuditWorkflow' },
+    recordWorkerWorkflow: { workflowId: 'workflow//./workflows/record-worker//recordWorkerWorkflow' },
+  } } })
+  await write('functions/.well-known/workflow/v1/step.func/record-worker.mjs', 'console.log("worker")')
   return { root, output, write, routes }
 }
 
@@ -67,6 +71,14 @@ it('rejects missing functions and unintended automatic per-route API outputs', a
   await rm(join(output, 'functions/api'), { recursive: true })
   await rm(join(output, 'functions/public-site.func'), { recursive: true })
   await expect(verifyVercelOutput(root)).rejects.toThrow('Unexpected deployment functions')
+})
+
+it('rejects a missing recording workflow or worker bundle', async () => {
+  const { root, output, write } = await fixture()
+  await rm(join(output, 'functions/.well-known/workflow/v1/step.func/record-worker.mjs'))
+  await expect(verifyVercelOutput(root)).rejects.toThrow()
+  await write('diagnostics/workflows-manifest.json', { workflows: { source: { productAuditWorkflow: { workflowId: 'workflow//./workflows/product-audit//productAuditWorkflow' } } } })
+  await expect(verifyVercelOutput(root)).rejects.toThrow('Recording worker workflow missing')
 })
 
 it('rejects broken runtime metadata, workflow registration, and missing static entrypoints', async () => {

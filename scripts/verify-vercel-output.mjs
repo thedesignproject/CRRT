@@ -38,6 +38,8 @@ export async function verifyVercelOutput(root) {
   const manifest = JSON.parse(await readFile(join(output, 'diagnostics/workflows-manifest.json'), 'utf8'))
   const workflows = Object.values(manifest.workflows ?? {}).flatMap(file => Object.values(file))
   if (!workflows.some(workflow => workflow.workflowId === 'workflow//./workflows/product-audit//productAuditWorkflow')) throw new Error('Product Audit workflow missing')
+  if (!workflows.some(workflow => workflow.workflowId === 'workflow//./workflows/record-worker//recordWorkerWorkflow')) throw new Error('Recording worker workflow missing')
+  await access(join(output, 'functions/.well-known/workflow/v1/step.func/record-worker.mjs'))
   // Check routing order too: Stripe must reach its raw-body handler before the
   // general API router; API routes must precede the public-page catchall.
   const webhook = config.routes.findIndex(route => route.dest === '/stripe-webhook')
