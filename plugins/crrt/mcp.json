@@ -10,7 +10,7 @@
             "type": "oauth",
             "client": { "mode": "dcr" },
             "baseScopes": ["crrt:read"],
-            "defaultScopes": ["crrt:read", "crrt:implement"]
+            "defaultScopes": ["crrt:read", "crrt:implement", "crrt:review", "crrt:dashboard"]
           }
         }
       }

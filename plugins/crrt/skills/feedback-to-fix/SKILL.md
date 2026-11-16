@@ -1,13 +1,42 @@
 ---
 name: feedback-to-fix
-description: Inspect CRRT visual feedback and prepare explicitly selected accepted items for implementation. Use when the user asks to find, understand, or implement feedback in a CRRT project.
+description: Work with CRRT projects, visual feedback, documents, recordings, audits, team access, and integrations using the connected MCP. Use when the user requests a CRRT workflow, including feedback implementation or an explicit review decision.
 ---
 
 Use the connected CRRT MCP tools. Connection grants do not replace project membership
 or implementation entitlements. If authentication is needed, use the client's OAuth
 connection flow; never ask for a password, token, or API key in the conversation.
 
-## Find and understand feedback
+## Discover the available CRRT capabilities
+
+The package requests all four scopes: `crrt:read`, `crrt:implement`, `crrt:review`,
+and `crrt:dashboard`. Consent enables the existing MCP surface; it does not
+grant project roles, super-admin status, paid entitlements, or authority to act
+without a user request. Use the server's actual tools and schemas.
+
+Use `connection_status` to inspect the connection. For an older connection with
+missing dashboard access, `request_dashboard_access` supports a consent upgrade;
+explain the requested access and preserve the user's choice. Do not repeatedly
+reinstall a connection or bypass a declined grant. Refresh the client's tools
+after an approved scope change if required.
+
+For project, inbox, team, domain, access-request, repository, integration,
+external-work, notification, recording, audit, billing, or administrator workflows,
+use `list_dashboard_operations` to discover the relevant operation and its inputs,
+then `run_dashboard_operation`. Read current state first. Supply `userRequested`
+only for an action the user actually requested, preserve retry keys for identical
+retries, and reconcile conflicts or unknown outcomes before retrying mutations.
+An account-management or integration URL is a next step, not a completed action.
+Super-admin operations require the actual super-admin role.
+
+Use the dedicated document tools for drafts, published revisions, comparison,
+feedback, sharing, and invitations. Read the current version before writes and
+use the returned version guards. Publishing, deleting, sharing, inviting, or
+changing review decisions requires the user's specific request. A draft save or
+revision restore does not publish it. Do not invent document passwords or ask
+for credentials in chat; use supported account and document-unlock flows.
+
+## Find and understand visual feedback
 
 Resolve the user's project with `list_projects`. For ambiguous names, show the
 authorized choices and use the selected project ID. Follow pagination rather than
@@ -43,7 +72,12 @@ the progress tools. Refresh feedback before the next item. Stop on claim conflic
 Report actual checks and limitations. Completion means ready for human testing;
 people own acceptance, Done status, and merging.
 
-This package requests read and implementation scopes. Do not request dashboard or
-review permissions merely to work around a denied operation. If a user requests a
-review action unavailable under this connection, explain the permission boundary
-and direct them to the CRRT dashboard.
+## Apply explicit review decisions
+
+Review scope makes `set_feedback_status` available; it does not authorize the
+agent to make the review decision. When a human explicitly requests a status
+change, read `get_feedback` immediately beforehand and pass its exact `updatedAt`,
+`userRequested:true`, and a reason grounded in that request. On a stale-version
+conflict, refresh and reconcile before retrying. Never approve or mark items
+Done automatically as part of implementation. Use the same human-decision
+boundary for document feedback and dashboard review operations.
