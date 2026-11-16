@@ -95,6 +95,14 @@ export interface WidgetPage {
 export interface PersonalComments {
   /** Sidebar label for this authenticated extension context. */
   label?: string
+  /** Host-owned review and handoff; adapters without these keep capture-only behavior. */
+  review?(id: string, status: ReviewStatus): Promise<void>
+  subscribe?(listener: () => void): () => void
+  handoff?: {
+    label: string
+    description: string
+    open(commentId?: string): void
+  }
   /** Visible project audience. Guests receive a locked shared audience. */
   audience?: {
     value: 'shared' | 'internal'

@@ -2,9 +2,17 @@ import type { Comment, PersonalComments } from '../../../src/components/Feedback
 
 const STORAGE_KEY = 'crrt:landing-demo-comments:v1'
 
+export interface DemoComments extends PersonalComments {
+  review: NonNullable<PersonalComments['review']>
+  subscribe: NonNullable<PersonalComments['subscribe']>
+  getSnapshot(): Comment[]
+  reset(): void
+}
+
 /** The real widget, backed by this tab rather than a public project or API. */
-export function createDemoComments(): PersonalComments {
+export function createDemoComments(): DemoComments {
   let comments: Comment[] = []
+  const listeners = new Set<() => void>()
   try {
     const saved: unknown = JSON.parse(sessionStorage.getItem(STORAGE_KEY) ?? '[]')
     if (Array.isArray(saved)) comments = saved.filter((item): item is Comment =>
@@ -14,6 +22,7 @@ export function createDemoComments(): PersonalComments {
   } catch { /* Storage can be unavailable; the live demo still works in memory. */ }
 
   function save() {
+    listeners.forEach(listener => listener())
     try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(comments)) } catch {
       // Screenshot data can exceed storage quota. Keep text/pins across reloads.
       try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify(comments.map((comment) => ({ ...comment, imageUrl: null })))) } catch { /* Memory-only fallback. */ }
@@ -22,6 +31,10 @@ export function createDemoComments(): PersonalComments {
 
   return {
     label: 'Your demo feedback',
+    getSnapshot: () => comments,
+    subscribe(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
+    async review(id, reviewStatus) { comments = comments.map(comment => comment.id === id ? { ...comment, reviewStatus } : comment); save() },
+    reset() { comments = []; save() },
     async list(pageUrl) { return comments.filter((comment) => comment.pageUrl === pageUrl) },
     async create(payload) {
       const comment: Comment = {
