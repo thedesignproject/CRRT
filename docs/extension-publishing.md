@@ -61,6 +61,31 @@ publishing from branch pushes.
 
 ## Release
 
+### Recording release (1.1.0)
+
+Version 1.1.0 packages the recorder already merged into trunk. Deploying the
+dashboard does not update the installed Chrome extension.
+
+Before tagging this release:
+
+- Check Store status with the read-only workflow above. Confirm 1.1.0 is newer
+  than every published and submitted version.
+- If production recording storage uses R2, set repository Actions variable
+  `CRRT_RECORD_STORAGE_ORIGIN` to its exact HTTPS origin (no bucket path).
+  The workflow passes it to `WXT_RECORD_STORAGE_ORIGIN` for manifest upload
+  permissions. Leave it unset for Supabase storage.
+- Confirm private storage and the supervised worker are configured using
+  `docs/record-v1.md`. A Vercel deployment does not start the recording worker.
+- Build an artifact on trunk with `check_store_access=false`, load the unpacked
+  extension in Chrome, and verify Record appears. With an authenticated test
+  account, capture a short recording, stop, upload, wait for processing, and
+  play it from the dashboard. Confirm an unrelated account cannot access it.
+- After this smoke test passes, push `extension-v1.1.0` using the procedure
+  below. Confirm Store approval and the installed version before calling
+  Recording available to customers.
+
+Local tests and fixture builds do not establish production recording readiness.
+
 1. Increment only `apps/extension/package.json` (for example `1.0.0` → `1.0.1`),
    commit the change, and merge it into `trunk` through the normal review flow.
 2. Pull `trunk`, then create and push the matching tag:

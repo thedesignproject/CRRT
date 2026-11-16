@@ -7,6 +7,7 @@ const production = {
   WXT_API_BASE: 'https://crrt.ai/api',
   WXT_DASHBOARD_URL: 'https://crrt.ai/dashboard/',
   WXT_SUPABASE_URL: 'https://project-ref.supabase.co',
+  WXT_RECORD_STORAGE_ORIGIN: '',
 }
 
 afterEach(() => vi.unstubAllEnvs())
