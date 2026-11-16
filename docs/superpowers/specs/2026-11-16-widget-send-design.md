@@ -38,6 +38,6 @@ Verify owner/member/guest/public boundaries, changed retries, simultaneous sends
 - [x] Implement and validate storage layer.
 - [x] Implement and validate MCP/API layer.
 - [x] Implement and validate widget layer.
-- [ ] Open and verify the PR stack.
+- [x] Open and verify the PR stack: #437 → #438 → #443 (native stack #439), with PyPranav requested on each PR.
 
 The optional writing-plans skill is not installed. The layer sequence and acceptance matrix above serve as the implementation plan. Existing user authorization covers proceeding with the agreed design.
