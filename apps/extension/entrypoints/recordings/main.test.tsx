@@ -1,8 +1,23 @@
-import { fireEvent, screen } from '@testing-library/react'
+import { act, fireEvent, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ sendMessage: vi.fn(), listRecordings: vi.fn(), cloudList: vi.fn() }))
-afterEach(() => vi.unstubAllGlobals())
+const roots = vi.hoisted(() => [] as { unmount: () => void }[])
+
+vi.mock('react-dom/client', async importOriginal => {
+  const actual = await importOriginal<typeof import('react-dom/client')>()
+  return { ...actual, createRoot: (...args: Parameters<typeof actual.createRoot>) => {
+    const root = actual.createRoot(...args)
+    roots.push(root)
+    return root
+  } }
+})
+
+afterEach(async () => {
+  await act(async () => { for (const root of roots.splice(0)) root.unmount() })
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+})
 vi.mock('wxt/browser', () => ({ browser: { runtime: {
   sendMessage: mocks.sendMessage,
   getURL: (path: string) => `chrome-extension://test${path}`,
@@ -11,7 +26,7 @@ vi.mock('../../lib/recording-cloud', () => ({ ownerRecordRequest: mocks.cloudLis
 vi.mock('../../lib/recording-store', () => ({ listLocalRecordings: mocks.listRecordings }))
 
 beforeEach(() => {
-  vi.resetModules(); vi.clearAllMocks()
+  vi.resetModules(); vi.resetAllMocks()
   document.body.innerHTML = '<div id="root"></div>'
   mocks.listRecordings.mockResolvedValue([])
   mocks.cloudList.mockResolvedValue({ recordings: [], next: null })
