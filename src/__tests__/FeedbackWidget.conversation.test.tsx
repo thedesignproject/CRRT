@@ -55,7 +55,8 @@ it('restores durable target positions and preserves a failed draft through acces
   expect(screen.getByLabelText('Leave feedback')).toHaveValue('Recovered')
   expect(draft).toHaveBeenLastCalledWith(expect.objectContaining({ target }))
   fireEvent.click(screen.getByRole('button', { name: 'Add feedback' })); await screen.findByRole('alert')
-  fireEvent.keyDown(document, { key: 'Escape' }); expect(screen.getByLabelText('Leave feedback')).toHaveValue('Recovered')
+  fireEvent.keyDown(document, { key: 'Escape' }); expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument()
+  fireEvent.keyDown(document, { key: 'c' }); expect(screen.getByLabelText('Leave feedback')).toHaveValue('Recovered')
   view.rerender(<FeedbackWidget projectId="host" conversation={{ ...props, readOnly: true, concealed: true }} />)
   expect(screen.getByLabelText('Leave feedback')).toHaveProperty('readOnly', true)
   fireEvent.click(screen.getByRole('button', { name: 'Discard feedback' })); expect(discard).toHaveBeenCalled()
@@ -159,4 +160,42 @@ it('keeps scoped selectors unique through nested document structure and differen
   expect(conversationSelector(root,'.selector-document')).toBe('.selector-document')
   const outside=document.createElement('p');outside.id='outside-selector';document.body.append(outside);expect(conversationSelector(outside,'.selector-document')).toBe('#outside-selector')
   wrapper.remove();outside.remove()
+})
+
+
+it.each([768,240])('keeps Reply visible for a long document in a %spx viewport and submits to its thread',async height=>{
+  const originalHeight=window.innerHeight
+  Object.defineProperty(window,'innerHeight',{configurable:true,value:height})
+  const submit=vi.fn(async()=>{})
+  const view=render(<><article className="long-document">Long document</article><FeedbackWidget projectId="host" conversation={conversation({containerSelector:'.long-document',authorName:'Owner',feedback:[note],onComment:submit})}/></>)
+  const content=document.querySelector('.long-document')!
+  content.getBoundingClientRect=()=>({left:2000,top:200,width:800,height:8000} as DOMRect)
+  openFeedbackList();expect(screen.queryByText('open')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button',{name:'Reply'}))
+  const field=screen.getByRole('textbox',{name:'Reply'})
+  expect(field).toHaveFocus()
+  const popover=field.closest('[data-fw]') as HTMLElement
+  expect(parseFloat(popover.style.top)).toBeGreaterThanOrEqual(16)
+  expect(parseFloat(popover.style.top)).toBeLessThanOrEqual(Math.max(16,height-300-16))
+  expect(parseFloat(popover.style.left)).toBeLessThanOrEqual(window.innerWidth-340-16)
+  fireEvent.change(field,{target:{value:'A threaded reply'}});fireEvent.click(screen.getByRole('button',{name:'Send reply'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledWith({body:'A threaded reply',author:'Owner',parentId:note.id,version:note.version}))
+  view.unmount();Object.defineProperty(window,'innerHeight',{configurable:true,value:originalHeight})
+})
+
+
+it.each(['keyboard','menu'])('dismisses an unsent reply with Escape and resumes it through the %s',async via=>{
+  const submit=vi.fn(async()=>{}),draft=vi.fn()
+  render(<FeedbackWidget projectId="host" conversation={conversation({authorName:'Owner',feedback:[note],onComment:submit,onDraftChange:draft})}/>)
+  openFeedbackList();fireEvent.click(screen.getByRole('button',{name:'Reply'}))
+  fireEvent.change(screen.getByRole('textbox',{name:'Reply'}),{target:{value:'Keep my reply'}})
+  fireEvent.keyDown(screen.getByRole('textbox',{name:'Reply'}),{key:'Escape'})
+  expect(screen.queryByRole('textbox',{name:'Reply'})).not.toBeInTheDocument()
+  expect(submit).not.toHaveBeenCalled();expect(draft).toHaveBeenLastCalledWith(expect.objectContaining({body:'Keep my reply',reply:expect.objectContaining({id:note.id})}))
+  if(via==='keyboard')fireEvent.keyDown(document,{key:'c'})
+  else{fireEvent.click(screen.getByRole('button',{name:'Open CRRT menu'}));fireEvent.click(screen.getByRole('menuitem',{name:/Resume draft/}))}
+  expect(screen.getByRole('textbox',{name:'Reply'})).toHaveValue('Keep my reply')
+  expect(screen.getByRole('textbox',{name:'Reply'})).toHaveFocus()
+  fireEvent.click(screen.getByRole('button',{name:'Send reply'}))
+  await waitFor(()=>expect(submit).toHaveBeenCalledWith(expect.objectContaining({body:'Keep my reply',parentId:note.id,version:note.version})))
 })

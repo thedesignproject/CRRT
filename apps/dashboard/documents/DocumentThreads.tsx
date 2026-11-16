@@ -3,7 +3,7 @@ import { FeedbackWidget } from '../../../src'
 import type { ConversationDraft } from '../../../src'
 import type { FeedbackDraft } from './DocumentRecovery'
 import type { DocumentComment, DocumentTarget } from '../../../shared/documents'
-import { quoteMatches, type DocumentQuote, type DocumentSelection } from './DocumentBody'
+import { captureDocumentSelection, quoteMatches, type DocumentQuote, type DocumentSelection } from './DocumentBody'
 import { documentMessage } from './client'
 import { getDashboardTheme } from '../lib/theme'
 
@@ -12,6 +12,7 @@ type Props = {
   revision: number
   source: string
   selection: DocumentSelection
+  onQuote?: (quote: DocumentSelection) => void
   onClearSelection: () => void
   onComment: (input: { body: string; author: string; parentId?: string; revision?: number; target?: DocumentTarget } & DocumentQuote) => Promise<void>
   onReview?: (comment: DocumentComment, status: 'accepted' | 'rejected', done?: boolean) => void
@@ -44,6 +45,12 @@ export function DocumentThreads({ feedback, revision, source, selection, onComme
       progressUpdates: comment.progress_updates,
       contextLabel: comment.revision === revision ? undefined : `${quoteMatches(source, comment) ? 'Carried from' : 'Text changed since'} revision ${comment.revision}`,
     })),
+    onTextSelection: (range) => {
+      const quote = captureDocumentSelection(range)
+      if (!quote) return false
+      props.onQuote?.(quote)
+      return true
+    },
     selection: selection.quote,
     selectionTarget: selection.selectionTarget,
     initialDraft: initialDraft ? { ...initialDraft, reply: initialDraft.reply ? { id: initialDraft.reply.id, version: initialDraft.reply.revision, author: initialDraft.reply.author } : null } : undefined,

@@ -696,6 +696,7 @@ function FeedbackWidgetInner({
           isExcluded: (node) => node.closest(`[${WIDGET_ATTR}]`) !== null,
         })
         if (built) {
+          if (conversation?.onTextSelection?.(sel.getRangeAt(0)) === false) return
           const pct = toPagePercent(
             built.midpointClient.x + window.scrollX,
             built.midpointClient.y + window.scrollY,
@@ -750,7 +751,7 @@ function FeedbackWidgetInner({
     return () => {
       window.removeEventListener('click', onClick, true)
     }
-  }, [mode, conversation?.readOnly, conversation?.disabled, conversation?.draftLocked, conversation?.containerSelector])
+  }, [mode, conversation?.readOnly, conversation?.disabled, conversation?.draftLocked, conversation?.containerSelector, conversation?.onTextSelection])
 
   // --- Auto-focus textarea ---
   useEffect(() => {
@@ -889,7 +890,7 @@ function FeedbackWidgetInner({
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
-          if (conversation && comment) return
+          if (conversation && comment) { clearNativeSelection(); setMode('idle'); return }
           clearNativeSelection()
           conversation?.onClearSelection()
           setTarget(null)
@@ -958,6 +959,7 @@ function FeedbackWidgetInner({
   }
 
   function enterFeedbackMode() {
+    if (conversation && comment) { setSidebarOpen(false); setLauncherOpen(false); setMode('commenting'); return }
     if (conversation?.readOnly || conversation?.disabled || conversation?.draftLocked) return
     clearNativeSelection()
     conversation?.onClearSelection()
@@ -1086,6 +1088,10 @@ function FeedbackWidgetInner({
     if (topFixed + popH > window.innerHeight) topFixed = fixedY - popH - pad
     if (leftFixed < pad) leftFixed = pad
     if (topFixed < pad) topFixed = pad
+    if (conversation) {
+      leftFixed = Math.min(leftFixed, Math.max(pad, window.innerWidth - popW - pad))
+      topFixed = Math.min(topFixed, Math.max(pad, window.innerHeight - popH - pad))
+    }
     return {
       position: 'fixed',
       left: leftFixed,
@@ -2351,7 +2357,8 @@ function FeedbackWidgetInner({
                 enterFeedbackMode()
               }}
             />
-            {conversation && <LauncherAction icon={<MessageCircle size={17} />} title="Add note" subtitle="Feedback on the whole document" disabled={Boolean(conversation.readOnly || conversation.disabled || conversation.draftLocked)} onClick={() => {
+            {conversation && <LauncherAction icon={<MessageCircle size={17} />} title={comment ? "Resume draft" : "Add note"} subtitle="Feedback on the whole document" disabled={!comment && Boolean(conversation.readOnly || conversation.disabled || conversation.draftLocked)} onClick={() => {
+              if (comment) { setLauncherOpen(false); setMode('commenting'); return }
               clearNativeSelection(); conversation.onClearSelection()
               setLauncherOpen(false); setReply(null); setTarget(conversationTarget('', conversation.containerSelector)); setMode('commenting')
               if (!authorNameRef.current) setShowNameModal(true)

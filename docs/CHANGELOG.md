@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.26] - Unreleased
+
+### Fixed
+- Hosted documents open text feedback only after activating capture with C or the feedback menu, preserving ordinary text selection and copying.
+- Hosted reply and note composers stay within the viewport when their document target is offscreen.
+- Escape dismisses an unsent hosted comment or reply while preserving the draft; C or Resume draft restores it.
+- New hosted comments no longer display the redundant "open" status label.
+
+### Added
+- Conversation adapters can validate and capture quote context through `onTextSelection` during explicit feedback capture.
+
+This version is prepared for review. Publishing requires the reviewed release commit, release tag, and successful npm workflow.
+
 ## [0.3.25] - Unreleased
 
 ### Added

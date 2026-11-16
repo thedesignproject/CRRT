@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { feedbackField, replyField, nameField, openNote } from '../../../src/__tests__/conversationInteractions'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { DocumentBody, documentHtml, quoteMatches } from './DocumentBody'
+import { DocumentBody, captureDocumentSelection, documentHtml, quoteMatches } from './DocumentBody'
 import { DocumentThreads } from './DocumentThreads'
 import { DocumentReader } from './DocumentReader'
 import { documentRequest, documentMessage, DocumentRequestError } from './client'
@@ -15,9 +15,10 @@ const doc = { id,canComment:true,title:'Design proposal',body:'# Introduction\n\
 const root = { id:'c',document_id:id,revision:1,parent_id:null,quote:'clear paragraph',prefix:'A ',suffix:'.',body:'Make this stronger',author:'Alice',review_status:'open',implementation_status:'unassigned',version:1,created_at:'2026-11-06T00:00:00Z' } as DocumentComment
 const reply = { ...root,id:'r',parent_id:'c',body:'Agreed',author:'Bob' }
 const response = (data:DocumentResult|object,ok=true) => Promise.resolve({ ok,json:async()=>data })
+const waitForCapture = () => waitFor(()=>expect(screen.getByRole('menuitem',{name:/Drop comment/,hidden:true})).toBeEnabled())
 const page = (fields:object={}) => ({ document:doc,feedback:[],nextOffset:null,...fields })
 beforeEach(()=>{vi.stubGlobal('fetch',fetcher);fetcher.mockReset(); Range.prototype.getClientRects=()=>[] as unknown as DOMRectList;Range.prototype.getBoundingClientRect=()=>({width:0,height:0,left:0,top:0}) as DOMRect})
-afterEach(()=>{vi.unstubAllGlobals();window.getSelection()?.removeAllRanges()})
+afterEach(()=>{cleanup();vi.unstubAllGlobals();window.getSelection()?.removeAllRanges()})
 it('uses the signed-in identity when an anonymous reader signs in before leaving feedback',async()=>{
   fetcher.mockImplementation(()=>response(page()))
   const view=render(documentRoute(`/doc/${id}`,'/api'))
@@ -45,16 +46,15 @@ it('reattaches only unique quotes with matching surrounding text',()=>{
   expect(quoteMatches('target passage. First\n\ntarget passage. Second',{quote:'target passage.',prefix:'',suffix:' First'})).toBe(true)
   expect(quoteMatches('First target passage.\n\nFirst target passage.',{quote:'target passage.',prefix:'First ',suffix:''})).toBe(false)
 })
-it('captures text selections only inside document content and within the size limit',()=>{
-  const onQuote=vi.fn(), view=render(<DocumentBody source="A clear paragraph." onQuote={onQuote}/>), prose=view.container.firstElementChild!
-  fireEvent.mouseUp(prose);expect(onQuote).not.toHaveBeenCalled()
-  const range=document.createRange();range.selectNodeContents(prose.querySelector('p')!);window.getSelection()!.addRange(range)
-  fireEvent.mouseUp(prose);expect(onQuote).toHaveBeenCalledWith(expect.objectContaining({quote:'A clear paragraph.'}))
-  window.getSelection()!.removeAllRanges();const outside=document.createRange();outside.selectNodeContents(document.body);window.getSelection()!.addRange(outside);fireEvent.keyUp(prose)
-  expect(onQuote).toHaveBeenCalledTimes(1)
-  window.getSelection()!.removeAllRanges();view.rerender(<DocumentBody source={'a'.repeat(2001)} onQuote={onQuote}/>);range.selectNodeContents(prose.querySelector('p')!);window.getSelection()!.addRange(range);fireEvent.mouseUp(prose);expect(onQuote).toHaveBeenCalledTimes(1)
-  window.getSelection()!.removeAllRanges();view.rerender(<DocumentBody source=" "/>);fireEvent.mouseUp(prose)
-  view.rerender(<DocumentBody source=" "/>);const blank=document.createRange();blank.selectNodeContents(prose);window.getSelection()!.removeAllRanges();window.getSelection()!.addRange(blank);fireEvent.mouseUp(prose)
+it('captures only explicit selections inside document content and within the size limit',()=>{
+  const range=document.createRange()
+  expect(captureDocumentSelection(range)).toBeUndefined()
+  const view=render(<DocumentBody source="A clear paragraph."/>), prose=view.container.firstElementChild!
+  range.selectNodeContents(prose.querySelector('p')!)
+  expect(captureDocumentSelection(range)).toMatchObject({quote:'A clear paragraph.'})
+  range.selectNodeContents(document.body);expect(captureDocumentSelection(range)).toBeUndefined()
+  view.rerender(<DocumentBody source={'a'.repeat(2001)}/>);range.selectNodeContents(prose.querySelector('p')!);expect(captureDocumentSelection(range)).toBeUndefined()
+  view.rerender(<DocumentBody source=" "/>);range.selectNodeContents(prose);expect(captureDocumentSelection(range)).toBeUndefined()
 })
 it('shows empty feedback, posts comments, recovers failures, and clears selected passages',async()=>{
   const comment=vi.fn().mockRejectedValueOnce(new DocumentRequestError('forbidden')).mockResolvedValue(undefined), clear=vi.fn()
@@ -110,9 +110,9 @@ it('ignores resolved and rejected reads after unmount and matches only document 
   expect(documentRoute(`/doc/${id}/login`,'/api')).not.toBeNull();expect(documentRoute('/not-a-document','/api')).toBeNull();expect(documentRoute(`/doc/${id}`,'/api')).not.toBeNull()
 })
 it('keeps bold selections attached to their surrounding paragraph',()=>{
-  const capture=vi.fn(),source='First **same** word.\n\nSecond **same** word.',view=render(<DocumentBody source={source} onQuote={capture}/>),bold=view.container.querySelectorAll('strong')[1]
+  const source='First **same** word.\n\nSecond **same** word.',view=render(<DocumentBody source={source}/>),bold=view.container.querySelectorAll('strong')[1]
   const range=document.createRange();range.selectNodeContents(bold);window.getSelection()!.addRange(range);fireEvent.mouseUp(bold)
-  const anchor=capture.mock.calls[0][0];expect(anchor.prefix).toContain('Second ');expect(quoteMatches(source,anchor)).toBe(true)
+  const anchor=captureDocumentSelection(range)!;expect(anchor.prefix).toContain('Second ');expect(quoteMatches(source,anchor)).toBe(true)
 })
 it('hides the entire feedback widget from view-only readers',()=>{
   render(<DocumentThreads feedback={[root,reply]} revision={2} source={doc.body} selection={root} onClearSelection={vi.fn()} onComment={vi.fn()} readOnly/> )
@@ -141,7 +141,8 @@ it('retries reading a posted comment without duplicating the mutation',async()=>
 })
 it.each(['same','carried','changed'])('recovers selected feedback across publication: %s',async mode=>{
   fetcher.mockImplementationOnce(()=>response(page({nextOffset:50})));render(<DocumentReader apiBase="/api" shareKey={id}/>);await screen.findByText('Design proposal')
-  const prose=document.querySelector('.document-prose')!,text=prose.querySelector('p')!.firstChild!,range=document.createRange();range.setStart(text,2);range.setEnd(text,7);window.getSelection()!.addRange(range);fireEvent.mouseUp(prose)
+  await waitForCapture()
+  const prose=document.querySelector('.document-prose')!,text=prose.querySelector('p')!.firstChild!,range=document.createRange();range.setStart(text,2);range.setEnd(text,7);fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(prose);fireEvent.click(prose)
   fireEvent.change(nameField(),{target:{value:'Me'}});fireEvent.change(feedbackField(),{target:{value:'Selected note'}})
   if(mode!=='same'){
     fetcher.mockImplementationOnce(()=>response({error:'revision_not_found'},false));fireEvent.click(screen.getByText('Load more feedback'));await screen.findByText('Reload latest revision')
@@ -180,7 +181,8 @@ it.each(['post','read'])('discard abandons a lost %s operation before an identic
 })
 it('keeps the submitted passage unchanged during a lost send and subsequent retry',async()=>{
   fetcher.mockImplementationOnce(()=>response(page()));render(<DocumentReader apiBase="/api" shareKey={id}/>);await screen.findByText('Design proposal');const prose=document.querySelector('.document-prose')!,text=prose.querySelector('p')!.firstChild!
-  const select=(start:number,end:number)=>{const text=prose.querySelector('p')!.firstChild!,range=document.createRange();range.setStart(text,start);range.setEnd(text,end);window.getSelection()!.removeAllRanges();window.getSelection()!.addRange(range);fireEvent.mouseUp(prose)}
+  await waitForCapture()
+  const select=(start:number,end:number)=>{const text=prose.querySelector('p')!.firstChild!,range=document.createRange();range.setStart(text,start);range.setEnd(text,end);window.getSelection()!.removeAllRanges();fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(prose);fireEvent.click(prose)}
   select(2,7);fireEvent.change(nameField(),{target:{value:'Me'}});fireEvent.change(feedbackField(),{target:{value:'Keep anchor'}})
   let reject!:(error:Error)=>void;fetcher.mockImplementationOnce(()=>new Promise((_resolve,fail)=>{reject=fail}));fireEvent.click(screen.getByText('Add feedback'));select(8,17)
   expect(screen.getAllByText('“clear”').length).toBeGreaterThan(0);await act(async()=>reject(new Error('Lost response')));await screen.findByText('Reload latest revision');select(8,17)
@@ -341,12 +343,13 @@ it('keeps newer view-only permissions while an older feedback confirmation is re
 it.each(['same\n\nsame','same\n\n> same'])('pins the selected occurrence with its full ancestor selector: %s',async source=>{
   fetcher.mockImplementationOnce(()=>response(page({document:{...doc,body:source}})))
   render(<DocumentReader apiBase="/api" shareKey={id} authorName="Owner"/>);await screen.findByText('Design proposal')
+  await waitForCapture()
   const paragraphs=document.querySelectorAll('.document-prose p'),selected=paragraphs[1],range=document.createRange()
   selected.getBoundingClientRect=()=>({left:100,top:400,width:600,height:40} as DOMRect)
   range.selectNodeContents(selected)
   Object.defineProperty(range,'getClientRects',{value:()=>[{left:120,top:410,width:80,height:20}]})
   Object.defineProperty(range,'getBoundingClientRect',{value:()=>({left:120,top:410,width:80,height:20})})
-  window.getSelection()!.addRange(range);fireEvent.mouseUp(selected)
+  fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(selected);fireEvent.click(selected)
   expect(screen.getByLabelText('Leave feedback')).toHaveFocus()
   fireEvent.change(screen.getByLabelText('Leave feedback'),{target:{value:'Feedback on the second occurrence'}})
   let posted:any
@@ -376,7 +379,8 @@ it('revalidates a pending mutation after replacing its password grant',async()=>
 it.each(['exit-note','escape-point','exit-point','drop-point'])('clears an abandoned passage before submitting a new %s',async flow=>{
   fetcher.mockImplementationOnce(()=>response(page()))
   render(<DocumentReader apiBase="/api" shareKey={id} authorName="Owner"/>);await screen.findByText('Design proposal')
-  const paragraph=document.querySelector('.document-prose p')!,range=document.createRange();range.selectNodeContents(paragraph);window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph)
+  await waitForCapture()
+  const paragraph=document.querySelector('.document-prose p')!,range=document.createRange();range.selectNodeContents(paragraph);fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph);fireEvent.click(paragraph)
   expect(screen.getByRole('button',{name:'Clear selected passage'})).toBeInTheDocument()
   fireEvent.keyDown(document,{key:'Escape'})
   if(flow!=='escape-point')fireEvent.keyDown(document,{key:'Escape'})
@@ -404,4 +408,35 @@ it.each([false,true])('round-trips recovered feedback through the adapter (reply
   fireEvent.change(field,{target:{value:'Edited recovered feedback'}})
   expect(changed).toHaveBeenLastCalledWith(expect.objectContaining({body:'Edited recovered feedback',reply:draft.reply}))
   fireEvent.click(screen.getByRole('button',{name:'Discard feedback'}));expect(changed).toHaveBeenLastCalledWith(null)
+})
+
+
+it.each(['keyboard','button'])('requires explicit %s activation before capturing document text',async activation=>{
+  fetcher.mockImplementation(()=>response(page()))
+  render(<DocumentReader apiBase="/api" shareKey={id} authorName="Owner"/>);await screen.findByText('Design proposal')
+  await waitForCapture()
+  const paragraph=document.querySelector('.document-prose p')!,range=document.createRange()
+  range.selectNodeContents(paragraph);window.getSelection()!.addRange(range)
+  fireEvent.mouseUp(paragraph);fireEvent.click(paragraph);fireEvent.keyUp(paragraph,{key:'Shift'})
+  for(const modifier of ['metaKey','ctrlKey']){
+    fireEvent.keyDown(paragraph,{key:'c',[modifier]:true});fireEvent.keyUp(paragraph,{key:'c',[modifier]:true})
+    expect(window.getSelection()!.toString()).toBe('A clear paragraph.')
+    expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument()
+  }
+  if(activation==='keyboard')fireEvent.keyDown(document,{key:'c'})
+  else{fireEvent.click(screen.getByRole('button',{name:'Open CRRT menu'}));fireEvent.click(screen.getByRole('menuitem',{name:/Drop comment/}))}
+  window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph);fireEvent.click(paragraph)
+  expect(screen.getByLabelText('Leave feedback')).toHaveFocus();expect(screen.getByText('“A clear paragraph.”')).toBeInTheDocument()
+  fireEvent.keyDown(document,{key:'Escape'});fireEvent.keyDown(document,{key:'Escape'})
+  window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph);fireEvent.click(paragraph)
+  expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument()
+})
+
+it('rejects overlong text captures without opening a composer',async()=>{
+  fetcher.mockImplementation(()=>response(page({document:{...doc,body:'a'.repeat(2001)}})))
+  render(<DocumentReader apiBase="/api" shareKey={id} authorName="Owner"/>);await screen.findByText('Design proposal')
+  await waitForCapture()
+  const paragraph=document.querySelector('.document-prose p')!,range=document.createRange();range.selectNodeContents(paragraph)
+  fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.click(paragraph)
+  expect(screen.queryByLabelText('Leave feedback')).not.toBeInTheDocument()
 })

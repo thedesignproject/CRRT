@@ -171,7 +171,7 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
               )}
             </div>
             <h1 className="break-words text-2xl font-semibold tracking-tight">{data.document.title}</h1>
-            <p className="mt-3 text-sm text-muted-foreground">{data.document.canComment ? 'Select text to leave feedback. Changes stay connected to this document.' : 'You have view-only access to this document.'}</p>
+            <p className="mt-3 text-sm text-muted-foreground">{data.document.canComment ? 'Use the feedback button to select text or an element. Changes stay connected to this document.' : 'You have view-only access to this document.'}</p>
           </div>}
           {error && (
             <p role="alert" className="px-6 py-3 text-sm text-status-rejected">
@@ -209,11 +209,6 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
             <div className="document-reading-surface">
               {!concealed && <DocumentBody
                 source={data.document.body}
-                onQuote={(quote) => {
-                  if (feedback.hasPending()) return
-                  setSelection(quote)
-                  selectionRevision.current = data.document!.publishedRevision
-                }}
               />}
             </div>
             <div>
@@ -229,6 +224,11 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
                 feedback={concealed ? [] : data.feedback!}
                 revision={data.document.publishedRevision!}
                 source={concealed ? '' : data.document.body}
+                onQuote={(quote) => {
+                  if (feedback.hasPending()) return
+                  setSelection(quote)
+                  selectionRevision.current = data.document!.publishedRevision
+                }}
                 selection={selection}
                 onClearSelection={clearSelection}
                 readOnly={concealed || !data.document.canComment}

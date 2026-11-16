@@ -67,7 +67,7 @@ export const hostedComments: PersonalComments = { label: 'Feedback', list: async
 export function ConversationDetails({ conversation, comment, onReply, disabled }: { conversation: FeedbackConversationProps; comment: ConversationComment; onReply(): void; disabled: boolean }) {
   return <div style={{ marginLeft: 32, marginTop: 12, fontSize: 12, color: 'var(--fw-foreground-muted)' }} onClick={event => event.stopPropagation()}>
     {comment.contextLabel && <p>{comment.contextLabel}</p>}
-    <p>{comment.implementationStatus === 'unassigned' ? comment.reviewStatus : comment.implementationStatus.replace(/_/g, ' ')}</p>
+    {(comment.implementationStatus !== 'unassigned' || comment.reviewStatus !== 'open') && <p>{comment.implementationStatus === 'unassigned' ? comment.reviewStatus : comment.implementationStatus.replace(/_/g, ' ')}</p>}
     {conversation.feedback.filter(item => item.parentId === comment.id).map(reply => <div key={reply.id} style={{ borderLeft: '1px solid var(--fw-contrast-08)', paddingLeft: 12, marginTop: 12 }}><FeedbackAuthor author={reply.author} resolved={false} /><FeedbackContent body={reply.body} resolved={false} /></div>)}
     {Boolean(comment.progressUpdates?.length) && <details style={{ marginTop: 12 }}><summary>Work updates</summary><ol>{comment.progressUpdates!.map((update, index) => <li key={index}><p>{update.agentId} · {update.operation}</p><p style={{ whiteSpace: 'pre-wrap' }}>{update.summary}</p><time dateTime={update.createdAt}>{new Date(update.createdAt).toLocaleString()}</time></li>)}</ol></details>}
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>

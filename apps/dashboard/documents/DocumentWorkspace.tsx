@@ -476,9 +476,7 @@ export function DocumentWorkspace({
               <>
                 {!concealed && <div className="document-reading-surface">
                   {publicationPending ? <div role="status" aria-label="Loading published document"><Spinner /></div>
-                    : document.publishedRevision ? <DocumentBody source={publishedBody!} onQuote={(quote) => {
-                      if (!feedback.hasPending()) setSelection({ ...quote, revision: document.publishedRevision! })
-                    }} /> : <p className="text-sm text-muted-foreground">Publish a revision to collect feedback.</p>}
+                    : document.publishedRevision ? <DocumentBody source={publishedBody!} /> : <p className="text-sm text-muted-foreground">Publish a revision to collect feedback.</p>}
                 </div>}
                 <DocumentThreads
                   disabled={busy || publicationPending}
@@ -494,6 +492,9 @@ export function DocumentWorkspace({
                   feedback={concealed ? [] : data!.feedback!}
                   revision={document.publishedRevision ?? 0}
                   source={publishedBody ?? ''}
+                  onQuote={(quote) => {
+                    if (!feedback.hasPending()) setSelection({ ...quote, revision: document.publishedRevision! })
+                  }}
                   selection={selection}
                   onClearSelection={() => setSelection(emptySelection)}
                   authorName={author}

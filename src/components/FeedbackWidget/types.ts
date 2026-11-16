@@ -57,6 +57,8 @@ export interface FeedbackConversationProps {
   selection: string
   /** Actual range captured by the host, avoiding ambiguous text searches. */
   selectionTarget?: ClickTarget
+  /** Validate and capture host quote context only during explicit feedback selection. */
+  onTextSelection?(range: Range): boolean
   onClearSelection(): void
   onComment(input: { body: string; author: string; parentId?: string; version?: number; target?: FeedbackPosition }): Promise<void>
   onReview?(comment: ConversationComment, status: 'accepted' | 'rejected', done?: boolean): void
