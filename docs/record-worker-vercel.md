@@ -6,11 +6,16 @@ handler sweeps expired recordings and starts a Workflow only when work is waitin
 and no job has a live lease. The Workflow launches the bundled existing worker in
 a Vercel Sandbox with FFmpeg, polls its detached command, and stops the VM when
 the command finishes. A one-shot worker also atomically writes a completion
-marker after all stage calls finish, then explicitly exits. The Workflow checks
-that marker before command status so a lingering process or stale command status
-cannot retain the worker slot after completed work. Failures before completion
-do not publish a marker. The VM has a hard 30-minute timeout and no persistent
-snapshot. Database leases, heartbeats, retries, and cleanup remain authoritative.
+marker after all stage calls finish, then explicitly exits. When command status
+still reports running, the Workflow accepts that marker and logs
+`record_worker_completed_before_exit_status`, so a lingering process or stale
+command status cannot retain the worker slot after completed work. Repeated
+warnings indicate one of those causes; a single one can be the brief gap before
+exit. Failures before completion do not publish a marker. Status checks and stops
+use the VM's current session, never resuming a stopped VM; an ended VM fails the
+run as `record_worker_sandbox_<status>`. Worker logs record only error type/code
+and the active handle types at exit. The VM has a hard 30-minute timeout and no
+persistent snapshot. Database leases, heartbeats, retries, and cleanup remain authoritative.
 
 The existing GitHub production deployment builds and ships both the Workflow
 and worker bundle. No Cloudflare Worker, Container, or paid Cloudflare plan is

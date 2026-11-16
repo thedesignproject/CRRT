@@ -8,7 +8,10 @@ import { Sandbox } from '@vercel/sandbox'
 import { launchRecordWorker, recordWorkerStatus, stopRecordWorker } from './worker-sandbox.js'
 import { WORKER_COMPLETION_CONTENT, WORKER_COMPLETION_FILE } from '../../../shared/record/worker-completion.js'
 
-const vm = { name: 'worker-vm', writeFiles: vi.fn(), runCommand: vi.fn(), getCommand: vi.fn(), readFileToBuffer: vi.fn(), stop: vi.fn() }
+const vm = { name: 'worker-vm', writeFiles: vi.fn(), runCommand: vi.fn(), stop: vi.fn() }
+// The session that exists when inspected. Its methods never resume a sandbox.
+const current = { status: 'running', getCommand: vi.fn(), readFileToBuffer: vi.fn(), stop: vi.fn() }
+const named = { currentSession: () => current }
 const session = { name: 'worker-vm', commandId: 'command-1' }
 function sessions(values: { status: string; createdAt?: number }[]) {
   vi.mocked(Sandbox.list).mockResolvedValue({ async *[Symbol.asyncIterator]() {
@@ -25,10 +28,11 @@ beforeEach(() => {
   vi.stubEnv('UNRELATED_SECRET', 'unrelated-key')
   vi.mocked(readFile).mockResolvedValue(Buffer.from('worker-source'))
   vi.mocked(Sandbox.create).mockResolvedValue(vm as never)
-  vi.mocked(Sandbox.get).mockResolvedValue(vm as never)
+  vi.mocked(Sandbox.get).mockResolvedValue(named as never)
   vm.runCommand.mockResolvedValue({ cmdId: 'command-1' })
-  vm.getCommand.mockResolvedValue({ exitCode: null })
-  vm.readFileToBuffer.mockResolvedValue(null)
+  current.status = 'running'
+  current.getCommand.mockResolvedValue({ exitCode: null })
+  current.readFileToBuffer.mockResolvedValue(null)
   sessions([])
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -93,35 +97,76 @@ it.each(['writeFiles', 'runCommand'] as const)('stops the VM after a %s failure'
   expect(vm.stop).toHaveBeenCalledOnce()
 })
 
-it('polls detached command status and stops the selected VM', async () => {
+it('polls detached command status and stops the selected VM without resuming it', async () => {
   expect(await recordWorkerStatus(session)).toBeNull()
-  vm.getCommand.mockResolvedValueOnce({ exitCode: 0 })
+  expect(current.readFileToBuffer).toHaveBeenCalledWith({ path: WORKER_COMPLETION_FILE })
+  current.getCommand.mockResolvedValueOnce({ exitCode: 0 })
+  current.readFileToBuffer.mockClear()
   expect(await recordWorkerStatus(session)).toBe(0)
-  expect(Sandbox.get).toHaveBeenCalledWith({ name: 'worker-vm' })
-  expect(vm.getCommand).toHaveBeenCalledWith('command-1')
+  // Reported command status stays the primary signal.
+  expect(current.readFileToBuffer).not.toHaveBeenCalled()
+  expect(Sandbox.get).toHaveBeenCalledWith({ name: 'worker-vm', resume: false })
+  expect(current.getCommand).toHaveBeenCalledWith('command-1')
   await stopRecordWorker(session)
-  expect(vm.stop).toHaveBeenCalledOnce()
+  expect(current.stop).toHaveBeenCalledOnce()
+  expect(vm.stop).not.toHaveBeenCalled()
 })
 
-it('recognizes completed work even when detached command status still reports running', async () => {
-  vm.readFileToBuffer.mockResolvedValue(Buffer.from(WORKER_COMPLETION_CONTENT))
+it('reports a failed command exit code', async () => {
+  current.getCommand.mockResolvedValue({ exitCode: 100 })
+  expect(await recordWorkerStatus(session)).toBe(100)
+})
+
+it('recognizes completed work, with a safe diagnostic, when command status still reports running', async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  current.readFileToBuffer.mockResolvedValue(Buffer.from(WORKER_COMPLETION_CONTENT))
   expect(await recordWorkerStatus(session)).toBe(0)
-  expect(vm.readFileToBuffer).toHaveBeenCalledWith({ path: WORKER_COMPLETION_FILE })
-  expect(vm.getCommand).not.toHaveBeenCalled()
+  expect(current.getCommand).toHaveBeenCalledWith('command-1')
+  expect(warn).toHaveBeenCalledExactlyOnceWith('record_worker_completed_before_exit_status')
   await stopRecordWorker(session)
-  expect(vm.stop).toHaveBeenCalledOnce()
+  expect(current.stop).toHaveBeenCalledOnce()
   // A subsequent dispatch can take the released slot.
   sessions([{ status: 'stopped' }])
   expect(await launchRecordWorker()).toEqual(session)
+  warn.mockRestore()
 })
 
 it('rejects an invalid completion marker instead of declaring success', async () => {
-  vm.readFileToBuffer.mockResolvedValue(Buffer.from('incomplete'))
+  current.readFileToBuffer.mockResolvedValue(Buffer.from('incomplete'))
   await expect(recordWorkerStatus(session)).rejects.toThrow('record_worker_completion_invalid')
-  expect(vm.getCommand).not.toHaveBeenCalled()
 })
 
-it('propagates completion inspection failures instead of declaring success', async () => {
-  vm.readFileToBuffer.mockRejectedValue(new Error('read-failed'))
-  await expect(recordWorkerStatus(session)).rejects.toThrow('read-failed')
+it.each(['getCommand', 'readFileToBuffer'] as const)('propagates %s failures instead of declaring success', async method => {
+  current[method].mockRejectedValue(new Error('inspection-failed'))
+  await expect(recordWorkerStatus(session)).rejects.toThrow('inspection-failed')
+})
+
+it.each(['stopping', 'stopped', 'failed', 'aborted', 'snapshotting'])(
+  'reports a %s VM without inspecting, resuming, or stopping it again', async status => {
+    current.status = status
+    await expect(recordWorkerStatus(session)).rejects.toThrow(`record_worker_sandbox_${status}`)
+    expect(current.getCommand).not.toHaveBeenCalled()
+    expect(current.readFileToBuffer).not.toHaveBeenCalled()
+    await stopRecordWorker(session)
+    expect(current.stop).not.toHaveBeenCalled()
+    expect(Sandbox.get).toHaveBeenCalledTimes(2)
+    expect(Sandbox.get).toHaveBeenNthCalledWith(2, { name: 'worker-vm', resume: false })
+  },
+)
+
+it('fails a check when the VM stops mid-inspection, then sees it ended', async () => {
+  current.getCommand.mockImplementationOnce(async () => {
+    current.status = 'stopped' // Its 30-minute deadline passes between calls.
+    throw Object.assign(new Error('sandbox stopped'), { status: 410 })
+  })
+  await expect(recordWorkerStatus(session)).rejects.toThrow('sandbox stopped')
+  expect(current.readFileToBuffer).not.toHaveBeenCalled()
+  await expect(recordWorkerStatus(session)).rejects.toThrow('record_worker_sandbox_stopped')
+  expect(current.getCommand).toHaveBeenCalledOnce()
+})
+
+it('stops a VM that is still starting', async () => {
+  current.status = 'pending'
+  await stopRecordWorker(session)
+  expect(current.stop).toHaveBeenCalledOnce()
 })

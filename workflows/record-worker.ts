@@ -27,7 +27,7 @@ export async function recordWorkerWorkflow() {
     for (let poll = 0; poll < 180; poll++) {
       const exitCode = await statusStep(session)
       if (exitCode !== null) {
-        if (exitCode !== 0) throw new Error('record_worker_failed')
+        if (exitCode !== 0) throw new Error(`record_worker_failed exit_code=${exitCode}`)
         return
       }
       await sleep(10_000)

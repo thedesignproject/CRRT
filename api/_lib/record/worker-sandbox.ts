@@ -62,17 +62,29 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
   }
 }
 
+// Sandbox methods resume a stopped sandbox and retry. Inspect and stop only
+// the session that exists now, so status checks never start another VM, even
+// if the worker VM reaches its deadline between these calls.
+async function currentWorkerVm(session: WorkerSession) {
+  return (await Sandbox.get({ name: session.name, resume: false })).currentSession()
+}
+const liveStatuses = ['pending', 'running']
+
 export async function recordWorkerStatus(session: WorkerSession) {
-  const sandbox = await Sandbox.get({ name: session.name })
-  const completion = await sandbox.readFileToBuffer({ path: WORKER_COMPLETION_FILE })
-  if (completion !== null) {
-    if (completion.toString('utf8') !== WORKER_COMPLETION_CONTENT) throw new Error('record_worker_completion_invalid')
-    return 0
-  }
-  const command = await sandbox.getCommand(session.commandId)
-  return command.exitCode
+  const vm = await currentWorkerVm(session)
+  if (!liveStatuses.includes(vm.status)) throw new Error(`record_worker_sandbox_${vm.status}`)
+  const command = await vm.getCommand(session.commandId)
+  if (command.exitCode !== null) return command.exitCode
+  const completion = await vm.readFileToBuffer({ path: WORKER_COMPLETION_FILE })
+  if (completion === null) return null
+  if (completion.toString('utf8') !== WORKER_COMPLETION_CONTENT) throw new Error('record_worker_completion_invalid')
+  // The worker exits right after publishing the marker, so one observation can
+  // be that brief gap. Repeated warnings point to a lingering process or stale status.
+  console.warn('record_worker_completed_before_exit_status')
+  return 0
 }
 
 export async function stopRecordWorker(session: WorkerSession) {
-  await (await Sandbox.get({ name: session.name })).stop()
+  const vm = await currentWorkerVm(session)
+  if (liveStatuses.includes(vm.status)) await vm.stop()
 }
