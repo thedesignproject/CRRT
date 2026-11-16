@@ -60,9 +60,10 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
   }
 }
 
-// Sandbox methods resume a stopped sandbox and retry. Inspect and stop only
-// the session that exists now, so status checks never start another VM, even
-// if the worker VM reaches its deadline between these calls.
+// Sandbox methods retry failed calls through the SDK's auto-resume path;
+// Session methods never do. Inspect and stop only the session that exists now,
+// so a status check never asks to resume the worker VM, even if it reaches its
+// deadline between these calls.
 async function currentWorkerVm(session: WorkerSession) {
   return (await Sandbox.get({ name: session.name, resume: false })).currentSession()
 }
