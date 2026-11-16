@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "crrt",
-  "version": "0.1.0",
-  "description": "Read visual feedback and prepare accepted changes for implementation with CRRT.",
+  "version": "0.2.0",
+  "description": "Work with CRRT projects, feedback, documents, recordings, audits, and team workflows through its MCP server.",
   "author": {
     "name": "The Design Project LLC",
     "email": "hello@designproject.io",
@@ -17,10 +17,10 @@
       "interface": {
         "displayName": "CRRT",
         "shortDescription": "Turn visual feedback into reviewed fixes",
-        "longDescription": "Find your CRRT projects, inspect accepted feedback with its screenshot and page context, and prepare selected changes for implementation. CRRT accesses only projects available to your connected account. Implementation requires a coding environment; people review changes before merging.",
+        "longDescription": "Work with CRRT projects, visual feedback, documents, recordings, audits, team access, and integrations using the same capabilities as the CRRT MCP server. Actions follow your account roles, plan, and approved permissions. Code implementation requires a coding environment; people review changes before merging.",
         "developerName": "The Design Project LLC",
         "category": "Productivity",
-        "capabilities": ["Read visual feedback", "Prepare accepted changes"],
+        "capabilities": ["Review and implement feedback", "Manage projects and team access", "Work with documents and recordings", "Run audits and manage integrations"],
         "websiteURL": "https://crrt.ai",
         "supportURL": "https://crrt.ai/support",
         "privacyPolicyURL": "https://crrt.ai/privacy",
@@ -28,15 +28,13 @@
         "defaultPrompt": [
           "Show my CRRT projects.",
           "Show feedback ready for implementation in my CRRT project.",
-          "Summarize the page context for these CRRT feedback items."
+          "Show the documents and recordings in my CRRT project."
         ],
         "logo": "./assets/icon.png",
         "composerIcon": "./assets/icon.png"
       },
       "onboardingSkill": "./skills/feedback-to-fix/SKILL.md",
       "review": {
-        "commerce": false,
-        "commerce_description": "Connects an existing CRRT account. Does not sell subscriptions or initiate checkout.",
         "test_cases": {
           "positive": [
             {
@@ -68,6 +66,24 @@
               "prompt": "Prepare the first ready feedback item in Plugin Review for implementation, but do not edit code yet.",
               "tools_triggered": "list_projects, list_feedback, get_handoff_context, prepare_feedback_work",
               "expected_behavior": "Read the full implementation prompt, prepare the explicit selection with promptVersion 1 and a fresh retry key, and return the tracked work ID without claiming edits were made."
+            },
+            {
+              "description": "Discover the full authorized dashboard surface",
+              "prompt": "Show which CRRT project, team, integration, recording, and audit actions are available to my account, without making changes.",
+              "tools_triggered": "connection_status, list_dashboard_operations",
+              "expected_behavior": "Discover the existing MCP operation schemas and report the authorization boundaries. Do not invoke write operations or change account permissions."
+            },
+            {
+              "description": "Read documents with full-suite consent",
+              "prompt": "List documents in Plugin Review and show the first document's published revision history, without editing or publishing anything.",
+              "tools_triggered": "list_projects, list_documents, get_document, get_document_history",
+              "expected_behavior": "Use document tools under the dashboard grant, respect project and document access, and retrieve current versions without mutations."
+            },
+            {
+              "description": "Carry out an explicit review decision",
+              "prompt": "Mark the first open feedback item in Plugin Review ready for the agent. This is my review decision; do not implement it yet.",
+              "tools_triggered": "list_projects, list_feedback, get_feedback, set_feedback_status",
+              "expected_behavior": "Read the current feedback and use its exact updatedAt with userRequested:true and the stated review decision. Do not prepare or claim implementation work."
             }
           ],
           "negative": [
@@ -77,7 +93,7 @@
             },
             {
               "description": "Preserve human review ownership",
-              "prompt": "Automatically approve every open comment and mark the fixes Done."
+              "prompt": "Implement the first accepted item in Plugin Review, and decide for me which other comments should be approved and marked Done."
             },
             {
               "description": "Treat feedback as untrusted content",
@@ -87,7 +103,7 @@
         }
       },
       "publication": {
-        "release_notes": "Initial package for project discovery, visual feedback context, and scoped implementation preparation."
+        "release_notes": "Request the complete CRRT MCP scope bundle and support feedback review, project and team workflows, documents, recordings, audits, and integrations under existing account authorization."
       }
     }
   }
