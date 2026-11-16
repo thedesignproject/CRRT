@@ -25,8 +25,8 @@ it('skips an overlapping workflow without stopping the other worker', async () =
   expect(stopRecordWorker).not.toHaveBeenCalled()
 })
 it('stops the VM and exposes a safe failure after a failed process', async () => {
-  vi.mocked(recordWorkerStatus).mockResolvedValue(1)
-  await expect(recordWorkerWorkflow()).rejects.toThrow('record_worker_failed')
+  vi.mocked(recordWorkerStatus).mockResolvedValue(100)
+  await expect(recordWorkerWorkflow()).rejects.toThrow('record_worker_failed exit_code=100')
   expect(stopRecordWorker).toHaveBeenCalledWith(session)
 })
 it('stops the VM after a status error', async () => {

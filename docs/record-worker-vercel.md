@@ -1,12 +1,21 @@
 # Recording processing on Vercel
 
-Production uses private R2 storage and the existing Supabase recording job queue.
-Vercel Cron calls `/api/v1/internal/record-worker` every minute. The authenticated
-handler sweeps expired recordings and starts a Workflow only when work is waiting
-and no job has a live lease. The Workflow launches the bundled existing worker in
-a Vercel Sandbox with FFmpeg, polls its detached command, and stops the VM when
-the command finishes. The VM has a hard 30-minute timeout and no persistent
-snapshot. Database leases, heartbeats, retries, and cleanup remain authoritative.
+Production uses private R2 storage and the existing Supabase recording job
+queue. Vercel Cron calls `/api/v1/internal/record-worker` every minute. The
+authenticated handler sweeps expired recordings and starts a Workflow only when
+work is waiting and no job has a live lease. The Workflow launches the bundled
+existing worker in a Vercel Sandbox with FFmpeg, polls its detached command, and
+stops the VM when the command finishes. Vercel records a command's exit code
+only for a request that waits for it ([Get a command](https://vercel.com/docs/rest-api/sandboxes/get-a-command)); plain status reads
+report `null` even after exit. Each status check therefore waits up to 10
+seconds for the exit code, so success and failure both release the worker slot
+promptly. A one-shot worker explicitly exits after its awaited stage calls, so
+open network handles cannot keep it alive. Status checks and stops use the VM's
+current session, which bypasses the SDK's auto-resume retries; a VM found ended
+fails the run with `record_worker_sandbox_<status>`. Worker logs record only
+error type/code and the active handle types at exit. The VM has a hard 30-minute
+timeout and no persistent snapshot. Database leases, heartbeats, retries, and
+cleanup remain authoritative.
 
 The existing GitHub production deployment builds and ships both the Workflow
 and worker bundle. No Cloudflare Worker, Container, or paid Cloudflare plan is

@@ -60,12 +60,35 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
   }
 }
 
+// Sandbox methods retry failed calls through the SDK's auto-resume path;
+// Session methods never do. Inspect and stop only the session that exists now,
+// so a status check never asks to resume the worker VM, even if it reaches its
+// deadline between these calls.
+async function currentWorkerVm(session: WorkerSession) {
+  return (await Sandbox.get({ name: session.name, resume: false })).currentSession()
+}
+const liveStatuses = ['pending', 'running']
+
+// Vercel records a command's exit code only when a request waits for it, so a
+// plain getCommand() poll reports null forever, even after the process exits:
+// https://vercel.com/docs/rest-api/sandboxes/get-a-command
+// A bounded wait returns the real exit code, or null while the worker still runs.
+const STATUS_WAIT_MS = 10_000
+
 export async function recordWorkerStatus(session: WorkerSession) {
-  const sandbox = await Sandbox.get({ name: session.name })
-  const command = await sandbox.getCommand(session.commandId)
-  return command.exitCode
+  const vm = await currentWorkerVm(session)
+  if (!liveStatuses.includes(vm.status)) throw new Error(`record_worker_sandbox_${vm.status}`)
+  const command = await vm.getCommand(session.commandId)
+  const signal = AbortSignal.timeout(STATUS_WAIT_MS)
+  try {
+    return (await command.wait({ signal })).exitCode
+  } catch (error) {
+    if (signal.aborted) return null
+    throw error
+  }
 }
 
 export async function stopRecordWorker(session: WorkerSession) {
-  await (await Sandbox.get({ name: session.name })).stop()
+  const vm = await currentWorkerVm(session)
+  if (liveStatuses.includes(vm.status)) await vm.stop()
 }
