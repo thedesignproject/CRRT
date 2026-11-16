@@ -23,6 +23,7 @@ This version is prepared for review. Publishing requires the reviewed release co
 ## [0.3.25] - Unreleased
 
 ### Added
+- The landing demo now supports local review, agent/tracker handoff previews, an illustrative fix review, and reset. Host adapters may opt into review, subscriptions, and a handoff entry point without enabling production APIs.
 - `FeedbackWidget` supports an optional `conversation` data adapter for its standard launcher, pins, composer, and sidebar; it supports host-owned feedback, replies, review actions, and in-memory draft recovery. Hosted documents import this package's source entry point, so shared widget UI changes apply to documents without copying components or updating a second widget dependency.
 - Exported TypeScript types describe the widget props and conversation adapter.
 

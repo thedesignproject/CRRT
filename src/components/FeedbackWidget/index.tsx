@@ -833,7 +833,7 @@ function FeedbackWidgetInner({
         anchor: targetData.anchor ?? null,
       }
 
-      setComments((prev) => [newComment, ...prev])
+      setComments((prev) => [newComment, ...prev.filter(comment => comment.id !== newComment.id)])
 
       setBadgeAnim(true)
       setTimeout(() => setBadgeAnim(false), 720)
