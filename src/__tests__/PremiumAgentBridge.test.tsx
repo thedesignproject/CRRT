@@ -4,6 +4,7 @@ import type { ComponentProps } from 'react'
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { PremiumAgentBridge } from '../components/PremiumAgentBridge'
+import { fetchDelivery, sendFeedback } from '../components/FeedbackWidget/dispatch'
 import { WidgetRequestError } from '../lib/widgetLogin'
 
 const apiMocks = vi.hoisted(() => ({
@@ -20,6 +21,8 @@ vi.mock('../components/FeedbackWidget/api', () => ({
   startWidgetAgentUpgrade: apiMocks.upgrade,
 }))
 
+vi.mock('../components/FeedbackWidget/dispatch', () => ({ fetchDelivery: vi.fn(async () => ({ listeners: [], dispatches: [] })), sendFeedback: vi.fn() }))
+
 const API = 'https://api.example.com'
 const PAGE = 'https://site.example.com/pricing'
 const session = { accessToken: `crrt_widget_${'a'.repeat(43)}`, displayName: 'Ada', expiresAt: '2099-01-01T00:00:00Z' }
@@ -31,7 +34,7 @@ const comments = [
 ]
 
 function button(label: string) {
-  const found = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.textContent?.includes(label) || (label === 'Send to agent' && item.textContent?.includes('Accept & send to agent')))
+  const found = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.textContent?.includes(label))
   if (!found) throw new Error(`Button not found: ${label}`)
   return found
 }
@@ -146,7 +149,7 @@ describe('<PremiumAgentBridge />', () => {
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
     fireEvent.click(checkbox('Polish the CTA'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
 
     expect(apiMocks.createSession).toHaveBeenCalledOnce()
     const payload = apiMocks.createSession.mock.calls[0][1]
@@ -167,7 +170,7 @@ describe('<PremiumAgentBridge />', () => {
     await act(async () => { fireEvent.click(button('Accept selected')) })
     expect(apiMocks.mutate).toHaveBeenCalledWith(API, { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1'], action: 'accept' }, session)
 
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
     await act(async () => { fireEvent.click(button('Start another handoff')) })
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
@@ -198,7 +201,7 @@ describe('<PremiumAgentBridge />', () => {
     vi.mocked(fetch).mockResolvedValue(response)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     expect(document.body.textContent).toContain(message)
   })
 
@@ -219,7 +222,7 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.createSession.mockRejectedValueOnce('handoff')
     const handoff = renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     expect(document.body.textContent).toContain('Could not create the Agent handoff.')
   })
 
@@ -227,7 +230,7 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.createSession.mockRejectedValue(new WidgetRequestError(500))
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     expect(document.body.textContent).toContain('Could not save or load feedback. Please try again.')
     expect(document.body.textContent).toContain('Fix the headline')
   })
@@ -236,9 +239,9 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.createSession.mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce({ shareId: 'share-id', slug: 'share-slug', token: 'share-token', tokenUrl: 'https://x', expiresAt: now, commentCount: 1 })
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     expect(document.body.textContent).toContain('temporary')
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     expect(apiMocks.createSession.mock.calls[0][1].idempotencyKey).toBe(apiMocks.createSession.mock.calls[1][1].idempotencyKey)
   })
 
@@ -252,7 +255,7 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.createSession.mockRejectedValue(failure)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     expect(document.body.textContent).toContain(heading)
   })
 
@@ -309,7 +312,7 @@ describe('<PremiumAgentBridge />', () => {
     vi.mocked(navigator.clipboard.writeText).mockRejectedValue(new Error('denied'))
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => { fireEvent.click(button('Create prompt handoff')) })
     await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
     await act(async () => { fireEvent.click(button('Claude Code')) })
     expect(document.body.textContent).toContain('Copy failed')
@@ -362,12 +365,12 @@ it.each(['page', 'project', 'session', 'api', 'unmount'] as const)('discards a d
   apiMocks.createSession.mockReturnValueOnce(pending.promise)
   const view = renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  fireEvent.click(button('Send to agent'))
+  fireEvent.click(button('Create prompt handoff'))
   if (change === 'unmount') view.unmount()
   else {
     const overrides = change === 'page' ? { pageUrl: PAGE + '/new' } : change === 'project' ? { projectId: 'other' } : change === 'api' ? { apiBase: API + '/new' } : { widgetSession: { ...session, accessToken: 'new-token' } }
     view.rerender(<PremiumAgentBridge {...view.props} {...overrides} />)
-    await waitFor(() => expect(button('Send to agent').disabled).toBe(false))
+    await waitFor(() => expect(button('Create prompt handoff').disabled).toBe(false))
   }
   await act(async () => { pending.resolve({ slug: 'old-share', token: 'old-token' }); await pending.promise })
   expect(fetch).not.toHaveBeenCalled()
@@ -380,10 +383,10 @@ it.each(['resolve', 'reject'] as const)('discards %s of delayed prompts after na
   vi.mocked(fetch).mockImplementation(() => pending.promise.then((response) => response.clone()))
   const view = renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  fireEvent.click(button('Send to agent'))
+  fireEvent.click(button('Create prompt handoff'))
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(3))
   view.rerender(<PremiumAgentBridge {...view.props} pageUrl={PAGE + '/new'} />)
-  await waitFor(() => expect(button('Send to agent').disabled).toBe(false))
+  await waitFor(() => expect(button('Create prompt handoff').disabled).toBe(false))
   await act(async () => {
     if (outcome === 'reject') pending.reject(new WidgetRequestError(401))
     else pending.resolve(new Response(JSON.stringify({ prompt: 'OLD PROMPT' })))
@@ -400,7 +403,7 @@ it.each(['resolve', 'reject'] as const)('discards a delayed mutation %s after na
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
   fireEvent.click(button('Accept'))
   view.rerender(<PremiumAgentBridge {...view.props} pageUrl={PAGE + '/new'} />)
-  await waitFor(() => expect(button('Send to agent').disabled).toBe(false))
+  await waitFor(() => expect(button('Create prompt handoff').disabled).toBe(false))
   await act(async () => { outcome === 'resolve' ? pending.resolve({}) : pending.reject(new WidgetRequestError(401)) })
   expect(view.props.onFeedbackChanged).not.toHaveBeenCalled()
   expect(document.body.textContent).not.toContain('Log in to continue')
@@ -427,12 +430,12 @@ it('keeps the retry key through a background eligibility refresh, and changes it
   apiMocks.createSession.mockRejectedValue(new Error('temporary'))
   renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => { fireEvent.click(button('Create prompt handoff')) })
   await act(async () => { window.dispatchEvent(new Event('focus')) })
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => { fireEvent.click(button('Create prompt handoff')) })
   expect(apiMocks.createSession.mock.calls[1][1].idempotencyKey).toBe(apiMocks.createSession.mock.calls[0][1].idempotencyKey)
   fireEvent.click(checkbox('Polish the CTA'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => { fireEvent.click(button('Create prompt handoff')) })
   expect(apiMocks.createSession.mock.calls[2][1].idempotencyKey).not.toBe(apiMocks.createSession.mock.calls[0][1].idempotencyKey)
 })
 
@@ -440,12 +443,12 @@ it('keeps the retry key through a background eligibility refresh, and changes it
 it('creates a fresh key for an explicit new handoff with the same selection', async () => {
   renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => { fireEvent.click(button('Create prompt handoff')) })
   await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
   const first = apiMocks.createSession.mock.calls[0][1]
   await act(async () => { fireEvent.click(button('Start another handoff')) })
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => { fireEvent.click(button('Create prompt handoff')) })
   await waitFor(() => expect(apiMocks.createSession).toHaveBeenCalledTimes(2))
   const second = apiMocks.createSession.mock.calls[1][1]
   expect(second.commentIds).toEqual(first.commentIds)
@@ -463,7 +466,7 @@ it('keeps a completed handoff visible after an upgrade, focus, and polling inter
   apiMocks.eligibility.mockResolvedValue({ state: 'ready', comments })
   await act(async () => { window.dispatchEvent(new Event('focus')) })
   expect(document.body.textContent).toContain('Fix the headline')
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => { fireEvent.click(button('Create prompt handoff')) })
   expect(document.body.textContent).toContain('Handoff ready')
   const eligibilityCalls = apiMocks.eligibility.mock.calls.length
   await act(async () => {
@@ -480,9 +483,9 @@ it('keeps a completed handoff visible after an upgrade, focus, and polling inter
 it('discloses acceptance before handoff and retries prompt loading without another mutation',async()=>{
  vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'))
  const view=renderBridge()
- await waitFor(()=>expect(document.body.textContent).toContain('Sending accepts 1 open feedback item.'))
- expect(button('Accept & send to agent')).toBeEnabled()
- await act(async()=>{fireEvent.click(button('Accept & send to agent'))})
+ await waitFor(()=>expect(document.body.textContent).toContain('Creating a prompt handoff accepts 1 open feedback item.'))
+ expect(button('Create prompt handoff')).toBeEnabled()
+ await act(async()=>{fireEvent.click(button('Create prompt handoff'))})
  expect(document.body.textContent).toContain('Feedback is accepted and the handoff exists.')
  expect(view.props.onFeedbackChanged).toHaveBeenCalledOnce()
  await act(async()=>{fireEvent.click(button('Retry loading prompts'))})
@@ -495,5 +498,18 @@ it('discloses acceptance before handoff and retries prompt loading without anoth
 it('discloses the count when accepting multiple open items',async()=>{
  apiMocks.eligibility.mockResolvedValue({state:'ready',comments:comments.slice(0,2).map(c=>({...c,reviewStatus:'open',implementationStatus:'unassigned'}))})
  renderBridge()
- await waitFor(()=>expect(document.body.textContent).toContain('Sending accepts 2 open feedback items.'))
+ await waitFor(()=>expect(document.body.textContent).toContain('Creating a prompt handoff accepts 2 open feedback items.'))
+})
+
+it('sends a reviewed comment directly and refreshes project feedback without creating a prompt', async () => {
+  apiMocks.eligibility.mockResolvedValue({ state: 'ready', comments: [{ ...comments[0], updatedAt: now }] })
+  vi.mocked(fetchDelivery).mockResolvedValueOnce({ listeners: [{ listenerId: 'terminal', label: 'Codex', repoUrl: 'https://github.com/test/repo', online: true, stopped: false }], dispatches: [] })
+  vi.mocked(sendFeedback).mockResolvedValueOnce({ dispatchId: 'd', state: 'queued' })
+  const { props, getByRole } = renderBridge()
+  const send = await waitFor(() => { const item = getByRole('button', { name: 'SEND: Fix the headline' }); expect(item).toBeEnabled(); return item })
+  fireEvent.click(send)
+  await waitFor(() => expect(props.onFeedbackChanged).toHaveBeenCalled())
+  expect(sendFeedback).toHaveBeenCalledWith(API, session, expect.objectContaining({ listenerId: 'terminal', commentId: 'c1', expectedUpdatedAt: now }))
+  expect(apiMocks.createSession).not.toHaveBeenCalled()
+  expect(apiMocks.eligibility).toHaveBeenCalledTimes(2)
 })

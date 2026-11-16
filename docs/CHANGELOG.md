@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.26] - Unreleased
+
+### Added
+- Authorized project reviewers can SEND a single comment from the widget Agent dialog to an active MCP listener. Terminal selection, availability, delivery status, and retry-safe delivery keep the feedback attached to its reviewed revision.
+- MCP listener tools receive queued work through the existing claim/progress/completion protocol; completion remains ready for human testing. A connected agent must explicitly start listening; SEND does not wake closed terminals or authorize merge/deploy.
+
+### Changed
+- The manual copy-prompt path is labeled “Create prompt handoff” to distinguish it from direct delivery.
+
 ## [0.3.25] - Unreleased
 
 ### Added

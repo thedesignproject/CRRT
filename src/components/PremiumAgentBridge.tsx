@@ -1,3 +1,4 @@
+import { DirectAgentSend } from './DirectAgentSend'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { Bot, Check, Copy, RefreshCw, X } from 'lucide-react'
@@ -292,7 +293,7 @@ export function PremiumAgentBridge({
           <div style={{ width: 38, height: 38, borderRadius: 10, background: '#E8853D', color: '#080808', display: 'grid', placeItems: 'center', flexShrink: 0 }}><Bot size={20} aria-hidden="true" /></div>
           <div style={{ flex: 1 }}>
             <h2 id="fw-agent-title" style={{ margin: 0, fontSize: 18, color: 'var(--fw-foreground)' }}>Send feedback to agent</h2>
-            <p id="fw-agent-description" style={{ margin: '5px 0 0', fontSize: 13, lineHeight: 1.45, color: 'var(--fw-foreground-muted)' }}>Choose the work. CRRT creates one exact, private handoff without leaving this page.</p>
+            <p id="fw-agent-description" style={{ margin: '5px 0 0', fontSize: 13, lineHeight: 1.45, color: 'var(--fw-foreground-muted)' }}>Send a comment directly to a listening terminal, or prepare a prompt handoff.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close Agent Bridge" style={iconButtonStyle}><X size={17} aria-hidden="true" /></button>
         </header>
@@ -307,7 +308,7 @@ export function PremiumAgentBridge({
           {(view === 'forbidden' || view === 'project_access_denied') && <StateCard title="Agent is unavailable" body="Your current project role does not allow Agent access." error={message} />}
           {view === 'error' && <StateCard title="Agent could not load" body="Your selection is still here. Retry when you’re ready." actionLabel="Retry" action={() => { void refreshAccess(true) }} error={message} />}
 
-          {view === 'ready' && <>
+          {view === 'ready' && widgetSession && <DirectAgentSend apiBase={apiBase} projectId={projectId} pageUrl={pageUrl} session={widgetSession} onSent={() => { onFeedbackChanged?.(); void refreshAccess(true, true) }}>{direct => <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <strong style={{ color: 'var(--fw-foreground)', fontSize: 13 }}>{selectedIds.size} of {comments.filter(canSelect).length} selected</strong>
               <button type="button" onClick={() => setSelectedIds(new Set(comments.filter(canSelect).map((comment) => comment.id)))} style={textButtonStyle}>Select all</button>
@@ -328,7 +329,8 @@ export function PremiumAgentBridge({
                       </span>
                       <span style={statusStyle}>{statusLabel(comment)}</span>
                     </label>
-                    <div style={{ display: 'flex', gap: 6, margin: '9px 0 0 30px' }}>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '9px 0 0 30px' }}>
+                      {direct.action(comment)}
                       {comment.reviewStatus === 'open' && <><button type="button" disabled={busy} onClick={() => { void mutate([comment.id], 'accept') }} style={smallButtonStyle}>Accept</button><button type="button" disabled={busy} onClick={() => { void mutate([comment.id], 'reject') }} style={smallButtonStyle}>Reject</button></>}
                       {comment.reviewStatus === 'accepted' && comment.implementationStatus !== 'done' && <button type="button" disabled={busy} onClick={() => { void mutate([comment.id], 'resolve') }} style={smallButtonStyle}>Resolve</button>}
                     </div>
@@ -336,15 +338,15 @@ export function PremiumAgentBridge({
                 })}
               </div>
             )}
-            {openSelected.length > 0 && <p style={{fontSize:12,color:'var(--fw-foreground-muted)'}}>Sending accepts {openSelected.length} open feedback item{openSelected.length === 1 ? '' : 's'}. Copying the prompt never marks work done.</p>}
+            {openSelected.length > 0 && <p style={{fontSize:12,color:'var(--fw-foreground-muted)'}}>Creating a prompt handoff accepts {openSelected.length} open feedback item{openSelected.length === 1 ? '' : 's'}. Copying the prompt never marks work done.</p>}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginTop: 16 }}>
-              <button type="button" disabled={busy || selectedIds.size === 0} onClick={() => { void confirmHandoff() }} style={primaryButtonStyle}>{busy ? 'Creating handoff…' : openSelected.length ? 'Accept & send to agent' : 'Send to agent'}</button>
+              <button type="button" disabled={busy || selectedIds.size === 0} onClick={() => { void confirmHandoff() }} style={primaryButtonStyle}>{busy ? 'Creating handoff…' : 'Create prompt handoff'}</button>
               {openSelected.length > 0 && <button type="button" disabled={busy} onClick={() => { void mutate(openSelected.map((comment) => comment.id), 'accept') }} style={secondaryButtonStyle}>Accept selected</button>}
               {selected.length > 0 && <button type="button" disabled={busy} onClick={() => { void mutate(selected.map((comment) => comment.id), 'reject') }} style={secondaryButtonStyle}>Reject selected</button>}
               {resolvableSelected.length > 0 && <button type="button" disabled={busy} onClick={() => { void mutate(resolvableSelected.map((comment) => comment.id), 'resolve') }} style={secondaryButtonStyle}>Resolve selected</button>}
             </div>
             {message && <p role="alert" style={errorStyle}>{message}</p>}
-          </>}
+          </>}</DirectAgentSend>}
 
           {view === 'handoff' && share && <>
             <StateCard title="Handoff ready" body={`${selectedIds.size} feedback item${selectedIds.size === 1 ? '' : 's'} accepted and scoped to this Agent session.`} />

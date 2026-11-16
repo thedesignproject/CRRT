@@ -35,9 +35,9 @@ Verify owner/member/guest/public boundaries, changed retries, simultaneous sends
 - [x] Explore existing widget/MCP/schema and repository rules.
 - [x] Use approved behavior and resolve execution approach; no visual choice requires a separate mockup tool.
 - [x] Write and self-review this spec for scope, trust and failure behavior.
-- [ ] Implement and validate storage layer.
-- [ ] Implement and validate MCP/API layer.
-- [ ] Implement and validate widget layer.
+- [x] Implement and validate storage layer.
+- [x] Implement and validate MCP/API layer.
+- [x] Implement and validate widget layer.
 - [ ] Open and verify the PR stack.
 
 The optional writing-plans skill is not installed. The layer sequence and acceptance matrix above serve as the implementation plan. Existing user authorization covers proceeding with the agreed design.

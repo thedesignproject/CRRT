@@ -18,6 +18,7 @@ export type WidgetAgentAccessState =
   | 'ready'
 
 export interface WidgetAgentComment {
+  updatedAt?: string
   id: string
   pageUrl: string
   selector: string

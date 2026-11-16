@@ -4,6 +4,7 @@ import { billing, comments, fixedTime, project } from './data'
 
 export async function installNetwork(page: Page, state = '') {
   const unexpected: string[] = []
+  let sent = false
   await page.route('**/*', async route => {
     const url = new URL(route.request().url())
     // Marketing videos use their shipped posters in visual tests. Playback is
@@ -54,6 +55,10 @@ export async function installNetwork(page: Page, state = '') {
       if (state === 'error') return respond({ error: 'Agent is temporarily unavailable.' }, 503)
       const access = ['upgrade_required', 'owner_upgrade_required', 'seat_limit_reached', 'forbidden', 'project_access_denied'].includes(state) ? state : 'ready'
       return respond({ state: access, role: 'owner', comments: state === 'empty' ? [] : comments.map((comment, index) => ({ ...comment, reviewStatus: index === 0 ? 'open' : 'accepted', implementationStatus: index === 2 ? 'in_progress' : 'unassigned', claimedByAgentId: null, pageUrl: 'https://example.test/pricing' })) })
+    }
+    if (path === '/v1/widget/agent/dispatch') {
+      if (route.request().method() === 'POST') { sent = true; return respond({ dispatchId: 'visual-send', state: 'queued' }) }
+      return respond({ listeners: [{ listenerId: 'visual-terminal', label: 'Tomás · Codex', repoUrl: 'https://github.com/thedesignproject/CRRT', online: state !== 'offline', stopped: false }], dispatches: sent ? [{ dispatchId: 'visual-send', commentId: 'visual-1', listenerId: 'visual-terminal', state: 'queued', reason: null }] : [] })
     }
     if (path === '/v1/widget/agent/session') return state === 'handoff-error' ? respond({ error: 'Could not create the Agent handoff.' }, 503) : respond({ slug: 'visual-share', token: 'visual-token', commentCount: 2 })
     if (path === '/v1/widget/feedback') return respond({ error: 'Could not update feedback. Try again.' }, 503)

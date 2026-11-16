@@ -12,10 +12,10 @@ export const auditStates = ['running', 'completed-findings', 'failed']
 export const dashboardStates = ['feedback', 'empty-account', 'onboarding', 'detail', 'add-project', 'project-settings', 'inbox', 'billing', 'login', 'signup', 'forgot-password', 'reset-password', 'mcp-connections', 'mcp-consent', 'audit-new', 'agent-panel', 'super-admin']
 export const authHandoffStates = ['widget-auth-login', 'extension-auth-login']
 export const widgetStates = ['idle', 'launcher', 'selecting', 'composer-filled', 'screenshot-failed', 'sending', 'send-error', 'submitted', 'name-entry', 'private-login', 'sidebar', 'sidebar-empty', 'sidebar-edit', 'tracker-picker']
-export const widgetAgentStates = ['ready', 'handoff', 'upgrade_required', 'error']
+export const widgetAgentStates = ['ready', 'sent', 'offline', 'handoff', 'upgrade_required', 'error']
 export const extensionStates = ['disclosure', 'signed-out', 'signed-in', 'auth-error', 'ambiguous', 'restricted', 'local-expanded', 'import-error']
 export const addonStates = ['ready', 'authentication_required', 'offline_error']
-export const mobileScreens = ['public / home', 'dashboard / feedback', 'widget / sidebar']
+export const mobileScreens = ['widget-agent / ready', 'widget-agent / sent', 'public / home', 'dashboard / feedback', 'widget / sidebar']
 export const inventory = {
   public: [...publicScreens.map(s => s.id), ...auditStates.map(s => `audit-${s}`)],
   dashboard: [...dashboardStates, ...authHandoffStates, ...auditStates.map(s => `audit-${s}`)],
