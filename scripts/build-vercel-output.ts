@@ -10,6 +10,7 @@ import { buildPublicFunction } from './build-public-function.js'
 import { verifyVercelOutput } from './verify-vercel-output.mjs'
 import { apiBuilderPackage } from './vercel-api-package.mjs'
 import { PRODUCT_AUDIT_WORKFLOW_ID } from '../workflows/product-audit-id.js'
+import { RECORD_WORKER_WORKFLOW_ID } from '../workflows/record-worker-id.js'
 
 const exec = promisify(execFile)
 const root = resolve(import.meta.dirname, '..')
@@ -130,6 +131,14 @@ const workflowIds = Object.values(manifest.workflows || {})
 if (!workflowIds.includes(PRODUCT_AUDIT_WORKFLOW_ID)) {
   throw new Error(`Product Audit workflow registration mismatch: expected ${PRODUCT_AUDIT_WORKFLOW_ID}`)
 }
+if (!workflowIds.includes(RECORD_WORKER_WORKFLOW_ID)) throw new Error('Recording worker workflow registration missing')
+// The step launches this standalone Node bundle inside Sandbox. Ship it only
+// with the step function; normal API functions never need FFmpeg or media bytes.
+const workerBuild = await Bun.build({
+  entrypoints: [join(root, 'scripts/record-worker.ts')], target: 'node', format: 'esm',
+})
+if (!workerBuild.success) throw new Error('Recording worker bundle failed')
+await writeFile(join(output, 'functions/.well-known/workflow/v1/step.func/record-worker.mjs'), await workerBuild.outputs[0].text())
 await rm(join(output, 'static'), { recursive: true, force: true })
 await cp(join(root, 'apps/landing/dist'), join(output, 'static'), { recursive: true })
 await buildApiFunction()
