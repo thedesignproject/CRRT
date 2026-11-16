@@ -5,7 +5,11 @@ Vercel Cron calls `/api/v1/internal/record-worker` every minute. The authenticat
 handler sweeps expired recordings and starts a Workflow only when work is waiting
 and no job has a live lease. The Workflow launches the bundled existing worker in
 a Vercel Sandbox with FFmpeg, polls its detached command, and stops the VM when
-the command finishes. The VM has a hard 30-minute timeout and no persistent
+the command finishes. A one-shot worker also atomically writes a completion
+marker after all stage calls finish, then explicitly exits. The Workflow checks
+that marker before command status so a lingering process or stale command status
+cannot retain the worker slot after completed work. Failures before completion
+do not publish a marker. The VM has a hard 30-minute timeout and no persistent
 snapshot. Database leases, heartbeats, retries, and cleanup remain authoritative.
 
 The existing GitHub production deployment builds and ships both the Workflow

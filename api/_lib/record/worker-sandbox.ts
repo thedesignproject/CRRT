@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Sandbox } from '@vercel/sandbox'
+import { WORKER_COMPLETION_CONTENT, WORKER_COMPLETION_FILE } from '../../../shared/record/worker-completion.js'
 
 export type WorkerSession = { name: string; commandId: string }
 
@@ -40,6 +41,7 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
     const value = process.env[key]
     if (value !== undefined) env[key] = value
   }
+  env.CRRT_RECORD_WORKER_COMPLETION_FILE = WORKER_COMPLETION_FILE
   const sandbox = await Sandbox.create({
     name: `${prefix}${Math.floor(Date.now() / 60_000)}`,
     image: 'vercel/sandbox/node:22', persistent: false,
@@ -62,6 +64,11 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
 
 export async function recordWorkerStatus(session: WorkerSession) {
   const sandbox = await Sandbox.get({ name: session.name })
+  const completion = await sandbox.readFileToBuffer({ path: WORKER_COMPLETION_FILE })
+  if (completion !== null) {
+    if (completion.toString('utf8') !== WORKER_COMPLETION_CONTENT) throw new Error('record_worker_completion_invalid')
+    return 0
+  }
   const command = await sandbox.getCommand(session.commandId)
   return command.exitCode
 }

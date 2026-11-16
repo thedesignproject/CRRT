@@ -6,8 +6,9 @@ vi.mock('@vercel/sandbox', () => ({ Sandbox: { create: vi.fn(), get: vi.fn(), li
 import { readFile } from 'node:fs/promises'
 import { Sandbox } from '@vercel/sandbox'
 import { launchRecordWorker, recordWorkerStatus, stopRecordWorker } from './worker-sandbox.js'
+import { WORKER_COMPLETION_CONTENT, WORKER_COMPLETION_FILE } from '../../../shared/record/worker-completion.js'
 
-const vm = { name: 'worker-vm', writeFiles: vi.fn(), runCommand: vi.fn(), getCommand: vi.fn(), stop: vi.fn() }
+const vm = { name: 'worker-vm', writeFiles: vi.fn(), runCommand: vi.fn(), getCommand: vi.fn(), readFileToBuffer: vi.fn(), stop: vi.fn() }
 const session = { name: 'worker-vm', commandId: 'command-1' }
 function sessions(values: { status: string; createdAt?: number }[]) {
   vi.mocked(Sandbox.list).mockResolvedValue({ async *[Symbol.asyncIterator]() {
@@ -27,6 +28,7 @@ beforeEach(() => {
   vi.mocked(Sandbox.get).mockResolvedValue(vm as never)
   vm.runCommand.mockResolvedValue({ cmdId: 'command-1' })
   vm.getCommand.mockResolvedValue({ exitCode: null })
+  vm.readFileToBuffer.mockResolvedValue(null)
   sessions([])
 })
 afterEach(() => vi.unstubAllEnvs())
@@ -45,6 +47,7 @@ it('launches the packaged worker with only its environment and a hard VM deadlin
   expect(command.args[1]).toContain('exec node record-worker.mjs --once')
   expect(command.env).not.toHaveProperty('VERCEL_OIDC_TOKEN')
   expect(command.env).not.toHaveProperty('UNRELATED_SECRET')
+  expect(command.env.CRRT_RECORD_WORKER_COMPLETION_FILE).toBe(WORKER_COMPLETION_FILE)
   expect(vm.stop).not.toHaveBeenCalled()
 })
 
@@ -98,4 +101,27 @@ it('polls detached command status and stops the selected VM', async () => {
   expect(vm.getCommand).toHaveBeenCalledWith('command-1')
   await stopRecordWorker(session)
   expect(vm.stop).toHaveBeenCalledOnce()
+})
+
+it('recognizes completed work even when detached command status still reports running', async () => {
+  vm.readFileToBuffer.mockResolvedValue(Buffer.from(WORKER_COMPLETION_CONTENT))
+  expect(await recordWorkerStatus(session)).toBe(0)
+  expect(vm.readFileToBuffer).toHaveBeenCalledWith({ path: WORKER_COMPLETION_FILE })
+  expect(vm.getCommand).not.toHaveBeenCalled()
+  await stopRecordWorker(session)
+  expect(vm.stop).toHaveBeenCalledOnce()
+  // A subsequent dispatch can take the released slot.
+  sessions([{ status: 'stopped' }])
+  expect(await launchRecordWorker()).toEqual(session)
+})
+
+it('rejects an invalid completion marker instead of declaring success', async () => {
+  vm.readFileToBuffer.mockResolvedValue(Buffer.from('incomplete'))
+  await expect(recordWorkerStatus(session)).rejects.toThrow('record_worker_completion_invalid')
+  expect(vm.getCommand).not.toHaveBeenCalled()
+})
+
+it('propagates completion inspection failures instead of declaring success', async () => {
+  vm.readFileToBuffer.mockRejectedValue(new Error('read-failed'))
+  await expect(recordWorkerStatus(session)).rejects.toThrow('read-failed')
 })
