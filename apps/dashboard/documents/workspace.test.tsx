@@ -442,7 +442,7 @@ it('renders the published body with the widget and sends feedback on its actual 
   paragraph.getBoundingClientRect=()=>({left:100,top:200,width:400,height:100} as DOMRect)
   Object.defineProperty(range,'getClientRects',{value:()=>[{left:120,top:220,width:80,height:20}]})
   Object.defineProperty(range,'getBoundingClientRect',{value:()=>({left:120,top:220,width:80,height:20})})
-  window.getSelection()!.removeAllRanges();window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph)
+  window.getSelection()!.removeAllRanges();fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph);fireEvent.click(paragraph)
   fireEvent.change(screen.getByLabelText('Leave feedback'),{target:{value:'A note on the published passage'}});fireEvent.click(screen.getByRole('button',{name:'Add feedback'}))
   await waitFor(()=>expect(request).toHaveBeenCalledWith('/api','s',expect.objectContaining({action:'comment',quote:'Original',revision:1,target:expect.objectContaining({selector:'.document-prose > p:nth-of-type(1)',elementX:.15,elementY:.3})})))
   window.getSelection()!.removeAllRanges()
@@ -466,7 +466,7 @@ function selectPublication(element:Element,end=element.textContent!.length){
   element.getBoundingClientRect=()=>({left:100,top:200,width:400,height:100} as DOMRect)
   const range=document.createRange();range.setStart(element.firstChild!,0);range.setEnd(element.firstChild!,end)
   Object.defineProperty(range,'getClientRects',{value:()=>[{left:120,top:220,width:80,height:20}]});Object.defineProperty(range,'getBoundingClientRect',{value:()=>({left:120,top:220,width:80,height:20})})
-  window.getSelection()!.removeAllRanges();window.getSelection()!.addRange(range);fireEvent.mouseUp(element)
+  window.getSelection()!.removeAllRanges();fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(element);fireEvent.click(element)
 }
 it('freezes the quoted passage and pin target while retrying an uncertain feedback submission',async()=>{
   memory([{...initial,publishedRevision:1}]);workspace();fireEvent.click(await screen.findByText('Proposal'));await screen.findByLabelText('Markdown');fireEvent.click(screen.getByText('Feedback'));await waitForPublication()
