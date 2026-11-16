@@ -493,7 +493,7 @@ export function DocumentWorkspace({
                   revision={document.publishedRevision ?? 0}
                   source={publishedBody ?? ''}
                   onQuote={(quote) => {
-                    if (!feedback.hasPending()) setSelection({ ...quote, revision: document.publishedRevision! })
+                    setSelection({ ...quote, revision: document.publishedRevision! })
                   }}
                   selection={selection}
                   onClearSelection={() => setSelection(emptySelection)}
