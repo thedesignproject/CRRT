@@ -38,3 +38,15 @@ it('adds documents without changing the existing dashboard permission schema', (
   expect(migration).not.toContain('ALTER TABLE "mcp_')
   expect(migration).not.toContain('crrt:documents:')
 })
+
+it('ships service-only explicit SEND storage and the live dispatched-work fence', async () => {
+  const { agentDispatchSql, agentDispatchWorkSql } = await import('./schema')
+  const migration = readFileSync('db/migrations/0053_agent_dispatch.sql', 'utf8')
+  expect(migration).toContain(agentDispatchSql.trim())
+  expect(migration).toContain(agentDispatchWorkSql.trim())
+  expect(migration).toContain('ALTER TABLE "agent_listeners" ENABLE ROW LEVEL SECURITY')
+  expect(migration).toContain('ALTER TABLE "agent_dispatches" ENABLE ROW LEVEL SECURITY')
+  expect(migration).not.toMatch(/CREATE POLICY/)
+  expect(migration).not.toMatch(/DROP (TABLE|COLUMN)/)
+  expect(agentDispatchWorkSql).toContain('public.agent_dispatch_guard(p_actor,p_connection,p_work,p_op)')
+})

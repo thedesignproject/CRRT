@@ -4496,3 +4496,226 @@ CREATE TRIGGER document_revision_immutable BEFORE UPDATE OR DELETE ON public.doc
 NOTIFY pgrst, 'reload schema';
 `;
 
+
+// Explicit widget SEND delivery. No browser or anonymous role can access this queue.
+export const agentListeners = pgTable('agent_listeners', {
+  id: uuid('id').primaryKey(),
+  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
+  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  label: text('label').notNull(),
+  repoUrl: text('repo_url').notNull(),
+  senderIds: uuid('sender_ids').array().notNull(),
+  stopped: boolean('stopped').notNull().default(false),
+  heartbeatAt: timestamp('heartbeat_at', { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, t => ({
+  project: index('agent_listeners_project').on(t.projectKey),
+  connection: index('agent_listeners_connection').on(t.connectionId),
+  shape: check('agent_listeners_shape', sql`length(${t.label}) between 1 and 80 and length(${t.repoUrl}) between 1 and 500 and cardinality(${t.senderIds}) between 1 and 50`),
+})).enableRLS()
+
+export const agentDispatches = pgTable('agent_dispatches', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  listenerId: uuid('listener_id').notNull().references(() => agentListeners.id, { onDelete: 'cascade' }),
+  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+  commentId: uuid('comment_id').notNull().references(() => comments.id, { onDelete: 'cascade' }),
+  senderId: uuid('sender_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+  requestKey: uuid('request_key').notNull(),
+  requestHash: text('request_hash').notNull(),
+  contentHash: text('content_hash').notNull(),
+  state: text('state').notNull().default('queued'),
+  workId: uuid('work_id').references(() => feedbackShares.id, { onDelete: 'cascade' }),
+  reason: text('reason'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  receivedAt: timestamp('received_at', { withTimezone: true }),
+}, t => ({
+  retry: uniqueIndex('agent_dispatches_retry').on(t.senderId, t.requestKey),
+  active: uniqueIndex('agent_dispatches_active_comment').on(t.commentId).where(sql`${t.state} in ('queued','received')`),
+  work: uniqueIndex('agent_dispatches_work').on(t.workId),
+  queue: index('agent_dispatches_queue').on(t.listenerId, t.createdAt),
+  shape: check('agent_dispatches_shape', sql`${t.state} in ('queued','received','completed','cancelled') and (${t.state} <> 'received' or ${t.workId} is not null)`),
+})).enableRLS()
+
+export const agentDispatchSql = `
+GRANT ALL ON public.agent_listeners, public.agent_dispatches TO service_role;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_comment_fingerprint(c public.comments) RETURNS text
+LANGUAGE sql IMMUTABLE SET search_path='' AS $$
+  SELECT md5(jsonb_build_array(c.project_id,c.comment,c.url,c.element,c.x,c.y,c.target_type,c.anchor,c.image_url,c.screenshot_storage_path,c.visibility)::text)
+$$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_listener_access(l public.agent_listeners) RETURNS void
+LANGUAGE plpgsql SET search_path='' AS $$
+BEGIN
+  PERFORM public.lock_feedback_actor(l.project_key,l.user_id,'agent:operate');
+  PERFORM public.mcp_require_connection(l.connection_id,l.user_id,'crrt:implement');
+  PERFORM public.cloud_validate_write(public.cloud_owner(l.project_key));
+  PERFORM 1 FROM public.project_repo_configs WHERE project_key=l.project_key AND repo_url=l.repo_url FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'repository_changed'; END IF;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_listener_register(p_actor uuid,p_connection uuid,p_id uuid,p_project text,p_label text,p_repo text,p_senders uuid[])
+RETURNS jsonb LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE l public.agent_listeners; member uuid; role text;
+BEGIN
+  role:=public.lock_feedback_actor(p_project,p_actor,'agent:operate');
+  PERFORM public.mcp_require_connection(p_connection,p_actor,'crrt:implement');
+  PERFORM public.cloud_validate_write(public.cloud_owner(p_project));
+  PERFORM 1 FROM public.project_repo_configs WHERE project_key=p_project AND repo_url=p_repo AND repo_url IS NOT NULL FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'repository_mismatch'; END IF;
+  IF cardinality(p_senders) IS NULL OR cardinality(p_senders)<1 OR cardinality(p_senders)>50 OR NOT p_actor=ANY(p_senders) THEN RAISE EXCEPTION 'invalid_senders'; END IF;
+  FOREACH member IN ARRAY p_senders LOOP
+    IF member<>p_actor AND role<>'admin' THEN RAISE EXCEPTION 'forbidden'; END IF;
+    PERFORM public.lock_feedback_actor(p_project,member,'agent:operate');
+  END LOOP;
+  PERFORM pg_advisory_xact_lock(hashtextextended('listener:'||p_connection::text,0));
+  SELECT * INTO l FROM public.agent_listeners WHERE id=p_id FOR UPDATE;
+  IF FOUND THEN
+    IF l.connection_id<>p_connection OR l.project_key<>p_project OR l.user_id<>p_actor OR l.repo_url<>p_repo THEN RAISE EXCEPTION 'listener_conflict'; END IF;
+    UPDATE public.agent_listeners SET label=p_label,sender_ids=p_senders,stopped=false,heartbeat_at=clock_timestamp() WHERE id=p_id RETURNING * INTO l;
+  ELSE
+    IF (SELECT count(*) FROM public.agent_listeners WHERE connection_id=p_connection AND NOT stopped)>=8 THEN RAISE EXCEPTION 'listener_limit'; END IF;
+    INSERT INTO public.agent_listeners(id,connection_id,project_key,user_id,label,repo_url,sender_ids)
+      VALUES(p_id,p_connection,p_project,p_actor,p_label,p_repo,p_senders) RETURNING * INTO l;
+  END IF;
+  RETURN jsonb_build_object('listenerId',l.id,'projectId',l.project_key,'label',l.label,'repoUrl',l.repo_url);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_dispatch_send(p_actor uuid,p_project text,p_page text,p_listener uuid,p_comment uuid,p_expected timestamptz,p_key uuid)
+RETURNS jsonb LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE l public.agent_listeners; c public.comments; d public.agent_dispatches; fingerprint text;
+BEGIN
+  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');
+  PERFORM public.cloud_validate_write(public.cloud_owner(p_project));
+  PERFORM pg_advisory_xact_lock(hashtextextended('send:'||p_actor::text||':'||p_key::text,0));
+  SELECT * INTO l FROM public.agent_listeners WHERE id=p_listener AND project_key=p_project FOR UPDATE;
+  IF NOT FOUND OR NOT p_actor=ANY(l.sender_ids) THEN RAISE EXCEPTION 'forbidden'; END IF;
+  PERFORM public.agent_listener_access(l);
+  fingerprint:=md5(jsonb_build_array(p_project,p_page,p_listener,p_comment,p_expected)::text);
+  SELECT * INTO d FROM public.agent_dispatches WHERE sender_id=p_actor AND request_key=p_key;
+  IF FOUND THEN
+    IF d.request_hash<>fingerprint THEN RAISE EXCEPTION 'idempotency_conflict'; END IF;
+    RETURN jsonb_build_object('dispatchId',d.id,'state',d.state);
+  END IF;
+  IF l.stopped OR l.heartbeat_at<clock_timestamp()-interval '60 seconds' THEN RAISE EXCEPTION 'listener_offline'; END IF;
+  SELECT * INTO c FROM public.comments WHERE id=p_comment AND project_id=p_project AND url=p_page FOR UPDATE;
+  IF NOT FOUND OR c.updated_at IS DISTINCT FROM p_expected THEN RAISE EXCEPTION 'feedback_changed'; END IF;
+  IF c.status NOT IN ('pending','approved') OR coalesce(c.implementation_status,'unassigned')<>'unassigned' OR c.claimed_by_agent_id IS NOT NULL THEN RAISE EXCEPTION 'feedback_not_eligible'; END IF;
+  IF EXISTS(SELECT 1 FROM public.agent_dispatches WHERE comment_id=c.id AND state IN ('queued','received')) THEN RAISE EXCEPTION 'already_sent'; END IF;
+  -- SEND is the authenticated human review decision, never model inference.
+  PERFORM public.mutate_actor_feedback(p_project,p_actor,p_comment,jsonb_build_object('status','approved'));
+  INSERT INTO public.agent_dispatches(listener_id,project_key,comment_id,sender_id,request_key,request_hash,content_hash)
+    VALUES(l.id,p_project,c.id,p_actor,p_key,fingerprint,public.agent_comment_fingerprint(c)) RETURNING * INTO d;
+  RETURN jsonb_build_object('dispatchId',d.id,'state',d.state);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_dispatch_validate(d public.agent_dispatches,l public.agent_listeners) RETURNS void
+LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE c public.comments;
+BEGIN
+  PERFORM public.agent_listener_access(l);
+  PERFORM public.lock_feedback_actor(d.project_key,d.sender_id,'feedback:manage');
+  IF NOT d.sender_id=ANY(l.sender_ids) THEN RAISE EXCEPTION 'sender_removed'; END IF;
+  IF l.stopped OR d.state='cancelled' THEN RAISE EXCEPTION 'listener_stopped'; END IF;
+  SELECT * INTO c FROM public.comments WHERE id=d.comment_id AND project_id=d.project_key FOR UPDATE;
+  IF NOT FOUND OR c.status<>'approved' OR public.agent_comment_fingerprint(c)<>d.content_hash THEN RAISE EXCEPTION 'feedback_changed'; END IF;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_listener_poll(p_actor uuid,p_connection uuid,p_id uuid,p_share jsonb)
+RETURNS jsonb LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE l public.agent_listeners; d public.agent_dispatches; work uuid; failure text;
+BEGIN
+  SELECT * INTO l FROM public.agent_listeners WHERE id=p_id AND user_id=p_actor AND connection_id=p_connection;
+  IF NOT FOUND THEN RAISE EXCEPTION 'listener_not_found'; END IF;
+  PERFORM public.agent_listener_access(l);
+  SELECT * INTO l FROM public.agent_listeners WHERE id=p_id FOR UPDATE;
+  IF l.stopped THEN RAISE EXCEPTION 'listener_stopped'; END IF;
+  UPDATE public.agent_listeners SET heartbeat_at=clock_timestamp() WHERE id=l.id;
+  -- A received work is replayed until finished, including after lost HTTP responses.
+  SELECT * INTO d FROM public.agent_dispatches WHERE listener_id=l.id AND state IN ('received','queued')
+    ORDER BY (state='received') DESC,created_at,id LIMIT 1;
+  IF NOT FOUND THEN RETURN jsonb_build_object('state','waiting'); END IF;
+  BEGIN
+    PERFORM public.agent_dispatch_validate(d,l);
+  EXCEPTION WHEN raise_exception THEN
+    GET STACKED DIAGNOSTICS failure=MESSAGE_TEXT;
+    UPDATE public.agent_dispatches SET state='cancelled',reason=failure WHERE id=d.id;
+    RETURN jsonb_build_object('state','cancelled','dispatchId',d.id,'reason',failure);
+  END;
+  IF d.work_id IS NULL THEN
+    work:=public.mcp_prepare_work(p_connection,p_actor,l.project_key,ARRAY[d.comment_id],d.id::text,
+      encode(sha256(convert_to(d.id::text,'UTF8')),'hex'),p_share);
+    UPDATE public.agent_dispatches SET work_id=work,state='received',received_at=clock_timestamp() WHERE id=d.id RETURNING * INTO d;
+  END IF;
+  RETURN jsonb_build_object('state','received','dispatchId',d.id,'workId',d.work_id,'projectId',d.project_key,'feedbackId',d.comment_id,'repoUrl',l.repo_url);
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_listener_stop(p_actor uuid,p_connection uuid,p_id uuid) RETURNS void
+LANGUAGE plpgsql SET search_path='' AS $$
+BEGIN
+  PERFORM public.mcp_require_connection(p_connection,p_actor,'crrt:implement');
+  UPDATE public.agent_listeners SET stopped=true WHERE id=p_id AND user_id=p_actor AND connection_id=p_connection;
+  IF NOT FOUND THEN RAISE EXCEPTION 'listener_not_found'; END IF;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_dispatch_guard(p_actor uuid,p_connection uuid,p_work uuid,p_op text) RETURNS void
+LANGUAGE plpgsql SET search_path='' AS $$
+DECLARE l public.agent_listeners; d public.agent_dispatches;
+BEGIN
+  SELECT * INTO d FROM public.agent_dispatches WHERE work_id=p_work;
+  IF NOT FOUND THEN RETURN; END IF;
+  SELECT * INTO l FROM public.agent_listeners WHERE id=d.listener_id FOR UPDATE;
+  IF l.user_id<>p_actor OR l.connection_id<>p_connection THEN RAISE EXCEPTION 'forbidden'; END IF;
+  IF d.state='completed' AND p_op<>'complete' THEN RAISE EXCEPTION 'dispatch_completed'; END IF;
+  PERFORM public.agent_dispatch_validate(d,l);
+  UPDATE public.agent_listeners SET heartbeat_at=clock_timestamp() WHERE id=l.id;
+END $$;
+--> statement-breakpoint
+CREATE FUNCTION public.agent_dispatch_progress() RETURNS trigger
+LANGUAGE plpgsql SET search_path='' AS $$
+BEGIN
+  IF NEW.implementation_status IN ('ready_for_testing','done') THEN
+    UPDATE public.agent_dispatches SET state='completed' WHERE comment_id=NEW.id AND state='received';
+  ELSIF NEW.status IS DISTINCT FROM 'approved' THEN
+    UPDATE public.agent_dispatches SET state='cancelled',reason='review_changed' WHERE comment_id=NEW.id AND state IN ('queued','received');
+  END IF;
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER agent_dispatch_progress AFTER UPDATE OF status,implementation_status ON public.comments
+  FOR EACH ROW EXECUTE FUNCTION public.agent_dispatch_progress();
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.agent_comment_fingerprint(public.comments), public.agent_listener_access(public.agent_listeners), public.agent_listener_register(uuid,uuid,uuid,text,text,text,uuid[]), public.agent_dispatch_send(uuid,text,text,uuid,uuid,timestamptz,uuid), public.agent_dispatch_validate(public.agent_dispatches,public.agent_listeners), public.agent_listener_poll(uuid,uuid,uuid,jsonb), public.agent_listener_stop(uuid,uuid,uuid), public.agent_dispatch_guard(uuid,uuid,uuid,text), public.agent_dispatch_progress() FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.agent_comment_fingerprint(public.comments), public.agent_listener_access(public.agent_listeners), public.agent_listener_register(uuid,uuid,uuid,text,text,text,uuid[]), public.agent_dispatch_send(uuid,text,text,uuid,uuid,timestamptz,uuid), public.agent_dispatch_validate(public.agent_dispatches,public.agent_listeners), public.agent_listener_poll(uuid,uuid,uuid,jsonb), public.agent_listener_stop(uuid,uuid,uuid), public.agent_dispatch_guard(uuid,uuid,uuid,text), public.agent_dispatch_progress() TO service_role;
+`
+
+// Preserve the established work protocol; dispatched work receives one additional
+// live authorization/content fence before any existing claim/progress operation.
+export const agentDispatchWorkSql = mcpWorkflowSql
+  .slice(mcpWorkflowSql.indexOf('CREATE FUNCTION public.mcp_work_operation'), mcpWorkflowSql.indexOf('CREATE FUNCTION public.mcp_set_feedback_status'))
+  .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+  .replace('  PERFORM public.lock_agent_share(item.id,item.access_token_hash);',
+    '  PERFORM public.agent_dispatch_guard(p_actor,p_connection,p_work,p_op);\n  PERFORM public.lock_agent_share(item.id,item.access_token_hash);')
+
+// Recheck the human account as well as project membership on delivery/progress.
+export const agentDispatchAuthorizationSql = `
+CREATE FUNCTION public.agent_dispatch_actor(p_project text,p_actor uuid,p_capability text)
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$
+DECLARE role text;
+BEGIN
+  role:=public.lock_feedback_actor(p_project,p_actor,p_capability);
+  PERFORM 1 FROM auth.users WHERE id=p_actor AND deleted_at IS NULL AND (banned_until IS NULL OR banned_until<now()) FOR SHARE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'forbidden'; END IF;
+  RETURN role;
+END $$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION public.agent_dispatch_actor(text,uuid,text) FROM PUBLIC,anon,authenticated;
+--> statement-breakpoint
+GRANT EXECUTE ON FUNCTION public.agent_dispatch_actor(text,uuid,text) TO service_role;
+--> statement-breakpoint
+` + agentDispatchSql.split('--> statement-breakpoint')
+  .filter(statement => /CREATE FUNCTION public\.(agent_listener_access|agent_listener_register|agent_dispatch_send|agent_dispatch_validate)\(/.test(statement))
+  .map(statement => statement.replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION').replaceAll('public.lock_feedback_actor(', 'public.agent_dispatch_actor('))
+  .join('\n--> statement-breakpoint\n')
