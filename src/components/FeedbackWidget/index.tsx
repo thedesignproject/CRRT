@@ -1173,13 +1173,17 @@ function FeedbackWidgetInner({
     }
     recompute()
     let pending = false
+    let timeout: number | undefined
     const obs = new MutationObserver(() => {
       if (pending) return
       pending = true
-      window.setTimeout(() => { pending = false; recompute() }, 250)
+      timeout = window.setTimeout(() => { pending = false; recompute() }, 250)
     })
     obs.observe(document.body, { childList: true, subtree: true, attributes: true })
-    return () => obs.disconnect()
+    return () => {
+      obs.disconnect()
+      window.clearTimeout(timeout)
+    }
   }, [filteredComments, page?.liveIds])
   const commentCount = filteredComments.length
 

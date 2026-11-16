@@ -1,25 +1,9 @@
 name: Resource page quality
 
 on:
-  pull_request:
-    paths:
-      - 'apps/landing/**'
-      - 'branding/**'
-      - 'src/**'
-      - 'shared/**'
-      - 'scripts/**'
-      - '*'
-      - '.github/workflows/resources-quality.yml'
-  push:
-    branches: [trunk]
-    paths:
-      - 'apps/landing/**'
-      - 'branding/**'
-      - 'src/**'
-      - 'shared/**'
-      - 'scripts/**'
-      - '*'
-      - '.github/workflows/resources-quality.yml'
+  schedule:
+    # Monday at 03:17 UTC (08:47 IST), away from the busy top of the hour.
+    - cron: '17 3 * * 1'
   workflow_dispatch:
 
 permissions:
@@ -30,45 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  affected:
-    name: Lighthouse · affected pages
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    outputs:
-      run: ${{ steps.select.outputs.run }}
-      shards: ${{ steps.select.outputs.shards }}
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-node@v7
-        with:
-          node-version-file: .nvmrc
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.4.4
-      - run: bun install --frozen-lockfile
-      - name: Select affected resource URLs (full audit on uncertainty)
-        id: select
-        env:
-          LIGHTHOUSE_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          LIGHTHOUSE_FULL: ${{ github.event_name == 'workflow_dispatch' }}
-        run: node scripts/lighthouse-affected.mjs
-
   lighthouse:
-    name: lighthouse (${{ matrix.profile }}, shard ${{ matrix.shard.number }}/${{ matrix.shard.total }})
-    needs: affected
-    # A failed selector must not silently suppress the audit. Empty paths then
-    # use audit:resources' existing full-page default.
-    if: ${{ always() && !cancelled() && (needs.affected.result != 'success' || needs.affected.outputs.run == 'true') }}
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    name: lighthouse (${{ matrix.profile }})
+    # Scheduled runs use the default branch; manual runs must select trunk too.
+    if: github.ref == 'refs/heads/trunk'
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         profile: [mobile, desktop]
-        shard: ${{ fromJSON(needs.affected.result == 'success' && needs.affected.outputs.shards || '[{"number":1,"total":1,"paths":""}]') }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -83,19 +38,15 @@ jobs:
       - name: Verify crawlable HTML, Markdown, metadata, and routing
         run: bun run test -- scripts/public-pages.test.ts
       - run: bun run build:landing
-      - name: Audit affected resource pages (median of three runs)
+      - name: Audit all resource pages (median of three runs)
         env:
           LIGHTHOUSE_PROFILE: ${{ matrix.profile }}
-          LIGHTHOUSE_PATHS: ${{ needs.affected.result == 'success' && matrix.shard.paths || '' }}
-        run: |
-          args=(--profile="$LIGHTHOUSE_PROFILE" --runs=3)
-          if [[ -n "$LIGHTHOUSE_PATHS" ]]; then args+=(--paths="$LIGHTHOUSE_PATHS"); fi
-          bun run audit:resources "${args[@]}"
+        run: bun run audit:resources --profile="$LIGHTHOUSE_PROFILE" --runs=3
       - name: Save Lighthouse reports as workflow artifacts
         if: always()
         uses: actions/upload-artifact@v7.0.2
         with:
-          name: resources-lighthouse-${{ matrix.profile }}-shard-${{ matrix.shard.number }}
+          name: resources-lighthouse-${{ matrix.profile }}
           path: artifacts/lighthouse/${{ matrix.profile }}/
           if-no-files-found: warn
           retention-days: 14
