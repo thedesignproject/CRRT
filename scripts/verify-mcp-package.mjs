@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module'
 import { pathToFileURL } from 'node:url'
 import { randomBytes, createHash, randomUUID } from 'node:crypto'
+import { deepStrictEqual } from 'node:assert'
 const root = process.cwd(), require = createRequire(`${root}/package.json`)
 const { createClient } = require('@supabase/supabase-js')
 const { Client, StreamableHTTPClientTransport } = await import(pathToFileURL(require.resolve('@modelcontextprotocol/client')))
@@ -46,7 +47,21 @@ try {
   const tokens=await post('token',{client_id:clientId,redirect_uri:'http://127.0.0.1:8765/callback',grant_type:'authorization_code',code:new URL(consent.redirectUrl).searchParams.get('code'),code_verifier:verifier,resource})
   client=new Client({name:'packaged-verifier',version:'1'})
   await client.connect(new StreamableHTTPClientTransport(new URL(resource),{fetch:invoke,requestInit:{headers:{authorization:`Bearer ${tokens.access_token}`}}}))
-  const tools=await client.listTools(); if(tools.tools.length!==13)throw new Error(`Unexpected tool count ${tools.tools.length}`)
+  const tools=await client.listTools()
+  const expectedTools = [
+    'list_projects', 'list_feedback', 'get_feedback', 'get_handoff_context',
+    'prepare_feedback_work', 'report_agent_presence', 'update_feedback_progress', 'set_feedback_status',
+    'connection_status', 'request_dashboard_access', 'list_dashboard_operations',
+    'run_dashboard_operation', 'manage_mcp_connections',
+    'list_documents', 'get_document', 'get_document_history', 'get_document_revision',
+    'compare_document_revisions', 'create_document', 'update_document', 'publish_document',
+    'restore_document_revision', 'assign_document_project', 'set_document_invitation',
+    'set_document_sharing', 'archive_document', 'delete_document', 'add_document_comment',
+    'review_document_feedback', 'update_document_feedback_progress', 'unlock_document',
+  ]
+  deepStrictEqual(tools.tools.map(tool=>tool.name).sort(), expectedTools.sort(), 'Packaged MCP tool discovery changed')
+  const documents=await client.callTool({name:'list_documents',arguments:{}})
+  if(documents.isError || !Array.isArray(documents.structuredContent?.documents))throw new Error('Packaged document discovery failed')
   const result=await client.callTool({name:'run_dashboard_operation',arguments:{operation:'notifications.read_all',userRequested:true,idempotencyKey:randomUUID()}})
   if(result.isError || result.structuredContent?.ok!==true)throw new Error(`Packaged write failed ${JSON.stringify(result)}`)
   // Exercise cached recovery in the packaged module graph, including domain

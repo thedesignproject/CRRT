@@ -41,6 +41,10 @@ import { McpAuthPage } from './components/McpAuthPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 import { RecordingSharePage } from './components/RecordingSharePage'
 import { RecordingsPage } from './components/RecordingsPage'
+import { DocumentUnlockPage } from './documents/DocumentUnlockPage'
+import { documentRoute } from './documents/DocumentRoute'
+import { DocumentRecoveryProvider } from './documents/DocumentRecovery'
+import { DocumentsPage } from './documents/DocumentsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
 const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
@@ -62,6 +66,10 @@ function markOnboarded() {
 }
 
 export function App() {
+  return <DocumentRecoveryProvider><AppRoutes /></DocumentRecoveryProvider>
+}
+
+function AppRoutes() {
   const { session, user, loading: authLoading, signOut } = useAuth()
   const [pathname, setPathname] = useState(typeof window === 'undefined' ? '/' : relPath(window.location.pathname))
 
@@ -80,6 +88,8 @@ export function App() {
   // Recovery can fail while another session is still signed in. Let the user
   // request a fresh link without being routed into the dashboard.
   if (pathname === '/forgot-password') return <LoginPage />
+  const sharedDocument = documentRoute(pathname, API_BASE, session?.access_token ?? null, user?.id ?? null, user?.email ?? '')
+  if (sharedDocument) return sharedDocument
 
   if (pathname === '/recording' && !window.location.search) return <RecordingSharePage apiBase={API_BASE} />
 
@@ -91,6 +101,8 @@ export function App() {
     )
   }
 
+  if (pathname === '/document-unlock') return <DocumentUnlockPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
+
   if (pathname === '/mcp-auth') return <McpAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
   if (pathname === '/widget-auth') return <WidgetAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
@@ -99,7 +111,8 @@ export function App() {
     return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
   }
 
-  if (!session || !user) return <LoginPage />
+  if (!session || !user) return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
+  if (pathname === '/documents') return <DocumentsPage key={user.id} userId={user.id} apiBase={API_BASE} session={session.access_token} author={user.email ?? 'Project member'} />
 
   const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined
   const initialPlan = billingPlanSelection(window.location.search)

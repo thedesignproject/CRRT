@@ -1,4 +1,5 @@
 import { metadataPath } from '../server/mcp/http.js'
+import { fileURLToPath } from 'node:url'
 type QueryValue = string | string[]
 
 type LocalRequest = {
@@ -22,7 +23,8 @@ process.env.AUDIT_LOCAL_EXECUTION = 'true'
 // The server binds only to loopback, so anonymous local reports can be reopened
 // across browser profiles without weakening deployed capability-token checks.
 process.env.AUDIT_LOCAL_ACCESS_BYPASS = 'true'
-const routeFiles = Array.from(new Bun.Glob('api/**/*.ts').scanSync({ cwd: root.pathname }))
+const routeFiles = Array.from(new Bun.Glob('api/**/*.ts').scanSync({ cwd: fileURLToPath(root) }))
+  .map(file => file.replace(/\\/g, '/'))
   .filter((file) => !file.includes('/_lib/') && !file.endsWith('.test.ts'))
 
 function buildRoute(file: string): Route {
