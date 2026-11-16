@@ -72,7 +72,7 @@ it('restores an unsent quoted selection and pin position after signing back into
   const paragraph=document.querySelector('.document-prose p')!,range=document.createRange();range.selectNodeContents(paragraph)
   paragraph.getBoundingClientRect=()=>({left:100,top:200,width:400,height:100} as DOMRect)
   Object.defineProperty(range,'getClientRects',{value:()=>[{left:120,top:220,width:80,height:20}]});Object.defineProperty(range,'getBoundingClientRect',{value:()=>({left:120,top:220,width:80,height:20})})
-  window.getSelection()!.removeAllRanges();window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph)
+  window.getSelection()!.removeAllRanges();fireEvent.keyDown(document,{key:'c'});window.getSelection()!.addRange(range);fireEvent.mouseUp(paragraph);fireEvent.click(paragraph)
   fireEvent.change(screen.getByLabelText('Leave feedback'),{target:{value:'My recovered quoted note'}})
   account(view,null);account(view,'a')
   await waitFor(()=>expect(screen.getByLabelText('Leave feedback')).toHaveValue('My recovered quoted note'));await waitForPublication();await waitFor(()=>expect(screen.getByRole('button',{name:'Add feedback'})).toBeEnabled())
