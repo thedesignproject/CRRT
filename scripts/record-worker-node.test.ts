@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import ts from 'typescript'
-import { WORKER_COMPLETION_CONTENT, workerCompletionLog, workerFailureLog } from '../shared/record/worker-completion.js'
+import { workerCompletionLog, workerFailureLog } from '../shared/record/worker-completion.js'
 
-it.each(['success', 'without-marker', 'stage-failure', 'marker-failure'])(
+it.each(['success', 'stage-failure'])(
   'exits the actual one-shot Node entrypoint despite a referenced handle: %s', async scenario => {
     const root = await mkdtemp(join(tmpdir(), 'crrt-worker-exit-'))
     try {
@@ -32,23 +32,19 @@ it.each(['success', 'without-marker', 'stage-failure', 'marker-failure'])(
           return true;
         }
       `)
-      const marker = join(root, 'completed')
       const stageLog = join(root, 'stages')
       const result = spawnSync(process.execPath, [join(root, 'scripts/record-worker.js'), '--once'], {
         encoding: 'utf8', timeout: 3000,
         env: { PATH: process.env.PATH, CRRT_RECORD_ENABLED: 'true', STAGE_LOG: stageLog,
-          ...(scenario === 'without-marker' ? {} : {
-            CRRT_RECORD_WORKER_COMPLETION_FILE: scenario === 'marker-failure' ? join(root, 'missing/completed') : marker,
-          }),
           ...(scenario === 'stage-failure' ? { FAIL_STAGE: 'transcription' } : {}),
         },
       })
       expect(result.error).toBeUndefined()
       expect(result.signal).toBeNull()
-      expect(result.status, result.stderr).toBe(scenario.endsWith('failure') ? 1 : 0)
+      expect(result.status, result.stderr).toBe(scenario === 'stage-failure' ? 1 : 0)
       expect(result.stderr).not.toContain('private-key')
-      if (scenario.endsWith('failure')) {
-        expect(result.stderr.trim()).toBe(`record_worker_failed type=Error code=${scenario === 'stage-failure' ? 'unknown' : 'ENOENT'}`)
+      if (scenario === 'stage-failure') {
+        expect(result.stderr.trim()).toBe('record_worker_failed type=Error code=unknown')
         expect(result.stdout).toBe('')
       } else {
         // The retained interval is reported by type only.
@@ -56,12 +52,6 @@ it.each(['success', 'without-marker', 'stage-failure', 'marker-failure'])(
       }
       expect(await readFile(stageLog, 'utf8')).toBe(scenario === 'stage-failure'
         ? 'metadata\n' : 'metadata\ntranscription\nalignment\ncleanup\n')
-      if (scenario === 'success') {
-        expect(await readFile(marker, 'utf8')).toBe(WORKER_COMPLETION_CONTENT)
-        await expect(readFile(`${marker}.tmp`)).rejects.toMatchObject({ code: 'ENOENT' })
-      } else {
-        await expect(readFile(marker)).rejects.toMatchObject({ code: 'ENOENT' })
-      }
     } finally { await rm(root, { recursive: true, force: true }) }
   },
 )

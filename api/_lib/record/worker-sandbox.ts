@@ -2,7 +2,6 @@ import { readFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { Sandbox } from '@vercel/sandbox'
-import { WORKER_COMPLETION_CONTENT, WORKER_COMPLETION_FILE } from '../../../shared/record/worker-completion.js'
 
 export type WorkerSession = { name: string; commandId: string }
 
@@ -41,7 +40,6 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
     const value = process.env[key]
     if (value !== undefined) env[key] = value
   }
-  env.CRRT_RECORD_WORKER_COMPLETION_FILE = WORKER_COMPLETION_FILE
   const sandbox = await Sandbox.create({
     name: `${prefix}${Math.floor(Date.now() / 60_000)}`,
     image: 'vercel/sandbox/node:22', persistent: false,
@@ -70,18 +68,23 @@ async function currentWorkerVm(session: WorkerSession) {
 }
 const liveStatuses = ['pending', 'running']
 
+// Vercel records a command's exit code only when a request waits for it, so a
+// plain getCommand() poll reports null forever, even after the process exits:
+// https://vercel.com/docs/rest-api/sandboxes/get-a-command
+// A bounded wait returns the real exit code, or null while the worker still runs.
+const STATUS_WAIT_MS = 10_000
+
 export async function recordWorkerStatus(session: WorkerSession) {
   const vm = await currentWorkerVm(session)
   if (!liveStatuses.includes(vm.status)) throw new Error(`record_worker_sandbox_${vm.status}`)
   const command = await vm.getCommand(session.commandId)
-  if (command.exitCode !== null) return command.exitCode
-  const completion = await vm.readFileToBuffer({ path: WORKER_COMPLETION_FILE })
-  if (completion === null) return null
-  if (completion.toString('utf8') !== WORKER_COMPLETION_CONTENT) throw new Error('record_worker_completion_invalid')
-  // The worker exits right after publishing the marker, so one observation can
-  // be that brief gap. Repeated warnings point to a lingering process or stale status.
-  console.warn('record_worker_completed_before_exit_status')
-  return 0
+  const signal = AbortSignal.timeout(STATUS_WAIT_MS)
+  try {
+    return (await command.wait({ signal })).exitCode
+  } catch (error) {
+    if (signal.aborted) return null
+    throw error
+  }
 }
 
 export async function stopRecordWorker(session: WorkerSession) {

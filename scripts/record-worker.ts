@@ -1,7 +1,6 @@
-import { rename, writeFile } from 'node:fs/promises'
 import { rpc } from '../api/_lib/record/core.js'
 import { runNext, type Stage } from '../api/_lib/record/processing.js'
-import { WORKER_COMPLETION_CONTENT, workerCompletionLog, workerFailureLog } from '../shared/record/worker-completion.js'
+import { workerCompletionLog, workerFailureLog } from '../shared/record/worker-completion.js'
 
 if (process.env.CRRT_RECORD_ENABLED !== 'true') throw new Error('Record worker requires CRRT_RECORD_ENABLED=true')
 
@@ -17,11 +16,6 @@ try {
     if (!worked && !once) await Bun.sleep(2000)
   } while (!once && !stopping)
   if (once) {
-    const completion = process.env.CRRT_RECORD_WORKER_COMPLETION_FILE
-    if (completion) {
-      await writeFile(`${completion}.tmp`, WORKER_COMPLETION_CONTENT, { flag: 'wx' })
-      await rename(`${completion}.tmp`, completion)
-    }
     // All writes and lease completions above are awaited. Network handles must
     // not keep a completed one-shot process (and the global worker slot) alive.
     console.log(workerCompletionLog(process.getActiveResourcesInfo()))
