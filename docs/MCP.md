@@ -1,11 +1,13 @@
 # CRRT MCP v1
 
-Implements the MCP-only portion of TDP-5932; plugin packaging is deferred.
+Implements the MCP portion of TDP-5932. A draft ChatGPT plugin package and its
+remaining public-review requirements are documented in [ChatGPT plugin](chatgpt-plugin.md).
 
 CRRT MCP reuses the existing Supabase users, dashboard login, project membership,
 capability rules, and feedback read services. OAuth is a transport credential
 boundary: clients receive opaque `crrt_mcp_…` credentials with explicitly approved `crrt:read`, `crrt:implement`, and `crrt:review` scopes,
-not dashboard or extension Supabase sessions. No ChatGPT plugin is included.
+not dashboard or extension Supabase sessions. The plugin has not been submitted
+or published to the ChatGPT directory.
 
 ## Local setup
 
