@@ -73,9 +73,10 @@ export function DirectAgentSend({ apiBase, projectId, pageUrl, session, onSent, 
       <label style={{ display: 'grid', gap: 6 }}>Send to terminal
         <select aria-label="Send to terminal" value={destination} disabled={busy || checking} onChange={event => setDestination(event.target.value)} style={{ ...buttonStyle, width: '100%', minWidth: 0, background: 'var(--fw-surface-deep)' }}>
           <option value="">Choose a listening terminal</option>
-          {delivery.listeners.map(item => <option key={item.listenerId} value={item.listenerId} disabled={!item.online}>{item.label} · {item.online ? 'Listening' : 'Offline'} · {item.repoUrl}</option>)}
+          {delivery.listeners.map(item => <option key={item.listenerId} value={item.listenerId} disabled={!item.online}>{item.label} · {item.online ? 'Listening' : 'Offline'}</option>)}
         </select>
       </label>
+      {delivery.listeners.filter(item => item.listenerId === destination).map(item => <p key={item.listenerId} style={{ margin: '6px 0', fontSize: 12, overflowWrap: 'anywhere' }}>{item.repoUrl}</p>)}
       <p role="status" style={{ margin: '8px 0', lineHeight: 1.5 }}>{checking ? 'Checking terminals…' : online ? 'SEND accepts this comment and starts implementation. Merge and deploy are separate.' : 'No selected terminal is listening. Ask your connected agent to listen for CRRT SEND requests in this repository.'}</p>
       {(error || readError) && <p role="alert" style={{ color: 'var(--fw-danger-label)', lineHeight: 1.5 }}>{error || readError}</p>}
     </section>

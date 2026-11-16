@@ -66,3 +66,12 @@ it.each([true, false])('discards stale availability responses after unmount (suc
  const ui = render(view()); ui.unmount(); await act(async () => { if (success) resolve({ listeners: [listener], dispatches: [] }); else reject(new Error('stale')) })
  expect(onSent).not.toHaveBeenCalled()
 })
+it('deduplicates two click events before React commits the disabled state', async () => {
+ let resolve!: (v: { dispatchId: string; state: string }) => void
+ vi.mocked(sendFeedback).mockReturnValue(new Promise(r => { resolve = r }))
+ render(view()); await waitFor(() => expect(send()).toBeEnabled())
+ const button = send()
+ act(() => { button.click(); button.click() })
+ expect(sendFeedback).toHaveBeenCalledOnce()
+ await act(async () => resolve({ dispatchId: 'd', state: 'queued' }))
+})
