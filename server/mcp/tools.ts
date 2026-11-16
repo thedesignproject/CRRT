@@ -3,5 +3,6 @@ import { contextTools } from './context.js'
 import { actionTools } from './actions.js'
 import { dashboardTools } from './dashboard.js'
 import { dashboardAccessTools } from './dashboard-access.js'
+import { listenerTools } from './listeners.js'
 import { documentTools } from './documents.js'
-export const tools = [...discoveryTools, ...contextTools, ...actionTools, ...dashboardAccessTools, ...dashboardTools, ...documentTools]
+export const tools = [...discoveryTools, ...contextTools, ...actionTools, ...dashboardAccessTools, ...dashboardTools, ...documentTools, ...listenerTools]

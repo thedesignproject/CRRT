@@ -33,6 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         implementationStatus: comment.implementationStatus,
         claimedByAgentId: comment.claimedByAgentId,
         createdAt: comment.createdAt,
+        updatedAt: comment.updatedAt,
         authorName: comment.authorName,
       })),
     })
