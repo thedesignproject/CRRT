@@ -26,7 +26,9 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
   // Include bootstrapping VMs, before they have claimed a database lease.
   // A shared minute name also prevents overlapping cron deliveries from
   // starting two sessions in the same environment at the same time.
-  const sessions = await Sandbox.list({ namePrefix: prefix, sortBy: 'createdAt', sortOrder: 'desc' })
+  // Prefix filtering requires name sorting. Our minute-based names keep this
+  // newest-first, so the hard-deadline cutoff below still bounds pagination.
+  const sessions = await Sandbox.list({ namePrefix: prefix, sortBy: 'name', sortOrder: 'desc' })
   for await (const session of sessions) {
     // Older sessions cannot still be active under our hard 30-minute timeout.
     if (session.createdAt < Date.now() - 31 * 60_000) break

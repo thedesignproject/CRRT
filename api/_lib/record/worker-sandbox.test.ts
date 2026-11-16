@@ -33,7 +33,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 it('launches the packaged worker with only its environment and a hard VM deadline', async () => {
   expect(await launchRecordWorker()).toEqual(session)
-  expect(Sandbox.list).toHaveBeenCalledWith({ namePrefix: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-$/), sortBy: 'createdAt', sortOrder: 'desc' })
+  expect(Sandbox.list).toHaveBeenCalledWith({ namePrefix: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-$/), sortBy: 'name', sortOrder: 'desc' })
   expect(Sandbox.create).toHaveBeenCalledWith(expect.objectContaining({
     name: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-\d+$/),
     image: 'vercel/sandbox/node:22', persistent: false, resources: { vcpus: 1 }, timeout: 1_800_000,
@@ -62,6 +62,15 @@ it.each(['pending', 'running', 'stopping'])('does not launch while an existing V
 
 it('ignores stopped sessions when launching new work', async () => {
   sessions([{ status: 'stopped' }])
+  expect(await launchRecordWorker()).toEqual(session)
+})
+it('uses the Sandbox API sorting required by a name prefix filter', async () => {
+  vi.mocked(Sandbox.list).mockImplementationOnce(async options => {
+    if (options?.namePrefix && options.sortBy !== 'name') {
+      throw new Error('Invalid request: namePrefix is only valid when sortBy is name')
+    }
+    return { async *[Symbol.asyncIterator]() {} } as never
+  })
   expect(await launchRecordWorker()).toEqual(session)
 })
 it('does not paginate through historical sessions beyond the hard deadline', async () => {
