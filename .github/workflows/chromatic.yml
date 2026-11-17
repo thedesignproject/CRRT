@@ -25,7 +25,10 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Chromatic walks history to find baselines; a blobless clone keeps
+          # the commits and trees without every historical file.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
       - uses: actions/setup-node@v7
         with:
@@ -34,7 +37,55 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
-      - run: bunx playwright install --with-deps chromium
+      # `--with-deps` spends ~26s on apt (12.5s of it `apt-get update`) to add
+      # the same 9 font packages to every runner. Cache those exact .debs and
+      # the browsers per Playwright version and runner image; trunk seeds the
+      # cache and PRs restore it. A miss runs the original install.
+      - name: Playwright cache key
+        id: playwright
+        run: |
+          version=$(node -p "require('@playwright/test/package.json').version")
+          echo "key=playwright-chromium-$version-$ImageOS-$ImageVersion" >> "$GITHUB_OUTPUT"
+      - name: Restore Playwright browsers and system packages
+        id: playwright-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/playwright-apt
+          key: ${{ steps.playwright.outputs.key }}
+      - name: Install Playwright Chromium and system dependencies
+        id: playwright-install
+        env:
+          CACHE_HIT: ${{ steps.playwright-cache.outputs.cache-hit }}
+        run: |
+          shopt -s nullglob
+          cached=(~/.cache/playwright-apt/*.deb)
+          if [ "$CACHE_HIT" = true ]; then
+            if [ ${#cached[@]} -gt 0 ]; then sudo dpkg -i "${cached[@]}"; fi
+            bunx playwright install chromium
+            exit 0
+          fi
+          dpkg-query -W -f='${Package}\n' | sort > "$RUNNER_TEMP/packages-before"
+          bunx playwright install --with-deps chromium
+          dpkg-query -W -f='${Package}\n' | sort > "$RUNNER_TEMP/packages-after"
+          # Record exactly what --with-deps added; only a complete set is saved.
+          mkdir -p ~/.cache/playwright-apt
+          complete=true
+          for package in $(comm -13 "$RUNNER_TEMP/packages-before" "$RUNNER_TEMP/packages-after"); do
+            debs=(/var/cache/apt/archives/"$package"_*.deb)
+            if [ ${#debs[@]} -eq 0 ]; then complete=false; else cp "${debs[@]}" ~/.cache/playwright-apt/; fi
+          done
+          if [ "$complete" = false ]; then echo "::warning::Some apt archives were not kept; not caching Playwright system packages"; fi
+          echo "complete=$complete" >> "$GITHUB_OUTPUT"
+      - name: Seed Playwright cache from trunk
+        if: steps.playwright-install.outputs.complete == 'true' && github.ref == 'refs/heads/trunk'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            ~/.cache/ms-playwright
+            ~/.cache/playwright-apt
+          key: ${{ steps.playwright.outputs.key }}
       - run: bun run test:visual:types
       - name: Capture and replay selected screens
         id: local
