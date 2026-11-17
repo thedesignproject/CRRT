@@ -18,6 +18,7 @@ jobs:
   typecheck:
     name: typecheck (react ${{ matrix.react }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       matrix:
@@ -54,6 +55,7 @@ jobs:
   test:
     name: test (react ${{ matrix.react }}, ${{ matrix.shard }}/${{ matrix.react == '19' && '6' || '4' }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     strategy:
       fail-fast: false
       # React 19 collects coverage, so it gets more shards to stay well
@@ -106,6 +108,7 @@ jobs:
 
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
       - name: Start budget clock
         run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
@@ -159,6 +162,7 @@ jobs:
     if: always()
     needs: [typecheck, test, build]
     runs-on: ubuntu-24.04
+    timeout-minutes: 5
     env:
       DIFF_COVERAGE: ${{ github.event_name == 'pull_request' }}
     steps:
@@ -216,8 +220,11 @@ jobs:
 
   mcp-integration:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     name: MCP OAuth, dashboard parity and permissions
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
@@ -227,20 +234,22 @@ jobs:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - name: Start isolated local Supabase and apply migrations
-        run: bun run local:up
+        run: bash scripts/ci-budget.sh 150 "local Supabase" -- bun run local:up
       - name: Exercise real MCP OAuth, RLS, dashboard upgrades and writes
-        run: bun run test:mcp:local
+        run: bash scripts/ci-budget.sh 30 "MCP tests" -- bun run test:mcp:local
       - name: Build and verify packaged MCP function
         run: |
-          bun run build:landing
-          bun run build:dashboard
-          bun scripts/build-vercel-output.ts
-          bunx -p node@24 node --env-file=.env.docker.local scripts/verify-mcp-package.mjs
+          bash scripts/ci-budget.sh 60 "MCP package build and verify" -- bash -c '
+            bun run build:landing &&
+            bun run build:dashboard &&
+            bun scripts/build-vercel-output.ts &&
+            bunx -p node@24 node --env-file=.env.docker.local scripts/verify-mcp-package.mjs'
       # No `supabase stop`: the runner VM is discarded after the job, and the
       # stop took 11-12s every run.
 
   drizzle:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     name: drizzle (snapshot consistency)
     steps:
       - name: Start budget clock
@@ -255,7 +264,10 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
@@ -267,10 +279,11 @@ jobs:
       # (--prod), high + critical; dev-tree hygiene is tracked via Dependabot.
       # Reads the lockfile directly, so no install is needed.
       - name: bun audit (runtime only, high + critical)
-        run: bun audit --prod --audit-level=high
+        run: bash scripts/ci-budget.sh 10 audit -- bun audit --prod --audit-level=high
 
   secrets:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Start budget clock
         run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
