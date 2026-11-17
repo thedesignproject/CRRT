@@ -64,3 +64,13 @@ it.each([{ saved: {} }, { saved: [null, {}, { id: 'x' }, { id: 'x', pageUrl: '/'
   sessionStorage.setItem('crrt:landing-demo-comments:v1', JSON.stringify(saved))
   expect(await createDemoComments().list(payload.pageUrl)).toEqual([])
 })
+
+it('notifies subscribers, preserves review state, and resets its local snapshot', async () => {
+  const demo = createDemoComments(), listener = vi.fn(), unsubscribe = demo.subscribe(listener)
+  const first = await demo.create(payload), second = await demo.create({ ...payload, body: 'Second' })
+  await demo.review(first.id, 'accepted')
+  expect(demo.getSnapshot()).toEqual([second, { ...first, reviewStatus: 'accepted' }])
+  expect(createDemoComments().getSnapshot()).toEqual(demo.getSnapshot())
+  expect(listener).toHaveBeenCalledTimes(3); unsubscribe(); demo.reset()
+  expect(listener).toHaveBeenCalledTimes(3); expect(demo.getSnapshot()).toEqual([]); expect(createDemoComments().getSnapshot()).toEqual([])
+})

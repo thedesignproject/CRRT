@@ -16,10 +16,10 @@ import { readResourceData } from './resources/readResourceData'
 import './globals.css'
 import './marketing-polish.css'
 
-import { FeedbackWidget } from '@widget/components/FeedbackWidget'
+import { LandingFeedbackDemo } from './demo/LandingFeedbackDemo'
 import { supabase } from './lib/supabase'
 import { createDemoComments } from './lib/demoComments'
-import type { PersonalComments } from '../../src/components/FeedbackWidget/types'
+import type { DemoComments } from './lib/demoComments'
 
 export function App() {
   return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light"><RoutedApp /></ThemeProvider>
@@ -57,7 +57,7 @@ function RoutedApp() {
     return (
       <>
         <DocsApp initialPath={initialPath} />
-        <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
+        <LandingFeedbackDemo apiBase={apiBase} projectId={projectId} demoComments={demoComments} />
       </>
     )
   }
@@ -76,7 +76,7 @@ function MarketingSite({
 }: {
   apiBase: string
   projectId: string
-  demoComments: PersonalComments
+  demoComments: DemoComments
 }) {
   const [session, setSession] = useState<Session | null>(null)
 
@@ -95,7 +95,7 @@ function MarketingSite({
   return (
     <>
       <MarketingPage authenticated={Boolean(session)} accessToken={session?.access_token} apiBase={apiBase} />
-      <FeedbackWidget apiBase={apiBase} projectId={projectId} personalComments={demoComments} />
+      <LandingFeedbackDemo apiBase={apiBase} projectId={projectId} demoComments={demoComments} />
       <EasterEgg />
     </>
   )

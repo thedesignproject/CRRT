@@ -634,7 +634,9 @@ function FeedbackWidgetInner({
     }
     const timer = window.setInterval(refresh, 240_000)
     window.addEventListener('focus', refresh)
+    const unsubscribe = personalComments?.subscribe?.(refresh)
     return () => {
+      unsubscribe?.()
       cancelled = true
       window.clearInterval(timer); window.removeEventListener('focus', refresh)
     }
@@ -831,7 +833,7 @@ function FeedbackWidgetInner({
         anchor: targetData.anchor ?? null,
       }
 
-      setComments((prev) => [newComment, ...prev])
+      setComments((prev) => [newComment, ...prev.filter(comment => comment.id !== newComment.id)])
 
       setBadgeAnim(true)
       setTimeout(() => setBadgeAnim(false), 720)
@@ -867,6 +869,7 @@ function FeedbackWidgetInner({
   }, [widgetLogin.session, handleSend])
 
   const openAgentBridge = useCallback(() => {
+    if (personalComments?.handoff) { setSidebarOpen(false); personalComments.handoff.open(); return }
     if (suppliedPersonalComments || conversation) return
     setLauncherOpen(false)
     setSidebarOpen(false)
@@ -875,7 +878,7 @@ function FeedbackWidgetInner({
       return
     }
     setAgentOpen(true)
-  }, [agentOpen, suppliedPersonalComments, Boolean(conversation)])
+  }, [agentOpen, suppliedPersonalComments, Boolean(conversation), personalComments?.handoff])
 
   // --- Keyboard shortcuts ---
   useEffect(() => {
@@ -996,9 +999,17 @@ function FeedbackWidgetInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
-  function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
+  async function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
+    if (personalComments?.review) {
+      try { await personalComments.review(commentId, reviewStatus); setApiError('') }
+      catch (error) { setApiError(String((error as Error).message)); return }
+    } else { apiPatchReviewStatus(apiBase, commentId, reviewStatus) }
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
-    apiPatchReviewStatus(apiBase, commentId, reviewStatus)
+  }
+
+  function openHandoff(commentId: string) {
+    if (personalComments?.handoff) { setSidebarOpen(false); personalComments.handoff.open(commentId) }
+    else { setExternalProviderCommentId(commentId); setMenuOpenId(null) }
   }
 
   async function deleteComment(commentId: string) {
@@ -1132,7 +1143,9 @@ function FeedbackWidgetInner({
   const sidebarBaseComments = personalComments?.scope?.value === 'project'
     ? allRecentComments
     : visibleComments
-  const sidebarComments = personalComments ? sidebarBaseComments : filteredComments
+  const sidebarComments = personalComments
+    ? personalComments.review ? sidebarBaseComments.filter(comment => filterStatus === 'all' || comment.reviewStatus === (filterStatus === 'open' ? 'open' : 'accepted')) : sidebarBaseComments
+    : filteredComments
   const sortedComments = useMemo(() => [...sidebarComments].sort((a, b) => {
     const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
     const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
@@ -1724,10 +1737,10 @@ function FeedbackWidgetInner({
                       </div>
                       <PinActionCluster
                         key={c.id}
-                        reviewEnabled={!personalComments}
+                        reviewEnabled={!personalComments || Boolean(personalComments.review)}
                         mutationEnabled={!personalComments || c.editable !== false}
-                        onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
-                          ? () => { setExternalProviderCommentId(c.id) }
+                        onSendTo={(personalComments?.externalWork || personalComments?.handoff) && c.reviewStatus !== 'rejected'
+                          ? () => openHandoff(c.id)
                           : undefined}
                         isResolved={isResolved}
                         onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
@@ -1875,7 +1888,7 @@ function FeedbackWidgetInner({
 
         {conversation?.readOnly && <p style={{ padding: '12px 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>View-only access</p>}
         {/* Agent CTA — visible path into agent flow, not only Shift+A. */}
-        {!suppliedPersonalComments && !conversation && <div
+        {((!suppliedPersonalComments && !conversation) || personalComments?.handoff) && <div
           style={{
             padding: '14px 16px 12px',
             borderBottom: '1px solid var(--fw-contrast-04)',
@@ -1925,12 +1938,12 @@ function FeedbackWidgetInner({
             </span>
               <span style={{ flex: 1, minWidth: 0 }}>
                 <span style={{ display: 'block', fontSize: 13, fontWeight: 650, lineHeight: 1.25 }}>
-                  Open agent
+                  {personalComments?.handoff?.label ?? 'Open agent'}
                 </span>
                 <span style={{ display: 'block', marginTop: 2, fontSize: 12, color: 'var(--fw-foreground-muted)', lineHeight: 1.35 }}>
-                  {readyForAgentCount > 0
+                  {personalComments?.handoff?.description ?? (readyForAgentCount > 0
                     ? `${readyForAgentCount} ready comment${readyForAgentCount === 1 ? '' : 's'}`
-                    : 'Approve comments to queue work'}
+                    : 'Approve comments to queue work')}
                 </span>
               </span>
             {shortcutsEnabled && <span
@@ -1976,7 +1989,7 @@ function FeedbackWidgetInner({
         </div>}
 
         {/* Filter row */}
-        {!personalComments && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
+        {(!personalComments || personalComments.review) && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
           <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <span style={{ fontSize: 13, color: 'var(--fw-foreground)', fontWeight: 600 }}>{sidebarTitle}</span>
             <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{filteredComments.length}</span>
@@ -2084,7 +2097,7 @@ function FeedbackWidgetInner({
                     </div>
                     {/* Actions inline — same row as the author */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      {!personalComments && isPending && (
+                      {(!personalComments || personalComments.review) && isPending && (
                         <button
                           onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
                           title="Approve"
@@ -2112,7 +2125,7 @@ function FeedbackWidgetInner({
                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         </button>
                       )}
-                      {(c.editable !== false || !personalComments || Boolean(personalComments?.externalWork)) && <button
+                      {(c.editable !== false || !personalComments || Boolean(personalComments?.externalWork || personalComments?.handoff)) && <button
                         onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
                         title="More"
                         aria-label="More"
@@ -2220,15 +2233,15 @@ function FeedbackWidgetInner({
                         animation: 'fw-tooltip-in 0.1s ease both',
                       }}
                     >
-                      {personalComments?.externalWork && c.reviewStatus !== 'rejected' && <button
-                        onClick={() => { setExternalProviderCommentId(c.id); setMenuOpenId(null) }}
+                      {(personalComments?.externalWork || personalComments?.handoff) && c.reviewStatus !== 'rejected' && <button
+                        onClick={() => openHandoff(c.id)}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
                         <span aria-hidden="true">↗</span> Send to…
                       </button>}
-                      {!personalComments && <button
+                      {(!personalComments || personalComments.review) && <button
                         onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
