@@ -103,6 +103,19 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Check formatting (oxfmt)
+        run: bash scripts/ci-budget.sh 5 format -- bun run format:check
+
   build:
     runs-on: ubuntu-24.04
     steps:
@@ -140,15 +153,15 @@ jobs:
   check-react-18:
     name: check (react 18)
     if: always()
-    needs: [typecheck, test, build]
+    needs: [typecheck, test, build, format]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
-      - name: Require typecheck, tests and build to pass
+      - name: Require typecheck, tests, build and format to pass
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "typecheck, test, build: $RESULTS"
+          echo "typecheck, test, build, format: $RESULTS"
           for result in $RESULTS; do
             if [ "$result" != success ]; then exit 1; fi
           done
@@ -156,16 +169,16 @@ jobs:
   check-react-19:
     name: check (react 19)
     if: always()
-    needs: [typecheck, test, build]
+    needs: [typecheck, test, build, format]
     runs-on: ubuntu-24.04
     env:
       DIFF_COVERAGE: ${{ github.event_name == 'pull_request' }}
     steps:
-      - name: Require typecheck, tests and build to pass
+      - name: Require typecheck, tests, build and format to pass
         env:
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "typecheck, test, build: $RESULTS"
+          echo "typecheck, test, build, format: $RESULTS"
           for result in $RESULTS; do
             if [ "$result" != success ]; then exit 1; fi
           done
