@@ -48,13 +48,13 @@
     "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsup",
     "typecheck": "tsc --noEmit",
-    "test": "npm run build && node --test tests/*.test.mjs && vitest run",
+    "test": "bun run build && node --test tests/*.test.mjs && vitest run",
     "pack:verify": "node scripts/verify-package.mjs",
     "consumer:verify": "node scripts/verify-consumer.mjs",
-    "prepack": "npm run build && npm run pack:verify",
-    "prestorybook": "npm run build",
+    "prepack": "bun run build && bun run pack:verify",
+    "prestorybook": "bun run build",
     "storybook": "storybook dev -p 6007",
-    "prebuild-storybook": "npm run build",
+    "prebuild-storybook": "bun run build",
     "build-storybook": "storybook build"
   },
   "peerDependencies": {
