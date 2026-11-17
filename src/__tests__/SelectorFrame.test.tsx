@@ -163,7 +163,7 @@ describe('<SelectorFrame />', () => {
     render(<FeedbackWidgetStyles />)
     const css = document.querySelector('style')!.textContent ?? ''
     expect(css).toContain('--crrt-selector-motion-duration: 250ms')
-    expect(css).toContain('--crrt-selector-motion-easing: cubic-bezier(.22, 1.18, .36, 1)')
+    expect(css).toContain('--crrt-selector-motion-easing: cubic-bezier(0.22, 1.18, 0.36, 1)')
     expect(css).toContain('--crrt-selector-opacity-duration: 120ms')
     expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.fw-selector-frame\s*\{[\s\S]*transition:\s*none !important/)
   })

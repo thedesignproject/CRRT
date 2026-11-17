@@ -46,7 +46,7 @@ export function FeedbackWidgetStyles() {
           --fw-contrast-15: rgba(255, 255, 255, 0.15);
           --fw-contrast-18: rgba(255, 255, 255, 0.18);
           --crrt-selector-motion-duration: 250ms;
-          --crrt-selector-motion-easing: cubic-bezier(.22, 1.18, .36, 1);
+          --crrt-selector-motion-easing: cubic-bezier(0.22, 1.18, 0.36, 1);
           --crrt-selector-opacity-duration: 120ms;
         }
         [data-fw-crrt][data-crrt-theme='light'] {

@@ -7,7 +7,7 @@ describe('selector motion design tokens', () => {
 
   it.each([
     ['--crrt-selector-motion-duration', '250ms'],
-    ['--crrt-selector-motion-easing', 'cubic-bezier(.22, 1.18, .36, 1)'],
+    ['--crrt-selector-motion-easing', 'cubic-bezier(0.22, 1.18, 0.36, 1)'],
     ['--crrt-selector-opacity-duration', '120ms'],
   ])('defines and documents %s', (name, value) => {
     expect(tokens).toContain(`${name}: ${value}`)
