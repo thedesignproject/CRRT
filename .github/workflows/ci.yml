@@ -23,6 +23,8 @@ jobs:
       matrix:
         react: ['18', '19']
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
@@ -37,26 +39,36 @@ jobs:
             "react-dom@$REACT_MAJOR" \
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
-      - run: bun run typecheck
+      - name: Typecheck
+        run: bash scripts/ci-budget.sh 5 typecheck -- bun run typecheck
       # The widget ships .d.ts files to React 18 and 19 consumers. The build
       # job emits them with the lockfile's React 19; emit them under React 18
       # types here so declaration-only errors still surface for 18.
       - name: Widget declarations under React 18
         if: matrix.react == '18'
-        run: ./node_modules/.bin/tsc --project tsconfig.json --outDir "$RUNNER_TEMP/dts" --declarationDir "$RUNNER_TEMP/dts"
+        run: bash scripts/ci-budget.sh 15 "widget declarations" -- ./node_modules/.bin/tsc --project tsconfig.json --outDir "$RUNNER_TEMP/dts" --declarationDir "$RUNNER_TEMP/dts"
 
   # Shards balance files by measured duration (scripts/test-durations.json).
   # Every shard records the full file list and its share; check (react 19)
   # proves the shards covered every file exactly once.
   test:
-    name: test (react ${{ matrix.react }}, ${{ matrix.shard }}/4)
+    name: test (react ${{ matrix.react }}, ${{ matrix.shard }}/${{ matrix.react == '19' && '6' || '4' }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
+      # React 19 collects coverage, so it gets more shards to stay well
+      # inside the 60s per-shard budget (4 shards measured 58s at p95).
       matrix:
         react: ['18', '19']
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3, 4, 5, 6]
+        exclude:
+          - react: '18'
+            shard: 5
+          - react: '18'
+            shard: 6
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
@@ -76,12 +88,12 @@ jobs:
             "@types/react-dom@$REACT_MAJOR"
       # Coverage feeds the diff-coverage gate and Codecov, both React 19 only;
       # shards keep raw coverage in blob reports and check (react 19) merges it.
-      - name: Test shard ${{ matrix.shard }}/4
+      - name: Test shard
         env:
-          SHARD: ${{ matrix.shard }}/4
+          SHARD: ${{ matrix.shard }}/${{ matrix.react == '19' && '6' || '4' }}
           VITEST_SHARD_MANIFEST: .vitest-shards/react${{ matrix.react }}/shard-${{ matrix.shard }}.json
           COVERAGE_ARGS: ${{ matrix.react == '19' && '--coverage --coverage.reporter=json-summary --reporter=default --reporter=github-actions --reporter=blob' || '' }}
-        run: ./node_modules/.bin/vitest run --shard="$SHARD" $COVERAGE_ARGS
+        run: bash scripts/ci-budget.sh 60 "test shard $SHARD" -- ./node_modules/.bin/vitest run --shard="$SHARD" $COVERAGE_ARGS
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: vitest-react${{ matrix.react }}-shard${{ matrix.shard }}
@@ -95,6 +107,8 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
@@ -106,7 +120,8 @@ jobs:
       # React, as publish.yml does) covers both React majors; typecheck
       # (react 18) covers the widget's React 18 types.
       - run: bun install --frozen-lockfile
-      - run: bun run build
+      - name: Build
+        run: bash scripts/ci-budget.sh 20 build -- bun run build
       - name: Enforce bundle size ceiling
         run: |
           SIZE=$(wc -c < dist/crrt.es.js | tr -d ' ')
@@ -155,6 +170,8 @@ jobs:
           for result in $RESULTS; do
             if [ "$result" != success ]; then exit 1; fi
           done
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           # Diff coverage needs the PR base. A blobless clone fetches history
@@ -184,7 +201,7 @@ jobs:
           bun scripts/verify-test-shards.ts .vitest-shards/react18
           bun scripts/verify-test-shards.ts .vitest-shards/react19
       - name: Merge shard coverage
-        run: ./node_modules/.bin/vitest --merge-reports --coverage --coverage.reporter=lcov --coverage.reporter=text-summary
+        run: bash scripts/ci-budget.sh 15 "coverage merge" -- ./node_modules/.bin/vitest --merge-reports --coverage --coverage.reporter=lcov --coverage.reporter=text-summary
       - name: Enforce 100% diff coverage
         if: env.DIFF_COVERAGE == 'true'
         run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
@@ -224,12 +241,15 @@ jobs:
     runs-on: ubuntu-latest
     name: drizzle (snapshot consistency)
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
-      - run: bunx drizzle-kit check
+      - name: Check migration snapshot consistency
+        run: bash scripts/ci-budget.sh 10 "drizzle check" -- bunx drizzle-kit check
 
   audit:
     runs-on: ubuntu-latest
@@ -250,6 +270,8 @@ jobs:
   secrets:
     runs-on: ubuntu-latest
     steps:
+      - name: Start budget clock
+        run: echo "CI_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
@@ -268,4 +290,4 @@ jobs:
       - name: Scan for committed secrets
         # Scan this checkout's full ancestry, including historical secrets, without
         # pulling unrelated fetched branches into every PR's result.
-        run: gitleaks detect --source . --log-opts=HEAD --redact --verbose --exit-code 1
+        run: bash scripts/ci-budget.sh 15 "secret scan" -- gitleaks detect --source . --log-opts=HEAD --redact --verbose --exit-code 1
