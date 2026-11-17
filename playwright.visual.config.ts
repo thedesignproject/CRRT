@@ -3,7 +3,9 @@ import type { ChromaticConfig } from '@chromatic-com/playwright'
 export default defineConfig<ChromaticConfig>({
   testDir: './tests/visual', testMatch: '*.visual.ts',
   outputDir: 'artifacts/chromatic-simple/captures',
-  forbidOnly: true, retries: 0, workers: 2, timeout: 45_000,
+  forbidOnly: true, retries: 0, timeout: 45_000,
+  // One worker per core on CI runners (4 vCPU); local runs keep 2.
+  workers: process.env.CI ? '100%' : 2,
   reporter: [['list'], ['json', { outputFile: 'artifacts/chromatic-simple/results.json' }]],
   use: { baseURL: 'http://127.0.0.1:4380', browserName: 'chromium', locale: 'en-US', timezoneId: 'UTC',
     reducedMotion: 'reduce', disableAutoSnapshot: true, resourceArchiveTimeout: 10_000,
