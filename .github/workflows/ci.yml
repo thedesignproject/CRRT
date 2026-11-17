@@ -10,31 +10,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # Typecheck, build and tests run as parallel jobs; `check (react N)` below
+  # keeps the required status names and fails unless every one of them passed.
+  typecheck:
+    name: typecheck (react ${{ matrix.react }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         react: ['18', '19']
-    name: check (react ${{ matrix.react }})
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      - uses: actions/setup-python@v6
-        if: matrix.react == '19' && github.event_name == 'pull_request'
-        with:
-          python-version: '3.13'
       - run: bun install --frozen-lockfile
-      - name: Install diff coverage tooling
-        if: matrix.react == '19' && github.event_name == 'pull_request'
-        run: python3 -m pip install diff-cover==10.0.0
       - name: Install React ${{ matrix.react }}
         env:
           REACT_MAJOR: ${{ matrix.react }}
@@ -45,17 +35,80 @@ jobs:
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
       - run: bun run typecheck
-      - run: bun run test:coverage
+
+  test:
+    name: test (react ${{ matrix.react }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        react: ['18', '19']
+    env:
+      # Coverage feeds the diff-coverage gate and Codecov, both React 19 only.
+      COVERAGE: ${{ matrix.react == '19' }}
+      DIFF_COVERAGE: ${{ matrix.react == '19' && github.event_name == 'pull_request' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Diff coverage needs the PR base. A blobless clone fetches history
+          # without file contents (measured as fast as a shallow clone here).
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-python@v6
+        if: env.DIFF_COVERAGE == 'true'
+        with:
+          python-version: '3.13'
+      - run: bun install --frozen-lockfile
+      - name: Install diff coverage tooling
+        if: env.DIFF_COVERAGE == 'true'
+        run: python3 -m pip install diff-cover==10.0.0
+      - name: Install React ${{ matrix.react }}
+        env:
+          REACT_MAJOR: ${{ matrix.react }}
+        run: |
+          bun add --no-save \
+            "react@$REACT_MAJOR" \
+            "react-dom@$REACT_MAJOR" \
+            "@types/react@$REACT_MAJOR" \
+            "@types/react-dom@$REACT_MAJOR"
+      - name: Test with coverage
+        if: env.COVERAGE == 'true'
+        run: bun run test:coverage
+      # React 18 coverage was collected but never read: no upload, no gate.
+      - name: Test
+        if: env.COVERAGE != 'true'
+        run: bun run test
       - name: Enforce 100% diff coverage
-        if: matrix.react == '19' && github.event_name == 'pull_request'
+        if: env.DIFF_COVERAGE == 'true'
         run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
       - name: Upload coverage to Codecov
-        if: matrix.react == '19'
+        if: env.COVERAGE == 'true'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./coverage/lcov.info
           fail_ci_if_error: false
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      # React is external to the bundle, so one build (with the lockfile's
+      # React, as publish.yml does) covers both React majors; typecheck
+      # (react 18) covers the widget's React 18 types.
+      - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Enforce bundle size ceiling
         run: |
@@ -68,6 +121,29 @@ jobs:
             echo "::error::Bundle exceeds size ceiling"
             exit 1
           fi
+
+  # Required status checks are named `check (react 18)` and `check (react 19)`.
+  # Both require every typecheck, test and build job to succeed. `always()`
+  # (not `!cancelled()`) so a cancelled or skipped dependency reports a
+  # failure instead of a skipped, and therefore passing, required check.
+  check:
+    name: check (react ${{ matrix.react }})
+    if: always()
+    needs: [typecheck, test, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    strategy:
+      matrix:
+        react: ['18', '19']
+    steps:
+      - name: Require typecheck, tests and build to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "typecheck, test, build: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then exit 1; fi
+          done
 
   mcp-integration:
     runs-on: ubuntu-latest
