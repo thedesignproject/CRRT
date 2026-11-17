@@ -36,38 +36,26 @@ jobs:
             "@types/react-dom@$REACT_MAJOR"
       - run: bun run typecheck
 
+  # Shards balance files by measured duration (scripts/test-durations.json).
+  # Every shard records the full file list and its share; check (react 19)
+  # proves the shards covered every file exactly once.
   test:
-    name: test (react ${{ matrix.react }})
+    name: test (react ${{ matrix.react }}, ${{ matrix.shard }}/4)
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         react: ['18', '19']
-    env:
-      # Coverage feeds the diff-coverage gate and Codecov, both React 19 only.
-      COVERAGE: ${{ matrix.react == '19' }}
-      DIFF_COVERAGE: ${{ matrix.react == '19' && github.event_name == 'pull_request' }}
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
-        with:
-          # Diff coverage needs the PR base. A blobless clone fetches history
-          # without file contents (measured as fast as a shallow clone here).
-          fetch-depth: 0
-          filter: blob:none
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      - uses: actions/setup-python@v6
-        if: env.DIFF_COVERAGE == 'true'
-        with:
-          python-version: '3.13'
       - run: bun install --frozen-lockfile
-      - name: Install diff coverage tooling
-        if: env.DIFF_COVERAGE == 'true'
-        run: python3 -m pip install diff-cover==10.0.0
       - name: Install React ${{ matrix.react }}
         env:
           REACT_MAJOR: ${{ matrix.react }}
@@ -77,23 +65,23 @@ jobs:
             "react-dom@$REACT_MAJOR" \
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
-      - name: Test with coverage
-        if: env.COVERAGE == 'true'
-        run: bun run test:coverage
-      # React 18 coverage was collected but never read: no upload, no gate.
-      - name: Test
-        if: env.COVERAGE != 'true'
-        run: bun run test
-      - name: Enforce 100% diff coverage
-        if: env.DIFF_COVERAGE == 'true'
-        run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
-      - name: Upload coverage to Codecov
-        if: env.COVERAGE == 'true'
-        uses: codecov/codecov-action@v7
+      # Coverage feeds the diff-coverage gate and Codecov, both React 19 only;
+      # shards keep raw coverage in blob reports and check (react 19) merges it.
+      - name: Test shard ${{ matrix.shard }}/4
+        env:
+          SHARD: ${{ matrix.shard }}/4
+          VITEST_SHARD_MANIFEST: .vitest-shards/react${{ matrix.react }}/shard-${{ matrix.shard }}.json
+          COVERAGE_ARGS: ${{ matrix.react == '19' && '--coverage --coverage.reporter=json-summary --reporter=default --reporter=blob' || '' }}
+        run: ./node_modules/.bin/vitest run --shard="$SHARD" $COVERAGE_ARGS
+      - uses: actions/upload-artifact@v7.0.2
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
+          name: vitest-react${{ matrix.react }}-shard${{ matrix.shard }}
+          path: |
+            .vitest-shards/
+            .vitest-reports/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
 
   build:
     runs-on: ubuntu-24.04
@@ -126,15 +114,12 @@ jobs:
   # Both require every typecheck, test and build job to succeed. `always()`
   # (not `!cancelled()`) so a cancelled or skipped dependency reports a
   # failure instead of a skipped, and therefore passing, required check.
-  check:
-    name: check (react ${{ matrix.react }})
+  check-react-18:
+    name: check (react 18)
     if: always()
     needs: [typecheck, test, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 2
-    strategy:
-      matrix:
-        react: ['18', '19']
     steps:
       - name: Require typecheck, tests and build to pass
         env:
@@ -144,6 +129,62 @@ jobs:
           for result in $RESULTS; do
             if [ "$result" != success ]; then exit 1; fi
           done
+
+  check-react-19:
+    name: check (react 19)
+    if: always()
+    needs: [typecheck, test, build]
+    runs-on: ubuntu-24.04
+    env:
+      DIFF_COVERAGE: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Require typecheck, tests and build to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "typecheck, test, build: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then exit 1; fi
+          done
+      - uses: actions/checkout@v7
+        with:
+          # Diff coverage needs the PR base. A blobless clone fetches history
+          # without file contents (measured as fast as a shallow clone here).
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-python@v6
+        if: env.DIFF_COVERAGE == 'true'
+        with:
+          python-version: '3.13'
+      - run: bun install --frozen-lockfile
+      - name: Install diff coverage tooling
+        if: env.DIFF_COVERAGE == 'true'
+        run: python3 -m pip install diff-cover==10.0.0
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: vitest-react*-shard*
+          merge-multiple: true
+      - name: Prove every test file ran exactly once
+        run: |
+          bun scripts/verify-test-shards.ts .vitest-shards/react18
+          bun scripts/verify-test-shards.ts .vitest-shards/react19
+      - name: Merge shard coverage
+        run: ./node_modules/.bin/vitest --merge-reports --coverage --coverage.reporter=lcov --coverage.reporter=text-summary
+      - name: Enforce 100% diff coverage
+        if: env.DIFF_COVERAGE == 'true'
+        run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
 
   mcp-integration:
     runs-on: ubuntu-latest

@@ -28,3 +28,5 @@ supabase/.branches/_current_branch
 /playwright-report/
 /build-storybook.log
 /build-archive.log
+.vitest-reports/
+.vitest-shards/
