@@ -117,6 +117,14 @@ jobs:
             echo "::error::Tag v$TAG_VERSION does not match package.json version $PKG_VERSION"
             exit 1
           fi
+      # The PR audit gates bun.lock (what CI and Vercel install). npm users of
+      # the published package resolve its dependency ranges fresh instead, so
+      # audit that tree before publishing it.
+      - name: Audit what npm consumers install (runtime, high + critical)
+        run: |
+          npm install --global npm@11.16.0
+          npm install --package-lock-only --no-audit --no-fund
+          npm audit --omit=dev --audit-level=high
       - run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

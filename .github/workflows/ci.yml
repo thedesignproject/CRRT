@@ -81,28 +81,16 @@ jobs:
         with:
           bun-version: 1.4.4
       - run: bun install --frozen-lockfile
-      # Supabase startup (image pulls, migrations, seed) and the build share
-      # nothing, so start Supabase in the background and build meanwhile.
-      # The wait step below fails with the startup's own log and exit code.
-      - name: Start isolated local Supabase and apply migrations (background)
-        run: |
-          nohup bash -c 'bun run local:up; echo $? > "$RUNNER_TEMP/local-up.status"' \
-            > "$RUNNER_TEMP/local-up.log" 2>&1 &
-      - name: Build packaged MCP function
+      - name: Start isolated local Supabase and apply migrations
+        run: bun run local:up
+      - name: Exercise real MCP OAuth, RLS, dashboard upgrades and writes
+        run: bun run test:mcp:local
+      - name: Build and verify packaged MCP function
         run: |
           bun run build:landing
           bun run build:dashboard
           bun scripts/build-vercel-output.ts
-      - name: Wait for local Supabase and migrations
-        timeout-minutes: 5
-        run: |
-          until [ -f "$RUNNER_TEMP/local-up.status" ]; do sleep 1; done
-          cat "$RUNNER_TEMP/local-up.log"
-          exit "$(cat "$RUNNER_TEMP/local-up.status")"
-      - name: Exercise real MCP OAuth, RLS, dashboard upgrades and writes
-        run: bun run test:mcp:local
-      - name: Verify packaged MCP function
-        run: bunx -p node@24 node --env-file=.env.docker.local scripts/verify-mcp-package.mjs
+          bunx -p node@24 node --env-file=.env.docker.local scripts/verify-mcp-package.mjs
       # No `supabase stop`: the runner VM is discarded after the job, and the
       # stop took 11-12s every run.
 
@@ -124,12 +112,12 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      # Audit bun.lock, the tree that CI and Vercel actually install. The old
-      # npm gate resolved a fresh package-lock from package.json ranges, so it
-      # audited versions we never ship and missed advisories in bun.lock.
-      # Gate on shipped runtime code only (--prod), high + critical; dev-tree
-      # hygiene is tracked via Dependabot (.github/dependabot.yml). Reads the
-      # lockfile directly, so no install is needed.
+      # Audit bun.lock, the tree that CI and Vercel install. The old npm gate
+      # resolved package.json ranges fresh, so it missed advisories in
+      # bun.lock; that fresh tree (what npm users of the published package
+      # get) is now audited when publishing (publish.yml). Runtime code only
+      # (--prod), high + critical; dev-tree hygiene is tracked via Dependabot.
+      # Reads the lockfile directly, so no install is needed.
       - name: bun audit (runtime only, high + critical)
         run: bun audit --prod --audit-level=high
 
