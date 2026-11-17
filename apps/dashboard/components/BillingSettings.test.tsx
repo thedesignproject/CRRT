@@ -339,3 +339,11 @@ it('restores the last annual Checkout selection after returning without subscrib
   fireEvent.click(screen.getByRole('button',{name:'Start 14-day trial'}))
   await waitFor(()=>expect(runBillingAction).toHaveBeenCalledWith('/api','token','checkout','studio',undefined,'yearly'))
 })
+
+it('offers a plain subscription once the free trial is used', async () => {
+  vi.mocked(getBillingSummary).mockResolvedValueOnce(summary({ trialUsed: true }))
+  render(<BillingSettings {...props} />)
+  expect(await screen.findByText('Choose a plan to subscribe. Your free trial has been used.')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Subscribe to Pro' })).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Start 14-day trial' })).not.toBeInTheDocument()
+})

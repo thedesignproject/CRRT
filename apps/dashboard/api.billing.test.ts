@@ -22,10 +22,10 @@ it('normalizes the current trunk summary without enabling unsupported actions', 
   fetchMock.mockResolvedValue(response({
     enabled: true, testMode: true, canManage: true, cancelAtPeriodEnd: false, periodEnd: '2026-11-01T00:00:00Z',
     plans: [{ id: 'pro', name: 'Cloud Pro', monthlyUsd: 19, projects: 10, internal_users: 10, comments: 2000, product_audits: 5, amount: '$19', interval: 'month' }],
-    entitlements: { plan: 'pro', status: 'active', resetAt: '2026-11-01T00:00:00Z', usage: { projects: 2, internal_users: 3, comments: 40, product_audits: 1 }, limits: { projects: 10, internal_users: 10, comments: 2000, product_audits: 5 } },
+    entitlements: { plan: 'pro', status: 'active', trialUsed: true, resetAt: '2026-11-01T00:00:00Z', usage: { projects: 2, internal_users: 3, comments: 40, product_audits: 1 }, limits: { projects: 10, internal_users: 10, comments: 2000, product_audits: 5 } },
   }))
   await expect(getBillingSummary('/api', 'token')).resolves.toMatchObject({
-    plan: 'pro', lifecycle: 'active', actions: { checkoutState: false, changePlan: false },
+    plan: 'pro', lifecycle: 'active', trialUsed: true, actions: { checkoutState: false, changePlan: false },
     plans: [{ key: 'pro', name: 'Pro', limits: { internalUsers: 10 } }],
     usage: { comments: { used: 40, limit: 2000, resetAt: '2026-11-01T00:00:00Z' } },
   })

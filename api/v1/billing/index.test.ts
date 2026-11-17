@@ -2,11 +2,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../../_lib/billing/cloud-summary.js',()=>({cloudBillingSummary:vi.fn()}))
 vi.mock('../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../_lib/billing/config.js', () => ({ stripeEnabled: vi.fn(), billingConfig: vi.fn() }))
-vi.mock('../../_lib/billing/service.js', () => ({ billingSummary: vi.fn(), checkout: vi.fn(), portal: vi.fn() }))
+vi.mock('../../_lib/billing/service.js', () => ({ billingSummary: vi.fn(), checkout: vi.fn(), portal: vi.fn(), trialAvailable: vi.fn(), planRequired: vi.fn() }))
 import { cloudBillingSummary } from '../../_lib/billing/cloud-summary.js'
 import { requireUser } from '../../_lib/auth.js'
 import { stripeEnabled, billingConfig } from '../../_lib/billing/config.js'
-import { billingSummary, checkout, portal } from '../../_lib/billing/service.js'
+import { billingSummary, checkout, planRequired, portal, trialAvailable } from '../../_lib/billing/service.js'
 import { BillingBusyError } from '../../_lib/billing/store.js'
 import handler from './index.js'
 import { createCheckoutState, readCheckoutState } from '../../_lib/billing/checkout-state.js'
@@ -63,10 +63,14 @@ it('reports contention separately from configuration/provider failures without l
   const response = await call('GET'); expect(response.statusCode).toBe(503); expect(response.body).toEqual({ error: 'Billing is temporarily unavailable' })
 })
 
-it('checks navigation availability without touching configuration or account state', async () => {
+it('checks navigation availability and the trial hint without touching configuration or Stripe', async () => {
+  vi.mocked(trialAvailable).mockResolvedValue(true)
+  vi.mocked(planRequired).mockResolvedValue(true)
   const response = res()
   await handler({ method: 'GET', headers: { authorization: 'Bearer session' }, query: { availability: '1' } } as never, response as never)
-  expect(response.body).toEqual({ enabled: true })
+  expect(response.body).toEqual({ enabled: true, trialAvailable: true, planRequired: true })
+  expect(trialAvailable).toHaveBeenCalledWith('authenticated-user')
+  expect(planRequired).toHaveBeenCalledWith('authenticated-user')
   expect(billingConfig).not.toHaveBeenCalled()
   expect(billingSummary).not.toHaveBeenCalled()
 })

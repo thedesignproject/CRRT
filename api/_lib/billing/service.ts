@@ -4,6 +4,7 @@ import type { AuthenticatedUser } from '../auth.js'
 import { assertCloudPrice } from './cloud-prices.js'
 import { billingConfig, stripeClient } from './config.js'
 import { accountForCustomer, getAccount, recordEvent, withAccount, type BillingAccount } from './store.js'
+import { ownerEntitlements } from './entitlements.js'
 
 import { cloudPriceCatalog, isCloud, planForPrice, selectionForPrice, type BillingCycle, type CloudPlan } from './plans.js'
 
@@ -79,6 +80,23 @@ export async function billingSummary(userId: string) {
     canManage: Boolean(latest?.customer_id),
     ...(isCloud() ? { billingCycle: selection?.cycle ?? 'monthly', ...(!existing && selection ? { checkoutPlan: selection.plan } : {}) } : {}),
   }
+}
+
+// Cheap hint for the dashboard's trial offer: one account read, no Stripe
+// calls. Checkout re-checks Stripe history before granting the trial.
+export async function trialAvailable(userId: string) {
+  if (!isCloud()) return false
+  let account
+  try { account = await getAccount(userId) } catch { return false }
+  if (!account) return true
+  return !account.is_legacy && !account.trial_used && (!account.subscription_status || terminal.has(account.subscription_status))
+}
+
+// Whether this user must start a plan before creating projects (Cloud limits
+// on and no usable subscription). A UI hint only; writes are still enforced.
+export async function planRequired(userId: string) {
+  if (!isCloud()) return false
+  try { return !(await ownerEntitlements(userId)).canWrite } catch { return false }
 }
 
 export async function checkout(user: AuthenticatedUser, plan: CloudPlan = 'pro', cycle: BillingCycle = 'monthly') {

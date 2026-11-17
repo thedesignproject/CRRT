@@ -166,6 +166,7 @@ export interface BillingSummary {
   lifecycle?: BillingLifecycle
   status?: BillingLifecycle
   trialEndsAt?: string | null
+  trialUsed?: boolean
   currentPeriodEnd?: string | null
   periodEnd?: string | null
   graceEndsAt?: string | null
@@ -338,6 +339,7 @@ type LegacyBillingSummary = {
     isLegacy?: boolean
     plan: BillingPlanKey | null
     status: string
+    trialUsed?: boolean
     resetAt: string | null
     usage: { projects: number; internal_users: number; comments: number; product_audits: number }
     limits: { projects: number | null; internal_users: number | null; comments: number | null; product_audits: number | null }
@@ -374,6 +376,7 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
     billingCycle: legacy.billingCycle,
     checkoutPlan: legacy.checkoutPlan,
     lifecycle: legacyLifecycle(entitlement.status, entitlement.plan),
+    trialUsed: entitlement.trialUsed,
     cancelAtPeriodEnd: legacy.cancelAtPeriodEnd,
     currentPeriodEnd: legacy.periodEnd,
     canManageSubscription: legacy.canManage,

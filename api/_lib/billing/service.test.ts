@@ -1,10 +1,12 @@
 import Stripe from 'stripe'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./config.js', () => ({ billingConfig: vi.fn(), stripeClient: vi.fn() }))
+vi.mock('./entitlements.js', () => ({ ownerEntitlements: vi.fn() }))
 vi.mock('./store.js', () => ({ getAccount: vi.fn(), accountForCustomer: vi.fn(), recordEvent: vi.fn(), withAccount: vi.fn() }))
 import { billingConfig, stripeClient } from './config.js'
 import { accountForCustomer, getAccount, recordEvent, withAccount, type BillingAccount } from './store.js'
-import { billingSummary, checkout, portal, processBillingEvent } from './service.js'
+import { billingSummary, checkout, planRequired, portal, processBillingEvent, trialAvailable } from './service.js'
+import { ownerEntitlements } from './entitlements.js'
 const user = { userId: 'user-a', email: 'a@example.com' }
 const save = vi.fn()
 const sdk = { prices: { retrieve: vi.fn() }, customers: { create: vi.fn() }, subscriptions: { list: vi.fn() }, checkout: { sessions: { list: vi.fn(), create: vi.fn(), retrieve: vi.fn(), expire: vi.fn() } }, billingPortal: { configurations: { retrieve: vi.fn() }, sessions: { create: vi.fn() } } }
@@ -476,4 +478,32 @@ it('returns the same safe defaults before a Cloud billing account exists', async
   const summary = await billingSummary(user.userId)
   expect(summary).toMatchObject({ billingCycle: 'monthly', canManage: false })
   expect(summary).not.toHaveProperty('checkoutPlan')
+})
+
+it('offers the trial only to Cloud accounts that can still start one', async () => {
+  expect(await trialAvailable(user.userId)).toBe(false)
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')
+  vi.mocked(getAccount).mockResolvedValueOnce(null)
+  expect(await trialAvailable(user.userId)).toBe(true)
+  for (const [values, expected] of [
+    [{}, true], [{ subscription_status: 'canceled' }, true], [{ subscription_status: 'incomplete_expired' }, true],
+    [{ trial_used: true }, false], [{ is_legacy: true }, false], [{ subscription_status: 'active' }, false], [{ subscription_status: 'trialing' }, false],
+  ] as const) {
+    vi.mocked(getAccount).mockResolvedValueOnce({ ...account, ...values })
+    expect(await trialAvailable(user.userId)).toBe(expected)
+  }
+  vi.mocked(getAccount).mockRejectedValueOnce(new Error('db down'))
+  expect(await trialAvailable(user.userId)).toBe(false)
+  vi.unstubAllEnvs()
+})
+
+it('requires a plan only when Cloud would refuse the owner\'s writes', async () => {
+  expect(await planRequired(user.userId)).toBe(false)
+  vi.stubEnv('CRRT_DEPLOYMENT_MODE', 'cloud')
+  vi.mocked(ownerEntitlements).mockResolvedValueOnce({ canWrite: false } as never)
+  expect(await planRequired(user.userId)).toBe(true)
+  vi.mocked(ownerEntitlements).mockResolvedValueOnce({ canWrite: true } as never)
+  expect(await planRequired(user.userId)).toBe(false)
+  vi.mocked(ownerEntitlements).mockRejectedValueOnce(new Error('rpc down'))
+  expect(await planRequired(user.userId)).toBe(false)
 })
