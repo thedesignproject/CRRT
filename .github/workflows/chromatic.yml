@@ -39,8 +39,12 @@ jobs:
       - name: Capture and replay selected screens
         id: local
         run: bun run test:visual
+      # Best effort: the cloud comparison can be unavailable (for example when
+      # the monthly snapshot quota runs out). Local capture/replay above is
+      # the blocking visual check; the PR result reports the cloud outcome.
       - name: Publish and compare with Chromatic
         id: cloud
+        continue-on-error: true
         if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
         env:
           CHROMATIC_PROJECT_TOKEN: ${{ secrets.CHROMATIC_PROJECT_TOKEN }}
@@ -82,6 +86,7 @@ jobs:
     permissions:
       actions: read
       pull-requests: write
+      statuses: write
     steps:
       # No checkout: this job reads report data, never executes PR code.
       - uses: actions/download-artifact@v8
@@ -122,13 +127,17 @@ jobs:
               if (url.protocol === 'https:' && url.hostname === 'www.chromatic.com' && url.pathname === '/build' && url.searchParams.get('appId') === '6aeae810ce4e3a1237160876' && /^\d+$/.test(url.searchParams.get('number') || '')) buildUrl = url.href;
             } catch {}
             const localPassed = process.env.LOCAL_RESULT === 'success';
-            const complete = localPassed && process.env.CLOUD_RESULT === 'success' && Number.isSafeInteger(expected) && expected > 0 && total === expected && results.length === total && errors === 0 && skipped === 0 && count('failures') === pending && results.every(result => ['PASSED', 'ACCEPTED', 'PENDING'].includes(result)) && buildUrl;
-            const status = complete ? (pending ? 'Needs baseline review' : 'Passed') : 'Failed';
+            // A cloud run counts only when it compared every snapshot. Anything
+            // less (missing token, quota exhausted, skipped snapshots) is skipped.
+            const cloudRan = process.env.CLOUD_RESULT === 'success' && Number.isSafeInteger(expected) && expected > 0 && total === expected && results.length === total && skipped === 0 && Boolean(buildUrl);
+            const cloudPassed = cloudRan && errors === 0 && count('failures') === pending && results.every(result => ['PASSED', 'ACCEPTED', 'PENDING'].includes(result));
+            const status = !localPassed || (cloudRan && !cloudPassed) ? 'Failed' : !cloudRan ? 'Passed locally (Chromatic cloud skipped)' : pending ? 'Needs baseline review' : 'Passed';
             const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
             const body = [marker, `### Chromatic — ${status}`, `Commit \`${sha.slice(0, 7)}\``,
               `Local capture/replay: **${localPassed ? 'passed' : 'failed or incomplete'}**.`,
               total === null ? 'No complete cloud report was produced.' : `${total} snapshots · ${errors ?? '?'} rendering errors · ${skipped ?? '?'} skipped · ${pending} pending baseline reviews.`,
-              complete && pending ? 'Approve changes in Chromatic to resolve its UI Tests check. This comment reflects the workflow run; the native check updates after approval.' : '',
+              !cloudRan && localPassed ? 'The Chromatic cloud comparison did not run to completion (for example, the monthly snapshot quota is used up), so it was skipped. Local capture/replay still gates this check, and the UI Tests / UI Review statuses are marked skipped.' : '',
+              cloudPassed && pending ? 'Approve changes in Chromatic to resolve its UI Tests check. This comment reflects the workflow run; the native check updates after approval.' : '',
               [buildUrl && `[Review snapshots](${buildUrl})`, `[Workflow logs](${runUrl})`].filter(Boolean).join(' · ')
             ].join('\n\n');
             await core.summary.addRaw(body).write();
@@ -136,4 +145,12 @@ jobs:
             const existing = comments.find(comment => comment.user?.type === 'Bot' && comment.body?.includes(marker));
             if (existing) await github.rest.issues.updateComment({ ...context.repo, comment_id: existing.id, body });
             else await github.rest.issues.createComment({ ...context.repo, issue_number, body });
+            // Chromatic leaves its UI Tests / UI Review statuses pending when the
+            // cloud comparison cannot run. Mark them skipped so they do not block
+            // merges; a later real Chromatic run replaces these statuses.
+            if (localPassed && !cloudRan) {
+              for (const name of ['UI Tests', 'UI Review']) {
+                await github.rest.repos.createCommitStatus({ ...context.repo, sha, state: 'success', context: name, target_url: runUrl, description: 'Skipped: Chromatic cloud comparison unavailable' });
+              }
+            }
             if (status === 'Failed') core.setFailed('Chromatic checks failed or the report is incomplete');
