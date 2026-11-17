@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Pack tarball
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.4
       # setup-node is kept solely for the final `npm publish` step — Bun can
       # install and build, but `npm publish --provenance` with GitHub's OIDC
       # story is the reliable publish path.
