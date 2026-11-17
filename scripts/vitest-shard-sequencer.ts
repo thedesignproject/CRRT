@@ -2,8 +2,9 @@
 //
 // `vitest --shard=i/n` normally hashes paths into n equal-sized buckets, so one
 // shard can draw most of the slow files. This partitions files with
-// longest-processing-time-first bin packing over scripts/test-durations.json
-// (refresh it with `bun run test:durations` after a full run).
+// longest-processing-time-first bin packing over scripts/test-durations.json,
+// each file's full cost (environment, setup files, import and tests) as
+// recorded by `bun run test:durations`.
 //
 // Every shard must compute the same partition or a file could run twice or
 // never. The durations therefore come from a committed file, never from a
@@ -44,24 +45,6 @@ export function partition(files: string[], durations: Durations, count: number):
   return shards.map((shard) => shard.files)
 }
 
-/** Seeded Fisher-Yates (mulberry32), so `--sequence.seed` replays a file order. */
-export function shuffle<T>(items: readonly T[], seed: number): T[] {
-  let state = seed >>> 0
-  const random = (): number => {
-    state = (state + 0x6d2b79f5) >>> 0
-    let t = state
-    t = Math.imul(t ^ (t >>> 15), t | 1)
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
-    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296
-  }
-  const out = [...items]
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(random() * (i + 1))
-    ;[out[i], out[j]] = [out[j], out[i]]
-  }
-  return out
-}
-
 export function readDurations(path: string | URL): Durations {
   return (JSON.parse(readFileSync(path, 'utf8')) as { files: Durations }).files
 }
@@ -84,13 +67,5 @@ export class DurationShardSequencer extends BaseSequencer {
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     }
     return files.filter((spec) => mine.has(this.key(spec)))
-  }
-
-  // A custom sequencer replaces Vitest's RandomSequencer, so honour
-  // `sequence.shuffle` for file order here (tests inside files still shuffle).
-  override async sort(files: TestSpecification[]): Promise<TestSpecification[]> {
-    const { shuffle: shuffled, seed } = this.ctx.config.sequence
-    if (shuffled) return shuffle(files, seed ?? Date.now())
-    return super.sort(files)
   }
 }

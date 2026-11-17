@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { partition, shuffle, type ShardManifest } from './vitest-shard-sequencer'
+import { partition, type ShardManifest } from './vitest-shard-sequencer'
 import { verifyShards } from './verify-test-shards'
 
 const files = ['a.test.ts', 'b.test.ts', 'c.test.ts', 'd.test.ts', 'e.test.ts', 'new.test.ts']
@@ -24,13 +24,6 @@ it('balances by duration, longest first, and prices unknown files at the median'
 
 it('is deterministic regardless of input order', () => {
   expect(partition([...files].reverse(), durations, 3)).toEqual(partition(files, durations, 3))
-})
-
-it('shuffles reproducibly from a seed without losing files', () => {
-  const once = shuffle(files, 42)
-  expect(shuffle(files, 42)).toEqual(once)
-  expect(shuffle(files, 7)).not.toEqual(once)
-  expect([...once].sort()).toEqual([...files].sort())
 })
 
 const manifest = (index: number, mine: string[], all = ['x', 'y', 'z'], count = 2): ShardManifest => ({ index, count, all, mine })

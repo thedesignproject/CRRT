@@ -38,7 +38,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:diff-coverage": "bash scripts/check-diff-coverage.sh",
-    "test:durations": "bun scripts/update-test-durations.ts",
+    "test:durations": "vitest run --reporter=default --reporter=./scripts/vitest-durations-reporter.ts",
     "build": "tsc && vite build",
     "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
     "build:extension": "wxt build --config apps/extension/wxt.config.ts",

@@ -35,6 +35,12 @@ jobs:
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
       - run: bun run typecheck
+      # The widget ships .d.ts files to React 18 and 19 consumers. The build
+      # job emits them with the lockfile's React 19; emit them under React 18
+      # types here so declaration-only errors still surface for 18.
+      - name: Widget declarations under React 18
+        if: matrix.react == '18'
+        run: ./node_modules/.bin/tsc --project tsconfig.json --outDir "$RUNNER_TEMP/dts" --declarationDir "$RUNNER_TEMP/dts"
 
   # Shards balance files by measured duration (scripts/test-durations.json).
   # Every shard records the full file list and its share; check (react 19)
@@ -71,7 +77,7 @@ jobs:
         env:
           SHARD: ${{ matrix.shard }}/4
           VITEST_SHARD_MANIFEST: .vitest-shards/react${{ matrix.react }}/shard-${{ matrix.shard }}.json
-          COVERAGE_ARGS: ${{ matrix.react == '19' && '--coverage --coverage.reporter=json-summary --reporter=default --reporter=blob' || '' }}
+          COVERAGE_ARGS: ${{ matrix.react == '19' && '--coverage --coverage.reporter=json-summary --reporter=default --reporter=github-actions --reporter=blob' || '' }}
         run: ./node_modules/.bin/vitest run --shard="$SHARD" $COVERAGE_ARGS
       - uses: actions/upload-artifact@v7.0.2
         with:

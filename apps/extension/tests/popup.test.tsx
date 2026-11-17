@@ -39,6 +39,7 @@ vi.mock('../lib/disclosure', () => ({
 
 document.body.innerHTML = '<div id="root"></div>'
 const { Popup } = await import('../entrypoints/popup/main')
+if (importRoots.length !== 1) throw new Error(`popup entrypoint should create exactly one root on import; captured ${importRoots.length}`)
 await act(async () => { for (const root of importRoots.splice(0)) root.unmount() })
 
 beforeEach(() => {
