@@ -1,5 +1,22 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+// The popup entrypoint mounts a real <Popup /> into #root on import. Capture
+// that root so it is unmounted before any test runs: left mounted, React 18
+// keeps rendering it concurrently and RTL's cleanup can unmount another root
+// mid-render, which breaks every later test ("Should not already be working").
+const importRoots = vi.hoisted(() => [] as { unmount: () => void }[])
+vi.mock('react-dom/client', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('react-dom/client')>()
+  return {
+    ...actual,
+    createRoot: (...args: Parameters<typeof actual.createRoot>) => {
+      const root = actual.createRoot(...args)
+      importRoots.push(root)
+      return root
+    },
+  }
+})
 
 vi.mock('../lib/local-workspace-panel',()=>({LocalWorkspacePanel:({billingUrl}:{billingUrl:string})=><a href={billingUrl}>Local billing</a>}))
 const sendMessage = vi.fn()
@@ -22,6 +39,8 @@ vi.mock('../lib/disclosure', () => ({
 
 document.body.innerHTML = '<div id="root"></div>'
 const { Popup } = await import('../entrypoints/popup/main')
+if (importRoots.length !== 1) throw new Error(`popup entrypoint should create exactly one root on import; captured ${importRoots.length}`)
+await act(async () => { for (const root of importRoots.splice(0)) root.unmount() })
 
 beforeEach(() => {
   sendMessage.mockReset()

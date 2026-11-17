@@ -10,31 +10,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  check:
+  # Typecheck, build and tests run as parallel jobs; `check (react N)` below
+  # keeps the required status names and fails unless every one of them passed.
+  typecheck:
+    name: typecheck (react ${{ matrix.react }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         react: ['18', '19']
-    name: check (react ${{ matrix.react }})
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      - uses: actions/setup-python@v6
-        if: matrix.react == '19' && github.event_name == 'pull_request'
-        with:
-          python-version: '3.13'
       - run: bun install --frozen-lockfile
-      - name: Install diff coverage tooling
-        if: matrix.react == '19' && github.event_name == 'pull_request'
-        run: python3 -m pip install diff-cover==10.0.0
       - name: Install React ${{ matrix.react }}
         env:
           REACT_MAJOR: ${{ matrix.react }}
@@ -45,17 +35,74 @@ jobs:
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
       - run: bun run typecheck
-      - run: bun run test:coverage
-      - name: Enforce 100% diff coverage
-        if: matrix.react == '19' && github.event_name == 'pull_request'
-        run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
-      - name: Upload coverage to Codecov
-        if: matrix.react == '19'
-        uses: codecov/codecov-action@v7
+      # The widget ships .d.ts files to React 18 and 19 consumers. The build
+      # job emits them with the lockfile's React 19; emit them under React 18
+      # types here so declaration-only errors still surface for 18.
+      - name: Widget declarations under React 18
+        if: matrix.react == '18'
+        run: ./node_modules/.bin/tsc --project tsconfig.json --outDir "$RUNNER_TEMP/dts" --declarationDir "$RUNNER_TEMP/dts"
+
+  # Shards balance files by measured duration (scripts/test-durations.json).
+  # Every shard records the full file list and its share; check (react 19)
+  # proves the shards covered every file exactly once.
+  test:
+    name: test (react ${{ matrix.react }}, ${{ matrix.shard }}/4)
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        react: ['18', '19']
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
         with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./coverage/lcov.info
-          fail_ci_if_error: false
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - name: Install React ${{ matrix.react }}
+        env:
+          REACT_MAJOR: ${{ matrix.react }}
+        run: |
+          bun add --no-save \
+            "react@$REACT_MAJOR" \
+            "react-dom@$REACT_MAJOR" \
+            "@types/react@$REACT_MAJOR" \
+            "@types/react-dom@$REACT_MAJOR"
+      # Coverage feeds the diff-coverage gate and Codecov, both React 19 only;
+      # shards keep raw coverage in blob reports and check (react 19) merges it.
+      - name: Test shard ${{ matrix.shard }}/4
+        env:
+          SHARD: ${{ matrix.shard }}/4
+          VITEST_SHARD_MANIFEST: .vitest-shards/react${{ matrix.react }}/shard-${{ matrix.shard }}.json
+          COVERAGE_ARGS: ${{ matrix.react == '19' && '--coverage --coverage.reporter=json-summary --reporter=default --reporter=github-actions --reporter=blob' || '' }}
+        run: ./node_modules/.bin/vitest run --shard="$SHARD" $COVERAGE_ARGS
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: vitest-react${{ matrix.react }}-shard${{ matrix.shard }}
+          path: |
+            .vitest-shards/
+            .vitest-reports/
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      # React is external to the bundle, so one build (with the lockfile's
+      # React, as publish.yml does) covers both React majors; typecheck
+      # (react 18) covers the widget's React 18 types.
+      - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Enforce bundle size ceiling
         run: |
@@ -68,6 +115,82 @@ jobs:
             echo "::error::Bundle exceeds size ceiling"
             exit 1
           fi
+
+  # Required status checks are named `check (react 18)` and `check (react 19)`.
+  # Both require every typecheck, test and build job to succeed. `always()`
+  # (not `!cancelled()`) so a cancelled or skipped dependency reports a
+  # failure instead of a skipped, and therefore passing, required check.
+  check-react-18:
+    name: check (react 18)
+    if: always()
+    needs: [typecheck, test, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Require typecheck, tests and build to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "typecheck, test, build: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then exit 1; fi
+          done
+
+  check-react-19:
+    name: check (react 19)
+    if: always()
+    needs: [typecheck, test, build]
+    runs-on: ubuntu-24.04
+    env:
+      DIFF_COVERAGE: ${{ github.event_name == 'pull_request' }}
+    steps:
+      - name: Require typecheck, tests and build to pass
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "typecheck, test, build: $RESULTS"
+          for result in $RESULTS; do
+            if [ "$result" != success ]; then exit 1; fi
+          done
+      - uses: actions/checkout@v7
+        with:
+          # Diff coverage needs the PR base. A blobless clone fetches history
+          # without file contents (measured as fast as a shallow clone here).
+          fetch-depth: 0
+          filter: blob:none
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - uses: actions/setup-python@v6
+        if: env.DIFF_COVERAGE == 'true'
+        with:
+          python-version: '3.13'
+      - run: bun install --frozen-lockfile
+      - name: Install diff coverage tooling
+        if: env.DIFF_COVERAGE == 'true'
+        run: python3 -m pip install diff-cover==10.0.0
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: vitest-react*-shard*
+          merge-multiple: true
+      - name: Prove every test file ran exactly once
+        run: |
+          bun scripts/verify-test-shards.ts .vitest-shards/react18
+          bun scripts/verify-test-shards.ts .vitest-shards/react19
+      - name: Merge shard coverage
+        run: ./node_modules/.bin/vitest --merge-reports --coverage --coverage.reporter=lcov --coverage.reporter=text-summary
+      - name: Enforce 100% diff coverage
+        if: env.DIFF_COVERAGE == 'true'
+        run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          fail_ci_if_error: false
 
   mcp-integration:
     runs-on: ubuntu-latest
