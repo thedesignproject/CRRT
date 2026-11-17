@@ -33,7 +33,7 @@ it('shuffles reproducibly from a seed without losing files', () => {
   expect([...once].sort()).toEqual([...files].sort())
 })
 
-const manifest = (index: number, mine: string[], all = ['x', 'y', 'z'], count = 2): ShardManifest => ({ index, count, all, mine })
+const manifest = (index: number, mine: string[], all = ['x', 'y', 'z'], count = 2, mode: ShardManifest['mode'] = 'full'): ShardManifest => ({ index, count, mode, all, mine })
 
 it('accepts shards that cover every file exactly once', () => {
   expect(verifyShards([manifest(1, ['x', 'z']), manifest(2, ['y'])])).toEqual([])
@@ -46,5 +46,8 @@ it('reports missing, duplicated, unclaimed and inconsistent shards', () => {
   expect(verifyShards([manifest(1, ['x', 'y', 'z']), manifest(2, [], ['x', 'y'], 3)])).toEqual([
     'shard 2 saw 3 shards, shard 1 saw 2',
     'shard 2 saw a different test file list than shard 1',
+  ])
+  expect(verifyShards([manifest(1, ['x', 'y', 'z'], undefined, 2, 'changed'), manifest(2, [])])).toEqual([
+    'shard 2 ran the full suite, shard 1 ran the changed suite',
   ])
 })

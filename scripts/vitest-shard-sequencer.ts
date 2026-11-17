@@ -19,6 +19,8 @@ export type Durations = Record<string, number>
 export interface ShardManifest {
   index: number
   count: number
+  /** 'changed' when a pull request ran only the tests its diff can reach. */
+  mode: 'full' | 'changed'
   all: string[]
   mine: string[]
 }
@@ -79,7 +81,8 @@ export class DurationShardSequencer extends BaseSequencer {
     const mine = new Set(parts[index - 1])
     const manifestPath = process.env.VITEST_SHARD_MANIFEST
     if (manifestPath) {
-      const manifest: ShardManifest = { index, count, all: [...keys].sort(byPath), mine: [...mine].sort(byPath) }
+      const mode = process.env.VITEST_SELECTION_MODE === 'changed' ? 'changed' : 'full'
+      const manifest: ShardManifest = { index, count, mode, all: [...keys].sort(byPath), mine: [...mine].sort(byPath) }
       mkdirSync(dirname(manifestPath), { recursive: true })
       writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
     }

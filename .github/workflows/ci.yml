@@ -49,6 +49,10 @@ jobs:
         shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v7
+        with:
+          # PR selection diffs against the base; blobless keeps history cheap.
+          fetch-depth: 0
+          filter: blob:none
       - uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
@@ -65,14 +69,17 @@ jobs:
             "react-dom@$REACT_MAJOR" \
             "@types/react@$REACT_MAJOR" \
             "@types/react-dom@$REACT_MAJOR"
-      # Coverage feeds the diff-coverage gate and Codecov, both React 19 only;
-      # shards keep raw coverage in blob reports and check (react 19) merges it.
+      # Pull requests run only the tests their diff can reach when nothing in
+      # the diff is invisible to the module graph (scripts/test-selection.ts);
+      # trunk and the merge queue always run everything. Coverage feeds the
+      # diff-coverage gate and Codecov, both React 19 only; shards keep raw
+      # coverage in blob reports and check (react 19) merges it.
       - name: Test shard ${{ matrix.shard }}/4
         env:
-          SHARD: ${{ matrix.shard }}/4
+          SELECTION_BASE: ${{ github.event.pull_request.base.sha }}
+          COVERAGE: ${{ matrix.react == '19' }}
           VITEST_SHARD_MANIFEST: .vitest-shards/react${{ matrix.react }}/shard-${{ matrix.shard }}.json
-          COVERAGE_ARGS: ${{ matrix.react == '19' && '--coverage --coverage.reporter=json-summary --reporter=default --reporter=blob' || '' }}
-        run: ./node_modules/.bin/vitest run --shard="$SHARD" $COVERAGE_ARGS
+        run: bun scripts/run-test-shard.ts ${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v7.0.2
         with:
           name: vitest-react${{ matrix.react }}-shard${{ matrix.shard }}
@@ -171,6 +178,7 @@ jobs:
           pattern: vitest-react*-shard*
           merge-multiple: true
       - name: Prove every test file ran exactly once
+        id: shards
         run: |
           bun scripts/verify-test-shards.ts .vitest-shards/react18
           bun scripts/verify-test-shards.ts .vitest-shards/react19
@@ -179,7 +187,10 @@ jobs:
       - name: Enforce 100% diff coverage
         if: env.DIFF_COVERAGE == 'true'
         run: bun run test:diff-coverage -- "${{ github.event.pull_request.base.sha }}"
+      # A selected run covers only the affected tests; uploading it would
+      # report a false project-wide drop. The diff-coverage gate still ran.
       - name: Upload coverage to Codecov
+        if: steps.shards.outputs.mode == 'full'
         uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
