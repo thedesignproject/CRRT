@@ -184,14 +184,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.4
-      - uses: actions/setup-python@v6
-        if: env.DIFF_COVERAGE == 'true'
-        with:
-          python-version: '3.13'
-      - run: bun install --frozen-lockfile
-      - name: Install diff coverage tooling
-        if: env.DIFF_COVERAGE == 'true'
-        run: python3 -m pip install diff-cover==10.0.0
+      # Six network-bound setup steps in series pushed this job to 35s of
+      # setup in one run; install diff-cover alongside bun instead of after.
+      - name: Install dependencies and diff coverage tooling
+        run: |
+          if [ "$DIFF_COVERAGE" = true ]; then
+            (python3 -m venv /tmp/dc-venv && /tmp/dc-venv/bin/pip install -q diff-cover==10.0.0) &
+            pip_pid=$!
+          fi
+          bun install --frozen-lockfile
+          if [ -n "${pip_pid:-}" ]; then wait "$pip_pid"; fi
       - uses: actions/download-artifact@v8
         with:
           pattern: vitest-react*-shard*
