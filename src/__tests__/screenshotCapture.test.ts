@@ -40,11 +40,7 @@ describe('screenshot capture', () => {
   })
 
   it('adds a small contextual crop around the focused target', () => {
-    expect(calculateCaptureRegion(
-      { left: 620, top: 390, width: 200, height: 120 },
-      1440,
-      900,
-    )).toEqual({
+    expect(calculateCaptureRegion({ left: 620, top: 390, width: 200, height: 120 }, 1440, 900)).toEqual({
       left: 610,
       top: 380,
       width: 220,
@@ -53,11 +49,7 @@ describe('screenshot capture', () => {
   })
 
   it('keeps a crop inside the viewport when the target reaches an edge', () => {
-    expect(calculateCaptureRegion(
-      { left: 1100, top: 700, width: 300, height: 180 },
-      1200,
-      800,
-    )).toEqual({
+    expect(calculateCaptureRegion({ left: 1100, top: 700, width: 300, height: 180 }, 1200, 800)).toEqual({
       left: 1080,
       top: 680,
       width: 120,
@@ -66,11 +58,7 @@ describe('screenshot capture', () => {
   })
 
   it('anchors the crop to the nearest edge for an offscreen focus rect', () => {
-    expect(calculateCaptureRegion(
-      { left: -100, top: 1000, width: 20, height: 20 },
-      800,
-      600,
-    )).toEqual({
+    expect(calculateCaptureRegion({ left: -100, top: 1000, width: 20, height: 20 }, 800, 600)).toEqual({
       left: 0,
       top: 580,
       width: 20,
@@ -79,11 +67,7 @@ describe('screenshot capture', () => {
   })
 
   it('keeps padding around a target in a small viewport', () => {
-    expect(calculateCaptureRegion(
-      { left: 120, top: 80, width: 20, height: 20 },
-      300,
-      200,
-    )).toEqual({
+    expect(calculateCaptureRegion({ left: 120, top: 80, width: 20, height: 20 }, 300, 200)).toEqual({
       left: 110,
       top: 70,
       width: 40,
@@ -103,17 +87,20 @@ describe('screenshot capture', () => {
     const blob = await captureViewport({ left: 620, top: 390, width: 200, height: 120 })
 
     expect(blob).toBeInstanceOf(Blob)
-    expect(vi.mocked(html2canvas)).toHaveBeenCalledWith(document.documentElement, expect.objectContaining({
-      x: 634,
-      y: 1020,
-      width: 220,
-      height: 140,
-      scrollX: 24,
-      scrollY: 640,
-      windowWidth: 1440,
-      windowHeight: 900,
-      scale: 2,
-    }))
+    expect(vi.mocked(html2canvas)).toHaveBeenCalledWith(
+      document.documentElement,
+      expect.objectContaining({
+        x: 634,
+        y: 1020,
+        width: 220,
+        height: 140,
+        scrollX: 24,
+        scrollY: 640,
+        windowWidth: 1440,
+        windowHeight: 900,
+        scale: 2,
+      }),
+    )
     const options = vi.mocked(html2canvas).mock.calls[0][1]!
     const overlay = document.createElement('div')
     overlay.setAttribute('data-fw', '')
@@ -127,9 +114,7 @@ describe('screenshot capture', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     await expect(captureViewport()).resolves.toBeNull()
-    expect(warn).toHaveBeenCalledWith(
-      '[FeedbackWidget] Screenshot capture failed: canvas.toBlob() returned null',
-    )
+    expect(warn).toHaveBeenCalledWith('[FeedbackWidget] Screenshot capture failed: canvas.toBlob() returned null')
   })
 
   it('returns null and warns when rendering rejects', async () => {
@@ -163,7 +148,9 @@ describe('screenshot capture', () => {
     const captureSource = vi.fn().mockResolvedValue(screenshot)
     const { result } = renderHook(() => useScreenshotCapture(captureSource))
     const focus = { left: 10, top: 20, width: 30, height: 40 }
-    await act(async () => { await result.current.capture(focus) })
+    await act(async () => {
+      await result.current.capture(focus)
+    })
     expect(captureSource).toHaveBeenCalledWith(focus)
     expect(result.current.image).toBe(screenshot)
     expect(html2canvas).not.toHaveBeenCalled()
@@ -185,9 +172,11 @@ describe('screenshot capture', () => {
   it('ignores a capture that finishes after it was cleared', async () => {
     const screenshot = new Blob(['late'], { type: 'image/png' })
     let resolveRenderer!: (canvas: HTMLCanvasElement) => void
-    vi.mocked(html2canvas).mockReturnValue(new Promise((resolve) => {
-      resolveRenderer = resolve
-    }))
+    vi.mocked(html2canvas).mockReturnValue(
+      new Promise((resolve) => {
+        resolveRenderer = resolve
+      }),
+    )
     const { result } = renderHook(() => useScreenshotCapture())
 
     let capturePromise!: Promise<Blob | null>

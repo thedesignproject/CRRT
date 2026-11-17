@@ -14,6 +14,9 @@ export function workerFailureLog(error: unknown) {
 export function workerCompletionLog(resources: string[]) {
   const counts = new Map<string, number>()
   for (const resource of resources) counts.set(safe(resource), (counts.get(safe(resource)) ?? 0) + 1)
-  const summary = [...counts].map(([type, count]) => `${type}:${count}`).sort().join(',')
+  const summary = [...counts]
+    .map(([type, count]) => `${type}:${count}`)
+    .sort()
+    .join(',')
   return `record_worker_complete active_resources=${summary || 'none'}`
 }

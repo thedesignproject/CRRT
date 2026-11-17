@@ -72,19 +72,17 @@ export function createWidgetAuthToken(
   })
 }
 
-export function verifyWidgetAuthToken(
-  token: string,
-  nowSeconds = Math.floor(Date.now() / 1000),
-) {
+export function verifyWidgetAuthToken(token: string, nowSeconds = Math.floor(Date.now() / 1000)) {
   const payload = decodeSignedJson<WidgetAuthTokenPayload>(token)
   if (!payload || typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
   if (
-    typeof payload.projectKey !== 'string'
-    || typeof payload.githubUserId !== 'string'
-    || typeof payload.githubLogin !== 'string'
-    || typeof payload.githubOwner !== 'string'
-    || typeof payload.githubRepo !== 'string'
-  ) return null
+    typeof payload.projectKey !== 'string' ||
+    typeof payload.githubUserId !== 'string' ||
+    typeof payload.githubLogin !== 'string' ||
+    typeof payload.githubOwner !== 'string' ||
+    typeof payload.githubRepo !== 'string'
+  )
+    return null
   return payload
 }
 
@@ -100,17 +98,11 @@ export function createWidgetGithubState(
   })
 }
 
-export function verifyWidgetGithubState(
-  state: string,
-  nowSeconds = Math.floor(Date.now() / 1000),
-) {
+export function verifyWidgetGithubState(state: string, nowSeconds = Math.floor(Date.now() / 1000)) {
   const payload = decodeSignedJson<WidgetGithubState>(state)
   if (!payload || typeof payload.exp !== 'number' || payload.exp < nowSeconds) return null
-  if (
-    typeof payload.projectKey !== 'string'
-    || typeof payload.origin !== 'string'
-    || typeof payload.nonce !== 'string'
-  ) return null
+  if (typeof payload.projectKey !== 'string' || typeof payload.origin !== 'string' || typeof payload.nonce !== 'string')
+    return null
   return payload
 }
 
@@ -132,7 +124,7 @@ export async function exchangeGitHubCode(code: string) {
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
     body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
   })
-  const body = await response.json() as { access_token?: unknown }
+  const body = (await response.json()) as { access_token?: unknown }
   if (!response.ok || typeof body.access_token !== 'string') {
     throw new Error('github_code_exchange_failed')
   }
@@ -143,7 +135,7 @@ export async function getGitHubUser(accessToken: string): Promise<GitHubUser> {
   const response = await fetch('https://api.github.com/user', {
     headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${accessToken}` },
   })
-  const body = await response.json() as { id?: unknown; login?: unknown }
+  const body = (await response.json()) as { id?: unknown; login?: unknown }
   if (!response.ok || body.id === undefined || typeof body.login !== 'string') {
     throw new Error('github_user_lookup_failed')
   }

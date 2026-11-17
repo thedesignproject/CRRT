@@ -8,17 +8,9 @@ type AgentLauncherProps = {
   | { disabled: true; unavailableReason: string; onOpen?: never }
 )
 
-export function AgentLauncher({
-  readyCount,
-  open,
-  onOpen,
-  disabled = false,
-  unavailableReason,
-}: AgentLauncherProps) {
+export function AgentLauncher({ readyCount, open, onOpen, disabled = false, unavailableReason }: AgentLauncherProps) {
   const hasReadyWork = !disabled && readyCount > 0
-  const label = disabled
-    ? `Agents unavailable: ${unavailableReason}`
-    : `Agents, ${readyCount} ready`
+  const label = disabled ? `Agents unavailable: ${unavailableReason}` : `Agents, ${readyCount} ready`
 
   return (
     <button
@@ -34,7 +26,10 @@ export function AgentLauncher({
       <BotIcon size={16} />
       <span>Agents</span>
       {readyCount > 0 ? (
-        <span key={readyCount} className="dashboard-agent-ready-count inline-flex h-4 items-center justify-center rounded-full px-1.5 text-[10px] leading-none tabular-nums">
+        <span
+          key={readyCount}
+          className="dashboard-agent-ready-count inline-flex h-4 items-center justify-center rounded-full px-1.5 text-[10px] leading-none tabular-nums"
+        >
           {readyCount} ready
         </span>
       ) : null}

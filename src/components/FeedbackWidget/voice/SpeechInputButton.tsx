@@ -6,18 +6,24 @@ type SpeechResult = { readonly isFinal: boolean; readonly 0?: SpeechAlternative 
 type SpeechResultEvent = Event & { readonly resultIndex: number; readonly results: ArrayLike<SpeechResult> }
 type SpeechRecognitionErrorEvent = Event & { readonly error?: string }
 type SpeechRecognitionInstance = {
-  continuous: boolean; interimResults: boolean; lang: string
-  onstart: (() => void) | null; onend: (() => void) | null
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onend: (() => void) | null
   onerror: ((event: SpeechRecognitionErrorEvent) => void) | null
   onresult: ((event: SpeechResultEvent) => void) | null
-  start(): void; stop(): void; abort(): void
+  start(): void
+  stop(): void
+  abort(): void
 }
 type SpeechRecognitionConstructor = new () => SpeechRecognitionInstance
-type SpeechWindow = Window & typeof globalThis & {
-  SpeechRecognition?: SpeechRecognitionConstructor
-  webkitSpeechRecognition?: SpeechRecognitionConstructor
-  webkitAudioContext?: typeof AudioContext
-}
+type SpeechWindow = Window &
+  typeof globalThis & {
+    SpeechRecognition?: SpeechRecognitionConstructor
+    webkitSpeechRecognition?: SpeechRecognitionConstructor
+    webkitAudioContext?: typeof AudioContext
+  }
 type SpeechSupport = {
   Recognition: SpeechRecognitionConstructor
   Audio: typeof AudioContext
@@ -25,7 +31,10 @@ type SpeechSupport = {
 }
 type Phase = 'idle' | 'requesting' | 'listening' | 'error'
 
-export function getSpeechSupport(speechWindow: SpeechWindow | undefined, mediaDevices: MediaDevices | undefined): SpeechSupport | null {
+export function getSpeechSupport(
+  speechWindow: SpeechWindow | undefined,
+  mediaDevices: MediaDevices | undefined,
+): SpeechSupport | null {
   if (!speechWindow || !mediaDevices?.getUserMedia) return null
   const Recognition = speechWindow.SpeechRecognition ?? speechWindow.webkitSpeechRecognition
   const Audio = speechWindow.AudioContext ?? speechWindow.webkitAudioContext
@@ -39,7 +48,10 @@ function currentSupport() {
 }
 
 function joinTranscript(...parts: string[]) {
-  return parts.map((part) => part.trim()).filter(Boolean).join(' ')
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join(' ')
 }
 
 function detachRecognition(recognition: SpeechRecognitionInstance) {
@@ -51,11 +63,20 @@ function detachRecognition(recognition: SpeechRecognitionInstance) {
 
 function isBlockedError(error: unknown) {
   const candidate = Object(error) as { name?: string; error?: string }
-  return candidate.name === 'NotAllowedError' || candidate.name === 'SecurityError'
-    || candidate.error === 'not-allowed' || candidate.error === 'service-not-allowed'
+  return (
+    candidate.name === 'NotAllowedError' ||
+    candidate.name === 'SecurityError' ||
+    candidate.error === 'not-allowed' ||
+    candidate.error === 'service-not-allowed'
+  )
 }
 
-export function SpeechInputButton({ value, onChange, stopSignal = 0, disabled = false }: {
+export function SpeechInputButton({
+  value,
+  onChange,
+  stopSignal = 0,
+  disabled = false,
+}: {
   value: string
   onChange: (value: string) => void
   stopSignal?: number
@@ -75,7 +96,9 @@ export function SpeechInputButton({ value, onChange, stopSignal = 0, disabled = 
   const baseTextRef = useRef('')
   const finalTextRef = useRef('')
 
-  useEffect(() => { valueRef.current = value }, [value])
+  useEffect(() => {
+    valueRef.current = value
+  }, [value])
 
   const stopMedia = useCallback(() => {
     window.cancelAnimationFrame(animationRef.current)
@@ -87,17 +110,20 @@ export function SpeechInputButton({ value, onChange, stopSignal = 0, disabled = 
     setLevel(0)
   }, [])
 
-  const release = useCallback((recognition?: SpeechRecognitionInstance, failed = false, error?: unknown) => {
-    if (recognition) detachRecognition(recognition)
-    recognitionRef.current = null
-    stopMedia()
-    window.clearTimeout(errorTimerRef.current)
-    if (failed) {
-      setErrorLabel(isBlockedError(error) ? 'Mic blocked here' : 'Mic unavailable')
-      setPhase('error')
-      errorTimerRef.current = window.setTimeout(() => setPhase('idle'), 2200)
-    } else setPhase('idle')
-  }, [stopMedia])
+  const release = useCallback(
+    (recognition?: SpeechRecognitionInstance, failed = false, error?: unknown) => {
+      if (recognition) detachRecognition(recognition)
+      recognitionRef.current = null
+      stopMedia()
+      window.clearTimeout(errorTimerRef.current)
+      if (failed) {
+        setErrorLabel(isBlockedError(error) ? 'Mic blocked here' : 'Mic unavailable')
+        setPhase('error')
+        errorTimerRef.current = window.setTimeout(() => setPhase('idle'), 2200)
+      } else setPhase('idle')
+    },
+    [stopMedia],
+  )
 
   const stop = useCallback(() => {
     sessionRef.current += 1
@@ -142,12 +168,19 @@ export function SpeechInputButton({ value, onChange, stopSignal = 0, disabled = 
       recognition.interimResults = true
       recognition.lang = document.documentElement.lang || navigator.language || 'en-US'
       const isCurrent = () => session === sessionRef.current && recognitionRef.current === recognition
-      recognition.onstart = () => { if (isCurrent()) setPhase('listening') }
-      recognition.onend = () => { if (isCurrent()) release(recognition) }
-      recognition.onerror = (event) => { if (isCurrent()) release(recognition, true, event) }
+      recognition.onstart = () => {
+        if (isCurrent()) setPhase('listening')
+      }
+      recognition.onend = () => {
+        if (isCurrent()) release(recognition)
+      }
+      recognition.onerror = (event) => {
+        if (isCurrent()) release(recognition, true, event)
+      }
       recognition.onresult = (event) => {
         if (!isCurrent()) return
-        let finalText = '', interimText = ''
+        let finalText = '',
+          interimText = ''
         for (let index = event.resultIndex; index < event.results.length; index += 1) {
           const result = event.results[index]
           const transcript = result?.[0]?.transcript ?? ''
@@ -167,60 +200,89 @@ export function SpeechInputButton({ value, onChange, stopSignal = 0, disabled = 
     if (stopSignal > 0) stop()
   }, [stop, stopSignal])
 
-  useEffect(() => () => {
-    sessionRef.current += 1
-    const recognition = recognitionRef.current
-    if (recognition) {
-      detachRecognition(recognition)
-      recognition.abort()
-    }
-    window.clearTimeout(errorTimerRef.current)
-    window.cancelAnimationFrame(animationRef.current)
-    streamRef.current?.getTracks().forEach((track) => track.stop())
-    void audioRef.current?.close()
-  }, [])
+  useEffect(
+    () => () => {
+      sessionRef.current += 1
+      const recognition = recognitionRef.current
+      if (recognition) {
+        detachRecognition(recognition)
+        recognition.abort()
+      }
+      window.clearTimeout(errorTimerRef.current)
+      window.cancelAnimationFrame(animationRef.current)
+      streamRef.current?.getTracks().forEach((track) => track.stop())
+      void audioRef.current?.close()
+    },
+    [],
+  )
 
   if (!supported) return null
   const active = phase === 'requesting' || phase === 'listening'
-  const label = phase === 'requesting' ? 'Requesting microphone access'
-    : phase === 'listening' ? 'Stop voice input'
-      : phase === 'error' ? errorLabel : 'Start voice input'
+  const label =
+    phase === 'requesting'
+      ? 'Requesting microphone access'
+      : phase === 'listening'
+        ? 'Stop voice input'
+        : phase === 'error'
+          ? errorLabel
+          : 'Start voice input'
   const bars = [0.55, 0.85, 1, 0.7]
   return (
     <button
-      type="button" aria-label={label} aria-pressed={phase === 'listening'} title={label}
+      type="button"
+      aria-label={label}
+      aria-pressed={phase === 'listening'}
+      title={label}
       onClick={active ? stop : start}
       disabled={disabled}
       style={{
-        width: active ? 62 : phase === 'error' ? 124 : 28, height: 28,
+        width: active ? 62 : phase === 'error' ? 124 : 28,
+        height: 28,
         padding: active || phase === 'error' ? '0 8px' : 0,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
         borderRadius: 9999,
         border: `1px solid ${phase === 'error' || active ? '#B85F1F' : 'var(--fw-contrast-09)'}`,
-        background: phase === 'listening' ? '#E8853D' : phase === 'error' ? 'rgba(184, 95, 31, 0.18)' : 'var(--fw-contrast-05)',
+        background:
+          phase === 'listening' ? '#E8853D' : phase === 'error' ? 'rgba(184, 95, 31, 0.18)' : 'var(--fw-contrast-05)',
         color: phase === 'listening' ? '#FFFFFF' : phase === 'error' ? '#E8853D' : 'var(--fw-foreground-muted)',
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.55 : 1,
-        transition: 'width 220ms ease, padding 220ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease',
+        transition:
+          'width 220ms ease, padding 220ms ease, background 150ms ease, color 150ms ease, border-color 150ms ease',
       }}
-      onMouseEnter={(event) => { if (!active && phase !== 'error') event.currentTarget.style.color = 'var(--fw-foreground)' }}
-      onMouseLeave={(event) => { if (!active && phase !== 'error') event.currentTarget.style.color = 'var(--fw-foreground-muted)' }}
+      onMouseEnter={(event) => {
+        if (!active && phase !== 'error') event.currentTarget.style.color = 'var(--fw-foreground)'
+      }}
+      onMouseLeave={(event) => {
+        if (!active && phase !== 'error') event.currentTarget.style.color = 'var(--fw-foreground-muted)'
+      }}
     >
       <Mic size={14} strokeWidth={2} aria-hidden="true" style={{ flexShrink: 0 }} />
       {phase === 'error' ? (
         <span style={{ fontSize: 11, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>{errorLabel}</span>
-      ) : active && (
-        <span aria-hidden="true" style={{ height: 16, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-          {bars.map((scale, index) => (
-            <span key={index} style={{
-              width: 2,
-              height: phase === 'requesting' ? 4 + index * 2 : 3 + level * 13 * scale,
-              minHeight: 3, maxHeight: 16, borderRadius: 9999, background: 'currentColor',
-              opacity: phase === 'requesting' ? 0.45 + index * 0.12 : 1,
-              transition: 'height 80ms linear',
-            }} />
-          ))}
-        </span>
+      ) : (
+        active && (
+          <span aria-hidden="true" style={{ height: 16, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+            {bars.map((scale, index) => (
+              <span
+                key={index}
+                style={{
+                  width: 2,
+                  height: phase === 'requesting' ? 4 + index * 2 : 3 + level * 13 * scale,
+                  minHeight: 3,
+                  maxHeight: 16,
+                  borderRadius: 9999,
+                  background: 'currentColor',
+                  opacity: phase === 'requesting' ? 0.45 + index * 0.12 : 1,
+                  transition: 'height 80ms linear',
+                }}
+              />
+            ))}
+          </span>
+        )
       )}
     </button>
   )

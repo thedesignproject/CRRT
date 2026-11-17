@@ -38,8 +38,12 @@ describe('api/_lib/tokens', () => {
   it('fails loudly in production when SHARE_TOKEN_SECRET is unset', () => {
     vi.stubEnv('SHARE_TOKEN_SECRET', '')
     vi.stubEnv('NODE_ENV', 'production')
-    expect(() => encryptToken('t')).toThrow('SHARE_TOKEN_SECRET is not set — refusing to handle share tokens in production')
-    expect(() => decryptToken('v1.a.b.c')).toThrow('SHARE_TOKEN_SECRET is not set — refusing to handle share tokens in production')
+    expect(() => encryptToken('t')).toThrow(
+      'SHARE_TOKEN_SECRET is not set — refusing to handle share tokens in production',
+    )
+    expect(() => decryptToken('v1.a.b.c')).toThrow(
+      'SHARE_TOKEN_SECRET is not set — refusing to handle share tokens in production',
+    )
   })
 
   it('fails loudly when VERCEL_ENV is production even if NODE_ENV is not', () => {
@@ -61,6 +65,8 @@ describe('api/_lib/tokens', () => {
     expect(fresh.decryptToken(encrypted)).toBe('dev-token')
 
     expect(warnSpy).toHaveBeenCalledTimes(1)
-    expect(warnSpy).toHaveBeenCalledWith('[tokens] SHARE_TOKEN_SECRET is unset — using the development-only fallback secret')
+    expect(warnSpy).toHaveBeenCalledWith(
+      '[tokens] SHARE_TOKEN_SECRET is unset — using the development-only fallback secret',
+    )
   })
 })

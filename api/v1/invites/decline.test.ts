@@ -15,10 +15,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -50,7 +60,8 @@ describe('api/v1/invites/decline', () => {
     expect(res.statusCode).toBe(405)
 
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
-      r.status(401).json({ error: 'Unauthorized' }); return null
+      r.status(401).json({ error: 'Unauthorized' })
+      return null
     })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
@@ -71,9 +82,12 @@ describe('api/v1/invites/decline', () => {
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'inviter-1', kind: 'invite.declined',
-    }))
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'inviter-1',
+        kind: 'invite.declined',
+      }),
+    )
 
     // notif emit fails → decline still returns 200 (fanout is fire-and-forget)
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -91,7 +105,9 @@ describe('api/v1/invites/decline', () => {
     expect(res.statusCode).toBe(500)
 
     // non-Error throw → 500
-    vi.mocked(declineInvite).mockImplementationOnce(() => { throw 'string-not-error' })
+    vi.mocked(declineInvite).mockImplementationOnce(() => {
+      throw 'string-not-error'
+    })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)

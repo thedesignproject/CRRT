@@ -13,8 +13,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     return res.status(200).json(await executeDocument(req.body, actor))
   } catch (error) {
-    return res
-      .status(error instanceof DocumentError ? error.status : error instanceof z.ZodError ? 400 : 503)
-      .json({ error: error instanceof DocumentError ? error.message : error instanceof z.ZodError ? 'invalid_request' : 'document_unavailable' })
+    return res.status(error instanceof DocumentError ? error.status : error instanceof z.ZodError ? 400 : 503).json({
+      error:
+        error instanceof DocumentError
+          ? error.message
+          : error instanceof z.ZodError
+            ? 'invalid_request'
+            : 'document_unavailable',
+    })
   }
 }

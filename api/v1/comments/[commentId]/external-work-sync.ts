@@ -22,21 +22,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     await closeLinkedExternalWork(comment.projectId, commentId, comment.updatedAt)
     const work = await listCommentExternalWork(commentId)
-    const externalWork = work.flatMap((item) => (
+    const externalWork = work.flatMap((item) =>
       item.state === 'created' && item.externalId && item.externalKey && item.externalUrl
-        ? [{
-            provider: item.provider,
-            externalId: item.externalId,
-            externalKey: item.externalKey,
-            externalUrl: item.externalUrl,
-            lifecycleStatus: item.lifecycleStatus,
-            syncAction: item.syncAction,
-            closedAt: item.closedAt,
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-          }]
-        : []
-    ))
+        ? [
+            {
+              provider: item.provider,
+              externalId: item.externalId,
+              externalKey: item.externalKey,
+              externalUrl: item.externalUrl,
+              lifecycleStatus: item.lifecycleStatus,
+              syncAction: item.syncAction,
+              closedAt: item.closedAt,
+              createdAt: item.createdAt,
+              updatedAt: item.updatedAt,
+            },
+          ]
+        : [],
+    )
     setCors(req, res, METHODS)
     return res.status(200).json({ externalWork })
   } catch {

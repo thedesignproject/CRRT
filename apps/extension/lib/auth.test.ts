@@ -24,14 +24,17 @@ describe('extension auth', () => {
     local.get.mockResolvedValueOnce({ key: 'value' }).mockResolvedValueOnce({ key: 42 })
     await expect(storage?.getItem('key')).resolves.toBe('value')
     await expect(storage?.getItem('key')).resolves.toBeNull()
-    await storage?.setItem('key', 'value'); expect(local.set).toHaveBeenCalledWith({ key: 'value' })
-    await storage?.removeItem('key'); expect(local.remove).toHaveBeenCalledWith('key')
+    await storage?.setItem('key', 'value')
+    expect(local.set).toHaveBeenCalledWith({ key: 'value' })
+    await storage?.removeItem('key')
+    expect(local.remove).toHaveBeenCalledWith('key')
   })
 
   it('rejects either missing Supabase setting', () => {
     vi.stubEnv('WXT_SUPABASE_URL', '')
     expect(() => createExtensionSupabase()).toThrow(/Missing extension/)
-    vi.stubEnv('WXT_SUPABASE_URL', 'https://project.supabase.co'); vi.stubEnv('WXT_SUPABASE_ANON_KEY', '')
+    vi.stubEnv('WXT_SUPABASE_URL', 'https://project.supabase.co')
+    vi.stubEnv('WXT_SUPABASE_ANON_KEY', '')
     expect(() => createExtensionSupabase()).toThrow(/Missing extension/)
   })
 
@@ -46,11 +49,17 @@ describe('extension auth', () => {
 
   it('gets and signs out while returning safe session summaries', async () => {
     const session = { access_token: 'token', user: { id: 'user-1', email: 'u@example.com' } }
-    const client = { auth: {
-      getSession: vi.fn().mockResolvedValue({ data: { session }, error: null }),
-      signOut: vi.fn().mockResolvedValue({ error: null }),
-    } }
-    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com', userId: 'user-1' })
+    const client = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue({ data: { session }, error: null }),
+        signOut: vi.fn().mockResolvedValue({ error: null }),
+      },
+    }
+    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({
+      accessToken: 'token',
+      email: 'u@example.com',
+      userId: 'user-1',
+    })
     await expect(handleAuthMessage(client as never, { type: 'auth:sign-out' })).resolves.toBeNull()
     expect(client.auth.signOut).toHaveBeenCalledWith({ scope: 'local' })
     client.auth.getSession.mockResolvedValueOnce({ data: { session: null }, error: null })
@@ -61,10 +70,12 @@ describe('extension auth', () => {
 
   it('surfaces Supabase auth errors', async () => {
     const failure = { data: { session: null }, error: new Error('auth down') }
-    const client = { auth: {
-      getSession: vi.fn().mockResolvedValue(failure),
-      signOut: vi.fn().mockResolvedValue({ error: new Error('auth down') }),
-    } }
+    const client = {
+      auth: {
+        getSession: vi.fn().mockResolvedValue(failure),
+        signOut: vi.fn().mockResolvedValue({ error: new Error('auth down') }),
+      },
+    }
     await expect(handleAuthMessage(client as never, { type: 'auth:get' })).rejects.toThrow('auth down')
     await expect(handleAuthMessage(client as never, { type: 'auth:sign-out' })).rejects.toThrow('auth down')
   })
@@ -73,12 +84,25 @@ describe('extension auth', () => {
     let finishRead!: (value: unknown) => void
     const session = { access_token: 'token', user: { id: 'user-1', email: 'u@example.com' } }
     const result = { data: { session }, error: null }
-    const client = { auth: { getSession: vi.fn()
-      .mockImplementationOnce(() => new Promise((resolve) => { finishRead = resolve }))
-      .mockResolvedValue(result),
-    } }
+    const client = {
+      auth: {
+        getSession: vi
+          .fn()
+          .mockImplementationOnce(
+            () =>
+              new Promise((resolve) => {
+                finishRead = resolve
+              }),
+          )
+          .mockResolvedValue(result),
+      },
+    }
     const first = handleAuthMessage(client as never, { type: 'auth:get' })
-    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({ accessToken: 'token', email: 'u@example.com', userId: 'user-1' })
+    await expect(handleAuthMessage(client as never, { type: 'auth:get' })).resolves.toEqual({
+      accessToken: 'token',
+      email: 'u@example.com',
+      userId: 'user-1',
+    })
     finishRead(result)
     await expect(first).resolves.toEqual({ accessToken: 'token', email: 'u@example.com', userId: 'user-1' })
   })

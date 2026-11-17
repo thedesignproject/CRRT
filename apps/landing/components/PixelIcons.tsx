@@ -57,7 +57,7 @@ export function WidgetCarrotIcon() {
 
 export function AgentIcon() {
   const fill = 'var(--crrt-phosphor)'
-  const cutout = 'var(--crrt-bg-deep)'  // matches the shell so eyes/mouth read as "holes"
+  const cutout = 'var(--crrt-bg-deep)' // matches the shell so eyes/mouth read as "holes"
   return (
     <IconShell>
       <svg

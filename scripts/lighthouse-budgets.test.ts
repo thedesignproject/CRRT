@@ -2,11 +2,21 @@ import { expect, it } from 'vitest'
 import { lighthouseBudgets, metricBudgets, transferBudgets, median, summarizeReports } from './lighthouse-budgets.mjs'
 
 const report = () => ({
-  categories: { ...Object.fromEntries(Object.keys(lighthouseBudgets).map(id => [id, { score: 1 }])), 'agentic-browsing': { auditRefs: [{ id: 'llms-txt' }] } },
+  categories: {
+    ...Object.fromEntries(Object.keys(lighthouseBudgets).map((id) => [id, { score: 1 }])),
+    'agentic-browsing': { auditRefs: [{ id: 'llms-txt' }] },
+  },
   audits: {
     ...Object.fromEntries(Object.entries(metricBudgets).map(([id, max]) => [id, { numericValue: max / 2 }])),
     'llms-txt': { score: 1, scoreDisplayMode: 'binary' },
-    'resource-summary': { details: { items: Object.entries(transferBudgets).map(([resourceType, maximum]) => ({ resourceType, transferSize: maximum / 2 })) } },
+    'resource-summary': {
+      details: {
+        items: Object.entries(transferBudgets).map(([resourceType, maximum]) => ({
+          resourceType,
+          transferSize: maximum / 2,
+        })),
+      },
+    },
   },
 })
 
@@ -30,7 +40,7 @@ it.each([
   { values: [100, 120, 800], fails: false },
   { values: [100, 300, 800], fails: true },
 ])('applies TBT headroom to the median of $values (fails: $fails)', ({ values, fails }) => {
-  const reports = values.map(value => {
+  const reports = values.map((value) => {
     const measurement = report()
     measurement.audits['total-blocking-time'].numericValue = value
     return measurement

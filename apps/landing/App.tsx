@@ -22,7 +22,11 @@ import { createDemoComments } from './lib/demoComments'
 import type { PersonalComments } from '../../src/components/FeedbackWidget/types'
 
 export function App() {
-  return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light"><RoutedApp /></ThemeProvider>
+  return (
+    <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light">
+      <RoutedApp />
+    </ThemeProvider>
+  )
 }
 
 function RoutedApp() {
@@ -40,7 +44,15 @@ function RoutedApp() {
 
   if (publicPath === '/resources' || publicPath.startsWith('/resources/')) {
     const article = readResourceData(initialPath)
-    return <ResourcesPage pathname={initialPath} article={article}>{publicPath === '/resources' ? <ResourcesIndex /> : article && <ResourceArticle resource={article} tool={article.tool && <ResourceTool kind={article.tool} />} />}</ResourcesPage>
+    return (
+      <ResourcesPage pathname={initialPath} article={article}>
+        {publicPath === '/resources' ? (
+          <ResourcesIndex />
+        ) : (
+          article && <ResourceArticle resource={article} tool={article.tool && <ResourceTool kind={article.tool} />} />
+        )}
+      </ResourcesPage>
+    )
   }
 
   if (publicPath === '/privacy') {

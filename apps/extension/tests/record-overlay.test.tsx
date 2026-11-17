@@ -5,13 +5,17 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
 }))
 
-vi.mock('wxt/browser', () => ({ browser: { runtime: {
-  sendMessage: mocks.sendMessage,
-  onMessage: {
-    addListener: (listener: (message: unknown) => unknown) => mocks.listeners.add(listener),
-    removeListener: (listener: (message: unknown) => unknown) => mocks.listeners.delete(listener),
+vi.mock('wxt/browser', () => ({
+  browser: {
+    runtime: {
+      sendMessage: mocks.sendMessage,
+      onMessage: {
+        addListener: (listener: (message: unknown) => unknown) => mocks.listeners.add(listener),
+        removeListener: (listener: (message: unknown) => unknown) => mocks.listeners.delete(listener),
+      },
+    },
   },
-} } }))
+}))
 vi.mock('wxt/utils/define-unlisted-script', () => ({ defineUnlistedScript: (main: unknown) => main }))
 vi.mock('../entrypoints/record-controls/main', () => ({ RecordControls: ({ id }: { id: string }) => <div>{id}</div> }))
 
@@ -19,7 +23,8 @@ import recordOverlayMain, { mountActiveRecording, mountRecordingSurface } from '
 
 beforeEach(() => {
   document.documentElement.innerHTML = '<head></head><body></body>'
-  mocks.listeners.clear(); mocks.sendMessage.mockReset()
+  mocks.listeners.clear()
+  mocks.sendMessage.mockReset()
 })
 
 it('mounts, replaces, and removes the tab-native recording surface', () => {

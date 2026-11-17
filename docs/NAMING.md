@@ -28,12 +28,12 @@ answer.
 In order of weight:
 
 1. **Self-similarity to the act, OR self-similarity to the brand promise.**
-   A great name either describes the *act* of using the product (Serif,
-   Loupe) or commits to the *posture* of the brand (Carrot). Either is a
+   A great name either describes the _act_ of using the product (Serif,
+   Loupe) or commits to the _posture_ of the brand (Carrot). Either is a
    tighter loop than a flat-literal label.
 2. **Status-coding for the wedge.** Designers are our wedge. The name should
    either signal craft to them (Serif/Glyph/Loupe) or signal personality to
-   *everyone* (Carrot). Both are valid — generic-premium-tech is the failure
+   _everyone_ (Carrot). Both are valid — generic-premium-tech is the failure
    mode in the middle.
 3. **Pratfall potential.** The strongest brands have one deliberate,
    visible flaw. Serif's "one-serif wordmark" is the canonical example.
@@ -52,25 +52,25 @@ In order of weight:
 
 ### Concept
 
-A *serif* is the small, deliberate stroke at the terminals of a letter —
-the detail that makes a typeface read as *intentional* rather than
+A _serif_ is the small, deliberate stroke at the terminals of a letter —
+the detail that makes a typeface read as _intentional_ rather than
 incidental. It is a word designers know in their bones. It points at
 craft in the small things, every time.
 
 ### Product fit
 
-This is the candidate where the *act* of using the product mirrors the
-*thing* the name describes most directly. People who drop pins on a page
+This is the candidate where the _act_ of using the product mirrors the
+_thing_ the name describes most directly. People who drop pins on a page
 are doing the same work as people who notice serifs: spotting what
 others don't, marking what matters, getting the small thing right.
 
 The product captures the small misalignment, the wrong verb, the copy
-that's *off*. The name names exactly that energy.
+that's _off_. The name names exactly that energy.
 
 ### Brand archetype
 
-The opinionated craftsperson. Quiet confidence. Closer to *Klim Type
-Foundry* than to a SaaS vendor. Editorial heritage runs through the
+The opinionated craftsperson. Quiet confidence. Closer to _Klim Type
+Foundry_ than to a SaaS vendor. Editorial heritage runs through the
 system naturally: stet, caret, redline, marginalia all live in this lane
 and we can draw on them without pastiche.
 
@@ -101,7 +101,7 @@ is psychologically load-bearing:
   italic terminal on the `f`). Brand wears its name once, at the
   smallest deliberate detail. **This is the pratfall.** Competence + one
   visible flaw = liking. The whole identity hinges on this being
-  *visible*.
+  _visible_.
 - **Option 02** — the brand named after a typographic detail uses
   **zero** serifs anywhere. Conceptually clever but operationally
   invisible. The "tension" lives entirely in the founder's head;
@@ -112,7 +112,7 @@ when the flaw is visible.
 
 ### Status-coding (the actual mechanism)
 
-The doc's earlier framing leaned on *self-similarity* (the act = the
+The doc's earlier framing leaned on _self-similarity_ (the act = the
 name). That's a founder's argument; it works in your head, not in a
 stranger's. The mechanisms that will actually drive adoption:
 
@@ -124,7 +124,7 @@ stranger's. The mechanisms that will actually drive adoption:
 
 ### Risks
 
-- **Affinity adjacency** *(load-bearing risk).* Affinity is owned by
+- **Affinity adjacency** _(load-bearing risk)._ Affinity is owned by
   Canva, sells design tools (~$100M+ ARR), and lives in the same
   product-aisle our wedge audience already shops. Designers Googling
   "serif" hit Affinity and type-history before they hit us. The earlier
@@ -138,21 +138,21 @@ stranger's. The mechanisms that will actually drive adoption:
 - **Cold-recall tax.** Homepage copy has to do more work than it would
   for a more literal name.
 
-### Verified availability *(checked 2026-05-08, original doc)*
+### Verified availability _(checked 2026-05-08, original doc)_
 
-| Asset | Status |
-|---|---|
-| `serif.com` | Owned by Serif (Europe) Ltd — expires 2027 |
-| `serif.io` | Privacy proxy since 2016 — **expires 2026-08-07** |
-| `serif.dev` / `serif.app` | In use |
-| `theserif.com` | Privacy parker since 2004 |
-| **`theserif.io`** | **Available** |
-| **`getserif.io`** | **Available** |
-| **`heyserif.io`** | **Available** |
-| **`tryserif.io`** | **Available** |
-| GitHub `@serif` / `@theserif` | Taken |
-| **GitHub `@getserif` / `@useserif` / `@tryserif` / `@heyserif`** | **Available** |
-| X / Instagram | Manual check required |
+| Asset                                                            | Status                                            |
+| ---------------------------------------------------------------- | ------------------------------------------------- |
+| `serif.com`                                                      | Owned by Serif (Europe) Ltd — expires 2027        |
+| `serif.io`                                                       | Privacy proxy since 2016 — **expires 2026-08-07** |
+| `serif.dev` / `serif.app`                                        | In use                                            |
+| `theserif.com`                                                   | Privacy parker since 2004                         |
+| **`theserif.io`**                                                | **Available**                                     |
+| **`getserif.io`**                                                | **Available**                                     |
+| **`heyserif.io`**                                                | **Available**                                     |
+| **`tryserif.io`**                                                | **Available**                                     |
+| GitHub `@serif` / `@theserif`                                    | Taken                                             |
+| **GitHub `@getserif` / `@useserif` / `@tryserif` / `@heyserif`** | **Available**                                     |
+| X / Instagram                                                    | Manual check required                             |
 
 ### Verdict
 
@@ -168,21 +168,21 @@ voice. Phonetically and operationally clean.
 
 ### Concept
 
-A *glyph* is a single carved or drawn typographic character — a unit of
-written meaning. Sharper and more iconic than *serif*: where a serif is
-about *details inside* a letter, a glyph is *the letter itself*.
+A _glyph_ is a single carved or drawn typographic character — a unit of
+written meaning. Sharper and more iconic than _serif_: where a serif is
+about _details inside_ a letter, a glyph is _the letter itself_.
 
 ### Product fit
 
-A graceful framing: every pin in the product *is* a glyph — a meaningful,
+A graceful framing: every pin in the product _is_ a glyph — a meaningful,
 intentional mark placed at a specific location on the page. The whole
 product becomes a vocabulary of glyphs accumulating: each comment is a
 character in a conversation, each resolution a stroke completed.
 
-Strong, but the loop is one step longer than Serif's. *Serif* says the
-act is the name. *Glyph* says the units of the act are the name. Less
-direct, but still meaningful — and arguably more *graphic* than Serif
-(which is more *literary*).
+Strong, but the loop is one step longer than Serif's. _Serif_ says the
+act is the name. _Glyph_ says the units of the act are the name. Less
+direct, but still meaningful — and arguably more _graphic_ than Serif
+(which is more _literary_).
 
 ### Brand archetype
 
@@ -196,13 +196,13 @@ graphic, less editorial.
   Product/UX designers recognise it as a typography term; the mental
   model is shorter than for "serif" but the recognition is real.
 - **PMs / engineers:** see it as a typography or graphics term. Less
-  broadly known than *serif*, but the audience that matters reads it
+  broadly known than _serif_, but the audience that matters reads it
   correctly.
 
 ### Phonetic ease + cold-recall
 
 - **Phonetic ease:** **Low.** 1 syllable, but the /gl/+/f/ structure
-  produces a *spelling tax* — the word is regularly misspelled (glif,
+  produces a _spelling tax_ — the word is regularly misspelled (glif,
   glyf, gliph). When a designer recommends you in a Slack DM and types
   it wrong, the search lands somewhere else. This is a hidden
   word-of-mouth tax that compounds over time.
@@ -211,12 +211,12 @@ graphic, less editorial.
 
 ### Tension / pratfall mechanism
 
-Available but underdeveloped. *Glyph* could lean into "every pin is a
+Available but underdeveloped. _Glyph_ could lean into "every pin is a
 glyph; the page is a manuscript" — but that is a metaphor we'd have to
-*build*, not one the word delivers on first hearing.
+_build_, not one the word delivers on first hearing.
 
 The wordmark could itself be presented as "one carved glyph" — but no
-equivalent of Serif's "one-serif" trick exists, because a glyph *is* a
+equivalent of Serif's "one-serif" trick exists, because a glyph _is_ a
 character, not a detail of one. The pratfall mechanism doesn't have an
 obvious surface to live on.
 
@@ -228,19 +228,19 @@ obvious surface to live on.
 - **Spelling tax** on word-of-mouth (glif/glyf/gliph). Compounds.
 - **Roblox Glyph** (in-platform wallet/token brand) and **Sony Glyph**
   (head-mounted display brand) both occupy "Glyph" in consumer tech.
-- The word is used heavily in *iconography* libraries (Material Glyphs,
+- The word is used heavily in _iconography_ libraries (Material Glyphs,
   Apple SF Symbols glyph names), which dilutes it for engineers.
 
-### Verified availability *(checked 2026-05-08, original doc)*
+### Verified availability _(checked 2026-05-08, original doc)_
 
-| Asset | Status |
-|---|---|
-| `glyph.com` (1994) | Taken |
-| **`glyph.io`** | **Reserved by registry — un-acquirable** |
-| `glyph.app` (Google) / `glyph.so` (2023) / `glyph.dev` / `glyph.studio` | All taken |
-| `getglyph.com` (2017) / `useglyph.com` (2024) | Taken |
-| **`getglyph.io`** | **Available** (only path) |
-| GitHub `@glyph` / `@useglyph` | Taken |
+| Asset                                                                   | Status                                   |
+| ----------------------------------------------------------------------- | ---------------------------------------- |
+| `glyph.com` (1994)                                                      | Taken                                    |
+| **`glyph.io`**                                                          | **Reserved by registry — un-acquirable** |
+| `glyph.app` (Google) / `glyph.so` (2023) / `glyph.dev` / `glyph.studio` | All taken                                |
+| `getglyph.com` (2017) / `useglyph.com` (2024)                           | Taken                                    |
+| **`getglyph.io`**                                                       | **Available** (only path)                |
+| GitHub `@glyph` / `@useglyph`                                           | Taken                                    |
 
 ### Verdict
 
@@ -259,25 +259,25 @@ fallback if Serif's Affinity adjacency proves fatal — and only then.
 
 ### Concept
 
-A *loupe* is a small magnifying tool used by jewelers, watchmakers, and
+A _loupe_ is a small magnifying tool used by jewelers, watchmakers, and
 print production designers to inspect detail at close range. The act of
-using a loupe *is* the act of careful, close examination.
+using a loupe _is_ the act of careful, close examination.
 
 ### Product fit
 
 A different mechanism than Serif's. Where Serif names the act
-(noticing), Loupe names the *posture* (getting close to look). Designers
+(noticing), Loupe names the _posture_ (getting close to look). Designers
 using your product are doing what a jeweler does at the bench: leaning
 in, inspecting the work, marking what's off.
 
-This is self-similarity through *bodily metaphor* rather than through
+This is self-similarity through _bodily metaphor_ rather than through
 linguistic match. Strong, but operates one level below conscious
 recognition — users feel the metaphor before they articulate it.
 
 ### Brand archetype
 
 The watchmaker / jeweler / print pressman. Craft-precision. Quietly
-authoritative. *Tool-coded* rather than *typography-coded* — a different
+authoritative. _Tool-coded_ rather than _typography-coded_ — a different
 flavor of craft heritage from Serif. More tactile, less literary.
 
 ### Audience signal
@@ -286,15 +286,15 @@ flavor of craft heritage from Serif. More tactile, less literary.
   loupes from production work and jewelry. Recognition is high and
   warm.
 - **Designers from pure-screen / product / UX backgrounds:** may not
-  know the reference. The wedge is *narrower than Serif's, but
-  deeper* — the people who get it, get it strongly.
+  know the reference. The wedge is _narrower than Serif's, but
+  deeper_ — the people who get it, get it strongly.
 - **PMs / engineers:** ambiguous. Reads as a craft tool, not a
   feedback tool.
 
 ### Phonetic ease + cold-recall
 
-- **Phonetic ease:** Mixed. 1 syllable (*loop*), but **spelling
-  friction** — *loup*, *loup*, *loop*, *loupe*. When designers type it
+- **Phonetic ease:** Mixed. 1 syllable (_loop_), but **spelling
+  friction** — _loup_, _loup_, _loop_, _loupe_. When designers type it
   fast, "loop" lands somewhere else. Recurring tax similar to Glyph's
   but with a different mechanism (correct word, wrong spelling).
 - **Cold-recall:** wrong category — outsiders guess jewelry tool or
@@ -303,23 +303,23 @@ flavor of craft heritage from Serif. More tactile, less literary.
 ### Tension / pratfall mechanism
 
 Less of a built-in pratfall than Serif. The brand could build a tension
-through *focal/blur* metaphor — UI surfaces blur until inspected, the
+through _focal/blur_ metaphor — UI surfaces blur until inspected, the
 homepage starts out-of-focus and resolves on scroll. But there's no
 "wordmark with one detail wrong" gimmick the way Serif Option 01
 delivers.
 
-The pratfall has to be *built*, not *named*.
+The pratfall has to be _built_, not _named_.
 
 ### Risks
 
-- **Loupedeck** *(material risk).* Premium creative-hardware brand
-  acquired by Logitech in 2023. Sits in the *creative tools* aisle
+- **Loupedeck** _(material risk)._ Premium creative-hardware brand
+  acquired by Logitech in 2023. Sits in the _creative tools_ aisle
   adjacent to design-feedback. Direct collision in SEO and brand
   recognition. The "Loupe + design tools" search space is occupied.
   This is the Affinity-equivalent risk for this name.
 - **Spelling friction** is a permanent low-grade word-of-mouth tax
   (loop vs loupe). Same mechanism as Glyph but different shape.
-- Multiple smaller photography / film products use *Loupe* (Loupe
+- Multiple smaller photography / film products use _Loupe_ (Loupe
   Photo, Loupe Tools, etc.). None dominant, but the word is crowded.
 - Wedge audience is narrower than Serif's — print/branding designers
   recognise it cold, screen-first product designers may not.
@@ -329,13 +329,13 @@ The pratfall has to be *built*, not *named*.
 **Not yet verified.** The original doc didn't analyze Loupe. Pre-launch
 checks needed:
 
-| Asset | Needs verification |
-|---|---|
-| `loupe.com` | Likely owned (premium short word) |
-| `loupe.io` / `loupe.app` / `loupe.dev` | Status unknown |
-| `getloupe.io` / `useloupe.io` / `theloupe.io` | Status unknown |
-| GitHub `@loupe` / `@useloupe` / `@theloupe` | Status unknown |
-| Trademark in Class 9 / 42 | Needs filing search |
+| Asset                                         | Needs verification                |
+| --------------------------------------------- | --------------------------------- |
+| `loupe.com`                                   | Likely owned (premium short word) |
+| `loupe.io` / `loupe.app` / `loupe.dev`        | Status unknown                    |
+| `getloupe.io` / `useloupe.io` / `theloupe.io` | Status unknown                    |
+| GitHub `@loupe` / `@useloupe` / `@theloupe`   | Status unknown                    |
+| Trademark in Class 9 / 42                     | Needs filing search               |
 
 This is a hard prerequisite before Loupe can be seriously considered as
 the final pick.
@@ -349,8 +349,8 @@ Pratfall mechanism has to be built into the visual identity rather than
 named.
 
 Loupe could win against Serif if (a) the domain situation comes back
-clean, (b) the founder vision is more *watchmaker* than
-*editor-typographer*, and (c) Loupedeck adjacency does not block the
+clean, (b) the founder vision is more _watchmaker_ than
+_editor-typographer_, and (c) Loupedeck adjacency does not block the
 SEO and brand-recognition real estate. Until (a) is verified, Serif
 remains the leading craft-heritage option.
 
@@ -377,11 +377,11 @@ Indirect. Three available framings, brand picks one:
    Designs do too. Feedback is the soil. Stretch metaphor; works in
    illustration.
 3. **No metaphor at all.** Just a delightful name. The brand chooses
-   to be playful for its own sake. *Mailchimp* never explains why a
-   chimp; *Slack* never explains why slack.
+   to be playful for its own sake. _Mailchimp_ never explains why a
+   chimp; _Slack_ never explains why slack.
 
 The third path is the strongest. Stretching to justify the name is a
-trap; committing to the playfulness *is* the brand.
+trap; committing to the playfulness _is_ the brand.
 
 ### Brand archetype
 
@@ -396,7 +396,7 @@ different brands.
 - **Designers (wedge):** does not try to status-code through craft
   reference. Instead codes "this brand has personality" to everyone.
   Designers who pick Carrot are signaling something different from
-  designers who pick Serif: *I'm not precious about my tools*.
+  designers who pick Serif: _I'm not precious about my tools_.
   Different status signal, equally real.
 - **PMs / engineers:** read as warm, friendly, low-friction. Easier
   first-touch than any of the craft-heritage names.
@@ -409,7 +409,7 @@ different brands.
   syllables, ubiquitous English word, zero spelling risk, zero
   pronunciation hesitation, zero foreign-language friction.
 - **Cold-recall:** outsiders won't guess "design feedback widget" —
-  but they also won't guess any *specific wrong category*. The brand
+  but they also won't guess any _specific wrong category_. The brand
   promise carries the recall, not the name. The homepage hero copy
   has to do all the explanatory work, but it doesn't have to fight a
   miscategorization the way Serif/Glyph fight typography
@@ -432,7 +432,7 @@ The whole brand is the pratfall. Naming a B2B design-tool startup after
 a vegetable is the deliberate, visible choice to be unserious. The flaw
 is in the gestalt, not in a wordmark detail.
 
-This is a *bigger* pratfall than Serif's Option 01 — and harder to
+This is a _bigger_ pratfall than Serif's Option 01 — and harder to
 execute. Serif's pratfall is one curve; Carrot's pratfall is the entire
 brand voice, copy, illustration, hires. The founder has to commit to
 playfulness as a sustained operating discipline, not a marketing
@@ -440,10 +440,10 @@ choice.
 
 ### Risks
 
-- **Carrot Weather** *(real adjacency).* Popular iOS app with strong
+- **Carrot Weather** _(real adjacency)._ Popular iOS app with strong
   personality-first brand voice (snarky, playful, distinctive). Same
   archetype Carrot would inhabit. Different category (B2C weather vs
-  B2B design tools), but the *brand voice space* is partly occupied.
+  B2B design tools), but the _brand voice space_ is partly occupied.
   Manageable but real.
 - **Multiple smaller Carrot brands** — Carrot fertility, Carrot Inc
   (real estate), Carrot insurance, etc. The name is widely registered
@@ -456,22 +456,22 @@ choice.
 - **Founder commitment risk.** Carrot is the highest-execution-cost
   name of the four. The brand only works if founders, hires, copy,
   illustration, and product UX all stay committed to playful-personality
-  voice. *This is not a name to ship if the team is uncomfortable with
-  personality-first brand building.* Half-committed playfulness reads
+  voice. _This is not a name to ship if the team is uncomfortable with
+  personality-first brand building._ Half-committed playfulness reads
   worse than committed seriousness.
 
 ### Verified availability
 
 **Not yet verified.** Pre-launch checks needed:
 
-| Asset | Needs verification |
-|---|---|
-| `carrot.com` | Almost certainly owned (premium common word) |
-| `carrot.io` / `carrot.app` / `carrot.so` | Status unknown |
-| `getcarrot.com` / `usecarrot.com` / `trycarrot.com` | Likely some taken |
-| `getcarrot.io` / `usecarrot.io` / `heycarrot.io` | Status unknown |
-| GitHub `@carrot` / `@usecarrot` / `@getcarrot` / `@trycarrot` | Status unknown |
-| Trademark Class 9 / 42 | Needs filing search |
+| Asset                                                         | Needs verification                           |
+| ------------------------------------------------------------- | -------------------------------------------- |
+| `carrot.com`                                                  | Almost certainly owned (premium common word) |
+| `carrot.io` / `carrot.app` / `carrot.so`                      | Status unknown                               |
+| `getcarrot.com` / `usecarrot.com` / `trycarrot.com`           | Likely some taken                            |
+| `getcarrot.io` / `usecarrot.io` / `heycarrot.io`              | Status unknown                               |
+| GitHub `@carrot` / `@usecarrot` / `@getcarrot` / `@trycarrot` | Status unknown                               |
+| Trademark Class 9 / 42                                        | Needs filing search                          |
 
 This is a hard prerequisite. Common-word domains are typically the
 hardest to acquire.
@@ -480,11 +480,11 @@ hardest to acquire.
 
 **The bet only the founder can authorize.** Different brand world from
 the other three. Highest memorability. Logo is essentially free. Cold-
-recall risk is *different in shape* than Serif/Glyph/Loupe — easier in
+recall risk is _different in shape_ than Serif/Glyph/Loupe — easier in
 some ways (no miscategorization), harder in others (homepage carries
 all the explanatory load).
 
-Carrot is the strongest *personality-first* answer the exploration
+Carrot is the strongest _personality-first_ answer the exploration
 produced. The risk is not brand collision; it is whether the founders
 want to build a personality-first brand and can sustain that
 discipline.
@@ -493,19 +493,19 @@ discipline.
 
 ## Comparative summary
 
-| Dimension | Serif | Glyph | Loupe | Carrot |
-|---|---|---|---|---|
-| **Brand world** | Literary craft | Graphic craft | Tool craft | Playful personality |
-| **Self-similarity** | Highest (act = name) | Medium-high (units = name) | Medium-high (posture) | Indirect / brand promise |
-| **Status-coding for designers** | Highest (taste signal) | High (specialist) | High (narrower wedge) | Different signal (personality) |
-| **Pratfall mechanism** | **Strongest** (Option 01) | Underdeveloped | Has to be built | Whole brand |
-| **Phonetic ease** | OK | **Low** (spelling tax) | Mixed (loop/loupe) | **Highest** |
-| **Cold-recall** | Wrong (publishing) | Wrong (typography) | Wrong (jewelry) | None — neutral |
-| **Designer-coded** | High | High (narrower) | Medium-high | Low — and doesn't need to be |
-| **Logo** | Designed wordmark | Designed mark | Designed wordmark | **Free** (the carrot itself) |
-| **Domain matrix (verified)** | **4 + 4** | 1 + 0 | Not verified | Not verified |
-| **Biggest risk** | Affinity adjacency | `.io` reserved + spelling tax | Loupedeck adjacency | Founder commitment |
-| **Memorability** | Medium-high | Medium | Medium-high | **Highest** |
+| Dimension                       | Serif                     | Glyph                         | Loupe                 | Carrot                         |
+| ------------------------------- | ------------------------- | ----------------------------- | --------------------- | ------------------------------ |
+| **Brand world**                 | Literary craft            | Graphic craft                 | Tool craft            | Playful personality            |
+| **Self-similarity**             | Highest (act = name)      | Medium-high (units = name)    | Medium-high (posture) | Indirect / brand promise       |
+| **Status-coding for designers** | Highest (taste signal)    | High (specialist)             | High (narrower wedge) | Different signal (personality) |
+| **Pratfall mechanism**          | **Strongest** (Option 01) | Underdeveloped                | Has to be built       | Whole brand                    |
+| **Phonetic ease**               | OK                        | **Low** (spelling tax)        | Mixed (loop/loupe)    | **Highest**                    |
+| **Cold-recall**                 | Wrong (publishing)        | Wrong (typography)            | Wrong (jewelry)       | None — neutral                 |
+| **Designer-coded**              | High                      | High (narrower)               | Medium-high           | Low — and doesn't need to be   |
+| **Logo**                        | Designed wordmark         | Designed mark                 | Designed wordmark     | **Free** (the carrot itself)   |
+| **Domain matrix (verified)**    | **4 + 4**                 | 1 + 0                         | Not verified          | Not verified                   |
+| **Biggest risk**                | Affinity adjacency        | `.io` reserved + spelling tax | Loupedeck adjacency   | Founder commitment             |
+| **Memorability**                | Medium-high               | Medium                        | Medium-high           | **Highest**                    |
 
 ### Within-lane finding
 
@@ -513,7 +513,7 @@ Glyph and Loupe **do not beat Serif on craft-heritage's own
 dimensions.** Glyph has a fatal domain situation (`.io` reserved) and a
 spelling tax. Loupe has unverified domains and the Loupedeck adjacency.
 Both are credible fallbacks if Serif's Affinity adjacency proves fatal,
-but neither offers a positive case to choose them *over* Serif.
+but neither offers a positive case to choose them _over_ Serif.
 
 This means the real choice the document supports is **Serif vs.
 Carrot.**
@@ -523,11 +523,11 @@ Carrot.**
 ## Recommendation
 
 The choice is not which name is better in the abstract; it is which
-*brand world* the founders want to build.
+_brand world_ the founders want to build.
 
 ### Choose Serif if:
 
-- The brand should feel like *a designer's quiet, opinionated tool* —
+- The brand should feel like _a designer's quiet, opinionated tool_ —
   Linear, Notion, Pitch with editorial heritage.
 - The founders are comfortable carrying the cold-recall tax (homepage
   copy works hard) in exchange for status-coding to the wedge.
@@ -538,7 +538,7 @@ The choice is not which name is better in the abstract; it is which
 
 ### Choose Carrot if:
 
-- The brand should feel like *the friendly insider* — Mailchimp, Slack,
+- The brand should feel like _the friendly insider_ — Mailchimp, Slack,
   Bumble, but for design feedback.
 - The founders are willing to commit to personality-first brand
   building as a sustained discipline (not a marketing layer).
@@ -593,7 +593,7 @@ become unworkable.
 
 ---
 
-*This analysis is a working document. The name selection is now a
+_This analysis is a working document. The name selection is now a
 brand-world decision more than a name-quality decision; both shortlist
 finalists (Serif, Carrot) are defensible. The strongest path forward is
-the one the founders can execute with conviction.*
+the one the founders can execute with conviction._

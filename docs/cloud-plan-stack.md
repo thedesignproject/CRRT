@@ -2,14 +2,14 @@
 
 All six branches are local, each with exactly one commit relative to its immediate parent. No PRs were opened or pushed. The stack is rebased onto trunk `f2d95034`, which includes `0040_inbox_bulk_assignment`. These six layers each add one commit above it. Each layer targets the branch immediately below it.
 
-| Layer | Branch | Changed lines (added + deleted) |
-| --- | --- | ---: |
-| 1 | `feat/cloud-plan-schema` | 6216 |
-| 2 | `feat/cloud-plan-billing-backend` | 424 |
-| 3 | `feat/cloud-plan-access` | 659 |
-| 4 | `feat/extension-cloud-workflow` | 813 |
-| 5 | `feat/cloud-plan-ui` | 600 |
-| 6 | `chore/cloud-plan-rollout` | 585 |
+| Layer | Branch                            | Changed lines (added + deleted) |
+| ----- | --------------------------------- | ------------------------------: |
+| 1     | `feat/cloud-plan-schema`          |                            6216 |
+| 2     | `feat/cloud-plan-billing-backend` |                             424 |
+| 3     | `feat/cloud-plan-access`          |                             659 |
+| 4     | `feat/extension-cloud-workflow`   |                             813 |
+| 5     | `feat/cloud-plan-ui`              |                             600 |
+| 6     | `chore/cloud-plan-rollout`        |                             585 |
 
 The first layer is the requested size exception. It includes schema source, **one migration: `0041_cloud_plans.sql`**, its snapshot/journal, and database regression tests. All other layers are below 900 changed lines and contain no migrations.
 

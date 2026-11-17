@@ -11,28 +11,56 @@ import { getComment, listCommentExternalWork } from '../../../_lib/store.js'
 
 function response() {
   return {
-    statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(body: unknown) { this.body = body; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    statusCode: 200,
+    body: null as unknown,
+    headers: {} as Record<string, string>,
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(body: unknown) {
+      this.body = body
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
-const call = (req: unknown, res: unknown) => (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
+const call = (req: unknown, res: unknown) =>
+  (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 const work = {
-  provider: 'linear', state: 'created', externalId: 'issue', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7',
-  lifecycleStatus: 'closed', syncAction: null, closedAt: 'later', createdAt: 'now', updatedAt: 'later', leaseToken: 'private',
+  provider: 'linear',
+  state: 'created',
+  externalId: 'issue',
+  externalKey: 'WEB-7',
+  externalUrl: 'https://linear.app/issue/WEB-7',
+  lifecycleStatus: 'closed',
+  syncAction: null,
+  closedAt: 'later',
+  createdAt: 'now',
+  updatedAt: 'later',
+  leaseToken: 'private',
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@example.com' })
   vi.mocked(getComment).mockResolvedValue({
-    id: 'comment', projectId: 'project', reviewStatus: 'rejected', updatedAt: 'rejected-version',
+    id: 'comment',
+    projectId: 'project',
+    reviewStatus: 'rejected',
+    updatedAt: 'rejected-version',
   } as never)
   vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
-  vi.mocked(listCommentExternalWork).mockResolvedValue([work, { ...work, state: 'creating', externalId: null }] as never)
+  vi.mocked(listCommentExternalWork).mockResolvedValue([
+    work,
+    { ...work, state: 'creating', externalId: null },
+  ] as never)
 })
 
 describe('external work close retry API', () => {
@@ -63,7 +91,11 @@ describe('external work close retry API', () => {
     await call({ method: 'POST', query: { commentId: 'comment' }, headers: {} }, res)
     expect(closeLinkedExternalWork).not.toHaveBeenCalled()
 
-    vi.mocked(getComment).mockResolvedValueOnce({ id: 'comment', projectId: 'project', reviewStatus: 'accepted' } as never)
+    vi.mocked(getComment).mockResolvedValueOnce({
+      id: 'comment',
+      projectId: 'project',
+      reviewStatus: 'accepted',
+    } as never)
     res = response()
     await call({ method: 'POST', query: { commentId: 'comment' }, headers: {} }, res)
     expect(res.statusCode).toBe(409)
@@ -73,10 +105,21 @@ describe('external work close retry API', () => {
     const res = response()
     await call({ method: 'POST', query: { commentId: 'comment' }, headers: {} }, res)
     expect(closeLinkedExternalWork).toHaveBeenCalledWith('project', 'comment', 'rejected-version')
-    expect(res.body).toEqual({ externalWork: [{
-      provider: 'linear', externalId: 'issue', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7',
-      lifecycleStatus: 'closed', syncAction: null, closedAt: 'later', createdAt: 'now', updatedAt: 'later',
-    }] })
+    expect(res.body).toEqual({
+      externalWork: [
+        {
+          provider: 'linear',
+          externalId: 'issue',
+          externalKey: 'WEB-7',
+          externalUrl: 'https://linear.app/issue/WEB-7',
+          lifecycleStatus: 'closed',
+          syncAction: null,
+          closedAt: 'later',
+          createdAt: 'now',
+          updatedAt: 'later',
+        },
+      ],
+    })
     expect(JSON.stringify(res.body)).not.toContain('private')
   })
 

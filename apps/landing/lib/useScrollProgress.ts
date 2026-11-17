@@ -44,7 +44,7 @@ export function useScrollProgress() {
     }
     function onResize() {
       maxScroll = Math.max(1, document.documentElement.scrollHeight - window.innerHeight)
-      lastY = -1  // force a recompute since progress depends on maxScroll
+      lastY = -1 // force a recompute since progress depends on maxScroll
       onScroll()
     }
     update()

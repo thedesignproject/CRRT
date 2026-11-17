@@ -34,24 +34,25 @@ export type ExternalWorkDraft = {
 type AuthResponse = { ok: true; data: SessionSummary | null } | { ok: false; error: string }
 
 export async function extensionSession() {
-  const response = await browser.runtime.sendMessage({ type: 'auth:get' }) as AuthResponse
+  const response = (await browser.runtime.sendMessage({ type: 'auth:get' })) as AuthResponse
   if (!response?.ok) throw new Error(response?.error || 'CRRT authentication is unavailable')
   return response.data
 }
 
 async function request<T>(path: string, init?: RequestInit, expectedAccessToken?: string): Promise<T> {
   const session = await extensionSession()
-  if(expectedAccessToken !== undefined && session?.accessToken !== expectedAccessToken)throw new Error('Sign-in changed; import stopped. Your local feedback is retained.')
+  if (expectedAccessToken !== undefined && session?.accessToken !== expectedAccessToken)
+    throw new Error('Sign-in changed; import stopped. Your local feedback is retained.')
   if (!session) throw new Error('Sign in to CRRT from the extension')
   const response = await fetch(`${import.meta.env.WXT_API_BASE.replace(/\/$/, '')}${path}`, {
     ...init,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}`, ...init?.headers },
   })
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({})) as { error?: string }
+    const payload = (await response.json().catch(() => ({}))) as { error?: string }
     throw new Error(payload.error || `CRRT request failed (${response.status})`)
   }
-  return response.status === 204 ? undefined as T : response.json() as Promise<T>
+  return response.status === 204 ? (undefined as T) : (response.json() as Promise<T>)
 }
 
 export async function listExtensionProjects() {
@@ -69,12 +70,26 @@ export async function listProjectComments(projectId: string, page = 1) {
   return request<{ items: ExtensionComment[]; total: number }>(`/v1/extension/comments?${query}`)
 }
 
-export function createPageComment(input: { projectId?: string; pageUrl: string; selector: string; x: number; y: number; body: string; visibility?: 'shared' | 'internal'; targetType?: Comment['targetType']; anchor?: Comment['anchor']; screenshot: { base64: string; mimeType: string } | null }) {
+export function createPageComment(input: {
+  projectId?: string
+  pageUrl: string
+  selector: string
+  x: number
+  y: number
+  body: string
+  visibility?: 'shared' | 'internal'
+  targetType?: Comment['targetType']
+  anchor?: Comment['anchor']
+  screenshot: { base64: string; mimeType: string } | null
+}) {
   return request<ExtensionComment>('/v1/extension/comments', { method: 'POST', body: JSON.stringify(input) })
 }
 
 export function updatePageComment(id: string, body: string) {
-  return request<ExtensionComment>(`/v1/extension/comments/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ body }) })
+  return request<ExtensionComment>(`/v1/extension/comments/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ body }),
+  })
 }
 
 export function deletePageComment(id: string) {
@@ -85,16 +100,38 @@ export function getExternalWorkDraft(commentId: string, provider: 'github' | 'li
   return request<ExternalWorkDraft>(`/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`)
 }
 
-export function sendExternalWork(commentId: string, provider: 'github' | 'linear' | 'jira', draft: { title: string; body: string }) {
-  return request<{ issueNumber?: number; issueUrl?: string; externalUrl?: string; createdAt: string; created: boolean }>(
-    `/v1/comments/${encodeURIComponent(commentId)}/external-work`,
-    { method: 'POST', body: JSON.stringify({ provider, draft }) },
-  )
+export function sendExternalWork(
+  commentId: string,
+  provider: 'github' | 'linear' | 'jira',
+  draft: { title: string; body: string },
+) {
+  return request<{
+    issueNumber?: number
+    issueUrl?: string
+    externalUrl?: string
+    createdAt: string
+    created: boolean
+  }>(`/v1/comments/${encodeURIComponent(commentId)}/external-work`, {
+    method: 'POST',
+    body: JSON.stringify({ provider, draft }),
+  })
 }
 
 // The API binds the import to the bearer owner, never a client-supplied owner id.
-export function importLocalProject(projectId: string, name: string, comments: Comment[], expectedAccessToken:string, signal?:AbortSignal) {
-  return request<{ projectId: string; imported: number }>('/v1/extension/import', {
-    method: 'POST', body: JSON.stringify({ projectId, name, comments }),signal,
-  },expectedAccessToken)
+export function importLocalProject(
+  projectId: string,
+  name: string,
+  comments: Comment[],
+  expectedAccessToken: string,
+  signal?: AbortSignal,
+) {
+  return request<{ projectId: string; imported: number }>(
+    '/v1/extension/import',
+    {
+      method: 'POST',
+      body: JSON.stringify({ projectId, name, comments }),
+      signal,
+    },
+    expectedAccessToken,
+  )
 }

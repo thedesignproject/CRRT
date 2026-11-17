@@ -3,21 +3,66 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { LocalRecording } from '../lib/recording'
 const mocks = vi.hoisted(() => ({ sync: vi.fn(), playback: vi.fn(), request: vi.fn(), send: vi.fn(), save: vi.fn() }))
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage: mocks.send } } }))
-vi.mock('../lib/recording-cloud', () => ({ isMissingCloudRecording: (error: unknown) => error instanceof Error && 'code' in error && error.code === 'record_not_found', syncRecording: mocks.sync, readRecordingPlayback: mocks.playback, ownerRecordRequest: mocks.request }))
+vi.mock('../lib/recording-cloud', () => ({
+  isMissingCloudRecording: (error: unknown) =>
+    error instanceof Error && 'code' in error && error.code === 'record_not_found',
+  syncRecording: mocks.sync,
+  readRecordingPlayback: mocks.playback,
+  ownerRecordRequest: mocks.request,
+}))
 vi.mock('../lib/recording-store', () => ({ saveLocalRecording: mocks.save }))
 import { RecordingAgentContext, RecordingCloud } from './recording-cloud'
-const recording = (finalized?: boolean): LocalRecording => ({ id: 'local', title: 'Video', source: 'tab', authorName: 'You', createdAt: 'now', status: 'ready', transcriptionStatus: 'processing', durationMs: 1000, marks: [], transcript: [], ...(finalized === undefined ? {} : { cloud: { id: 'remote', authorId: 'owner', shareId: 'capability', manifest: { version: 'record.v1', artifacts: [], events: [], durationMs: 1000 }, uploads: {}, finalized } }) })
-const playback = (state = 'ready', stage = 'done') => ({ recording: { state, failure: null }, stages: [{ stage: 'transcription', state: stage }], transcript: [{ id: 's', text: 'Speech', start_ms: 100, end_ms: 500 }] })
+const recording = (finalized?: boolean): LocalRecording => ({
+  id: 'local',
+  title: 'Video',
+  source: 'tab',
+  authorName: 'You',
+  createdAt: 'now',
+  status: 'ready',
+  transcriptionStatus: 'processing',
+  durationMs: 1000,
+  marks: [],
+  transcript: [],
+  ...(finalized === undefined
+    ? {}
+    : {
+        cloud: {
+          id: 'remote',
+          authorId: 'owner',
+          shareId: 'capability',
+          manifest: { version: 'record.v1', artifacts: [], events: [], durationMs: 1000 },
+          uploads: {},
+          finalized,
+        },
+      }),
+})
+const playback = (state = 'ready', stage = 'done') => ({
+  recording: { state, failure: null },
+  stages: [{ stage: 'transcription', state: stage }],
+  transcript: [{ id: 's', text: 'Speech', start_ms: 100, end_ms: 500 }],
+})
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('WXT_DASHBOARD_URL', 'https://app.test/dashboard/')
-  mocks.sync.mockResolvedValue(recording(true)); mocks.playback.mockResolvedValue(playback()); mocks.request.mockImplementation(async path => path.endsWith('/share') ? { shareId: 'capability' } : { payload: 'paid context' }); mocks.save.mockResolvedValue(undefined)
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  mocks.sync.mockResolvedValue(recording(true))
+  mocks.playback.mockResolvedValue(playback())
+  mocks.request.mockImplementation(async (path) =>
+    path.endsWith('/share') ? { shareId: 'capability' } : { payload: 'paid context' },
+  )
+  mocks.save.mockResolvedValue(undefined)
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  })
 })
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
+})
 it('uploads automatically, reports errors and retries without discarding the local recording', async () => {
   mocks.sync.mockRejectedValueOnce(new Error('Sign in to CRRT to upload recordings.'))
-  const changed = vi.fn(); render(<RecordingCloud recording={recording()} changed={changed} />)
+  const changed = vi.fn()
+  render(<RecordingCloud recording={recording()} changed={changed} />)
   expect(await screen.findByRole('alert')).toHaveTextContent('Sign in')
   fireEvent.click(screen.getByRole('button', { name: 'Sign in to CRRT' }))
   expect(mocks.send).toHaveBeenCalledWith({ type: 'auth:open-popup' })
@@ -40,7 +85,11 @@ it('reports clipboard failures', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not copy')
 })
 it('recovers an older oversized note through explicit editing before upload without changing the media', async () => {
-  const original = { ...recording(), screenBlob: new Blob(['retained media']), marks: [{ id: 'note', type: 'text' as const, atMs: 100, points: [{ x: 50, y: 50 }], text: 'x'.repeat(2001) }] }
+  const original = {
+    ...recording(),
+    screenBlob: new Blob(['retained media']),
+    marks: [{ id: 'note', type: 'text' as const, atMs: 100, points: [{ x: 50, y: 50 }], text: 'x'.repeat(2001) }],
+  }
   const changed = vi.fn()
   render(<RecordingCloud recording={original} changed={changed} />)
   expect(mocks.sync).not.toHaveBeenCalled()
@@ -50,22 +99,35 @@ it('recovers an older oversized note through explicit editing before upload with
   expect(original.marks[0].text).toHaveLength(2001)
   fireEvent.click(screen.getByRole('button', { name: 'Save notes and upload' }))
   await waitFor(() => expect(mocks.sync).toHaveBeenCalledOnce())
-  expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ title: 'My shortened note', screenBlob: original.screenBlob, marks: [expect.objectContaining({ text: 'My shortened note', atMs: 100 })] }))
+  expect(mocks.save).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: 'My shortened note',
+      screenBlob: original.screenBlob,
+      marks: [expect.objectContaining({ text: 'My shortened note', atMs: 100 })],
+    }),
+  )
   expect(mocks.sync.mock.calls[0][0].screenBlob).toBe(original.screenBlob)
   expect(mocks.save.mock.invocationCallOrder[0]).toBeLessThan(mocks.sync.mock.invocationCallOrder[0])
   expect(original.marks[0].text).toHaveLength(2001)
 })
 it('uploads ordinary notes and non-text marks without showing the recovery editor', async () => {
-  const original = { ...recording(), marks: [
-    { id: 'pin', type: 'pin' as const, atMs: 0, points: [{ x: 1, y: 1 }] },
-    { id: 'note', type: 'text' as const, atMs: 1, points: [{ x: 1, y: 1 }], text: 'x'.repeat(2000) },
-  ] }
+  const original = {
+    ...recording(),
+    marks: [
+      { id: 'pin', type: 'pin' as const, atMs: 0, points: [{ x: 1, y: 1 }] },
+      { id: 'note', type: 'text' as const, atMs: 1, points: [{ x: 1, y: 1 }], text: 'x'.repeat(2000) },
+    ],
+  }
   render(<RecordingCloud recording={original} changed={vi.fn()} />)
   await waitFor(() => expect(mocks.sync).toHaveBeenCalledOnce())
   expect(screen.queryByRole('region', { name: 'Shorten oversized notes' })).toBeNull()
 })
 it('retains the original note when local persistence fails and retries repair before upload', async () => {
-  const original = { ...recording(), pageTitle: 'Checkout', marks: [{ id: 'note', type: 'text' as const, atMs: 0, points: [{ x: 1, y: 1 }], text: 'x'.repeat(2001) }] }
+  const original = {
+    ...recording(),
+    pageTitle: 'Checkout',
+    marks: [{ id: 'note', type: 'text' as const, atMs: 0, points: [{ x: 1, y: 1 }], text: 'x'.repeat(2001) }],
+  }
   mocks.save.mockRejectedValueOnce(new Error('Disk unavailable'))
   render(<RecordingCloud recording={original} changed={vi.fn()} />)
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Edited note' } })
@@ -85,19 +147,38 @@ it('does not copy a cached capability after the owner unshares the recording', a
   expect(navigator.clipboard.writeText).not.toHaveBeenCalled()
   expect(mocks.request).toHaveBeenCalledWith('recordings/remote/share')
 })
-it.each([['done', 'ready'], ['failed', 'failed'], ['running', 'processing'], [undefined, 'processing']])('polls authoritative transcript state %s', async (stage, expected) => {
-  const result = playback('processing', stage); if (stage === undefined) result.stages = []
+it.each([
+  ['done', 'ready'],
+  ['failed', 'failed'],
+  ['running', 'processing'],
+  [undefined, 'processing'],
+])('polls authoritative transcript state %s', async (stage, expected) => {
+  const result = playback('processing', stage)
+  if (stage === undefined) result.stages = []
   mocks.playback.mockResolvedValue(result)
-  const changed = vi.fn(); render(<RecordingCloud recording={recording(true)} changed={changed} />)
+  const changed = vi.fn()
+  render(<RecordingCloud recording={recording(true)} changed={changed} />)
   expect(await screen.findByText('Recording processing')).toBeInTheDocument()
-  await waitFor(() => expect(changed).toHaveBeenCalledWith(expect.objectContaining({ transcript: [{ id: 's', text: 'Speech', startMs: 100, endMs: 500 }], transcriptionStatus: expected })))
+  await waitFor(() =>
+    expect(changed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcript: [{ id: 's', text: 'Speech', startMs: 100, endMs: 500 }],
+        transcriptionStatus: expected,
+      }),
+    ),
+  )
 })
 it('keeps polling for signed state and stops after unmount', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   const { unmount } = render(<RecordingCloud recording={recording(true)} changed={vi.fn()} />)
-  await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10_000)
+  })
   expect(mocks.playback).toHaveBeenCalledTimes(2)
-  unmount(); await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+  unmount()
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(10_000)
+  })
   expect(mocks.playback).toHaveBeenCalledTimes(2)
 })
 it('reports playback failures and retries an authorized failed stage', async () => {
@@ -105,13 +186,21 @@ it('reports playback failures and retries an authorized failed stage', async () 
   const view = render(<RecordingCloud recording={recording(true)} changed={vi.fn()} />)
   expect(await screen.findByRole('alert')).toHaveTextContent('Unavailable')
   view.unmount()
-  mocks.playback.mockResolvedValue({ ...playback('failed'), stages: [{ stage: 'metadata', state: 'failed', failure: { retryable: true, stage: 'metadata' } }], recording: { state: 'failed', failure: { retryable: true, stage: 'metadata' } } })
+  mocks.playback.mockResolvedValue({
+    ...playback('failed'),
+    stages: [{ stage: 'metadata', state: 'failed', failure: { retryable: true, stage: 'metadata' } }],
+    recording: { state: 'failed', failure: { retryable: true, stage: 'metadata' } },
+  })
   render(<RecordingCloud recording={recording(true)} changed={vi.fn()} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Retry video' }))
   await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('recordings/remote/retry', { stage: 'metadata' }))
 })
 it('reports processing retry errors', async () => {
-  mocks.playback.mockResolvedValue({ ...playback('failed'), stages: [{ stage: 'transcription', state: 'failed', failure: { retryable: true, stage: 'transcription' } }], recording: { state: 'failed', failure: { retryable: true, stage: 'transcription' } } })
+  mocks.playback.mockResolvedValue({
+    ...playback('failed'),
+    stages: [{ stage: 'transcription', state: 'failed', failure: { retryable: true, stage: 'transcription' } }],
+    recording: { state: 'failed', failure: { retryable: true, stage: 'transcription' } },
+  })
   mocks.request.mockRejectedValue(new Error('Cannot retry'))
   render(<RecordingCloud recording={recording(true)} changed={vi.fn()} />)
   fireEvent.click(await screen.findByRole('button', { name: 'Retry transcription' }))
@@ -119,22 +208,45 @@ it('reports processing retry errors', async () => {
 })
 it('discards in-flight playback results and failures after unmount', async () => {
   let resolve!: (v: unknown) => void
-  mocks.playback.mockReturnValue(new Promise(r => { resolve = r }))
-  const changed = vi.fn(), first = render(<RecordingCloud recording={recording(true)} changed={changed} />)
-  first.unmount(); await act(async () => { resolve(playback()) }); expect(changed).not.toHaveBeenCalled()
+  mocks.playback.mockReturnValue(
+    new Promise((r) => {
+      resolve = r
+    }),
+  )
+  const changed = vi.fn(),
+    first = render(<RecordingCloud recording={recording(true)} changed={changed} />)
+  first.unmount()
+  await act(async () => {
+    resolve(playback())
+  })
+  expect(changed).not.toHaveBeenCalled()
   let reject!: (e: unknown) => void
-  mocks.playback.mockReturnValue(new Promise((_r, j) => { reject = j }))
+  mocks.playback.mockReturnValue(
+    new Promise((_r, j) => {
+      reject = j
+    }),
+  )
   const second = render(<RecordingCloud recording={recording(true)} changed={changed} />)
-  second.unmount(); await act(async () => { reject(new Error('late')) })
+  second.unmount()
+  await act(async () => {
+    reject(new Error('late'))
+  })
 })
 
 it('does not change the review after unmount while a transcript save is pending', async () => {
   let resolve!: () => void
-  mocks.save.mockReturnValue(new Promise<void>(r => { resolve = r }))
-  const changed = vi.fn(), view = render(<RecordingCloud recording={recording(true)} changed={changed} />)
+  mocks.save.mockReturnValue(
+    new Promise<void>((r) => {
+      resolve = r
+    }),
+  )
+  const changed = vi.fn(),
+    view = render(<RecordingCloud recording={recording(true)} changed={changed} />)
   await waitFor(() => expect(mocks.save).toHaveBeenCalled())
   view.unmount()
-  await act(async () => { resolve() })
+  await act(async () => {
+    resolve()
+  })
   expect(changed).not.toHaveBeenCalled()
 })
 it('disables agent requests until upload finalization', () => {
@@ -165,7 +277,8 @@ it('surfaces backend entitlement and clipboard failures', async () => {
 it('keeps deleted captures local until an explicit fresh upload and hides stale sharing and agent actions', async () => {
   const deleted = { ...recording(true), cloud: { ...recording(true).cloud!, deleted: true, shareId: null } }
   mocks.sync.mockResolvedValue(deleted)
-  const changed = vi.fn(), view = render(<RecordingCloud recording={deleted} changed={changed} />)
+  const changed = vi.fn(),
+    view = render(<RecordingCloud recording={deleted} changed={changed} />)
   expect(await screen.findByText('Cloud recording deleted')).toBeInTheDocument()
   await waitFor(() => expect(mocks.sync).toHaveBeenCalledWith(deleted, changed, false))
   expect(mocks.playback).not.toHaveBeenCalled()
@@ -180,7 +293,10 @@ it('keeps deleted captures local until an explicit fresh upload and hides stale 
 it('detects cloud deletion during playback polling and clears obsolete playback', async () => {
   const original = recording(true)
   const deleted = { ...original, cloud: { ...original.cloud!, deleted: true, shareId: null } }
-  mocks.sync.mockImplementation(async (_input, changed) => { changed(deleted); return deleted })
+  mocks.sync.mockImplementation(async (_input, changed) => {
+    changed(deleted)
+    return deleted
+  })
   mocks.playback.mockRejectedValue(Object.assign(new Error('Missing'), { code: 'record_not_found' }))
   const changed = vi.fn()
   const view = render(<RecordingCloud recording={original} changed={changed} />)

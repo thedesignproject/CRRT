@@ -3,7 +3,12 @@ import { listAccessRequests, submitAccessRequest, reviewAccessRequest } from './
 import { getServiceSupabase } from './supabase.js'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 const result = { data: [], error: null as null | { message: string } }
-const query = { select: vi.fn(), eq: vi.fn(), order: vi.fn(), then: (resolve: (r: unknown) => unknown) => Promise.resolve(result).then(resolve) }
+const query = {
+  select: vi.fn(),
+  eq: vi.fn(),
+  order: vi.fn(),
+  then: (resolve: (r: unknown) => unknown) => Promise.resolve(result).then(resolve),
+}
 const client = { from: vi.fn(() => query), rpc: vi.fn(async () => result) }
 beforeEach(() => {
   vi.clearAllMocks()
@@ -14,15 +19,30 @@ beforeEach(() => {
 it('scopes request listing and sends the authenticated actor to transactional RPCs', async () => {
   expect(await listAccessRequests('p')).toEqual([])
   expect(client.from).toHaveBeenCalledWith('project_access_requests')
-  expect(query.eq.mock.calls).toEqual([['project_key', 'p'], ['status', 'pending']])
+  expect(query.eq.mock.calls).toEqual([
+    ['project_key', 'p'],
+    ['status', 'pending'],
+  ])
   await submitAccessRequest('p', 'u')
   expect(client.rpc).toHaveBeenCalledWith('submit_project_access_request', { p_project: 'p', p_user: 'u' })
   await reviewAccessRequest('p', 'r', 'admin', 2, 'approved', 'guest')
-  expect(client.rpc).toHaveBeenCalledWith('review_project_access_request', { p_project: 'p', p_request: 'r', p_reviewer: 'admin', p_attempt: 2, p_decision: 'approved', p_role: 'guest' })
+  expect(client.rpc).toHaveBeenCalledWith('review_project_access_request', {
+    p_project: 'p',
+    p_request: 'r',
+    p_reviewer: 'admin',
+    p_attempt: 2,
+    p_decision: 'approved',
+    p_role: 'guest',
+  })
 })
 it('propagates storage failures', async () => {
   result.error = { message: 'failed' }
-  for (const operation of [() => listAccessRequests('p'), () => submitAccessRequest('p', 'u'), () => reviewAccessRequest('p', 'r', 'a', 1, 'declined', 'member')]) await expect(operation()).rejects.toThrow('failed')
+  for (const operation of [
+    () => listAccessRequests('p'),
+    () => submitAccessRequest('p', 'u'),
+    () => reviewAccessRequest('p', 'r', 'a', 1, 'declined', 'member'),
+  ])
+    await expect(operation()).rejects.toThrow('failed')
 })
 
 it('turns the database seat guard into a stable review outcome', async () => {

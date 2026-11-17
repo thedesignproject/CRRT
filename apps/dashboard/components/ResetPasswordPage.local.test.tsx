@@ -6,7 +6,11 @@ import postgres from 'postgres'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 
 const holder = vi.hoisted(() => ({ client: null as SupabaseClient | null }))
-vi.mock('../lib/supabase', () => ({ get supabase() { return holder.client } }))
+vi.mock('../lib/supabase', () => ({
+  get supabase() {
+    return holder.client
+  },
+}))
 import { ResetPasswordPage } from './ResetPasswordPage'
 
 const enabled = process.env.CRRT_LOCAL_RESET_TEST === '1'
@@ -19,12 +23,25 @@ let email: string
 let originalPassword = 'Local-reset-original-123!'
 let userId: string
 function client(flowType: 'implicit' | 'pkce' = 'implicit', storage = new Map<string, string>()) {
-  const value = createClient(api, process.env.SUPABASE_KEY!, { auth: {
-    flowType, persistSession: true, autoRefreshToken: false, detectSessionInUrl: true,
-    storageKey: 'local-reset-test',
-    storage: { getItem: key => storage.get(key) ?? null, setItem: (key, v) => { storage.set(key, v) }, removeItem: key => { storage.delete(key) } },
-    lock: async (_name, _timeout, fn) => fn(),
-  } })
+  const value = createClient(api, process.env.SUPABASE_KEY!, {
+    auth: {
+      flowType,
+      persistSession: true,
+      autoRefreshToken: false,
+      detectSessionInUrl: true,
+      storageKey: 'local-reset-test',
+      storage: {
+        getItem: (key) => storage.get(key) ?? null,
+        setItem: (key, v) => {
+          storage.set(key, v)
+        },
+        removeItem: (key) => {
+          storage.delete(key)
+        },
+      },
+      lock: async (_name, _timeout, fn) => fn(),
+    },
+  })
   clients.push(value)
   return value
 }
@@ -47,7 +64,9 @@ async function ready() {
   await waitFor(() => expect(screen.getByLabelText('new password')).toBeEnabled(), { timeout: 10000 })
 }
 async function invalid() {
-  await waitFor(() => expect(screen.getByRole('heading', { name: 'link has expired' })).toBeInTheDocument(), { timeout: 10000 })
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'link has expired' })).toBeInTheDocument(), {
+    timeout: 10000,
+  })
   expect(screen.queryByLabelText('new password')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /update password/ })).not.toBeInTheDocument()
   expect(screen.getByRole('link', { name: /request a new link/ })).toBeInTheDocument()
@@ -63,13 +82,21 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
   beforeAll(async () => {
     // Refuse a cloud URL even if a developer accidentally loads the wrong env file.
     expect(process.env.SUPABASE_URL).toBe(api)
-    admin = createClient(api, process.env.SUPABASE_SECRET_KEY!, { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } })
+    admin = createClient(api, process.env.SUPABASE_SECRET_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    })
     email = `reset-e2e-${Date.now()}@example.test`
-    const { data, error } = await admin.auth.admin.createUser({ email, password: originalPassword, email_confirm: true })
+    const { data, error } = await admin.auth.admin.createUser({
+      email,
+      password: originalPassword,
+      email_confirm: true,
+    })
     if (error) throw error
     userId = data.user.id
   })
-  afterAll(async () => { if (userId) await admin.auth.admin.deleteUser(userId) })
+  afterAll(async () => {
+    if (userId) await admin.auth.admin.deleteUser(userId)
+  })
   afterEach(async () => {
     cleanup()
     for (const value of clients.splice(0)) {
@@ -84,13 +111,20 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
     const { error } = await requester.auth.resetPasswordForEmail(email, { redirectTo })
     expect(error).toBeNull()
     let messageId = ''
-    await waitFor(async () => {
-      const inbox = await (await fetch(mail + '/api/v1/messages')).json()
-      messageId = inbox.messages.find((m: { To: { Address: string }[] }) => m.To.some(to => to.Address === email))?.ID
-      expect(messageId).toBeTruthy()
-    }, { timeout: 10000 })
+    await waitFor(
+      async () => {
+        const inbox = await (await fetch(mail + '/api/v1/messages')).json()
+        messageId = inbox.messages.find((m: { To: { Address: string }[] }) =>
+          m.To.some((to) => to.Address === email),
+        )?.ID
+        expect(messageId).toBeTruthy()
+      },
+      { timeout: 10000 },
+    )
     const message = await (await fetch(mail + '/api/v1/message/' + messageId)).json()
-    const actionLink = (message.HTML as string).match(/href="([^"]*\/auth\/v1\/verify[^\"]*)"/)![1].replace(/&amp;/g, '&')
+    const actionLink = (message.HTML as string)
+      .match(/href="([^"]*\/auth\/v1\/verify[^\"]*)"/)![1]
+      .replace(/&amp;/g, '&')
     await open(await callback(actionLink))
     const newPassword = 'Local-reset-changed-456!'
     await changePassword(newPassword)
@@ -128,7 +162,9 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
     const sql = postgres(process.env.DATABASE_URL!, { max: 1 })
     try {
       await sql`update auth.users set recovery_sent_at = now() - interval '2 days' where id = ${userId}`
-    } finally { await sql.end() }
+    } finally {
+      await sql.end()
+    }
     const url = await callback(link)
     expect(url).toContain('error_code=otp_expired')
     await open(url)
@@ -149,11 +185,21 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
     const storageSession = (await holder.client.auth.getSession()).data.session!
     cleanup()
     const storage = new Map([['local-reset-test', JSON.stringify(storageSession)]])
-    await open(redirectTo + '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired', 'implicit', storage)
+    await open(
+      redirectTo + '#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired',
+      'implicit',
+      storage,
+    )
     await invalid()
   })
 
-  it.each(['', '#type=recovery', '#access_token=broken&type=recovery', '#access_token=broken&refresh_token=broken&expires_in=3600&token_type=bearer&type=recovery', '?code=invalid-code'])('rejects a missing/stripped/malformed recovery context %s', async suffix => {
+  it.each([
+    '',
+    '#type=recovery',
+    '#access_token=broken&type=recovery',
+    '#access_token=broken&refresh_token=broken&expires_in=3600&token_type=bearer&type=recovery',
+    '?code=invalid-code',
+  ])('rejects a missing/stripped/malformed recovery context %s', async (suffix) => {
     await open(redirectTo + suffix)
     await invalid()
   })
@@ -171,7 +217,11 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
   it('handles real PKCE recovery, rejecting a missing verifier and a reused code', async () => {
     // A separate account avoids the per-user recovery-email cooldown.
     const pkceEmail = `pkce-${Date.now()}@example.test`
-    const created = await admin.auth.admin.createUser({ email: pkceEmail, password: originalPassword, email_confirm: true })
+    const created = await admin.auth.admin.createUser({
+      email: pkceEmail,
+      password: originalPassword,
+      email_confirm: true,
+    })
     if (created.error) throw created.error
     try {
       window.location.href = redirectTo
@@ -179,11 +229,16 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
       const requester = client('pkce', storage)
       expect((await requester.auth.resetPasswordForEmail(pkceEmail, { redirectTo })).error).toBeNull()
       let messageId = ''
-      await waitFor(async () => {
-        const inbox = await (await fetch(mail + '/api/v1/messages')).json()
-        messageId = inbox.messages.find((m: { To: { Address: string }[] }) => m.To.some(to => to.Address === pkceEmail))?.ID
-        expect(messageId).toBeTruthy()
-      }, { timeout: 10000 })
+      await waitFor(
+        async () => {
+          const inbox = await (await fetch(mail + '/api/v1/messages')).json()
+          messageId = inbox.messages.find((m: { To: { Address: string }[] }) =>
+            m.To.some((to) => to.Address === pkceEmail),
+          )?.ID
+          expect(messageId).toBeTruthy()
+        },
+        { timeout: 10000 },
+      )
       const message = await (await fetch(mail + '/api/v1/message/' + messageId)).json()
       const link = (message.HTML as string).match(/href="([^"]*\/auth\/v1\/verify[^\"]*)"/)![1].replace(/&amp;/g, '&')
       const url = await callback(link)
@@ -200,13 +255,17 @@ describe.skipIf(!enabled)('local Supabase password recovery', () => {
       storage.set('local-reset-test-code-verifier', 'invalid-verifier')
       await open(url, 'pkce', storage)
       await invalid()
-    } finally { await admin.auth.admin.deleteUser(created.data.user.id) }
+    } finally {
+      await admin.auth.admin.deleteUser(created.data.user.id)
+    }
   })
 
   it('disables the form when the recovery session signs out', async () => {
     await open(await callback(await recoveryLink()))
     await ready()
-    await act(async () => { await holder.client!.auth.signOut() })
+    await act(async () => {
+      await holder.client!.auth.signOut()
+    })
     await invalid()
   })
 })

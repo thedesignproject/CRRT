@@ -1,6 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCapability, requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
-import { assignExtensionCommentToProject, deleteExtensionComment, ExtensionCommentError, getOwnedExtensionCommentScope, updateExtensionComment } from '../../../_lib/extension-comments.js'
+import {
+  assignExtensionCommentToProject,
+  deleteExtensionComment,
+  ExtensionCommentError,
+  getOwnedExtensionCommentScope,
+  updateExtensionComment,
+} from '../../../_lib/extension-comments.js'
 import { feedbackVisibilityForRole } from '../../../_lib/project-capabilities.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
@@ -23,13 +29,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       setCors(req, res, METHODS)
       return res.status(204).end()
     }
-    if (scope.projectId && !(await requireProjectCommentCapability(
-      req,
-      res,
-      user,
-      { projectId: scope.projectId, visibility: scope.visibility },
-      'feedback:create',
-    ))) return
+    if (
+      scope.projectId &&
+      !(await requireProjectCommentCapability(
+        req,
+        res,
+        user,
+        { projectId: scope.projectId, visibility: scope.visibility },
+        'feedback:create',
+      ))
+    )
+      return
     if (req.method === 'DELETE') {
       await deleteExtensionComment(user.userId, commentId)
       setCors(req, res, METHODS)

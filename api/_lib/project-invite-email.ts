@@ -14,11 +14,7 @@ export type ProjectInviteEmailInput = {
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function sanitizeEmailHeader(value: string) {
@@ -26,9 +22,7 @@ function sanitizeEmailHeader(value: string) {
 }
 
 export function getProjectInviteEmailIdempotencyKey(projectKey: string, recipient: string) {
-  const digest = createHash('sha256')
-    .update(`${projectKey}\0${recipient.trim().toLowerCase()}`)
-    .digest('hex')
+  const digest = createHash('sha256').update(`${projectKey}\0${recipient.trim().toLowerCase()}`).digest('hex')
   return `project-invite/${digest}`
 }
 

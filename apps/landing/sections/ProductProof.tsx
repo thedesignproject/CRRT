@@ -23,10 +23,13 @@ export function ProductProof() {
       return
     }
 
-    const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) playVideo()
-      else video.pause()
-    }, { threshold: 0.3 })
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) playVideo()
+        else video.pause()
+      },
+      { threshold: 0.3 },
+    )
     observer.observe(section)
 
     return () => {
@@ -37,7 +40,10 @@ export function ProductProof() {
 
   return (
     <section ref={sectionRef} className="landing-section landing-proof">
-      <SectionIntro title="More than a screenshot in a prompt." description="CRRT gives every comment the project’s design rules, screenshot, selector, viewport, and approved direction. Your agent gets the full brief; your team keeps the review step." />
+      <SectionIntro
+        title="More than a screenshot in a prompt."
+        description="CRRT gives every comment the project’s design rules, screenshot, selector, viewport, and approved direction. Your agent gets the full brief; your team keeps the review step."
+      />
       <DemoFrame title="CRRT Workspace" status="3 fixes ready" className="landing-dashboard-frame">
         <div className="landing-dashboard-video-shell">
           <video

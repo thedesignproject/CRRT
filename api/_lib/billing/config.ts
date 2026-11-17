@@ -6,7 +6,8 @@ export function stripeEnabled() {
 }
 
 export function billingConfig() {
-  if (process.env.STRIPE_MODE && !['test','live'].includes(process.env.STRIPE_MODE)) throw new Error('STRIPE_MODE must be test or live')
+  if (process.env.STRIPE_MODE && !['test', 'live'].includes(process.env.STRIPE_MODE))
+    throw new Error('STRIPE_MODE must be test or live')
   if (isCloud()) billingCycles()
   const secret = process.env.STRIPE_SECRET_KEY
   const price = isCloud() ? cloudPriceCatalog().pro : process.env.STRIPE_PRICE_ID

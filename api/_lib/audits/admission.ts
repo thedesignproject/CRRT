@@ -14,7 +14,10 @@ export type VerificationDecision = {
 const minimumFindingConfidence = 0.8
 
 function fingerprint(candidate: AuditCandidate) {
-  return candidate.title.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  return candidate.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
 }
 
 export function admitAuditFindings(
@@ -47,12 +50,14 @@ export function admitAuditFindings(
     const key = fingerprint(candidate)
     if (seen.has(key)) continue
     seen.add(key)
-    findings.push(auditFindingSchema.parse({
-      ...candidate,
-      status: 'open',
-      admittedBy: direct ? 'direct-evidence' : 'independent-signals',
-      evidence: support,
-    }))
+    findings.push(
+      auditFindingSchema.parse({
+        ...candidate,
+        status: 'open',
+        admittedBy: direct ? 'direct-evidence' : 'independent-signals',
+        evidence: support,
+      }),
+    )
     if (findings.length === 5) break
   }
   return findings

@@ -13,21 +13,31 @@ export async function processExtensionImageCleanup(paths?: string[]) {
   if (error) throw new Error(error.message)
   const jobs = (data as CleanupJob[] | null) ?? []
   for (let offset = 0; offset < jobs.length; offset += 20) {
-    await Promise.all(jobs.slice(offset, offset + 20).map(async (job) => {
-      try {
-        const { error } = await client.storage.from('extension-feedback-images').remove([job.storage_path])
-        if (error) throw new Error(error.message)
-        const { error: deleteError } = await client.from('extension_image_cleanup_jobs')
-          .delete().eq('storage_path', job.storage_path).eq('attempts', job.attempts)
-        if (deleteError) throw new Error(deleteError.message)
-      } catch (error) {
-        console.error('Extension image cleanup deferred', error)
-        const delay = Math.min(3600, 60 * 2 ** Math.min(job.attempts, 6))
-        const { error: retryError } = await client.from('extension_image_cleanup_jobs').update({
-          attempts: job.attempts + 1, next_attempt_at: new Date(Date.now() + delay * 1000).toISOString(),
-        }).eq('storage_path', job.storage_path).eq('attempts', job.attempts)
-        if (retryError) throw new Error(retryError.message)
-      }
-    }))
+    await Promise.all(
+      jobs.slice(offset, offset + 20).map(async (job) => {
+        try {
+          const { error } = await client.storage.from('extension-feedback-images').remove([job.storage_path])
+          if (error) throw new Error(error.message)
+          const { error: deleteError } = await client
+            .from('extension_image_cleanup_jobs')
+            .delete()
+            .eq('storage_path', job.storage_path)
+            .eq('attempts', job.attempts)
+          if (deleteError) throw new Error(deleteError.message)
+        } catch (error) {
+          console.error('Extension image cleanup deferred', error)
+          const delay = Math.min(3600, 60 * 2 ** Math.min(job.attempts, 6))
+          const { error: retryError } = await client
+            .from('extension_image_cleanup_jobs')
+            .update({
+              attempts: job.attempts + 1,
+              next_attempt_at: new Date(Date.now() + delay * 1000).toISOString(),
+            })
+            .eq('storage_path', job.storage_path)
+            .eq('attempts', job.attempts)
+          if (retryError) throw new Error(retryError.message)
+        }
+      }),
+    )
   }
 }

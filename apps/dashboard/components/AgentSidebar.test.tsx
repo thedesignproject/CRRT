@@ -29,32 +29,34 @@ function comment(id: string, implementationStatus: ImplStatus): Comment {
 
 describe('<AgentSidebar /> testing queue', () => {
   it('places ready-for-testing work between the agent queue and Done', () => {
-    render(<AgentSidebar
-      selectedProject="project-1"
-      projectComments={[
-        comment('done', 'done'),
-        comment('testing', 'ready_for_testing'),
-        comment('ready', 'unassigned'),
-      ]}
-      readyCount={1}
-      filtered={false}
-      selectedCommentId="ready"
-      onSelectComment={vi.fn()}
-      agentSession={{ shareId: 'share-id', slug: 'share', token: 'token', docUrl: 'https://example.com/share' }}
-      agentEvents={[]}
-      agentError={null}
-      agentErrorCode={null}
-      agentConnected
-      selectedAgent="codex"
-      setSelectedAgent={vi.fn()}
-      selectedAgentMeta={{ id: 'codex', name: 'Codex', hint: 'Paste prompt in prompt', target: 'codex' }}
-      agentDropdownOpen={false}
-      setAgentDropdownOpen={vi.fn()}
-      copyStatus="idle"
-      onCopySessionLink={vi.fn()}
-      onUpgrade={vi.fn()}
-      onClose={vi.fn()}
-    />)
+    render(
+      <AgentSidebar
+        selectedProject="project-1"
+        projectComments={[
+          comment('done', 'done'),
+          comment('testing', 'ready_for_testing'),
+          comment('ready', 'unassigned'),
+        ]}
+        readyCount={1}
+        filtered={false}
+        selectedCommentId="ready"
+        onSelectComment={vi.fn()}
+        agentSession={{ shareId: 'share-id', slug: 'share', token: 'token', docUrl: 'https://example.com/share' }}
+        agentEvents={[]}
+        agentError={null}
+        agentErrorCode={null}
+        agentConnected
+        selectedAgent="codex"
+        setSelectedAgent={vi.fn()}
+        selectedAgentMeta={{ id: 'codex', name: 'Codex', hint: 'Paste prompt in prompt', target: 'codex' }}
+        agentDropdownOpen={false}
+        setAgentDropdownOpen={vi.fn()}
+        copyStatus="idle"
+        onCopySessionLink={vi.fn()}
+        onUpgrade={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    )
 
     const queue = screen.getByRole('region', { name: 'Agent queue' })
     const queueItems = within(queue).getAllByRole('button')
@@ -72,12 +74,24 @@ describe('<AgentSidebar /> testing queue', () => {
   it('offers checkout only to an owner who can upgrade the project', () => {
     const upgrade = vi.fn()
     const props = {
-      selectedProject: 'project-1', projectComments: [], readyCount: 0, filtered: false,
-      selectedCommentId: '', onSelectComment: vi.fn(), agentSession: null, agentEvents: [],
-      agentConnected: false, selectedAgent: 'codex', setSelectedAgent: vi.fn(),
+      selectedProject: 'project-1',
+      projectComments: [],
+      readyCount: 0,
+      filtered: false,
+      selectedCommentId: '',
+      onSelectComment: vi.fn(),
+      agentSession: null,
+      agentEvents: [],
+      agentConnected: false,
+      selectedAgent: 'codex',
+      setSelectedAgent: vi.fn(),
       selectedAgentMeta: { id: 'codex', name: 'Codex', hint: 'Paste prompt in prompt', target: 'codex' as const },
-      agentDropdownOpen: false, setAgentDropdownOpen: vi.fn(), copyStatus: 'idle' as const,
-      onCopySessionLink: vi.fn(), onUpgrade: upgrade, onClose: vi.fn(),
+      agentDropdownOpen: false,
+      setAgentDropdownOpen: vi.fn(),
+      copyStatus: 'idle' as const,
+      onCopySessionLink: vi.fn(),
+      onUpgrade: upgrade,
+      onClose: vi.fn(),
     }
     const view = render(<AgentSidebar {...props} agentError="Upgrade the plan" agentErrorCode="upgrade_required" />)
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade plan' }))

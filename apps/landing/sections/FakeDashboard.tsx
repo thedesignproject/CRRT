@@ -14,15 +14,51 @@ type DemoCommentData = {
 // so the demo feels alive instead of static. Avatars and timestamps shift to
 // reinforce the "real team commenting" vibe.
 const VISITORS_COMMENTS: DemoCommentData[] = [
-  { initials: 'L', author: 'Lucía F.', time: '9 min ago',  avatarColor: '#E8853D', body: 'Could the +12.4% delta match the value size? Hierarchy reads a bit flat.' },
-  { initials: 'D', author: 'Diego M.', time: 'just now',   avatarColor: '#1F3A2F', body: '"Visitors" is too generic. Try "Sessions" or "Active users"?' },
-  { initials: 'A', author: 'Ana C.',   time: '3 min ago',  avatarColor: '#B85F1F', body: 'Love the trend arrow. A sparkline below the number would seal it.' },
+  {
+    initials: 'L',
+    author: 'Lucía F.',
+    time: '9 min ago',
+    avatarColor: '#E8853D',
+    body: 'Could the +12.4% delta match the value size? Hierarchy reads a bit flat.',
+  },
+  {
+    initials: 'D',
+    author: 'Diego M.',
+    time: 'just now',
+    avatarColor: '#1F3A2F',
+    body: '"Visitors" is too generic. Try "Sessions" or "Active users"?',
+  },
+  {
+    initials: 'A',
+    author: 'Ana C.',
+    time: '3 min ago',
+    avatarColor: '#B85F1F',
+    body: 'Love the trend arrow. A sparkline below the number would seal it.',
+  },
 ]
 
 const CHART_COMMENTS: DemoCommentData[] = [
-  { initials: 'T', author: 'Tomás B.', time: '22 min ago', avatarColor: '#1F3A2F', body: 'Worth labelling the chart peaks? Hard to tell which week is which.' },
-  { initials: 'E', author: 'Emma K.',  time: '5 min ago',  avatarColor: '#E8853D', body: 'A tooltip on hover with exact numbers would close the loop here.' },
-  { initials: 'J', author: 'Joaquín P.', time: '1 min ago', avatarColor: '#FFB000', body: 'Filter by source — marketing wants organic vs paid side by side.' },
+  {
+    initials: 'T',
+    author: 'Tomás B.',
+    time: '22 min ago',
+    avatarColor: '#1F3A2F',
+    body: 'Worth labelling the chart peaks? Hard to tell which week is which.',
+  },
+  {
+    initials: 'E',
+    author: 'Emma K.',
+    time: '5 min ago',
+    avatarColor: '#E8853D',
+    body: 'A tooltip on hover with exact numbers would close the loop here.',
+  },
+  {
+    initials: 'J',
+    author: 'Joaquín P.',
+    time: '1 min ago',
+    avatarColor: '#FFB000',
+    body: 'Filter by source — marketing wants organic vs paid side by side.',
+  },
 ]
 
 export function FakeDashboard() {
@@ -40,7 +76,14 @@ export function FakeDashboard() {
         <div className="flex items-center gap-3" style={{ marginBottom: 24 }}>
           <span className="section-marker">/ 03 try it</span>
           <span style={{ width: 40, height: 1, background: 'var(--crrt-rule-dark)' }} />
-          <span style={{ fontFamily: 'var(--crrt-font-crt)', fontSize: 18, letterSpacing: '0.08em', color: 'var(--crrt-ink-faint)' }}>
+          <span
+            style={{
+              fontFamily: 'var(--crrt-font-crt)',
+              fontSize: 18,
+              letterSpacing: '0.08em',
+              color: 'var(--crrt-ink-faint)',
+            }}
+          >
             a fake product to comment on
           </span>
         </div>
@@ -57,7 +100,8 @@ export function FakeDashboard() {
             maxWidth: 720,
           }}
         >
-          A pretend dashboard.<br />
+          A pretend dashboard.
+          <br />
           <span style={{ color: 'var(--crrt-ink-mute)' }}>Drop a CRRT anywhere.</span>
         </h2>
 
@@ -82,9 +126,15 @@ export function FakeDashboard() {
           >
             <div className="flex items-center gap-3">
               <div className="flex gap-1.5">
-                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF5F57', display: 'inline-block' }} />
-                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#FEBC2E', display: 'inline-block' }} />
-                <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#28C840', display: 'inline-block' }} />
+                <span
+                  style={{ width: 10, height: 10, borderRadius: '50%', background: '#FF5F57', display: 'inline-block' }}
+                />
+                <span
+                  style={{ width: 10, height: 10, borderRadius: '50%', background: '#FEBC2E', display: 'inline-block' }}
+                />
+                <span
+                  style={{ width: 10, height: 10, borderRadius: '50%', background: '#28C840', display: 'inline-block' }}
+                />
               </div>
               <span
                 style={{
@@ -147,13 +197,36 @@ export function FakeDashboard() {
                       padding: 14,
                     }}
                   >
-                    <div style={{ fontSize: 12, color: 'var(--crrt-ink-faint)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: 'var(--crrt-ink-faint)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.06em',
+                      }}
+                    >
                       {m.label}
                     </div>
-                    <div style={{ fontFamily: 'var(--crrt-font-mono)', fontSize: 22, color: 'var(--crrt-white)', marginTop: 6, fontWeight: 600 }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--crrt-font-mono)',
+                        fontSize: 22,
+                        color: 'var(--crrt-white)',
+                        marginTop: 6,
+                        fontWeight: 600,
+                      }}
+                    >
                       {m.value}
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--crrt-phosphor)', marginTop: 4, fontFamily: 'var(--crrt-font-crt)', letterSpacing: '0.08em' }}>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: 'var(--crrt-phosphor)',
+                        marginTop: 4,
+                        fontFamily: 'var(--crrt-font-crt)',
+                        letterSpacing: '0.08em',
+                      }}
+                    >
                       {m.delta}
                     </div>
                   </div>
@@ -183,12 +256,24 @@ export function FakeDashboard() {
           <DemoPin top="14%" left="73%" delay={100} />
           <DemoPin top="32%" left="94%" delay={400} />
 
-          <DemoComment top="22%" left="42%" popoverSide="below"
-            pinDelay={700} popoverDelay={1200}
-            comments={VISITORS_COMMENTS} cycleStart={0} />
-          <DemoComment top="68%" left="58%" popoverSide="above"
-            pinDelay={1100} popoverDelay={1600}
-            comments={CHART_COMMENTS} cycleStart={1} />
+          <DemoComment
+            top="22%"
+            left="42%"
+            popoverSide="below"
+            pinDelay={700}
+            popoverDelay={1200}
+            comments={VISITORS_COMMENTS}
+            cycleStart={0}
+          />
+          <DemoComment
+            top="68%"
+            left="58%"
+            popoverSide="above"
+            pinDelay={1100}
+            popoverDelay={1600}
+            comments={CHART_COMMENTS}
+            cycleStart={1}
+          />
         </div>
       </div>
     </section>
@@ -207,8 +292,7 @@ function FakeChart() {
   const toPath = (pts: number[]) =>
     pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${i * stepX} ${h - (p / max) * h}`).join(' ')
 
-  const toArea = (pts: number[]) =>
-    `${toPath(pts)} L ${w} ${h} L 0 ${h} Z`
+  const toArea = (pts: number[]) => `${toPath(pts)} L ${w} ${h} L 0 ${h} Z`
 
   return (
     <svg viewBox={`0 0 ${w} ${h + 20}`} width="100%" preserveAspectRatio="none" style={{ display: 'block' }}>
@@ -322,7 +406,7 @@ function DemoComment({
   const current = comments[idx]!
   const nextAuthor = comments[(idx + 1) % comments.length]!
 
-  const popoverOffset = 18  // gap between pin center and popover edge
+  const popoverOffset = 18 // gap between pin center and popover edge
   const popoverStyle: React.CSSProperties = {
     position: 'absolute',
     width: 240,
@@ -395,30 +479,47 @@ function DemoComment({
           transformOrigin: popoverSide === 'above' ? 'bottom left' : 'top left',
         }}
       >
-        {active && (phase === 'comment' ? (
-          <div key={`c-${idx}`} style={{ animation: 'crrt-comment-swap 360ms cubic-bezier(0.16, 1, 0.3, 1) both' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <Avatar initials={current.initials} color={current.avatarColor} />
-              <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 13, fontWeight: 600, color: '#FFFFFF' }}>
-                {current.author}
-              </span>
-              <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 12, color: '#6B6560' }}>
-                {current.time}
-              </span>
+        {active &&
+          (phase === 'comment' ? (
+            <div key={`c-${idx}`} style={{ animation: 'crrt-comment-swap 360ms cubic-bezier(0.16, 1, 0.3, 1) both' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Avatar initials={current.initials} color={current.avatarColor} />
+                <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 13, fontWeight: 600, color: '#FFFFFF' }}>
+                  {current.author}
+                </span>
+                <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 12, color: '#6B6560' }}>
+                  {current.time}
+                </span>
+              </div>
+              <p
+                style={{
+                  margin: 0,
+                  fontFamily: 'var(--crrt-font-sans)',
+                  fontSize: 13,
+                  lineHeight: 1.5,
+                  color: '#E8E5DF',
+                }}
+              >
+                {current.body}
+              </p>
             </div>
-            <p style={{ margin: 0, fontFamily: 'var(--crrt-font-sans)', fontSize: 13, lineHeight: 1.5, color: '#E8E5DF' }}>
-              {current.body}
-            </p>
-          </div>
-        ) : (
-          <div key={`t-${idx}`} style={{ animation: 'crrt-comment-swap 280ms cubic-bezier(0.16, 1, 0.3, 1) both', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Avatar initials={nextAuthor.initials} color={nextAuthor.avatarColor} />
-            <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 13, color: '#A8A29A' }}>
-              {nextAuthor.author} is typing
-            </span>
-            <TypingDots />
-          </div>
-        ))}
+          ) : (
+            <div
+              key={`t-${idx}`}
+              style={{
+                animation: 'crrt-comment-swap 280ms cubic-bezier(0.16, 1, 0.3, 1) both',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Avatar initials={nextAuthor.initials} color={nextAuthor.avatarColor} />
+              <span style={{ fontFamily: 'var(--crrt-font-sans)', fontSize: 13, color: '#A8A29A' }}>
+                {nextAuthor.author} is typing
+              </span>
+              <TypingDots />
+            </div>
+          ))}
       </div>
     </div>
   )

@@ -1,20 +1,37 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../../_lib/auth.js'
 import { getLinearAccessToken } from '../../../../_lib/linear-connection.js'
-import { buildLinearAuthorizeUrl, createLinearOAuthState, getLinearWorkspace, hasLinearWriteScope } from '../../../../_lib/linear.js'
+import {
+  buildLinearAuthorizeUrl,
+  createLinearOAuthState,
+  getLinearWorkspace,
+  hasLinearWriteScope,
+} from '../../../../_lib/linear.js'
 import {
   deleteProjectIntegration,
   getProjectIntegration,
   getProjectMember,
   updateProjectIntegrationDestination,
 } from '../../../../_lib/store.js'
-import { firstHeaderValue, getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
+import {
+  firstHeaderValue,
+  getAppUrl,
+  getStringQuery,
+  handleOptions,
+  jsonError,
+  methodNotAllowed,
+  setCors,
+} from '../../../../_lib/http.js'
 
 const METHODS = ['GET', 'PATCH', 'DELETE', 'OPTIONS']
 
 function browserOrigin(req: VercelRequest) {
   const raw = firstHeaderValue(req.headers.origin)
-  try { return raw ? new URL(raw).origin : getAppUrl(req) } catch { return getAppUrl(req) }
+  try {
+    return raw ? new URL(raw).origin : getAppUrl(req)
+  } catch {
+    return getAppUrl(req)
+  }
 }
 
 function redirectUri(req: VercelRequest) {
@@ -75,14 +92,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       provider: 'linear',
       reauthorizationRequired: !hasLinearWriteScope(integration.grantedScopes),
       workspace: current?.workspaceName ?? workspace.name,
-      selectedDestinationId: req.method === 'PATCH'
-        ? (typeof req.body?.containerId === 'string' ? req.body.containerId : null)
-        : integration.containerId,
+      selectedDestinationId:
+        req.method === 'PATCH'
+          ? typeof req.body?.containerId === 'string'
+            ? req.body.containerId
+            : null
+          : integration.containerId,
       destinations: workspace.teams.map((team) => ({ id: team.id, name: `${team.key} · ${team.name}` })),
     })
   } catch (error) {
-    const known = error instanceof Error && ['missing_linear_oauth_credentials', 'linear_reauthorization_required'].includes(error.message)
+    const known =
+      error instanceof Error &&
+      ['missing_linear_oauth_credentials', 'linear_reauthorization_required'].includes(error.message)
     if (!known) console.error('Linear project integration failed')
-    return jsonError(req, res, known ? 409 : 502, known && error instanceof Error ? error.message : 'Linear integration request failed', error)
+    return jsonError(
+      req,
+      res,
+      known ? 409 : 502,
+      known && error instanceof Error ? error.message : 'Linear integration request failed',
+      error,
+    )
   }
 }

@@ -2,8 +2,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ rpc: vi.fn() }))
 vi.mock('./supabase.js', () => ({ getServiceSupabase: () => ({ rpc: m.rpc }) }))
 import { reserveRecordingTranscription, reserveTranscription } from './recording-transcription-limit'
-const request = (headers: object = {}, address: string | undefined = '192.0.2.1') => ({ headers, socket: { remoteAddress: address } }) as any
-beforeEach(() => { vi.stubEnv('VERCEL', ''); vi.stubEnv('SHARE_TOKEN_SECRET', 'local-quota-test-secret-long-enough'); m.rpc.mockReset().mockResolvedValue({ data: true, error: null }) })
+const request = (headers: object = {}, address: string | undefined = '192.0.2.1') =>
+  ({ headers, socket: { remoteAddress: address } }) as any
+beforeEach(() => {
+  vi.stubEnv('VERCEL', '')
+  vi.stubEnv('SHARE_TOKEN_SECRET', 'local-quota-test-secret-long-enough')
+  m.rpc.mockReset().mockResolvedValue({ data: true, error: null })
+})
 afterEach(() => vi.unstubAllEnvs())
 it('reserves durable attempts against a stable owner identity and the shared global budget', async () => {
   await reserveRecordingTranscription('owner-one', 100)
@@ -21,7 +26,13 @@ it('reserves durable attempts against a stable owner identity and the shared glo
 it('reserves stable private socket identity, ignores spoofed identity headers, and canonicalizes mapped IPs', async () => {
   await reserveTranscription(request({ origin: 'chrome-extension://anything', 'x-forwarded-for': 'evil' }), 10)
   const initial = m.rpc.mock.calls[0][1]
-  expect(initial).toMatchObject({ p_bytes: 10, p_client_requests: 6, p_client_bytes: 16_777_216, p_global_requests: 100, p_global_bytes: 134_217_728 })
+  expect(initial).toMatchObject({
+    p_bytes: 10,
+    p_client_requests: 6,
+    p_client_bytes: 16_777_216,
+    p_global_requests: 100,
+    p_global_bytes: 134_217_728,
+  })
   expect(initial.p_client).toMatch(/^[a-f0-9]{64}$/)
   expect(JSON.stringify(initial)).not.toContain('192.0.2.1')
   await reserveTranscription(request({}, '::ffff:192.0.2.1'), 10)
@@ -59,10 +70,20 @@ it('fails closed for missing secrets and bad configuration, and accepts explicit
 it('rejects depleted budgets, RPC errors, missing responses and transport failure without leaking details', async () => {
   m.rpc.mockResolvedValueOnce({ data: false, error: null })
   await expect(reserveTranscription(request(), 1)).rejects.toMatchObject({ status: 429 })
-  for (const result of [{ data: true, error: { message: 'database secret' } }, { data: null, error: null }, { data: {}, error: null }]) {
+  for (const result of [
+    { data: true, error: { message: 'database secret' } },
+    { data: null, error: null },
+    { data: {}, error: null },
+  ]) {
     m.rpc.mockResolvedValueOnce(result)
-    await expect(reserveTranscription(request(), 1)).rejects.toMatchObject({ status: 503, message: 'Recording transcription quota is unavailable.' })
+    await expect(reserveTranscription(request(), 1)).rejects.toMatchObject({
+      status: 503,
+      message: 'Recording transcription quota is unavailable.',
+    })
   }
   m.rpc.mockRejectedValueOnce(new Error('database secret'))
-  await expect(reserveTranscription(request(), 1)).rejects.toMatchObject({ status: 503, message: 'Recording transcription quota is unavailable.' })
+  await expect(reserveTranscription(request(), 1)).rejects.toMatchObject({
+    status: 503,
+    message: 'Recording transcription quota is unavailable.',
+  })
 })

@@ -17,7 +17,9 @@ describe('<AgentLauncher />', () => {
     view.rerender(<AgentLauncher readyCount={0} open onOpen={onOpen} />)
     expect(screen.getByRole('button', { name: 'Agents, 0 ready' })).toHaveAttribute('aria-expanded', 'true')
     expect(screen.getByRole('button', { name: 'Agents, 0 ready' })).toHaveClass('dashboard-agent-launcher-open')
-    expect(screen.getByRole('button', { name: 'Agents, 0 ready' })).not.toHaveClass('dashboard-agent-launcher-has-ready')
+    expect(screen.getByRole('button', { name: 'Agents, 0 ready' })).not.toHaveClass(
+      'dashboard-agent-launcher-has-ready',
+    )
     expect(screen.queryByText('3 ready')).toBeNull()
   })
 

@@ -14,7 +14,10 @@ beforeEach(() => {
   mocks.send.mockResolvedValue({ ok: true })
   vi.spyOn(window, 'close').mockImplementation(() => {})
 })
-afterEach(() => { cleanup(); vi.restoreAllMocks() })
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
 
 it('waits for an explicit click, grants only selected devices, then resumes the session', async () => {
   render(<RecordingPermissions />)
@@ -38,18 +41,25 @@ it('keeps the window open after denial and lets the user retry', async () => {
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Recording in progress' })).toBeInTheDocument())
 })
 
-it.each([undefined, { ok: false }, { ok: false, error: 'Session expired' }])('does not close or claim success when the session cannot resume: %j', async (response) => {
-  mocks.send.mockResolvedValueOnce(response)
-  render(<RecordingPermissions />)
-  fireEvent.click(screen.getByRole('button'))
-  await screen.findByRole('alert')
-  expect(window.close).not.toHaveBeenCalled()
-  expect(screen.getByRole('button')).toBeEnabled()
-})
+it.each([undefined, { ok: false }, { ok: false, error: 'Session expired' }])(
+  'does not close or claim success when the session cannot resume: %j',
+  async (response) => {
+    mocks.send.mockResolvedValueOnce(response)
+    render(<RecordingPermissions />)
+    fireEvent.click(screen.getByRole('button'))
+    await screen.findByRole('alert')
+    expect(window.close).not.toHaveBeenCalled()
+    expect(screen.getByRole('button')).toBeEnabled()
+  },
+)
 
 it('keeps the permission window alive until capture acquisition is acknowledged', async () => {
   let acknowledge!: (value: unknown) => void
-  mocks.send.mockReturnValueOnce(new Promise((resolve) => { acknowledge = resolve }))
+  mocks.send.mockReturnValueOnce(
+    new Promise((resolve) => {
+      acknowledge = resolve
+    }),
+  )
   render(<RecordingPermissions />)
   fireEvent.click(screen.getByRole('button'))
   await waitFor(() => expect(mocks.send).toHaveBeenCalled())

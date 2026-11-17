@@ -74,21 +74,25 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppInstallState(`${body}.${signature.slice(0, -1)}${replacement}`, 1000)).toBeNull()
     expect(verifyGitHubAppInstallState('bad', 1000)).toBeNull()
 
-    const missingNonce = Buffer.from(JSON.stringify({
-      type: installStateType,
-      projectKey: 'p',
-      userId: 'u',
-      exp: 1600,
-    })).toString('base64url')
+    const missingNonce = Buffer.from(
+      JSON.stringify({
+        type: installStateType,
+        projectKey: 'p',
+        userId: 'u',
+        exp: 1600,
+      }),
+    ).toString('base64url')
     expect(verifyGitHubAppInstallState(signedInstallStateBody(missingNonce), 1000)).toBeNull()
 
-    const missingOrigin = Buffer.from(JSON.stringify({
-      type: installStateType,
-      projectKey: 'p',
-      userId: 'u',
-      nonce: 'n',
-      exp: 1600,
-    })).toString('base64url')
+    const missingOrigin = Buffer.from(
+      JSON.stringify({
+        type: installStateType,
+        projectKey: 'p',
+        userId: 'u',
+        nonce: 'n',
+        exp: 1600,
+      }),
+    ).toString('base64url')
     expect(verifyGitHubAppInstallState(signedInstallStateBody(missingOrigin), 1000)).toBeNull()
 
     const malformedJson = Buffer.from('{').toString('base64url')
@@ -96,29 +100,41 @@ describe('github app install helpers', () => {
   })
 
   it('rejects signed GitHub App payloads with the wrong token purpose', () => {
-    const installState = createGitHubAppInstallState({
-      projectKey: 'p',
-      userId: 'u',
-      origin: 'https://app.example',
-    }, 1000)
-    const installationToken = createGitHubAppInstallationToken({
-      projectKey: 'p',
-      userId: 'u',
-      installationId: '99',
-      expectedConnectionVersion: 0,
-    }, 1000)
-    const setupAuthState = createGitHubAppSetupAuthState({
-      projectKey: 'p',
-      userId: 'u',
-      origin: 'https://app.example',
-      installationId: '99',
-    }, 1000)
-    const reuseAuthState = createGitHubAppReuseAuthState({
-      projectKey: 'p',
-      userId: 'u',
-      origin: 'https://app.example',
-      installationRef: 'opaque-ref',
-    }, 1000)
+    const installState = createGitHubAppInstallState(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.example',
+      },
+      1000,
+    )
+    const installationToken = createGitHubAppInstallationToken(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        installationId: '99',
+        expectedConnectionVersion: 0,
+      },
+      1000,
+    )
+    const setupAuthState = createGitHubAppSetupAuthState(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.example',
+        installationId: '99',
+      },
+      1000,
+    )
+    const reuseAuthState = createGitHubAppReuseAuthState(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.example',
+        installationRef: 'opaque-ref',
+      },
+      1000,
+    )
 
     expect(verifyGitHubAppInstallationToken(setupAuthState, 1000)).toBeNull()
     expect(verifyGitHubAppInstallationToken(installState, 1000)).toBeNull()
@@ -127,14 +143,16 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppReuseAuthState(setupAuthState, 1000)).toBeNull()
     expect(verifyGitHubAppSetupAuthState(reuseAuthState, 1000)).toBeNull()
 
-    const legacyPayload = Buffer.from(JSON.stringify({
-      projectKey: 'p',
-      userId: 'u',
-      installationId: '99',
-      origin: 'https://app.example',
-      nonce: 'n',
-      exp: 1600,
-    })).toString('base64url')
+    const legacyPayload = Buffer.from(
+      JSON.stringify({
+        projectKey: 'p',
+        userId: 'u',
+        installationId: '99',
+        origin: 'https://app.example',
+        nonce: 'n',
+        exp: 1600,
+      }),
+    ).toString('base64url')
     const legacyToken = signedInstallStateBody(legacyPayload)
     expect(verifyGitHubAppInstallationToken(legacyToken, 1000)).toBeNull()
     expect(verifyGitHubAppSetupAuthState(legacyToken, 1000)).toBeNull()
@@ -143,12 +161,15 @@ describe('github app install helpers', () => {
   })
 
   it('signs and verifies installation tokens bound to an installation id', () => {
-    const token = createGitHubAppInstallationToken({
-      projectKey: 'p',
-      userId: 'u',
-      installationId: '99',
-      expectedConnectionVersion: 3,
-    }, 1000)
+    const token = createGitHubAppInstallationToken(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        installationId: '99',
+        expectedConnectionVersion: 3,
+      },
+      1000,
+    )
     expect(verifyGitHubAppInstallationToken(token, 1000)).toMatchObject({
       projectKey: 'p',
       userId: 'u',
@@ -162,39 +183,51 @@ describe('github app install helpers', () => {
     expect(verifyGitHubAppInstallationToken(token, 1601)).toBeNull()
     expect(verifyGitHubAppInstallationToken('bad', 1000)).toBeNull()
 
-    const missingInstallationId = createGitHubAppInstallationToken({
-      projectKey: 'p',
-      userId: 'u',
-      installationId: undefined,
-      expectedConnectionVersion: 0,
-    } as never, 1000)
+    const missingInstallationId = createGitHubAppInstallationToken(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        installationId: undefined,
+        expectedConnectionVersion: 0,
+      } as never,
+      1000,
+    )
     expect(verifyGitHubAppInstallationToken(missingInstallationId, 1000)).toBeNull()
 
-    const invalidVersion = createGitHubAppInstallationToken({
-      projectKey: 'p',
-      userId: 'u',
-      installationId: '99',
-      expectedConnectionVersion: -1,
-    }, 1000)
+    const invalidVersion = createGitHubAppInstallationToken(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        installationId: '99',
+        expectedConnectionVersion: -1,
+      },
+      1000,
+    )
     expect(verifyGitHubAppInstallationToken(invalidVersion, 1000)).toBeNull()
 
-    const unsafeVersion = createGitHubAppInstallationToken({
-      projectKey: 'p',
-      userId: 'u',
-      installationId: '99',
-      expectedConnectionVersion: Number.MAX_SAFE_INTEGER + 1,
-    }, 1000)
+    const unsafeVersion = createGitHubAppInstallationToken(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        installationId: '99',
+        expectedConnectionVersion: Number.MAX_SAFE_INTEGER + 1,
+      },
+      1000,
+    )
     expect(verifyGitHubAppInstallationToken(unsafeVersion, 1000)).toBeNull()
     expect(verifyGitHubAppInstallationToken(signedInstallStateBody('eA'), 1000)).toBeNull()
   })
 
   it('signs and verifies setup auth state for GitHub user verification', () => {
-    const state = createGitHubAppSetupAuthState({
-      projectKey: 'p',
-      userId: 'u',
-      origin: 'https://app.example',
-      installationId: '99',
-    }, 1000)
+    const state = createGitHubAppSetupAuthState(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.example',
+        installationId: '99',
+      },
+      1000,
+    )
     expect(verifyGitHubAppSetupAuthState(state, 1000)).toMatchObject({
       projectKey: 'p',
       userId: 'u',
@@ -203,24 +236,29 @@ describe('github app install helpers', () => {
     })
     expect(verifyGitHubAppSetupAuthState(state, 1601)).toBeNull()
 
-    const missingOrigin = Buffer.from(JSON.stringify({
-      type: setupAuthStateType,
-      projectKey: 'p',
-      userId: 'u',
-      installationId: '99',
-      nonce: 'n',
-      exp: 1600,
-    })).toString('base64url')
+    const missingOrigin = Buffer.from(
+      JSON.stringify({
+        type: setupAuthStateType,
+        projectKey: 'p',
+        userId: 'u',
+        installationId: '99',
+        nonce: 'n',
+        exp: 1600,
+      }),
+    ).toString('base64url')
     expect(verifyGitHubAppSetupAuthState(signedInstallStateBody(missingOrigin), 1000)).toBeNull()
   })
 
   it('signs reuse state with only an opaque user-installation reference', () => {
-    const state = createGitHubAppReuseAuthState({
-      projectKey: 'p',
-      userId: 'u',
-      origin: 'https://app.example',
-      installationRef: 'opaque-ref',
-    }, 1000)
+    const state = createGitHubAppReuseAuthState(
+      {
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.example',
+        installationRef: 'opaque-ref',
+      },
+      1000,
+    )
     expect(verifyGitHubAppReuseAuthState(state, 1000)).toMatchObject({
       projectKey: 'p',
       userId: 'u',
@@ -230,22 +268,27 @@ describe('github app install helpers', () => {
     expect(state).not.toContain('installationId')
     expect(verifyGitHubAppReuseAuthState(state, 1601)).toBeNull()
 
-    const missingRef = Buffer.from(JSON.stringify({
-      type: reuseAuthStateType,
-      projectKey: 'p',
-      userId: 'u',
-      origin: 'https://app.example',
-      nonce: 'n',
-      exp: 1600,
-    })).toString('base64url')
+    const missingRef = Buffer.from(
+      JSON.stringify({
+        type: reuseAuthStateType,
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.example',
+        nonce: 'n',
+        exp: 1600,
+      }),
+    ).toString('base64url')
     expect(verifyGitHubAppReuseAuthState(signedInstallStateBody(missingRef), 1000)).toBeNull()
   })
 
   it('creates installation access tokens and maps failures', async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ token: 'inst-token' }), {
-      status: 201,
-      headers: { 'content-type': 'application/json' },
-    })) as never
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ token: 'inst-token' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as never
     await expect(createInstallationAccessToken('99')).resolves.toBe('inst-token')
 
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
@@ -254,39 +297,43 @@ describe('github app install helpers', () => {
     globalThis.fetch = vi.fn(async () => new Response('not-json', { status: 201 })) as never
     await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
 
-    globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('secret transport detail')
+    }) as never
     await expect(createInstallationAccessToken('99')).rejects.toThrow('github_installation_token_failed')
   })
 
   it('verifies repository access with a short-lived installation token', async () => {
-    globalThis.fetch = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'inst-token' }), {
-        status: 201,
-        headers: { 'content-type': 'application/json' },
-      }))
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ token: 'inst-token' }), {
+          status: 201,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
       .mockResolvedValueOnce(new Response('{}', { status: 200 })) as never
 
     await expect(assertGitHubInstallationRepoAccess('99', 'acme org', 'widgets/ui')).resolves.toBeUndefined()
-    expect(globalThis.fetch).toHaveBeenLastCalledWith(
-      'https://api.github.com/repos/acme%20org/widgets%2Fui',
-      {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          Authorization: 'Bearer inst-token',
-        },
+    expect(globalThis.fetch).toHaveBeenLastCalledWith('https://api.github.com/repos/acme%20org/widgets%2Fui', {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: 'Bearer inst-token',
       },
-    )
+    })
   })
 
   it('maps installation repository access failures without exposing credentials', async () => {
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'secret-token' }), { status: 201 }))
       .mockResolvedValueOnce(new Response('{}', { status: 404 })) as never
     await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'private')).rejects.toThrow(
       'github_installation_repo_inaccessible',
     )
 
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'secret-token' }), { status: 201 }))
       .mockResolvedValueOnce(new Response('{}', { status: 500 })) as never
     await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'widgets')).rejects.toThrow(
@@ -298,7 +345,8 @@ describe('github app install helpers', () => {
       'github_installation_token_failed',
     )
 
-    globalThis.fetch = vi.fn()
+    globalThis.fetch = vi
+      .fn()
       .mockResolvedValueOnce(new Response(JSON.stringify({ token: 'secret-token' }), { status: 201 }))
       .mockRejectedValueOnce(new Error('secret transport detail')) as never
     await expect(assertGitHubInstallationRepoAccess('99', 'acme', 'widgets')).rejects.toThrow(
@@ -309,9 +357,10 @@ describe('github app install helpers', () => {
   it('checks user access to installations across pages', async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
       const page = new URL(url).searchParams.get('page')
-      const installations = page === '1'
-        ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
-        : [{ id: 101, account: { id: 7, login: 'acme', type: 'Organization' } }]
+      const installations =
+        page === '1'
+          ? Array.from({ length: 100 }, (_, i) => ({ id: i + 1 }))
+          : [{ id: 101, account: { id: 7, login: 'acme', type: 'Organization' } }]
       return new Response(JSON.stringify({ installations }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -323,38 +372,60 @@ describe('github app install helpers', () => {
       type: 'Organization',
     })
 
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ installations: [{ id: 1 }] }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })) as never
-    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_installation_inaccessible')
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ installations: [{ id: 1 }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow(
+      'github_installation_inaccessible',
+    )
 
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
-    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow(
+      'github_user_installations_failed',
+    )
 
     globalThis.fetch = vi.fn(async () => new Response('not-json', { status: 200 })) as never
-    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow(
+      'github_user_installations_failed',
+    )
 
-    globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
-    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('secret transport detail')
+    }) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow(
+      'github_user_installations_failed',
+    )
 
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
-      installations: [{ id: 99, account: { id: 7, login: 'acme', type: 'Bot' } }],
-    }), { status: 200 })) as never
-    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow('github_user_installations_failed')
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            installations: [{ id: 99, account: { id: 7, login: 'acme', type: 'Bot' } }],
+          }),
+          { status: 200 },
+        ),
+    ) as never
+    await expect(assertGitHubUserInstallationAccess('user-token', '99')).rejects.toThrow(
+      'github_user_installations_failed',
+    )
   })
 
   it('lists user-accessible installation repositories across pages', async () => {
     globalThis.fetch = vi.fn(async (url: string) => {
       const page = new URL(url).searchParams.get('page')
-      const repositories = page === '1'
-        ? Array.from({ length: 100 }, (_, i) => ({
-            owner: { login: 'acme' },
-            name: `repo-${i}`,
-            full_name: `acme/repo-${i}`,
-            private: i % 2 === 0,
-          }))
-        : [{ owner: { login: 'acme' }, name: 'last', full_name: 'acme/last', private: false }]
+      const repositories =
+        page === '1'
+          ? Array.from({ length: 100 }, (_, i) => ({
+              owner: { login: 'acme' },
+              name: `repo-${i}`,
+              full_name: `acme/repo-${i}`,
+              private: i % 2 === 0,
+            }))
+          : [{ owner: { login: 'acme' }, name: 'last', full_name: 'acme/last', private: false }]
       return new Response(JSON.stringify({ repositories }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -377,17 +448,27 @@ describe('github app install helpers', () => {
         headers: { 'content-type': 'application/json' },
       })
     }) as never
-    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow(
+      'github_installation_repos_failed',
+    )
 
     globalThis.fetch = vi.fn(async () => {
       return new Response('{}', { status: 500, headers: { 'content-type': 'application/json' } })
     }) as never
-    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow(
+      'github_installation_repos_failed',
+    )
 
     globalThis.fetch = vi.fn(async () => new Response('not-json', { status: 200 })) as never
-    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow(
+      'github_installation_repos_failed',
+    )
 
-    globalThis.fetch = vi.fn(async () => { throw new Error('secret transport detail') }) as never
-    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow('github_installation_repos_failed')
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('secret transport detail')
+    }) as never
+    await expect(listUserInstallationRepositories('user-token', '99')).rejects.toThrow(
+      'github_installation_repos_failed',
+    )
   })
 })

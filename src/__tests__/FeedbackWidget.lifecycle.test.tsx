@@ -9,10 +9,18 @@ afterEach(() => {
 
 it('cancels a pending live-pin DOM scan when the widget unmounts', async () => {
   vi.useFakeTimers()
-  const view = render(<FeedbackWidget projectId="host" conversation={{
-    feedback: [], selection: '', onClearSelection: vi.fn(),
-    onComment: vi.fn(async () => {}), errorMessage: () => 'Offline',
-  }} />)
+  const view = render(
+    <FeedbackWidget
+      projectId="host"
+      conversation={{
+        feedback: [],
+        selection: '',
+        onClearSelection: vi.fn(),
+        onComment: vi.fn(async () => {}),
+        errorMessage: () => 'Offline',
+      }}
+    />,
+  )
   const schedule = vi.spyOn(window, 'setTimeout')
   await act(async () => {
     view.container.setAttribute('data-layout-change', 'true')
@@ -23,5 +31,7 @@ it('cancels a pending live-pin DOM scan when the widget unmounts', async () => {
   const cancel = vi.spyOn(window, 'clearTimeout')
   view.unmount()
   expect(cancel).toHaveBeenCalledWith(schedule.mock.results[scan].value)
-  await act(async () => { await vi.advanceTimersByTimeAsync(250) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250)
+  })
 })

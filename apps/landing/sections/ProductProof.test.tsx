@@ -18,11 +18,16 @@ it('starts the dashboard video when observers are unavailable', () => {
 it('plays and pauses the dashboard video with viewport visibility', () => {
   let update: IntersectionObserverCallback = () => undefined
   const disconnect = vi.fn()
-  vi.stubGlobal('IntersectionObserver', class {
-    constructor(callback: IntersectionObserverCallback) { update = callback }
-    observe = vi.fn()
-    disconnect = disconnect
-  })
+  vi.stubGlobal(
+    'IntersectionObserver',
+    class {
+      constructor(callback: IntersectionObserverCallback) {
+        update = callback
+      }
+      observe = vi.fn()
+      disconnect = disconnect
+    },
+  )
   const play = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
   const pause = vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined)
 

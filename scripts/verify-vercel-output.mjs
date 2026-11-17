@@ -3,8 +3,11 @@ import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
 const requiredFunctions = [
-  'api-router.func', 'stripe-webhook.func', 'public-site.func',
-  '.well-known/workflow/v1/flow.func', '.well-known/workflow/v1/step.func',
+  'api-router.func',
+  'stripe-webhook.func',
+  'public-site.func',
+  '.well-known/workflow/v1/flow.func',
+  '.well-known/workflow/v1/step.func',
   '.well-known/workflow/v1/webhook/[token].func',
 ]
 
@@ -14,7 +17,7 @@ async function functionNames(directory, prefix = '') {
     if (!entry.isDirectory()) continue
     const name = prefix + entry.name
     if (entry.name.endsWith('.func')) result.push(name)
-    else result.push(...await functionNames(join(directory, entry.name), name + '/'))
+    else result.push(...(await functionNames(join(directory, entry.name), name + '/')))
   }
   return result.sort()
 }
@@ -36,20 +39,29 @@ export async function verifyVercelOutput(root) {
     await access(join(output, 'static', file))
   }
   const manifest = JSON.parse(await readFile(join(output, 'diagnostics/workflows-manifest.json'), 'utf8'))
-  const workflows = Object.values(manifest.workflows ?? {}).flatMap(file => Object.values(file))
-  if (!workflows.some(workflow => workflow.workflowId === 'workflow//./workflows/product-audit//productAuditWorkflow')) throw new Error('Product Audit workflow missing')
-  if (!workflows.some(workflow => workflow.workflowId === 'workflow//./workflows/record-worker//recordWorkerWorkflow')) throw new Error('Recording worker workflow missing')
+  const workflows = Object.values(manifest.workflows ?? {}).flatMap((file) => Object.values(file))
+  if (
+    !workflows.some((workflow) => workflow.workflowId === 'workflow//./workflows/product-audit//productAuditWorkflow')
+  )
+    throw new Error('Product Audit workflow missing')
+  if (
+    !workflows.some((workflow) => workflow.workflowId === 'workflow//./workflows/record-worker//recordWorkerWorkflow')
+  )
+    throw new Error('Recording worker workflow missing')
   await access(join(output, 'functions/.well-known/workflow/v1/step.func/record-worker.mjs'))
   // Check routing order too: Stripe must reach its raw-body handler before the
   // general API router; API routes must precede the public-page catchall.
-  const webhook = config.routes.findIndex(route => route.dest === '/stripe-webhook')
-  const api = config.routes.findIndex(route => route.dest === '/api-router?__audit_path=$1')
-  const fallback = config.routes.findIndex(route => route.src === '^(/.*)$' && route.dest === '/public-site?__public_path=$1')
+  const webhook = config.routes.findIndex((route) => route.dest === '/stripe-webhook')
+  const api = config.routes.findIndex((route) => route.dest === '/api-router?__audit_path=$1')
+  const fallback = config.routes.findIndex(
+    (route) => route.src === '^(/.*)$' && route.dest === '/public-site?__public_path=$1',
+  )
   if (webhook < 0 || api <= webhook || fallback <= api) throw new Error('Required API routing order is missing')
   const stripe = JSON.parse(await readFile(join(output, 'functions/stripe-webhook.func/.vc-config.json'), 'utf8'))
   if (stripe.shouldAddHelpers !== false) throw new Error('Stripe raw-body handling must stay enabled')
   const apiMetadata = JSON.parse(await readFile(join(output, 'functions/api-router.func/.vc-config.json'), 'utf8'))
-  if (apiMetadata.maxDuration !== 60 || stripe.maxDuration !== 60) throw new Error('API functions must preserve the 60-second duration limit')
+  if (apiMetadata.maxDuration !== 60 || stripe.maxDuration !== 60)
+    throw new Error('API functions must preserve the 60-second duration limit')
   return functions
 }
 

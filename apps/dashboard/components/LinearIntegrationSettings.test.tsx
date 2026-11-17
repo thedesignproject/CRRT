@@ -28,7 +28,10 @@ beforeEach(() => {
   vi.mocked(disconnectLinear).mockReset()
 })
 
-afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 describe('<LinearIntegrationSettings />', () => {
   it('loads a connection and changes its destination team', async () => {
@@ -39,9 +42,9 @@ describe('<LinearIntegrationSettings />', () => {
     expect(await screen.findByText('Acme')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Linear team'), { target: { value: 'team-product' } })
 
-    await waitFor(() => expect(selectLinearTeam).toHaveBeenCalledWith(
-      props.apiBase, props.accessToken, props.projectKey, 'team-product',
-    ))
+    await waitFor(() =>
+      expect(selectLinearTeam).toHaveBeenCalledWith(props.apiBase, props.accessToken, props.projectKey, 'team-product'),
+    )
     expect(screen.getByLabelText('Linear team')).toHaveValue('team-product')
   })
 
@@ -55,7 +58,9 @@ describe('<LinearIntegrationSettings />', () => {
     vi.mocked(getLinearIntegration)
       .mockResolvedValueOnce({ provider: 'linear', connected: false, destinations: [] })
       .mockResolvedValueOnce({
-        provider: 'linear', connected: false, destinations: [],
+        provider: 'linear',
+        connected: false,
+        destinations: [],
         authorizeUrl: 'https://linear.app/oauth/authorize?state=signed',
       })
       .mockResolvedValueOnce(connected)
@@ -64,20 +69,33 @@ describe('<LinearIntegrationSettings />', () => {
 
     render(<LinearIntegrationSettings {...props} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Linear' }))
-    await waitFor(() => expect(window.open).toHaveBeenCalledWith(
-      'https://linear.app/oauth/authorize?state=signed', 'crrt-linear-connect',
-    ))
+    await waitFor(() =>
+      expect(window.open).toHaveBeenCalledWith(
+        'https://linear.app/oauth/authorize?state=signed',
+        'crrt-linear-connect',
+      ),
+    )
 
-    act(() => window.dispatchEvent(new MessageEvent('message', {
-      origin: 'https://attacker.test', source: popup,
-      data: { type: 'crrt:linear-connect', ok: true, projectKey: 'shop' },
-    })))
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://attacker.test',
+          source: popup,
+          data: { type: 'crrt:linear-connect', ok: true, projectKey: 'shop' },
+        }),
+      ),
+    )
     expect(screen.queryByText('Acme')).not.toBeInTheDocument()
 
-    act(() => window.dispatchEvent(new MessageEvent('message', {
-      origin: 'https://api.crrt.test', source: popup,
-      data: { type: 'crrt:linear-connect', ok: true, projectKey: 'shop' },
-    })))
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://api.crrt.test',
+          source: popup,
+          data: { type: 'crrt:linear-connect', ok: true, projectKey: 'shop' },
+        }),
+      ),
+    )
     expect(await screen.findByText('Acme')).toBeInTheDocument()
   })
 
@@ -111,20 +129,36 @@ describe('<LinearIntegrationSettings />', () => {
   it('offers reconnection when the saved authorization lacks write access', async () => {
     vi.mocked(getLinearIntegration)
       .mockResolvedValueOnce({ ...connected, reauthorizationRequired: true })
-      .mockResolvedValueOnce({ ...connected, reauthorizationRequired: true, authorizeUrl: 'https://linear.app/oauth/authorize' })
+      .mockResolvedValueOnce({
+        ...connected,
+        reauthorizationRequired: true,
+        authorizeUrl: 'https://linear.app/oauth/authorize',
+      })
     const popup = { closed: false } as Window
     vi.spyOn(window, 'open').mockReturnValue(popup)
     render(<LinearIntegrationSettings {...props} />)
     expect(await screen.findByRole('status')).toHaveTextContent('Reconnect Linear')
     fireEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
-    await waitFor(() => expect(window.open).toHaveBeenCalledWith('https://linear.app/oauth/authorize', 'crrt-linear-connect'))
+    await waitFor(() =>
+      expect(window.open).toHaveBeenCalledWith('https://linear.app/oauth/authorize', 'crrt-linear-connect'),
+    )
   })
 
   it('rejects invalid authorization URLs and blocked popups', async () => {
     vi.mocked(getLinearIntegration)
       .mockResolvedValueOnce({ provider: 'linear', connected: false, destinations: [] })
-      .mockResolvedValueOnce({ provider: 'linear', connected: false, destinations: [], authorizeUrl: 'https://attacker.test/oauth' })
-      .mockResolvedValueOnce({ provider: 'linear', connected: false, destinations: [], authorizeUrl: 'https://linear.app/oauth/authorize' })
+      .mockResolvedValueOnce({
+        provider: 'linear',
+        connected: false,
+        destinations: [],
+        authorizeUrl: 'https://attacker.test/oauth',
+      })
+      .mockResolvedValueOnce({
+        provider: 'linear',
+        connected: false,
+        destinations: [],
+        authorizeUrl: 'https://linear.app/oauth/authorize',
+      })
     vi.spyOn(window, 'open').mockReturnValue(null)
     render(<LinearIntegrationSettings {...props} />)
     const connect = await screen.findByRole('button', { name: 'Connect Linear' })
@@ -138,7 +172,12 @@ describe('<LinearIntegrationSettings />', () => {
     vi.useFakeTimers()
     vi.mocked(getLinearIntegration)
       .mockResolvedValueOnce({ provider: 'linear', connected: false, destinations: [] })
-      .mockResolvedValue({ provider: 'linear', connected: false, destinations: [], authorizeUrl: 'https://linear.app/oauth/authorize' })
+      .mockResolvedValue({
+        provider: 'linear',
+        connected: false,
+        destinations: [],
+        authorizeUrl: 'https://linear.app/oauth/authorize',
+      })
     const popup = { closed: false } as Window
     vi.spyOn(window, 'open').mockReturnValue(popup)
     render(<LinearIntegrationSettings {...props} />)
@@ -148,17 +187,38 @@ describe('<LinearIntegrationSettings />', () => {
     for (const data of [
       { type: 'other', ok: false, projectKey: 'shop' },
       { type: 'crrt:linear-connect', ok: false, projectKey: 'other' },
-    ]) act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: popup, data })))
-    act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: window, data: { type: 'crrt:linear-connect', ok: false, projectKey: 'shop' } })))
-    act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: popup, data: { type: 'crrt:linear-connect', ok: false, projectKey: 'shop' } })))
+    ])
+      act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: popup, data })))
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: props.apiBase,
+          source: window,
+          data: { type: 'crrt:linear-connect', ok: false, projectKey: 'shop' },
+        }),
+      ),
+    )
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: props.apiBase,
+          source: popup,
+          data: { type: 'crrt:linear-connect', ok: false, projectKey: 'shop' },
+        }),
+      ),
+    )
     expect(screen.getByRole('alert')).toHaveTextContent('authorization could not be completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Linear' }))
     await act(async () => {})
-    await act(async () => { vi.advanceTimersByTime(500) })
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+    })
     expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
     ;(popup as { closed: boolean }).closed = true
-    await act(async () => { vi.advanceTimersByTime(1_000) })
+    await act(async () => {
+      vi.advanceTimersByTime(1_000)
+    })
     expect(screen.getByRole('button', { name: 'Connect Linear' })).toBeEnabled()
   })
 })

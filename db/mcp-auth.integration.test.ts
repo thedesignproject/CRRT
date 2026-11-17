@@ -7,19 +7,29 @@ const local = process.env.MCP_TEST_LOCAL === '1'
 const suite = local ? describe : describe.skip
 suite('MCP authorization transactions on local Docker Postgres', () => {
   const url = process.env.DATABASE_URL!
-  if (local && !['localhost', '127.0.0.1'].includes(new URL(url).hostname)) throw new Error('MCP tests require a loopback database')
+  if (local && !['localhost', '127.0.0.1'].includes(new URL(url).hostname))
+    throw new Error('MCP tests require a loopback database')
   const sql = postgres(url || 'postgres://localhost/unused', { max: 5 })
-  const user = randomUUID(), client = randomUUID()
-  const resource = 'http://127.0.0.1:3001/api/mcp/v1', redirect = 'http://localhost:8765/callback'
+  const user = randomUUID(),
+    client = randomUUID()
+  const resource = 'http://127.0.0.1:3001/api/mcp/v1',
+    redirect = 'http://localhost:8765/callback'
   const challenge = pkceChallenge(createProof())
   async function grant() {
-    const hash = hashProof(createProof()), access = hashProof(createProof()), refresh = hashProof(createProof())
+    const hash = hashProof(createProof()),
+      access = hashProof(createProof()),
+      refresh = hashProof(createProof())
     await sql`insert into mcp_codes(hash,user_id,client_id,redirect_uri,challenge,state_hash,resource,expires_at)
       values(${hash},${user},${client},${redirect},${challenge},${hash},${resource},now()+interval '5 minutes')`
     return { hash, access, refresh }
   }
-  const exchange = async (g: Awaited<ReturnType<typeof grant>>, overrides: { client?: string; redirect?: string; challenge?: string; resource?: string } = {}) =>
-    (await sql`select mcp_exchange(${g.hash},${overrides.client ?? client},${overrides.redirect ?? redirect},${overrides.challenge ?? challenge},${overrides.resource ?? resource},${g.access},${g.refresh}) as id`)[0].id
+  const exchange = async (
+    g: Awaited<ReturnType<typeof grant>>,
+    overrides: { client?: string; redirect?: string; challenge?: string; resource?: string } = {},
+  ) =>
+    (
+      await sql`select mcp_exchange(${g.hash},${overrides.client ?? client},${overrides.redirect ?? redirect},${overrides.challenge ?? challenge},${overrides.resource ?? resource},${g.access},${g.refresh}) as id`
+    )[0].id
   beforeAll(async () => {
     await sql`insert into auth.users(id,email) values(${user},${`${user}@mcp.test`})`
     await sql`insert into mcp_clients(id,name,redirect_uris) values(${client},'MCP transaction test',${[redirect]})`
@@ -32,7 +42,13 @@ suite('MCP authorization transactions on local Docker Postgres', () => {
   })
   it('binds codes to the client, exact callback, PKCE, resource, expiry, and enabled client', async () => {
     const g = await grant()
-    for (const overrides of [{ client: randomUUID() }, { redirect: `${redirect}?wrong` }, { challenge: pkceChallenge(createProof()) }, { resource: 'https://wrong.test' }]) expect(await exchange(g, overrides)).toBeNull()
+    for (const overrides of [
+      { client: randomUUID() },
+      { redirect: `${redirect}?wrong` },
+      { challenge: pkceChallenge(createProof()) },
+      { resource: 'https://wrong.test' },
+    ])
+      expect(await exchange(g, overrides)).toBeNull()
     await sql`update mcp_clients set revoked_at=now() where id=${client}`
     expect(await exchange(g)).toBeNull()
     await sql`update mcp_clients set revoked_at=null where id=${client}`
@@ -41,27 +57,41 @@ suite('MCP authorization transactions on local Docker Postgres', () => {
   })
   it('consumes a code only once across concurrent exchanges and rejects replay', async () => {
     const g = await grant()
-    const results = await Promise.all([exchange(g), exchange({ ...g, access: hashProof(createProof()), refresh: hashProof(createProof()) })])
+    const results = await Promise.all([
+      exchange(g),
+      exchange({ ...g, access: hashProof(createProof()), refresh: hashProof(createProof()) }),
+    ])
     expect(results.filter(Boolean)).toHaveLength(1)
     expect(await exchange(g)).toBeNull()
   })
   it('rotates refresh tokens and revokes the family on replay', async () => {
-    const g = await grant(); const connection = await exchange(g)
-    const access = hashProof(createProof()), refresh = hashProof(createProof())
-    expect((await sql`select mcp_refresh(${g.refresh},${client},${resource},${access},${refresh}) as id`)[0].id).toBe(connection)
+    const g = await grant()
+    const connection = await exchange(g)
+    const access = hashProof(createProof()),
+      refresh = hashProof(createProof())
+    expect((await sql`select mcp_refresh(${g.refresh},${client},${resource},${access},${refresh}) as id`)[0].id).toBe(
+      connection,
+    )
     expect(await sql`select * from mcp_identity(${access},${resource})`).toHaveLength(1)
-    expect((await sql`select mcp_refresh(${g.refresh},${client},${resource},${hashProof(createProof())},${hashProof(createProof())}) as id`)[0].id).toBeNull()
+    expect(
+      (
+        await sql`select mcp_refresh(${g.refresh},${client},${resource},${hashProof(createProof())},${hashProof(createProof())}) as id`
+      )[0].id,
+    ).toBeNull()
     expect(await sql`select * from mcp_identity(${access},${resource})`).toHaveLength(0)
   })
   it('serializes concurrent refresh and invalidates the family when the consumed token is retried', async () => {
-    const g = await grant(); await exchange(g)
-    const rotate = () => sql`select mcp_refresh(${g.refresh},${client},${resource},${hashProof(createProof())},${hashProof(createProof())}) as id`
+    const g = await grant()
+    await exchange(g)
+    const rotate = () =>
+      sql`select mcp_refresh(${g.refresh},${client},${resource},${hashProof(createProof())},${hashProof(createProof())}) as id`
     const results = await Promise.all([rotate(), rotate()])
-    expect(results.filter(rows => rows[0].id)).toHaveLength(1)
+    expect(results.filter((rows) => rows[0].id)).toHaveLength(1)
     expect(await sql`select * from mcp_identity(${g.access},${resource})`).toHaveLength(0)
   })
   it('checks access credential type, expiry, user status, and immediate revocation', async () => {
-    const g = await grant(); await exchange(g)
+    const g = await grant()
+    await exchange(g)
     expect(await sql`select * from mcp_identity(${g.refresh},${resource})`).toHaveLength(0)
     expect(await sql`select * from mcp_identity(${g.access},'https://wrong.test')`).toHaveLength(0)
     await sql`update auth.users set banned_until=now()+interval '1 hour' where id=${user}`
@@ -70,66 +100,101 @@ suite('MCP authorization transactions on local Docker Postgres', () => {
     expect(await sql`select * from mcp_identity(${g.access},${resource})`).toHaveLength(1)
     await sql`select mcp_revoke(${g.access},${client})`
     expect(await sql`select * from mcp_identity(${g.access},${resource})`).toHaveLength(0)
-    const expired = await grant(); await exchange(expired)
+    const expired = await grant()
+    await exchange(expired)
     await sql`update mcp_credentials set created_at=now()-interval '1 hour',expires_at=now()-interval '50 minutes' where hash=${expired.access}`
     expect(await sql`select * from mcp_identity(${expired.access},${resource})`).toHaveLength(0)
   })
   it('bounds code lifetimes and prevents browser-role access to records and RPCs', async () => {
     const g = await grant()
-    await expect(sql`update mcp_codes set expires_at=now()+interval '1 hour' where hash=${g.hash}`).rejects.toMatchObject({ code: '23514' })
+    await expect(
+      sql`update mcp_codes set expires_at=now()+interval '1 hour' where hash=${g.hash}`,
+    ).rejects.toMatchObject({ code: '23514' })
     for (const role of ['anon', 'authenticated']) {
-      await sql.begin(async tx => {
+      await sql.begin(async (tx) => {
         await tx.unsafe(`set local role ${role}`)
         // Depending on default grants, RLS returns no rows or the table grant denies access.
-        const [{ allowed }] = await tx`select has_function_privilege(current_user,'public.mcp_exchange(text,uuid,text,text,text,text,text)','execute') as allowed`
+        const [{ allowed }] =
+          await tx`select has_function_privilege(current_user,'public.mcp_exchange(text,uuid,text,text,text,text,text)','execute') as allowed`
         expect(allowed).toBe(false)
       })
     }
-    const [{ secure }] = await sql`select bool_and(relrowsecurity) as secure from pg_class where relname in ('mcp_clients','mcp_codes','mcp_connections','mcp_credentials','mcp_limits')`
+    const [{ secure }] =
+      await sql`select bool_and(relrowsecurity) as secure from pg_class where relname in ('mcp_clients','mcp_codes','mcp_connections','mcp_credentials','mcp_limits')`
     expect(secure).toBe(true)
   })
   it('reserves durable limits atomically and resets at the next window', async () => {
     const results = await Promise.all(Array.from({ length: 8 }, () => sql`select mcp_reserve(${client},3) as allowed`))
-    expect(results.filter(rows => rows[0].allowed)).toHaveLength(3)
+    expect(results.filter((rows) => rows[0].allowed)).toHaveLength(3)
     await sql`update mcp_limits set window_start=now()-interval '2 minutes' where key=${client}`
     expect((await sql`select mcp_reserve(${client},3) as allowed`)[0].allowed).toBe(true)
     await sql`select mcp_cleanup()`
   })
   it('binds one full-suite approval to its owner and preserves credentials and refresh scope', async () => {
-    const g = await grant(), connection = await exchange(g)
-    const requests = await Promise.all([sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`, sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`])
+    const g = await grant(),
+      connection = await exchange(g)
+    const requests = await Promise.all([
+      sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`,
+      sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`,
+    ])
     const id = requests[0][0].request.id
     expect(requests[1][0].request.id).toBe(id)
-    await expect(sql`select mcp_decide_dashboard_upgrade(${id},${randomUUID()},'approve')`).rejects.toThrow('upgrade_unavailable')
+    await expect(sql`select mcp_decide_dashboard_upgrade(${id},${randomUUID()},'approve')`).rejects.toThrow(
+      'upgrade_unavailable',
+    )
     await expect(sql`select mcp_decide_dashboard_upgrade(${id},${user},'invalid')`).rejects.toThrow('invalid_decision')
     const [{ result: inspected }] = await sql`select mcp_decide_dashboard_upgrade(${id},${user},'inspect') as result`
     expect(inspected.state).toBe('pending')
-    const decisions = await Promise.all([sql`select mcp_decide_dashboard_upgrade(${id},${user},'approve') as result`, sql`select mcp_decide_dashboard_upgrade(${id},${user},'approve') as result`])
-    expect(decisions.every(rows => rows[0].result.state === 'approved')).toBe(true)
+    const decisions = await Promise.all([
+      sql`select mcp_decide_dashboard_upgrade(${id},${user},'approve') as result`,
+      sql`select mcp_decide_dashboard_upgrade(${id},${user},'approve') as result`,
+    ])
+    expect(decisions.every((rows) => rows[0].result.state === 'approved')).toBe(true)
     const [{ scope }] = await sql`select scope from mcp_identity(${g.access},${resource})`
     expect(scope).toBe('crrt:read crrt:implement crrt:review crrt:dashboard')
     const refreshedAccess = hashProof(createProof())
-    expect((await sql`select mcp_refresh(${g.refresh},${client},${resource},${refreshedAccess},${hashProof(createProof())}) as id`)[0].id).toBe(connection)
+    expect(
+      (
+        await sql`select mcp_refresh(${g.refresh},${client},${resource},${refreshedAccess},${hashProof(createProof())}) as id`
+      )[0].id,
+    ).toBe(connection)
     expect((await sql`select scope from mcp_identity(${refreshedAccess},${resource})`)[0].scope).toBe(scope)
-    expect((await sql`select mcp_decide_dashboard_upgrade(${id},${user},'deny') as result`)[0].result.state).toBe('approved')
+    expect((await sql`select mcp_decide_dashboard_upgrade(${id},${user},'deny') as result`)[0].result.state).toBe(
+      'approved',
+    )
   })
   it('keeps prior access on decline/expiry and rejects revoked connections and unauthorized SQL callers', async () => {
-    const g = await grant(), connection = await exchange(g)
+    const g = await grant(),
+      connection = await exchange(g)
     const [{ request }] = await sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`
-    expect((await sql`select mcp_decide_dashboard_upgrade(${request.id},${user},'deny') as result`)[0].result.state).toBe('declined')
+    expect(
+      (await sql`select mcp_decide_dashboard_upgrade(${request.id},${user},'deny') as result`)[0].result.state,
+    ).toBe('declined')
     expect((await sql`select scope from mcp_identity(${g.access},${resource})`)[0].scope).toBe('crrt:read')
     const [{ request: expired }] = await sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`
     await sql`update mcp_permission_upgrades set created_at=now()-interval '20 minutes',expires_at=now()-interval '10 minutes' where id=${expired.id}`
-    expect((await sql`select mcp_decide_dashboard_upgrade(${expired.id},${user},'approve') as result`)[0].result.state).toBe('expired')
+    expect(
+      (await sql`select mcp_decide_dashboard_upgrade(${expired.id},${user},'approve') as result`)[0].result.state,
+    ).toBe('expired')
     const [{ request: revoked }] = await sql`select mcp_request_dashboard_upgrade(${connection},${user}) as request`
     await sql`update mcp_connections set revoked_at=now() where id=${connection}`
-    await expect(sql`select mcp_decide_dashboard_upgrade(${revoked.id},${user},'approve')`).rejects.toThrow('insufficient_scope')
+    await expect(sql`select mcp_decide_dashboard_upgrade(${revoked.id},${user},'approve')`).rejects.toThrow(
+      'insufficient_scope',
+    )
     await expect(sql`select mcp_request_dashboard_upgrade(${connection},${user})`).rejects.toThrow('insufficient_scope')
-    for (const role of ['anon', 'authenticated']) await sql.begin(async tx => {
-      await tx.unsafe(`set local role ${role}`)
-      expect((await tx`select has_function_privilege(current_user,'public.mcp_decide_dashboard_upgrade(uuid,uuid,text)','execute') as allowed`)[0].allowed).toBe(false)
-    })
-    expect((await sql`select bool_and(relrowsecurity) as enabled from pg_class where relname in ('mcp_permission_upgrades','mcp_dashboard_operations')`)[0].enabled).toBe(true)
+    for (const role of ['anon', 'authenticated'])
+      await sql.begin(async (tx) => {
+        await tx.unsafe(`set local role ${role}`)
+        expect(
+          (
+            await tx`select has_function_privilege(current_user,'public.mcp_decide_dashboard_upgrade(uuid,uuid,text)','execute') as allowed`
+          )[0].allowed,
+        ).toBe(false)
+      })
+    expect(
+      (
+        await sql`select bool_and(relrowsecurity) as enabled from pg_class where relname in ('mcp_permission_upgrades','mcp_dashboard_operations')`
+      )[0].enabled,
+    ).toBe(true)
   })
-
 })

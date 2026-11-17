@@ -11,7 +11,10 @@ export type DomainSuggestion = {
 export function normalizeEmailDomain(input: unknown): string | null {
   if (typeof input !== 'string') return null
   const domain = input.trim().toLowerCase().replace(/^@/, '')
-  return domain.length <= 253 && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain) ? domain : null
+  return domain.length <= 253 &&
+    /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)+$/.test(domain)
+    ? domain
+    : null
 }
 
 export async function suggestDomainProjects(userId: string): Promise<DomainSuggestion[]> {
@@ -21,15 +24,26 @@ export async function suggestDomainProjects(userId: string): Promise<DomainSugge
 }
 
 export async function listEmailDomains(projectKey: string): Promise<{ domain: string }[]> {
-  const { data, error } = await getServiceSupabase().from('project_email_domains')
-    .select('domain').eq('project_key', projectKey).order('domain')
+  const { data, error } = await getServiceSupabase()
+    .from('project_email_domains')
+    .select('domain')
+    .eq('project_key', projectKey)
+    .order('domain')
   if (error) throw new Error(error.message)
   return data!
 }
 
-async function mutateEmailDomain(projectKey: string, actor: string, domain: string, remove: boolean): Promise<'updated' | 'forbidden'> {
+async function mutateEmailDomain(
+  projectKey: string,
+  actor: string,
+  domain: string,
+  remove: boolean,
+): Promise<'updated' | 'forbidden'> {
   const { data, error } = await getServiceSupabase().rpc('mutate_project_email_domain', {
-    p_project: projectKey, p_actor: actor, p_domain: domain, p_remove: remove,
+    p_project: projectKey,
+    p_actor: actor,
+    p_domain: domain,
+    p_remove: remove,
   })
   if (error) throw new Error(error.message)
   if (data !== 'updated' && data !== 'forbidden') throw new Error('Invalid domain mutation result')

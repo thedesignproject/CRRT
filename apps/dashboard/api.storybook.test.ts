@@ -17,9 +17,10 @@ describe('Storybook integration API', () => {
   })
 
   it('treats a malformed connection collection as empty', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ connections: null }), { status: 200 }),
-    ))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(new Response(JSON.stringify({ connections: null }), { status: 200 })),
+    )
 
     await expect(getStorybookIntegration('/api', 'session', 'demo')).resolves.toEqual({ state: 'not_connected' })
   })
@@ -27,8 +28,22 @@ describe('Storybook integration API', () => {
   it('prefers an active claimed connection over newer abandoned attempts', async () => {
     const payload = {
       connections: [
-        { id: 'waiting', project_key: 'demo', created_by: 'owner', expires_at: '2099-01-01T00:00:00.000Z', claimed_at: null, revoked_at: null },
-        { id: 'connected', project_key: 'demo', created_by: 'owner', expires_at: '2026-10-15T00:00:00.000Z', claimed_at: '2026-10-15T00:01:00.000Z', revoked_at: null },
+        {
+          id: 'waiting',
+          project_key: 'demo',
+          created_by: 'owner',
+          expires_at: '2099-01-01T00:00:00.000Z',
+          claimed_at: null,
+          revoked_at: null,
+        },
+        {
+          id: 'connected',
+          project_key: 'demo',
+          created_by: 'owner',
+          expires_at: '2026-10-15T00:00:00.000Z',
+          claimed_at: '2026-10-15T00:01:00.000Z',
+          revoked_at: null,
+        },
       ],
     }
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })))
@@ -41,13 +56,42 @@ describe('Storybook integration API', () => {
   })
 
   it('maps expired and unrecoverable pairing attempts without exposing a secret', async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ connections: [
-        { id: 'expired', project_key: 'demo', created_by: 'owner', expires_at: '2000-01-01T00:00:00.000Z', claimed_at: null, revoked_at: null },
-      ] }), { status: 200 }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ connections: [
-        { id: 'waiting', project_key: 'demo', created_by: 'owner', expires_at: '2099-01-01T00:00:00.000Z', claimed_at: null, revoked_at: null },
-      ] }), { status: 200 }))
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            connections: [
+              {
+                id: 'expired',
+                project_key: 'demo',
+                created_by: 'owner',
+                expires_at: '2000-01-01T00:00:00.000Z',
+                claimed_at: null,
+                revoked_at: null,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            connections: [
+              {
+                id: 'waiting',
+                project_key: 'demo',
+                created_by: 'owner',
+                expires_at: '2099-01-01T00:00:00.000Z',
+                claimed_at: null,
+                revoked_at: null,
+              },
+            ],
+          }),
+          { status: 200 },
+        ),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getStorybookIntegration('/api', 'session', 'demo')).resolves.toMatchObject({

@@ -19,7 +19,8 @@ export async function requireAuditAccess(req: VercelRequest, res: VercelResponse
     }
     const user = await requireUser(req, res)
     if (!user) return null
-    if (!row.project_key || !(await requireProjectCapability(req, res, user, row.project_key, 'feedback:manage'))) return null
+    if (!row.project_key || !(await requireProjectCapability(req, res, user, row.project_key, 'feedback:manage')))
+      return null
     return row
   }
 

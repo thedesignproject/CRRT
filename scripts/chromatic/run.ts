@@ -16,6 +16,12 @@ for (const args of [
 }
 const index = JSON.parse(readFileSync(`${output}/storybook/index.json`, 'utf8'))
 const expected = Object.values(inventory).reduce((count, states) => count + states.length, 0) + mobileScreens.length
-if (Object.keys(index.entries).length !== expected) throw new Error(`Expected ${expected} captures; got ${Object.keys(index.entries).length}`)
-const size = (path: string): number => statSync(path).isDirectory() ? readdirSync(path).reduce((sum, file) => sum + size(join(path, file)), 0) : statSync(path).size
-console.log(`Verified ${expected} screen/state captures and replays. Archive: ${(size(`${output}/storybook`) / 1_000_000).toFixed(1)} MB.`)
+if (Object.keys(index.entries).length !== expected)
+  throw new Error(`Expected ${expected} captures; got ${Object.keys(index.entries).length}`)
+const size = (path: string): number =>
+  statSync(path).isDirectory()
+    ? readdirSync(path).reduce((sum, file) => sum + size(join(path, file)), 0)
+    : statSync(path).size
+console.log(
+  `Verified ${expected} screen/state captures and replays. Archive: ${(size(`${output}/storybook`) / 1_000_000).toFixed(1)} MB.`,
+)

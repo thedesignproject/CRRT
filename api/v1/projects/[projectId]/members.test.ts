@@ -14,10 +14,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -42,7 +52,8 @@ describe('api/v1/projects/[projectId]/members GET', () => {
     expect(res.statusCode).toBe(405)
 
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
-      r.status(401).json({ error: 'Unauthorized' }); return null
+      r.status(401).json({ error: 'Unauthorized' })
+      return null
     })
     res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
@@ -58,7 +69,10 @@ describe('api/v1/projects/[projectId]/members GET', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
 
     // non-member
-    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_q, r) => { r.status(403).json({ error: 'Forbidden' }); return null })
+    vi.mocked(requireProjectCapability).mockImplementationOnce(async (_q, r) => {
+      r.status(403).json({ error: 'Forbidden' })
+      return null
+    })
     let res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(403)

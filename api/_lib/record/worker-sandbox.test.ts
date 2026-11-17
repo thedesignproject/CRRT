@@ -15,9 +15,11 @@ const command = { exitCode: null, wait: vi.fn() }
 const named = { currentSession: () => current }
 const session = { name: 'worker-vm', commandId: 'command-1' }
 function sessions(values: { status: string; createdAt?: number }[]) {
-  vi.mocked(Sandbox.list).mockResolvedValue({ async *[Symbol.asyncIterator]() {
-    yield* values.map(value => ({ createdAt: Date.now(), ...value }))
-  } } as never)
+  vi.mocked(Sandbox.list).mockResolvedValue({
+    async *[Symbol.asyncIterator]() {
+      yield* values.map((value) => ({ createdAt: Date.now(), ...value }))
+    },
+  } as never)
 }
 beforeEach(() => {
   vi.resetAllMocks()
@@ -40,14 +42,27 @@ afterEach(() => vi.unstubAllEnvs())
 
 it('launches the packaged worker with only its environment and a hard VM deadline', async () => {
   expect(await launchRecordWorker()).toEqual(session)
-  expect(Sandbox.list).toHaveBeenCalledWith({ namePrefix: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-$/), sortBy: 'name', sortOrder: 'desc' })
-  expect(Sandbox.create).toHaveBeenCalledWith(expect.objectContaining({
-    name: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-\d+$/),
-    image: 'vercel/sandbox/node:22', persistent: false, resources: { vcpus: 1 }, timeout: 1_800_000,
-  }))
+  expect(Sandbox.list).toHaveBeenCalledWith({
+    namePrefix: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-$/),
+    sortBy: 'name',
+    sortOrder: 'desc',
+  })
+  expect(Sandbox.create).toHaveBeenCalledWith(
+    expect.objectContaining({
+      name: expect.stringMatching(/^crrt-record-[a-f0-9]{16}-\d+$/),
+      image: 'vercel/sandbox/node:22',
+      persistent: false,
+      resources: { vcpus: 1 },
+      timeout: 1_800_000,
+    }),
+  )
   expect(vm.writeFiles).toHaveBeenCalledWith([{ path: 'record-worker.mjs', content: Buffer.from('worker-source') }])
   const command = vm.runCommand.mock.calls[0][0]
-  expect(command).toMatchObject({ cmd: 'bash', detached: true, env: { CRRT_RECORD_ENABLED: 'true', SUPABASE_SECRET_KEY: 'private-service-key' } })
+  expect(command).toMatchObject({
+    cmd: 'bash',
+    detached: true,
+    env: { CRRT_RECORD_ENABLED: 'true', SUPABASE_SECRET_KEY: 'private-service-key' },
+  })
   expect(command.args[1]).toContain('ffmpeg')
   expect(command.args[1]).toContain('exec node record-worker.mjs --once')
   expect(command.env).not.toHaveProperty('VERCEL_OIDC_TOKEN')
@@ -55,13 +70,13 @@ it('launches the packaged worker with only its environment and a hard VM deadlin
   expect(vm.stop).not.toHaveBeenCalled()
 })
 
-it.each(['VERCEL_PROJECT_ID', 'VERCEL_ENV'])('refuses launch without %s', async key => {
+it.each(['VERCEL_PROJECT_ID', 'VERCEL_ENV'])('refuses launch without %s', async (key) => {
   vi.stubEnv(key, '')
   await expect(launchRecordWorker()).rejects.toThrow('record_worker_environment_missing')
   expect(Sandbox.create).not.toHaveBeenCalled()
 })
 
-it.each(['pending', 'running', 'stopping'])('does not launch while an existing VM is %s', async status => {
+it.each(['pending', 'running', 'stopping'])('does not launch while an existing VM is %s', async (status) => {
   sessions([{ status }])
   expect(await launchRecordWorker()).toBeNull()
   expect(Sandbox.create).not.toHaveBeenCalled()
@@ -72,7 +87,7 @@ it('ignores stopped sessions when launching new work', async () => {
   expect(await launchRecordWorker()).toEqual(session)
 })
 it('uses the Sandbox API sorting required by a name prefix filter', async () => {
-  vi.mocked(Sandbox.list).mockImplementationOnce(async options => {
+  vi.mocked(Sandbox.list).mockImplementationOnce(async (options) => {
     if (options?.namePrefix && options.sortBy !== 'name') {
       throw new Error('Invalid request: namePrefix is only valid when sortBy is name')
     }
@@ -91,7 +106,7 @@ it('does not allocate a VM if its bundle is missing', async () => {
   expect(Sandbox.create).not.toHaveBeenCalled()
 })
 
-it.each(['writeFiles', 'runCommand'] as const)('stops the VM after a %s failure', async method => {
+it.each(['writeFiles', 'runCommand'] as const)('stops the VM after a %s failure', async (method) => {
   vm[method].mockRejectedValueOnce(new Error('launch-failed'))
   await expect(launchRecordWorker()).rejects.toThrow('launch-failed')
   expect(vm.stop).toHaveBeenCalledOnce()
@@ -117,19 +132,25 @@ it('reports a failed command exit code', async () => {
 
 it('reports a still-running worker when the bounded wait elapses', async () => {
   const timeout = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort())
-  command.wait.mockImplementation(async ({ signal }: { signal: AbortSignal }) => { throw signal.reason })
+  command.wait.mockImplementation(async ({ signal }: { signal: AbortSignal }) => {
+    throw signal.reason
+  })
   expect(await recordWorkerStatus(session)).toBeNull()
   timeout.mockRestore()
 })
 
-it.each(['getCommand', 'wait'] as const)('propagates %s failures instead of reporting a running worker', async method => {
-  const target = method === 'wait' ? command.wait : current.getCommand
-  target.mockRejectedValue(new Error('inspection-failed'))
-  await expect(recordWorkerStatus(session)).rejects.toThrow('inspection-failed')
-})
+it.each(['getCommand', 'wait'] as const)(
+  'propagates %s failures instead of reporting a running worker',
+  async (method) => {
+    const target = method === 'wait' ? command.wait : current.getCommand
+    target.mockRejectedValue(new Error('inspection-failed'))
+    await expect(recordWorkerStatus(session)).rejects.toThrow('inspection-failed')
+  },
+)
 
 it.each(['stopping', 'stopped', 'failed', 'aborted', 'snapshotting'])(
-  'reports a %s VM without inspecting, resuming, or stopping it again', async status => {
+  'reports a %s VM without inspecting, resuming, or stopping it again',
+  async (status) => {
     current.status = status
     await expect(recordWorkerStatus(session)).rejects.toThrow(`record_worker_sandbox_${status}`)
     expect(current.getCommand).not.toHaveBeenCalled()

@@ -84,4 +84,3 @@ The frontend isolates Pranav's shipped backend contract behind two functions:
 - Empty-state tests verify both setup choices without regressing the widget instructions.
 - API tests verify authenticated methods, encoded project keys, and response bodies.
 - Typecheck, dashboard build, full tests, and 100% line and branch diff coverage are required.
-

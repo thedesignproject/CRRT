@@ -4,7 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const enabled = process.env.WIDGET_AGENT_DB_TEST === 'true'
 const connection = process.env.DATABASE_URL || ''
-if (enabled && !/^postgres(?:ql)?:\/\/[^/]+@(localhost|127\.0\.0\.1):/.test(connection)) throw new Error('Local database required')
+if (enabled && !/^postgres(?:ql)?:\/\/[^/]+@(localhost|127\.0\.0\.1):/.test(connection))
+  throw new Error('Local database required')
 const suite = enabled ? describe : describe.skip
 const sql = enabled ? postgres(connection, { max: 6 }) : null
 
@@ -58,8 +59,12 @@ suite('widget Agent workflow database boundary', () => {
     const expected = [ids.open, ids.accepted, ids.atomic].sort()
     expect(ownerRows.map((row) => row.id).sort()).toEqual(expected)
     expect(memberRows.map((row) => row.id).sort()).toEqual(expected)
-    await expect(sql!`select id from public.read_widget_agent_feedback(${project},${guest},${page})`).rejects.toMatchObject({ message: 'forbidden' })
-    await expect(sql!`select id from public.read_widget_agent_feedback(${project},${outsider},${page})`).rejects.toMatchObject({ message: 'forbidden' })
+    await expect(
+      sql!`select id from public.read_widget_agent_feedback(${project},${guest},${page})`,
+    ).rejects.toMatchObject({ message: 'forbidden' })
+    await expect(
+      sql!`select id from public.read_widget_agent_feedback(${project},${outsider},${page})`,
+    ).rejects.toMatchObject({ message: 'forbidden' })
   })
 
   it('applies exact accept, reject, and resolve transitions', async () => {
@@ -67,7 +72,8 @@ suite('widget Agent workflow database boundary', () => {
       ${project},${owner},${page},${[ids.open]}::uuid[],'accept')`
     expect(accepted[0]).toMatchObject({ id: ids.open, status: 'approved' })
 
-    const resolved = await sql!`select id,implementation_status,claimed_by_agent_id from public.mutate_widget_feedback_batch(
+    const resolved =
+      await sql!`select id,implementation_status,claimed_by_agent_id from public.mutate_widget_feedback_batch(
       ${project},${owner},${page},${[ids.accepted]}::uuid[],'resolve')`
     expect(resolved[0]).toMatchObject({ id: ids.accepted, implementation_status: 'done', claimed_by_agent_id: null })
 
@@ -78,20 +84,31 @@ suite('widget Agent workflow database boundary', () => {
 
   it('rejects malformed or mixed-page batches atomically', async () => {
     await expect(sql!`select id from public.mutate_widget_feedback_batch(
-      ${project},${owner},${page},${[ids.open, ids.otherPage]}::uuid[],'reject')`).rejects.toMatchObject({ message: 'invalid_selection' })
+      ${project},${owner},${page},${[ids.open, ids.otherPage]}::uuid[],'reject')`).rejects.toMatchObject({
+      message: 'invalid_selection',
+    })
     expect((await sql!`select status from public.comments where id=${ids.open}`)[0].status).toBe('approved')
 
     await expect(sql!`select id from public.mutate_widget_feedback_batch(
-      ${project},${owner},${page},${[ids.open, ids.open]}::uuid[],'accept')`).rejects.toMatchObject({ message: 'invalid_selection' })
+      ${project},${owner},${page},${[ids.open, ids.open]}::uuid[],'accept')`).rejects.toMatchObject({
+      message: 'invalid_selection',
+    })
     await expect(sql!`select id from public.mutate_widget_feedback_batch(
-      ${project},${owner},${page},${[ids.open]}::uuid[],'unknown')`).rejects.toMatchObject({ message: 'invalid_widget_feedback_request' })
+      ${project},${owner},${page},${[ids.open]}::uuid[],'unknown')`).rejects.toMatchObject({
+      message: 'invalid_widget_feedback_request',
+    })
   })
 
   it('rechecks current private-project visibility on every operation', async () => {
     await sql!`update public.projects set widget_private=true,feedback_access='admins' where public_key=${project}`
-    await expect(sql!`select id from public.read_widget_agent_feedback(${project},${member},${page})`).rejects.toMatchObject({ message: 'forbidden' })
+    await expect(
+      sql!`select id from public.read_widget_agent_feedback(${project},${member},${page})`,
+    ).rejects.toMatchObject({ message: 'forbidden' })
     await expect(sql!`select id from public.mutate_widget_feedback_batch(
       ${project},${member},${page},${[ids.open]}::uuid[],'accept')`).rejects.toMatchObject({ message: 'forbidden' })
-    expect((await sql!`select count(*)::int as count from public.read_widget_agent_feedback(${project},${owner},${page})`)[0].count).toBeGreaterThan(0)
+    expect(
+      (await sql!`select count(*)::int as count from public.read_widget_agent_feedback(${project},${owner},${page})`)[0]
+        .count,
+    ).toBeGreaterThan(0)
   })
 })

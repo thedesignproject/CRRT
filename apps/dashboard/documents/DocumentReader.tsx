@@ -10,7 +10,19 @@ import { DocumentThreads } from './DocumentThreads'
 import './documents.css'
 
 const emptyQuote: DocumentSelection = { quote: '', prefix: '', suffix: '' }
-export function DocumentReader({ apiBase, shareKey, session = null, userId = null, authorName = '' }: { apiBase: string; shareKey: string; session?: string | null; userId?: string | null; authorName?: string }) {
+export function DocumentReader({
+  apiBase,
+  shareKey,
+  session = null,
+  userId = null,
+  authorName = '',
+}: {
+  apiBase: string
+  shareKey: string
+  session?: string | null
+  userId?: string | null
+  authorName?: string
+}) {
   const [denied, setDenied] = useState(false)
   const deniedRef = useRef(false)
   const [loadedUser, setLoadedUser] = useState<string | null>(userId)
@@ -27,7 +39,17 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
     selectionRevision = useRef<number | null>(null),
     updates = useRef(0)
   const reportError = useCallback((error: unknown) => {
-    if (error instanceof DocumentRequestError && ['Unauthorized', 'forbidden', 'login_required', 'document_not_found', 'password_required', 'incorrect_password'].includes(error.code)) {
+    if (
+      error instanceof DocumentRequestError &&
+      [
+        'Unauthorized',
+        'forbidden',
+        'login_required',
+        'document_not_found',
+        'password_required',
+        'incorrect_password',
+      ].includes(error.code)
+    ) {
       deniedRef.current = true
       updates.current++
       setDenied(true)
@@ -37,17 +59,27 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
   const principal = useRef({ userId })
   if (principal.current.userId !== userId) principal.current = { userId }
   const feedback = useDocumentComment(apiBase, session, userId)
-  const context = useMemo(() => ({ apiBase, shareKey, session, userId, grant }), [apiBase, shareKey, session, userId, grant])
+  const context = useMemo(
+    () => ({ apiBase, shareKey, session, userId, grant }),
+    [apiBase, shareKey, session, userId, grant],
+  )
   const currentContext = useRef(context)
   currentContext.current = context
-  const request = useCallback((input: object, signal?: AbortSignal) => documentRequest(apiBase, session, input, signal), [apiBase, session])
+  const request = useCallback(
+    (input: object, signal?: AbortSignal) => documentRequest(apiBase, session, input, signal),
+    [apiBase, session],
+  )
   useEffect(() => {
     let active = true
     const generation = updates.current
     const controller = new AbortController()
     setLoading(true)
     setError(undefined)
-    Promise.all(Array.from({ length: pages.current }, (_, page) => request({ action: 'read', id: shareKey, shareKey, accessToken: grant, offset: page * 50 }, controller.signal)))
+    Promise.all(
+      Array.from({ length: pages.current }, (_, page) =>
+        request({ action: 'read', id: shareKey, shareKey, accessToken: grant, offset: page * 50 }, controller.signal),
+      ),
+    )
       .then((results) => {
         if (active && generation === updates.current) {
           deniedRef.current = false
@@ -58,9 +90,9 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
             ...results[0],
             feedback: mergeFeedback(
               current && current.document!.id === results[0].document!.id ? current.feedback! : [],
-              results.flatMap((page) => page.feedback!)
+              results.flatMap((page) => page.feedback!),
             ),
-            nextOffset: results[results.length - 1].nextOffset
+            nextOffset: results[results.length - 1].nextOffset,
           }))
         }
       })
@@ -92,20 +124,42 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
       setBusy(false)
     }
   }
-  async function comment(input: { body: string; author: string; parentId?: string; revision?: number } & DocumentQuote) {
+  async function comment(
+    input: { body: string; author: string; parentId?: string; revision?: number } & DocumentQuote,
+  ) {
     let confirmedIn = context
     let generation = updates.current
     setSending(true)
     try {
-      if (!feedback.hasPending() && input.quote && selectionRevision.current !== data!.document!.publishedRevision && !quoteMatches(data!.document!.body, input))
+      if (
+        !feedback.hasPending() &&
+        input.quote &&
+        selectionRevision.current !== data!.document!.publishedRevision &&
+        !quoteMatches(data!.document!.body, input)
+      )
         throw new DocumentRequestError('selection_changed')
-      const updated = await feedback.submit({ ...input, id: data!.document!.id, revision: input.revision ?? data!.document!.publishedRevision!, shareKey, accessToken: grant }, (reader) => {
-        const current = currentContext.current
-        if (reader.session === current.session && reader.userId === current.userId && apiBase === current.apiBase && shareKey === current.shareKey && grant === current.grant) {
-          confirmedIn = current
-          generation = updates.current
-        }
-      })
+      const updated = await feedback.submit(
+        {
+          ...input,
+          id: data!.document!.id,
+          revision: input.revision ?? data!.document!.publishedRevision!,
+          shareKey,
+          accessToken: grant,
+        },
+        (reader) => {
+          const current = currentContext.current
+          if (
+            reader.session === current.session &&
+            reader.userId === current.userId &&
+            apiBase === current.apiBase &&
+            shareKey === current.shareKey &&
+            grant === current.grant
+          ) {
+            confirmedIn = current
+            generation = updates.current
+          }
+        },
+      )
       if (currentContext.current !== confirmedIn || generation !== updates.current) {
         if (!deniedRef.current) setRefresh((n) => n + 1)
         return
@@ -115,7 +169,11 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
       setLoadedUser(confirmedIn.userId)
       setLoading(false)
       updates.current++
-      setData((current) => ({ ...current, document: updated.document, feedback: mergeFeedback(current!.feedback!, updated.feedback!) }))
+      setData((current) => ({
+        ...current,
+        document: updated.document,
+        feedback: mergeFeedback(current!.feedback!, updated.feedback!),
+      }))
       setError(undefined)
     } catch (error) {
       if (currentContext.current === confirmedIn && generation === updates.current) reportError(error)
@@ -143,7 +201,9 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
     }
   }
   const concealed = loadedUser !== userId || denied
-  const locked = error instanceof DocumentRequestError && ['password_required', 'incorrect_password', 'rate_limited'].includes(error.code)
+  const locked =
+    error instanceof DocumentRequestError &&
+    ['password_required', 'incorrect_password', 'rate_limited'].includes(error.code)
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="document-header">
@@ -159,27 +219,35 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
         </div>
       ) : data?.document ? (
         <>
-          {!concealed && <div className="document-title">
-            <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
-              Revision {data.document.publishedRevision}
-              {data.document.passwordProtected && (
-                <>
-                  <span>·</span>
-                  <LockKeyhole size={12} />
-                  Protected link
-                </>
+          {!concealed && (
+            <div className="document-title">
+              <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
+                Revision {data.document.publishedRevision}
+                {data.document.passwordProtected && (
+                  <>
+                    <span>·</span>
+                    <LockKeyhole size={12} />
+                    Protected link
+                  </>
+                )}
+              </div>
+              <h1 className="break-words text-2xl font-semibold tracking-tight">{data.document.title}</h1>
+              {!data.document.canComment && (
+                <p className="mt-3 text-sm text-muted-foreground">You have view-only access to this document.</p>
               )}
             </div>
-            <h1 className="break-words text-2xl font-semibold tracking-tight">{data.document.title}</h1>
-            {!data.document.canComment && <p className="mt-3 text-sm text-muted-foreground">You have view-only access to this document.</p>}
-          </div>}
+          )}
           {error && (
             <p role="alert" className="px-6 py-3 text-sm text-status-rejected">
               {documentMessage(error)}
             </p>
           )}
           {locked && (
-            <form aria-label="Unlock document" onSubmit={(event) => void unlock(event)} className="flex flex-wrap items-end gap-3 border-b border-border px-6 py-4">
+            <form
+              aria-label="Unlock document"
+              onSubmit={(event) => void unlock(event)}
+              className="flex flex-wrap items-end gap-3 border-b border-border px-6 py-4"
+            >
               <label className="text-sm font-medium">
                 Password
                 <input
@@ -199,18 +267,27 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
             </form>
           )}
           {error && !locked && (
-            <button type="button" className="document-text-button m-6" disabled={loading || sending || busy} onClick={() => setRefresh((n) => n + 1)}>
+            <button
+              type="button"
+              className="document-text-button m-6"
+              disabled={loading || sending || busy}
+              onClick={() => setRefresh((n) => n + 1)}
+            >
               Reload latest revision
             </button>
           )}
-          {concealed && !locked && <a className="document-text-button m-6" href={route('/doc/' + shareKey + '/login')}>Log in to CRRT</a>}
-          {feedback.locked && !sending && <p className="px-6 py-3 text-sm text-muted-foreground">Retry this feedback or discard it to start a new note.</p>}
+          {concealed && !locked && (
+            <a className="document-text-button m-6" href={route('/doc/' + shareKey + '/login')}>
+              Log in to CRRT
+            </a>
+          )}
+          {feedback.locked && !sending && (
+            <p className="px-6 py-3 text-sm text-muted-foreground">
+              Retry this feedback or discard it to start a new note.
+            </p>
+          )}
           <main className="document-reader-layout">
-            <div className="document-reading-surface">
-              {!concealed && <DocumentBody
-                source={data.document.body}
-              />}
-            </div>
+            <div className="document-reading-surface">{!concealed && <DocumentBody source={data.document.body} />}</div>
             <div>
               <DocumentThreads
                 authorName={authorName}
@@ -234,7 +311,12 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
                 onComment={comment}
               />
               {!concealed && data.document.canComment && data.nextOffset !== null && (
-                <button type="button" className="document-text-button m-6" disabled={busy || loading || sending} onClick={() => void more()}>
+                <button
+                  type="button"
+                  className="document-text-button m-6"
+                  disabled={busy || loading || sending}
+                  onClick={() => void more()}
+                >
                   Load more feedback
                 </button>
               )}
@@ -248,11 +330,21 @@ export function DocumentReader({ apiBase, shareKey, session = null, userId = nul
               <LockKeyhole size={24} className="text-muted-foreground" />
               <div>
                 <h1 className="text-xl font-semibold">This document is protected</h1>
-                <p className="mt-2 text-sm leading-6 text-muted-foreground">Enter the password shared with you to read and leave feedback.</p>
+                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                  Enter the password shared with you to read and leave feedback.
+                </p>
               </div>
               <label className="block text-sm font-medium">
                 Password
-                <input className="document-input mt-2" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required maxLength={128} />
+                <input
+                  className="document-input mt-2"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  maxLength={128}
+                />
               </label>
               <p role="alert" className="text-sm text-muted-foreground">
                 {documentMessage(error)}

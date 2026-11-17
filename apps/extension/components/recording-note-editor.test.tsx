@@ -8,7 +8,8 @@ const marks = (): RecordingMark[] => [
   { id: 'short', type: 'text', atMs: 3, points: [{ x: 20, y: 10 }], text: 'Keep this complete note' },
 ]
 it('keeps the original full text until explicit save, preserving the other marks and geometry', async () => {
-  const original = marks(), save = vi.fn().mockResolvedValue(undefined)
+  const original = marks(),
+    save = vi.fn().mockResolvedValue(undefined)
   render(<RecordingNoteEditor marks={original} save={save} />)
   const field = screen.getByRole('textbox')
   expect(field).toHaveValue('x'.repeat(2001))
@@ -34,7 +35,12 @@ it('reports persistence failure and lets the user retry the edited note', async 
 })
 it('waits for every oversized note and disables editing during persistence', async () => {
   let finish!: () => void
-  const save = vi.fn(() => new Promise<void>(resolve => { finish = resolve }))
+  const save = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+  )
   render(<RecordingNoteEditor marks={[...marks(), { ...marks()[0], id: 'second' }]} save={save} />)
   const fields = screen.getAllByRole('textbox')
   fireEvent.change(fields[0], { target: { value: 'Shortened' } })

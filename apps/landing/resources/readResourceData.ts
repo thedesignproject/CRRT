@@ -6,7 +6,17 @@ export function readResourceData(pathname: string): Resource | undefined {
   if (!text) return undefined
   try {
     const data = JSON.parse(text) as Resource
-    if (data && typeof data.slug === 'string' && Array.isArray(data.sections) && Array.isArray(data.questions) && Array.isArray(data.sources) && resourcePath(data) === pathname.replace(/\/+$/, '')) return data
-  } catch { /* A malformed document must not execute or replace trusted data. */ }
+    if (
+      data &&
+      typeof data.slug === 'string' &&
+      Array.isArray(data.sections) &&
+      Array.isArray(data.questions) &&
+      Array.isArray(data.sources) &&
+      resourcePath(data) === pathname.replace(/\/+$/, '')
+    )
+      return data
+  } catch {
+    /* A malformed document must not execute or replace trusted data. */
+  }
   return undefined
 }

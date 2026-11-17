@@ -1,21 +1,13 @@
-import { connectStorybook, clearScopedSession, subscribeScopedSessions } from "../auth";
-import React, { useCallback, useEffect, useState, useRef } from "react";
-import {
-  useParameter,
-  useStorybookApi,
-  useStorybookState,
-} from "storybook/manager-api";
-import { PARAM_KEY } from "../constants";
-import { getInjectedCrrtParameters } from "../runtime-config";
-import {
-  fetchConnectionState,
-  canSendFeedback,
-  type ConnectionState,
-} from "../connection";
-import type { CrrtParameters, StoryContext } from "../types";
-import { ComplianceSection } from "./ComplianceSection";
-import { FeedbackSection } from "./FeedbackSection";
-import { ConnectionNotice } from "./ConnectionNotice";
+import { connectStorybook, clearScopedSession, subscribeScopedSessions } from '../auth'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
+import { useParameter, useStorybookApi, useStorybookState } from 'storybook/manager-api'
+import { PARAM_KEY } from '../constants'
+import { getInjectedCrrtParameters } from '../runtime-config'
+import { fetchConnectionState, canSendFeedback, type ConnectionState } from '../connection'
+import type { CrrtParameters, StoryContext } from '../types'
+import { ComplianceSection } from './ComplianceSection'
+import { FeedbackSection } from './FeedbackSection'
+import { ConnectionNotice } from './ConnectionNotice'
 
 /**
  * The CRRT 🥕 panel. Two sections, in this order on purpose:
@@ -30,53 +22,71 @@ import { ConnectionNotice } from "./ConnectionNotice";
  * active story's id/title/name come straight from Storybook's API.
  */
 export const Panel = () => {
-  const api = useStorybookApi();
-  const { storyId } = useStorybookState();
-  const parameters = useParameter<CrrtParameters>(PARAM_KEY, {}) ?? {};
-  const crrt = { ...getInjectedCrrtParameters(), ...parameters };
+  const api = useStorybookApi()
+  const { storyId } = useStorybookState()
+  const parameters = useParameter<CrrtParameters>(PARAM_KEY, {}) ?? {}
+  const crrt = { ...getInjectedCrrtParameters(), ...parameters }
   const [connection, setConnection] = useState<ConnectionState>(() =>
-    crrt.connectionId ? { kind: "connecting" } : { kind: "ready" },
-  );
+    crrt.connectionId ? { kind: 'connecting' } : { kind: 'ready' },
+  )
 
-  const revision = useRef(0);
-  const signingIn = useRef(false);
+  const revision = useRef(0)
+  const signingIn = useRef(false)
   const refreshConnection = useCallback(async () => {
     if (!crrt.connectionId) {
-      setConnection({ kind: "ready" });
-      return;
+      setConnection({ kind: 'ready' })
+      return
     }
-    const current = ++revision.current;
-    setConnection({ kind: "connecting" });
+    const current = ++revision.current
+    setConnection({ kind: 'connecting' })
     const result = await fetchConnectionState({
-        connectionId: crrt.connectionId,
-        apiBase: crrt.apiBase,
-      });
-    if (current === revision.current) setConnection(result);
-  }, [crrt.apiBase, crrt.connectionId]);
+      connectionId: crrt.connectionId,
+      apiBase: crrt.apiBase,
+    })
+    if (current === revision.current) setConnection(result)
+  }, [crrt.apiBase, crrt.connectionId])
 
   useEffect(() => {
-    void refreshConnection();
-    const remove = subscribeScopedSessions(() => { void refreshConnection(); });
-    const focus = () => { if (!signingIn.current) void refreshConnection(); };
-    window.addEventListener("focus", focus);
-    return () => { revision.current++; remove(); window.removeEventListener("focus", focus); };
-  }, [refreshConnection]);
+    void refreshConnection()
+    const remove = subscribeScopedSessions(() => {
+      void refreshConnection()
+    })
+    const focus = () => {
+      if (!signingIn.current) void refreshConnection()
+    }
+    window.addEventListener('focus', focus)
+    return () => {
+      revision.current++
+      remove()
+      window.removeEventListener('focus', focus)
+    }
+  }, [refreshConnection])
 
   const signIn = async () => {
-    if (!crrt.connectionId || !crrt.projectId || signingIn.current) return;
-    signingIn.current = true;
-    revision.current++;
-    setConnection({ kind: "connecting", message: "Finish signing in in the CRRT window…" });
+    if (!crrt.connectionId || !crrt.projectId || signingIn.current) return
+    signingIn.current = true
+    revision.current++
+    setConnection({ kind: 'connecting', message: 'Finish signing in in the CRRT window…' })
     try {
-      await connectStorybook({ connectionId: crrt.connectionId, projectId: crrt.projectId, apiBase: crrt.apiBase, dashboardUrl: crrt.dashboardUrl });
-      await refreshConnection();
+      await connectStorybook({
+        connectionId: crrt.connectionId,
+        projectId: crrt.projectId,
+        apiBase: crrt.apiBase,
+        dashboardUrl: crrt.dashboardUrl,
+      })
+      await refreshConnection()
     } catch (error) {
-      setConnection({ kind: "authentication_required", message: error instanceof Error ? error.message : "Sign in again." });
-    } finally { signingIn.current = false; }
-  };
-  const feedbackReady = canSendFeedback(connection);
+      setConnection({
+        kind: 'authentication_required',
+        message: error instanceof Error ? error.message : 'Sign in again.',
+      })
+    } finally {
+      signingIn.current = false
+    }
+  }
+  const feedbackReady = canSendFeedback(connection)
 
-  const data = api.getCurrentStoryData();
+  const data = api.getCurrentStoryData()
   const story: StoryContext | null =
     storyId && data
       ? {
@@ -84,14 +94,14 @@ export const Panel = () => {
           componentTitle: data.title,
           storyName: data.name,
         }
-      : null;
+      : null
 
   if (!story) {
     return (
       <div style={styles.container}>
         <div style={styles.muted}>Select a story to talk to CRRT about it.</div>
       </div>
-    );
+    )
   }
 
   return (
@@ -106,22 +116,25 @@ export const Panel = () => {
             <span
               style={{
                 ...styles.connectedDot,
-                background:
-                  feedbackReady ? "#1d7a3e" : "#F26419",
+                background: feedbackReady ? '#1d7a3e' : '#F26419',
               }}
               aria-hidden
             />
-            {feedbackReady ? "Connected to CRRT" : "CRRT"}
+            {feedbackReady ? 'Connected to CRRT' : 'CRRT'}
           </span>
         )}
       </div>
 
-      {crrt.connectionId && (
-        <ConnectionNotice state={connection} onRetry={refreshConnection} onSignIn={signIn} />
-      )}
+      {crrt.connectionId && <ConnectionNotice state={connection} onRetry={refreshConnection} onSignIn={signIn} />}
 
       {crrt.connectionId && feedbackReady && (
-        <button type="button" onClick={() => clearScopedSession({ connectionId: crrt.connectionId!, apiBase: crrt.apiBase })} style={{ marginBottom: 12, cursor: "pointer" }}>Sign out of this Storybook</button>
+        <button
+          type="button"
+          onClick={() => clearScopedSession({ connectionId: crrt.connectionId!, apiBase: crrt.apiBase })}
+          style={{ marginBottom: 12, cursor: 'pointer' }}
+        >
+          Sign out of this Storybook
+        </button>
       )}
 
       <ComplianceSection
@@ -145,8 +158,8 @@ export const Panel = () => {
         dashboardUrl={crrt.dashboardUrl}
       />
     </div>
-  );
-};
+  )
+}
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
@@ -157,28 +170,28 @@ const styles: Record<string, React.CSSProperties> = {
   },
   header: {
     marginBottom: 12,
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 12,
   },
   connected: {
-    display: "inline-flex",
-    alignItems: "center",
+    display: 'inline-flex',
+    alignItems: 'center',
     gap: 5,
     fontSize: 11,
     opacity: 0.72,
-    whiteSpace: "nowrap",
+    whiteSpace: 'nowrap',
   },
   connectedDot: {
     width: 6,
     height: 6,
-    borderRadius: "50%",
+    borderRadius: '50%',
   },
   muted: { opacity: 0.6 },
   divider: {
-    border: "none",
-    borderTop: "1px solid rgba(0,0,0,0.1)",
-    margin: "14px 0",
+    border: 'none',
+    borderTop: '1px solid rgba(0,0,0,0.1)',
+    margin: '14px 0',
   },
-};
+}

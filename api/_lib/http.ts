@@ -1,7 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { parsePlanFailure, PLAN_MESSAGES } from './billing/plan-errors.js'
 
-const DEFAULT_HEADERS = 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token'
+const DEFAULT_HEADERS =
+  'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token'
 
 function safeSetHeader(res: VercelResponse, key: string, value: string) {
   if (typeof res.setHeader === 'function') {
@@ -37,10 +38,14 @@ export function methodNotAllowed(req: VercelRequest, res: VercelResponse, method
 export function jsonError(req: VercelRequest, res: VercelResponse, status: number, error: string, cause?: unknown) {
   setCors(req, res, ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'])
   const planFailure = parsePlanFailure(cause ?? error)
-  if (planFailure) return res.status(planFailure.resource === 'subscription' ? 402 : 409).json({
-    error: planFailure.resource === 'subscription' ? PLAN_MESSAGES.subscription
-      : `${PLAN_MESSAGES[planFailure.resource]} Usage: ${planFailure.usage}/${planFailure.limit}. Reset: ${planFailure.resetAt ?? 'not applicable'}.`, ...planFailure,
-  })
+  if (planFailure)
+    return res.status(planFailure.resource === 'subscription' ? 402 : 409).json({
+      error:
+        planFailure.resource === 'subscription'
+          ? PLAN_MESSAGES.subscription
+          : `${PLAN_MESSAGES[planFailure.resource]} Usage: ${planFailure.usage}/${planFailure.limit}. Reset: ${planFailure.resetAt ?? 'not applicable'}.`,
+      ...planFailure,
+    })
   return res.status(status).json({ error })
 }
 
@@ -79,14 +84,14 @@ export function firstHeaderValue(value: string | string[] | undefined) {
 }
 
 export function getAppUrl(req: VercelRequest): string {
-  const host = firstHeaderValue(req.headers['x-forwarded-host'])
-    || firstHeaderValue(req.headers.host)
-    || process.env.VERCEL_URL
+  const host =
+    firstHeaderValue(req.headers['x-forwarded-host']) || firstHeaderValue(req.headers.host) || process.env.VERCEL_URL
 
   if (host) {
     const normalizedHost = host.replace(/^https?:\/\//, '').replace(/\/$/, '')
-    const proto = firstHeaderValue(req.headers['x-forwarded-proto'])
-      || (normalizedHost.startsWith('localhost') || normalizedHost.startsWith('127.0.0.1') ? 'http' : 'https')
+    const proto =
+      firstHeaderValue(req.headers['x-forwarded-proto']) ||
+      (normalizedHost.startsWith('localhost') || normalizedHost.startsWith('127.0.0.1') ? 'http' : 'https')
 
     return `${proto}://${normalizedHost}`.replace(/\/$/, '')
   }

@@ -10,12 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.26] - Unreleased
 
 ### Fixed
+
 - Hosted documents open text feedback only after activating capture with C or the feedback menu, preserving ordinary text selection and copying.
 - Hosted reply and note composers stay within the viewport when their document target is offscreen.
 - Escape dismisses an unsent hosted comment or reply while preserving the draft; C or Resume draft restores it.
 - New hosted comments no longer display the redundant "open" status label.
 
 ### Added
+
 - Conversation adapters can validate and capture quote context through `onTextSelection` during explicit feedback capture.
 
 This version is prepared for review. Publishing requires the reviewed release commit, release tag, and successful npm workflow.
@@ -23,13 +25,16 @@ This version is prepared for review. Publishing requires the reviewed release co
 ## [0.3.25] - Unreleased
 
 ### Added
+
 - `FeedbackWidget` supports an optional `conversation` data adapter for its standard launcher, pins, composer, and sidebar; it supports host-owned feedback, replies, review actions, and in-memory draft recovery. Hosted documents import this package's source entry point, so shared widget UI changes apply to documents without copying components or updating a second widget dependency.
 - Exported TypeScript types describe the widget props and conversation adapter.
 
 ### Changed
+
 - Hosted document feedback uses the existing widget UI. Pin positions are persisted relative to the clicked element and preserved through reloads, layout changes, and in-memory draft recovery.
 
 ### Fixed
+
 - Starting a whole-document note or a new point clears an abandoned passage, so feedback is saved against the intended target. Pending submissions retain their original selection.
 - Hosted feedback preserves the actual captured text range and content-relative selector, including repeated text and nested paragraphs.
 - Document reader confirmations respect newer session and access decisions; the workspace Feedback tab displays the published body for pinning while keeping unpublished edits separate.
@@ -39,6 +44,7 @@ This version is prepared locally. Publishing still requires the release PR, rele
 ## [0.3.24] - Unreleased
 
 ### Added
+
 - The feedback composer includes a Record action. Integrations can supply the optional `onRecord` callback to launch the Chrome-extension recorder; otherwise the widget dispatches `crrt:record-request` and displays instructions for opening the extension.
 
 This version is prepared for the Record stack and is not published until its release tag and npm publish workflow complete. Recording storage, processing, and the Chrome extension are deployed separately from the widget package.
@@ -48,25 +54,30 @@ This version is prepared for the Record stack and is not published until its rel
 Scope: changes that ship in the published `@thedesignproject/crrt` package. Dashboard, API, extension, Storybook addon, and MCP work since `v0.3.22` moves on `trunk` and is not part of this tarball. No public API change — `src/index.ts` still exports only `FeedbackWidget`, with unchanged props — hence a patch release.
 
 ### Fixed
+
 - Modified `C` keypresses no longer open feedback mode. `Cmd`/`Ctrl`/`Alt`/`Shift`+`C` are ignored, so browser and OS shortcuts such as copy pass through to the host app.
 - Screenshot capture supports modern CSS color functions (`oklab()` / `oklch()`). Capture now renders through `html2canvas-pro` 2.5.2, replacing the hand-rolled color-function parser that rewrote inline styles on a cloned document.
 - A comment POST rejected by a Cloud plan limit (HTTP 402/409 with `code: "plan_limit"`) now throws the server's error message instead of returning `null`, so the widget surfaces the limit instead of appearing to fail silently.
 
 ### Changed
+
 - `html2canvas` is gone; screenshot capture bundles `html2canvas-pro` (dev dependency, inlined into `dist/`, not externalized).
 - Agent seat-limit copy now describes the plan's internal-user capacity rather than a fixed five-collaborator limit.
 
 ### Added
+
 - Internal design-system primitives under `src/design-system/` (button, segmented control, section intro). Not part of the published entry point.
 
 ## [0.3.17] - 2026-08-13
 
 ### Added
+
 - `<FeedbackWidget theme="light | dark | system">` lets integrations match the host application's appearance while preserving the existing dark theme by default.
 
 ## [0.3.7] - 2026-04-24
 
 ### Added
+
 - `api/comments.ts` handles both `GET` and `POST` on one route.
 - Handler unit tests (vitest) covering method dispatch, validation, and the silent-RLS failure mode.
 - Widget unit tests (@testing-library/react + happy-dom) covering mount, fetch URL encoding, offline resilience, projectId refetch, and the full comment-submit path (POST body shape, duplicate-Send guard, failure-does-not-ghost).
@@ -90,24 +101,28 @@ Scope: changes that ship in the published `@thedesignproject/crrt` package. Dash
 - README section describing the library-vs-demo repo layout and the reference backend.
 
 ### Changed
+
 - **BREAKING:** `apiBase` is now a required prop on `<FeedbackWidget>`. Previously the library fell back to a hardcoded URL pointing at the maintainer's Vercel deployment, silently funneling every consumer's data into one shared backend. Consumers must now point at their own deployment.
 - `api/comments.ts` uses `.insert([...]).select()` so the server sends back the inserted row. Without `.select()`, Supabase responds `201` with no body even when RLS blocks the write, causing silent data loss.
 - `INVALID_CLASS_CHARS` → `INVALID_IDENT_CHARS` in `src/lib/getSelector.ts`; the regex applies to both id and class selectors.
 - `peerDependencies` widened to `react@^18 || ^19`.
 
 ### Removed
+
 - `api/comment.ts` (singular). Collapsed into `api/comments.ts` (plural) with method dispatch.
 - `src/lib/supabase.ts` — unused dead code.
 - `sent` state and `fw-pop` keyframe — dead code.
 - Hardcoded `API_BASE` constant in the widget.
 
 ### Fixed
+
 - `res.set()` calls that crashed every non-`OPTIONS` response path with `FUNCTION_INVOCATION_FAILED` on Vercel. `res.set()` is an Express-style method not implemented on `VercelResponse`. Removed; CORS headers are set globally by `vercel.json`.
 - `handleSend` now awaits the fetch with a synchronous `sendingRef` guard, preventing duplicate submissions from rapid Cmd+Enter. Optimistic sidebar update only runs on HTTP success, so failed requests no longer leave ghost comments in the UI.
 - `x` / `y` fields are validated as finite numbers on the server; non-numeric values now return a clean 400 instead of leaking the underlying Postgres error.
 
 ### Security
-- Leaked Supabase anon key (committed in the initial commit and accidentally pushed) has been rotated. `.gitleaksignore` carries the single fingerprint for that historical blob so the `secrets` gate still fails on any *new* leak without re-firing on the rotated one. The blob remains in git history for traceability; only the live credential matters and that one is gone.
+
+- Leaked Supabase anon key (committed in the initial commit and accidentally pushed) has been rotated. `.gitleaksignore` carries the single fingerprint for that historical blob so the `secrets` gate still fails on any _new_ leak without re-firing on the rotated one. The blob remains in git history for traceability; only the live credential matters and that one is gone.
 - Row Level Security is enabled on the `comments` and `projects` tables; the deployed API uses the `service_role` key to bypass RLS legitimately. Anon-key traffic to the DB is denied by default.
 
 ## [0.3.4] - 2026-04-13

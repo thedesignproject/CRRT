@@ -21,10 +21,12 @@ vi.mock('../api', () => ({
 vi.mock('../lib/mocks', () => ({ mocksEnabled: false }))
 vi.mock('../lib/supabase', () => {
   const channel = {
-    on: vi.fn((_type: string, filter: { event: string }, handler: (payload: { old?: unknown; new?: unknown }) => void) => {
-      realtime.handlers[filter.event] = handler
-      return channel
-    }),
+    on: vi.fn(
+      (_type: string, filter: { event: string }, handler: (payload: { old?: unknown; new?: unknown }) => void) => {
+        realtime.handlers[filter.event] = handler
+        return channel
+      },
+    ),
     subscribe: vi.fn(() => channel),
   }
   return { supabase: { channel: vi.fn(() => channel), removeChannel: realtime.removeChannel } }
@@ -33,8 +35,12 @@ vi.mock('../lib/supabase', () => {
 import { useNotifications } from './useNotifications'
 
 const notification = {
-  id: 'notification-1', userId: 'user-1', kind: 'comment.activity' as const,
-  payload: {}, readAt: null, createdAt: '2026-01-01T00:00:00Z',
+  id: 'notification-1',
+  userId: 'user-1',
+  kind: 'comment.activity' as const,
+  payload: {},
+  readAt: null,
+  createdAt: '2026-01-01T00:00:00Z',
 }
 
 beforeEach(() => {

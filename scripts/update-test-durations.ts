@@ -10,7 +10,11 @@ const cacheRoot = 'node_modules/.vite/vitest'
 const caches = readdirSync(cacheRoot)
   .map((dir) => join(cacheRoot, dir, 'results.json'))
   .filter((path) => {
-    try { return statSync(path).isFile() } catch { return false }
+    try {
+      return statSync(path).isFile()
+    } catch {
+      return false
+    }
   })
   .sort((a, b) => statSync(b).mtimeMs - statSync(a).mtimeMs)
 if (caches.length === 0) throw new Error(`No Vitest results cache under ${cacheRoot}; run the full suite first`)

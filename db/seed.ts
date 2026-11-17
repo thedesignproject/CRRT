@@ -44,8 +44,7 @@ await db
     devCommand: 'bun run dev',
     testCommand: 'bun run test',
     buildCommand: 'bun run build',
-    agentInstructions:
-      'Keep the public widget lightweight. Do not reintroduce reviewer-only logic into the embed.',
+    agentInstructions: 'Keep the public widget lightweight. Do not reintroduce reviewer-only logic into the embed.',
   })
   .onConflictDoUpdate({
     target: projectRepoConfigs.projectKey,

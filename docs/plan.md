@@ -17,12 +17,12 @@ No custom backend. Supabase handles everything.
 
 ## Stack
 
-| Part | Technology |
-|------|-----------|
-| Widget | React component |
-| Database | Supabase (free tier) |
-| Dashboard | React + Supabase client |
-| Distribution | npm package |
+| Part         | Technology              |
+| ------------ | ----------------------- |
+| Widget       | React component         |
+| Database     | Supabase (free tier)    |
+| Dashboard    | React + Supabase client |
+| Distribution | npm package             |
 
 ## How It Works
 
@@ -155,6 +155,7 @@ These come later, if there's traction.
 **Styling**: system fonts only (no custom fonts in widget), CSS variables for theming, Shadow DOM or CSS modules to avoid style leaking.
 
 **Key CSS Variables (Widget)**:
+
 ```css
 --fw-bg: rgba(15, 15, 15, 0.9);
 --fw-text: #fafafa;
@@ -170,15 +171,17 @@ These come later, if there's traction.
 **Layout**: dark sidebar (project list) + light main area (comment feed). Each comment card shows: comment text, element selector (monospace), page URL, relative timestamp. Warm orange accent color as brand signature.
 
 **Typography**:
+
 - Headings: Instrument Sans or General Sans
 - Body: IBM Plex Sans
 - Monospace (IDs, selectors, timestamps): IBM Plex Mono
 
 **Color Palette**:
+
 ```css
---bg-primary: #FAFAF8;
+--bg-primary: #fafaf8;
 --bg-sidebar: #111111;
---accent: #E85D2A;
+--accent: #e85d2a;
 --text-primary: #1a1a1a;
 --text-secondary: #6b6b6b;
 ```

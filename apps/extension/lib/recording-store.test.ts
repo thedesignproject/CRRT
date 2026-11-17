@@ -3,8 +3,16 @@ import type { LocalRecording } from './recording'
 import { deleteLocalRecording, getLocalRecording, listLocalRecordings, saveLocalRecording } from './recording-store'
 
 const recording = (id: string, createdAt: string): LocalRecording => ({
-  id, createdAt, title: id, source: 'tab', status: 'ready', durationMs: 1_000,
-  authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'ready',
+  id,
+  createdAt,
+  title: id,
+  source: 'tab',
+  status: 'ready',
+  durationMs: 1_000,
+  authorName: 'Tomás',
+  marks: [],
+  transcript: [],
+  transcriptionStatus: 'ready',
 })
 
 beforeEach(async () => {

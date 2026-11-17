@@ -1,10 +1,15 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ request: vi.fn(), copy: vi.fn() }))
-vi.mock('../../../shared/record/client', async original => ({ ...await original<typeof import('../../../shared/record/client')>(), recordRequest: mocks.request }))
+vi.mock('../../../shared/record/client', async (original) => ({
+  ...(await original<typeof import('../../../shared/record/client')>()),
+  recordRequest: mocks.request,
+}))
 import { RecordingShareButton } from './RecordingShareButton'
 beforeEach(() => {
-  vi.clearAllMocks(); mocks.request.mockResolvedValue({ shareId: 'existing' }); mocks.copy.mockResolvedValue(undefined)
+  vi.clearAllMocks()
+  mocks.request.mockResolvedValue({ shareId: 'existing' })
+  mocks.copy.mockResolvedValue(undefined)
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: mocks.copy } })
 })
 function open() {
@@ -24,12 +29,15 @@ it('reads and copies the same authorized link without rotating it, including aft
   expect(mocks.request).toHaveBeenCalledExactlyOnceWith('/api', 'recordings/recording/share', 'owner')
   ;(screen.getByRole('dialog') as HTMLDialogElement).close()
   fireEvent.click(screen.getByRole('button', { name: 'Share Checkout' }))
-  expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue(`${location.origin}/recording#existing`)
+  expect(await screen.findByRole('textbox', { name: 'Share link' })).toHaveValue(
+    `${location.origin}/recording#existing`,
+  )
   expect(mocks.request).toHaveBeenCalledTimes(2)
-  expect(mocks.request.mock.calls.every(call => call.length === 3)).toBe(true)
+  expect(mocks.request.mock.calls.every((call) => call.length === 3)).toBe(true)
 })
 it('unshares and enables a fresh link only on explicit request', async () => {
-  open(); await screen.findByRole('textbox')
+  open()
+  await screen.findByRole('textbox')
   mocks.request.mockResolvedValueOnce({ shareId: null })
   fireEvent.click(screen.getByRole('button', { name: 'Unshare' }))
   expect(await screen.findByText(/Sharing is off/)).toBeInTheDocument()
@@ -53,7 +61,8 @@ it('retries unavailable share state and retains the link when unsharing fails', 
 })
 it('keeps a selectable link and retries copying if clipboard access is denied', async () => {
   mocks.copy.mockRejectedValueOnce(new Error('Denied'))
-  open(); await screen.findByRole('textbox')
+  open()
+  await screen.findByRole('textbox')
   fireEvent.click(screen.getByRole('button', { name: 'Copy share link' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Select and copy it below')
   expect(screen.getByRole('textbox')).toHaveAttribute('readonly')

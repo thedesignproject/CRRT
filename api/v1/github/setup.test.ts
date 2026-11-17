@@ -17,10 +17,7 @@ vi.mock('../../_lib/widget-github-auth.js', () => ({
 }))
 
 import handler from './setup.js'
-import {
-  createGitHubAppSetupAuthState,
-  verifyGitHubAppInstallState,
-} from '../../_lib/github-app.js'
+import { createGitHubAppSetupAuthState, verifyGitHubAppInstallState } from '../../_lib/github-app.js'
 import { buildGitHubAuthorizeUrl } from '../../_lib/widget-github-auth.js'
 
 function mockRes() {
@@ -28,10 +25,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -77,11 +84,14 @@ describe('api/v1/github/setup', () => {
 
   it('redirects to GitHub OAuth verification using only the signed install state project', async () => {
     let res = mockRes()
-    await call({
-      method: 'GET',
-      query: { projectId: 'attacker-project', installation_id: '99', state: 'state' },
-      headers: {},
-    }, res)
+    await call(
+      {
+        method: 'GET',
+        query: { projectId: 'attacker-project', installation_id: '99', state: 'state' },
+        headers: {},
+      },
+      res,
+    )
     expect(res.statusCode).toBe(302)
     expect(verifyGitHubAppInstallState).toHaveBeenCalledWith('state')
     expect(createGitHubAppSetupAuthState).toHaveBeenCalledWith({
@@ -108,8 +118,16 @@ describe('api/v1/github/setup', () => {
 })
 
 it('preserves signed MCP flow identity through the GitHub installation redirect', async () => {
-  vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce({projectKey:'p',userId:'u',origin:'https://app.example',mcpFlow:{connectionId:'connection',requestKey:'flow'}} as never)
-  const res=mockRes();await call({method:'GET',query:{installation_id:'123',state:'signed-state'},headers:{}},res)
+  vi.mocked(verifyGitHubAppInstallState).mockReturnValueOnce({
+    projectKey: 'p',
+    userId: 'u',
+    origin: 'https://app.example',
+    mcpFlow: { connectionId: 'connection', requestKey: 'flow' },
+  } as never)
+  const res = mockRes()
+  await call({ method: 'GET', query: { installation_id: '123', state: 'signed-state' }, headers: {} }, res)
   expect(res.statusCode).toBe(302)
-  expect(createGitHubAppSetupAuthState).toHaveBeenCalledWith(expect.objectContaining({mcpFlow:{connectionId:'connection',requestKey:'flow'}}))
+  expect(createGitHubAppSetupAuthState).toHaveBeenCalledWith(
+    expect.objectContaining({ mcpFlow: { connectionId: 'connection', requestKey: 'flow' } }),
+  )
 })

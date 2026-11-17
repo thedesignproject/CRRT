@@ -13,7 +13,13 @@ import { useEffect, useState, type RefObject } from 'react'
  * The last step also owns `hold` extra slices at the end of the track, so it
  * stays pinned long enough to land and be seen before the section scrolls on.
  */
-export function useScrollSteps(ref: RefObject<HTMLElement | null>, steps: number, property: string, dwell: number, hold: number) {
+export function useScrollSteps(
+  ref: RefObject<HTMLElement | null>,
+  steps: number,
+  property: string,
+  dwell: number,
+  hold: number,
+) {
   const [step, setStep] = useState(0)
   useEffect(() => {
     const element = ref.current!
@@ -22,7 +28,8 @@ export function useScrollSteps(ref: RefObject<HTMLElement | null>, steps: number
     let position = 0
     let target = 0
     let shown = -1
-    const write = () => element.style.setProperty(property, (Math.min(Math.max(position, shown), shown + 1) / steps).toFixed(4))
+    const write = () =>
+      element.style.setProperty(property, (Math.min(Math.max(position, shown), shown + 1) / steps).toFixed(4))
     const show = (next: number) => {
       shown = next
       setStep(next)
@@ -44,7 +51,9 @@ export function useScrollSteps(ref: RefObject<HTMLElement | null>, steps: number
       else if (!timer) walk()
       write()
     }
-    const schedule = () => { if (!frame) frame = requestAnimationFrame(update) }
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(update)
+    }
     update()
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)

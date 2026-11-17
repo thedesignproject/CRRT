@@ -5,15 +5,31 @@ import handler from './record-worker.js'
 
 function response() {
   return {
-    statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
-    setHeader(key: string, value: string) { this.headers[key] = value },
-    status(value: number) { this.statusCode = value; return this },
-    json(value: unknown) { this.body = value; return this }, end() { return this },
+    statusCode: 200,
+    body: null as unknown,
+    headers: {} as Record<string, string>,
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
+    status(value: number) {
+      this.statusCode = value
+      return this
+    },
+    json(value: unknown) {
+      this.body = value
+      return this
+    },
+    end() {
+      return this
+    },
   }
 }
 const call = (method = 'GET', authorization: unknown = 'Bearer cron-secret') => {
   const res = response()
-  return (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)({ method, headers: { authorization } }, res).then(() => res)
+  return (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(
+    { method, headers: { authorization } },
+    res,
+  ).then(() => res)
 }
 beforeEach(() => {
   vi.resetAllMocks()

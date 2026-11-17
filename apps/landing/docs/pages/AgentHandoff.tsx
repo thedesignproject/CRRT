@@ -66,20 +66,20 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
       <Section>
         <H2>CRRT developer resources</H2>
         <P>
-          The CRRT Agent API is an authenticated HTTP API for working on shared feedback.
-          Download the <a href="/openapi.json">OpenAPI 3.1 specification</a> for endpoint descriptions,
-          request parameters, response schemas, and authentication. Start with the{' '}
-          <a href="/llms.txt">CRRT agent guide</a> for when-to-use guidance.
+          The CRRT Agent API is an authenticated HTTP API for working on shared feedback. Download the{' '}
+          <a href="/openapi.json">OpenAPI 3.1 specification</a> for endpoint descriptions, request parameters, response
+          schemas, and authentication. Start with the <a href="/llms.txt">CRRT agent guide</a> for when-to-use guidance.
           Connect your coding agent through CRRT MCP, or use the HTTP API below for a scoped handoff.
         </P>
         <P>
-          Get a scoped share token from a human-created agent handoff. Announce presence before
-          reading state. Work only on accepted comments, claim each item before editing, and
-          report progress through the operations endpoint. Humans review the resulting changes.
-          A missing or invalid token returns 401; an expired or revoked share returns 410.
-          Keep tokens in environment variables and send them in the Authorization header.
+          Get a scoped share token from a human-created agent handoff. Announce presence before reading state. Work only
+          on accepted comments, claim each item before editing, and report progress through the operations endpoint.
+          Humans review the resulting changes. A missing or invalid token returns 401; an expired or revoked share
+          returns 410. Keep tokens in environment variables and send them in the Authorization header.
         </P>
-        <CodeBlock language="bash" code={String.raw`curl --fail-with-body -X POST \
+        <CodeBlock
+          language="bash"
+          code={String.raw`curl --fail-with-body -X POST \
   "https://crrt.ai/api/v1/agent/shares/$CRRT_SHARE_SLUG/presence" \
   -H "Authorization: Bearer $CRRT_SHARE_TOKEN" \
   -H "X-Agent-Id: my-agent" \
@@ -88,14 +88,25 @@ export function AgentHandoffPage({ pathname, onNavigate }: AgentHandoffPageProps
 
 curl --fail-with-body \
   "https://crrt.ai/api/v1/agent/shares/$CRRT_SHARE_SLUG/state" \
-  -H "Authorization: Bearer $CRRT_SHARE_TOKEN"`} />
+  -H "Authorization: Bearer $CRRT_SHARE_TOKEN"`}
+        />
       </Section>
 
       <Section>
         <H2>Connect with MCP</H2>
-        <P>Use a compatible Streamable HTTP client with <InlineCode>https://crrt.ai/api/mcp/v1</InlineCode>. Sign in with your CRRT account and approve the requested permissions.</P>
-        <P>Ask your agent to list your projects, read accepted feedback, and get the full handoff context. With implementation permission it can claim work and report progress back to CRRT. Completed agent work is ready for human testing.</P>
-        <P>Project permissions still apply. Read-only connections cannot change feedback. Manage or revoke connections in <a href="/dashboard/mcp-auth">MCP settings</a>.</P>
+        <P>
+          Use a compatible Streamable HTTP client with <InlineCode>https://crrt.ai/api/mcp/v1</InlineCode>. Sign in with
+          your CRRT account and approve the requested permissions.
+        </P>
+        <P>
+          Ask your agent to list your projects, read accepted feedback, and get the full handoff context. With
+          implementation permission it can claim work and report progress back to CRRT. Completed agent work is ready
+          for human testing.
+        </P>
+        <P>
+          Project permissions still apply. Read-only connections cannot change feedback. Manage or revoke connections in{' '}
+          <a href="/dashboard/mcp-auth">MCP settings</a>.
+        </P>
         <CodeBlock language="bash" code={'codex mcp add crrt --url https://crrt.ai/api/mcp/v1\ncodex mcp login crrt'} />
       </Section>
 
@@ -107,20 +118,19 @@ curl --fail-with-body \
             <Strong>Open</Strong> status.
           </li>
           <li>
-            You triage it — accept, reject, or leave open. Accepted items move to{' '}
-            <Strong>Ready for Agent</Strong>.
+            You triage it — accept, reject, or leave open. Accepted items move to <Strong>Ready for Agent</Strong>.
           </li>
           <li>
-            Open the <Strong>Agent handoff</Strong> sidebar. The hero shows your count of ready items and a
-            single CTA: <InlineCode>Send N crrts to &lt;agent&gt;</InlineCode>.
+            Open the <Strong>Agent handoff</Strong> sidebar. The hero shows your count of ready items and a single CTA:{' '}
+            <InlineCode>Send N crrts to &lt;agent&gt;</InlineCode>.
           </li>
           <li>
-            Click <Strong>Send</Strong>. The dashboard generates a scoped prompt and copies it to your
-            clipboard. Pick the agent (Claude Code, Codex, generic) from the caret on the right.
+            Click <Strong>Send</Strong>. The dashboard generates a scoped prompt and copies it to your clipboard. Pick
+            the agent (Claude Code, Codex, generic) from the caret on the right.
           </li>
           <li>
-            Paste the prompt in your agent. It reads only the Ready items via a per-share bearer token,
-            claims them, fixes them, and marks them <Strong>Ready for testing</Strong>.
+            Paste the prompt in your agent. It reads only the Ready items via a per-share bearer token, claims them,
+            fixes them, and marks them <Strong>Ready for testing</Strong>.
           </li>
           <li>
             Test the proposed change, then mark it <Strong>Done</Strong>. The agent never makes that final call.
@@ -134,20 +144,20 @@ curl --fail-with-body \
       <Section>
         <H2>Supported agents</H2>
         <P>
-          The dashboard generates the prompt for each target. The agent doesn't need a special integration —
-          it just needs to read the share token URL we put in the prompt and call the agent API.
+          The dashboard generates the prompt for each target. The agent doesn't need a special integration — it just
+          needs to read the share token URL we put in the prompt and call the agent API.
         </P>
         <Ul>
           <li>
-            <Strong>Claude Code</Strong> — paste in the chat. The prompt embeds the share URL and tells
-            Claude Code which tools to use to fetch, claim, and update comments.
+            <Strong>Claude Code</Strong> — paste in the chat. The prompt embeds the share URL and tells Claude Code
+            which tools to use to fetch, claim, and update comments.
           </li>
           <li>
             <Strong>Codex</Strong> — paste in the prompt area. Same shape, different formatting.
           </li>
           <li>
-            <Strong>Generic</Strong> — for Cursor, Windsurf, Cline, or any tool that accepts a free-form
-            prompt. Same data, less tool-specific syntax.
+            <Strong>Generic</Strong> — for Cursor, Windsurf, Cline, or any tool that accepts a free-form prompt. Same
+            data, less tool-specific syntax.
           </li>
         </Ul>
       </Section>
@@ -155,48 +165,48 @@ curl --fail-with-body \
       <Section>
         <H2>Under the hood</H2>
         <P>
-          The handoff is mediated by a <Strong>feedback share</Strong>: a per-handoff record that bundles a
-          set of comments, a scope (page, selection, or whole project), an expiry, and a one-time bearer
-          token. The agent only ever sees the comments inside the share — nothing else from the project.
+          The handoff is mediated by a <Strong>feedback share</Strong>: a per-handoff record that bundles a set of
+          comments, a scope (page, selection, or whole project), an expiry, and a one-time bearer token. The agent only
+          ever sees the comments inside the share — nothing else from the project.
         </P>
 
         <H3>1. Create a share</H3>
         <CodeBlock language="http" code={shareCreateSnippet} />
         <P>
-          The dashboard does this for you automatically when you click <Strong>Send</Strong>. You can also
-          call the endpoint directly if you're scripting your own workflow.
+          The dashboard does this for you automatically when you click <Strong>Send</Strong>. You can also call the
+          endpoint directly if you're scripting your own workflow.
         </P>
 
         <H3>2. Generate the prompt</H3>
         <CodeBlock language="http" code={promptFetchSnippet} />
         <P>
           Choose <InlineCode>target=claude-code</InlineCode>, <InlineCode>codex</InlineCode>, or{' '}
-          <InlineCode>generic</InlineCode>. The returned prompt embeds the share URL plus instructions
-          tailored to that agent.
+          <InlineCode>generic</InlineCode>. The returned prompt embeds the share URL plus instructions tailored to that
+          agent.
         </P>
 
         <H3>3. Agent reads the share</H3>
         <CodeBlock language="http" code={agentStateSnippet} />
         <P>
           The agent fetches the state, claims comments (<InlineCode>POST .../presence</InlineCode>,{' '}
-          <InlineCode>POST .../ops</InlineCode>), reports progress, and marks each item Ready for testing when
-          it opens a pull request. The dashboard polls and renders the same state live; a human marks the item
-          Done after reviewing the result.
+          <InlineCode>POST .../ops</InlineCode>), reports progress, and marks each item Ready for testing when it opens
+          a pull request. The dashboard polls and renders the same state live; a human marks the item Done after
+          reviewing the result.
         </P>
 
         <Callout tone="info">
-          The bearer token in the share URL is scoped to that share only. Revoke a share and the agent
-          immediately loses access — useful if you ever need to stop a job mid-flight.
+          The bearer token in the share URL is scoped to that share only. Revoke a share and the agent immediately loses
+          access — useful if you ever need to stop a job mid-flight.
         </Callout>
       </Section>
 
       <Section>
         <H2>Custom integrations</H2>
         <P>
-          If you're building your own agent or a different review tool, integrate against the agent API
-          directly. The endpoints are documented in the <InlineCode>README</InlineCode> under{' '}
-          <InlineCode>/api/v1/agent/...</InlineCode>. Anything that can speak HTTP and respect a bearer token
-          can participate in the loop.
+          If you're building your own agent or a different review tool, integrate against the agent API directly. The
+          endpoints are documented in the <InlineCode>README</InlineCode> under{' '}
+          <InlineCode>/api/v1/agent/...</InlineCode>. Anything that can speak HTTP and respect a bearer token can
+          participate in the loop.
         </P>
       </Section>
 

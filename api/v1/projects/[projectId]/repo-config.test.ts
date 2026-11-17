@@ -11,20 +11,21 @@ vi.mock('../../../_lib/store.js', () => ({
   getGithubIssueConnection: vi.fn(),
   getProjectMember: vi.fn(),
   getRepoConfig: vi.fn(),
-  normalizeGitHubRepoUrl: vi.fn((value: string) => value === 'bad' ? null : ({
-    repoUrl: 'https://github.com/acme/widgets',
-    githubOwner: 'acme',
-    githubRepo: 'widgets',
-  })),
+  normalizeGitHubRepoUrl: vi.fn((value: string) =>
+    value === 'bad'
+      ? null
+      : {
+          repoUrl: 'https://github.com/acme/widgets',
+          githubOwner: 'acme',
+          githubRepo: 'widgets',
+        },
+  ),
   updateRepoConfig: vi.fn(),
 }))
 
 import handler from './repo-config.js'
 import { requireUser } from '../../../_lib/auth.js'
-import {
-  assertGitHubInstallationRepoAccess,
-  verifyGitHubAppInstallationToken,
-} from '../../../_lib/github-app.js'
+import { assertGitHubInstallationRepoAccess, verifyGitHubAppInstallationToken } from '../../../_lib/github-app.js'
 import {
   connectGithubRepo,
   disconnectGithubRepo,
@@ -39,10 +40,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -51,12 +62,14 @@ const call = (req: unknown, res: unknown) =>
 beforeEach(() => {
   vi.mocked(requireUser).mockReset()
   vi.mocked(assertGitHubInstallationRepoAccess).mockReset()
-  vi.mocked(verifyGitHubAppInstallationToken).mockReset().mockReturnValue({
-    projectKey: 'p',
-    userId: 'u',
-    installationId: '99',
-    expectedConnectionVersion: 4,
-  } as never)
+  vi.mocked(verifyGitHubAppInstallationToken)
+    .mockReset()
+    .mockReturnValue({
+      projectKey: 'p',
+      userId: 'u',
+      installationId: '99',
+      expectedConnectionVersion: 4,
+    } as never)
   vi.mocked(connectGithubRepo).mockReset()
   vi.mocked(disconnectGithubRepo).mockReset()
   vi.mocked(getGithubIssueConnection).mockReset()
@@ -84,16 +97,22 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     expect(res.statusCode).toBe(401)
 
     res = mockRes()
-    await call({
-      method: 'PATCH',
-      query: { projectId: 'p', token: 'query-token-must-not-work' },
-      body: { repoUrl: null },
-      headers: {},
-    }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p', token: 'query-token-must-not-work' },
+        body: { repoUrl: null },
+        headers: {},
+      },
+      res,
+    )
     expect(res.statusCode).toBe(401)
 
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: null }, headers: { authorization: 'Basic abc' } }, res)
+    await call(
+      { method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: null }, headers: { authorization: 'Basic abc' } },
+      res,
+    )
     expect(res.statusCode).toBe(401)
   })
 
@@ -132,12 +151,15 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
       githubConnectionStatus: 'connected',
     } as never)
     res = mockRes()
-    await call({
-      method: 'PATCH',
-      query: { projectId: 'p' },
-      body: { repoUrl: 'acme/widgets', installationToken: 'proof' },
-      headers: { authorization: 'Bearer session' },
-    }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { repoUrl: 'acme/widgets', installationToken: 'proof' },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(200)
     expect(assertGitHubInstallationRepoAccess).toHaveBeenCalledWith('99', 'acme', 'widgets')
     expect(connectGithubRepo).toHaveBeenCalledWith('p', 'u', 'https://github.com/acme/widgets', '99', 4)
@@ -170,12 +192,15 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     } as never)
 
     const res = mockRes()
-    await call({
-      method: 'PATCH',
-      query: { projectId: 'p' },
-      body: { repoUrl: null },
-      headers: { authorization: 'Bearer session' },
-    }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { repoUrl: null },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
 
     expect(res.statusCode).toBe(200)
     expect(disconnectGithubRepo).toHaveBeenCalledWith('p', 'u')
@@ -205,22 +230,49 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: 'bad', installationToken: 'proof' }, headers }, res)
+    await call(
+      { method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: 'bad', installationToken: 'proof' }, headers },
+      res,
+    )
     expect(res.statusCode).toBe(400)
 
     vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce(null)
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: 'acme/widgets', installationToken: 'bad-proof' }, headers }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { repoUrl: 'acme/widgets', installationToken: 'bad-proof' },
+        headers,
+      },
+      res,
+    )
     expect(res.statusCode).toBe(403)
 
     vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce({ projectKey: 'other', userId: 'u' } as never)
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: 'acme/widgets', installationToken: 'proof' }, headers }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { repoUrl: 'acme/widgets', installationToken: 'proof' },
+        headers,
+      },
+      res,
+    )
     expect(res.statusCode).toBe(403)
 
     vi.mocked(verifyGitHubAppInstallationToken).mockReturnValueOnce({ projectKey: 'p', userId: 'third-user' } as never)
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { repoUrl: 'acme/widgets', installationToken: 'proof' }, headers }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { repoUrl: 'acme/widgets', installationToken: 'proof' },
+        headers,
+      },
+      res,
+    )
     expect(res.statusCode).toBe(403)
     expect(assertGitHubInstallationRepoAccess).not.toHaveBeenCalled()
   })
@@ -229,7 +281,8 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     const req = {
-      method: 'PATCH', query: { projectId: 'p' },
+      method: 'PATCH',
+      query: { projectId: 'p' },
       body: { repoUrl: 'acme/widgets', installationToken: 'proof' },
       headers: { authorization: 'Bearer session' },
     }
@@ -273,7 +326,15 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
 
     const markdown = '  ## Read order\n\n- Read AGENTS.md **first**\n- Then `/rules`  '
     const res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: markdown }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { agentInstructions: markdown },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
 
     expect(res.statusCode).toBe(200)
     expect(updateRepoConfig).toHaveBeenCalledWith('p', {
@@ -287,12 +348,28 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     vi.mocked(updateRepoConfig).mockResolvedValue({ agentInstructions: null } as never)
 
     let res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: '   ' }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { agentInstructions: '   ' },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(200)
     expect(updateRepoConfig).toHaveBeenLastCalledWith('p', { agentInstructions: null })
 
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: null }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { agentInstructions: null },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(200)
     expect(updateRepoConfig).toHaveBeenLastCalledWith('p', { agentInstructions: null })
   })
@@ -302,12 +379,28 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
 
     let res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: 'x'.repeat(4001) }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { agentInstructions: 'x'.repeat(4001) },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(400)
     expect(res.body).toEqual({ error: 'agentInstructions must be 4000 characters or fewer' })
 
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: 42 }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { agentInstructions: 42 },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(400)
     expect(res.body).toEqual({ error: 'agentInstructions must be a string or null' })
 
@@ -318,12 +411,15 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     const res = mockRes()
-    await call({
-      method: 'PATCH',
-      query: { projectId: 'p' },
-      body: { repoUrl: 'acme/widgets', localPath: ' /srv/widgets ', devCommand: 'bun dev', testCommand: '' },
-      headers: { authorization: 'Bearer session' },
-    }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { repoUrl: 'acme/widgets', localPath: ' /srv/widgets ', devCommand: 'bun dev', testCommand: '' },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
 
     expect(res.statusCode).toBe(400)
     expect(updateRepoConfig).not.toHaveBeenCalled()
@@ -335,13 +431,29 @@ describe('api/v1/projects/[projectId]/repo-config', () => {
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' })
     let res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { unrelated: true }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { unrelated: true },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(400)
     expect(res.body).toEqual({ error: 'No supported fields to update' })
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'member' })
     res = mockRes()
-    await call({ method: 'PATCH', query: { projectId: 'p' }, body: { agentInstructions: 'x' }, headers: { authorization: 'Bearer session' } }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { projectId: 'p' },
+        body: { agentInstructions: 'x' },
+        headers: { authorization: 'Bearer session' },
+      },
+      res,
+    )
     expect(res.statusCode).toBe(403)
     expect(updateRepoConfig).not.toHaveBeenCalled()
   })

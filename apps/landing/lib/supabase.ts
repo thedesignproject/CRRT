@@ -10,12 +10,13 @@ const supabaseAnonKey = globalThis.__CRRT_SUPABASE_ANON_KEY__
 
 // Authentication enhances the public landing, but it must never prevent the
 // marketing and pricing UI from rendering in local or self-hosted previews.
-export const supabase = supabaseUrl && supabaseAnonKey
-  ? createClient(supabaseUrl, supabaseAnonKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-        detectSessionInUrl: true,
-      },
-    })
-  : null
+export const supabase =
+  supabaseUrl && supabaseAnonKey
+    ? createClient(supabaseUrl, supabaseAnonKey, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          detectSessionInUrl: true,
+        },
+      })
+    : null

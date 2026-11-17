@@ -7,9 +7,12 @@ import { apiBuilderPackage } from './vercel-api-package.mjs'
 
 it('preserves dependency resolution and ordinary scripts while removing deployment hooks', () => {
   const original = {
-    name: 'fixture', type: 'module', dependencies: { stripe: '22.6.2' },
+    name: 'fixture',
+    type: 'module',
+    dependencies: { stripe: '22.6.2' },
     scripts: { 'vercel-build': 'must-not-run', 'now-build': 'must-not-run', build: 'tsc', test: 'vitest' },
-    overrides: { dependency: '1.0.0' }, patchedDependencies: { dependency: 'patches/dependency.patch' },
+    overrides: { dependency: '1.0.0' },
+    patchedDependencies: { dependency: 'patches/dependency.patch' },
   }
   const sanitized = JSON.parse(apiBuilderPackage(JSON.stringify(original)))
   expect(sanitized).toEqual({ ...original, scripts: { build: 'tsc', test: 'vitest' } })
@@ -22,12 +25,18 @@ it('prevents the real Vercel builder hook lookup from finding a parent deploymen
   try {
     const api = join(root, 'api')
     await mkdir(api)
-    await writeFile(join(root, 'package.json'), apiBuilderPackage(JSON.stringify({
-      name: 'fixture', scripts: {
-        'vercel-build': 'node -e "process.exit(99)"',
-        'now-build': 'node -e "process.exit(99)"',
-      },
-    })))
+    await writeFile(
+      join(root, 'package.json'),
+      apiBuilderPackage(
+        JSON.stringify({
+          name: 'fixture',
+          scripts: {
+            'vercel-build': 'node -e "process.exit(99)"',
+            'now-build': 'node -e "process.exit(99)"',
+          },
+        }),
+      ),
+    )
     expect(await runPackageJsonScript(api, ['vercel-build', 'now-build'])).toBe(false)
   } finally {
     await rm(root, { recursive: true, force: true })

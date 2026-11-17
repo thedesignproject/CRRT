@@ -3,29 +3,50 @@ import { useRef } from 'react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useScrollSteps } from './useScrollSteps'
 
-beforeEach(() => { vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] }) })
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.useRealTimers() })
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+})
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 function Track() {
   const ref = useRef<HTMLDivElement>(null)
   const step = useScrollSteps(ref, 4, '--track-p', 300, 1)
-  return <div ref={ref} data-testid="track">{step}</div>
+  return (
+    <div ref={ref} data-testid="track">
+      {step}
+    </div>
+  )
 }
 
 function frames() {
   const queue: FrameRequestCallback[] = []
-  vi.spyOn(window, 'requestAnimationFrame').mockImplementation(callback => queue.push(callback))
+  vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => queue.push(callback))
   const cancel = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => undefined)
-  return { flush: () => act(() => { queue.splice(0).forEach(callback => callback(0)) }), cancel }
+  return {
+    flush: () =>
+      act(() => {
+        queue.splice(0).forEach((callback) => callback(0))
+      }),
+    cancel,
+  }
 }
 
-const wait = (ms: number) => act(() => { vi.advanceTimersByTime(ms) })
+const wait = (ms: number) =>
+  act(() => {
+    vi.advanceTimersByTime(ms)
+  })
 
 it('opens on the scrolled step, then walks one step per dwell toward wherever the reader flicks', () => {
   // Four steps plus one held slice: each step owns 200px of the 1000px track, the last owns 400px.
   const { flush, cancel } = frames()
   let top = -300
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(() => ({ top, height: window.innerHeight + 1000 }) as DOMRect)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    () => ({ top, height: window.innerHeight + 1000 }) as DOMRect,
+  )
   const { unmount } = render(<Track />)
   const track = screen.getByTestId('track')
   const progress = () => track.style.getPropertyValue('--track-p')
@@ -81,7 +102,10 @@ it('opens on the scrolled step, then walks one step per dwell toward wherever th
 
 it('stays on the first step when the track is no taller than the viewport', () => {
   frames()
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ top: -200, height: window.innerHeight } as DOMRect)
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    top: -200,
+    height: window.innerHeight,
+  } as DOMRect)
   render(<Track />)
   expect(screen.getByTestId('track')).toHaveTextContent('0')
   expect(screen.getByTestId('track').style.getPropertyValue('--track-p')).toBe('0.0000')

@@ -11,8 +11,12 @@ it('parses added, modified, renamed and deleted paths', () => {
 })
 
 it('narrows when every change is an added or modified module the graph can see', () => {
-  expect(selectionMode([{ status: 'M', path: 'apps/extension/entrypoints/recordings/main.tsx' }, { status: 'A', path: 'src/lib/new.test.ts' }]))
-    .toEqual({ mode: 'changed', reasons: [] })
+  expect(
+    selectionMode([
+      { status: 'M', path: 'apps/extension/entrypoints/recordings/main.tsx' },
+      { status: 'A', path: 'src/lib/new.test.ts' },
+    ]),
+  ).toEqual({ mode: 'changed', reasons: [] })
 })
 
 it.each([
@@ -26,7 +30,10 @@ it.each([
   ['D', 'src/lib/old.ts', 'deleted'],
   ['R087', 'src/lib/moved.ts', 'renamed'],
 ])('runs the full suite for %s %s', (status, path, reason) => {
-  const { mode, reasons } = selectionMode([{ status: 'M', path: 'src/index.ts' }, { status, path }])
+  const { mode, reasons } = selectionMode([
+    { status: 'M', path: 'src/index.ts' },
+    { status, path },
+  ])
   expect(mode).toBe('full')
   expect(reasons).toHaveLength(1)
   expect(reasons[0]).toContain(reason)

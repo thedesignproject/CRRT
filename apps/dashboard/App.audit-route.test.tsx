@@ -1,7 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-vi.mock('./hooks/useAuth', () => ({ useAuth: () => ({ session: { access_token: 'bearer' }, user: { id: 'user' }, loading: false, signOut: vi.fn() }) }))
-vi.mock('./components/ProductAuditPage', () => ({ ProductAuditPage: ({ auditId }: { auditId: string }) => <div>audit route {auditId}</div> }))
+vi.mock('./hooks/useAuth', () => ({
+  useAuth: () => ({ session: { access_token: 'bearer' }, user: { id: 'user' }, loading: false, signOut: vi.fn() }),
+}))
+vi.mock('./components/ProductAuditPage', () => ({
+  ProductAuditPage: ({ auditId }: { auditId: string }) => <div>audit route {auditId}</div>,
+}))
 vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./lib/supabase', () => ({ supabase: {} }))
 import { App } from './App'

@@ -9,11 +9,23 @@ import { getAdminStats } from '../../_lib/store.js'
 
 function mockRes() {
   return {
-    statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    statusCode: 200,
+    body: null as unknown,
+    headers: {} as Record<string, string>,
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -41,7 +53,11 @@ describe('api/v1/admin/stats', () => {
   it('returns stats and maps store failures to 500', async () => {
     vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     const stats = {
-      accounts: 1, projects: 2, comments: 3, shares: 4, activeAgentPresence: 5,
+      accounts: 1,
+      projects: 2,
+      comments: 3,
+      shares: 4,
+      activeAgentPresence: 5,
       signups: { last24Hours: 1, last7Days: 1, last30Days: 1 },
     }
     vi.mocked(getAdminStats).mockResolvedValueOnce(stats).mockRejectedValueOnce(new Error('boom'))

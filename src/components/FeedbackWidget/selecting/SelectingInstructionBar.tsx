@@ -49,20 +49,28 @@ export function SelectingInstructionBar({
         className="fw-rec-dot"
         style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }}
       />
-      <span style={{ fontWeight: 500, color: 'var(--fw-foreground-soft)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{message}</span>
-      <span style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '2px 6px',
-        borderRadius: 4,
-        border: '1px solid var(--fw-contrast-12)',
-        fontSize: 11,
-        fontWeight: 600,
-        color: 'var(--fw-foreground-faint)',
-        lineHeight: 1.4,
-        fontFamily: "'JetBrains Mono', monospace",
-      }}>{keyLabel}</span>
+      <span
+        style={{ fontWeight: 500, color: 'var(--fw-foreground-soft)', overflow: 'hidden', textOverflow: 'ellipsis' }}
+      >
+        {message}
+      </span>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2px 6px',
+          borderRadius: 4,
+          border: '1px solid var(--fw-contrast-12)',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--fw-foreground-faint)',
+          lineHeight: 1.4,
+          fontFamily: "'JetBrains Mono', monospace",
+        }}
+      >
+        {keyLabel}
+      </span>
       <button
         type="button"
         onClick={onCancel}
@@ -80,7 +88,9 @@ export function SelectingInstructionBar({
         }}
         onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fw-foreground)')}
         onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fw-foreground-faint)')}
-      >{actionLabel}</button>
+      >
+        {actionLabel}
+      </button>
     </div>
   )
 }

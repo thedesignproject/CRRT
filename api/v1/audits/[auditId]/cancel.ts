@@ -17,7 +17,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const row = await requireAuditAccess(req, res, auditId)
     if (!row) return
     await cancelAudit(auditId)
-    try { await cancelAuditExecution(row.workflow_run_id || null) } catch { /* persisted cancellation remains authoritative */ }
+    try {
+      await cancelAuditExecution(row.workflow_run_id || null)
+    } catch {
+      /* persisted cancellation remains authoritative */
+    }
     const audit = await getAuditResponse(auditId)
     if (!audit) return jsonError(req, res, 404, 'Audit not found')
     setCors(req, res, METHODS)

@@ -12,7 +12,7 @@ export function DocumentEditor({
   conflict = false,
   onDiscard,
   initialDraft,
-  onDraftChange
+  onDraftChange,
 }: {
   document: DocumentView
   disabled: boolean
@@ -36,7 +36,10 @@ export function DocumentEditor({
     onDraftChange?.(dirty && edited ? { title, body } : null)
   }, [dirty, edited, title, body, onDraftChange])
   useLayoutEffect(() => {
-    if (!edited) { setTitle(document.title); setBody(document.body) }
+    if (!edited) {
+      setTitle(document.title)
+      setBody(document.body)
+    }
   }, [edited, document.title, document.body])
   useEffect(() => {
     if (conflict) setPaused(true)
@@ -54,7 +57,8 @@ export function DocumentEditor({
     return () => window.removeEventListener('beforeunload', warn)
   }, [dirty])
   useEffect(() => {
-    if (!dirty || !edited || !title.trim() || disabled || loading || paused || !document.canEdit || document.archived) return
+    if (!dirty || !edited || !title.trim() || disabled || loading || paused || !document.canEdit || document.archived)
+      return
     const timer = setTimeout(() => {
       void onSave(title.trim(), body).then((saved) => {
         if (!saved) setPaused(true)
@@ -80,7 +84,15 @@ export function DocumentEditor({
     <section className="space-y-5 p-6" aria-label="Document editor">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p role="status" className="text-xs text-muted-foreground">
-          {loading ? 'Loading latest…' : disabled ? 'Saving…' : paused ? 'Autosave paused. Your changes are still here.' : dirty ? 'Unsaved changes' : 'All changes saved'}
+          {loading
+            ? 'Loading latest…'
+            : disabled
+              ? 'Saving…'
+              : paused
+                ? 'Autosave paused. Your changes are still here.'
+                : dirty
+                  ? 'Unsaved changes'
+                  : 'All changes saved'}
         </p>
         {document.canEdit && !document.archived && (
           <label className="document-text-button cursor-pointer">
@@ -111,7 +123,9 @@ export function DocumentEditor({
       )}
       {conflict && (
         <details open={!recovering} className="border-b border-border py-4">
-          <summary className="text-sm font-medium">{recovering ? 'Current published content' : 'Loaded server content — compare before saving your draft'}</summary>
+          <summary className="text-sm font-medium">
+            {recovering ? 'Current published content' : 'Loaded server content — compare before saving your draft'}
+          </summary>
           <p className="my-2 text-sm">{document.title}</p>
           <pre className="whitespace-pre-wrap break-words text-xs">{document.body}</pre>
         </details>
@@ -124,7 +138,10 @@ export function DocumentEditor({
           maxLength={200}
           readOnly={!document.canEdit || document.archived}
           disabled={loading || ((!document.canEdit || document.archived) && !recovering)}
-          onChange={(e) => { setEdited(true); setTitle(e.target.value) }}
+          onChange={(e) => {
+            setEdited(true)
+            setTitle(e.target.value)
+          }}
         />
       </label>
       <label className="block text-xs font-medium">
@@ -135,7 +152,10 @@ export function DocumentEditor({
           readOnly={!document.canEdit || document.archived}
           disabled={loading || ((!document.canEdit || document.archived) && !recovering)}
           maxLength={262144}
-          onChange={(e) => { setEdited(true); setBody(e.target.value) }}
+          onChange={(e) => {
+            setEdited(true)
+            setBody(e.target.value)
+          }}
           placeholder="Write or paste your document here…"
         />
       </label>

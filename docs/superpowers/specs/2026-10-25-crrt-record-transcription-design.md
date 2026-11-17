@@ -162,4 +162,3 @@ Acceptance test:
 7. Disable the provider key and confirm the recording remains playable with a retryable transcription error.
 
 The repo must pass typecheck, the full test suite, extension production build, and 100% diff line and branch coverage against the PR base.
-

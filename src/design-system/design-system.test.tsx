@@ -1,6 +1,15 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { applyTheme, Badge, componentMetadata, preferredTheme, PricingCard, ThemeProvider, ThemeToggle, useTheme } from '.'
+import {
+  applyTheme,
+  Badge,
+  componentMetadata,
+  preferredTheme,
+  PricingCard,
+  ThemeProvider,
+  ThemeToggle,
+  useTheme,
+} from '.'
 
 let stored: Map<string, string>
 beforeEach(() => {
@@ -35,7 +44,12 @@ it('persists theme changes and exposes the destination in the control name', () 
   }
 
   vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
-  render(<ThemeProvider><ThemeToggle /><CurrentTheme /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <ThemeToggle />
+      <CurrentTheme />
+    </ThemeProvider>,
+  )
   expect(screen.getByText('light')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }))
   expect(screen.getByText('dark')).toBeInTheDocument()
@@ -49,16 +63,31 @@ it('restores a legacy theme and updates an existing browser theme color', () => 
   stored.set('dashboard-theme', 'dark')
   document.head.insertAdjacentHTML('beforeend', '<meta name="theme-color" content="#fff">')
   vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: false } as MediaQueryList)
-  render(<ThemeProvider><ThemeToggle /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <ThemeToggle />
+    </ThemeProvider>,
+  )
   expect(screen.getByRole('button', { name: 'Switch to light mode' })).toBeInTheDocument()
   expect(document.querySelector('meta[name="theme-color"]')).toHaveAttribute('content', '#0a0a0a')
   document.querySelector('meta[name="theme-color"]')?.remove()
 })
 
 it('falls back to system dark mode when storage is unavailable', () => {
-  vi.stubGlobal('localStorage', { getItem: () => { throw new Error('blocked') }, setItem: () => { throw new Error('blocked') } })
+  vi.stubGlobal('localStorage', {
+    getItem: () => {
+      throw new Error('blocked')
+    },
+    setItem: () => {
+      throw new Error('blocked')
+    },
+  })
   vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList)
-  render(<ThemeProvider><ThemeToggle /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <ThemeToggle />
+    </ThemeProvider>,
+  )
   expect(screen.getByRole('button', { name: 'Switch to light mode' })).toBeInTheDocument()
 })
 
@@ -82,12 +111,28 @@ it('fails clearly when a theme consumer is rendered without its provider', () =>
 
 it('renders badges and both pricing card states', () => {
   const { rerender } = render(
-    <><Badge className="custom">Beta</Badge><PricingCard name="Pro" description="For teams" price="$19" suffix="/ month" action={<button>Start</button>}><span>One feature</span></PricingCard></>,
+    <>
+      <Badge className="custom">Beta</Badge>
+      <PricingCard name="Pro" description="For teams" price="$19" suffix="/ month" action={<button>Start</button>}>
+        <span>One feature</span>
+      </PricingCard>
+    </>,
   )
   expect(screen.getByText('Beta')).toHaveClass('ds-badge', 'custom')
   expect(screen.getByRole('article')).not.toHaveClass('is-recommended')
 
-  rerender(<PricingCard name="Pro" description="For teams" price="$19" suffix="/ month" recommended action={<button>Start</button>}><span>One feature</span></PricingCard>)
+  rerender(
+    <PricingCard
+      name="Pro"
+      description="For teams"
+      price="$19"
+      suffix="/ month"
+      recommended
+      action={<button>Start</button>}
+    >
+      <span>One feature</span>
+    </PricingCard>,
+  )
   expect(screen.getByRole('article')).toHaveClass('is-recommended')
   expect(screen.getByText('Recommended')).toBeInTheDocument()
 })

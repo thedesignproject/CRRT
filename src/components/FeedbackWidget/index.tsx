@@ -11,7 +11,12 @@ import type { ClickTarget, Comment, FeedbackWidgetProps, Mode, ReviewStatus } fr
 import { AUTHOR_NAME_KEY, COMMENT_CUTOFF, CRRT_CARROT_LOGO_URL, PIN_GRADIENT, WIDGET_ATTR } from './constants'
 import { fromPagePercentFixed, toPagePercent } from './coords'
 import { avatarColor, getInitials, normalizeReviewStatus, timeAgo } from './format'
-import { deleteComment as apiDeleteComment, fetchProjectComments, patchReviewStatus as apiPatchReviewStatus, postComment } from './api'
+import {
+  deleteComment as apiDeleteComment,
+  fetchProjectComments,
+  patchReviewStatus as apiPatchReviewStatus,
+  postComment,
+} from './api'
 import { FeedbackWidgetStyles } from './styles'
 import { ensureWidgetFonts } from './fonts'
 import { PinActionCluster, PinMarker } from './pin'
@@ -21,17 +26,22 @@ import { TextRangeQuote } from './quote'
 import { listenForWidgetEvent } from './events'
 import { SpeechInputButton } from './voice'
 import { SelectorFrame } from './SelectorFrame'
-import { ConversationDetails, conversationComments, conversationSelector, conversationTarget, hostedComments, positionAt, positionedPoint, savedPosition } from './conversation'
+import {
+  ConversationDetails,
+  conversationComments,
+  conversationSelector,
+  conversationTarget,
+  hostedComments,
+  positionAt,
+  positionedPoint,
+  savedPosition,
+} from './conversation'
 
 function clearNativeSelection() {
   window.getSelection()?.removeAllRanges()
 }
 
-function getElementFixedPos(
-  selector: string,
-  xPct: number,
-  yPct: number,
-): { left: number; top: number } | null {
+function getElementFixedPos(selector: string, xPct: number, yPct: number): { left: number; top: number } | null {
   try {
     const el = document.querySelector(selector)
     if (!el) return null
@@ -102,8 +112,12 @@ function LauncherAction({
         cursor: 'pointer',
         fontFamily: 'inherit',
       }}
-      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-07)' }}
-      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--fw-contrast-07)'
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent'
+      }}
     >
       <span
         style={{
@@ -135,26 +149,37 @@ function LauncherAction({
         >
           {title}
         </span>
-        <span style={{ fontSize: 12, lineHeight: 1.4, color: 'var(--fw-foreground-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <span
+          style={{
+            fontSize: 12,
+            lineHeight: 1.4,
+            color: 'var(--fw-foreground-muted)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
           {subtitle}
         </span>
       </span>
-      {shortcut && <kbd
-        style={{
-          minWidth: 26,
-          padding: '4px 7px',
-          borderRadius: 6,
-          border: '1px solid var(--fw-contrast-12)',
-          background: 'var(--fw-key-background)',
-          color: 'var(--fw-foreground-soft)',
-          fontSize: 11,
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-        }}
-      >
-        {shortcut}
-      </kbd>}
+      {shortcut && (
+        <kbd
+          style={{
+            minWidth: 26,
+            padding: '4px 7px',
+            borderRadius: 6,
+            border: '1px solid var(--fw-contrast-12)',
+            background: 'var(--fw-key-background)',
+            color: 'var(--fw-foreground-soft)',
+            fontSize: 11,
+            fontFamily: "'JetBrains Mono', ui-monospace, monospace",
+            textAlign: 'center',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {shortcut}
+        </kbd>
+      )}
     </button>
   )
 }
@@ -369,13 +394,20 @@ function FeedbackWidgetInner({
     }
   }, [onRecord])
 
-  useEffect(() => () => { if (recordHintTimer.current) window.clearTimeout(recordHintTimer.current) }, [])
+  useEffect(
+    () => () => {
+      if (recordHintTimer.current) window.clearTimeout(recordHintTimer.current)
+    },
+    [],
+  )
 
   const widgetLogin = useWidgetLogin(apiBase, projectId)
   const personalComments = suppliedPersonalComments ?? (conversation ? hostedComments : widgetLogin.comments)
   const viewerEmail = suppliedViewerEmail ?? widgetLogin.session?.displayName
   const [privateProject, setPrivateProject] = useState(false)
-  useEffect(() => { setPrivateProject(false) }, [apiBase, projectId])
+  useEffect(() => {
+    setPrivateProject(false)
+  }, [apiBase, projectId])
   const [authorName, setAuthorName] = useState<string | null>(null)
   const authorNameRef = useRef<string | null>(null)
   const [showNameModal, setShowNameModal] = useState(false)
@@ -384,13 +416,18 @@ function FeedbackWidgetInner({
     if (conversation) {
       const name = conversation.authorName || conversation.initialDraft?.author || null
       if (conversation.authorName) setShowNameModal(false)
-      authorNameRef.current = name; setAuthorName(name); return
+      authorNameRef.current = name
+      setAuthorName(name)
+      return
     }
     if (personalComments) {
       const name = viewerEmail || 'You'
-      authorNameRef.current = name; setAuthorName(name); return
+      authorNameRef.current = name
+      setAuthorName(name)
+      return
     }
-    authorNameRef.current = null; setAuthorName(null)
+    authorNameRef.current = null
+    setAuthorName(null)
     if (privateProject) return
     try {
       const stored = localStorage.getItem(AUTHOR_NAME_KEY)
@@ -406,7 +443,11 @@ function FeedbackWidgetInner({
     if (!trimmed) return
     authorNameRef.current = trimmed
     setAuthorName(trimmed)
-    if (!conversation) { try { localStorage.setItem(AUTHOR_NAME_KEY, trimmed) } catch {} }
+    if (!conversation) {
+      try {
+        localStorage.setItem(AUTHOR_NAME_KEY, trimmed)
+      } catch {}
+    }
   }
 
   function openNameEditor() {
@@ -462,9 +503,12 @@ function FeedbackWidgetInner({
       setPillHover(false)
     }, 120)
   }, [])
-  useEffect(() => () => {
-    if (pillLeaveTimer.current) window.clearTimeout(pillLeaveTimer.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (pillLeaveTimer.current) window.clearTimeout(pillLeaveTimer.current)
+    },
+    [],
+  )
 
   // Pins/popovers use position:fixed, so their viewport coords must be recomputed
   // on scroll (and on resize / body reflow, which shift the page-percent mapping).
@@ -476,7 +520,7 @@ function FeedbackWidgetInner({
     const bump = () => {
       if (!needsPositionSyncRef.current) return
       cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => forceUpdate(n => n + 1))
+      raf = requestAnimationFrame(() => forceUpdate((n) => n + 1))
     }
 
     function onResize() {
@@ -510,11 +554,14 @@ function FeedbackWidgetInner({
   // Track current URL for SPA navigation (pins scoped to page).
   // Poll location.href because some routers (e.g. Next.js App Router) cache
   // history.pushState at module load and bypass any wrapper we install.
-  const [currentUrl, setCurrentUrl] = useState(() => (
-    page ? page.url : typeof window === 'undefined' ? '' : window.location.href.split('#')[0]
-  ))
+  const [currentUrl, setCurrentUrl] = useState(() =>
+    page ? page.url : typeof window === 'undefined' ? '' : window.location.href.split('#')[0],
+  )
   useEffect(() => {
-    if (page) { setCurrentUrl(page.url); return }
+    if (page) {
+      setCurrentUrl(page.url)
+      return
+    }
     const id = window.setInterval(() => {
       const next = window.location.href.split('#')[0]
       setCurrentUrl((prev) => (prev === next ? prev : next))
@@ -558,35 +605,50 @@ function FeedbackWidgetInner({
     toBase64: encodeImage,
   } = useScreenshotCapture(page?.capture)
   const screenshotCapturing = screenshotStatus === 'capturing'
-  const sendDisabled = !comment.trim() || sending || screenshotCapturing || Boolean(conversation?.disabled || conversation?.readOnly)
+  const sendDisabled =
+    !comment.trim() || sending || screenshotCapturing || Boolean(conversation?.disabled || conversation?.readOnly)
 
   useEffect(() => {
     page?.selecting(mode === 'selecting')
     return () => page?.selecting(false)
   }, [mode, page?.selecting])
   useEffect(() => {
-    page?.track(comments
-      .filter((item) => samePage(item.pageUrl, currentUrl))
-      .map(({ id, selector, x, y }) => ({ id, selector, x, y })))
+    page?.track(
+      comments
+        .filter((item) => samePage(item.pageUrl, currentUrl))
+        .map(({ id, selector, x, y }) => ({ id, selector, x, y })),
+    )
   }, [comments, currentUrl, page?.track])
   useEffect(() => {
     if (!page?.target) return
-    setTarget(page.target); setSelectedPin(null); setSidebarOpen(false); setMode('commenting')
+    setTarget(page.target)
+    setSelectedPin(null)
+    setSidebarOpen(false)
+    setMode('commenting')
     void captureImage()
   }, [page?.target])
   useEffect(() => {
     if (!page) return
-    setTarget(null); setComment(''); clearImage(); setMode('idle'); setSelectedPin(null); setAgentOpen(false)
+    setTarget(null)
+    setComment('')
+    clearImage()
+    setMode('idle')
+    setSelectedPin(null)
+    setAgentOpen(false)
   }, [page?.url])
 
-  const pagePoint = (x: number, y: number, position: ClickTarget | Comment) => conversation && positionedPoint(position) || (page
-    ? { fixedX: x / 100 * page.width - page.scrollX, fixedY: y / 100 * page.height - page.scrollY }
-    : fromPagePercentFixed(x, y))
+  const pagePoint = (x: number, y: number, position: ClickTarget | Comment) =>
+    (conversation && positionedPoint(position)) ||
+    (page
+      ? { fixedX: (x / 100) * page.width - page.scrollX, fixedY: (y / 100) * page.height - page.scrollY }
+      : fromPagePercentFixed(x, y))
 
   const feedbackContextGeneration = useRef(0)
   useEffect(() => {
     feedbackContextGeneration.current++
-    return () => { feedbackContextGeneration.current++ }
+    return () => {
+      feedbackContextGeneration.current++
+    }
   }, [apiBase, projectId, currentUrl, widgetLogin.session])
 
   useEffect(() => {
@@ -594,16 +656,40 @@ function FeedbackWidgetInner({
     setComments(conversationComments(conversation, projectId))
   }, [conversation?.feedback, projectId])
   useEffect(() => {
-    if (!conversation?.selection || conversation.readOnly || conversation.draftLocked || sending || mode === 'selecting') return
-    setTarget(conversationTarget(conversation.selection, conversation.containerSelector, conversation.selectionTarget)); setReply(null); setSidebarOpen(false); setMode('commenting')
+    if (
+      !conversation?.selection ||
+      conversation.readOnly ||
+      conversation.draftLocked ||
+      sending ||
+      mode === 'selecting'
+    )
+      return
+    setTarget(conversationTarget(conversation.selection, conversation.containerSelector, conversation.selectionTarget))
+    setReply(null)
+    setSidebarOpen(false)
+    setMode('commenting')
     if (!authorNameRef.current) setShowNameModal(true)
   }, [conversation?.selection, conversation?.selectionTarget])
   useEffect(() => {
     if (!conversation?.initialDraft?.body) return
-    setTarget(conversation.initialDraft.target ? { ...conversation.initialDraft.target, url: currentUrl } : conversationTarget('', conversation.containerSelector)); setMode('commenting')
+    setTarget(
+      conversation.initialDraft.target
+        ? { ...conversation.initialDraft.target, url: currentUrl }
+        : conversationTarget('', conversation.containerSelector),
+    )
+    setMode('commenting')
   }, [])
   useLayoutEffect(() => {
-    conversation?.onDraftChange?.(comment ? { body: comment, author: authorName ?? '', reply, ...(target && !reply ? { target: savedPosition(target) } : {}) } : null)
+    conversation?.onDraftChange?.(
+      comment
+        ? {
+            body: comment,
+            author: authorName ?? '',
+            reply,
+            ...(target && !reply ? { target: savedPosition(target) } : {}),
+          }
+        : null,
+    )
   }, [comment, authorName, reply, target, conversation?.onDraftChange])
   useEffect(() => {
     conversation?.onPendingChange?.(Boolean(comment) || sending)
@@ -611,7 +697,10 @@ function FeedbackWidgetInner({
   useEffect(() => () => conversation?.onPendingChange?.(false), [conversation?.onPendingChange])
   useEffect(() => {
     if (!conversation || !comment) return
-    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
     window.addEventListener('beforeunload', warn)
     return () => window.removeEventListener('beforeunload', warn)
   }, [Boolean(conversation), Boolean(comment)])
@@ -621,22 +710,37 @@ function FeedbackWidgetInner({
     if (conversation) return
     let cancelled = false
     let refreshVersion = 0
-    const request = personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) })
-    request.then((nextComments) => {
-      if (!cancelled) setComments(nextComments)
-    }).catch((error) => { if (!cancelled) setApiError(String(error.message)) })
+    const request = personalComments
+      ? personalComments.list(currentUrl)
+      : fetchProjectComments(apiBase, projectId, (required) => {
+          if (!cancelled) setPrivateProject(required)
+        })
+    request
+      .then((nextComments) => {
+        if (!cancelled) setComments(nextComments)
+      })
+      .catch((error) => {
+        if (!cancelled) setApiError(String(error.message))
+      })
     const refresh = async () => {
       const version = ++refreshVersion
       try {
-        const fresh = await (personalComments ? personalComments.list(currentUrl) : fetchProjectComments(apiBase, projectId, (required) => { if (!cancelled) setPrivateProject(required) }))
+        const fresh = await (personalComments
+          ? personalComments.list(currentUrl)
+          : fetchProjectComments(apiBase, projectId, (required) => {
+              if (!cancelled) setPrivateProject(required)
+            }))
         if (!cancelled && version === refreshVersion) setComments(fresh)
-      } catch { /* Preserve drafts and loaded comments while offline. */ }
+      } catch {
+        /* Preserve drafts and loaded comments while offline. */
+      }
     }
     const timer = window.setInterval(refresh, 240_000)
     window.addEventListener('focus', refresh)
     return () => {
       cancelled = true
-      window.clearInterval(timer); window.removeEventListener('focus', refresh)
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refresh)
     }
   }, [projectId, apiBase, personalComments, currentUrl])
 
@@ -644,11 +748,19 @@ function FeedbackWidgetInner({
     if (conversation || !personalComments || !sidebarOpen) return
     let cancelled = false
     const timer = window.setInterval(() => {
-      void personalComments.list(currentUrl).then((fresh) => {
-        if (!cancelled) setComments(fresh)
-      }).catch(() => { /* Keep the last synchronized project state while offline. */ })
+      void personalComments
+        .list(currentUrl)
+        .then((fresh) => {
+          if (!cancelled) setComments(fresh)
+        })
+        .catch(() => {
+          /* Keep the last synchronized project state while offline. */
+        })
     }, 15_000)
-    return () => { cancelled = true; window.clearInterval(timer) }
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+    }
   }, [currentUrl, personalComments, sidebarOpen])
 
   // --- Set crosshair cursor when selecting; switch to text over real glyphs ---
@@ -663,7 +775,9 @@ function FeedbackWidgetInner({
   }, [mode, textHover])
 
   const captureBlocked = Boolean(conversation?.readOnly || conversation?.disabled || conversation?.draftLocked)
-  useEffect(() => { if (captureBlocked && mode === 'selecting') setMode('idle') }, [captureBlocked, mode])
+  useEffect(() => {
+    if (captureBlocked && mode === 'selecting') setMode('idle')
+  }, [captureBlocked, mode])
 
   // --- Handle element click / text selection in selecting mode ---
   useEffect(() => {
@@ -685,7 +799,9 @@ function FeedbackWidgetInner({
       const sel = window.getSelection()
       if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
         const built = buildTextRangeAnchor(sel.getRangeAt(0), {
-          getSelector: conversation ? (element) => conversationSelector(element, conversation.containerSelector ?? 'body') : getSelector,
+          getSelector: conversation
+            ? (element) => conversationSelector(element, conversation.containerSelector ?? 'body')
+            : getSelector,
           url: window.location.href,
           viewport: {
             width: window.innerWidth,
@@ -697,10 +813,7 @@ function FeedbackWidgetInner({
         })
         if (built) {
           if (conversation?.onTextSelection?.(sel.getRangeAt(0)) === false) return
-          const pct = toPagePercent(
-            built.midpointClient.x + window.scrollX,
-            built.midpointClient.y + window.scrollY,
-          )
+          const pct = toPagePercent(built.midpointClient.x + window.scrollX, built.midpointClient.y + window.scrollY)
           const selectedTarget: ClickTarget = {
             selector: built.anchor.containerSelector,
             x: pct.x,
@@ -709,7 +822,9 @@ function FeedbackWidgetInner({
             targetType: 'text_range',
             anchor: built.anchor,
           }
-          setTarget(conversation ? positionAt(selectedTarget, built.midpointClient.x, built.midpointClient.y) : selectedTarget)
+          setTarget(
+            conversation ? positionAt(selectedTarget, built.midpointClient.x, built.midpointClient.y) : selectedTarget,
+          )
 
           if (!authorNameRef.current) {
             setShowNameModal(true)
@@ -732,12 +847,13 @@ function FeedbackWidgetInner({
       setTarget(conversation ? positionAt(clickedTarget, e.clientX, e.clientY) : clickedTarget)
 
       const rect = el.getBoundingClientRect()
-      if (!conversation) captureImage({
-        left: rect.left,
-        top: rect.top,
-        width: rect.width,
-        height: rect.height,
-      })
+      if (!conversation)
+        captureImage({
+          left: rect.left,
+          top: rect.top,
+          width: rect.width,
+          height: rect.height,
+        })
 
       if (!authorNameRef.current) {
         setShowNameModal(true)
@@ -751,7 +867,14 @@ function FeedbackWidgetInner({
     return () => {
       window.removeEventListener('click', onClick, true)
     }
-  }, [mode, conversation?.readOnly, conversation?.disabled, conversation?.draftLocked, conversation?.containerSelector, conversation?.onTextSelection])
+  }, [
+    mode,
+    conversation?.readOnly,
+    conversation?.disabled,
+    conversation?.draftLocked,
+    conversation?.containerSelector,
+    conversation?.onTextSelection,
+  ])
 
   // --- Auto-focus textarea ---
   useEffect(() => {
@@ -762,7 +885,15 @@ function FeedbackWidgetInner({
 
   // --- Send comment ---
   const handleSend = useCallback(async () => {
-    if (!comment.trim() || !target || sendingRef.current || screenshotCapturing || conversation?.disabled || conversation?.readOnly) return
+    if (
+      !comment.trim() ||
+      !target ||
+      sendingRef.current ||
+      screenshotCapturing ||
+      conversation?.disabled ||
+      conversation?.readOnly
+    )
+      return
     setSpeechStopSignal((signal) => signal + 1)
 
     if (!authorNameRef.current || (privateProject && !personalComments)) {
@@ -781,8 +912,17 @@ function FeedbackWidgetInner({
 
     try {
       if (conversation) {
-        await conversation.onComment({ body: commentText, author: authorNameRef.current!, ...(reply ? { parentId: reply.id, version: reply.version } : { target: savedPosition(targetData) }) })
-        setComment(''); setReply(null); setTarget(null); setMode('idle'); setSidebarOpen(true); conversation.onClearSelection()
+        await conversation.onComment({
+          body: commentText,
+          author: authorNameRef.current!,
+          ...(reply ? { parentId: reply.id, version: reply.version } : { target: savedPosition(targetData) }),
+        })
+        setComment('')
+        setReply(null)
+        setTarget(null)
+        setMode('idle')
+        setSidebarOpen(true)
+        conversation.onClearSelection()
         return
       }
       const payload: Record<string, unknown> = {
@@ -811,7 +951,13 @@ function FeedbackWidgetInner({
         payload.imageMimeType = encoded.mimeType
       }
 
-      const data = await (personalComments ? personalComments.create(payload) : postComment(apiBase, payload, () => { setPrivateProject(true); setShowNameModal(true); pendingSendAfterName.current = true }))
+      const data = await (personalComments
+        ? personalComments.create(payload)
+        : postComment(apiBase, payload, () => {
+            setPrivateProject(true)
+            setShowNameModal(true)
+            pendingSendAfterName.current = true
+          }))
       if (!data) return
 
       const newComment: Comment = {
@@ -848,13 +994,27 @@ function FeedbackWidgetInner({
       setMode('selecting')
       setSidebarOpen(false)
     } catch (err) {
-      setApiError(conversation ? conversation.errorMessage(err) : err instanceof Error ? err.message : 'Could not save comment')
+      setApiError(
+        conversation ? conversation.errorMessage(err) : err instanceof Error ? err.message : 'Could not save comment',
+      )
       console.warn('[FeedbackWidget] API error:', err)
     } finally {
       sendingRef.current = false
       setSending(false)
     }
-  }, [comment, target, projectId, apiBase, encodeImage, clearImage, screenshotCapturing, personalComments, privateProject, conversation, reply])
+  }, [
+    comment,
+    target,
+    projectId,
+    apiBase,
+    encodeImage,
+    clearImage,
+    screenshotCapturing,
+    personalComments,
+    privateProject,
+    conversation,
+    reply,
+  ])
 
   useEffect(() => {
     if (!widgetLogin.session || !resumeAfterLogin.current) return
@@ -890,7 +1050,11 @@ function FeedbackWidgetInner({
         } else if (selectedPin) {
           setSelectedPin(null)
         } else if (mode === 'commenting') {
-          if (conversation && comment) { clearNativeSelection(); setMode('idle'); return }
+          if (conversation && comment) {
+            clearNativeSelection()
+            setMode('idle')
+            return
+          }
           clearNativeSelection()
           conversation?.onClearSelection()
           setTarget(null)
@@ -943,10 +1107,24 @@ function FeedbackWidgetInner({
       }
     }
     return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
-  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment])
+  }, [
+    shortcutsEnabled,
+    mode,
+    handleSend,
+    launcherOpen,
+    openAgentBridge,
+    sidebarOpen,
+    selectedPin,
+    showNameModal,
+    conversation,
+    comment,
+  ])
 
   function exitFeedbackMode() {
-    if (conversation && comment) { setMode('commenting'); return }
+    if (conversation && comment) {
+      setMode('commenting')
+      return
+    }
     clearNativeSelection()
     conversation?.onClearSelection()
     setMode('idle')
@@ -959,7 +1137,12 @@ function FeedbackWidgetInner({
   }
 
   function enterFeedbackMode() {
-    if (conversation && comment) { setSidebarOpen(false); setLauncherOpen(false); setMode('commenting'); return }
+    if (conversation && comment) {
+      setSidebarOpen(false)
+      setLauncherOpen(false)
+      setMode('commenting')
+      return
+    }
     if (conversation?.readOnly || conversation?.disabled || conversation?.draftLocked) return
     clearNativeSelection()
     conversation?.onClearSelection()
@@ -990,21 +1173,28 @@ function FeedbackWidgetInner({
 
   // External trigger — landing page "Drop a carrot" buttons dispatch this event.
   useEffect(() => {
-    const handler = () => { if (mode === 'idle') enterFeedbackMode() }
+    const handler = () => {
+      if (mode === 'idle') enterFeedbackMode()
+    }
     window.addEventListener('crrt:activate', handler)
     return () => window.removeEventListener('crrt:activate', handler)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
   function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
-    setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
+    setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, reviewStatus } : c)))
     apiPatchReviewStatus(apiBase, commentId, reviewStatus)
   }
 
   async function deleteComment(commentId: string) {
     if (personalComments) {
-      try { await personalComments.remove(commentId); setApiError('') }
-      catch (error) { setApiError(String((error as Error).message)); return }
+      try {
+        await personalComments.remove(commentId)
+        setApiError('')
+      } catch (error) {
+        setApiError(String((error as Error).message))
+        return
+      }
     }
     setComments((prev) => prev.filter((c) => c.id !== commentId))
     if (!personalComments) apiDeleteComment(apiBase, commentId, projectId)
@@ -1014,10 +1204,15 @@ function FeedbackWidgetInner({
     if (!editText.trim()) return
     const text = editText.trim()
     if (personalComments) {
-      try { await personalComments.update(commentId, text); setApiError('') }
-      catch (error) { setApiError(String((error as Error).message)); return }
+      try {
+        await personalComments.update(commentId, text)
+        setApiError('')
+      } catch (error) {
+        setApiError(String((error as Error).message))
+        return
+      }
     }
-    setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, body: text } : c))
+    setComments((prev) => prev.map((c) => (c.id === commentId ? { ...c, body: text } : c)))
     setEditingId(null)
   }
 
@@ -1031,7 +1226,15 @@ function FeedbackWidgetInner({
         if (opened) opened.opener = null
         return
       }
-      setExternalWork({ provider, commentId, destination: prepared.destination, title: prepared.title, body: prepared.body, busy: false, error: '' })
+      setExternalWork({
+        provider,
+        commentId,
+        destination: prepared.destination,
+        title: prepared.title,
+        body: prepared.body,
+        busy: false,
+        error: '',
+      })
     } catch (error) {
       setApiError(error instanceof Error ? error.message : 'Could not prepare external work')
     } finally {
@@ -1045,7 +1248,10 @@ function FeedbackWidgetInner({
     externalWorkRequestRef.current = true
     setExternalWork({ ...request, busy: true, error: '' })
     try {
-      const result = await personalComments.externalWork.send(request.provider, request.commentId, { title: request.title.trim(), body: request.body.trim() })
+      const result = await personalComments.externalWork.send(request.provider, request.commentId, {
+        title: request.title.trim(),
+        body: request.body.trim(),
+      })
       setExternalWork(null)
       const opened = window.open(result.issueUrl, '_blank', 'noopener,noreferrer')
       if (opened) opened.opener = null
@@ -1062,7 +1268,10 @@ function FeedbackWidgetInner({
 
   // --- Highlight element from comment ---
   function highlightElement(selector: string) {
-    if (page) { page.highlight(selector); return }
+    if (page) {
+      page.highlight(selector)
+      return
+    }
     try {
       const el = document.querySelector(selector)
       if (!el) return
@@ -1117,28 +1326,42 @@ function FeedbackWidgetInner({
     }
   }
 
-  const allRecentComments = useMemo(() => conversation ? conversationComments(conversation, projectId) : comments.filter((c) => (
-    new Date(c.createdAt) >= COMMENT_CUTOFF
-  )), [comments, conversation?.feedback, projectId])
-  const visibleComments = useMemo(() => allRecentComments.filter((c) => {
-    return samePage(c.pageUrl, currentUrl)
-  }), [allRecentComments, currentUrl])
-  const filteredComments = useMemo(() => visibleComments.filter((c) => {
-    const status = c.reviewStatus ?? 'open'
-    if (filterStatus === 'open') return status === 'open'
-    if (filterStatus === 'approved') return status === 'accepted'
-    return true
-  }), [visibleComments, filterStatus])
-  const sidebarBaseComments = personalComments?.scope?.value === 'project'
-    ? allRecentComments
-    : visibleComments
+  const allRecentComments = useMemo(
+    () =>
+      conversation
+        ? conversationComments(conversation, projectId)
+        : comments.filter((c) => new Date(c.createdAt) >= COMMENT_CUTOFF),
+    [comments, conversation?.feedback, projectId],
+  )
+  const visibleComments = useMemo(
+    () =>
+      allRecentComments.filter((c) => {
+        return samePage(c.pageUrl, currentUrl)
+      }),
+    [allRecentComments, currentUrl],
+  )
+  const filteredComments = useMemo(
+    () =>
+      visibleComments.filter((c) => {
+        const status = c.reviewStatus ?? 'open'
+        if (filterStatus === 'open') return status === 'open'
+        if (filterStatus === 'approved') return status === 'accepted'
+        return true
+      }),
+    [visibleComments, filterStatus],
+  )
+  const sidebarBaseComments = personalComments?.scope?.value === 'project' ? allRecentComments : visibleComments
   const sidebarComments = personalComments ? sidebarBaseComments : filteredComments
-  const sortedComments = useMemo(() => [...sidebarComments].sort((a, b) => {
-    const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
-    const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
-    if (aResolved !== bResolved) return aResolved ? 1 : -1
-    return 0
-  }), [sidebarComments])
+  const sortedComments = useMemo(
+    () =>
+      [...sidebarComments].sort((a, b) => {
+        const aResolved = a.reviewStatus === 'accepted' || a.reviewStatus === 'rejected'
+        const bResolved = b.reviewStatus === 'accepted' || b.reviewStatus === 'rejected'
+        if (aResolved !== bResolved) return aResolved ? 1 : -1
+        return 0
+      }),
+    [sidebarComments],
+  )
   const readyForAgentCount = useMemo(
     () => visibleComments.filter((c) => c.reviewStatus === 'accepted').length,
     [visibleComments],
@@ -1147,11 +1370,8 @@ function FeedbackWidgetInner({
     () => visibleComments.filter((c) => c.reviewStatus === 'open').length,
     [visibleComments],
   )
-  const sidebarTitle = filterStatus === 'approved'
-    ? 'Ready for agent'
-    : filterStatus === 'open'
-      ? 'Open comments'
-      : 'All comments'
+  const sidebarTitle =
+    filterStatus === 'approved' ? 'Ready for agent' : filterStatus === 'open' ? 'Open comments' : 'All comments'
   // Pin only renders if its selector still resolves on the current DOM.
   // Driven by a MutationObserver so we only recompute on real DOM changes,
   // and only re-render when the live set actually differs.
@@ -1159,11 +1379,18 @@ function FeedbackWidgetInner({
   const filteredCommentsRef = useRef(filteredComments)
   filteredCommentsRef.current = filteredComments
   useEffect(() => {
-    if (page) { setLiveCommentIds(new Set(page.liveIds)); return }
+    if (page) {
+      setLiveCommentIds(new Set(page.liveIds))
+      return
+    }
     const recompute = () => {
       const next = new Set<string>()
       for (const c of filteredCommentsRef.current) {
-        try { if (document.querySelector(c.selector)) next.add(c.id) } catch { /* invalid selector */ }
+        try {
+          if (document.querySelector(c.selector)) next.add(c.id)
+        } catch {
+          /* invalid selector */
+        }
       }
       setLiveCommentIds((prev) => {
         if (prev.size !== next.size) return next
@@ -1177,7 +1404,10 @@ function FeedbackWidgetInner({
     const obs = new MutationObserver(() => {
       if (pending) return
       pending = true
-      timeout = window.setTimeout(() => { pending = false; recompute() }, 250)
+      timeout = window.setTimeout(() => {
+        pending = false
+        recompute()
+      }, 250)
     })
     obs.observe(document.body, { childList: true, subtree: true, attributes: true })
     return () => {
@@ -1189,25 +1419,50 @@ function FeedbackWidgetInner({
 
   // Sync on scroll when anything position:fixed is visible — popovers, the
   // commenting flow, or persisted pins. Gating keeps idle pages cheap.
-  needsPositionSyncRef.current = selectedPin !== null || mode !== 'idle' || !!target || (pinsVisible && filteredComments.length > 0)
+  needsPositionSyncRef.current =
+    selectedPin !== null || mode !== 'idle' || !!target || (pinsVisible && filteredComments.length > 0)
 
-  const pathDisplay = page ? new URL(page.url).pathname.slice(0, 28) : typeof window === 'undefined'
-    ? '/'
-    : window.location.pathname.slice(0, 28) || '/'
+  const pathDisplay = page
+    ? new URL(page.url).pathname.slice(0, 28)
+    : typeof window === 'undefined'
+      ? '/'
+      : window.location.pathname.slice(0, 28) || '/'
   const avatarInitial = authorName ? (getInitials(authorName) ?? authorName[0]?.toUpperCase() ?? 'U') : 'U'
-  const badgeAnimation = badgeAnim ? 'fw-badge-pop 720ms cubic-bezier(0.16, 1, 0.3, 1)' : 'crrt-pulse 2.4s ease-in-out infinite'
+  const badgeAnimation = badgeAnim
+    ? 'fw-badge-pop 720ms cubic-bezier(0.16, 1, 0.3, 1)'
+    : 'crrt-pulse 2.4s ease-in-out infinite'
   const launcherActive = launcherOpen || mode !== 'idle'
   const hideWidget = page?.hide
 
   return (
-    <div ref={widgetRef} {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-project': projectId, 'data-crrt-theme': theme }}>
-      {apiError && <div role="alert" style={{ position: 'fixed', bottom: 24, left: 24, zIndex: 2147483647, padding: 16, background: 'var(--fw-surface)', color: 'var(--fw-foreground)', borderRadius: 8 }}>{apiError}<button onClick={() => setApiError('')} aria-label="Dismiss error">×</button></div>}
+    <div
+      ref={widgetRef}
+      {...{ [WIDGET_ATTR]: '', 'data-fw-crrt': '', 'data-crrt-project': projectId, 'data-crrt-theme': theme }}
+    >
+      {apiError && (
+        <div
+          role="alert"
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            left: 24,
+            zIndex: 2147483647,
+            padding: 16,
+            background: 'var(--fw-surface)',
+            color: 'var(--fw-foreground)',
+            borderRadius: 8,
+          }}
+        >
+          {apiError}
+          <button onClick={() => setApiError('')} aria-label="Dismiss error">
+            ×
+          </button>
+        </div>
+      )}
       <SelectorFrame active={mode === 'selecting' && !page} onTextHover={setTextHover} />
 
       {/* Instruction tooltip */}
-      {mode === 'selecting' && showSelectingHint && (
-        <SelectingInstructionBar onCancel={exitFeedbackMode} />
-      )}
+      {mode === 'selecting' && showSelectingHint && <SelectingInstructionBar onCancel={exitFeedbackMode} />}
       {mode === 'selecting' && !showSelectingHint && postSendHint && (
         <SelectingInstructionBar
           message="Saved. Drop another or review comments."
@@ -1259,78 +1514,132 @@ function FeedbackWidgetInner({
             }}
           >
             {/* Header: time pill (Phosphor amber) + location chip (Carrot tint) */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              padding: '10px 12px 8px',
-            }}>
-              <span style={{
-                display: 'inline-flex',
+            <div
+              style={{
+                display: 'flex',
                 alignItems: 'center',
-                padding: '3px 8px',
-                borderRadius: 4,
-                background: 'rgba(255, 176, 0, 0.18)',
-                color: 'var(--fw-time-chip-label)',
-                fontFamily: "'VT323', 'JetBrains Mono', monospace",
-                fontSize: 13,
-                letterSpacing: '0.04em',
-                lineHeight: 1,
-              }}>
+                gap: 8,
+                padding: '10px 12px 8px',
+              }}
+            >
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  background: 'rgba(255, 176, 0, 0.18)',
+                  color: 'var(--fw-time-chip-label)',
+                  fontFamily: "'VT323', 'JetBrains Mono', monospace",
+                  fontSize: 13,
+                  letterSpacing: '0.04em',
+                  lineHeight: 1,
+                }}
+              >
                 Just now
               </span>
-              {personalComments?.audience && (
-                personalComments.audience.canChoose ? (
+              {personalComments?.audience &&
+                (personalComments.audience.canChoose ? (
                   <select
                     aria-label="Feedback audience"
                     value={personalComments.audience.value}
-                    onChange={(event) => personalComments.audience?.onChange?.(event.target.value as 'shared' | 'internal')}
+                    onChange={(event) =>
+                      personalComments.audience?.onChange?.(event.target.value as 'shared' | 'internal')
+                    }
                     style={{
-                      marginLeft: 'auto', padding: '3px 7px', borderRadius: 4,
-                      border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-surface-raised)',
-                      color: 'var(--fw-foreground-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11,
+                      marginLeft: 'auto',
+                      padding: '3px 7px',
+                      borderRadius: 4,
+                      border: '1px solid var(--fw-contrast-08)',
+                      background: 'var(--fw-surface-raised)',
+                      color: 'var(--fw-foreground-muted)',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
                     }}
                   >
                     <option value="shared">Shared</option>
                     <option value="internal">Internal</option>
                   </select>
                 ) : (
-                  <span style={{ marginLeft: 'auto', color: 'var(--fw-foreground-muted)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                  <span
+                    style={{
+                      marginLeft: 'auto',
+                      color: 'var(--fw-foreground-muted)',
+                      fontFamily: "'JetBrains Mono', monospace",
+                      fontSize: 11,
+                    }}
+                  >
                     Shared
                   </span>
-                )
-              )}
-              <span style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 4,
-                padding: '3px 8px',
-                borderRadius: 4,
-                background: 'rgba(232, 133, 61, 0.15)',
-                color: 'var(--fw-location-chip-label)',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontSize: 11,
-                lineHeight: 1,
-                maxWidth: 180,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                ))}
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  padding: '3px 8px',
+                  borderRadius: 4,
+                  background: 'rgba(232, 133, 61, 0.15)',
+                  color: 'var(--fw-location-chip-label)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 11,
+                  lineHeight: 1,
+                  maxWidth: 180,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <svg
+                  width="10"
+                  height="10"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ flexShrink: 0 }}
+                >
                   <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
                   <circle cx="12" cy="10" r="3" />
                 </svg>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {pathDisplay}
-                </span>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{pathDisplay}</span>
               </span>
             </div>
 
-            {conversation && <div style={{ padding: '0 14px 8px', fontSize: 12, color: 'var(--fw-foreground-muted)' }}>
-              {conversation.readOnly || conversation.concealed ? 'Your access changed. Copy or discard your preserved feedback.' : reply ? `Replying to ${reply.author} · revision ${reply.version}` : 'Leave feedback'}
-              {reply && !conversation.concealed && <button type="button" aria-label="Cancel reply" disabled={sending || conversation.disabled || conversation.draftLocked} onClick={() => setReply(null)}>×</button>}
-              {conversation.selection && !reply && !conversation.concealed && <button type="button" aria-label="Clear selected passage" disabled={sending || conversation.disabled || conversation.draftLocked} onClick={() => { conversation.onClearSelection(); setTarget({ ...target, anchor: undefined }) }}>×</button>}
-            </div>}
+            {conversation && (
+              <div style={{ padding: '0 14px 8px', fontSize: 12, color: 'var(--fw-foreground-muted)' }}>
+                {conversation.readOnly || conversation.concealed
+                  ? 'Your access changed. Copy or discard your preserved feedback.'
+                  : reply
+                    ? `Replying to ${reply.author} · revision ${reply.version}`
+                    : 'Leave feedback'}
+                {reply && !conversation.concealed && (
+                  <button
+                    type="button"
+                    aria-label="Cancel reply"
+                    disabled={sending || conversation.disabled || conversation.draftLocked}
+                    onClick={() => setReply(null)}
+                  >
+                    ×
+                  </button>
+                )}
+                {conversation.selection && !reply && !conversation.concealed && (
+                  <button
+                    type="button"
+                    aria-label="Clear selected passage"
+                    disabled={sending || conversation.disabled || conversation.draftLocked}
+                    onClick={() => {
+                      conversation.onClearSelection()
+                      setTarget({ ...target, anchor: undefined })
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+            )}
             {/* Textarea */}
             <div style={{ padding: '0 14px 4px' }}>
               <textarea
@@ -1338,7 +1647,11 @@ function FeedbackWidgetInner({
                 aria-label={conversation ? (reply ? 'Reply' : 'Leave feedback') : undefined}
                 maxLength={conversation ? 8000 : undefined}
                 readOnly={conversation?.readOnly}
-                disabled={conversation ? (!conversation.readOnly && Boolean(sending || conversation.disabled || conversation.draftLocked)) : undefined}
+                disabled={
+                  conversation
+                    ? !conversation.readOnly && Boolean(sending || conversation.disabled || conversation.draftLocked)
+                    : undefined
+                }
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 onKeyDown={(e) => {
@@ -1365,34 +1678,47 @@ function FeedbackWidgetInner({
             </div>
 
             {target.anchor && !conversation?.concealed && (
-              <TextRangeQuote
-                text={target.anchor.selectedText}
-                style={{ margin: '0 14px 8px' }}
-              />
+              <TextRangeQuote text={target.anchor.selectedText} style={{ margin: '0 14px 8px' }} />
             )}
 
             {/* Screenshot capture status */}
             {screenshotStatus !== 'idle' && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                padding: '8px 12px',
-                margin: '0 14px 6px',
-                background: 'var(--fw-contrast-03)',
-                border: '1px solid var(--fw-contrast-06)',
-                borderRadius: 8,
-              }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '8px 12px',
+                  margin: '0 14px 6px',
+                  background: 'var(--fw-contrast-03)',
+                  border: '1px solid var(--fw-contrast-06)',
+                  borderRadius: 8,
+                }}
+              >
                 {imagePreviewUrl ? (
                   <img
                     src={imagePreviewUrl}
                     alt="captured viewport"
-                    style={{ height: 36, width: 56, objectFit: 'cover', borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)' }}
+                    style={{
+                      height: 36,
+                      width: 56,
+                      objectFit: 'cover',
+                      borderRadius: 4,
+                      flexShrink: 0,
+                      border: '1px solid var(--fw-contrast-08)',
+                    }}
                   />
                 ) : (
                   <div
                     aria-hidden="true"
-                    style={{ height: 36, width: 56, borderRadius: 4, flexShrink: 0, border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-contrast-04)' }}
+                    style={{
+                      height: 36,
+                      width: 56,
+                      borderRadius: 4,
+                      flexShrink: 0,
+                      border: '1px solid var(--fw-contrast-08)',
+                      background: 'var(--fw-contrast-04)',
+                    }}
                   />
                 )}
                 <span style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', flex: 1, fontFamily: 'inherit' }}>
@@ -1406,19 +1732,47 @@ function FeedbackWidgetInner({
                   <button
                     onClick={() => clearImage()}
                     aria-label="Remove screenshot"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fw-foreground-faint)', padding: 2, display: 'flex', flexShrink: 0, borderRadius: 4 }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--fw-foreground-faint)',
+                      padding: 2,
+                      display: 'flex',
+                      flexShrink: 0,
+                      borderRadius: 4,
+                    }}
                     onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--fw-foreground)')}
                     onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--fw-foreground-faint)')}
                   >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
                     </svg>
                   </button>
                 ) : screenshotStatus === 'failed' ? (
                   <button
                     onClick={() => captureImage()}
                     aria-label="Retry screenshot"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fw-foreground-muted)', padding: 2, fontSize: 12, fontWeight: 500, fontFamily: 'inherit' }}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      cursor: 'pointer',
+                      color: 'var(--fw-foreground-muted)',
+                      padding: 2,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      fontFamily: 'inherit',
+                    }}
                   >
                     Retry
                   </button>
@@ -1427,28 +1781,38 @@ function FeedbackWidgetInner({
             )}
 
             {/* Footer toolbar: avatar + cancel + send */}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 8,
-              padding: '8px 10px 10px',
-              borderTop: '1px solid var(--fw-contrast-06)',
-              marginTop: 4,
-            }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: 8,
+                padding: '8px 10px 10px',
+                borderTop: '1px solid var(--fw-contrast-06)',
+                marginTop: 4,
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                 {authorName && (
                   <button
                     title={`Signed in as ${authorName}`}
                     onClick={openNameEditor}
                     style={{
-                      width: 28, height: 28,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: 28,
+                      height: 28,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
                       background: personalComments ? 'var(--fw-surface-raised)' : avatarColor(authorName),
-                      border: 'none', borderRadius: '50%',
-                      cursor: 'pointer', flexShrink: 0,
-                      color: personalComments ? 'var(--fw-foreground)' : '#FFFFFF', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                      border: 'none',
+                      borderRadius: '50%',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      color: personalComments ? 'var(--fw-foreground)' : '#FFFFFF',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      fontFamily: 'inherit',
                     }}
                     onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
                     onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
@@ -1464,18 +1828,42 @@ function FeedbackWidgetInner({
                 />
                 <button
                   type="button"
-                  onClick={() => { void openRecord() }}
+                  onClick={() => {
+                    void openRecord()
+                  }}
                   aria-label="Record screen"
                   title="Record screen, voice and marks"
                   style={{
-                    position: 'relative', height: 28, display: 'inline-flex', alignItems: 'center', gap: 5,
-                    padding: '0 8px', borderRadius: 9999, border: '1px solid rgba(232,133,61,.35)',
-                    background: 'rgba(232,133,61,.08)', color: '#E8853D', cursor: 'pointer',
-                    fontFamily: 'inherit', fontSize: 11, fontWeight: 650,
+                    position: 'relative',
+                    height: 28,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    padding: '0 8px',
+                    borderRadius: 9999,
+                    border: '1px solid rgba(232,133,61,.35)',
+                    background: 'rgba(232,133,61,.08)',
+                    color: '#E8853D',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    fontSize: 11,
+                    fontWeight: 650,
                   }}
                 >
-                  <Video size={13} /><span>Record</span>
-                  <span style={{ position: 'absolute', right: -3, top: -5, width: 6, height: 6, borderRadius: '50%', background: '#E8853D', boxShadow: '0 0 0 2px var(--fw-surface-card)' }} />
+                  <Video size={13} />
+                  <span>Record</span>
+                  <span
+                    style={{
+                      position: 'absolute',
+                      right: -3,
+                      top: -5,
+                      width: 6,
+                      height: 6,
+                      borderRadius: '50%',
+                      background: '#E8853D',
+                      boxShadow: '0 0 0 2px var(--fw-surface-card)',
+                    }}
+                  />
                 </button>
               </div>
 
@@ -1483,7 +1871,12 @@ function FeedbackWidgetInner({
                 <button
                   disabled={sending || conversation?.disabled}
                   onClick={() => {
-                    if (conversation) { conversation.onDiscard?.(); conversation.onClearSelection(); setReply(null); setApiError('') }
+                    if (conversation) {
+                      conversation.onDiscard?.()
+                      conversation.onClearSelection()
+                      setReply(null)
+                      setApiError('')
+                    }
                     clearNativeSelection()
                     setTarget(null)
                     setComment('')
@@ -1504,8 +1897,14 @@ function FeedbackWidgetInner({
                     fontFamily: 'inherit',
                     transition: 'background 150ms ease, color 150ms ease',
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-04)'; e.currentTarget.style.color = 'var(--fw-foreground)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'var(--fw-contrast-04)'
+                    e.currentTarget.style.color = 'var(--fw-foreground)'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent'
+                    e.currentTarget.style.color = 'var(--fw-foreground-muted)'
+                  }}
                 >
                   {conversation ? 'Discard feedback' : 'Cancel'}
                 </button>
@@ -1531,274 +1930,419 @@ function FeedbackWidgetInner({
                     transition: 'background 150ms ease',
                   }}
                   /* v8 ignore next 2 */
-                  onMouseEnter={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#B85F1F' }}
-                  onMouseLeave={sendDisabled ? undefined : (e) => { e.currentTarget.style.background = '#E8853D' }}
+                  onMouseEnter={
+                    sendDisabled
+                      ? undefined
+                      : (e) => {
+                          e.currentTarget.style.background = '#B85F1F'
+                        }
+                  }
+                  onMouseLeave={
+                    sendDisabled
+                      ? undefined
+                      : (e) => {
+                          e.currentTarget.style.background = '#E8853D'
+                        }
+                  }
                 >
-                  {conversation ? (sending ? 'Sending…' : reply ? 'Send reply' : 'Add feedback') : <span>Send</span>}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  {conversation ? sending ? 'Sending…' : reply ? 'Send reply' : 'Add feedback' : <span>Send</span>}
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.4"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <line x1="5" y1="12" x2="19" y2="12" />
                     <polyline points="12 5 19 12 12 19" />
                   </svg>
                 </button>
               </div>
             </div>
-            {recordHint && <div role="status" style={{ margin: '-4px 10px 9px', padding: '8px 10px', borderRadius: 7, border: '1px solid rgba(232,133,61,.28)', background: 'rgba(232,133,61,.08)', color: 'var(--fw-foreground-muted)', fontSize: 11, lineHeight: 1.4 }}><strong style={{ color: 'var(--fw-foreground)' }}>Open the CRRT Chrome extension</strong><br />Choose Record or press ⌥⇧R. The recorder runs in the extension so Chrome can capture safely.</div>}
+            {recordHint && (
+              <div
+                role="status"
+                style={{
+                  margin: '-4px 10px 9px',
+                  padding: '8px 10px',
+                  borderRadius: 7,
+                  border: '1px solid rgba(232,133,61,.28)',
+                  background: 'rgba(232,133,61,.08)',
+                  color: 'var(--fw-foreground-muted)',
+                  fontSize: 11,
+                  lineHeight: 1.4,
+                }}
+              >
+                <strong style={{ color: 'var(--fw-foreground)' }}>Open the CRRT Chrome extension</strong>
+                <br />
+                Choose Record or press ⌥⇧R. The recorder runs in the extension so Chrome can capture safely.
+              </div>
+            )}
           </div>
         </>
       )}
 
       {/* New comment pin at clicked position */}
-      {mode === 'commenting' && target && (() => {
-        const { fixedX, fixedY } = pagePoint(target.x, target.y, target)
-        return (
-          <div
-            {...{ [WIDGET_ATTR]: '' }}
-            style={{
-              position: 'fixed',
-              left: fixedX,
-              top: fixedY - 11,
-              zIndex: 2147483646,
-              pointerEvents: 'none',
-              animation: 'fw-pin-drop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
-              transformOrigin: 'bottom left',
-            }}
-          >
-            <PinMarker />
-          </div>
-        )
-      })()}
-
-      {/* Persisted comment pins */}
-      {pinsVisible && filteredComments.map((c, i) => {
-        if (!liveCommentIds.has(c.id) || (conversation && !conversation.feedback.find(item => item.id === c.id)?.target)) return null
-        const point = pagePoint(c.x, c.y, c)
-        const pinPos = page || conversation ? { left: point.fixedX, top: point.fixedY } : getElementFixedPos(c.selector, c.x, c.y)
-        if (!pinPos) return null
-        const pinNumber = filteredComments.length - i
-        const isSelected = selectedPin === c.id
-        const isHovered = hoveredPin === c.id && !isSelected
-        const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
-        const pinAuthor = c.authorName ?? 'User'
-        return (
-          <div key={c.id} {...{ [WIDGET_ATTR]: '' }}>
-            {/* Pin marker */}
+      {mode === 'commenting' &&
+        target &&
+        (() => {
+          const { fixedX, fixedY } = pagePoint(target.x, target.y, target)
+          return (
             <div
-              data-fw-pin
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelectedPin(isSelected ? null : c.id)
-              }}
-              onMouseEnter={() => setHoveredPin(c.id)}
-              onMouseLeave={() => setHoveredPin(null)}
+              {...{ [WIDGET_ATTR]: '' }}
               style={{
                 position: 'fixed',
-                left: pinPos.left,
-                top: pinPos.top - 11,
-                zIndex: isSelected ? 2147483646 : isHovered ? 2147483642 : 2147483640,
-                cursor: 'pointer',
-                transition: 'transform 0.15s, opacity 0.2s',
-                transform: isSelected || isHovered ? 'scale(1.15)' : 'scale(1)',
+                left: fixedX,
+                top: fixedY - 11,
+                zIndex: 2147483646,
+                pointerEvents: 'none',
+                animation: 'fw-pin-drop 0.4s cubic-bezier(0.16, 1, 0.3, 1) both',
                 transformOrigin: 'bottom left',
-                opacity: isResolved && !isSelected && !isHovered ? 0.4 : 1,
               }}
             >
-              <PinMarker outline={isSelected} hovered={isHovered} number={pinNumber} resolved={isResolved} />
+              <PinMarker />
             </div>
+          )
+        })()}
 
-            {/* Hover tooltip — dark CRRT glass. Flips toward whichever side has
-                room so it never clips against the viewport edge. */}
-            {isHovered && (() => {
-              const TOOLTIP_W = 280
-              const TOOLTIP_H_EST = 140
-              const MARGIN = 8
-              const PIN_W = 28
-              const flipH = pinPos.left + TOOLTIP_W + MARGIN > window.innerWidth
-              const flipV = pinPos.top - 11 - TOOLTIP_H_EST < MARGIN
-              const wrapperLeft = flipH
-                ? Math.max(MARGIN, pinPos.left + PIN_W - TOOLTIP_W)
-                : pinPos.left
-              const wrapperTop = flipV ? pinPos.top + 25 : pinPos.top - 11
-              const wrapperTransform = flipV ? 'translateY(0)' : 'translateY(-100%)'
-              const tailRadius = flipV
-                ? (flipH ? '14px 0 14px 14px' : '0 14px 14px 14px')
-                : (flipH ? '14px 14px 0 14px' : '14px 14px 14px 0')
-              const tailOrigin = flipV
-                ? (flipH ? '100% 0%' : '0% 0%')
-                : (flipH ? '100% 100%' : '0% 100%')
-              return (
+      {/* Persisted comment pins */}
+      {pinsVisible &&
+        filteredComments.map((c, i) => {
+          if (
+            !liveCommentIds.has(c.id) ||
+            (conversation && !conversation.feedback.find((item) => item.id === c.id)?.target)
+          )
+            return null
+          const point = pagePoint(c.x, c.y, c)
+          const pinPos =
+            page || conversation ? { left: point.fixedX, top: point.fixedY } : getElementFixedPos(c.selector, c.x, c.y)
+          if (!pinPos) return null
+          const pinNumber = filteredComments.length - i
+          const isSelected = selectedPin === c.id
+          const isHovered = hoveredPin === c.id && !isSelected
+          const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
+          const pinAuthor = c.authorName ?? 'User'
+          return (
+            <div key={c.id} {...{ [WIDGET_ATTR]: '' }}>
+              {/* Pin marker */}
               <div
+                data-fw-pin
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedPin(isSelected ? null : c.id)
+                }}
+                onMouseEnter={() => setHoveredPin(c.id)}
+                onMouseLeave={() => setHoveredPin(null)}
                 style={{
                   position: 'fixed',
-                  left: wrapperLeft,
-                  top: wrapperTop,
-                  zIndex: 2147483643,
-                  pointerEvents: 'none',
-                  transform: wrapperTransform,
+                  left: pinPos.left,
+                  top: pinPos.top - 11,
+                  zIndex: isSelected ? 2147483646 : isHovered ? 2147483642 : 2147483640,
+                  cursor: 'pointer',
+                  transition: 'transform 0.15s, opacity 0.2s',
+                  transform: isSelected || isHovered ? 'scale(1.15)' : 'scale(1)',
+                  transformOrigin: 'bottom left',
+                  opacity: isResolved && !isSelected && !isHovered ? 0.4 : 1,
                 }}
               >
-                <div style={{
-                  width: TOOLTIP_W,
-                  background: 'var(--fw-surface-translucent)',
-                  backdropFilter: 'blur(20px)',
-                  WebkitBackdropFilter: 'blur(20px)',
-                  borderRadius: tailRadius,
-                  padding: 14,
-                  boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
-                  border: '1px solid var(--fw-contrast-08)',
-                  fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                  animation: 'fw-tooltip-liquid 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
-                  transformOrigin: tailOrigin,
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: 10,
-                }}>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: PIN_GRADIENT,
-                    flexShrink: 0,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    color: '#fff', fontSize: 12, fontWeight: 700,
-                  }}>
-                    {getInitials(c.authorName) ?? ''}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fw-foreground)' }}>{pinAuthor}</span>
-                      <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{timeAgo(c.createdAt)}</span>
-                    </div>
-                    {c.anchor && (
-                      <TextRangeQuote
-                        text={c.anchor.selectedText}
-                        style={{ fontSize: 12, marginBottom: 4, WebkitLineClamp: 2 }}
-                      />
-                    )}
-                    <div style={{ fontSize: 13, color: 'var(--fw-foreground-soft)', lineHeight: 1.4, wordBreak: 'break-word' }}>
-                      {c.body}
-                    </div>
-                  </div>
-                </div>
+                <PinMarker outline={isSelected} hovered={isHovered} number={pinNumber} resolved={isResolved} />
               </div>
-              )
-            })()}
 
-            {/* Pin detail popover */}
-            {isSelected && (() => {
-              const avColor = avatarColor(c.id)
-              const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
-              const bodyMarginBottom = c.imageUrl ? 10 : 14
-              return (
-                <>
-                  <div
-                    data-fw-pin-backdrop
-                    onClick={() => setSelectedPin(null)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 2147483645 }}
-                  />
-                  <div
-                    style={{
-                      ...pinPopoverStyle(c),
-                      width: 300,
-                      background: 'var(--fw-surface)',
-                      border: '1px solid var(--fw-contrast-08)',
-                      borderRadius: 16,
-                      boxShadow: '0 12px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
-                      padding: 16,
-                      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
-                      animation: 'fw-tooltip-in 0.15s ease both',
-                    }}
-                  >
-                    {/* Header */}
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
-                      <div style={{
-                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                        background: avColor,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: '#fff', fontSize: 13, fontWeight: 700,
-                      }}>
-                        {initial}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fw-foreground)', marginBottom: 2 }}>{pinAuthor}</div>
-                        <div style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>
-                          #{pinNumber} &middot; {timeAgo(c.createdAt)}
-                        </div>
-                      </div>
-                      <PinActionCluster
-                        key={c.id}
-                        reviewEnabled={!personalComments}
-                        mutationEnabled={!personalComments || c.editable !== false}
-                        onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
-                          ? () => { setExternalProviderCommentId(c.id) }
-                          : undefined}
-                        isResolved={isResolved}
-                        onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
-                        onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
-                        onViewList={() => { setSelectedPin(null); setSidebarOpen(true) }}
-                        onEdit={() => { setEditingId(c.id); setEditText(c.body) }}
-                        onDelete={() => { deleteComment(c.id); setSelectedPin(null) }}
-                      />
-                    </div>
-
-                    {editingId === c.id ? (
-                      <div style={{ marginBottom: c.imageUrl ? 10 : 14 }}>
-                        <textarea
-                          autoFocus
-                          value={editText}
-                          onChange={(e) => setEditText(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (shortcutsEnabled && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveEdit(c.id) }
-                            if (e.key === 'Escape') { setEditingId(null) }
-                          }}
-                          rows={3}
+              {/* Hover tooltip — dark CRRT glass. Flips toward whichever side has
+                room so it never clips against the viewport edge. */}
+              {isHovered &&
+                (() => {
+                  const TOOLTIP_W = 280
+                  const TOOLTIP_H_EST = 140
+                  const MARGIN = 8
+                  const PIN_W = 28
+                  const flipH = pinPos.left + TOOLTIP_W + MARGIN > window.innerWidth
+                  const flipV = pinPos.top - 11 - TOOLTIP_H_EST < MARGIN
+                  const wrapperLeft = flipH ? Math.max(MARGIN, pinPos.left + PIN_W - TOOLTIP_W) : pinPos.left
+                  const wrapperTop = flipV ? pinPos.top + 25 : pinPos.top - 11
+                  const wrapperTransform = flipV ? 'translateY(0)' : 'translateY(-100%)'
+                  const tailRadius = flipV
+                    ? flipH
+                      ? '14px 0 14px 14px'
+                      : '0 14px 14px 14px'
+                    : flipH
+                      ? '14px 14px 0 14px'
+                      : '14px 14px 14px 0'
+                  const tailOrigin = flipV ? (flipH ? '100% 0%' : '0% 0%') : flipH ? '100% 100%' : '0% 100%'
+                  return (
+                    <div
+                      style={{
+                        position: 'fixed',
+                        left: wrapperLeft,
+                        top: wrapperTop,
+                        zIndex: 2147483643,
+                        pointerEvents: 'none',
+                        transform: wrapperTransform,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: TOOLTIP_W,
+                          background: 'var(--fw-surface-translucent)',
+                          backdropFilter: 'blur(20px)',
+                          WebkitBackdropFilter: 'blur(20px)',
+                          borderRadius: tailRadius,
+                          padding: 14,
+                          boxShadow: '0 12px 32px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.3)',
+                          border: '1px solid var(--fw-contrast-08)',
+                          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+                          animation: 'fw-tooltip-liquid 0.5s cubic-bezier(0.16, 1, 0.3, 1) both',
+                          transformOrigin: tailOrigin,
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 10,
+                        }}
+                      >
+                        <div
                           style={{
-                            width: '100%', boxSizing: 'border-box',
-                            fontSize: 14, lineHeight: 1.5, color: 'var(--fw-foreground)',
-                            border: '1px solid var(--fw-contrast-08)', borderRadius: 8,
-                            padding: '8px 10px', fontFamily: 'inherit',
-                            outline: 'none', resize: 'vertical', background: 'var(--fw-surface-input)',
+                            width: 28,
+                            height: 28,
+                            borderRadius: '50%',
+                            background: PIN_GRADIENT,
+                            flexShrink: 0,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            fontSize: 12,
+                            fontWeight: 700,
                           }}
-                          onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
-                          onBlur={(e) => (e.target.style.borderColor = 'var(--fw-contrast-08)')}
-                        />
-                        <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}
-                          >Cancel</button>
-                          <button
-                            onClick={() => saveEdit(c.id)}
-                            style={{ fontSize: 12, color: '#fff', background: '#E8853D', fontWeight: 600, border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}
-                          >Save</button>
+                        >
+                          {getInitials(c.authorName) ?? ''}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ marginBottom: 4, display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fw-foreground)' }}>
+                              {pinAuthor}
+                            </span>
+                            <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>
+                              {timeAgo(c.createdAt)}
+                            </span>
+                          </div>
+                          {c.anchor && (
+                            <TextRangeQuote
+                              text={c.anchor.selectedText}
+                              style={{ fontSize: 12, marginBottom: 4, WebkitLineClamp: 2 }}
+                            />
+                          )}
+                          <div
+                            style={{
+                              fontSize: 13,
+                              color: 'var(--fw-foreground-soft)',
+                              lineHeight: 1.4,
+                              wordBreak: 'break-word',
+                            }}
+                          >
+                            {c.body}
+                          </div>
                         </div>
                       </div>
-                    ) : (
-                      <>
-                        {c.anchor && (
-                          <TextRangeQuote
-                            text={c.anchor.selectedText}
-                            style={{ marginBottom: 10 }}
+                    </div>
+                  )
+                })()}
+
+              {/* Pin detail popover */}
+              {isSelected &&
+                (() => {
+                  const avColor = avatarColor(c.id)
+                  const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
+                  const bodyMarginBottom = c.imageUrl ? 10 : 14
+                  return (
+                    <>
+                      <div
+                        data-fw-pin-backdrop
+                        onClick={() => setSelectedPin(null)}
+                        style={{ position: 'fixed', inset: 0, zIndex: 2147483645 }}
+                      />
+                      <div
+                        style={{
+                          ...pinPopoverStyle(c),
+                          width: 300,
+                          background: 'var(--fw-surface)',
+                          border: '1px solid var(--fw-contrast-08)',
+                          borderRadius: 16,
+                          boxShadow: '0 12px 40px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3)',
+                          padding: 16,
+                          fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+                          animation: 'fw-tooltip-in 0.15s ease both',
+                        }}
+                      >
+                        {/* Header */}
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 12 }}>
+                          <div
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              flexShrink: 0,
+                              background: avColor,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#fff',
+                              fontSize: 13,
+                              fontWeight: 700,
+                            }}
+                          >
+                            {initial}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div
+                              style={{ fontSize: 13, fontWeight: 600, color: 'var(--fw-foreground)', marginBottom: 2 }}
+                            >
+                              {pinAuthor}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>
+                              #{pinNumber} &middot; {timeAgo(c.createdAt)}
+                            </div>
+                          </div>
+                          <PinActionCluster
+                            key={c.id}
+                            reviewEnabled={!personalComments}
+                            mutationEnabled={!personalComments || c.editable !== false}
+                            onSendTo={
+                              personalComments?.externalWork && c.reviewStatus !== 'rejected'
+                                ? () => {
+                                    setExternalProviderCommentId(c.id)
+                                  }
+                                : undefined
+                            }
+                            isResolved={isResolved}
+                            onResolve={() => {
+                              updateStatus(c.id, 'accepted')
+                              setSelectedPin(null)
+                            }}
+                            onToggleResolve={() => {
+                              updateStatus(c.id, isResolved ? 'open' : 'accepted')
+                              setSelectedPin(null)
+                            }}
+                            onViewList={() => {
+                              setSelectedPin(null)
+                              setSidebarOpen(true)
+                            }}
+                            onEdit={() => {
+                              setEditingId(c.id)
+                              setEditText(c.body)
+                            }}
+                            onDelete={() => {
+                              deleteComment(c.id)
+                              setSelectedPin(null)
+                            }}
+                          />
+                        </div>
+
+                        {editingId === c.id ? (
+                          <div style={{ marginBottom: c.imageUrl ? 10 : 14 }}>
+                            <textarea
+                              autoFocus
+                              value={editText}
+                              onChange={(e) => setEditText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (shortcutsEnabled && e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault()
+                                  saveEdit(c.id)
+                                }
+                                if (e.key === 'Escape') {
+                                  setEditingId(null)
+                                }
+                              }}
+                              rows={3}
+                              style={{
+                                width: '100%',
+                                boxSizing: 'border-box',
+                                fontSize: 14,
+                                lineHeight: 1.5,
+                                color: 'var(--fw-foreground)',
+                                border: '1px solid var(--fw-contrast-08)',
+                                borderRadius: 8,
+                                padding: '8px 10px',
+                                fontFamily: 'inherit',
+                                outline: 'none',
+                                resize: 'vertical',
+                                background: 'var(--fw-surface-input)',
+                              }}
+                              onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
+                              onBlur={(e) => (e.target.style.borderColor = 'var(--fw-contrast-08)')}
+                            />
+                            <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
+                              <button
+                                onClick={() => setEditingId(null)}
+                                style={{
+                                  fontSize: 12,
+                                  color: 'var(--fw-foreground-muted)',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  padding: '4px 10px',
+                                  fontFamily: 'inherit',
+                                }}
+                              >
+                                Cancel
+                              </button>
+                              <button
+                                onClick={() => saveEdit(c.id)}
+                                style={{
+                                  fontSize: 12,
+                                  color: '#fff',
+                                  background: '#E8853D',
+                                  fontWeight: 600,
+                                  border: 'none',
+                                  borderRadius: 6,
+                                  cursor: 'pointer',
+                                  padding: '4px 12px',
+                                  fontFamily: 'inherit',
+                                }}
+                              >
+                                Save
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            {c.anchor && <TextRangeQuote text={c.anchor.selectedText} style={{ marginBottom: 10 }} />}
+                            <div
+                              style={{
+                                fontSize: 14,
+                                lineHeight: 1.6,
+                                color: 'var(--fw-foreground-soft)',
+                                marginBottom: bodyMarginBottom,
+                              }}
+                            >
+                              {c.body}
+                            </div>
+                          </>
+                        )}
+
+                        {c.imageUrl && (
+                          <img
+                            src={c.imageUrl}
+                            alt=""
+                            onClick={() => window.open(c.imageUrl!, '_blank')}
+                            style={{
+                              width: '100%',
+                              borderRadius: 8,
+                              border: '1px solid var(--fw-contrast-08)',
+                              cursor: 'zoom-in',
+                              display: 'block',
+                              marginBottom: 14,
+                            }}
                           />
                         )}
-                        <div style={{ fontSize: 14, lineHeight: 1.6, color: 'var(--fw-foreground-soft)', marginBottom: bodyMarginBottom }}>
-                          {c.body}
-                        </div>
-                      </>
-                    )}
-
-                    {c.imageUrl && (
-                      <img
-                        src={c.imageUrl}
-                        alt=""
-                        onClick={() => window.open(c.imageUrl!, '_blank')}
-                        style={{ width: '100%', borderRadius: 8, border: '1px solid var(--fw-contrast-08)', cursor: 'zoom-in', display: 'block', marginBottom: 14 }}
-                      />
-                    )}
-                  </div>
-                </>
-              )
-            })()}
-          </div>
-        )
-      })}
+                      </div>
+                    </>
+                  )
+                })()}
+            </div>
+          )
+        })}
 
       {/* Sidebar overlay — only when NOT selecting/commenting, so user can click page elements to drop pins */}
       {sidebarOpen && mode === 'idle' && (
@@ -1831,23 +2375,29 @@ function FeedbackWidgetInner({
         }}
       >
         {/* Header */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          padding: '16px 16px 12px',
-          gap: 12,
-          borderBottom: '1px solid var(--fw-contrast-06)',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '16px 16px 12px',
+            gap: 12,
+            borderBottom: '1px solid var(--fw-contrast-06)',
+          }}
+        >
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 18, lineHeight: 1.1, fontWeight: 750, color: 'var(--fw-foreground)' }}>
               {personalComments?.label ?? (personalComments ? 'My extension comments' : 'Feedback')}
             </div>
             <div style={{ marginTop: 4, fontSize: 12, lineHeight: 1.2, color: 'var(--fw-foreground-faint)' }}>
-              {sidebarBaseComments.length} comment{sidebarBaseComments.length === 1 ? '' : 's'}{!personalComments && <> · {readyForAgentCount} ready</>}
+              {sidebarBaseComments.length} comment{sidebarBaseComments.length === 1 ? '' : 's'}
+              {!personalComments && <> · {readyForAgentCount} ready</>}
             </div>
           </div>
           <button
-            onClick={() => { if (mode !== 'idle') exitFeedbackMode(); setSidebarOpen(false) }}
+            onClick={() => {
+              if (mode !== 'idle') exitFeedbackMode()
+              setSidebarOpen(false)
+            }}
             aria-label="Close"
             style={{
               width: 34,
@@ -1863,8 +2413,14 @@ function FeedbackWidgetInner({
               justifyContent: 'center',
               transition: 'color 0.15s, background 0.15s',
             }}
-            onMouseEnter={(e) => { e.currentTarget.style.color = 'var(--fw-foreground)'; e.currentTarget.style.background = 'var(--fw-contrast-04)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--fw-foreground-muted)'; e.currentTarget.style.background = 'var(--fw-contrast-03)' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.color = 'var(--fw-foreground)'
+              e.currentTarget.style.background = 'var(--fw-contrast-04)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.color = 'var(--fw-foreground-muted)'
+              e.currentTarget.style.background = 'var(--fw-contrast-03)'
+            }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -1873,149 +2429,207 @@ function FeedbackWidgetInner({
           </button>
         </div>
 
-        {conversation?.readOnly && <p style={{ padding: '12px 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>View-only access</p>}
+        {conversation?.readOnly && (
+          <p style={{ padding: '12px 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>View-only access</p>
+        )}
         {/* Agent CTA — visible path into agent flow, not only Shift+A. */}
-        {!suppliedPersonalComments && !conversation && <div
-          style={{
-            padding: '14px 16px 12px',
-            borderBottom: '1px solid var(--fw-contrast-04)',
-          }}
-        >
-          <button
-            type="button"
-            onClick={openAgentBridge}
+        {!suppliedPersonalComments && !conversation && (
+          <div
             style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '11px 12px',
-              borderRadius: 10,
-              border: '1px solid rgba(232, 133, 61, 0.28)',
-              background: 'rgba(232, 133, 61, 0.08)',
-              color: 'var(--fw-foreground)',
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              textAlign: 'left',
-              transition: 'background 160ms ease, border-color 160ms ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'rgba(232, 133, 61, 0.13)'
-              e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.42)'
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'rgba(232, 133, 61, 0.08)'
-              e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.28)'
+              padding: '14px 16px 12px',
+              borderBottom: '1px solid var(--fw-contrast-04)',
             }}
           >
-            <span
+            <button
+              type="button"
+              onClick={openAgentBridge}
               style={{
-                width: 30,
-                height: 30,
-                borderRadius: 8,
-                display: 'inline-flex',
+                width: '100%',
+                display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                background: '#E8853D',
-                color: '#080808',
+                gap: 10,
+                padding: '11px 12px',
+                borderRadius: 10,
+                border: '1px solid rgba(232, 133, 61, 0.28)',
+                background: 'rgba(232, 133, 61, 0.08)',
+                color: 'var(--fw-foreground)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                textAlign: 'left',
+                transition: 'background 160ms ease, border-color 160ms ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(232, 133, 61, 0.13)'
+                e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.42)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(232, 133, 61, 0.08)'
+                e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.28)'
               }}
             >
-              <Bot size={17} />
-            </span>
+              <span
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 8,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                  background: '#E8853D',
+                  color: '#080808',
+                }}
+              >
+                <Bot size={17} />
+              </span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 13, fontWeight: 650, lineHeight: 1.25 }}>
-                  Open agent
-                </span>
-                <span style={{ display: 'block', marginTop: 2, fontSize: 12, color: 'var(--fw-foreground-muted)', lineHeight: 1.35 }}>
+                <span style={{ display: 'block', fontSize: 13, fontWeight: 650, lineHeight: 1.25 }}>Open agent</span>
+                <span
+                  style={{
+                    display: 'block',
+                    marginTop: 2,
+                    fontSize: 12,
+                    color: 'var(--fw-foreground-muted)',
+                    lineHeight: 1.35,
+                  }}
+                >
                   {readyForAgentCount > 0
                     ? `${readyForAgentCount} ready comment${readyForAgentCount === 1 ? '' : 's'}`
                     : 'Approve comments to queue work'}
                 </span>
               </span>
-            {shortcutsEnabled && <span
-              style={{
-                flexShrink: 0,
-                padding: '3px 7px',
-                borderRadius: 9999,
-                border: '1px solid var(--fw-contrast-10)',
-                color: 'var(--fw-foreground-muted)',
-                fontSize: 11,
-                lineHeight: 1,
-              }}
-            >
-              Shift + A
-            </span>}
-          </button>
-        </div>}
-
-        {personalComments?.scope && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-            {([
-              { id: 'page', label: 'This page', count: visibleComments.length },
-              { id: 'project', label: 'All feedback', count: allRecentComments.length },
-            ] as const).map((item) => {
-              const active = personalComments.scope?.value === item.id
-              return <button
-                key={item.id}
-                type="button"
-                onClick={() => personalComments.scope?.onChange(item.id)}
-                style={{
-                  height: 32,
-                  borderRadius: 9999,
-                  border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
-                  background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
-                  color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
-                  cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 650,
-                }}
-              >
-                {item.label} <span style={{ color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)', fontWeight: 500 }}>{item.count}</span>
-              </button>
-            })}
-          </div>
-        </div>}
-
-        {/* Filter row */}
-        {!personalComments && <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
-          <div style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ fontSize: 13, color: 'var(--fw-foreground)', fontWeight: 600 }}>{sidebarTitle}</span>
-            <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{filteredComments.length}</span>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
-            {([
-              { id: 'all', label: 'All', count: visibleComments.length },
-              { id: 'open', label: 'Open', count: openCommentCount },
-              { id: 'approved', label: 'Ready', count: readyForAgentCount },
-            ] as const).map((item) => {
-              const active = filterStatus === item.id
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setFilterStatus(item.id)}
+              {shortcutsEnabled && (
+                <span
                   style={{
-                    height: 32,
+                    flexShrink: 0,
+                    padding: '3px 7px',
                     borderRadius: 9999,
-                    border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
-                    background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
-                    color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: 12,
-                    fontWeight: 650,
+                    border: '1px solid var(--fw-contrast-10)',
+                    color: 'var(--fw-foreground-muted)',
+                    fontSize: 11,
+                    lineHeight: 1,
                   }}
                 >
-                  {item.label} <span style={{ color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)', fontWeight: 500 }}>{item.count}</span>
-                </button>
-              )
-            })}
+                  Shift + A
+                </span>
+              )}
+            </button>
           </div>
-        </div>}
+        )}
+
+        {personalComments?.scope && (
+          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+              {(
+                [
+                  { id: 'page', label: 'This page', count: visibleComments.length },
+                  { id: 'project', label: 'All feedback', count: allRecentComments.length },
+                ] as const
+              ).map((item) => {
+                const active = personalComments.scope?.value === item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => personalComments.scope?.onChange(item.id)}
+                    style={{
+                      height: 32,
+                      borderRadius: 9999,
+                      border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
+                      background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
+                      color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                      fontWeight: 650,
+                    }}
+                  >
+                    {item.label}{' '}
+                    <span
+                      style={{
+                        color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Filter row */}
+        {!personalComments && (
+          <div style={{ padding: '12px 16px 10px', borderBottom: '1px solid var(--fw-contrast-04)' }}>
+            <div
+              style={{
+                marginBottom: 10,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <span style={{ fontSize: 13, color: 'var(--fw-foreground)', fontWeight: 600 }}>{sidebarTitle}</span>
+              <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)' }}>{filteredComments.length}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+              {(
+                [
+                  { id: 'all', label: 'All', count: visibleComments.length },
+                  { id: 'open', label: 'Open', count: openCommentCount },
+                  { id: 'approved', label: 'Ready', count: readyForAgentCount },
+                ] as const
+              ).map((item) => {
+                const active = filterStatus === item.id
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setFilterStatus(item.id)}
+                    style={{
+                      height: 32,
+                      borderRadius: 9999,
+                      border: active ? '1px solid rgba(232, 133, 61, 0.32)' : '1px solid var(--fw-contrast-06)',
+                      background: active ? 'rgba(232, 133, 61, 0.13)' : 'var(--fw-contrast-03)',
+                      color: active ? 'var(--fw-active-label)' : 'var(--fw-foreground-muted)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                      fontWeight: 650,
+                    }}
+                  >
+                    {item.label}{' '}
+                    <span
+                      style={{
+                        color: active ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-faint)',
+                        fontWeight: 500,
+                      }}
+                    >
+                      {item.count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Comment list */}
         <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
           {sortedComments.length === 0 && (
-            <div style={{ color: 'var(--fw-empty-state)', fontSize: 13, textAlign: 'center', marginTop: 40, padding: '0 24px', lineHeight: 1.5 }}>
+            <div
+              style={{
+                color: 'var(--fw-empty-state)',
+                fontSize: 13,
+                textAlign: 'center',
+                marginTop: 40,
+                padding: '0 24px',
+                lineHeight: 1.5,
+              }}
+            >
               {sidebarBaseComments.length === 0
                 ? 'No comments yet'
                 : filterStatus === 'approved'
@@ -2024,244 +2638,492 @@ function FeedbackWidgetInner({
             </div>
           )}
           {sortedComments.map((c, i) => {
-              const pinNum = filteredComments.length - filteredComments.indexOf(c)
-              const isCurrentPage = samePage(c.pageUrl, currentUrl)
-              const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
-              const isPending = !c.reviewStatus || c.reviewStatus === 'open'
-              const isEditing = editingId === c.id
-              const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
-              const isMenuOpen = menuOpenId === c.id
-              return (
-                <div
-                  key={c.id}
-                  className="fw-sidebar-card"
-                  onClick={() => {
-                    if (isEditing || isMenuOpen) return
-                    if (isCurrentPage) { setSelectedPin(c.id); highlightElement(c.selector) }
-                    else window.open(c.pageUrl, '_blank', 'noopener,noreferrer')
-                  }}
-                  style={{
-                    padding: '14px 16px',
-                    cursor: isEditing ? 'default' : 'pointer',
-                    position: 'relative',
-                    zIndex: isMenuOpen ? 100000 : 'auto',
-                    borderBottom: '1px solid var(--fw-contrast-04)',
-                    opacity: isResolved ? 0.55 : 1,
-                    transition: 'background 0.1s, opacity 0.2s',
-                    animation: sidebarOpen ? `fw-slide-in 0.2s ease ${i * 0.04}s both` : 'none',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-02)' }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent' }}
-                >
-                  {/* Top row: avatar + name + meta + actions */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                    {/* Avatar */}
-                    <div style={{
-                      width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
+            const pinNum = filteredComments.length - filteredComments.indexOf(c)
+            const isCurrentPage = samePage(c.pageUrl, currentUrl)
+            const isResolved = c.reviewStatus === 'accepted' || c.reviewStatus === 'rejected'
+            const isPending = !c.reviewStatus || c.reviewStatus === 'open'
+            const isEditing = editingId === c.id
+            const initial = getInitials(c.authorName) ?? (c.body[0] || 'U').toUpperCase()
+            const isMenuOpen = menuOpenId === c.id
+            return (
+              <div
+                key={c.id}
+                className="fw-sidebar-card"
+                onClick={() => {
+                  if (isEditing || isMenuOpen) return
+                  if (isCurrentPage) {
+                    setSelectedPin(c.id)
+                    highlightElement(c.selector)
+                  } else window.open(c.pageUrl, '_blank', 'noopener,noreferrer')
+                }}
+                style={{
+                  padding: '14px 16px',
+                  cursor: isEditing ? 'default' : 'pointer',
+                  position: 'relative',
+                  zIndex: isMenuOpen ? 100000 : 'auto',
+                  borderBottom: '1px solid var(--fw-contrast-04)',
+                  opacity: isResolved ? 0.55 : 1,
+                  transition: 'background 0.1s, opacity 0.2s',
+                  animation: sidebarOpen ? `fw-slide-in 0.2s ease ${i * 0.04}s both` : 'none',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = 'var(--fw-contrast-02)'
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = 'transparent'
+                }}
+              >
+                {/* Top row: avatar + name + meta + actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  {/* Avatar */}
+                  <div
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      flexShrink: 0,
                       background: isResolved ? '#2C2C2C' : avatarColor(c.authorName ?? c.id),
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#FFFFFF', fontSize: 11, fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      fontSize: 11,
+                      fontWeight: 700,
                       fontFamily: 'inherit',
-                    }}>
-                      {initial}
-                    </div>
-                    {/* Name + meta inline */}
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--fw-foreground)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {c.authorName ?? 'User'}
+                    }}
+                  >
+                    {initial}
+                  </div>
+                  {/* Name + meta inline */}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flex: 1, minWidth: 0 }}>
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: 'var(--fw-foreground)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {c.authorName ?? 'User'}
+                    </span>
+                    <span
+                      style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}
+                    >
+                      {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span>{' '}
+                      <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
+                        {isCurrentPage
+                          ? `#${pinNum}`
+                          : (() => {
+                              try {
+                                return new URL(c.pageUrl).pathname || '/'
+                              } catch {
+                                return c.pageUrl
+                              }
+                            })()}
                       </span>
-                      <span style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', flexShrink: 0, whiteSpace: 'nowrap' }}>
-                        {timeAgo(c.createdAt)} <span style={{ color: 'var(--fw-surface-divider-strong)' }}>·</span>{' '}
-                        <span style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11 }}>
-                          {isCurrentPage ? `#${pinNum}` : (() => { try { return new URL(c.pageUrl).pathname || '/' } catch { return c.pageUrl } })()}
-                        </span>
+                    </span>
+                    {c.visibility && (
+                      <span
+                        style={{
+                          fontSize: 10,
+                          color: 'var(--fw-foreground-faint)',
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.04em',
+                        }}
+                      >
+                        {c.visibility}
                       </span>
-                      {c.visibility && (
-                        <span style={{ fontSize: 10, color: 'var(--fw-foreground-faint)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          {c.visibility}
-                        </span>
-                      )}
-                    </div>
-                    {/* Actions inline — same row as the author */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      {!personalComments && isPending && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
-                          title="Approve"
-                          aria-label="Approve"
-                          style={{
-                            width: 28, height: 28, borderRadius: 7,
-                            border: '1px solid rgba(232, 133, 61, 0.35)',
-                            background: 'rgba(232, 133, 61, 0.08)',
-                            cursor: 'pointer', display: 'flex',
-                            alignItems: 'center', justifyContent: 'center',
-                            color: '#E8853D', padding: 0,
-                            transition: 'background 150ms ease, color 150ms ease, border-color 150ms ease',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#E8853D'
-                            e.currentTarget.style.color = '#FFFFFF'
-                            e.currentTarget.style.borderColor = '#B85F1F'
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'rgba(232, 133, 61, 0.08)'
-                            e.currentTarget.style.color = '#E8853D'
-                            e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.35)'
-                          }}
+                    )}
+                  </div>
+                  {/* Actions inline — same row as the author */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    {!personalComments && isPending && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          updateStatus(c.id, 'accepted')
+                        }}
+                        title="Approve"
+                        aria-label="Approve"
+                        style={{
+                          width: 28,
+                          height: 28,
+                          borderRadius: 7,
+                          border: '1px solid rgba(232, 133, 61, 0.35)',
+                          background: 'rgba(232, 133, 61, 0.08)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#E8853D',
+                          padding: 0,
+                          transition: 'background 150ms ease, color 150ms ease, border-color 150ms ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#E8853D'
+                          e.currentTarget.style.color = '#FFFFFF'
+                          e.currentTarget.style.borderColor = '#B85F1F'
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'rgba(232, 133, 61, 0.08)'
+                          e.currentTarget.style.color = '#E8853D'
+                          e.currentTarget.style.borderColor = 'rgba(232, 133, 61, 0.35)'
+                        }}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
                         >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                        </button>
-                      )}
-                      {(c.editable !== false || !personalComments || Boolean(personalComments?.externalWork)) && <button
-                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(isMenuOpen ? null : c.id) }}
+                          <path d="M20 6L9 17l-5-5" />
+                        </svg>
+                      </button>
+                    )}
+                    {(c.editable !== false || !personalComments || Boolean(personalComments?.externalWork)) && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setMenuOpenId(isMenuOpen ? null : c.id)
+                        }}
                         title="More"
                         aria-label="More"
                         style={{
-                          width: 28, height: 28, borderRadius: 7,
+                          width: 28,
+                          height: 28,
+                          borderRadius: 7,
                           border: '1px solid ' + (isMenuOpen ? 'var(--fw-contrast-14)' : 'var(--fw-contrast-08)'),
                           background: isMenuOpen ? 'var(--fw-contrast-06)' : 'transparent',
                           cursor: 'pointer',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: 'var(--fw-foreground-muted)', padding: 0,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'var(--fw-foreground-muted)',
+                          padding: 0,
                           transition: 'background 150ms ease, border-color 150ms ease, color 150ms ease',
                         }}
-                        onMouseEnter={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'var(--fw-contrast-06)'; e.currentTarget.style.color = 'var(--fw-foreground)' } }}
-                        onMouseLeave={(e) => { if (!isMenuOpen) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' } }}
+                        onMouseEnter={(e) => {
+                          if (!isMenuOpen) {
+                            e.currentTarget.style.background = 'var(--fw-contrast-06)'
+                            e.currentTarget.style.color = 'var(--fw-foreground)'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (!isMenuOpen) {
+                            e.currentTarget.style.background = 'transparent'
+                            e.currentTarget.style.color = 'var(--fw-foreground-muted)'
+                          }
+                        }}
                       >
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
-                      </button>}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="1.5" />
+                          <circle cx="12" cy="12" r="1.5" />
+                          <circle cx="12" cy="19" r="1.5" />
+                        </svg>
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {/* Body */}
+                {isEditing ? (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <textarea
+                      autoFocus
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (shortcutsEnabled && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault()
+                          saveEdit(c.id)
+                        }
+                        if (e.key === 'Escape') {
+                          setEditingId(null)
+                        }
+                      }}
+                      rows={2}
+                      style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        fontSize: 14,
+                        lineHeight: 1.5,
+                        color: 'var(--fw-foreground)',
+                        border: '1px solid var(--fw-contrast-08)',
+                        borderRadius: 6,
+                        padding: '8px 10px',
+                        fontFamily: 'inherit',
+                        outline: 'none',
+                        resize: 'none',
+                        background: 'var(--fw-surface)',
+                      }}
+                      onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
+                      onBlur={(e) => (e.target.style.borderColor = 'var(--fw-contrast-08)')}
+                    />
+                    <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        style={{
+                          fontSize: 12,
+                          color: 'var(--fw-foreground-muted)',
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          padding: '4px 10px',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={() => saveEdit(c.id)}
+                        style={{
+                          fontSize: 12,
+                          color: '#FFFFFF',
+                          fontWeight: 600,
+                          background: '#E8853D',
+                          border: 'none',
+                          borderRadius: 6,
+                          cursor: 'pointer',
+                          padding: '4px 12px',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Save
+                      </button>
                     </div>
                   </div>
-                  {/* Body */}
-                  {isEditing ? (
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <textarea
-                        autoFocus
-                        value={editText}
-                        onChange={(e) => setEditText(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (shortcutsEnabled && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); saveEdit(c.id) }
-                          if (e.key === 'Escape') { setEditingId(null) }
-                        }}
-                        rows={2}
-                        style={{
-                          width: '100%', boxSizing: 'border-box',
-                          fontSize: 14, lineHeight: 1.5, color: 'var(--fw-foreground)',
-                          border: '1px solid var(--fw-contrast-08)', borderRadius: 6,
-                          padding: '8px 10px', fontFamily: 'inherit',
-                          outline: 'none', resize: 'none', background: 'var(--fw-surface)',
-                        }}
-                        onFocus={(e) => (e.target.style.borderColor = '#E8853D')}
-                        onBlur={(e) => (e.target.style.borderColor = 'var(--fw-contrast-08)')}
-                      />
-                      <div style={{ display: 'flex', gap: 8, marginTop: 6, justifyContent: 'flex-end' }}>
-                        <button onClick={() => setEditingId(null)} style={{ fontSize: 12, color: 'var(--fw-foreground-muted)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px 10px', fontFamily: 'inherit' }}>Cancel</button>
-                        <button onClick={() => saveEdit(c.id)} style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 600, background: '#E8853D', border: 'none', borderRadius: 6, cursor: 'pointer', padding: '4px 12px', fontFamily: 'inherit' }}>Save</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      {c.anchor && (
-                        <TextRangeQuote
-                          text={c.anchor.selectedText}
-                          style={{ marginLeft: 32, marginBottom: 6 }}
-                        />
-                      )}
-                      <div
-                        style={{
-                          fontSize: 13.5,
-                          lineHeight: 1.5,
-                          color: isResolved ? 'var(--fw-foreground-faint)' : 'var(--fw-foreground-soft)',
-                          marginLeft: 32,
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        {c.body}
-                      </div>
-                      {c.imageUrl && (
-                        <img
-                          src={c.imageUrl}
-                          alt=""
-                          onClick={(e) => { e.stopPropagation(); window.open(c.imageUrl!, '_blank') }}
-                          style={{
-                            marginTop: 8,
-                            marginLeft: 32,
-                            maxWidth: 'calc(100% - 32px)',
-                            borderRadius: 6,
-                            border: '1px solid var(--fw-contrast-06)',
-                            cursor: 'zoom-in',
-                            display: 'block',
-                            filter: isResolved ? 'grayscale(0.7) brightness(0.5)' : 'none',
-                          }}
-                        />
-                      )}
-                    </>
-                  )}
-
-                  {conversation && <ConversationDetails conversation={conversation} comment={conversation.feedback.find(item => item.id === c.id)!} disabled={sending || Boolean(conversation.disabled)} onReply={() => {
-                    setReply({ id: c.id, version: conversation.feedback.find(item => item.id === c.id)!.version, author: c.authorName! }); setTarget(conversationTarget('', conversation.containerSelector)); setSidebarOpen(false); setSelectedPin(null); setMode('commenting')
-                    if (!authorNameRef.current) setShowNameModal(true)
-                  }} />}
-
-                  {/* Dropdown menu */}
-                  {isMenuOpen && (
-                    <>
+                ) : (
+                  <>
+                    {c.anchor && (
+                      <TextRangeQuote text={c.anchor.selectedText} style={{ marginLeft: 32, marginBottom: 6 }} />
+                    )}
                     <div
-                      onClick={(e) => { e.stopPropagation(); setMenuOpenId(null) }}
+                      style={{
+                        fontSize: 13.5,
+                        lineHeight: 1.5,
+                        color: isResolved ? 'var(--fw-foreground-faint)' : 'var(--fw-foreground-soft)',
+                        marginLeft: 32,
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {c.body}
+                    </div>
+                    {c.imageUrl && (
+                      <img
+                        src={c.imageUrl}
+                        alt=""
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          window.open(c.imageUrl!, '_blank')
+                        }}
+                        style={{
+                          marginTop: 8,
+                          marginLeft: 32,
+                          maxWidth: 'calc(100% - 32px)',
+                          borderRadius: 6,
+                          border: '1px solid var(--fw-contrast-06)',
+                          cursor: 'zoom-in',
+                          display: 'block',
+                          filter: isResolved ? 'grayscale(0.7) brightness(0.5)' : 'none',
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+
+                {conversation && (
+                  <ConversationDetails
+                    conversation={conversation}
+                    comment={conversation.feedback.find((item) => item.id === c.id)!}
+                    disabled={sending || Boolean(conversation.disabled)}
+                    onReply={() => {
+                      setReply({
+                        id: c.id,
+                        version: conversation.feedback.find((item) => item.id === c.id)!.version,
+                        author: c.authorName!,
+                      })
+                      setTarget(conversationTarget('', conversation.containerSelector))
+                      setSidebarOpen(false)
+                      setSelectedPin(null)
+                      setMode('commenting')
+                      if (!authorNameRef.current) setShowNameModal(true)
+                    }}
+                  />
+                )}
+
+                {/* Dropdown menu */}
+                {isMenuOpen && (
+                  <>
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setMenuOpenId(null)
+                      }}
                       style={{ position: 'fixed', inset: 0, zIndex: 99998 }}
                     />
                     <div
                       onClick={(e) => e.stopPropagation()}
                       style={{
-                        position: 'absolute', top: 34, right: 12, zIndex: 99999,
-                        background: 'var(--fw-surface-raised)', border: '1px solid var(--fw-surface-divider)', borderRadius: 8,
-                        padding: '4px 0', minWidth: 160,
+                        position: 'absolute',
+                        top: 34,
+                        right: 12,
+                        zIndex: 99999,
+                        background: 'var(--fw-surface-raised)',
+                        border: '1px solid var(--fw-surface-divider)',
+                        borderRadius: 8,
+                        padding: '4px 0',
+                        minWidth: 160,
                         boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
                         animation: 'fw-tooltip-in 0.1s ease both',
                       }}
                     >
-                      {personalComments?.externalWork && c.reviewStatus !== 'rejected' && <button
-                        onClick={() => { setExternalProviderCommentId(c.id); setMenuOpenId(null) }}
-                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                      >
-                        <span aria-hidden="true">↗</span> Send to…
-                      </button>}
-                      {!personalComments && <button
-                        onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
-                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
-                        {c.reviewStatus === 'accepted' ? 'Reopen' : 'Approve'}
-                      </button>}
+                      {personalComments?.externalWork && c.reviewStatus !== 'rejected' && (
+                        <button
+                          onClick={() => {
+                            setExternalProviderCommentId(c.id)
+                            setMenuOpenId(null)
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 14px',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--fw-foreground-subtle)',
+                            fontSize: 12,
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          <span aria-hidden="true">↗</span> Send to…
+                        </button>
+                      )}
+                      {!personalComments && (
+                        <button
+                          onClick={() => {
+                            updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted')
+                            setMenuOpenId(null)
+                          }}
+                          style={{
+                            width: '100%',
+                            padding: '8px 14px',
+                            background: 'none',
+                            border: 'none',
+                            color: 'var(--fw-foreground-subtle)',
+                            fontSize: 12,
+                            textAlign: 'left',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                          }}
+                          onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
+                          onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+                        >
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                          {c.reviewStatus === 'accepted' ? 'Reopen' : 'Approve'}
+                        </button>
+                      )}
                       <button
-                        onClick={() => { setEditingId(c.id); setEditText(c.body); setMenuOpenId(null) }}
-                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                        onClick={() => {
+                          setEditingId(c.id)
+                          setEditText(c.body)
+                          setMenuOpenId(null)
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 14px',
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--fw-foreground-subtle)',
+                          fontSize: 12,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+                          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+                        </svg>
                         Edit
                       </button>
                       <div style={{ height: 1, background: 'var(--fw-surface-divider)', margin: '4px 0' }} />
                       <button
-                        onClick={() => { deleteComment(c.id); setMenuOpenId(null) }}
-                        style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: '#ef4444', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+                        onClick={() => {
+                          deleteComment(c.id)
+                          setMenuOpenId(null)
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '8px 14px',
+                          background: 'none',
+                          border: 'none',
+                          color: '#ef4444',
+                          fontSize: 12,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 8,
+                        }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
                       >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" /></svg>
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
                         Delete
                       </button>
                     </div>
-                    </>
-                  )}
-                </div>
-              )
-            })}
+                  </>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -2344,7 +3206,9 @@ function FeedbackWidgetInner({
               backdropFilter: 'blur(18px)',
               WebkitBackdropFilter: 'blur(18px)',
               opacity: launcherOpen ? 1 : 0,
-              transform: launcherOpen ? 'translateY(-50%) translateX(0) scale(1)' : 'translateY(-50%) translateX(8px) scale(0.98)',
+              transform: launcherOpen
+                ? 'translateY(-50%) translateX(0) scale(1)'
+                : 'translateY(-50%) translateX(8px) scale(0.98)',
               transformOrigin: 'right center',
               pointerEvents: launcherOpen ? 'auto' : 'none',
               transition: 'opacity 160ms ease, transform 180ms cubic-bezier(0.16, 1, 0.3, 1)',
@@ -2355,48 +3219,82 @@ function FeedbackWidgetInner({
               disabled={Boolean(conversation?.readOnly || conversation?.disabled || conversation?.draftLocked)}
               title="Drop comment"
               subtitle="Pin feedback on the page"
-              shortcut={shortcutsEnabled ? "C" : undefined}
+              shortcut={shortcutsEnabled ? 'C' : undefined}
               onClick={() => {
                 setLauncherOpen(false)
                 enterFeedbackMode()
               }}
             />
-            {conversation && <LauncherAction icon={<MessageCircle size={17} />} title={comment ? "Resume draft" : "Add note"} subtitle="Feedback on the whole document" disabled={!comment && Boolean(conversation.readOnly || conversation.disabled || conversation.draftLocked)} onClick={() => {
-              if (comment) { setLauncherOpen(false); setMode('commenting'); return }
-              clearNativeSelection(); conversation.onClearSelection()
-              setLauncherOpen(false); setReply(null); setTarget(conversationTarget('', conversation.containerSelector)); setMode('commenting')
-              if (!authorNameRef.current) setShowNameModal(true)
-            }} />}
+            {conversation && (
+              <LauncherAction
+                icon={<MessageCircle size={17} />}
+                title={comment ? 'Resume draft' : 'Add note'}
+                subtitle="Feedback on the whole document"
+                disabled={
+                  !comment && Boolean(conversation.readOnly || conversation.disabled || conversation.draftLocked)
+                }
+                onClick={() => {
+                  if (comment) {
+                    setLauncherOpen(false)
+                    setMode('commenting')
+                    return
+                  }
+                  clearNativeSelection()
+                  conversation.onClearSelection()
+                  setLauncherOpen(false)
+                  setReply(null)
+                  setTarget(conversationTarget('', conversation.containerSelector))
+                  setMode('commenting')
+                  if (!authorNameRef.current) setShowNameModal(true)
+                }}
+              />
+            )}
             <LauncherAction
               icon={<PanelRightOpen size={17} />}
               title="Open sidebar"
               subtitle="Review active comments"
-              shortcut={shortcutsEnabled ? "F" : undefined}
+              shortcut={shortcutsEnabled ? 'F' : undefined}
               onClick={() => {
                 setLauncherOpen(false)
                 setSidebarOpen(true)
               }}
             />
-            {!personalComments && <LauncherAction
-              icon={<Bot size={17} />}
-              title="Open agent"
-              subtitle="Send context to agent"
-              shortcut={shortcutsEnabled ? "Shift + A" : undefined}
-              onClick={() => {
-                setLauncherOpen(false)
-                openAgentBridge()
-              }}
-            />}
+            {!personalComments && (
+              <LauncherAction
+                icon={<Bot size={17} />}
+                title="Open agent"
+                subtitle="Send context to agent"
+                shortcut={shortcutsEnabled ? 'Shift + A' : undefined}
+                onClick={() => {
+                  setLauncherOpen(false)
+                  openAgentBridge()
+                }}
+              />
+            )}
             <button
               type="button"
               role="menuitemcheckbox"
               aria-checked={shortcutsEnabled}
               aria-label="Keyboard shortcuts"
               onClick={() => setShortcutsEnabled(!shortcutsEnabled)}
-              style={{ width: '100%', display: 'flex', justifyContent: 'space-between', padding: 8, marginTop: 8, border: 0, borderTop: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground)', fontFamily: 'inherit', fontSize: 12, cursor: 'pointer' }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: 'space-between',
+                padding: 8,
+                marginTop: 8,
+                border: 0,
+                borderTop: '1px solid var(--fw-contrast-10)',
+                background: 'transparent',
+                color: 'var(--fw-foreground)',
+                fontFamily: 'inherit',
+                fontSize: 12,
+                cursor: 'pointer',
+              }}
               title="Remembered on this site. Escape still closes or cancels."
             >
-              <span>Keyboard shortcuts</span><span>{shortcutsEnabled ? 'On' : 'Off'}</span>
+              <span>Keyboard shortcuts</span>
+              <span>{shortcutsEnabled ? 'On' : 'Off'}</span>
             </button>
           </div>
 
@@ -2410,7 +3308,7 @@ function FeedbackWidgetInner({
             onClick={async () => {
               if (mode !== 'idle') return
               try {
-                if (personalComments?.beforeOpen && !await personalComments.beforeOpen()) return
+                if (personalComments?.beforeOpen && !(await personalComments.beforeOpen())) return
                 setLauncherOpen((value) => !value)
               } catch (error) {
                 setApiError(error instanceof Error ? error.message : 'Could not open CRRT')
@@ -2479,9 +3377,12 @@ function FeedbackWidgetInner({
             // passed server-side eligibility. Never fall back to the anonymous
             // project feed while reconciling private lifecycle changes.
             const context = feedbackContextGeneration.current
-            void widgetLogin.comments!.list(currentUrl).then((fresh) => {
-              if (context === feedbackContextGeneration.current) setComments(fresh)
-            }).catch(() => {})
+            void widgetLogin
+              .comments!.list(currentUrl)
+              .then((fresh) => {
+                if (context === feedbackContextGeneration.current) setComments(fresh)
+              })
+              .catch(() => {})
           }}
         />
       )}
@@ -2490,20 +3391,80 @@ function FeedbackWidgetInner({
         <div
           {...{ [WIDGET_ATTR]: '' }}
           role="presentation"
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setExternalProviderCommentId(null) }}
-          style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setExternalProviderCommentId(null)
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2147483647,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 16,
+            background: 'rgba(0,0,0,.62)',
+            fontFamily: "'Inter', sans-serif",
+          }}
         >
-          <div role="dialog" aria-modal="true" aria-labelledby="fw-provider-title" style={{ width: 'min(360px, 100%)', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
-            <h2 id="fw-provider-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send feedback to…</h2>
-            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Choose a connected project integration.</p>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fw-provider-title"
+            style={{
+              width: 'min(360px, 100%)',
+              borderRadius: 14,
+              border: '1px solid var(--fw-contrast-10)',
+              background: 'var(--fw-surface)',
+              padding: 20,
+              boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+            }}
+          >
+            <h2 id="fw-provider-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>
+              Send feedback to…
+            </h2>
+            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>
+              Choose a connected project integration.
+            </p>
             <div style={{ display: 'grid', gap: 8 }}>
               {personalComments.externalWork.providers.map((provider) => (
-                <button key={provider} type="button" onClick={() => { const id = externalProviderCommentId; setExternalProviderCommentId(null); void prepareExternalWork(id, provider) }} style={{ borderRadius: 8, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', color: 'var(--fw-foreground)', padding: '11px 12px', textAlign: 'left', fontWeight: 700, cursor: 'pointer' }}>
+                <button
+                  key={provider}
+                  type="button"
+                  onClick={() => {
+                    const id = externalProviderCommentId
+                    setExternalProviderCommentId(null)
+                    void prepareExternalWork(id, provider)
+                  }}
+                  style={{
+                    borderRadius: 8,
+                    border: '1px solid var(--fw-contrast-10)',
+                    background: 'var(--fw-surface-input)',
+                    color: 'var(--fw-foreground)',
+                    padding: '11px 12px',
+                    textAlign: 'left',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
                   {provider === 'github' ? 'GitHub' : provider === 'linear' ? 'Linear' : 'Jira'}
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}><button type="button" onClick={() => setExternalProviderCommentId(null)} style={{ borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground-muted)', padding: '8px 12px', cursor: 'pointer' }}>Cancel</button></div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setExternalProviderCommentId(null)}
+                style={{
+                  borderRadius: 7,
+                  border: '1px solid var(--fw-contrast-10)',
+                  background: 'transparent',
+                  color: 'var(--fw-foreground-muted)',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -2512,24 +3473,135 @@ function FeedbackWidgetInner({
         <div
           {...{ [WIDGET_ATTR]: '' }}
           role="presentation"
-          onMouseDown={(event) => { if (event.target === event.currentTarget && !externalWork.busy) setExternalWork(null) }}
-          style={{ position: 'fixed', inset: 0, zIndex: 2147483647, display: 'grid', placeItems: 'center', padding: 16, background: 'rgba(0,0,0,.62)', fontFamily: "'Inter', sans-serif" }}
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !externalWork.busy) setExternalWork(null)
+          }}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 2147483647,
+            display: 'grid',
+            placeItems: 'center',
+            padding: 16,
+            background: 'rgba(0,0,0,.62)',
+            fontFamily: "'Inter', sans-serif",
+          }}
         >
-          <div role="dialog" aria-modal="true" aria-labelledby="fw-external-work-title" style={{ width: 'min(560px, 100%)', maxHeight: 'calc(100vh - 32px)', overflow: 'auto', borderRadius: 14, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface)', padding: 20, boxShadow: '0 24px 60px rgba(0,0,0,.55)' }}>
-            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>Send to {externalWork.provider === 'github' ? 'GitHub' : externalWork.provider === 'linear' ? 'Linear' : 'Jira'}</h2>
-            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>Review and edit before creating in {externalWork.destination}.</p>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="fw-external-work-title"
+            style={{
+              width: 'min(560px, 100%)',
+              maxHeight: 'calc(100vh - 32px)',
+              overflow: 'auto',
+              borderRadius: 14,
+              border: '1px solid var(--fw-contrast-10)',
+              background: 'var(--fw-surface)',
+              padding: 20,
+              boxShadow: '0 24px 60px rgba(0,0,0,.55)',
+            }}
+          >
+            <h2 id="fw-external-work-title" style={{ margin: 0, color: 'var(--fw-foreground)', fontSize: 16 }}>
+              Send to{' '}
+              {externalWork.provider === 'github' ? 'GitHub' : externalWork.provider === 'linear' ? 'Linear' : 'Jira'}
+            </h2>
+            <p style={{ margin: '6px 0 16px', color: 'var(--fw-foreground-muted)', fontSize: 12 }}>
+              Review and edit before creating in {externalWork.destination}.
+            </p>
             <label style={{ display: 'block', color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
               Title
-              <input aria-label="External work title" value={externalWork.title} maxLength={120} onChange={(event) => setExternalWork({ ...externalWork, title: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', font: 'inherit' }} />
+              <input
+                aria-label="External work title"
+                value={externalWork.title}
+                maxLength={120}
+                onChange={(event) => setExternalWork({ ...externalWork, title: event.target.value })}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  marginTop: 6,
+                  borderRadius: 7,
+                  border: '1px solid var(--fw-contrast-10)',
+                  background: 'var(--fw-surface-input)',
+                  padding: '9px 10px',
+                  color: 'var(--fw-foreground)',
+                  font: 'inherit',
+                }}
+              />
             </label>
-            <label style={{ display: 'block', marginTop: 14, color: 'var(--fw-foreground-muted)', fontSize: 12, fontWeight: 650 }}>
+            <label
+              style={{
+                display: 'block',
+                marginTop: 14,
+                color: 'var(--fw-foreground-muted)',
+                fontSize: 12,
+                fontWeight: 650,
+              }}
+            >
               Description
-              <textarea aria-label="External work description" value={externalWork.body} rows={12} onChange={(event) => setExternalWork({ ...externalWork, body: event.target.value })} style={{ display: 'block', width: '100%', boxSizing: 'border-box', marginTop: 6, resize: 'vertical', borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'var(--fw-surface-input)', padding: '9px 10px', color: 'var(--fw-foreground)', fontFamily: "'JetBrains Mono', monospace", fontSize: 12, lineHeight: 1.5 }} />
+              <textarea
+                aria-label="External work description"
+                value={externalWork.body}
+                rows={12}
+                onChange={(event) => setExternalWork({ ...externalWork, body: event.target.value })}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  boxSizing: 'border-box',
+                  marginTop: 6,
+                  resize: 'vertical',
+                  borderRadius: 7,
+                  border: '1px solid var(--fw-contrast-10)',
+                  background: 'var(--fw-surface-input)',
+                  padding: '9px 10px',
+                  color: 'var(--fw-foreground)',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontSize: 12,
+                  lineHeight: 1.5,
+                }}
+              />
             </label>
-            {externalWork.error && <p role="alert" style={{ color: '#ef4444', fontSize: 12 }}>{externalWork.error}</p>}
+            {externalWork.error && (
+              <p role="alert" style={{ color: '#ef4444', fontSize: 12 }}>
+                {externalWork.error}
+              </p>
+            )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 18 }}>
-              <button type="button" disabled={externalWork.busy} onClick={() => setExternalWork(null)} style={{ borderRadius: 7, border: '1px solid var(--fw-contrast-10)', background: 'transparent', color: 'var(--fw-foreground-muted)', padding: '8px 12px', cursor: 'pointer' }}>Cancel</button>
-              <button type="button" disabled={externalWork.busy || !externalWork.title.trim() || !externalWork.body.trim()} onClick={() => { void sendExternalWorkDraft() }} style={{ borderRadius: 7, border: 0, background: '#E8853D', color: '#080808', padding: '8px 12px', fontWeight: 700, cursor: 'pointer', opacity: externalWork.busy ? .6 : 1 }}>{externalWork.busy ? 'Sending…' : 'Create issue'}</button>
+              <button
+                type="button"
+                disabled={externalWork.busy}
+                onClick={() => setExternalWork(null)}
+                style={{
+                  borderRadius: 7,
+                  border: '1px solid var(--fw-contrast-10)',
+                  background: 'transparent',
+                  color: 'var(--fw-foreground-muted)',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={externalWork.busy || !externalWork.title.trim() || !externalWork.body.trim()}
+                onClick={() => {
+                  void sendExternalWorkDraft()
+                }}
+                style={{
+                  borderRadius: 7,
+                  border: 0,
+                  background: '#E8853D',
+                  color: '#080808',
+                  padding: '8px 12px',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  opacity: externalWork.busy ? 0.6 : 1,
+                }}
+              >
+                {externalWork.busy ? 'Sending…' : 'Create issue'}
+              </button>
             </div>
           </div>
         </div>
@@ -2545,7 +3617,14 @@ function FeedbackWidgetInner({
           onCancel={handleNameCancel}
           existingName={authorNameRef.current}
           loginRequired={privateProject}
-          onLogin={conversation ? undefined : () => { resumeAfterLogin.current = true; void widgetLogin.login() }}
+          onLogin={
+            conversation
+              ? undefined
+              : () => {
+                  resumeAfterLogin.current = true
+                  void widgetLogin.login()
+                }
+          }
           onLogout={widgetLogin.logout}
           signedIn={Boolean(widgetLogin.session)}
           busy={widgetLogin.busy}

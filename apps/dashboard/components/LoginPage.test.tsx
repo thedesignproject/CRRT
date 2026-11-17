@@ -3,7 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { renderToString } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { resetPasswordForEmail, signInWithOtp, signInWithPassword, signUp } = vi.hoisted(() => ({ resetPasswordForEmail: vi.fn(), signInWithOtp: vi.fn(), signInWithPassword: vi.fn(), signUp: vi.fn() }))
+const { resetPasswordForEmail, signInWithOtp, signInWithPassword, signUp } = vi.hoisted(() => ({
+  resetPasswordForEmail: vi.fn(),
+  signInWithOtp: vi.fn(),
+  signInWithPassword: vi.fn(),
+  signUp: vi.fn(),
+}))
 
 vi.mock('../lib/supabase', () => ({
   supabase: {
@@ -47,7 +52,9 @@ describe('LoginPage invitation continuation', () => {
     render(<LoginPage />)
     fireEvent.change(screen.getByLabelText('password'), { target: { value: 'password' } })
     fireEvent.click(screen.getByRole('button', { name: /authenticate/i }))
-    await waitFor(() => expect(signInWithPassword).toHaveBeenCalledWith({ email: 'guest@example.com', password: 'password' }))
+    await waitFor(() =>
+      expect(signInWithPassword).toHaveBeenCalledWith({ email: 'guest@example.com', password: 'password' }),
+    )
     expect(window.location.search).toBe('?invite=project%2Fone')
   })
 
@@ -57,10 +64,12 @@ describe('LoginPage invitation continuation', () => {
     render(<LoginPage />)
     expect(screen.getByLabelText('email')).toHaveValue('guest@example.com')
     fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
-    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({
-      email: 'guest@example.com',
-      options: { emailRedirectTo: 'http://localhost:3000/?invite=project%2Fone' },
-    }))
+    await waitFor(() =>
+      expect(signInWithOtp).toHaveBeenCalledWith({
+        email: 'guest@example.com',
+        options: { emailRedirectTo: 'http://localhost:3000/?invite=project%2Fone' },
+      }),
+    )
     expect(await screen.findByText(/secure sign-in link/)).toBeInTheDocument()
   })
 
@@ -91,27 +100,34 @@ describe('LoginPage invitation continuation', () => {
     render(<LoginPage />)
     fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
-    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({
-      email: 'buyer@example.com', options: { emailRedirectTo: 'http://localhost:3000/?billingPlan=studio' },
-    }))
+    await waitFor(() =>
+      expect(signInWithOtp).toHaveBeenCalledWith({
+        email: 'buyer@example.com',
+        options: { emailRedirectTo: 'http://localhost:3000/?billingPlan=studio' },
+      }),
+    )
   })
 
-  it.each(['billingPlan=studio', 'billingState=payload.signature'])('preserves %s through password recovery without an arbitrary redirect', async (selection) => {
-    window.history.replaceState({}, '', '/billing?' + selection + '&redirect=https://evil.test')
-    resetPasswordForEmail.mockResolvedValue({ error: null })
-    render(<LoginPage />)
-    fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
-    fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
-    fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
-    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('buyer@example.com', {
-      redirectTo: 'http://localhost:3000/reset-password?' + selection,
-    }))
-  })
+  it.each(['billingPlan=studio', 'billingState=payload.signature'])(
+    'preserves %s through password recovery without an arbitrary redirect',
+    async (selection) => {
+      window.history.replaceState({}, '', '/billing?' + selection + '&redirect=https://evil.test')
+      resetPasswordForEmail.mockResolvedValue({ error: null })
+      render(<LoginPage />)
+      fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
+      fireEvent.change(screen.getByLabelText('email'), { target: { value: 'buyer@example.com' } })
+      fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
+      await waitFor(() =>
+        expect(resetPasswordForEmail).toHaveBeenCalledWith('buyer@example.com', {
+          redirectTo: 'http://localhost:3000/reset-password?' + selection,
+        }),
+      )
+    },
+  )
 
   it('shows specific and fallback magic-link failures', async () => {
     window.history.replaceState({}, '', '/login')
-    signInWithOtp.mockResolvedValueOnce({ error: new Error('email unavailable') })
-      .mockRejectedValueOnce('offline')
+    signInWithOtp.mockResolvedValueOnce({ error: new Error('email unavailable') }).mockRejectedValueOnce('offline')
     render(<LoginPage />)
     fireEvent.change(screen.getByLabelText('email'), { target: { value: 'guest@example.com' } })
 
@@ -128,9 +144,11 @@ describe('LoginPage invitation continuation', () => {
     fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
     fireEvent.change(screen.getByLabelText('email'), { target: { value: 'guest@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
-    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('guest@example.com', {
-      redirectTo: 'http://localhost:3000/reset-password',
-    }))
+    await waitFor(() =>
+      expect(resetPasswordForEmail).toHaveBeenCalledWith('guest@example.com', {
+        redirectTo: 'http://localhost:3000/reset-password',
+      }),
+    )
   })
 })
 
@@ -205,7 +223,8 @@ describe('LoginPage signup', () => {
 
 describe('LoginPage extension continuation', () => {
   const continuation = `/extension-auth?${new URLSearchParams({
-    state: 's'.repeat(43), code_challenge: 'p'.repeat(43),
+    state: 's'.repeat(43),
+    code_challenge: 'p'.repeat(43),
     redirect_uri: 'https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/crrt-auth',
   })}`
 
@@ -220,9 +239,12 @@ describe('LoginPage extension continuation', () => {
     await waitFor(() => expect(signInWithPassword).toHaveBeenCalled())
     expect(window.location.pathname + window.location.search).toBe(continuation)
     fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
-    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({
-      email: 'u@example.com', options: { emailRedirectTo: `http://localhost:3000${continuation}` },
-    }))
+    await waitFor(() =>
+      expect(signInWithOtp).toHaveBeenCalledWith({
+        email: 'u@example.com',
+        options: { emailRedirectTo: `http://localhost:3000${continuation}` },
+      }),
+    )
   })
 
   it('switches modes without dropping the hosted flow and preserves it through recovery', async () => {
@@ -234,9 +256,11 @@ describe('LoginPage extension continuation', () => {
     fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
     fireEvent.change(screen.getByLabelText('email'), { target: { value: 'u@example.com' } })
     fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
-    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('u@example.com', {
-      redirectTo: `http://localhost:3000/reset-password?${new URLSearchParams({ continue: continuation })}`,
-    }))
+    await waitFor(() =>
+      expect(resetPasswordForEmail).toHaveBeenCalledWith('u@example.com', {
+        redirectTo: `http://localhost:3000/reset-password?${new URLSearchParams({ continue: continuation })}`,
+      }),
+    )
     expect(window.location.pathname + window.location.search).toBe(continuation)
   })
 })
@@ -261,7 +285,12 @@ describe('company access review continuation', () => {
     // Return to sign in to use the email-link flow.
     fireEvent.click(screen.getByRole('link', { name: /sign in/i }))
     fireEvent.click(screen.getByRole('button', { name: 'email me a sign-in link →' }))
-    await waitFor(() => expect(signInWithOtp).toHaveBeenCalledWith({ email: 'admin@company.com', options: { emailRedirectTo: 'http://localhost:3000/?accessProject=p' } }))
+    await waitFor(() =>
+      expect(signInWithOtp).toHaveBeenCalledWith({
+        email: 'admin@company.com',
+        options: { emailRedirectTo: 'http://localhost:3000/?accessProject=p' },
+      }),
+    )
   })
   it('preserves review context through password recovery', async () => {
     window.history.replaceState({}, '', '/login?accessProject=p')
@@ -270,22 +299,39 @@ describe('company access review continuation', () => {
     fireEvent.click(screen.getByRole('link', { name: 'forgot password? →' }))
     fireEvent.change(screen.getByLabelText('email'), { target: { value: 'admin@company.com' } })
     fireEvent.click(screen.getByRole('button', { name: /send reset link/i }))
-    await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('admin@company.com', { redirectTo: 'http://localhost:3000/reset-password?accessProject=p' }))
+    await waitFor(() =>
+      expect(resetPasswordForEmail).toHaveBeenCalledWith('admin@company.com', {
+        redirectTo: 'http://localhost:3000/reset-password?accessProject=p',
+      }),
+    )
   })
 })
 
 it.each([
-  '/widget-auth?' + new URLSearchParams({ projectKey: 'p', origin: 'https://site.test', state: 'a'.repeat(43), codeChallenge: 'b'.repeat(43) }),
-  '/extension-auth?' + new URLSearchParams({ state: 'a'.repeat(43), code_challenge: 'b'.repeat(43), redirect_uri: 'https://' + 'a'.repeat(32) + '.chromiumapp.org/crrt-auth' }),
-])('preserves a validated recovery continuation when requesting a fresh link: %s', async continuation => {
+  '/widget-auth?' +
+    new URLSearchParams({
+      projectKey: 'p',
+      origin: 'https://site.test',
+      state: 'a'.repeat(43),
+      codeChallenge: 'b'.repeat(43),
+    }),
+  '/extension-auth?' +
+    new URLSearchParams({
+      state: 'a'.repeat(43),
+      code_challenge: 'b'.repeat(43),
+      redirect_uri: 'https://' + 'a'.repeat(32) + '.chromiumapp.org/crrt-auth',
+    }),
+])('preserves a validated recovery continuation when requesting a fresh link: %s', async (continuation) => {
   window.history.replaceState({}, '', '/forgot-password?continue=' + encodeURIComponent(continuation))
   resetPasswordForEmail.mockResolvedValue({ error: null })
   render(<LoginPage />)
   fireEvent.change(screen.getByLabelText('email'), { target: { value: 'test@example.com' } })
   fireEvent.submit(screen.getByLabelText('email').closest('form')!)
-  await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
-    redirectTo: 'http://localhost:3000/reset-password?continue=' + encodeURIComponent(continuation),
-  }))
+  await waitFor(() =>
+    expect(resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
+      redirectTo: 'http://localhost:3000/reset-password?continue=' + encodeURIComponent(continuation),
+    }),
+  )
 })
 
 it('discards an external continuation when requesting a new reset link', async () => {
@@ -294,5 +340,9 @@ it('discards an external continuation when requesting a new reset link', async (
   render(<LoginPage />)
   fireEvent.change(screen.getByLabelText('email'), { target: { value: 'test@example.com' } })
   fireEvent.submit(screen.getByLabelText('email').closest('form')!)
-  await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', { redirectTo: 'http://localhost:3000/reset-password' }))
+  await waitFor(() =>
+    expect(resetPasswordForEmail).toHaveBeenCalledWith('test@example.com', {
+      redirectTo: 'http://localhost:3000/reset-password',
+    }),
+  )
 })

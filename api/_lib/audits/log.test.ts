@@ -8,7 +8,10 @@ describe('audit server logging', () => {
     const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined)
-    auditServerLog('info', 'stage.completed', { auditId: 'audit', values: Array.from({ length: 25 }, (_, index) => index) })
+    auditServerLog('info', 'stage.completed', {
+      auditId: 'audit',
+      values: Array.from({ length: 25 }, (_, index) => index),
+    })
     auditServerLog('warn', 'model.failed', { authorization: 'Bearer secret', message: 'Bearer hidden' })
     auditServerLog('error', 'run.failed', { apiKey: 'sk-secret', message: 'vck_abcdef' })
     expect(info).toHaveBeenCalledWith(expect.stringContaining('"event":"stage.completed"'))
@@ -21,13 +24,19 @@ describe('audit server logging', () => {
 
   it('serializes typed, generic, and unknown errors without leaking provider credentials', () => {
     const typed = Object.assign(new Error('provider failed with Bearer private'), {
-      name: 'AuditModelError', code: 'provider', retryAfterMs: 1_000,
+      name: 'AuditModelError',
+      code: 'provider',
+      retryAfterMs: 1_000,
       context: { httpStatus: 503, providerMessage: 'vck_private', token: 'secret' },
     })
-    expect(auditErrorLogFields(typed)).toEqual(expect.objectContaining({
-      errorName: 'AuditModelError', errorCode: 'provider', retryAfterMs: 1_000,
-      provider: expect.objectContaining({ httpStatus: 503, providerMessage: '[REDACTED]', token: '[REDACTED]' }),
-    }))
+    expect(auditErrorLogFields(typed)).toEqual(
+      expect.objectContaining({
+        errorName: 'AuditModelError',
+        errorCode: 'provider',
+        retryAfterMs: 1_000,
+        provider: expect.objectContaining({ httpStatus: 503, providerMessage: '[REDACTED]', token: '[REDACTED]' }),
+      }),
+    )
     expect(auditErrorLogFields('failed')).toEqual({ errorName: 'UnknownError', errorMessage: 'failed' })
   })
 })

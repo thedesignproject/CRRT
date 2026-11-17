@@ -7,12 +7,46 @@ import { Header } from './Header'
 import { route } from '../lib/routes'
 
 const fn = vi.fn()
-const props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, addProjectOpen: false, setAddProjectOpen: fn, onAddProject: fn, onCheckAvailability: fn, addProjectBusy: false, addProjectError: null, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark' as const, toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn }
+const props = {
+  projects: [],
+  projectsLoading: false,
+  projectsError: null,
+  commentsLoading: false,
+  selectedProject: '',
+  commentCount: 0,
+  setSelectedProject: fn,
+  setStatusFilter: fn,
+  setSelectedCommentId: fn,
+  addProjectOpen: false,
+  setAddProjectOpen: fn,
+  onAddProject: fn,
+  onCheckAvailability: fn,
+  addProjectBusy: false,
+  addProjectError: null,
+  onOpenCmd: fn,
+  onOpenSettings: fn,
+  settingsActive: false,
+  onOpenExtensionComments: fn,
+  extensionCommentsActive: false,
+  apiBase: '/api',
+  accessToken: 'token',
+  onProjectsChanged: fn,
+  onOpenCommentActivity: fn,
+  theme: 'dark' as const,
+  toggleTheme: fn,
+  user: { id: 'u' } as never,
+  onSignOut: fn,
+  superadmin: false,
+  superAdminActive: false,
+  onOpenSuperAdmin: fn,
+}
 
 describe('Header extension comments navigation', () => {
   it('places settings and super admin only in the sidebar footer and preserves permissions', () => {
     const onOpenSettings = vi.fn()
-    const view = render(<Header {...props} selectedProject="one" superadmin settingsActive onOpenSettings={onOpenSettings} />)
+    const view = render(
+      <Header {...props} selectedProject="one" superadmin settingsActive onOpenSettings={onOpenSettings} />,
+    )
     const footer = screen.getByRole('navigation', { name: 'Workspace administration' })
     expect(footer.parentElement).toBe(screen.getByRole('complementary', { name: 'Workspace navigation' }))
     expect(footer).toBe(footer.parentElement?.lastElementChild)
@@ -21,7 +55,9 @@ describe('Header extension comments navigation', () => {
     expect(settings).toHaveAttribute('aria-pressed', 'true')
     fireEvent.click(settings)
     expect(onOpenSettings).toHaveBeenCalledOnce()
-    expect(within(screen.getByRole('banner')).queryByRole('button', { name: /Project settings|Super admin/ })).toBeNull()
+    expect(
+      within(screen.getByRole('banner')).queryByRole('button', { name: /Project settings|Super admin/ }),
+    ).toBeNull()
     view.rerender(<Header {...props} selectedProject="one" canManageProject={false} />)
     expect(screen.queryByRole('button', { name: 'Project settings' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Super admin' })).toBeNull()
@@ -37,7 +73,8 @@ describe('Header extension comments navigation', () => {
   })
   it('opens and highlights the project-independent view', () => {
     const view = render(<Header {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Inbox' })); expect(fn).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'Inbox' }))
+    expect(fn).toHaveBeenCalled()
     view.rerender(<Header {...props} extensionCommentsActive />)
     expect(screen.getByRole('button', { name: 'Inbox' })).toHaveAttribute('aria-pressed', 'true')
   })
@@ -52,7 +89,14 @@ describe('Header extension comments navigation', () => {
   })
 
   it('never highlights a project or shows its settings alongside Inbox', () => {
-    const project = { publicKey: 'one', name: 'Project One', slug: 'one', allowedOrigins: [], createdAt: '', updatedAt: '' }
+    const project = {
+      publicKey: 'one',
+      name: 'Project One',
+      slug: 'one',
+      allowedOrigins: [],
+      createdAt: '',
+      updatedAt: '',
+    }
     const view = render(<Header {...props} projects={[project]} selectedProject="one" commentCount={3} />)
     expect(screen.getByRole('button', { name: /Project One/ })).toHaveAttribute('aria-pressed', 'true')
     view.rerender(<Header {...props} projects={[project]} selectedProject="one" extensionCommentsActive />)
@@ -85,5 +129,7 @@ it('hides the search shortcut hint when disabled but preserves the search button
     fn.mockClear()
     fireEvent.click(screen.getByRole('button', { name: 'Search feedback' }))
     expect(fn).toHaveBeenCalledOnce()
-  } finally { vi.unstubAllGlobals() }
+  } finally {
+    vi.unstubAllGlobals()
+  }
 })

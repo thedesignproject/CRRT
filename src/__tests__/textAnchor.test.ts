@@ -140,7 +140,15 @@ describe('buildTextRangeAnchor', () => {
   it('falls back to the container rect for zero-sized range rects', () => {
     const { p, lead } = setupDom()
     vi.spyOn(p, 'getBoundingClientRect').mockReturnValue({
-      left: 100, top: 200, width: 400, height: 50, right: 500, bottom: 250, x: 100, y: 200, toJSON: () => ({}),
+      left: 100,
+      top: 200,
+      width: 400,
+      height: 50,
+      right: 500,
+      bottom: 250,
+      x: 100,
+      y: 200,
+      toJSON: () => ({}),
     } as DOMRect)
 
     const built = buildTextRangeAnchor(makeRange(lead, 0, lead, 5), baseOpts)

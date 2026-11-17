@@ -1,11 +1,4 @@
-const TRACKING_PARAMS = new Set([
-  'fbclid',
-  'gclid',
-  'dclid',
-  'msclkid',
-  'mc_cid',
-  'mc_eid',
-])
+const TRACKING_PARAMS = new Set(['fbclid', 'gclid', 'dclid', 'msclkid', 'mc_cid', 'mc_eid'])
 
 export function normalizePageIdentity(value: string): string {
   try {

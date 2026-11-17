@@ -33,4 +33,3 @@ Source: `docs/context.md:101-110`, `docs/context.md:167-174`.
 - Do not add user research, surveys, or polls in v1.
 - Do not promise determinism; frame outputs as drafts to review.
 - Do not roadmap publicly too early.
-

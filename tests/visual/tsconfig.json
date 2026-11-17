@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "ES2022",
-      "DOM",
-      "DOM.Iterable"
-    ],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
@@ -13,20 +9,10 @@
     "skipLibCheck": true,
     "strict": true,
     "allowImportingTsExtensions": true,
-    "types": [
-      "node",
-      "vite/client"
-    ],
+    "types": ["node", "vite/client"],
     "paths": {
-      "@widget/*": [
-        "../../src/*"
-      ]
+      "@widget/*": ["../../src/*"]
     }
   },
-  "include": [
-    "./**/*",
-    "../replay/**/*",
-    "../../playwright.*.config.ts",
-    "../../scripts/chromatic/**/*.ts"
-  ]
+  "include": ["./**/*", "../replay/**/*", "../../playwright.*.config.ts", "../../scripts/chromatic/**/*.ts"]
 }

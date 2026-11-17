@@ -103,7 +103,12 @@ function sanitizeTextRangeAnchor(anchor: unknown): Record<string, unknown> | str
  * Legacy payloads (no targetType) resolve to element_point with no anchor.
  */
 export function parseCommentTarget(targetType: unknown, anchor: unknown): ParsedTarget {
-  if (targetType !== undefined && targetType !== null && targetType !== 'element_point' && targetType !== 'text_range') {
+  if (
+    targetType !== undefined &&
+    targetType !== null &&
+    targetType !== 'element_point' &&
+    targetType !== 'text_range'
+  ) {
     return { ok: false, error: 'targetType must be "element_point" or "text_range"' }
   }
 

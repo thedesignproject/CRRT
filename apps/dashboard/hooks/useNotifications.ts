@@ -86,7 +86,9 @@ export function useNotifications(
     }
   }, [apiBase, accessToken])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
   // Live-append inserts for this user. Falls back silently to the polled list
   // above if realtime isn't available.
@@ -99,9 +101,7 @@ export function useNotifications(
         { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
         (payload) => {
           const next = mapNotificationRow(payload.new as NotificationRow)
-          setNotifications((prev) => (
-            prev.some((p) => p.id === next.id) ? prev : sortNotifications([next, ...prev])
-          ))
+          setNotifications((prev) => (prev.some((p) => p.id === next.id) ? prev : sortNotifications([next, ...prev])))
           // An incoming invite notification may mean a new pending invite.
           if (next.kind === 'invite.received') refresh()
         },
@@ -127,32 +127,51 @@ export function useNotifications(
         },
       )
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    return () => {
+      supabase.removeChannel(channel)
+    }
   }, [userId, refresh])
 
   const unreadCount = notifications.filter((n) => !n.readAt).length
 
-  const markRead = useCallback(async (id: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)))
-    try { await apiMarkRead(apiBase, accessToken, id) } catch { await refresh() }
-  }, [apiBase, accessToken, refresh])
+  const markRead = useCallback(
+    async (id: string) => {
+      setNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n)))
+      try {
+        await apiMarkRead(apiBase, accessToken, id)
+      } catch {
+        await refresh()
+      }
+    },
+    [apiBase, accessToken, refresh],
+  )
 
   const markAllRead = useCallback(async () => {
     const ts = new Date().toISOString()
     setNotifications((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: ts })))
-    try { await apiMarkAll(apiBase, accessToken) } catch { await refresh() }
+    try {
+      await apiMarkAll(apiBase, accessToken)
+    } catch {
+      await refresh()
+    }
   }, [apiBase, accessToken, refresh])
 
-  const accept = useCallback(async (projectKey: string) => {
-    await apiAccept(apiBase, accessToken, projectKey)
-    onProjectsChanged?.()
-    await refresh()
-  }, [apiBase, accessToken, onProjectsChanged, refresh])
+  const accept = useCallback(
+    async (projectKey: string) => {
+      await apiAccept(apiBase, accessToken, projectKey)
+      onProjectsChanged?.()
+      await refresh()
+    },
+    [apiBase, accessToken, onProjectsChanged, refresh],
+  )
 
-  const decline = useCallback(async (projectKey: string) => {
-    await apiDecline(apiBase, accessToken, projectKey)
-    await refresh()
-  }, [apiBase, accessToken, refresh])
+  const decline = useCallback(
+    async (projectKey: string) => {
+      await apiDecline(apiBase, accessToken, projectKey)
+      await refresh()
+    },
+    [apiBase, accessToken, refresh],
+  )
 
   return { notifications, invites, unreadCount, loading, refresh, markRead, markAllRead, accept, decline }
 }

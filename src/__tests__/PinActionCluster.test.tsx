@@ -143,9 +143,7 @@ describe('PinActionCluster', () => {
 
   it('renders View list when onViewList is provided and fires the callback + themed hover', () => {
     const onViewList = vi.fn()
-    const { getByLabelText, getByText, queryByText } = render(
-      <PinActionCluster {...makeProps({ onViewList })} />,
-    )
+    const { getByLabelText, getByText, queryByText } = render(<PinActionCluster {...makeProps({ onViewList })} />)
     fireEvent.click(getByLabelText('More options'))
     const viewList = getByText('View list') as HTMLButtonElement
     expect(() => {

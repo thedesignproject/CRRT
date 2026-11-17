@@ -16,11 +16,7 @@ export function getSelector(el: Element): string {
     let selector = current.tagName.toLowerCase()
 
     if (current.className && typeof current.className === 'string') {
-      const safeClasses = current.className
-        .trim()
-        .split(/\s+/)
-        .filter(isValidClass)
-        .slice(0, 2)
+      const safeClasses = current.className.trim().split(/\s+/).filter(isValidClass).slice(0, 2)
 
       if (safeClasses.length) {
         selector += '.' + safeClasses.join('.')
@@ -29,9 +25,7 @@ export function getSelector(el: Element): string {
 
     const parent: Element | null = current.parentElement
     if (parent) {
-      const siblings = Array.from(parent.children).filter(
-        (c: Element) => c.tagName === current!.tagName
-      )
+      const siblings = Array.from(parent.children).filter((c: Element) => c.tagName === current!.tagName)
       if (siblings.length > 1) {
         const index = siblings.indexOf(current) + 1
         selector += `:nth-of-type(${index})`

@@ -25,13 +25,47 @@ const PAGE = 'https://site.example.com/pricing'
 const session = { accessToken: `crrt_widget_${'a'.repeat(43)}`, displayName: 'Ada', expiresAt: '2099-01-01T00:00:00Z' }
 const now = '2026-10-06T12:00:00.000Z'
 const comments = [
-  { id: 'c1', pageUrl: PAGE, selector: '#hero', body: 'Fix the headline', reviewStatus: 'open' as const, implementationStatus: 'unassigned' as const, claimedByAgentId: null, createdAt: now, authorName: 'Mina' },
-  { id: 'c2', pageUrl: PAGE, selector: '#cta', body: 'Polish the CTA', reviewStatus: 'accepted' as const, implementationStatus: 'in_progress' as const, claimedByAgentId: 'agent-1', createdAt: now, authorName: 'Teo' },
-  { id: 'c3', pageUrl: PAGE, selector: '#nav', body: 'Verify the nav', reviewStatus: 'accepted' as const, implementationStatus: 'ready_for_testing' as const, claimedByAgentId: 'agent-2', createdAt: now, authorName: null },
+  {
+    id: 'c1',
+    pageUrl: PAGE,
+    selector: '#hero',
+    body: 'Fix the headline',
+    reviewStatus: 'open' as const,
+    implementationStatus: 'unassigned' as const,
+    claimedByAgentId: null,
+    createdAt: now,
+    authorName: 'Mina',
+  },
+  {
+    id: 'c2',
+    pageUrl: PAGE,
+    selector: '#cta',
+    body: 'Polish the CTA',
+    reviewStatus: 'accepted' as const,
+    implementationStatus: 'in_progress' as const,
+    claimedByAgentId: 'agent-1',
+    createdAt: now,
+    authorName: 'Teo',
+  },
+  {
+    id: 'c3',
+    pageUrl: PAGE,
+    selector: '#nav',
+    body: 'Verify the nav',
+    reviewStatus: 'accepted' as const,
+    implementationStatus: 'ready_for_testing' as const,
+    claimedByAgentId: 'agent-2',
+    createdAt: now,
+    authorName: null,
+  },
 ]
 
 function button(label: string) {
-  const found = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((item) => item.textContent?.includes(label) || (label === 'Send to agent' && item.textContent?.includes('Accept & send to agent')))
+  const found = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find(
+    (item) =>
+      item.textContent?.includes(label) ||
+      (label === 'Send to agent' && item.textContent?.includes('Accept & send to agent')),
+  )
   if (!found) throw new Error(`Button not found: ${label}`)
   return found
 }
@@ -59,14 +93,27 @@ function renderBridge(overrides: Partial<ComponentProps<typeof PremiumAgentBridg
 beforeEach(() => {
   vi.stubGlobal('crypto', webcrypto)
   apiMocks.eligibility.mockReset().mockResolvedValue({ state: 'ready', comments })
-  apiMocks.createSession.mockReset().mockResolvedValue({ shareId: 'share-id', slug: 'share-slug', token: 'share-token', tokenUrl: 'https://x', expiresAt: now, commentCount: 1 })
+  apiMocks.createSession.mockReset().mockResolvedValue({
+    shareId: 'share-id',
+    slug: 'share-slug',
+    token: 'share-token',
+    tokenUrl: 'https://x',
+    expiresAt: now,
+    commentCount: 1,
+  })
   apiMocks.mutate.mockReset().mockResolvedValue({ comments })
   apiMocks.upgrade.mockReset().mockResolvedValue({ url: 'https://billing.example.com/checkout' })
-  vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
-    const target = new URL(String(input)).searchParams.get('target')
-    return new Response(JSON.stringify({ prompt: `PROMPT ${target}` }), { status: 200 })
-  }))
-  Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true })
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (input: RequestInfo | URL) => {
+      const target = new URL(String(input)).searchParams.get('target')
+      return new Response(JSON.stringify({ prompt: `PROMPT ${target}` }), { status: 200 })
+    }),
+  )
+  Object.defineProperty(navigator, 'clipboard', {
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    configurable: true,
+  })
 })
 
 afterEach(() => {
@@ -99,7 +146,9 @@ describe('<PremiumAgentBridge />', () => {
     dialog.focus()
     fireEvent.keyDown(window, { key: 'Tab' })
     expect(document.activeElement).toBe(dialog)
-    await act(async () => { fireEvent.click(login) })
+    await act(async () => {
+      fireEvent.click(login)
+    })
     expect(onLogin).toHaveBeenCalledOnce()
 
     fireEvent.keyDown(window, { key: 'Escape' })
@@ -130,15 +179,33 @@ describe('<PremiumAgentBridge />', () => {
     const { props } = renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
 
-    await act(async () => { fireEvent.click(button('Accept')) })
-    expect(apiMocks.mutate).toHaveBeenLastCalledWith(API, { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1'], action: 'accept' }, session)
+    await act(async () => {
+      fireEvent.click(button('Accept'))
+    })
+    expect(apiMocks.mutate).toHaveBeenLastCalledWith(
+      API,
+      { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1'], action: 'accept' },
+      session,
+    )
 
     fireEvent.click(checkbox('Polish the CTA'))
-    await act(async () => { fireEvent.click(button('Resolve selected')) })
-    expect(apiMocks.mutate).toHaveBeenLastCalledWith(API, { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c2'], action: 'resolve' }, session)
+    await act(async () => {
+      fireEvent.click(button('Resolve selected'))
+    })
+    expect(apiMocks.mutate).toHaveBeenLastCalledWith(
+      API,
+      { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c2'], action: 'resolve' },
+      session,
+    )
 
-    await act(async () => { fireEvent.click(button('Reject selected')) })
-    expect(apiMocks.mutate).toHaveBeenLastCalledWith(API, { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1', 'c2'], action: 'reject' }, session)
+    await act(async () => {
+      fireEvent.click(button('Reject selected'))
+    })
+    expect(apiMocks.mutate).toHaveBeenLastCalledWith(
+      API,
+      { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1', 'c2'], action: 'reject' },
+      session,
+    )
     expect(props.onFeedbackChanged).toHaveBeenCalledTimes(3)
   })
 
@@ -146,7 +213,9 @@ describe('<PremiumAgentBridge />', () => {
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
     fireEvent.click(checkbox('Polish the CTA'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
 
     expect(apiMocks.createSession).toHaveBeenCalledOnce()
     const payload = apiMocks.createSession.mock.calls[0][1]
@@ -155,7 +224,9 @@ describe('<PremiumAgentBridge />', () => {
     expect(fetch).toHaveBeenCalledTimes(3)
     await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
 
-    await act(async () => { fireEvent.click(button('Claude Code')) })
+    await act(async () => {
+      fireEvent.click(button('Claude Code'))
+    })
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT claude-code')
   })
 
@@ -164,12 +235,22 @@ describe('<PremiumAgentBridge />', () => {
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
     fireEvent.click(button('Select all'))
     expect(document.body.textContent).toContain('2 of 2 selected')
-    await act(async () => { fireEvent.click(button('Accept selected')) })
-    expect(apiMocks.mutate).toHaveBeenCalledWith(API, { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1'], action: 'accept' }, session)
+    await act(async () => {
+      fireEvent.click(button('Accept selected'))
+    })
+    expect(apiMocks.mutate).toHaveBeenCalledWith(
+      API,
+      { projectKey: 'proj', pageUrl: PAGE, commentIds: ['c1'], action: 'accept' },
+      session,
+    )
 
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
-    await act(async () => { fireEvent.click(button('Start another handoff')) })
+    await act(async () => {
+      fireEvent.click(button('Start another handoff'))
+    })
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
   })
 
@@ -192,13 +273,21 @@ describe('<PremiumAgentBridge />', () => {
   })
 
   it.each([
-    [new Response('', { status: 500 }), 'Feedback is accepted and the handoff exists. Prompts could not load; retry below.'],
-    [new Response(JSON.stringify({ prompt: 42 }), { status: 200 }), 'Feedback is accepted and the handoff exists. Prompts could not load; retry below.'],
+    [
+      new Response('', { status: 500 }),
+      'Feedback is accepted and the handoff exists. Prompts could not load; retry below.',
+    ],
+    [
+      new Response(JSON.stringify({ prompt: 42 }), { status: 200 }),
+      'Feedback is accepted and the handoff exists. Prompts could not load; retry below.',
+    ],
   ])('reports invalid prompt responses %#', async (response, message) => {
     vi.mocked(fetch).mockResolvedValue(response)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     expect(document.body.textContent).toContain(message)
   })
 
@@ -212,14 +301,18 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.mutate.mockRejectedValueOnce('mutation')
     const mutation = renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Accept')) })
+    await act(async () => {
+      fireEvent.click(button('Accept'))
+    })
     expect(document.body.textContent).toContain('Could not update feedback.')
     mutation.unmount()
 
     apiMocks.createSession.mockRejectedValueOnce('handoff')
     const handoff = renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     expect(document.body.textContent).toContain('Could not create the Agent handoff.')
   })
 
@@ -227,19 +320,34 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.createSession.mockRejectedValue(new WidgetRequestError(500))
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     expect(document.body.textContent).toContain('Could not save or load feedback. Please try again.')
     expect(document.body.textContent).toContain('Fix the headline')
   })
 
   it('reuses the idempotency key when the same handoff is retried', async () => {
-    apiMocks.createSession.mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce({ shareId: 'share-id', slug: 'share-slug', token: 'share-token', tokenUrl: 'https://x', expiresAt: now, commentCount: 1 })
+    apiMocks.createSession.mockRejectedValueOnce(new Error('temporary')).mockResolvedValueOnce({
+      shareId: 'share-id',
+      slug: 'share-slug',
+      token: 'share-token',
+      tokenUrl: 'https://x',
+      expiresAt: now,
+      commentCount: 1,
+    })
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     expect(document.body.textContent).toContain('temporary')
-    await act(async () => { fireEvent.click(button('Send to agent')) })
-    expect(apiMocks.createSession.mock.calls[0][1].idempotencyKey).toBe(apiMocks.createSession.mock.calls[1][1].idempotencyKey)
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
+    expect(apiMocks.createSession.mock.calls[0][1].idempotencyKey).toBe(
+      apiMocks.createSession.mock.calls[1][1].idempotencyKey,
+    )
   })
 
   it.each([
@@ -252,7 +360,9 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.createSession.mockRejectedValue(failure)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     expect(document.body.textContent).toContain(heading)
   })
 
@@ -271,14 +381,20 @@ describe('<PremiumAgentBridge />', () => {
   it('opens owner billing in a popup and exposes a fallback link when popups are blocked', async () => {
     apiMocks.eligibility.mockResolvedValue({ state: 'upgrade_required' })
     const popup = { location: { href: '' }, close: vi.fn() }
-    vi.spyOn(window, 'open').mockReturnValueOnce(popup as never).mockReturnValueOnce(null)
+    vi.spyOn(window, 'open')
+      .mockReturnValueOnce(popup as never)
+      .mockReturnValueOnce(null)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Agent is a premium feature'))
 
-    await act(async () => { fireEvent.click(button('Upgrade plan')) })
+    await act(async () => {
+      fireEvent.click(button('Upgrade plan'))
+    })
     expect(popup.location.href).toBe('https://billing.example.com/checkout')
     expect(apiMocks.upgrade).toHaveBeenCalledWith(API, { projectKey: 'proj', pageUrl: PAGE }, session)
-    await act(async () => { fireEvent.click(button('Upgrade plan')) })
+    await act(async () => {
+      fireEvent.click(button('Upgrade plan'))
+    })
     expect(document.body.textContent).toContain('blocked the billing window')
     expect(document.querySelector<HTMLAnchorElement>('a[href="https://billing.example.com/checkout"]')).not.toBeNull()
   })
@@ -290,7 +406,9 @@ describe('<PremiumAgentBridge />', () => {
     vi.spyOn(window, 'open').mockReturnValue(popup as never)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Agent is a premium feature'))
-    await act(async () => { fireEvent.click(button('Upgrade plan')) })
+    await act(async () => {
+      fireEvent.click(button('Upgrade plan'))
+    })
     expect(popup.close).toHaveBeenCalledOnce()
     expect(document.body.textContent).toContain('Billing unavailable')
   })
@@ -301,7 +419,9 @@ describe('<PremiumAgentBridge />', () => {
     vi.spyOn(window, 'open').mockReturnValue(null)
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Agent is a premium feature'))
-    await act(async () => { fireEvent.click(button('Upgrade plan')) })
+    await act(async () => {
+      fireEvent.click(button('Upgrade plan'))
+    })
     expect(document.body.textContent).toContain('Could not open billing.')
   })
 
@@ -309,9 +429,13 @@ describe('<PremiumAgentBridge />', () => {
     vi.mocked(navigator.clipboard.writeText).mockRejectedValue(new Error('denied'))
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Send to agent')) })
+    await act(async () => {
+      fireEvent.click(button('Send to agent'))
+    })
     await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
-    await act(async () => { fireEvent.click(button('Claude Code')) })
+    await act(async () => {
+      fireEvent.click(button('Claude Code'))
+    })
     expect(document.body.textContent).toContain('Copy failed')
   })
 
@@ -319,7 +443,9 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.eligibility.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ state: 'ready', comments })
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Agent could not load'))
-    await act(async () => { fireEvent.click(button('Retry')) })
+    await act(async () => {
+      fireEvent.click(button('Retry'))
+    })
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
   })
 
@@ -329,7 +455,9 @@ describe('<PremiumAgentBridge />', () => {
     // Flush the ready-state effect before firing the event it subscribes to.
     await act(async () => {})
     apiMocks.eligibility.mockRejectedValueOnce(new Error('background offline'))
-    await act(async () => { window.dispatchEvent(new Event('focus')) })
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
     await waitFor(() => expect(apiMocks.eligibility).toHaveBeenCalledTimes(2))
     expect(document.body.textContent).toContain('Fix the headline')
     expect(document.body.textContent).not.toContain('background offline')
@@ -345,7 +473,9 @@ describe('<PremiumAgentBridge />', () => {
     apiMocks.mutate.mockRejectedValueOnce(new WidgetRequestError(401))
     renderBridge()
     await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-    await act(async () => { fireEvent.click(button('Accept')) })
+    await act(async () => {
+      fireEvent.click(button('Accept'))
+    })
     expect(document.body.textContent).toContain('Log in to continue')
   })
 })
@@ -353,27 +483,43 @@ describe('<PremiumAgentBridge />', () => {
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
-  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no })
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes
+    reject = no
+  })
   return { promise, resolve, reject }
 }
 
-it.each(['page', 'project', 'session', 'api', 'unmount'] as const)('discards a delayed handoff after changing %s', async (change) => {
-  const pending = deferred<any>()
-  apiMocks.createSession.mockReturnValueOnce(pending.promise)
-  const view = renderBridge()
-  await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  fireEvent.click(button('Send to agent'))
-  if (change === 'unmount') view.unmount()
-  else {
-    const overrides = change === 'page' ? { pageUrl: PAGE + '/new' } : change === 'project' ? { projectId: 'other' } : change === 'api' ? { apiBase: API + '/new' } : { widgetSession: { ...session, accessToken: 'new-token' } }
-    view.rerender(<PremiumAgentBridge {...view.props} {...overrides} />)
-    await waitFor(() => expect(button('Send to agent').disabled).toBe(false))
-  }
-  await act(async () => { pending.resolve({ slug: 'old-share', token: 'old-token' }); await pending.promise })
-  expect(fetch).not.toHaveBeenCalled()
-  expect(document.body.textContent).not.toContain('Handoff ready')
-  expect(view.props.onFeedbackChanged).not.toHaveBeenCalled()
-})
+it.each(['page', 'project', 'session', 'api', 'unmount'] as const)(
+  'discards a delayed handoff after changing %s',
+  async (change) => {
+    const pending = deferred<any>()
+    apiMocks.createSession.mockReturnValueOnce(pending.promise)
+    const view = renderBridge()
+    await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
+    fireEvent.click(button('Send to agent'))
+    if (change === 'unmount') view.unmount()
+    else {
+      const overrides =
+        change === 'page'
+          ? { pageUrl: PAGE + '/new' }
+          : change === 'project'
+            ? { projectId: 'other' }
+            : change === 'api'
+              ? { apiBase: API + '/new' }
+              : { widgetSession: { ...session, accessToken: 'new-token' } }
+      view.rerender(<PremiumAgentBridge {...view.props} {...overrides} />)
+      await waitFor(() => expect(button('Send to agent').disabled).toBe(false))
+    }
+    await act(async () => {
+      pending.resolve({ slug: 'old-share', token: 'old-token' })
+      await pending.promise
+    })
+    expect(fetch).not.toHaveBeenCalled()
+    expect(document.body.textContent).not.toContain('Handoff ready')
+    expect(view.props.onFeedbackChanged).not.toHaveBeenCalled()
+  },
+)
 
 it.each(['resolve', 'reject'] as const)('discards %s of delayed prompts after navigation', async (outcome) => {
   const pending = deferred<Response>()
@@ -401,7 +547,9 @@ it.each(['resolve', 'reject'] as const)('discards a delayed mutation %s after na
   fireEvent.click(button('Accept'))
   view.rerender(<PremiumAgentBridge {...view.props} pageUrl={PAGE + '/new'} />)
   await waitFor(() => expect(button('Send to agent').disabled).toBe(false))
-  await act(async () => { outcome === 'resolve' ? pending.resolve({}) : pending.reject(new WidgetRequestError(401)) })
+  await act(async () => {
+    outcome === 'resolve' ? pending.resolve({}) : pending.reject(new WidgetRequestError(401))
+  })
   expect(view.props.onFeedbackChanged).not.toHaveBeenCalled()
   expect(document.body.textContent).not.toContain('Log in to continue')
   expect(apiMocks.eligibility).toHaveBeenCalledTimes(2)
@@ -417,7 +565,11 @@ it.each(['resolve', 'reject'] as const)('closes a delayed billing popup on conte
   await waitFor(() => expect(document.body.textContent).toContain('Agent is a premium feature'))
   fireEvent.click(button('Upgrade plan'))
   view.rerender(<PremiumAgentBridge {...view.props} pageUrl={PAGE + '/new'} />)
-  await act(async () => { outcome === 'resolve' ? pending.resolve({ url: 'https://old-billing.test' }) : pending.reject(new Error('OLD ERROR')) })
+  await act(async () => {
+    outcome === 'resolve'
+      ? pending.resolve({ url: 'https://old-billing.test' })
+      : pending.reject(new Error('OLD ERROR'))
+  })
   expect(popup.close).toHaveBeenCalledOnce()
   expect(popup.location.href).toBe('')
   expect(document.body.textContent).not.toContain('OLD ERROR')
@@ -427,31 +579,47 @@ it('keeps the retry key through a background eligibility refresh, and changes it
   apiMocks.createSession.mockRejectedValue(new Error('temporary'))
   renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
-  await act(async () => { window.dispatchEvent(new Event('focus')) })
-  await act(async () => { fireEvent.click(button('Send to agent')) })
-  expect(apiMocks.createSession.mock.calls[1][1].idempotencyKey).toBe(apiMocks.createSession.mock.calls[0][1].idempotencyKey)
+  await act(async () => {
+    fireEvent.click(button('Send to agent'))
+  })
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'))
+  })
+  await act(async () => {
+    fireEvent.click(button('Send to agent'))
+  })
+  expect(apiMocks.createSession.mock.calls[1][1].idempotencyKey).toBe(
+    apiMocks.createSession.mock.calls[0][1].idempotencyKey,
+  )
   fireEvent.click(checkbox('Polish the CTA'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
-  expect(apiMocks.createSession.mock.calls[2][1].idempotencyKey).not.toBe(apiMocks.createSession.mock.calls[0][1].idempotencyKey)
+  await act(async () => {
+    fireEvent.click(button('Send to agent'))
+  })
+  expect(apiMocks.createSession.mock.calls[2][1].idempotencyKey).not.toBe(
+    apiMocks.createSession.mock.calls[0][1].idempotencyKey,
+  )
 })
-
 
 it('creates a fresh key for an explicit new handoff with the same selection', async () => {
   renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => {
+    fireEvent.click(button('Send to agent'))
+  })
   await waitFor(() => expect(document.body.textContent).toContain('Handoff ready'))
   const first = apiMocks.createSession.mock.calls[0][1]
-  await act(async () => { fireEvent.click(button('Start another handoff')) })
+  await act(async () => {
+    fireEvent.click(button('Start another handoff'))
+  })
   await waitFor(() => expect(document.body.textContent).toContain('Fix the headline'))
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => {
+    fireEvent.click(button('Send to agent'))
+  })
   await waitFor(() => expect(apiMocks.createSession).toHaveBeenCalledTimes(2))
   const second = apiMocks.createSession.mock.calls[1][1]
   expect(second.commentIds).toEqual(first.commentIds)
   expect(second.idempotencyKey).not.toBe(first.idempotencyKey)
 })
-
 
 it('keeps a completed handoff visible after an upgrade, focus, and polling intervals', async () => {
   apiMocks.eligibility.mockResolvedValue({ state: 'upgrade_required' })
@@ -459,11 +627,17 @@ it('keeps a completed handoff visible after an upgrade, focus, and polling inter
   renderBridge()
   await waitFor(() => expect(document.body.textContent).toContain('Agent is a premium feature'))
   vi.useFakeTimers()
-  await act(async () => { fireEvent.click(button('Upgrade plan')) })
+  await act(async () => {
+    fireEvent.click(button('Upgrade plan'))
+  })
   apiMocks.eligibility.mockResolvedValue({ state: 'ready', comments })
-  await act(async () => { window.dispatchEvent(new Event('focus')) })
+  await act(async () => {
+    window.dispatchEvent(new Event('focus'))
+  })
   expect(document.body.textContent).toContain('Fix the headline')
-  await act(async () => { fireEvent.click(button('Send to agent')) })
+  await act(async () => {
+    fireEvent.click(button('Send to agent'))
+  })
   expect(document.body.textContent).toContain('Handoff ready')
   const eligibilityCalls = apiMocks.eligibility.mock.calls.length
   await act(async () => {
@@ -473,27 +647,38 @@ it('keeps a completed handoff visible after an upgrade, focus, and polling inter
   expect(apiMocks.eligibility).toHaveBeenCalledTimes(eligibilityCalls)
   expect(document.body.textContent).toContain('Handoff ready')
   expect(button('Codex').disabled).toBe(false)
-  await act(async () => { fireEvent.click(button('Codex')) })
+  await act(async () => {
+    fireEvent.click(button('Codex'))
+  })
   expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT codex')
 })
 
-it('discloses acceptance before handoff and retries prompt loading without another mutation',async()=>{
- vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'))
- const view=renderBridge()
- await waitFor(()=>expect(document.body.textContent).toContain('Sending accepts 1 open feedback item.'))
- expect(button('Accept & send to agent')).toBeEnabled()
- await act(async()=>{fireEvent.click(button('Accept & send to agent'))})
- expect(document.body.textContent).toContain('Feedback is accepted and the handoff exists.')
- expect(view.props.onFeedbackChanged).toHaveBeenCalledOnce()
- await act(async()=>{fireEvent.click(button('Retry loading prompts'))})
- expect(apiMocks.createSession).toHaveBeenCalledOnce()
- expect(apiMocks.mutate).not.toHaveBeenCalled()
- await act(async()=>{fireEvent.click(button('Claude Code'))})
- expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT claude-code')
- expect(apiMocks.mutate).not.toHaveBeenCalled()
+it('discloses acceptance before handoff and retries prompt loading without another mutation', async () => {
+  vi.mocked(fetch).mockRejectedValueOnce(new Error('offline'))
+  const view = renderBridge()
+  await waitFor(() => expect(document.body.textContent).toContain('Sending accepts 1 open feedback item.'))
+  expect(button('Accept & send to agent')).toBeEnabled()
+  await act(async () => {
+    fireEvent.click(button('Accept & send to agent'))
+  })
+  expect(document.body.textContent).toContain('Feedback is accepted and the handoff exists.')
+  expect(view.props.onFeedbackChanged).toHaveBeenCalledOnce()
+  await act(async () => {
+    fireEvent.click(button('Retry loading prompts'))
+  })
+  expect(apiMocks.createSession).toHaveBeenCalledOnce()
+  expect(apiMocks.mutate).not.toHaveBeenCalled()
+  await act(async () => {
+    fireEvent.click(button('Claude Code'))
+  })
+  expect(navigator.clipboard.writeText).toHaveBeenCalledWith('PROMPT claude-code')
+  expect(apiMocks.mutate).not.toHaveBeenCalled()
 })
-it('discloses the count when accepting multiple open items',async()=>{
- apiMocks.eligibility.mockResolvedValue({state:'ready',comments:comments.slice(0,2).map(c=>({...c,reviewStatus:'open',implementationStatus:'unassigned'}))})
- renderBridge()
- await waitFor(()=>expect(document.body.textContent).toContain('Sending accepts 2 open feedback items.'))
+it('discloses the count when accepting multiple open items', async () => {
+  apiMocks.eligibility.mockResolvedValue({
+    state: 'ready',
+    comments: comments.slice(0, 2).map((c) => ({ ...c, reviewStatus: 'open', implementationStatus: 'unassigned' })),
+  })
+  renderBridge()
+  await waitFor(() => expect(document.body.textContent).toContain('Sending accepts 2 open feedback items.'))
 })

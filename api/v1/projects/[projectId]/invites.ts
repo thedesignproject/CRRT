@@ -91,14 +91,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const invite = await createInvite({ projectKey, email, role, invitedBy: user.userId })
 
     try {
-      waitUntil(sendProjectInviteEmailInBackground({
-        email,
-        inviterEmail: user.email,
-        projectKey,
-        role,
-        dashboardUrl: getProjectInviteDashboardUrl(projectKey, email),
-        idempotencyKey: getProjectInviteEmailIdempotencyKey(projectKey, email),
-      }))
+      waitUntil(
+        sendProjectInviteEmailInBackground({
+          email,
+          inviterEmail: user.email,
+          projectKey,
+          role,
+          dashboardUrl: getProjectInviteDashboardUrl(projectKey, email),
+          idempotencyKey: getProjectInviteEmailIdempotencyKey(projectKey, email),
+        }),
+      )
     } catch (scheduleError) {
       console.warn('Project invite email scheduling failed', scheduleError)
     }
@@ -124,7 +126,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
     if (msg === 'already_invited') return jsonError(req, res, 409, 'Already invited', error)
-    if (msg === 'agent_seat_limit_reached') return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available', error)
+    if (msg === 'agent_seat_limit_reached')
+      return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available', error)
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error', error)
   }

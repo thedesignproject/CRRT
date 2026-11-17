@@ -15,6 +15,8 @@ describe.skipIf(!enabled)('credential-gated Product Audit providers', () => {
     const model = new OpenAiCompatibleAuditModel()
     const candidates = await runCritic(model, exploration.evidence)
     const decisions = await runVerifier(model, candidates, exploration.evidence)
-    expect(decisions.every((decision) => candidates.some((candidate) => candidate.id === decision.candidateId))).toBe(true)
+    expect(decisions.every((decision) => candidates.some((candidate) => candidate.id === decision.candidateId))).toBe(
+      true,
+    )
   }, 180_000)
 })

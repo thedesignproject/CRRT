@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
-  listener: undefined as ((message: unknown, sender: unknown, respond: (response: unknown) => void) => boolean) | undefined,
+  listener: undefined as
+    | ((message: unknown, sender: unknown, respond: (response: unknown) => void) => boolean)
+    | undefined,
   removed: undefined as ((tabId: number) => void) | undefined,
   activated: undefined as ((info: { windowId: number }) => void) | undefined,
   updated: undefined as ((tabId: number, changeInfo: { url?: string; status?: string }) => void) | undefined,
@@ -12,22 +14,46 @@ const browser = vi.hoisted(() => ({
   action: { openPopup: vi.fn() },
   windows: { create: vi.fn(), update: vi.fn(), remove: vi.fn().mockResolvedValue(undefined) },
   tabCapture: { getMediaStreamId: vi.fn() },
-  commands: { onCommand: { addListener: vi.fn((value) => { state.command = value }) } },
+  commands: {
+    onCommand: {
+      addListener: vi.fn((value) => {
+        state.command = value
+      }),
+    },
+  },
   tabs: {
     query: vi.fn(),
     get: vi.fn(),
     captureVisibleTab: vi.fn(),
     sendMessage: vi.fn(),
     update: vi.fn(),
-    onActivated: { addListener: vi.fn((value) => { state.activated = value }) },
-    onRemoved: { addListener: vi.fn((value) => { state.removed = value }) },
-    onUpdated: { addListener: vi.fn((value) => { state.updated = value }) },
+    onActivated: {
+      addListener: vi.fn((value) => {
+        state.activated = value
+      }),
+    },
+    onRemoved: {
+      addListener: vi.fn((value) => {
+        state.removed = value
+      }),
+    },
+    onUpdated: {
+      addListener: vi.fn((value) => {
+        state.updated = value
+      }),
+    },
   },
-  storage: { session: {
-    get: vi.fn(async (key: string) => ({ [key]: state.session[key] })),
-    set: vi.fn(async (values: Record<string, unknown>) => { Object.assign(state.session, values) }),
-    remove: vi.fn(async (key: string) => { delete state.session[key] }),
-  } },
+  storage: {
+    session: {
+      get: vi.fn(async (key: string) => ({ [key]: state.session[key] })),
+      set: vi.fn(async (values: Record<string, unknown>) => {
+        Object.assign(state.session, values)
+      }),
+      remove: vi.fn(async (key: string) => {
+        delete state.session[key]
+      }),
+    },
+  },
   scripting: { executeScript: vi.fn() },
   offscreen: { createDocument: vi.fn() },
   runtime: {
@@ -35,12 +61,20 @@ const browser = vi.hoisted(() => ({
     getURL: vi.fn((path: string) => `chrome-extension://extension-id${path}`),
     sendMessage: vi.fn(),
     getContexts: vi.fn().mockResolvedValue([]),
-    onMessage: { addListener: vi.fn((value) => { state.listener = value }) },
+    onMessage: {
+      addListener: vi.fn((value) => {
+        state.listener = value
+      }),
+    },
   },
 }))
 vi.mock('wxt/browser', () => ({ browser }))
 vi.mock('wxt/utils/define-background', () => ({ defineBackground: vi.fn((main) => main) }))
-vi.mock('../lib/auth', () => ({ createExtensionSupabase: vi.fn(() => 'client'), handleAuthMessage: vi.fn(), isAuthMessage: vi.fn() }))
+vi.mock('../lib/auth', () => ({
+  createExtensionSupabase: vi.fn(() => 'client'),
+  handleAuthMessage: vi.fn(),
+  isAuthMessage: vi.fn(),
+}))
 vi.mock('../lib/hosted-auth', () => ({ startHostedSignIn: vi.fn() }))
 const hasAcceptedDisclosure = vi.hoisted(() => vi.fn())
 vi.mock('../lib/disclosure', () => ({ hasAcceptedDisclosure }))
@@ -52,7 +86,12 @@ import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn } from '../lib/hosted-auth'
 
 beforeEach(() => {
-  vi.clearAllMocks(); state.listener = undefined; state.removed = undefined; state.updated = undefined; state.command = undefined; state.session = {}
+  vi.clearAllMocks()
+  state.listener = undefined
+  state.removed = undefined
+  state.updated = undefined
+  state.command = undefined
+  state.session = {}
   browser.tabs.get.mockImplementation(async (tabId: number) => ({ id: tabId, url: 'https://example.com' }))
   browser.tabs.sendMessage.mockResolvedValue({ ok: true })
   browser.tabs.update.mockResolvedValue(undefined)
@@ -80,8 +119,15 @@ describe('extension background', () => {
     ;(background as unknown as () => void)()
     expect(createExtensionSupabase).not.toHaveBeenCalled()
     vi.mocked(isAuthMessage).mockReturnValue(true)
-    for (const message of [{ type: 'auth:get' }, { type: 'auth:sign-out' }, { type: 'auth:hosted-sign-in', intent: 'signin' }]) {
-      await expect(send(message)).resolves.toEqual({ ok: false, error: 'Review the CRRT privacy summary before signing in' })
+    for (const message of [
+      { type: 'auth:get' },
+      { type: 'auth:sign-out' },
+      { type: 'auth:hosted-sign-in', intent: 'signin' },
+    ]) {
+      await expect(send(message)).resolves.toEqual({
+        ok: false,
+        error: 'Review the CRRT privacy summary before signing in',
+      })
     }
     expect(createExtensionSupabase).not.toHaveBeenCalled()
     expect(handleAuthMessage).not.toHaveBeenCalled()
@@ -99,7 +145,9 @@ describe('extension background', () => {
     hasAcceptedDisclosure.mockRejectedValueOnce(new Error('storage unavailable'))
     await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'storage unavailable' })
     expect(createExtensionSupabase).not.toHaveBeenCalled()
-    vi.mocked(createExtensionSupabase).mockImplementationOnce(() => { throw new Error('configuration unavailable') })
+    vi.mocked(createExtensionSupabase).mockImplementationOnce(() => {
+      throw new Error('configuration unavailable')
+    })
     await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'configuration unavailable' })
     await expect(send({ type: 'auth:get' })).resolves.toMatchObject({ ok: true })
     expect(createExtensionSupabase).toHaveBeenCalledTimes(2)
@@ -136,7 +184,10 @@ describe('extension background', () => {
     expect(browser.scripting.executeScript).toHaveBeenCalledOnce()
     delete state.session['crrt:recording-session']
     browser.tabs.query.mockResolvedValueOnce([{}])
-    await expect(send({ type: 'record:open' })).resolves.toEqual({ ok: false, error: 'Open a regular web page to start recording' })
+    await expect(send({ type: 'record:open' })).resolves.toEqual({
+      ok: false,
+      error: 'Open a regular web page to start recording',
+    })
   })
 
   it('runs the integrated setup, recording, restart, finish, and cancel lifecycle', async () => {
@@ -147,86 +198,218 @@ describe('extension background', () => {
     browser.tabCapture.getMediaStreamId.mockResolvedValue('stream-7')
 
     await send({ type: 'record:open' })
-    const descriptor = state.session['crrt:recording-session'] as { sessionId: string; snapshot: Record<string, unknown> }
+    const descriptor = state.session['crrt:recording-session'] as {
+      sessionId: string
+      snapshot: Record<string, unknown>
+    }
     const surface = { url: 'https://example.com/checkout', tab: { id: 7 }, frameId: 0 }
-    await expect(send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)).resolves.toMatchObject({ ok: true, data: { status: 'setup' } })
-    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }, surface)).resolves.toEqual({ ok: true })
-    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'microphone.toggled' } }, surface)).resolves.toEqual({ ok: true })
-    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'transcription.toggled' } }, surface)).resolves.toEqual({ ok: true })
+    await expect(
+      send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface),
+    ).resolves.toMatchObject({ ok: true, data: { status: 'setup' } })
+    await expect(
+      send(
+        { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } },
+        surface,
+      ),
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      send(
+        { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'microphone.toggled' } },
+        surface,
+      ),
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      send(
+        { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'transcription.toggled' } },
+        surface,
+      ),
+    ).resolves.toEqual({ ok: true })
     expect((state.session['crrt:recording-session'] as any).snapshot.hostedTranscription).toBe(true)
-    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'start' } }, surface)).resolves.toEqual({ ok: true })
-    expect(browser.offscreen.createDocument).toHaveBeenCalledWith(expect.objectContaining({ url: 'chrome-extension://extension-id/offscreen.html' }))
-    expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({
-      type: 'record:offscreen-start', sessionId: descriptor.sessionId, tabStreamId: 'stream-7', pageTitle: 'Checkout',
-    }))
+    await expect(
+      send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'start' } }, surface),
+    ).resolves.toEqual({ ok: true })
+    expect(browser.offscreen.createDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ url: 'chrome-extension://extension-id/offscreen.html' }),
+    )
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'record:offscreen-start',
+        sessionId: descriptor.sessionId,
+        tabStreamId: 'stream-7',
+        pageTitle: 'Checkout',
+      }),
+    )
 
-    const recording = { ...descriptor.snapshot, hostedTranscription: true, status: 'recording', countdown: 0, durationMs: 2_000 }
-    await send({ type: 'record:offscreen-state', target: 'background', sessionId: descriptor.sessionId, snapshot: recording })
-    await expect(send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'transcription.toggled' } }, surface)).resolves.toMatchObject({ ok: false, error: 'Transcription consent is locked after capture starts.' })
-    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:surface-state', snapshot: recording }), { frameId: 0 })
-    await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }, surface)
-    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith({ type: 'record:offscreen-command', target: 'offscreen', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } })
-    browser.scripting.executeScript.mockResolvedValueOnce([{ result: { selector: '#pay', pageUrl: 'https://example.com/checkout', tagName: 'button' } }])
+    const recording = {
+      ...descriptor.snapshot,
+      hostedTranscription: true,
+      status: 'recording',
+      countdown: 0,
+      durationMs: 2_000,
+    }
     await send({
-      type: 'record:surface-command', sessionId: descriptor.sessionId,
-      command: { kind: 'mark.added', mark: { id: 'mark-1', type: 'box', atMs: 2_000, points: [{ x: 20, y: 30 }, { x: 40, y: 50 }] } },
-    }, surface)
-    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      type: 'record:offscreen-state',
+      target: 'background',
+      sessionId: descriptor.sessionId,
+      snapshot: recording,
+    })
+    await expect(
+      send(
+        { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'transcription.toggled' } },
+        surface,
+      ),
+    ).resolves.toMatchObject({ ok: false, error: 'Transcription consent is locked after capture starts.' })
+    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ type: 'record:surface-state', snapshot: recording }),
+      { frameId: 0 },
+    )
+    await send(
+      { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } },
+      surface,
+    )
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith({
       type: 'record:offscreen-command',
-      command: expect.objectContaining({ mark: expect.objectContaining({ target: { selector: '#pay', pageUrl: 'https://example.com/checkout', tagName: 'button' } }) }),
-    }))
+      target: 'offscreen',
+      sessionId: descriptor.sessionId,
+      command: { kind: 'camera.toggled' },
+    })
+    browser.scripting.executeScript.mockResolvedValueOnce([
+      { result: { selector: '#pay', pageUrl: 'https://example.com/checkout', tagName: 'button' } },
+    ])
+    await send(
+      {
+        type: 'record:surface-command',
+        sessionId: descriptor.sessionId,
+        command: {
+          kind: 'mark.added',
+          mark: {
+            id: 'mark-1',
+            type: 'box',
+            atMs: 2_000,
+            points: [
+              { x: 20, y: 30 },
+              { x: 40, y: 50 },
+            ],
+          },
+        },
+      },
+      surface,
+    )
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        type: 'record:offscreen-command',
+        command: expect.objectContaining({
+          mark: expect.objectContaining({
+            target: { selector: '#pay', pageUrl: 'https://example.com/checkout', tagName: 'button' },
+          }),
+        }),
+      }),
+    )
     await send({ type: 'record:offscreen-restart', target: 'background', sessionId: descriptor.sessionId })
-    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ type: 'record:offscreen-start', sessionId: descriptor.sessionId }))
-    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ snapshot: expect.objectContaining({ hostedTranscription: true, durationMs: 0, marks: [] }) }))
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ type: 'record:offscreen-start', sessionId: descriptor.sessionId }),
+    )
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        snapshot: expect.objectContaining({ hostedTranscription: true, durationMs: 0, marks: [] }),
+      }),
+    )
     const restart = state.session['crrt:recording-session'] as any
-    await send({ type: 'record:offscreen-state', target: 'background', sessionId: descriptor.sessionId, snapshot: { ...restart.snapshot, hostedTranscription: false } })
+    await send({
+      type: 'record:offscreen-state',
+      target: 'background',
+      sessionId: descriptor.sessionId,
+      snapshot: { ...restart.snapshot, hostedTranscription: false },
+    })
     await send({ type: 'record:offscreen-restart', target: 'background', sessionId: descriptor.sessionId })
-    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(expect.objectContaining({ snapshot: expect.objectContaining({ hostedTranscription: false }) }))
-    await send({ type: 'record:offscreen-finished', target: 'background', sessionId: descriptor.sessionId, recordingId: 'recording-1' })
-    expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining('recording=recording-1') }))
+    expect(browser.runtime.sendMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ snapshot: expect.objectContaining({ hostedTranscription: false }) }),
+    )
+    await send({
+      type: 'record:offscreen-finished',
+      target: 'background',
+      sessionId: descriptor.sessionId,
+      recordingId: 'recording-1',
+    })
+    expect(browser.windows.create).toHaveBeenCalledWith(
+      expect.objectContaining({ url: expect.stringContaining('recording=recording-1') }),
+    )
     expect(state.session).not.toHaveProperty('crrt:recording-session')
 
     await send({ type: 'record:open' })
     const cancel = state.session['crrt:recording-session'] as { sessionId: string }
     await send({ type: 'record:surface-ready', sessionId: cancel.sessionId }, surface)
-    await expect(send({ type: 'record:surface-command', sessionId: cancel.sessionId, command: { kind: 'cancel' } }, surface)).resolves.toEqual({ ok: true })
-    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, { type: 'record:overlay-remove', sessionId: cancel.sessionId }, { frameId: 0 })
+    await expect(
+      send({ type: 'record:surface-command', sessionId: cancel.sessionId, command: { kind: 'cancel' } }, surface),
+    ).resolves.toEqual({ ok: true })
+    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(
+      7,
+      { type: 'record:overlay-remove', sessionId: cancel.sessionId },
+      { frameId: 0 },
+    )
     expect(state.session).not.toHaveProperty('crrt:recording-session')
 
     await send({ type: 'record:open' })
     const failed = state.session['crrt:recording-session'] as { sessionId: string }
-    await send({ type: 'record:offscreen-error', target: 'background', sessionId: failed.sessionId, error: 'Permission denied' })
-    expect(state.session['crrt:recording-session']).toMatchObject({ snapshot: { status: 'failed', error: 'Permission denied' } })
+    await send({
+      type: 'record:offscreen-error',
+      target: 'background',
+      sessionId: failed.sessionId,
+      error: 'Permission denied',
+    })
+    expect(state.session['crrt:recording-session']).toMatchObject({
+      snapshot: { status: 'failed', error: 'Permission denied' },
+    })
   })
 
   it('grants tab capture and DOM target resolution only to extension pages', async () => {
     ;(background as unknown as () => void)()
     vi.mocked(isAuthMessage).mockReturnValue(false)
     browser.tabCapture.getMediaStreamId.mockResolvedValue('stream-7')
-    browser.scripting.executeScript.mockResolvedValue([{ result: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' } }])
+    browser.scripting.executeScript.mockResolvedValue([
+      { result: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' } },
+    ])
     const sender = { url: 'chrome-extension://extension-id/record.html' }
 
     await expect(send({ type: 'record:tab-stream', tabId: 7 }, sender)).resolves.toEqual({ ok: true, data: 'stream-7' })
     expect(browser.tabCapture.getMediaStreamId).toHaveBeenCalledWith({ targetTabId: 7 })
     await expect(send({ type: 'record:resolve-target', tabId: 7, x: 42, y: 61 }, sender)).resolves.toEqual({
-      ok: true, data: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' },
+      ok: true,
+      data: { selector: '#pay', pageUrl: 'https://example.com', tagName: 'button' },
     })
-    expect(browser.scripting.executeScript).toHaveBeenCalledWith(expect.objectContaining({ target: { tabId: 7 }, args: [42, 61] }))
+    expect(browser.scripting.executeScript).toHaveBeenCalledWith(
+      expect.objectContaining({ target: { tabId: 7 }, args: [42, 61] }),
+    )
     const resolve = browser.scripting.executeScript.mock.calls[0]?.[0]?.func as (x: number, y: number) => unknown
-    const button = document.createElement('button'); button.id = 'pay:now'
+    const button = document.createElement('button')
+    button.id = 'pay:now'
     Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: vi.fn(() => button) })
-    Object.defineProperty(globalThis, 'CSS', { configurable: true, value: { escape: (value: string) => value.replace(':', '\\:') } })
+    Object.defineProperty(globalThis, 'CSS', {
+      configurable: true,
+      value: { escape: (value: string) => value.replace(':', '\\:') },
+    })
     expect(resolve(42, 61)).toMatchObject({ selector: '#pay\\:now', tagName: 'button' })
-    button.id = ''; button.className = 'primary large ignored'
+    button.id = ''
+    button.className = 'primary large ignored'
     Object.defineProperty(globalThis, 'CSS', { configurable: true, value: undefined })
     expect(resolve(42, 61)).toMatchObject({ selector: 'button.primary.large' })
     vi.mocked(document.elementFromPoint).mockReturnValueOnce(null)
     expect(resolve(42, 61)).toBeNull()
 
-    await expect(send({ type: 'record:tab-stream', tabId: 7 }, { url: 'https://example.com' })).resolves.toEqual({ ok: false, error: 'Invalid recording request' })
+    await expect(send({ type: 'record:tab-stream', tabId: 7 }, { url: 'https://example.com' })).resolves.toEqual({
+      ok: false,
+      error: 'Invalid recording request',
+    })
     browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'chrome://extensions' })
-    await expect(send({ type: 'record:tab-stream', tabId: 7 }, sender)).resolves.toEqual({ ok: false, error: 'This tab cannot be recorded. Choose Window or Entire screen.' })
-    await expect(send({ type: 'record:resolve-target', tabId: 7, x: '42', y: 61 }, sender)).resolves.toEqual({ ok: false, error: 'Invalid recording target' })
+    await expect(send({ type: 'record:tab-stream', tabId: 7 }, sender)).resolves.toEqual({
+      ok: false,
+      error: 'This tab cannot be recorded. Choose Window or Entire screen.',
+    })
+    await expect(send({ type: 'record:resolve-target', tabId: 7, x: '42', y: 61 }, sender)).resolves.toEqual({
+      ok: false,
+      error: 'Invalid recording target',
+    })
   })
 
   it('routes a tab recording session between its controller and injected surface', async () => {
@@ -234,24 +417,69 @@ describe('extension background', () => {
     vi.mocked(isAuthMessage).mockReturnValue(false)
     browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://example.com', windowId: 2 })
     const controller = { url: 'chrome-extension://extension-id/record.html', tab: { id: 9, windowId: 3 } }
-    const snapshot = { status: 'countdown', source: 'tab', cameraEnabled: true, microphoneEnabled: true, countdown: 3, durationMs: 0, tool: 'pointer', marks: [], error: null }
+    const snapshot = {
+      status: 'countdown',
+      source: 'tab',
+      cameraEnabled: true,
+      microphoneEnabled: true,
+      countdown: 3,
+      durationMs: 0,
+      tool: 'pointer',
+      marks: [],
+      error: null,
+    }
 
-    await expect(send({ type: 'record:session-create', tabId: 7, sessionId: 'session-1', snapshot }, controller)).resolves.toMatchObject({ ok: true, data: { sessionId: 'session-1', tabId: 7 } })
+    await expect(
+      send({ type: 'record:session-create', tabId: 7, sessionId: 'session-1', snapshot }, controller),
+    ).resolves.toMatchObject({ ok: true, data: { sessionId: 'session-1', tabId: 7 } })
     expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['record-overlay.js'] })
-    await expect(send({ type: 'record:surface-mount' }, { url: 'https://example.com', tab: { id: 7 }, frameId: 0 })).resolves.toEqual({ ok: true, data: { sessionId: 'session-1' } })
-    await expect(send({ type: 'record:surface-ready', sessionId: 'session-1' }, { url: 'chrome-extension://extension-id/record-controls.html', tab: { id: 7 }, frameId: 2 })).resolves.toEqual({ ok: true, data: snapshot })
+    await expect(
+      send({ type: 'record:surface-mount' }, { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }),
+    ).resolves.toEqual({ ok: true, data: { sessionId: 'session-1' } })
+    await expect(
+      send(
+        { type: 'record:surface-ready', sessionId: 'session-1' },
+        { url: 'chrome-extension://extension-id/record-controls.html', tab: { id: 7 }, frameId: 2 },
+      ),
+    ).resolves.toEqual({ ok: true, data: snapshot })
 
     const next = { ...snapshot, status: 'recording', countdown: 0 }
-    await expect(send({ type: 'record:session-sync', sessionId: 'session-1', snapshot: next }, controller)).resolves.toEqual({ ok: true, data: 2 })
-    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:surface-state', snapshot: next }), { frameId: 2 })
+    await expect(
+      send({ type: 'record:session-sync', sessionId: 'session-1', snapshot: next }, controller),
+    ).resolves.toEqual({ ok: true, data: 2 })
+    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ type: 'record:surface-state', snapshot: next }),
+      { frameId: 2 },
+    )
     const surface = { url: 'chrome-extension://extension-id/record-controls.html', tab: { id: 7 }, frameId: 2 }
-    await expect(send({ type: 'record:surface-layout', sessionId: 'session-1', tool: 'pointer', rects: [[1, 2, 3, 4]] }, surface)).resolves.toEqual({ ok: true })
-    await expect(send({ type: 'record:surface-pointer', sessionId: 'session-1', x: 'bad', y: 60 }, surface)).resolves.toEqual({ ok: false, error: 'Invalid recording surface' })
-    await expect(send({ type: 'record:surface-pointer', sessionId: 'session-1', x: 50, y: 60 }, surface)).resolves.toEqual({ ok: true })
-    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(7, expect.objectContaining({ type: 'record:overlay-pointer', x: 50, y: 60 }), { frameId: 0 })
-    await expect(send({ type: 'record:surface-command', sessionId: 'session-1', command: { kind: 'finish' } }, surface)).resolves.toEqual({ ok: true })
-    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({ type: 'record:offscreen-command', target: 'offscreen', sessionId: 'session-1', command: { kind: 'finish' } })
-    await expect(send({ type: 'record:session-stop', sessionId: 'session-1' }, controller)).resolves.toEqual({ ok: true, data: true })
+    await expect(
+      send({ type: 'record:surface-layout', sessionId: 'session-1', tool: 'pointer', rects: [[1, 2, 3, 4]] }, surface),
+    ).resolves.toEqual({ ok: true })
+    await expect(
+      send({ type: 'record:surface-pointer', sessionId: 'session-1', x: 'bad', y: 60 }, surface),
+    ).resolves.toEqual({ ok: false, error: 'Invalid recording surface' })
+    await expect(
+      send({ type: 'record:surface-pointer', sessionId: 'session-1', x: 50, y: 60 }, surface),
+    ).resolves.toEqual({ ok: true })
+    expect(browser.tabs.sendMessage).toHaveBeenCalledWith(
+      7,
+      expect.objectContaining({ type: 'record:overlay-pointer', x: 50, y: 60 }),
+      { frameId: 0 },
+    )
+    await expect(
+      send({ type: 'record:surface-command', sessionId: 'session-1', command: { kind: 'finish' } }, surface),
+    ).resolves.toEqual({ ok: true })
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith({
+      type: 'record:offscreen-command',
+      target: 'offscreen',
+      sessionId: 'session-1',
+      command: { kind: 'finish' },
+    })
+    await expect(send({ type: 'record:session-stop', sessionId: 'session-1' }, controller)).resolves.toEqual({
+      ok: true,
+      data: true,
+    })
     expect(state.session).not.toHaveProperty('crrt:recording-session')
   })
 
@@ -260,18 +488,37 @@ describe('extension background', () => {
     vi.mocked(isAuthMessage).mockReturnValue(false)
     browser.tabs.get.mockResolvedValue({ id: 7, url: 'https://example.com', windowId: 2 })
     const controller = { url: 'chrome-extension://extension-id/record.html', tab: { id: 9, windowId: 3 } }
-    const snapshot = { status: 'recording', source: 'tab', cameraEnabled: false, microphoneEnabled: true, countdown: 0, durationMs: 2_000, tool: 'pointer', marks: [], error: null }
+    const snapshot = {
+      status: 'recording',
+      source: 'tab',
+      cameraEnabled: false,
+      microphoneEnabled: true,
+      countdown: 0,
+      durationMs: 2_000,
+      tool: 'pointer',
+      marks: [],
+      error: null,
+    }
     await send({ type: 'record:session-create', tabId: 7, sessionId: 'session-nav', snapshot }, controller)
     browser.scripting.executeScript.mockClear()
     state.updated!(8, { status: 'complete' })
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(browser.scripting.executeScript).not.toHaveBeenCalled()
     state.updated!(7, { status: 'complete' })
-    await vi.waitFor(() => expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['record-overlay.js'] }))
+    await vi.waitFor(() =>
+      expect(browser.scripting.executeScript).toHaveBeenCalledWith({
+        target: { tabId: 7 },
+        files: ['record-overlay.js'],
+      }),
+    )
     browser.scripting.executeScript.mockRejectedValueOnce(new Error('access revoked'))
     browser.runtime.sendMessage.mockRejectedValueOnce(new Error('controller closed'))
     state.updated!(7, { status: 'complete' })
-    await vi.waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:controller-warning', sessionId: 'session-nav' })))
+    await vi.waitFor(() =>
+      expect(browser.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'record:controller-warning', sessionId: 'session-nav' }),
+      ),
+    )
     state.removed!(7)
     await vi.waitFor(() => expect(state.session).not.toHaveProperty('crrt:recording-session'))
   })
@@ -281,7 +528,9 @@ describe('extension background', () => {
     await activateCurrentTab()
     expect(browser.storage.session.set).toHaveBeenCalledWith({
       'crrt:active-tab:7': {
-        origin: 'https://example.com', activationId: expect.any(String), attemptId: expect.any(String),
+        origin: 'https://example.com',
+        activationId: expect.any(String),
+        attemptId: expect.any(String),
       },
     })
     expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['comment.js'] })
@@ -302,16 +551,30 @@ describe('extension background', () => {
     ;(background as unknown as () => void)()
     vi.mocked(isAuthMessage).mockReturnValue(false)
     state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
-    await expect(send({ type: 'comment:is-active' }, { url: 'https://example.com/next', tab: { id: 7, url: 'https://stale.test' } })).resolves.toEqual({
-      ok: true, data: { active: true, activationId: 'activation-7' },
+    await expect(
+      send(
+        { type: 'comment:is-active' },
+        { url: 'https://example.com/next', tab: { id: 7, url: 'https://stale.test' } },
+      ),
+    ).resolves.toEqual({
+      ok: true,
+      data: { active: true, activationId: 'activation-7' },
     })
-    await expect(send({ type: 'comment:is-active' }, { tab: { id: 8, url: 'https://example.com' } })).resolves.toEqual({ ok: true, data: null })
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 8, url: 'https://example.com' } })).resolves.toEqual({
+      ok: true,
+      data: null,
+    })
     await expect(send({ type: 'comment:is-active' }, {})).resolves.toEqual({ ok: true, data: null })
     browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://other.example' })
-    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'https://other.example' } })).resolves.toEqual({ ok: true, data: null })
+    await expect(
+      send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'https://other.example' } }),
+    ).resolves.toEqual({ ok: true, data: null })
     expect(state.session).not.toHaveProperty('crrt:active-tab:7')
     state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
-    await expect(send({ type: 'comment:is-active' }, { url: 'not a URL', tab: { id: 7 } })).resolves.toEqual({ ok: true, data: null })
+    await expect(send({ type: 'comment:is-active' }, { url: 'not a URL', tab: { id: 7 } })).resolves.toEqual({
+      ok: true,
+      data: null,
+    })
     expect(state.session).toHaveProperty('crrt:active-tab:7')
   })
 
@@ -320,7 +583,10 @@ describe('extension background', () => {
     vi.mocked(isAuthMessage).mockReturnValue(false)
     state.session['crrt:active-tab:7'] = activation('https://new.example', 'new-activation')
     browser.tabs.get.mockResolvedValueOnce({ id: 7, url: 'https://new.example/page' })
-    await expect(send({ type: 'comment:is-active' }, { url: 'https://old.example', tab: { id: 7 } })).resolves.toEqual({ ok: true, data: null })
+    await expect(send({ type: 'comment:is-active' }, { url: 'https://old.example', tab: { id: 7 } })).resolves.toEqual({
+      ok: true,
+      data: null,
+    })
     expect(state.session['crrt:active-tab:7']).toEqual(activation('https://new.example', 'new-activation'))
   })
 
@@ -329,7 +595,12 @@ describe('extension background', () => {
     vi.mocked(isAuthMessage).mockReturnValue(false)
     state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
     let releaseRead!: (value: Record<string, unknown>) => void
-    browser.storage.session.get.mockImplementationOnce(() => new Promise((resolve) => { releaseRead = resolve }))
+    browser.storage.session.get.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseRead = resolve
+        }),
+    )
     const read = send({ type: 'comment:is-active' }, { url: 'https://example.com', tab: { id: 7 } })
     await vi.waitFor(() => expect(browser.storage.session.get).toHaveBeenCalledOnce())
     const remove = send(
@@ -346,7 +617,10 @@ describe('extension background', () => {
     ;(background as unknown as () => void)()
     vi.mocked(isAuthMessage).mockReturnValue(false)
     state.session['crrt:active-tab:7'] = true
-    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'not a URL' } })).resolves.toEqual({ ok: true, data: null })
+    await expect(send({ type: 'comment:is-active' }, { tab: { id: 7, url: 'not a URL' } })).resolves.toEqual({
+      ok: true,
+      data: null,
+    })
     state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
     state.removed!(7)
     await vi.waitFor(() => expect(browser.storage.session.remove).toHaveBeenCalledWith('crrt:active-tab:7'))
@@ -357,16 +631,32 @@ describe('extension background', () => {
     vi.mocked(isAuthMessage).mockReturnValue(false)
     state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
     state.session['crrt:active-tab:8'] = activation('https://example.com', 'activation-8')
-    await expect(send({ type: 'comment:deactivate', tabId: 8, activationId: 'stale' }, { url: 'https://example.com', tab: { id: 7 } }))
-      .resolves.toEqual({ ok: true, data: false })
-    await expect(send({ type: 'comment:deactivate', tabId: 8, activationId: 'activation-7' }, { url: 'https://other.example', tab: { id: 7 } }))
-      .resolves.toEqual({ ok: true, data: false })
-    await expect(send({ type: 'comment:deactivate', tabId: 8, activationId: 'activation-7' }, { url: 'https://example.com', tab: { id: 7 } }))
-      .resolves.toEqual({ ok: true, data: true })
+    await expect(
+      send(
+        { type: 'comment:deactivate', tabId: 8, activationId: 'stale' },
+        { url: 'https://example.com', tab: { id: 7 } },
+      ),
+    ).resolves.toEqual({ ok: true, data: false })
+    await expect(
+      send(
+        { type: 'comment:deactivate', tabId: 8, activationId: 'activation-7' },
+        { url: 'https://other.example', tab: { id: 7 } },
+      ),
+    ).resolves.toEqual({ ok: true, data: false })
+    await expect(
+      send(
+        { type: 'comment:deactivate', tabId: 8, activationId: 'activation-7' },
+        { url: 'https://example.com', tab: { id: 7 } },
+      ),
+    ).resolves.toEqual({ ok: true, data: true })
     expect(state.session).toEqual({ 'crrt:active-tab:8': activation('https://example.com', 'activation-8') })
-    await expect(send({ type: 'comment:deactivate' }, { tab: { id: 8, url: 'https://example.com' } }))
-      .resolves.toEqual({ ok: true, data: false })
-    await expect(send({ type: 'comment:deactivate' }, {})).resolves.toEqual({ ok: false, error: 'Tab activation unavailable' })
+    await expect(send({ type: 'comment:deactivate' }, { tab: { id: 8, url: 'https://example.com' } })).resolves.toEqual(
+      { ok: true, data: false },
+    )
+    await expect(send({ type: 'comment:deactivate' }, {})).resolves.toEqual({
+      ok: false,
+      error: 'Tab activation unavailable',
+    })
   })
 
   it('rolls back activation when injection fails', async () => {
@@ -381,7 +671,12 @@ describe('extension background', () => {
       .mockResolvedValueOnce([{ id: 7, url: 'https://old.example' }])
       .mockResolvedValueOnce([{ id: 7, url: 'https://new.example' }])
     let rejectOlder!: (error: Error) => void
-    browser.scripting.executeScript.mockImplementationOnce(() => new Promise((_, reject) => { rejectOlder = reject }))
+    browser.scripting.executeScript.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectOlder = reject
+        }),
+    )
     const older = activateCurrentTab()
     await vi.waitFor(() => expect(browser.scripting.executeScript).toHaveBeenCalledOnce())
     await activateCurrentTab()
@@ -394,7 +689,12 @@ describe('extension background', () => {
   it('keeps the widget token while preventing an older same-origin failure from clearing a retry', async () => {
     browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com/page' }])
     let rejectOlder!: (error: Error) => void
-    browser.scripting.executeScript.mockImplementationOnce(() => new Promise((_, reject) => { rejectOlder = reject }))
+    browser.scripting.executeScript.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectOlder = reject
+        }),
+    )
     const older = activateCurrentTab()
     await vi.waitFor(() => expect(browser.scripting.executeScript).toHaveBeenCalledOnce())
     const first = state.session['crrt:active-tab:7'] as { activationId: string; attemptId: string }
@@ -429,7 +729,13 @@ describe('extension background', () => {
   })
 
   it('rejects missing, internal, and malformed tabs', async () => {
-    for (const tabs of [[], [{ url: 'https://example.com' }], [{ id: 1, url: 'chrome://settings' }], [{ id: 1 }], [{ id: 1, url: 'not a URL' }]]) {
+    for (const tabs of [
+      [],
+      [{ url: 'https://example.com' }],
+      [{ id: 1, url: 'chrome://settings' }],
+      [{ id: 1 }],
+      [{ id: 1, url: 'not a URL' }],
+    ]) {
       browser.tabs.query.mockResolvedValueOnce(tabs)
       await expect(activateCurrentTab()).rejects.toThrow(/regular web page/)
     }
@@ -447,17 +753,25 @@ describe('extension background', () => {
     await expect(send({ type: 'unknown' })).resolves.toBeUndefined()
     await expect(send(null)).resolves.toBeUndefined()
 
-    vi.mocked(isAuthMessage).mockReturnValueOnce(true); vi.mocked(handleAuthMessage).mockRejectedValueOnce(new Error('down'))
+    vi.mocked(isAuthMessage).mockReturnValueOnce(true)
+    vi.mocked(handleAuthMessage).mockRejectedValueOnce(new Error('down'))
     await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'down' })
-    vi.mocked(isAuthMessage).mockImplementationOnce(() => { throw 'bad' })
+    vi.mocked(isAuthMessage).mockImplementationOnce(() => {
+      throw 'bad'
+    })
     await expect(send({ type: 'auth:get' })).resolves.toEqual({ ok: false, error: 'Unexpected extension error' })
   })
 
   it('runs hosted authentication in the background', async () => {
     ;(background as unknown as () => void)()
-    vi.mocked(startHostedSignIn).mockResolvedValueOnce({ email: 'u@example.com', accessToken: 'token', userId: 'user-1' })
+    vi.mocked(startHostedSignIn).mockResolvedValueOnce({
+      email: 'u@example.com',
+      accessToken: 'token',
+      userId: 'user-1',
+    })
     await expect(send({ type: 'auth:hosted-sign-in', intent: 'signup' })).resolves.toEqual({
-      ok: true, data: { email: 'u@example.com', accessToken: 'token', userId: 'user-1' },
+      ok: true,
+      data: { email: 'u@example.com', accessToken: 'token', userId: 'user-1' },
     })
     expect(startHostedSignIn).toHaveBeenCalledWith('client', 'signup')
   })
@@ -472,23 +786,46 @@ describe('native screenshots', () => {
     browser.tabs.captureVisibleTab.mockResolvedValue('data:image/png;base64,eA==')
   })
   it('captures only the requesting active window as PNG', async () => {
-    await expect(send({ type: 'comment:capture' }, sender)).resolves.toEqual({ ok: true, data: 'data:image/png;base64,eA==' })
+    await expect(send({ type: 'comment:capture' }, sender)).resolves.toEqual({
+      ok: true,
+      data: 'data:image/png;base64,eA==',
+    })
     expect(browser.tabs.query).toHaveBeenCalledWith({ active: true, windowId: 3 })
     expect(browser.tabs.captureVisibleTab).toHaveBeenCalledWith(3, { format: 'png' })
   })
-  it.each([null, {}, { ...sender, id: 'foreign' }, { ...sender, frameId: 1 }, { ...sender, tab: {} }, { ...sender, tab: { id: 7 } }, { ...sender, url: 'chrome://settings' }])('rejects invalid senders %j', async (invalid) => {
-    await expect(send({ type: 'comment:capture' }, invalid)).resolves.toMatchObject({ ok: false, error: 'Invalid screenshot sender' })
+  it.each([
+    null,
+    {},
+    { ...sender, id: 'foreign' },
+    { ...sender, frameId: 1 },
+    { ...sender, tab: {} },
+    { ...sender, tab: { id: 7 } },
+    { ...sender, url: 'chrome://settings' },
+  ])('rejects invalid senders %j', async (invalid) => {
+    await expect(send({ type: 'comment:capture' }, invalid)).resolves.toMatchObject({
+      ok: false,
+      error: 'Invalid screenshot sender',
+    })
     expect(browser.tabs.captureVisibleTab).not.toHaveBeenCalled()
   })
   it('rejects missing activation', async () => {
     state.session = {}
-    await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false, error: 'Screenshot activation unavailable' })
+    await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({
+      ok: false,
+      error: 'Screenshot activation unavailable',
+    })
   })
-  it.each([[], [{ id: 8, url: sender.url }], [{ id: 7, url: 'https://example.com/next' }]].map((tabs) => [tabs]))('rejects changed tabs before capture %j', async (tabs) => {
-    browser.tabs.query.mockResolvedValue(tabs)
-    await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false, error: 'Page changed during screenshot capture' })
-    expect(browser.tabs.captureVisibleTab).not.toHaveBeenCalled()
-  })
+  it.each([[], [{ id: 8, url: sender.url }], [{ id: 7, url: 'https://example.com/next' }]].map((tabs) => [tabs]))(
+    'rejects changed tabs before capture %j',
+    async (tabs) => {
+      browser.tabs.query.mockResolvedValue(tabs)
+      await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({
+        ok: false,
+        error: 'Page changed during screenshot capture',
+      })
+      expect(browser.tabs.captureVisibleTab).not.toHaveBeenCalled()
+    },
+  )
   it('discards screenshots after tab, URL or activation changes', async () => {
     for (const change of ['tab', 'url', 'activation']) {
       ;(background as unknown as () => void)()
@@ -496,10 +833,16 @@ describe('native screenshots', () => {
       browser.tabs.query.mockResolvedValue([{ id: 7, url: sender.url }])
       browser.tabs.captureVisibleTab.mockImplementationOnce(async () => {
         if (change === 'activation') state.session['crrt:active-tab:7'] = activation('https://example.com', 'new')
-        else browser.tabs.query.mockResolvedValue([{ id: change === 'tab' ? 8 : 7, url: change === 'url' ? 'https://example.com/next' : sender.url }])
+        else
+          browser.tabs.query.mockResolvedValue([
+            { id: change === 'tab' ? 8 : 7, url: change === 'url' ? 'https://example.com/next' : sender.url },
+          ])
         return 'image'
       })
-      await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false, error: 'Page changed during screenshot capture' })
+      await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({
+        ok: false,
+        error: 'Page changed during screenshot capture',
+      })
     }
   })
   it('serializes capture calls, spaces them by 550ms, and revalidates after waiting', async () => {
@@ -519,17 +862,24 @@ describe('native screenshots', () => {
       await vi.advanceTimersByTimeAsync(550)
       await expect(third).resolves.toMatchObject({ ok: false })
       expect(browser.tabs.captureVisibleTab).toHaveBeenCalledTimes(2)
-    } finally { vi.useRealTimers() }
+    } finally {
+      vi.useRealTimers()
+    }
   })
   it('reports capture errors and releases the queue for retries', async () => {
     vi.useFakeTimers()
     try {
       browser.tabs.captureVisibleTab.mockRejectedValueOnce(new Error('Permission revoked'))
-      await expect(send({ type: 'comment:capture' }, sender)).resolves.toEqual({ ok: false, error: 'Permission revoked' })
+      await expect(send({ type: 'comment:capture' }, sender)).resolves.toEqual({
+        ok: false,
+        error: 'Permission revoked',
+      })
       const retry = send({ type: 'comment:capture' }, sender)
       await vi.advanceTimersByTimeAsync(550)
       await expect(retry).resolves.toMatchObject({ ok: true })
-    } finally { vi.useRealTimers() }
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 
@@ -540,9 +890,13 @@ it('discards native pixels when the tab switches away and back or reloads at the
     state.session['crrt:active-tab:7'] = activation('https://example.com', 'activation-7')
     browser.tabs.query.mockResolvedValue([{ id: 7, url: sender.url }])
     browser.tabs.captureVisibleTab.mockImplementationOnce(async () => {
-      if (change === 'switch') { state.activated!({ windowId: 3 }); state.activated!({ windowId: 3 }) }
-      else if (change === 'reload') { state.updated!(7, { status: 'loading' }); state.updated!(7, { status: 'loading' }) }
-      else state.removed!(7)
+      if (change === 'switch') {
+        state.activated!({ windowId: 3 })
+        state.activated!({ windowId: 3 })
+      } else if (change === 'reload') {
+        state.updated!(7, { status: 'loading' })
+        state.updated!(7, { status: 'loading' })
+      } else state.removed!(7)
       return 'image'
     })
     await expect(send({ type: 'comment:capture' }, sender)).resolves.toMatchObject({ ok: false })
@@ -553,28 +907,43 @@ it('requests first-use device permissions in a visible window before acquiring a
   ;(background as unknown as () => void)()
   vi.mocked(isAuthMessage).mockReturnValue(false)
   browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com', title: 'Example' }])
-  browser.runtime.sendMessage.mockImplementation(async (message) => message.type === 'record:permissions-check' ? { granted: false } : { ok: true })
+  browser.runtime.sendMessage.mockImplementation(async (message) =>
+    message.type === 'record:permissions-check' ? { granted: false } : { ok: true },
+  )
   await send({ type: 'record:open' })
   const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
   const surface = { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }
   await send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)
   await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'start' } }, surface)
   expect(browser.tabCapture.getMediaStreamId).not.toHaveBeenCalled()
-  expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ url: expect.stringContaining('/record-permissions.html?session=') }))
+  expect(browser.windows.create).toHaveBeenCalledWith(
+    expect.objectContaining({ url: expect.stringContaining('/record-permissions.html?session=') }),
+  )
   const permissionUrl = new URL(browser.windows.create.mock.calls[browser.windows.create.mock.calls.length - 1]![0].url)
   expect(permissionUrl.searchParams.get('camera')).toBe('1')
   expect(permissionUrl.searchParams.get('microphone')).toBe('1')
   browser.runtime.sendMessage.mockResolvedValue({ ok: true, granted: true })
   const ready = { type: 'record:permissions-ready', sessionId: descriptor.sessionId }
   await expect(send(ready, { url: 'https://example.com' })).resolves.toMatchObject({ ok: false })
-  await expect(send({ ...ready, sessionId: 'expired' }, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toMatchObject({ ok: false })
-  await expect(send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toEqual({ ok: true })
+  await expect(
+    send(
+      { ...ready, sessionId: 'expired' },
+      { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } },
+    ),
+  ).resolves.toMatchObject({ ok: false })
+  await expect(
+    send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } }),
+  ).resolves.toEqual({ ok: true })
   expect(browser.tabCapture.getMediaStreamId).toHaveBeenCalledWith({ targetTabId: 7 })
   const current = state.session['crrt:recording-session'] as any
   current.snapshot.status = 'recording'
-  await expect(send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toMatchObject({ ok: false })
+  await expect(
+    send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } }),
+  ).resolves.toMatchObject({ ok: false })
   delete state.session['crrt:recording-session']
-  await expect(send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toMatchObject({ ok: false })
+  await expect(
+    send(ready, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } }),
+  ).resolves.toMatchObject({ ok: false })
 })
 
 it('requests only the enabled devices when a setup attempt needs permission', async () => {
@@ -586,7 +955,8 @@ it('requests only the enabled devices when a setup attempt needs permission', as
   const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
   const surface = { url: 'https://example.com', tab: { id: 7 }, frameId: 0 }
   await send({ type: 'record:surface-ready', sessionId: descriptor.sessionId }, surface)
-  for (const kind of ['camera.toggled', 'microphone.toggled', 'start']) await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind } }, surface)
+  for (const kind of ['camera.toggled', 'microphone.toggled', 'start'])
+    await send({ type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind } }, surface)
   const url = new URL(browser.windows.create.mock.calls[browser.windows.create.mock.calls.length - 1]![0].url)
   expect(url.searchParams.get('camera')).toBe('0')
   expect(url.searchParams.get('microphone')).toBe('0')
@@ -596,10 +966,17 @@ it('returns a failed capture acknowledgment to the visible permission window', a
   ;(background as unknown as () => void)()
   vi.mocked(isAuthMessage).mockReturnValue(false)
   browser.tabs.query.mockResolvedValue([{ id: 7, url: 'https://example.com' }])
-  browser.runtime.sendMessage.mockImplementation(async (message) => message.type === 'record:permissions-check' ? { granted: true } : { ok: false, error: 'Camera disconnected' })
+  browser.runtime.sendMessage.mockImplementation(async (message) =>
+    message.type === 'record:permissions-check' ? { granted: true } : { ok: false, error: 'Camera disconnected' },
+  )
   await send({ type: 'record:open' })
   const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
-  await expect(send({ type: 'record:permissions-ready', sessionId: descriptor.sessionId }, { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } })).resolves.toEqual({ ok: false, error: 'Camera disconnected' })
+  await expect(
+    send(
+      { type: 'record:permissions-ready', sessionId: descriptor.sessionId },
+      { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } },
+    ),
+  ).resolves.toEqual({ ok: false, error: 'Camera disconnected' })
 })
 
 it.each(['finish', 'cancel', 'error', 'tab-close'])('closes the temporary permission window on %s', async (action) => {
@@ -611,7 +988,9 @@ it.each(['finish', 'cancel', 'error', 'tab-close'])('closes the temporary permis
   const descriptor = state.session['crrt:recording-session'] as { sessionId: string }
   const sessionId = descriptor.sessionId
   const sender = { url: 'chrome-extension://extension-id/record-permissions.html', tab: { windowId: 99 } }
-  await expect(send({ type: 'record:permissions-ready', sessionId }, { url: sender.url })).resolves.toMatchObject({ ok: false })
+  await expect(send({ type: 'record:permissions-ready', sessionId }, { url: sender.url })).resolves.toMatchObject({
+    ok: false,
+  })
   await expect(send({ type: 'record:permissions-ready', sessionId }, sender)).resolves.toMatchObject({ ok: true })
   expect(browser.windows.update).toHaveBeenCalledWith(99, { state: 'minimized' })
   if (action === 'finish') {
@@ -660,9 +1039,15 @@ it('opens a standalone source picker from the library when no web tab is active'
   ;(background as unknown as () => void)()
   vi.mocked(isAuthMessage).mockReturnValue(false)
   browser.tabs.query.mockResolvedValue([{ id: 9, url: 'chrome-extension://extension-id/recordings.html' }])
-  await expect(send({ type: 'record:open' }, { url: 'chrome-extension://extension-id/recordings.html' })).resolves.toEqual({ ok: true })
-  expect(browser.windows.create).toHaveBeenCalledWith(expect.objectContaining({ url: 'chrome-extension://extension-id/record.html' }))
-  await expect(send({ type: 'record:open' }, { url: 'chrome-extension://another-extension/recordings.html' })).resolves.toMatchObject({ ok: false })
+  await expect(
+    send({ type: 'record:open' }, { url: 'chrome-extension://extension-id/recordings.html' }),
+  ).resolves.toEqual({ ok: true })
+  expect(browser.windows.create).toHaveBeenCalledWith(
+    expect.objectContaining({ url: 'chrome-extension://extension-id/record.html' }),
+  )
+  await expect(
+    send({ type: 'record:open' }, { url: 'chrome-extension://another-extension/recordings.html' }),
+  ).resolves.toMatchObject({ ok: false })
 })
 
 it('preserves surface authorization across worker restarts and rejects other tabs and frames', async () => {
@@ -677,9 +1062,17 @@ it('preserves surface authorization across worker restarts and rejects other tab
   vi.resetModules()
   const { default: worker } = await import('../entrypoints/background')
   ;(worker as unknown as () => void)()
-  const command = { type: 'record:surface-command', sessionId: descriptor.sessionId, command: { kind: 'camera.toggled' } }
+  const command = {
+    type: 'record:surface-command',
+    sessionId: descriptor.sessionId,
+    command: { kind: 'camera.toggled' },
+  }
   await expect(send(command, surface)).resolves.toMatchObject({ ok: true })
-  for (const sender of [{ ...surface, tab: { id: 8 } }, { ...surface, frameId: 1 }, { ...surface, frameId: undefined }]) {
+  for (const sender of [
+    { ...surface, tab: { id: 8 } },
+    { ...surface, frameId: 1 },
+    { ...surface, frameId: undefined },
+  ]) {
     await expect(send(command, sender)).resolves.toMatchObject({ ok: false })
   }
 })

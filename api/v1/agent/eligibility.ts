@@ -1,7 +1,15 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getRepoConfig } from '../../_lib/store.js'
 import { verifyWidgetAuthToken } from '../../_lib/widget-github-auth.js'
-import { getAppUrl, getBearerToken, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
+import {
+  getAppUrl,
+  getBearerToken,
+  getStringQuery,
+  handleOptions,
+  jsonError,
+  methodNotAllowed,
+  setCors,
+} from '../../_lib/http.js'
 
 function buildLoginUrl(req: VercelRequest, projectKey: string) {
   const originHeader = Array.isArray(req.headers.origin) ? req.headers.origin[0] : req.headers.origin
@@ -50,9 +58,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const payload = verifyWidgetAuthToken(token)
-    const matchesRepo = payload?.projectKey === projectKey
-      && payload.githubOwner === config.githubOwner
-      && payload.githubRepo === config.githubRepo
+    const matchesRepo =
+      payload?.projectKey === projectKey &&
+      payload.githubOwner === config.githubOwner &&
+      payload.githubRepo === config.githubRepo
     if (!payload || !matchesRepo) {
       setCors(req, res, ['GET', 'OPTIONS'])
       return res.status(200).json(unauthenticated(req, projectKey, 'invalid_token'))

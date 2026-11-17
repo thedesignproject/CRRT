@@ -13,7 +13,9 @@ export function SupportPage() {
         <Ol>
           <li>Install CRRT in Chrome and pin it to the toolbar.</li>
           <li>Open the extension, review the first-run disclosure, then sign in or create your CRRT account.</li>
-          <li>Open a regular HTTP(S) product page and choose <Strong>Start commenting</Strong>.</li>
+          <li>
+            Open a regular HTTP(S) product page and choose <Strong>Start commenting</Strong>.
+          </li>
           <li>Confirm the destination and audience, select the page target, add your feedback, and submit.</li>
         </Ol>
         <P>
@@ -39,20 +41,24 @@ export function SupportPage() {
       <Section>
         <H2>Use local feedback or move it to Cloud</H2>
         <P>
-          Without signing in, the extension keeps one local project with up to 50 current comments in this browser.
-          You can capture, edit, resolve, delete, and export them without sending them to CRRT Cloud.
+          Without signing in, the extension keeps one local project with up to 50 current comments in this browser. You
+          can capture, edit, resolve, delete, and export them without sending them to CRRT Cloud.
         </P>
         <P>
           To import, sign in, choose a shared project, select <Strong>Review local import</Strong>, verify the
-          destination, screenshots, and monthly quota impact, then confirm. Interrupted imports are safe to retry.
-          CRRT keeps local copies after verification until you separately choose <Strong>Delete imported local copies</Strong>.
+          destination, screenshots, and monthly quota impact, then confirm. Interrupted imports are safe to retry. CRRT
+          keeps local copies after verification until you separately choose{' '}
+          <Strong>Delete imported local copies</Strong>.
         </P>
       </Section>
 
       <Section>
         <H2>Common recovery paths</H2>
         <H3>Sign-in expired or failed</H3>
-        <P>Open the extension and use <Strong>Sign in with CRRT</Strong> again. Complete the hosted flow in the window Chrome opens.</P>
+        <P>
+          Open the extension and use <Strong>Sign in with CRRT</Strong> again. Complete the hosted flow in the window
+          Chrome opens.
+        </P>
 
         <H3>No project appears</H3>
         <P>
@@ -74,7 +80,8 @@ export function SupportPage() {
 
         <H3>Payment or subscription needs attention</H3>
         <P>
-          The project owner opens <Strong>Billing &amp; usage</Strong> in the dashboard. Use <Strong>Manage billing</Strong>
+          The project owner opens <Strong>Billing &amp; usage</Strong> in the dashboard. Use{' '}
+          <Strong>Manage billing</Strong>
           to update the payment method, download invoices, cancel, or restore service through Stripe. During the
           seven-day recovery period, existing work remains available. After paid access ends, existing Cloud data
           remains readable and exportable while new paid operations stay blocked.
@@ -86,16 +93,20 @@ export function SupportPage() {
         <Ul>
           <li>Delete feedback you own from the on-page CRRT surface or My comments in the dashboard.</li>
           <li>Project administrators can disconnect GitHub, Linear, and Jira from project settings.</li>
-          <li>Sign out from the extension to remove its active local session, or uninstall it to remove extension-local data.</li>
+          <li>
+            Sign out from the extension to remove its active local session, or uninstall it to remove extension-local
+            data.
+          </li>
         </Ul>
         <P>
-          For account-level deletion, inaccessible records, installation help, or a suspected security incident,
-          email <LegalLink href="mailto:hello@designproject.io">hello@designproject.io</LegalLink>. Include your CRRT
-          account email, the affected project name, what happened, and any request ID shown by CRRT. Do not send
-          passwords, session tokens, provider secrets, or sensitive screenshots.
+          For account-level deletion, inaccessible records, installation help, or a suspected security incident, email{' '}
+          <LegalLink href="mailto:hello@designproject.io">hello@designproject.io</LegalLink>. Include your CRRT account
+          email, the affected project name, what happened, and any request ID shown by CRRT. Do not send passwords,
+          session tokens, provider secrets, or sensitive screenshots.
         </P>
         <P>
-          Read the <LegalLink href="/privacy">CRRT privacy policy</LegalLink> for the complete data inventory and controls.
+          Read the <LegalLink href="/privacy">CRRT privacy policy</LegalLink> for the complete data inventory and
+          controls.
         </P>
       </Section>
     </LegalLayout>

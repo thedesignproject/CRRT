@@ -12,10 +12,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -57,30 +67,39 @@ describe('api/v1/agent/eligibility', () => {
     vi.mocked(getRepoConfig).mockResolvedValue({ githubOwner: 'acme', githubRepo: 'widgets' } as never)
 
     let res = mockRes()
-    await call({
-      method: 'GET',
-      query: { project_id: 'p' },
-      headers: { origin: 'https://app.example' },
-    }, res)
+    await call(
+      {
+        method: 'GET',
+        query: { project_id: 'p' },
+        headers: { origin: 'https://app.example' },
+      },
+      res,
+    )
     expect(res.body).toMatchObject({ canRequest: false, mustLogin: true, reason: 'login_required' })
     expect((res.body as { loginUrl: string }).loginUrl).toContain('/api/v1/widget/github/login')
     expect((res.body as { loginUrl: string }).loginUrl).toContain('projectKey=p')
 
     res = mockRes()
-    await call({
-      method: 'GET',
-      query: { project_id: 'p' },
-      headers: { origin: ['https://first.example', 'https://second.example'] },
-    }, res)
+    await call(
+      {
+        method: 'GET',
+        query: { project_id: 'p' },
+        headers: { origin: ['https://first.example', 'https://second.example'] },
+      },
+      res,
+    )
     expect((res.body as { loginUrl: string }).loginUrl).toContain('origin=https%3A%2F%2Ffirst.example')
 
     vi.mocked(verifyWidgetAuthToken).mockReturnValueOnce(null)
     res = mockRes()
-    await call({
-      method: 'GET',
-      query: { project_id: 'p' },
-      headers: { authorization: 'Bearer bad', host: 'crrt.test', 'x-forwarded-proto': 'https' },
-    }, res)
+    await call(
+      {
+        method: 'GET',
+        query: { project_id: 'p' },
+        headers: { authorization: 'Bearer bad', host: 'crrt.test', 'x-forwarded-proto': 'https' },
+      },
+      res,
+    )
     expect(res.body).toMatchObject({ canRequest: false, reason: 'invalid_token' })
   })
 

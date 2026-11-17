@@ -8,13 +8,24 @@ export type WorkerSession = { name: string; commandId: string }
 // Forward only the worker's configuration, never the full deployment env or
 // the Vercel OIDC token. Secrets stay inside the step and are not workflow args.
 const workerKeys = [
-  'CRRT_RECORD_ENABLED', 'SUPABASE_URL', 'SUPABASE_SECRET_KEY', 'SUPABASE_SERVICE_ROLE_KEY',
-  'RECORD_STORAGE_PROVIDER', 'RECORD_R2_ACCOUNT_ID', 'RECORD_R2_BUCKET',
-  'RECORD_R2_ACCESS_KEY_ID', 'RECORD_R2_SECRET_ACCESS_KEY', 'RECORD_MAX_STORAGE_BYTES',
-  'RECORD_TRANSCRIPTION_ENABLED', 'RECORD_TRANSCRIPTION_POLICY_VERSION',
-  'RECORD_TRANSCRIPTION_CLIENT_REQUESTS_PER_HOUR', 'RECORD_TRANSCRIPTION_CLIENT_BYTES_PER_HOUR',
-  'RECORD_TRANSCRIPTION_GLOBAL_REQUESTS_PER_DAY', 'RECORD_TRANSCRIPTION_GLOBAL_BYTES_PER_DAY',
-  'SHARE_TOKEN_SECRET', 'DEEPGRAM_API_KEY',
+  'CRRT_RECORD_ENABLED',
+  'SUPABASE_URL',
+  'SUPABASE_SECRET_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'RECORD_STORAGE_PROVIDER',
+  'RECORD_R2_ACCOUNT_ID',
+  'RECORD_R2_BUCKET',
+  'RECORD_R2_ACCESS_KEY_ID',
+  'RECORD_R2_SECRET_ACCESS_KEY',
+  'RECORD_MAX_STORAGE_BYTES',
+  'RECORD_TRANSCRIPTION_ENABLED',
+  'RECORD_TRANSCRIPTION_POLICY_VERSION',
+  'RECORD_TRANSCRIPTION_CLIENT_REQUESTS_PER_HOUR',
+  'RECORD_TRANSCRIPTION_CLIENT_BYTES_PER_HOUR',
+  'RECORD_TRANSCRIPTION_GLOBAL_REQUESTS_PER_DAY',
+  'RECORD_TRANSCRIPTION_GLOBAL_BYTES_PER_DAY',
+  'SHARE_TOKEN_SECRET',
+  'DEEPGRAM_API_KEY',
 ]
 
 export async function launchRecordWorker(): Promise<WorkerSession | null> {
@@ -42,16 +53,23 @@ export async function launchRecordWorker(): Promise<WorkerSession | null> {
   }
   const sandbox = await Sandbox.create({
     name: `${prefix}${Math.floor(Date.now() / 60_000)}`,
-    image: 'vercel/sandbox/node:22', persistent: false,
-    resources: { vcpus: 1 }, timeout: 30 * 60_000,
+    image: 'vercel/sandbox/node:22',
+    persistent: false,
+    resources: { vcpus: 1 },
+    timeout: 30 * 60_000,
   })
   try {
     await sandbox.writeFiles([{ path: 'record-worker.mjs', content }])
     // Detached setup keeps package installation and FFmpeg work out of the
     // 60-second Function. The VM's hard deadline also bounds orphaned sessions.
     const command = await sandbox.runCommand({
-      cmd: 'bash', args: ['-c', 'sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null && exec node record-worker.mjs --once'],
-      detached: true, env,
+      cmd: 'bash',
+      args: [
+        '-c',
+        'sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends ffmpeg >/dev/null && exec node record-worker.mjs --once',
+      ],
+      detached: true,
+      env,
     })
     return { name: sandbox.name, commandId: command.cmdId }
   } catch (error) {

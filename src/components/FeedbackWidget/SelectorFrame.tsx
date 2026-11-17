@@ -43,18 +43,20 @@ function isTextAtPoint(x: number, y: number): boolean {
   if (!node || node.nodeType !== Node.TEXT_NODE || !(node.textContent ?? '').trim()) return false
   const range = document.createRange()
   range.selectNodeContents(node)
-  return Array.from(range.getClientRects()).some((rect) => (
-    x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom
-  ))
+  return Array.from(range.getClientRects()).some(
+    (rect) => x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom,
+  )
 }
 
 function sameGeometry(previous: SelectorFrameState, element: Element, rect: DOMRect) {
-  return previous.visible
-    && previous.element === element
-    && previous.left === rect.left - 2
-    && previous.top === rect.top - 2
-    && previous.width === rect.width + 4
-    && previous.height === rect.height + 4
+  return (
+    previous.visible &&
+    previous.element === element &&
+    previous.left === rect.left - 2 &&
+    previous.top === rect.top - 2 &&
+    previous.width === rect.width + 4 &&
+    previous.height === rect.height + 4
+  )
 }
 
 export function SelectorFrame({ active, onTextHover }: { active: boolean; onTextHover(value: boolean): void }) {
@@ -135,9 +137,7 @@ export function SelectorFrame({ active, onTextHover }: { active: boolean; onText
     }
 
     function onMove(event: MouseEvent) {
-      const element = event.target instanceof Element && !event.target.closest(`[${WIDGET_ATTR}]`)
-        ? event.target
-        : null
+      const element = event.target instanceof Element && !event.target.closest(`[${WIDGET_ATTR}]`) ? event.target : null
       point.current = { x: event.clientX, y: event.clientY }
       if (element !== candidate.current) {
         const animateGeometry = candidate.current !== null && element !== null
@@ -191,5 +191,13 @@ export function SelectorFrame({ active, onTextHover }: { active: boolean; onText
     willChange: 'transform, width, height, opacity',
   }
 
-  return <div {...{ [WIDGET_ATTR]: '' }} className="fw-selector-frame" data-fw-selector-frame="" aria-hidden="true" style={style} />
+  return (
+    <div
+      {...{ [WIDGET_ATTR]: '' }}
+      className="fw-selector-frame"
+      data-fw-selector-frame=""
+      aria-hidden="true"
+      style={style}
+    />
+  )
 }

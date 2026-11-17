@@ -12,10 +12,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -35,7 +45,9 @@ describe('api/v1/notifications', () => {
 
   it('returns 500 on non-Error throws', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u-1', email: 'a@b.c' })
-    vi.mocked(listNotificationsForUser).mockImplementationOnce(() => { throw 'string-not-error' })
+    vi.mocked(listNotificationsForUser).mockImplementationOnce(() => {
+      throw 'string-not-error'
+    })
     const res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)
@@ -48,7 +60,8 @@ describe('api/v1/notifications', () => {
     expect(res.statusCode).toBe(405)
 
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
-      r.status(401).json({ error: 'Unauthorized' }); return null
+      r.status(401).json({ error: 'Unauthorized' })
+      return null
     })
     res = mockRes()
     await call({ method: 'GET', query: {}, headers: {} }, res)

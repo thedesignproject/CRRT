@@ -15,15 +15,23 @@ afterEach(() => vi.unstubAllGlobals())
 
 it('shows project shortcuts by default', () => {
   const view = render(<StatusBar />)
-  expect([...view.container.querySelectorAll('kbd')].map(key => key.textContent))
-    .toEqual(['A', 'M', 'D', 'Space', 'J', 'K', 'S', '⌘K'])
+  expect([...view.container.querySelectorAll('kbd')].map((key) => key.textContent)).toEqual([
+    'A',
+    'M',
+    'D',
+    'Space',
+    'J',
+    'K',
+    'S',
+    '⌘K',
+  ])
 })
 
 it.each([false, true])('hides and restores footer shortcuts when toggled (personal=%s)', (personal) => {
   const preference = renderHook(() => useKeyboardShortcuts('dashboard'))
   const view = render(<StatusBar personal={personal} agentAvailable={false} />)
   const expected = personal ? ['Space', 'J', 'K'] : ['A', 'M', 'D', 'Space', 'J', 'K', '⌘K']
-  const keys = () => [...view.container.querySelectorAll('kbd')].map(key => key.textContent)
+  const keys = () => [...view.container.querySelectorAll('kbd')].map((key) => key.textContent)
   expect(keys()).toEqual(expected)
   act(() => preference.result.current[1](false))
   expect(keys()).toEqual([])

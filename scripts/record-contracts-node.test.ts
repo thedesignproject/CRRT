@@ -18,7 +18,8 @@ it('loads emitted Record contracts under Node without bundler import resolution'
       await writeFile(join(root, `${name}.js`), outputText)
     }
     const result = spawnSync('node', [join(root, 'contracts.js')], {
-      encoding: 'utf8', timeout: 15_000,
+      encoding: 'utf8',
+      timeout: 15_000,
     })
     expect(result.error).toBeUndefined()
     expect(result.status, result.stderr).toBe(0)

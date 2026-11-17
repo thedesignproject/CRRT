@@ -10,18 +10,34 @@ beforeEach(() => {
 describe('recording transcription API client', () => {
   it('skips empty audio and sends non-empty audio without requiring an account', async () => {
     await expect(transcribeRecording(new Blob())).resolves.toEqual({ source: 'none', language: 'und', segments: [] })
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ transcript: {
-      source: 'deepgram:nova-3', language: 'es', segments: [{ id: 's', startMs: 1, endMs: 2, text: ' Hola ' }],
-    } }), { status: 200 }))
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          transcript: {
+            source: 'deepgram:nova-3',
+            language: 'es',
+            segments: [{ id: 's', startMs: 1, endMs: 2, text: ' Hola ' }],
+          },
+        }),
+        { status: 200 },
+      ),
+    )
     await expect(transcribeRecording(new Blob(['audio']))).resolves.toMatchObject({ segments: [{ text: 'Hola' }] })
-    expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/recordings/transcribe', expect.objectContaining({
-      method: 'POST', headers: { 'Content-Type': 'application/octet-stream' }, body: expect.any(Blob),
-    }))
+    expect(fetch).toHaveBeenCalledWith(
+      'https://crrt.ai/api/v1/extension/recordings/transcribe',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: expect.any(Blob),
+      }),
+    )
   })
 
   it('uses stable API and status errors', async () => {
     expect(new RecordingTranscriptionClientError('Failure').name).toBe('RecordingTranscriptionClientError')
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Provider unavailable' }), { status: 503 }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Provider unavailable' }), { status: 503 }),
+    )
     await expect(transcribeRecording(new Blob(['audio']))).rejects.toThrow('Provider unavailable')
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('not-json', { status: 502 }))
     await expect(transcribeRecording(new Blob(['audio']))).rejects.toThrow('Transcription failed (502)')
@@ -33,8 +49,20 @@ describe('recording transcription API client', () => {
     { transcript: { source: 'provider', language: 1, segments: [] } },
     { transcript: { source: 'provider', language: 'es', segments: {} } },
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 1, startMs: 1, endMs: 2, text: 'bad' }] } },
-    { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: Number.NaN, endMs: 2, text: 'bad' }] } },
-    { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: 1, endMs: Number.NaN, text: 'bad' }] } },
+    {
+      transcript: {
+        source: 'provider',
+        language: 'es',
+        segments: [{ id: 's', startMs: Number.NaN, endMs: 2, text: 'bad' }],
+      },
+    },
+    {
+      transcript: {
+        source: 'provider',
+        language: 'es',
+        segments: [{ id: 's', startMs: 1, endMs: Number.NaN, text: 'bad' }],
+      },
+    },
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: -1, endMs: 2, text: 'bad' }] } },
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: 2, endMs: 1, text: 'bad' }] } },
     { transcript: { source: 'provider', language: 'es', segments: [{ id: 's', startMs: 1, endMs: 2, text: ' ' }] } },

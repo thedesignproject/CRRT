@@ -47,7 +47,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const presented = firstHeaderValue(req.headers['x-audit-session'])
       session = createOrVerifyAuditSession(presented)
       capability = createAuditCapability(`${session.hash}:${key}`)
-      const ip = firstHeaderValue(req.headers['x-forwarded-for']) || firstHeaderValue(req.headers['x-real-ip']) || 'unknown'
+      const ip =
+        firstHeaderValue(req.headers['x-forwarded-for']) || firstHeaderValue(req.headers['x-real-ip']) || 'unknown'
       ipHash = hashAuditIp(ip)
       expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1_000).toISOString()
     }
@@ -55,13 +56,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const target = await validateAuditUrl(parsed.data.url)
     const mode = isAuditDemoHostname(target.hostname) ? 'local-fixture' : 'live'
     const result = await createAuditRun({
-      ownerKind: projectKey ? 'project' : 'anonymous', projectKey, creatorUserId,
-      idempotencyKey: key, capabilityHash: capability?.hash || null, sessionHash: session?.hash || null,
-      ipHash, inputUrl: parsed.data.url, normalizedUrl: target.url,
-      mode, budgets: auditBudgets(), expiresAt,
+      ownerKind: projectKey ? 'project' : 'anonymous',
+      projectKey,
+      creatorUserId,
+      idempotencyKey: key,
+      capabilityHash: capability?.hash || null,
+      sessionHash: session?.hash || null,
+      ipHash,
+      inputUrl: parsed.data.url,
+      normalizedUrl: target.url,
+      mode,
+      budgets: auditBudgets(),
+      expiresAt,
     })
     if (result.status === 'rate_limited') {
-      if (result.retryAt) res.setHeader('Retry-After', String(Math.max(1, Math.ceil((new Date(result.retryAt).getTime() - Date.now()) / 1_000))))
+      if (result.retryAt)
+        res.setHeader(
+          'Retry-After',
+          String(Math.max(1, Math.ceil((new Date(result.retryAt).getTime() - Date.now()) / 1_000))),
+        )
       return jsonError(req, res, 429, 'Anonymous audit quota exceeded')
     }
     if (!result.auditId || !['created', 'existing'].includes(result.status)) {
@@ -74,17 +87,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await setAuditWorkflowRunId(result.auditId, workflowRunId)
       } catch {
         if (workflowRunId) {
-          try { await cancelAuditExecution(workflowRunId) } catch { /* Best effort; the audit still fails closed. */ }
+          try {
+            await cancelAuditExecution(workflowRunId)
+          } catch {
+            /* Best effort; the audit still fails closed. */
+          }
         }
         await markAuditFailed(result.auditId, 'workflow_start_failed', 'The audit could not be started safely.')
         return jsonError(req, res, 503, 'Audit execution is temporarily unavailable')
       }
     }
     const response = auditCreateResponseSchema.parse({
-      auditId: result.auditId, status: result.status === 'existing' ? result.runStatus : 'queued',
+      auditId: result.auditId,
+      status: result.status === 'existing' ? result.runStatus : 'queued',
       ...(session ? { sessionToken: session.token } : {}),
       ...(capability ? { auditToken: capability.token } : {}),
-      ...((result.status === 'existing' ? result.expiresAt : expiresAt) ? { expiresAt: result.status === 'existing' ? result.expiresAt : expiresAt } : {}),
+      ...((result.status === 'existing' ? result.expiresAt : expiresAt)
+        ? { expiresAt: result.status === 'existing' ? result.expiresAt : expiresAt }
+        : {}),
     })
     setCors(req, res, METHODS)
     return res.status(result.status === 'created' ? 202 : 200).json(response)

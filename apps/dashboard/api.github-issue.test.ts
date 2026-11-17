@@ -17,16 +17,23 @@ afterEach(() => vi.unstubAllGlobals())
 
 describe('createCommentGithubIssue', () => {
   it('posts to the encoded comment endpoint with session authorization', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      issueNumber: 42,
-      issueUrl: 'https://github.com/acme/site/issues/42',
-      createdAt: '2026-07-23T12:00:00Z',
-      created: true,
-    }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          issueNumber: 42,
+          issueUrl: 'https://github.com/acme/site/issues/42',
+          createdAt: '2026-07-23T12:00:00Z',
+          created: true,
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(createCommentGithubIssue('/api', 'session', 'comment/1'))
-      .resolves.toMatchObject({ issueNumber: 42, created: true })
+    await expect(createCommentGithubIssue('/api', 'session', 'comment/1')).resolves.toMatchObject({
+      issueNumber: 42,
+      created: true,
+    })
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/comments/comment%2F1/external-work',
       expect.objectContaining({
@@ -36,12 +43,17 @@ describe('createCommentGithubIssue', () => {
       }),
     )
 
-    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
-      issueNumber: 43,
-      issueUrl: 'https://github.com/acme/site/issues/43',
-      createdAt: '2026-07-23T12:01:00Z',
-      created: true,
-    }), { status: 201, headers: { 'Content-Type': 'application/json' } }))
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          issueNumber: 43,
+          issueUrl: 'https://github.com/acme/site/issues/43',
+          createdAt: '2026-07-23T12:01:00Z',
+          created: true,
+        }),
+        { status: 201, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
     await createCommentGithubIssue('/api', 'session', 'comment/1', { title: 'Edited', body: 'Details' })
     expect(fetchMock).toHaveBeenLastCalledWith(
       '/api/v1/comments/comment%2F1/external-work',
@@ -52,10 +64,19 @@ describe('createCommentGithubIssue', () => {
   })
 
   it('loads an editable external-work draft with authorization', async () => {
-    const draft = { provider: 'github', connected: true, destination: 'acme/site', existing: null, draft: { title: 'Title', body: 'Body' } }
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(draft), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    }))
+    const draft = {
+      provider: 'github',
+      connected: true,
+      destination: 'acme/site',
+      existing: null,
+      draft: { title: 'Title', body: 'Body' },
+    }
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(draft), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getExternalWorkDraft('/api', 'session', 'comment/1')).resolves.toEqual(draft)
@@ -67,20 +88,29 @@ describe('createCommentGithubIssue', () => {
 
   it('retries external-work close synchronization with authorization', async () => {
     const payload = { externalWork: [] }
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
     vi.stubGlobal('fetch', fetchMock)
     await expect(retryExternalWorkSync('/api', 'session', 'comment/1')).resolves.toEqual(payload)
     expect(fetchMock).toHaveBeenCalledWith('/api/v1/comments/comment%2F1/external-work-sync', {
-      method: 'POST', headers: { Authorization: 'Bearer session' },
+      method: 'POST',
+      headers: { Authorization: 'Bearer session' },
     })
   })
 
   it('reads only the project GitHub connection status without caching', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      githubConnectionStatus: 'connected',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          githubConnectionStatus: 'connected',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(getProjectGitHubStatus('/api', 'session', 'project/1')).resolves.toEqual({
@@ -96,14 +126,20 @@ describe('createCommentGithubIssue', () => {
   })
 
   it('updates implementation status with session authorization', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
-      id: 'comment-1',
-      implementationStatus: 'done',
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          id: 'comment-1',
+          implementationStatus: 'done',
+        }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      ),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(updateImplementationStatus('/api', 'session', 'comment/1', 'done'))
-      .resolves.toMatchObject({ implementationStatus: 'done' })
+    await expect(updateImplementationStatus('/api', 'session', 'comment/1', 'done')).resolves.toMatchObject({
+      implementationStatus: 'done',
+    })
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/v1/comments/comment%2F1/implementation-status',
       expect.objectContaining({
@@ -119,44 +155,83 @@ describe('createCommentGithubIssue', () => {
 
   it('loads, authorizes, updates, and disconnects the Linear integration', async () => {
     const payload = { provider: 'linear', connected: false, destinations: [] }
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(payload), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     await getLinearIntegration('/api', 'session', 'project/1')
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/linear', expect.objectContaining({ cache: 'no-store' }))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/linear',
+      expect.objectContaining({ cache: 'no-store' }),
+    )
     await getLinearIntegration('/api', 'session', 'project/1', true)
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/linear?action=authorize', expect.anything())
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/linear?action=authorize',
+      expect.anything(),
+    )
     await selectLinearTeam('/api', 'session', 'project/1', 'team')
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/linear', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ containerId: 'team' }) }))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/linear',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ containerId: 'team' }) }),
+    )
     await disconnectLinear('/api', 'session', 'project/1')
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/linear', expect.objectContaining({ method: 'DELETE' }))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/linear',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 
   it('loads, authorizes, updates, and disconnects the Jira integration', async () => {
     const payload = { provider: 'jira', connected: false, destinations: [] }
-    const fetchMock = vi.fn().mockImplementation(async () => new Response(JSON.stringify(payload), {
-      status: 200, headers: { 'Content-Type': 'application/json' },
-    }))
+    const fetchMock = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify(payload), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+    )
     vi.stubGlobal('fetch', fetchMock)
 
     await getJiraIntegration('/api', 'session', 'project/1')
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ cache: 'no-store' }))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/jira',
+      expect.objectContaining({ cache: 'no-store' }),
+    )
     await getJiraIntegration('/api', 'session', 'project/1', true)
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira?action=authorize', expect.anything())
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/jira?action=authorize',
+      expect.anything(),
+    )
     await selectJiraProject('/api', 'session', 'project/1', 'cloud:100')
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ containerId: 'cloud:100' }) }))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/jira',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ containerId: 'cloud:100' }) }),
+    )
     await disconnectJira('/api', 'session', 'project/1')
-    expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/projects/project%2F1/integrations/jira', expect.objectContaining({ method: 'DELETE' }))
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      '/api/v1/projects/project%2F1/integrations/jira',
+      expect.objectContaining({ method: 'DELETE' }),
+    )
   })
 })
 
-it('posts explicit admin recovery confirmation to the encoded endpoint',async()=>{
- const {resolvePendingExternalWork}=await import('./api')
- const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({resolved:true}),{status:200}));vi.stubGlobal('fetch',fetch)
- expect(await resolvePendingExternalWork('/api','token','comment/1','linear')).toEqual({resolved:true})
- expect(fetch).toHaveBeenCalledWith('/api/v1/comments/comment%2F1/external-work-recovery',expect.objectContaining({method:'POST',body:JSON.stringify({provider:'linear',confirmCheckedTracker:true})}))
+it('posts explicit admin recovery confirmation to the encoded endpoint', async () => {
+  const { resolvePendingExternalWork } = await import('./api')
+  const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ resolved: true }), { status: 200 }))
+  vi.stubGlobal('fetch', fetch)
+  expect(await resolvePendingExternalWork('/api', 'token', 'comment/1', 'linear')).toEqual({ resolved: true })
+  expect(fetch).toHaveBeenCalledWith(
+    '/api/v1/comments/comment%2F1/external-work-recovery',
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ provider: 'linear', confirmCheckedTracker: true }),
+    }),
+  )
 })
 
 it.each([
@@ -165,6 +240,8 @@ it.each([
 ])('retains HTTP status and a useful message when recovery fails: %s', async (body, status, message) => {
   const { resolvePendingExternalWork } = await import('./api')
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(body, { status })))
-  await expect(resolvePendingExternalWork('/api', 'token', 'comment/1', 'github'))
-    .rejects.toMatchObject({ message, status })
+  await expect(resolvePendingExternalWork('/api', 'token', 'comment/1', 'github')).rejects.toMatchObject({
+    message,
+    status,
+  })
 })

@@ -37,4 +37,3 @@ export async function requireAgentShare(req: VercelRequest, res: VercelResponse,
   }
   return { share, token }
 }
-

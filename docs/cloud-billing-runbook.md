@@ -14,10 +14,10 @@ Use separate databases and Stripe environments for sandbox, production and Commu
 
 Create active USD recurring prices for:
 
-| Product | Monthly price | Yearly price |
-| --- | ---: | ---: |
-| CRRT Pro | $18 | $192 |
-| CRRT Studio | $54 | $492 |
+| Product     | Monthly price | Yearly price |
+| ----------- | ------------: | -----------: |
+| CRRT Pro    |           $18 |         $192 |
+| CRRT Studio |           $54 |         $492 |
 
 Use distinct `price_…` IDs. Tax must not be included in the price. Complete Managed Payments onboarding and assign an eligible SaaS tax code to both products. New Cloud Checkout sessions enable Managed Payments; do not enable standalone automatic tax in their requests. Configure Customer Portal to expose only the intended Pro/Studio monthly and yearly prices, permit the desired plan changes and cancellation, and deliberately choose proration and billing-anchor behavior. Preserve the anchor for same-window plan changes so upgrades cannot reset consumed quotas.
 

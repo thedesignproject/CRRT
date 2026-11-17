@@ -7,49 +7,78 @@ vi.mock('./ProjectDomainAccess', () => ({ ProjectDomainAccess: () => <div>Compan
 vi.mock('./GitHubRepositorySettings', () => ({ GitHubRepositorySettings: () => null }))
 vi.mock('./LinearIntegrationSettings', () => ({ LinearIntegrationSettings: () => null }))
 vi.mock('./JiraIntegrationSettings', () => ({ JiraIntegrationSettings: () => null }))
-vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: () => <div>Storybook connection settings</div> }))
+vi.mock('./StorybookIntegrationSettings', () => ({
+  StorybookIntegrationSettings: () => <div>Storybook connection settings</div>,
+}))
 
 import { useProjectSettings } from '../hooks/useProjectSettings'
 import { ProjectSettings } from './ProjectSettings'
 
 const project: Project = {
-  publicKey: 'demo', slug: 'demo', name: 'Demo', allowedOrigins: [],
-  createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z',
+  publicKey: 'demo',
+  slug: 'demo',
+  name: 'Demo',
+  allowedOrigins: [],
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
 }
 
 const owner: ProjectMember = {
-  userId: 'owner', email: 'owner@example.com', role: 'owner', createdAt: '2026-01-01T00:00:00Z',
+  userId: 'owner',
+  email: 'owner@example.com',
+  role: 'owner',
+  createdAt: '2026-01-01T00:00:00Z',
 }
 const member: ProjectMember = {
-  userId: 'member', email: 'member@example.com', role: 'member', createdAt: '2026-01-02T00:00:00Z',
+  userId: 'member',
+  email: 'member@example.com',
+  role: 'member',
+  createdAt: '2026-01-02T00:00:00Z',
 }
 
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
-  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej })
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
   return { promise, resolve, reject }
 }
 
 function settings(overrides: Record<string, unknown> = {}) {
   return {
-    members: [owner, member], invites: [], repoConfig: null, repoConfigError: null,
-    loading: false, error: null, isAdmin: true, isOwner: true,
-    refresh: vi.fn(), rename: vi.fn(), updateAllowedOrigins: vi.fn(), saveAgentInstructions: vi.fn(),
-    invite: vi.fn().mockResolvedValue(undefined), changeRole: vi.fn().mockResolvedValue(undefined),
-    removeMember: vi.fn(), cancelInvite: vi.fn(), ...overrides,
+    members: [owner, member],
+    invites: [],
+    repoConfig: null,
+    repoConfigError: null,
+    loading: false,
+    error: null,
+    isAdmin: true,
+    isOwner: true,
+    refresh: vi.fn(),
+    rename: vi.fn(),
+    updateAllowedOrigins: vi.fn(),
+    saveAgentInstructions: vi.fn(),
+    invite: vi.fn().mockResolvedValue(undefined),
+    changeRole: vi.fn().mockResolvedValue(undefined),
+    removeMember: vi.fn(),
+    cancelInvite: vi.fn(),
+    ...overrides,
   }
 }
 
 function view(current = 'owner', selectedProject = project) {
-  return render(<ProjectSettings
-    project={selectedProject}
-    apiBase="/api"
-    accessToken="token"
-    currentUserId={current}
-    onBack={vi.fn()}
-    onProjectsChanged={vi.fn()}
-  />)
+  return render(
+    <ProjectSettings
+      project={selectedProject}
+      apiBase="/api"
+      accessToken="token"
+      currentUserId={current}
+      onBack={vi.fn()}
+      onProjectsChanged={vi.fn()}
+    />,
+  )
 }
 
 beforeEach(() => vi.mocked(useProjectSettings).mockReset())
@@ -198,14 +227,16 @@ describe('ProjectSettings role controls', () => {
 
     fireEvent.change(screen.getByLabelText('Role for member@example.com'), { target: { value: 'owner' } })
     fireEvent.click(screen.getByRole('button', { name: 'Transfer ownership' }))
-    rendered.rerender(<ProjectSettings
-      project={{ ...project, publicKey: 'other' }}
-      apiBase="/api"
-      accessToken="token"
-      currentUserId="owner"
-      onBack={vi.fn()}
-      onProjectsChanged={vi.fn()}
-    />)
+    rendered.rerender(
+      <ProjectSettings
+        project={{ ...project, publicKey: 'other' }}
+        apiBase="/api"
+        accessToken="token"
+        currentUserId="owner"
+        onBack={vi.fn()}
+        onProjectsChanged={vi.fn()}
+      />,
+    )
 
     change.reject(new Error('Stale transfer error'))
     await waitFor(() => expect(screen.queryByText('Stale transfer error')).toBeNull())
@@ -236,20 +267,22 @@ describe('ProjectSettings role controls', () => {
         allowedOrigins: ['b.example', 'new.example'],
       }),
     })
-    vi.mocked(useProjectSettings).mockImplementation((_api, _token, projectKey) => (
-      projectKey === project.publicKey ? stateA : stateB
-    ) as never)
+    vi.mocked(useProjectSettings).mockImplementation(
+      (_api, _token, projectKey) => (projectKey === project.publicKey ? stateA : stateB) as never,
+    )
     const rendered = view('owner', projectA)
 
     fireEvent.click(screen.getByLabelText('Remove a.example'))
-    rendered.rerender(<ProjectSettings
-      project={projectB}
-      apiBase="/api"
-      accessToken="token"
-      currentUserId="owner"
-      onBack={vi.fn()}
-      onProjectsChanged={vi.fn()}
-    />)
+    rendered.rerender(
+      <ProjectSettings
+        project={projectB}
+        apiBase="/api"
+        accessToken="token"
+        currentUserId="owner"
+        onBack={vi.fn()}
+        onProjectsChanged={vi.fn()}
+      />,
+    )
     await act(async () => {
       updateA.resolve({ ...projectA, allowedOrigins: [] })
       await updateA.promise
@@ -292,14 +325,16 @@ describe('ProjectSettings role controls', () => {
     expect(document.querySelector('.animate-spin')).toBeTruthy()
 
     vi.mocked(useProjectSettings).mockReturnValue(settings({ loading: false, members: [] }) as never)
-    rendered.rerender(<ProjectSettings
-      project={project}
-      apiBase="/api"
-      accessToken="token"
-      currentUserId="owner"
-      onBack={vi.fn()}
-      onProjectsChanged={vi.fn()}
-    />)
+    rendered.rerender(
+      <ProjectSettings
+        project={project}
+        apiBase="/api"
+        accessToken="token"
+        currentUserId="owner"
+        onBack={vi.fn()}
+        onProjectsChanged={vi.fn()}
+      />,
+    )
     expect(screen.getByText('No members yet.')).toBeTruthy()
   })
 
@@ -320,9 +355,13 @@ describe('ProjectSettings role controls', () => {
     expect(screen.getByText(/Transfer ownership to/).textContent).toContain('member')
     ownerView.unmount()
 
-    vi.mocked(useProjectSettings).mockReturnValue(settings({
-      members: [owner, member], isAdmin: false, isOwner: false,
-    }) as never)
+    vi.mocked(useProjectSettings).mockReturnValue(
+      settings({
+        members: [owner, member],
+        isAdmin: false,
+        isOwner: false,
+      }) as never,
+    )
     view('member')
     expect(screen.getAllByText('member').length).toBeGreaterThan(0)
   })
@@ -334,21 +373,40 @@ it('only mounts company access controls for project managers', () => {
   expect(screen.queryByText('Company access controls')).toBeNull()
   expect(screen.queryByText('Storybook connection settings')).toBeNull()
   vi.mocked(useProjectSettings).mockReturnValue(settings({ isOwner: false }) as never)
-  rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="admin" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
+  rerender(
+    <ProjectSettings
+      project={project}
+      apiBase="/api"
+      accessToken="token"
+      currentUserId="admin"
+      onBack={vi.fn()}
+      onProjectsChanged={vi.fn()}
+    />,
+  )
   expect(screen.getByText('Company access controls')).toBeInTheDocument()
   expect(screen.queryByText('Storybook connection settings')).toBeNull()
   vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
-  rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
+  rerender(
+    <ProjectSettings
+      project={project}
+      apiBase="/api"
+      accessToken="token"
+      currentUserId="owner"
+      onBack={vi.fn()}
+      onProjectsChanged={vi.fn()}
+    />,
+  )
   expect(screen.getByText('Company access controls')).toBeInTheDocument()
   expect(screen.getByText('Storybook connection settings')).toBeInTheDocument()
 })
 
-it('keeps company access singular across repeated settings edits',()=>{
- vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
- const errors=vi.spyOn(console,'error').mockImplementation(()=>{})
- view()
- for(const name of ['First','Second','Third']) fireEvent.change(screen.getByLabelText('Name'),{target:{value:name}})
- expect(screen.getAllByText('Company access controls')).toHaveLength(1)
- expect(errors.mock.calls.flat().join(' ')).not.toMatch(/same key/)
- errors.mockRestore()
+it('keeps company access singular across repeated settings edits', () => {
+  vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  view()
+  for (const name of ['First', 'Second', 'Third'])
+    fireEvent.change(screen.getByLabelText('Name'), { target: { value: name } })
+  expect(screen.getAllByText('Company access controls')).toHaveLength(1)
+  expect(errors.mock.calls.flat().join(' ')).not.toMatch(/same key/)
+  errors.mockRestore()
 })

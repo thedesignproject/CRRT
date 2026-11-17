@@ -15,7 +15,9 @@ it('copies one setup prompt with the guide, actual endpoint, and continuation bo
     fireEvent.click(screen.getByRole('button', { name: `Copy ${name}` }))
     await waitFor(() => expect(write).toHaveBeenCalledTimes(index + 1))
   }
-  expect(write.mock.calls[0][0]).toBe(`Set up CRRT for this agent. Fetch ${window.location.origin}/get-started.md and follow its instructions. Use this MCP server URL: http://127.0.0.1:3001/api/mcp/v1. After setup, continue any existing user-requested task that needed CRRT once its tools are available. If the client requires a reload, preserve the task and explain how to resume it after reloading, without repeating successful setup or login. If there is no existing task, confirm readiness once verified and wait for instructions.`)
+  expect(write.mock.calls[0][0]).toBe(
+    `Set up CRRT for this agent. Fetch ${window.location.origin}/get-started.md and follow its instructions. Use this MCP server URL: http://127.0.0.1:3001/api/mcp/v1. After setup, continue any existing user-requested task that needed CRRT once its tools are available. If the client requires a reload, preserve the task and explain how to resume it after reloading, without repeating successful setup or login. If there is no existing task, confirm readiness once verified and wait for instructions.`,
+  )
   expect(write.mock.calls[1][0]).toBe('http://127.0.0.1:3001/api/mcp/v1')
   expect(write.mock.calls[2][0]).toContain('Ready for Agent')
   expect(screen.getByText(/Sign in with your CRRT account/)).toBeInTheDocument()
@@ -24,9 +26,14 @@ it('copies one setup prompt with the guide, actual endpoint, and continuation bo
 })
 
 it('preserves selectable text on copy failure and supports relative API URLs', async () => {
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+  })
   render(<McpSetup apiBase="/api" />)
   fireEvent.click(screen.getByRole('button', { name: 'Copy setup prompt' }))
   expect(await screen.findByRole('status')).toHaveTextContent('Select and copy the text above')
-  expect(screen.getByText(/Set up CRRT for this agent/)).toHaveTextContent(`Use this MCP server URL: ${window.location.origin}/api/mcp/v1`)
+  expect(screen.getByText(/Set up CRRT for this agent/)).toHaveTextContent(
+    `Use this MCP server URL: ${window.location.origin}/api/mcp/v1`,
+  )
 })

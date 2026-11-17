@@ -23,24 +23,42 @@ function response() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    setHeader(key: string, value: string) { this.headers[key] = value },
-    status(value: number) { this.statusCode = value; return this },
-    json(value: unknown) { this.body = value; return this },
-    end() { return this },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
+    status(value: number) {
+      this.statusCode = value
+      return this
+    },
+    json(value: unknown) {
+      this.body = value
+      return this
+    },
+    end() {
+      return this
+    },
   }
 }
-const call = (request: unknown, res: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(request, res)
+const call = (request: unknown, res: unknown) =>
+  (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(request, res)
 const request = (overrides: Record<string, unknown> = {}) => ({
-  method: 'POST', headers: { origin }, body: { code, state, verifier, redirectUri }, ...overrides,
+  method: 'POST',
+  headers: { origin },
+  body: { code, state, verifier, redirectUri },
+  ...overrides,
 })
 
 beforeEach(() => {
   process.env.EXTENSION_ALLOWED_IDS = extensionId
   vi.mocked(consumeExtensionAuthHandoff).mockReset().mockResolvedValue('user-1')
-  vi.mocked(mintExtensionSession).mockReset().mockResolvedValue({
-    accessToken: 'access', refreshToken: 'refresh', expiresAt: 123,
-    user: { id: 'user-1', email: 'user@example.com' },
-  })
+  vi.mocked(mintExtensionSession)
+    .mockReset()
+    .mockResolvedValue({
+      accessToken: 'access',
+      refreshToken: 'refresh',
+      expiresAt: 123,
+      user: { id: 'user-1', email: 'user@example.com' },
+    })
 })
 afterEach(() => {
   if (originalAllowed === undefined) delete process.env.EXTENSION_ALLOWED_IDS
@@ -88,8 +106,11 @@ describe('extension auth exchange endpoint', () => {
     const res = response()
     await call(request(), res)
     expect(consumeExtensionAuthHandoff).toHaveBeenCalledWith({
-      codeHash: hashProof(code), stateHash: hashProof(state), codeChallenge: pkceChallenge(verifier),
-      extensionId, redirectUri,
+      codeHash: hashProof(code),
+      stateHash: hashProof(state),
+      codeChallenge: pkceChallenge(verifier),
+      extensionId,
+      redirectUri,
     })
     expect(mintExtensionSession).toHaveBeenCalledWith('user-1')
     expect(vi.mocked(consumeExtensionAuthHandoff).mock.invocationCallOrder[0]).toBeLessThan(
@@ -104,10 +125,17 @@ describe('extension auth exchange endpoint', () => {
 
   it('rejects redirect/origin mismatches before touching persistence', async () => {
     const res = response()
-    await call(request({ body: {
-      code, state, verifier,
-      redirectUri: `https://${otherExtensionId}.chromiumapp.org/crrt-auth`,
-    } }), res)
+    await call(
+      request({
+        body: {
+          code,
+          state,
+          verifier,
+          redirectUri: `https://${otherExtensionId}.chromiumapp.org/crrt-auth`,
+        },
+      }),
+      res,
+    )
     expect(res).toMatchObject({ statusCode: 403, body: { error: 'Extension origin does not match redirect' } })
     expect(consumeExtensionAuthHandoff).not.toHaveBeenCalled()
   })

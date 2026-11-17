@@ -15,10 +15,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -75,26 +85,40 @@ describe('api/v1/projects/[projectId]/comments', () => {
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual([{ id: 'c1' }])
-    expect(listProjectComments).toHaveBeenLastCalledWith('p', expect.objectContaining({
-      visibility: undefined, includeExternalWork: true,
-    }))
+    expect(listProjectComments).toHaveBeenLastCalledWith(
+      'p',
+      expect.objectContaining({
+        visibility: undefined,
+        includeExternalWork: true,
+      }),
+    )
 
     vi.mocked(listProjectComments).mockResolvedValueOnce([{ id: 'testing' }] as never)
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', implementationStatus: 'ready_for_testing' }, headers: {} }, res)
+    await call(
+      { method: 'GET', query: { projectId: 'p', implementationStatus: 'ready_for_testing' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(200)
-    expect(listProjectComments).toHaveBeenLastCalledWith('p', expect.objectContaining({
-      implementationStatus: 'ready_for_testing',
-    }))
+    expect(listProjectComments).toHaveBeenLastCalledWith(
+      'p',
+      expect.objectContaining({
+        implementationStatus: 'ready_for_testing',
+      }),
+    )
 
     vi.mocked(requireProjectCapability).mockResolvedValueOnce({ role: 'guest' })
     vi.mocked(listProjectComments).mockResolvedValueOnce([{ id: 'shared' }] as never)
     res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(listProjectComments).toHaveBeenLastCalledWith('p', expect.objectContaining({
-      visibility: 'shared', includeExternalWork: false,
-    }))
+    expect(listProjectComments).toHaveBeenLastCalledWith(
+      'p',
+      expect.objectContaining({
+        visibility: 'shared',
+        includeExternalWork: false,
+      }),
+    )
 
     vi.mocked(listProjectComments).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
@@ -107,16 +131,18 @@ it('rejects a read if access is revoked between authorization and the database q
   vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
   vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
   vi.mocked(listProjectComments).mockRejectedValueOnce(new Error('forbidden'))
-  const res=mockRes()
-  await call({ method:'GET', query:{ projectId:'p' }, headers:{} },res)
+  const res = mockRes()
+  await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
   expect(res.statusCode).toBe(403)
-  expect(listProjectComments).toHaveBeenCalledWith('p',expect.objectContaining({ actorUserId:'u' }))
+  expect(listProjectComments).toHaveBeenCalledWith('p', expect.objectContaining({ actorUserId: 'u' }))
 })
 
-it('handles non-Error read failures without leaking the thrown value',async()=>{
- vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
- vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
- vi.mocked(listProjectComments).mockRejectedValueOnce('opaque failure')
- const res=mockRes();await call({method:'GET',query:{projectId:'p'},headers:{}},res)
- expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
+it('handles non-Error read failures without leaking the thrown value', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(listProjectComments).mockRejectedValueOnce('opaque failure')
+  const res = mockRes()
+  await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({ error: 'Unexpected error' })
 })

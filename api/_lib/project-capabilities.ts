@@ -11,8 +11,22 @@ export type ProjectCapability =
   | 'project:manage'
 
 const CAPABILITIES: Record<ProjectRole, readonly ProjectCapability[]> = {
-  owner: ['feedback:read', 'feedback:create', 'feedback:manage', 'agent:operate', 'integrations:send', 'project:manage'],
-  admin: ['feedback:read', 'feedback:create', 'feedback:manage', 'agent:operate', 'integrations:send', 'project:manage'],
+  owner: [
+    'feedback:read',
+    'feedback:create',
+    'feedback:manage',
+    'agent:operate',
+    'integrations:send',
+    'project:manage',
+  ],
+  admin: [
+    'feedback:read',
+    'feedback:create',
+    'feedback:manage',
+    'agent:operate',
+    'integrations:send',
+    'project:manage',
+  ],
   member: ['feedback:read', 'feedback:create', 'feedback:manage', 'agent:operate', 'integrations:send'],
   guest: ['feedback:read', 'feedback:create'],
 }
@@ -37,5 +51,9 @@ export function feedbackVisibilityForRole(
 }
 
 export function projectFeedbackAllowed(role: ProjectRole, privateProject = false, feedbackAccess = 'team') {
-  return !privateProject || feedbackAccess === 'team' || (feedbackAccess === 'admins' && (role === 'owner' || role === 'admin'))
+  return (
+    !privateProject ||
+    feedbackAccess === 'team' ||
+    (feedbackAccess === 'admins' && (role === 'owner' || role === 'admin'))
+  )
 }

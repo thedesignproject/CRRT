@@ -8,10 +8,10 @@ The landing site and dashboard initialize PostHog from `apps/posthog.ts` in prod
 
 In the `crrt.ai` Vercel project, open Settings → Environment Variables and add these values for **Production**:
 
-| Variable | Value |
-| --- | --- |
-| `VITE_POSTHOG_KEY` | Public project token from PostHog project **705236** |
-| `VITE_POSTHOG_HOST` | `https://us.i.posthog.com` |
+| Variable            | Value                                                |
+| ------------------- | ---------------------------------------------------- |
+| `VITE_POSTHOG_KEY`  | Public project token from PostHog project **705236** |
+| `VITE_POSTHOG_HOST` | `https://us.i.posthog.com`                           |
 
 Use the project token, not a personal API key. These values are compiled into browser bundles. A new deployment is required after changing them. Keep local `.env` files out of Git.
 

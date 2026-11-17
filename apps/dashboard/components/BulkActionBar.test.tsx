@@ -5,16 +5,32 @@ import { BulkActionBar, BulkDeleteDialog } from './BulkActionBar'
 describe('BulkActionBar', () => {
   it('stays hidden without a selection and exposes compact actions when selected', () => {
     const close = vi.fn()
-    const view = render(<BulkActionBar selectedCount={0} onClose={close}><button>Move</button></BulkActionBar>)
+    const view = render(
+      <BulkActionBar selectedCount={0} onClose={close}>
+        <button>Move</button>
+      </BulkActionBar>,
+    )
     expect(screen.queryByRole('toolbar')).toBeNull()
-    view.rerender(<BulkActionBar selectedCount={3} onClose={close}><button>Move</button></BulkActionBar>)
+    view.rerender(
+      <BulkActionBar selectedCount={3} onClose={close}>
+        <button>Move</button>
+      </BulkActionBar>,
+    )
     expect(screen.getByRole('toolbar', { name: 'Bulk actions for 3 selected items' })).toBeInTheDocument()
     expect(screen.getByText('3 selected')).toHaveAttribute('aria-live', 'polite')
     fireEvent.click(screen.getByRole('button', { name: 'Clear selection' }))
     expect(close).toHaveBeenCalledOnce()
-    view.rerender(<BulkActionBar selectedCount={1} onClose={close}><button>Move</button></BulkActionBar>)
+    view.rerender(
+      <BulkActionBar selectedCount={1} onClose={close}>
+        <button>Move</button>
+      </BulkActionBar>,
+    )
     expect(screen.getByRole('toolbar', { name: 'Bulk actions for 1 selected item' })).toBeInTheDocument()
-    view.rerender(<BulkActionBar selectedCount={3} busy onClose={close}><button>Move</button></BulkActionBar>)
+    view.rerender(
+      <BulkActionBar selectedCount={3} busy onClose={close}>
+        <button>Move</button>
+      </BulkActionBar>,
+    )
     expect(screen.getByRole('button', { name: 'Clear selection' })).toBeDisabled()
   })
 

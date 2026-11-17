@@ -29,14 +29,17 @@ if (base) {
     if (affected.length > 0) mode = 'changed'
     else decision.reasons.push('no test imports the changed files')
   }
-  console.log(mode === 'changed'
-    ? `Selection: ${affected.length} test files reachable from the diff`
-    : `Selection: full suite\n  ${decision.reasons.join('\n  ')}`)
+  console.log(
+    mode === 'changed'
+      ? `Selection: ${affected.length} test files reachable from the diff`
+      : `Selection: full suite\n  ${decision.reasons.join('\n  ')}`,
+  )
 }
 
 const args = ['run', `--shard=${shard}`]
 if (mode === 'changed') args.push('--changed', base!, '--passWithNoTests')
-if (process.env.COVERAGE === 'true') args.push('--coverage', '--coverage.reporter=json-summary', '--reporter=default', '--reporter=blob')
+if (process.env.COVERAGE === 'true')
+  args.push('--coverage', '--coverage.reporter=json-summary', '--reporter=default', '--reporter=blob')
 const run = spawnSync(vitest, args, { stdio: 'inherit', env: { ...process.env, VITEST_SELECTION_MODE: mode } })
 if (run.status !== 0) process.exit(run.status ?? 1)
 

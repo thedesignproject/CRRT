@@ -32,21 +32,12 @@ export interface ScreenshotCaptureRegion {
   height: number
 }
 
-function centeredRegion(
-  start: number,
-  size: number,
-  viewportSize: number,
-) {
+function centeredRegion(start: number, size: number, viewportSize: number) {
   const visibleStart = clamp(start, 0, viewportSize)
   const visibleEnd = clamp(start + size, 0, viewportSize)
   const visibleSize = Math.max(0, visibleEnd - visibleStart)
-  const regionSize = Math.min(
-    viewportSize,
-    visibleSize + CAPTURE_PADDING * 2,
-  )
-  const center = visibleSize > 0
-    ? visibleStart + visibleSize / 2
-    : clamp(start, 0, viewportSize)
+  const regionSize = Math.min(viewportSize, visibleSize + CAPTURE_PADDING * 2)
+  const center = visibleSize > 0 ? visibleStart + visibleSize / 2 : clamp(start, 0, viewportSize)
 
   return {
     start: clamp(center - regionSize / 2, 0, viewportSize - regionSize),
@@ -63,16 +54,8 @@ export function calculateCaptureRegion(
     return { left: 0, top: 0, width: viewportWidth, height: viewportHeight }
   }
 
-  const horizontal = centeredRegion(
-    focus.left,
-    focus.width,
-    viewportWidth,
-  )
-  const vertical = centeredRegion(
-    focus.top,
-    focus.height,
-    viewportHeight,
-  )
+  const horizontal = centeredRegion(focus.left, focus.width, viewportWidth)
+  const vertical = centeredRegion(focus.top, focus.height, viewportHeight)
 
   return {
     left: horizontal.start,
@@ -87,9 +70,7 @@ export function calculateCaptureScale(width: number, height: number, sourceScale
   return Math.min(sourceScale, MAX_CAPTURE_EDGE / Math.max(width, height))
 }
 
-export async function captureViewport(
-  focus: ScreenshotFocusRect | null = null,
-): Promise<Blob | null> {
+export async function captureViewport(focus: ScreenshotFocusRect | null = null): Promise<Blob | null> {
   try {
     const { default: html2canvas } = await import('html2canvas-pro')
     const viewportWidth = window.innerWidth
@@ -123,7 +104,9 @@ export async function captureViewport(
   }
 }
 
-export function useScreenshotCapture(captureSource: (focus: ScreenshotFocusRect | null) => Promise<Blob | null> = captureViewport) {
+export function useScreenshotCapture(
+  captureSource: (focus: ScreenshotFocusRect | null) => Promise<Blob | null> = captureViewport,
+) {
   const [image, setImage] = useState<Blob | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [status, setStatus] = useState<ScreenshotCaptureStatus>('idle')
@@ -131,25 +114,31 @@ export function useScreenshotCapture(captureSource: (focus: ScreenshotFocusRect 
   const lastFocusRef = useRef<ScreenshotFocusRect | null>(null)
 
   useEffect(() => {
-    if (!image) { setPreviewUrl(null); return }
+    if (!image) {
+      setPreviewUrl(null)
+      return
+    }
     const url = URL.createObjectURL(image)
     setPreviewUrl(url)
     return () => URL.revokeObjectURL(url)
   }, [image])
 
-  const capture = useCallback(async (focus?: ScreenshotFocusRect) => {
-    if (focus) lastFocusRef.current = focus
-    const captureId = ++captureIdRef.current
-    setImage(null)
-    setStatus('capturing')
+  const capture = useCallback(
+    async (focus?: ScreenshotFocusRect) => {
+      if (focus) lastFocusRef.current = focus
+      const captureId = ++captureIdRef.current
+      setImage(null)
+      setStatus('capturing')
 
-    const blob = await captureSource(lastFocusRef.current)
-    if (captureId !== captureIdRef.current) return null
+      const blob = await captureSource(lastFocusRef.current)
+      if (captureId !== captureIdRef.current) return null
 
-    setImage(blob)
-    setStatus(blob ? 'ready' : 'failed')
-    return blob
-  }, [captureSource])
+      setImage(blob)
+      setStatus(blob ? 'ready' : 'failed')
+      return blob
+    },
+    [captureSource],
+  )
 
   const clear = useCallback(() => {
     captureIdRef.current += 1

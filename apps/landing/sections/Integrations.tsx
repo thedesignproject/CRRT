@@ -25,29 +25,67 @@ export function Integrations() {
         <div className="landing-integrations-list">
           {integrations.map(({ name, detail, Mark }, index) => (
             <article key={name} className={selected === index ? 'is-selected' : ''}>
-              <button type="button" aria-label={`Preview ${name} handoff`} aria-pressed={selected === index} onMouseEnter={() => setSelected(index)} onFocus={() => setSelected(index)} onClick={() => setSelected(index)}>
-                <i><Mark /></i><span><strong>{name}</strong><small>{detail}</small></span><ArrowRight size={16} />
+              <button
+                type="button"
+                aria-label={`Preview ${name} handoff`}
+                aria-pressed={selected === index}
+                onMouseEnter={() => setSelected(index)}
+                onFocus={() => setSelected(index)}
+                onClick={() => setSelected(index)}
+              >
+                <i>
+                  <Mark />
+                </i>
+                <span>
+                  <strong>{name}</strong>
+                  <small>{detail}</small>
+                </span>
+                <ArrowRight size={16} />
               </button>
             </article>
           ))}
         </div>
 
         <div className="landing-integrations-rail" aria-hidden="true">
-          <span /><span /><span /><span />
+          <span />
+          <span />
+          <span />
+          <span />
           <i />
           <em />
         </div>
 
         <article className="landing-integrations-output" key={destination.name}>
-          <header><span>CRRT.</span><b>Handoff preview</b></header>
-          <h3>{selected === 0 ? 'Your Claude Code. With the full picture.' : `Your feedback, ready for ${destination.name}.`}</h3>
+          <header>
+            <span>CRRT.</span>
+            <b>Handoff preview</b>
+          </header>
+          <h3>
+            {selected === 0
+              ? 'Your Claude Code. With the full picture.'
+              : `Your feedback, ready for ${destination.name}.`}
+          </h3>
           <ul>
-            <li><Check size={14} /> Original feedback and decision</li>
-            <li><Check size={14} /> Screenshot, selector, and viewport</li>
-            <li><Check size={14} /> Project instructions when configured</li>
+            <li>
+              <Check size={14} /> Original feedback and decision
+            </li>
+            <li>
+              <Check size={14} /> Screenshot, selector, and viewport
+            </li>
+            <li>
+              <Check size={14} /> Project instructions when configured
+            </li>
           </ul>
-          <div className="landing-integration-action"><DestinationMark /><span>{selected === 0 ? 'Send to Claude Code' : `Create a ${destination.name} issue`}</span><ArrowRight size={15} /></div>
-          <p className="handoff-preview-note">{selected === 0 ? 'Works with compatible MCP clients, including Codex.' : 'The original comment and its context stay together.'}</p>
+          <div className="landing-integration-action">
+            <DestinationMark />
+            <span>{selected === 0 ? 'Send to Claude Code' : `Create a ${destination.name} issue`}</span>
+            <ArrowRight size={15} />
+          </div>
+          <p className="handoff-preview-note">
+            {selected === 0
+              ? 'Works with compatible MCP clients, including Codex.'
+              : 'The original comment and its context stay together.'}
+          </p>
         </article>
       </div>
     </section>

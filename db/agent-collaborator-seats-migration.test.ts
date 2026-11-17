@@ -22,7 +22,10 @@ describe('Agent collaborator seat migration', () => {
 
   it('records a linked custom migration snapshot', () => {
     const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-    expect(journal.entries.find((entry: { idx: number }) => entry.idx === 35)).toMatchObject({ idx: 35, tag: '0035_agent_collaborator_seats' })
+    expect(journal.entries.find((entry: { idx: number }) => entry.idx === 35)).toMatchObject({
+      idx: 35,
+      tag: '0035_agent_collaborator_seats',
+    })
     const previous = JSON.parse(readFileSync('db/migrations/meta/0034_snapshot.json', 'utf8'))
     const current = JSON.parse(readFileSync('db/migrations/meta/0035_snapshot.json', 'utf8'))
     expect(current.prevId).toBe(previous.id)

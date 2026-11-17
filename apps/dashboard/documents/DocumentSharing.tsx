@@ -10,7 +10,7 @@ export function DocumentSharing({
   disabled,
   onAction,
   projects = [],
-  invites = []
+  invites = [],
 }: {
   document: DocumentView
   disabled: boolean
@@ -32,7 +32,10 @@ export function DocumentSharing({
     <section className="max-w-2xl space-y-6 p-6" aria-label="Document sharing">
       <div>
         <h2 className="text-sm font-semibold">Share for review</h2>
-        <p className="mt-2 text-sm leading-6 text-muted-foreground">Readers see the latest published revision and its feedback. Draft changes stay private to people with editing access.</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Readers see the latest published revision and its feedback. Draft changes stay private to people with editing
+          access.
+        </p>
       </div>
       <label className="block text-xs font-medium">
         Review link
@@ -63,12 +66,21 @@ export function DocumentSharing({
         className="space-y-5 border-y border-border py-6"
         onSubmit={(event) => {
           event.preventDefault()
-          void onAction('sharing', { accessMode: mode, ...(mode === 'password' && password ? { password } : {}), userRequested: true })
+          void onAction('sharing', {
+            accessMode: mode,
+            ...(mode === 'password' && password ? { password } : {}),
+            userRequested: true,
+          })
         }}
       >
         <label className="block text-xs font-medium">
           Who can open this document?
-          <select className="document-input mt-2" value={mode} disabled={!document.canManage || disabled || document.archived} onChange={(event) => setMode(event.target.value as DocumentView['accessMode'])}>
+          <select
+            className="document-input mt-2"
+            value={mode}
+            disabled={!document.canManage || disabled || document.archived}
+            onChange={(event) => setMode(event.target.value as DocumentView['accessMode'])}
+          >
             <option value="private">Private</option>
             {document.projectId && <option value="project">Project members only</option>}
             <option value="link">Anyone with the link</option>
@@ -97,7 +109,9 @@ export function DocumentSharing({
               required={!document.passwordProtected}
               disabled={!document.canManage || disabled || document.archived}
               onChange={(event) => setPassword(event.target.value)}
-              placeholder={document.passwordProtected ? 'Leave blank to keep the current password' : 'At least 8 characters'}
+              placeholder={
+                document.passwordProtected ? 'Leave blank to keep the current password' : 'At least 8 characters'
+              }
             />
           </label>
         )}
@@ -118,9 +132,18 @@ export function DocumentSharing({
         >
           <label className="block text-xs font-medium">
             Project (optional)
-            <select className="document-input mt-2" value={project} disabled={disabled || document.archived} onChange={(event) => setProject(event.target.value)}>
+            <select
+              className="document-input mt-2"
+              value={project}
+              disabled={disabled || document.archived}
+              onChange={(event) => setProject(event.target.value)}
+            >
               <option value="">No project</option>
-              {project && !projectAvailable && <option value={project} disabled>{projects.find((item) => item.publicKey === project)?.name ?? 'Project unavailable'}</option>}
+              {project && !projectAvailable && (
+                <option value={project} disabled>
+                  {projects.find((item) => item.publicKey === project)?.name ?? 'Project unavailable'}
+                </option>
+              )}
               {assignableProjects.map((item) => (
                 <option key={item.publicKey} value={item.publicKey}>
                   {item.name}
@@ -128,8 +151,13 @@ export function DocumentSharing({
               ))}
             </select>
           </label>
-          <p className="text-xs text-muted-foreground">Assignment does not grant access. Removing a project-only document makes it Private.</p>
-          <button className="dashboard-bulk-secondary" disabled={disabled || document.archived || !projectAvailable || !projectChanged}>
+          <p className="text-xs text-muted-foreground">
+            Assignment does not grant access. Removing a project-only document makes it Private.
+          </p>
+          <button
+            className="dashboard-bulk-secondary"
+            disabled={disabled || document.archived || !projectAvailable || !projectChanged}
+          >
             Save project
           </button>
         </form>
@@ -146,7 +174,14 @@ export function DocumentSharing({
           >
             <label className="min-w-0 flex-1 text-xs font-medium">
               Email
-              <input type="email" className="document-input mt-2" value={email} required maxLength={254} onChange={(event) => setEmail(event.target.value)} />
+              <input
+                type="email"
+                className="document-input mt-2"
+                value={email}
+                required
+                maxLength={254}
+                onChange={(event) => setEmail(event.target.value)}
+              />
             </label>
             <button className="dashboard-bulk-secondary" disabled={disabled || document.archived}>
               Invite
@@ -155,7 +190,12 @@ export function DocumentSharing({
           {invites.map((address) => (
             <div key={address} className="flex items-center justify-between gap-3 text-sm">
               <span className="break-all">{address}</span>
-              <button type="button" className="document-text-button" disabled={disabled || document.archived} onClick={() => void onAction('invite', { email: address, remove: true, userRequested: true })}>
+              <button
+                type="button"
+                className="document-text-button"
+                disabled={disabled || document.archived}
+                onClick={() => void onAction('invite', { email: address, remove: true, userRequested: true })}
+              >
                 Remove invitation
               </button>
             </div>
@@ -170,8 +210,17 @@ export function DocumentSharing({
       {document.canManage && (
         <details className="border-b border-border pb-6">
           <summary className="cursor-pointer text-sm font-medium">Replace this link</summary>
-          <p className="my-4 text-sm leading-6 text-muted-foreground">The old URL and existing password sessions will stop working. Share the replacement link with reviewers.</p>
-          <button type="button" className="dashboard-bulk-secondary" disabled={disabled || document.archived} onClick={() => void onAction('sharing', { accessMode: document.accessMode, rotateLink: true, userRequested: true })}>
+          <p className="my-4 text-sm leading-6 text-muted-foreground">
+            The old URL and existing password sessions will stop working. Share the replacement link with reviewers.
+          </p>
+          <button
+            type="button"
+            className="dashboard-bulk-secondary"
+            disabled={disabled || document.archived}
+            onClick={() =>
+              void onAction('sharing', { accessMode: document.accessMode, rotateLink: true, userRequested: true })
+            }
+          >
             Replace review link
           </button>
         </details>
@@ -179,16 +228,31 @@ export function DocumentSharing({
       {document.canManage && (
         <details>
           <summary className="cursor-pointer text-sm font-medium">Archive or delete</summary>
-          <p className="my-4 text-sm leading-6 text-muted-foreground">Archiving preserves history and disables reader access. You can restore an archived document.</p>
-          <button type="button" className="dashboard-bulk-secondary" disabled={disabled} onClick={() => void onAction('archive', { archived: !document.archived, userRequested: true })}>
+          <p className="my-4 text-sm leading-6 text-muted-foreground">
+            Archiving preserves history and disables reader access. You can restore an archived document.
+          </p>
+          <button
+            type="button"
+            className="dashboard-bulk-secondary"
+            disabled={disabled}
+            onClick={() => void onAction('archive', { archived: !document.archived, userRequested: true })}
+          >
             {document.archived ? 'Restore document' : 'Archive document'}
           </button>
           <div className="mt-6 space-y-3">
             <label className="block text-xs font-medium">
-              To delete permanently, type “{document.title}”<input className="document-input mt-2" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+              To delete permanently, type “{document.title}”
+              <input className="document-input mt-2" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
             </label>
-            <p className="text-xs leading-5 text-muted-foreground">This deletes the document, all revisions, and all feedback. It cannot be undone.</p>
-            <button type="button" className="dashboard-bulk-secondary text-status-rejected" disabled={disabled || confirm !== document.title} onClick={() => void onAction('delete', { userRequested: true })}>
+            <p className="text-xs leading-5 text-muted-foreground">
+              This deletes the document, all revisions, and all feedback. It cannot be undone.
+            </p>
+            <button
+              type="button"
+              className="dashboard-bulk-secondary text-status-rejected"
+              disabled={disabled || confirm !== document.title}
+              onClick={() => void onAction('delete', { userRequested: true })}
+            >
               Delete permanently
             </button>
           </div>

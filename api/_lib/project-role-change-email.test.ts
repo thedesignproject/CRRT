@@ -8,9 +8,13 @@ import {
 
 const originalEnv = process.env
 const input = (overrides: Partial<Parameters<typeof sendProjectRoleChangeEmail>[0]> = {}) => ({
-  recipient: 'member@example.com', projectName: 'Demo', actorEmail: 'owner@example.com',
-  previousRole: 'member' as const, role: 'admin' as const,
-  dashboardUrl: 'https://crrt.ai/dashboard', ...overrides,
+  recipient: 'member@example.com',
+  projectName: 'Demo',
+  actorEmail: 'owner@example.com',
+  previousRole: 'member' as const,
+  role: 'admin' as const,
+  dashboardUrl: 'https://crrt.ai/dashboard',
+  ...overrides,
 })
 
 beforeEach(() => {
@@ -26,10 +30,13 @@ afterEach(() => {
 
 describe('project role change email', () => {
   it('builds escaped role and ownership messages', () => {
-    const admin = buildProjectRoleChangeEmail(input({
-      projectName: '<Demo>', actorEmail: 'owner+<tag>@example.com',
-      dashboardUrl: 'https://crrt.ai/dashboard?a=<b>',
-    }))
+    const admin = buildProjectRoleChangeEmail(
+      input({
+        projectName: '<Demo>',
+        actorEmail: 'owner+<tag>@example.com',
+        dashboardUrl: 'https://crrt.ai/dashboard?a=<b>',
+      }),
+    )
     expect(admin.subject).toBe('Your role changed on <Demo>')
     expect(admin.text).toContain('from member to admin')
     expect(admin.html).toContain('You’re now an admin.')
@@ -55,8 +62,9 @@ describe('project role change email', () => {
   })
 
   it('uses only the configured application origin for dashboard links', () => {
-    expect(getProjectRoleChangeDashboardUrl({ APP_URL: 'https://app.example/' } as NodeJS.ProcessEnv))
-      .toBe('https://app.example/dashboard')
+    expect(getProjectRoleChangeDashboardUrl({ APP_URL: 'https://app.example/' } as NodeJS.ProcessEnv)).toBe(
+      'https://app.example/dashboard',
+    )
     expect(getProjectRoleChangeDashboardUrl({} as NodeJS.ProcessEnv)).toBe('https://crrt.ai/dashboard')
   })
 
@@ -79,13 +87,16 @@ describe('project role change email', () => {
   it('sends directly to the changed member', async () => {
     process.env.RESEND_API_KEY = 'key'
     process.env.COMMENT_ACTIVITY_EMAIL_FROM = 'CRRT <roles@mail.crrt.ai>'
-    await expect(sendProjectRoleChangeEmail(input({ recipient: ' member@example.com ' })))
-      .resolves.toEqual({ skipped: false })
+    await expect(sendProjectRoleChangeEmail(input({ recipient: ' member@example.com ' }))).resolves.toEqual({
+      skipped: false,
+    })
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://api.resend.com/emails')
     expect(init.signal).toBeInstanceOf(AbortSignal)
     expect(JSON.parse(String(init.body))).toMatchObject({
-      from: 'CRRT <roles@mail.crrt.ai>', to: 'member@example.com', subject: 'Your role changed on Demo',
+      from: 'CRRT <roles@mail.crrt.ai>',
+      to: 'member@example.com',
+      subject: 'Your role changed on Demo',
     })
   })
 
@@ -104,9 +115,14 @@ describe('project role change email', () => {
     vi.useFakeTimers()
     process.env.RESEND_API_KEY = 'key'
     process.env.COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS = '10'
-    vi.mocked(fetch).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
-      ;(init?.signal as AbortSignal | undefined)?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
-    }))
+    vi.mocked(fetch).mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          ;(init?.signal as AbortSignal | undefined)?.addEventListener('abort', () =>
+            reject(new DOMException('Aborted', 'AbortError')),
+          )
+        }),
+    )
     const send = sendProjectRoleChangeEmail(input())
     const expectation = expect(send).rejects.toThrow('Aborted')
     await vi.advanceTimersByTimeAsync(10)

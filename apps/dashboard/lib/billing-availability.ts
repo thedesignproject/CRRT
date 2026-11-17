@@ -7,7 +7,7 @@ export function billingAvailabilityOnce(apiBase: string, userId: string, accessT
   let result = availability.get(key)
   if (!result) {
     result = fetch(`${apiBase}/v1/billing?availability=1`, { headers: { Authorization: `Bearer ${accessToken}` } })
-      .then(async response => {
+      .then(async (response) => {
         if (!response.ok) throw new Error('Unavailable')
         return response.json()
       })

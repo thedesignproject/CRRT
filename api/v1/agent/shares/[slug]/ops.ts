@@ -1,11 +1,29 @@
 import { hashToken } from '../../../../_lib/tokens.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAgentId, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
-import { applyAgentFeedbackOperation, getComment, getOperationKey, shareContainsComment } from '../../../../_lib/store.js'
+import {
+  getAgentId,
+  getStringQuery,
+  handleOptions,
+  jsonError,
+  methodNotAllowed,
+  setCors,
+} from '../../../../_lib/http.js'
+import {
+  applyAgentFeedbackOperation,
+  getComment,
+  getOperationKey,
+  shareContainsComment,
+} from '../../../../_lib/store.js'
 import { requireAgentShare } from '../../../../_lib/shares.js'
 import type { ImplementationStatus } from '../../../../_lib/status.js'
 
-type AgentOp = 'comment.claim' | 'comment.start' | 'comment.note' | 'comment.block' | 'comment.complete' | 'comment.reopen'
+type AgentOp =
+  | 'comment.claim'
+  | 'comment.start'
+  | 'comment.note'
+  | 'comment.block'
+  | 'comment.complete'
+  | 'comment.reopen'
 
 const VALID_OPS = new Set<AgentOp>([
   'comment.claim',
@@ -33,7 +51,10 @@ function eventTypeForOp(op: AgentOp) {
   }
 }
 
-function patchForOp(op: AgentOp, agentId: string): { implementationStatus?: ImplementationStatus, claimedByAgentId?: string | null } | null {
+function patchForOp(
+  op: AgentOp,
+  agentId: string,
+): { implementationStatus?: ImplementationStatus; claimedByAgentId?: string | null } | null {
   switch (op) {
     case 'comment.claim':
       return { implementationStatus: 'claimed', claimedByAgentId: agentId }
@@ -62,7 +83,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!authorized) return
 
     const agentId = getAgentId(req)
-    const idempotencyKey = typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : undefined
+    const idempotencyKey =
+      typeof req.headers['idempotency-key'] === 'string' ? req.headers['idempotency-key'] : undefined
     const op = req.body?.op as AgentOp | undefined
     const commentId = req.body?.commentId as string | undefined
     const payload = typeof req.body?.payload === 'object' && req.body?.payload ? req.body.payload : {}
@@ -94,9 +116,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const patch = patchForOp(op, agentId)
     if (
-      (comment.implementationStatus === 'ready_for_testing' || comment.implementationStatus === 'done')
-      && patch
-      && patch.implementationStatus !== comment.implementationStatus
+      (comment.implementationStatus === 'ready_for_testing' || comment.implementationStatus === 'done') &&
+      patch &&
+      patch.implementationStatus !== comment.implementationStatus
     ) {
       return jsonError(req, res, 409, 'Comment status can only be changed by a human reviewer')
     }
@@ -136,7 +158,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       comment: result.comment,
     })
   } catch (error) {
-    if (error instanceof Error && error.message === 'share_unavailable') return jsonError(req, res, 410, 'Share unavailable', error)
+    if (error instanceof Error && error.message === 'share_unavailable')
+      return jsonError(req, res, 410, 'Share unavailable', error)
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error', error)
   }
 }

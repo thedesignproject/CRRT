@@ -27,7 +27,10 @@ beforeEach(() => {
   vi.mocked(selectJiraProject).mockReset()
   vi.mocked(disconnectJira).mockReset()
 })
-afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers() })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
 
 describe('<JiraIntegrationSettings />', () => {
   it('loads a connection and changes its destination project', async () => {
@@ -36,9 +39,14 @@ describe('<JiraIntegrationSettings />', () => {
     render(<JiraIntegrationSettings {...props} />)
     expect(await screen.findByText('Acme Jira')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Jira project'), { target: { value: 'cloud:product' } })
-    await waitFor(() => expect(selectJiraProject).toHaveBeenCalledWith(
-      props.apiBase, props.accessToken, props.projectKey, 'cloud:product',
-    ))
+    await waitFor(() =>
+      expect(selectJiraProject).toHaveBeenCalledWith(
+        props.apiBase,
+        props.accessToken,
+        props.projectKey,
+        'cloud:product',
+      ),
+    )
     expect(screen.getByLabelText('Jira project')).toHaveValue('cloud:product')
   })
 
@@ -52,7 +60,9 @@ describe('<JiraIntegrationSettings />', () => {
     vi.mocked(getJiraIntegration)
       .mockResolvedValueOnce({ provider: 'jira', connected: false, destinations: [] })
       .mockResolvedValueOnce({
-        provider: 'jira', connected: false, destinations: [],
+        provider: 'jira',
+        connected: false,
+        destinations: [],
         authorizeUrl: 'https://auth.atlassian.com/authorize?state=signed',
       })
       .mockResolvedValueOnce(connected)
@@ -60,18 +70,31 @@ describe('<JiraIntegrationSettings />', () => {
     vi.spyOn(window, 'open').mockReturnValue(popup)
     render(<JiraIntegrationSettings {...props} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Jira' }))
-    await waitFor(() => expect(window.open).toHaveBeenCalledWith(
-      'https://auth.atlassian.com/authorize?state=signed', 'crrt-jira-connect',
-    ))
-    act(() => window.dispatchEvent(new MessageEvent('message', {
-      origin: 'https://attacker.test', source: popup,
-      data: { type: 'crrt:jira-connect', ok: true, projectKey: 'shop' },
-    })))
+    await waitFor(() =>
+      expect(window.open).toHaveBeenCalledWith(
+        'https://auth.atlassian.com/authorize?state=signed',
+        'crrt-jira-connect',
+      ),
+    )
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://attacker.test',
+          source: popup,
+          data: { type: 'crrt:jira-connect', ok: true, projectKey: 'shop' },
+        }),
+      ),
+    )
     expect(screen.queryByText('Acme Jira')).not.toBeInTheDocument()
-    act(() => window.dispatchEvent(new MessageEvent('message', {
-      origin: 'https://api.crrt.test', source: popup,
-      data: { type: 'crrt:jira-connect', ok: true, projectKey: 'shop' },
-    })))
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://api.crrt.test',
+          source: popup,
+          data: { type: 'crrt:jira-connect', ok: true, projectKey: 'shop' },
+        }),
+      ),
+    )
     expect(await screen.findByText('Acme Jira')).toBeInTheDocument()
   })
 
@@ -105,8 +128,18 @@ describe('<JiraIntegrationSettings />', () => {
   it('rejects invalid authorization URLs and blocked popups', async () => {
     vi.mocked(getJiraIntegration)
       .mockResolvedValueOnce({ provider: 'jira', connected: false, destinations: [] })
-      .mockResolvedValueOnce({ provider: 'jira', connected: false, destinations: [], authorizeUrl: 'https://attacker.test/oauth' })
-      .mockResolvedValueOnce({ provider: 'jira', connected: false, destinations: [], authorizeUrl: 'https://auth.atlassian.com/authorize' })
+      .mockResolvedValueOnce({
+        provider: 'jira',
+        connected: false,
+        destinations: [],
+        authorizeUrl: 'https://attacker.test/oauth',
+      })
+      .mockResolvedValueOnce({
+        provider: 'jira',
+        connected: false,
+        destinations: [],
+        authorizeUrl: 'https://auth.atlassian.com/authorize',
+      })
     vi.spyOn(window, 'open').mockReturnValue(null)
     render(<JiraIntegrationSettings {...props} />)
     const connect = await screen.findByRole('button', { name: 'Connect Jira' })
@@ -120,7 +153,12 @@ describe('<JiraIntegrationSettings />', () => {
     vi.useFakeTimers()
     vi.mocked(getJiraIntegration)
       .mockResolvedValueOnce({ provider: 'jira', connected: false, destinations: [] })
-      .mockResolvedValue({ provider: 'jira', connected: false, destinations: [], authorizeUrl: 'https://auth.atlassian.com/authorize' })
+      .mockResolvedValue({
+        provider: 'jira',
+        connected: false,
+        destinations: [],
+        authorizeUrl: 'https://auth.atlassian.com/authorize',
+      })
     const popup = { closed: false } as Window
     vi.spyOn(window, 'open').mockReturnValue(popup)
     render(<JiraIntegrationSettings {...props} />)
@@ -130,17 +168,38 @@ describe('<JiraIntegrationSettings />', () => {
     for (const data of [
       { type: 'other', ok: false, projectKey: 'shop' },
       { type: 'crrt:jira-connect', ok: false, projectKey: 'other' },
-    ]) act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: popup, data })))
-    act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: window, data: { type: 'crrt:jira-connect', ok: false, projectKey: 'shop' } })))
-    act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: popup, data: { type: 'crrt:jira-connect', ok: false, projectKey: 'shop' } })))
+    ])
+      act(() => window.dispatchEvent(new MessageEvent('message', { origin: props.apiBase, source: popup, data })))
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: props.apiBase,
+          source: window,
+          data: { type: 'crrt:jira-connect', ok: false, projectKey: 'shop' },
+        }),
+      ),
+    )
+    act(() =>
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: props.apiBase,
+          source: popup,
+          data: { type: 'crrt:jira-connect', ok: false, projectKey: 'shop' },
+        }),
+      ),
+    )
     expect(screen.getByRole('alert')).toHaveTextContent('authorization could not be completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Connect Jira' }))
     await act(async () => {})
-    await act(async () => { vi.advanceTimersByTime(500) })
+    await act(async () => {
+      vi.advanceTimersByTime(500)
+    })
     expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
     ;(popup as { closed: boolean }).closed = true
-    await act(async () => { vi.advanceTimersByTime(1_000) })
+    await act(async () => {
+      vi.advanceTimersByTime(1_000)
+    })
     expect(screen.getByRole('button', { name: 'Connect Jira' })).toBeEnabled()
   })
 })

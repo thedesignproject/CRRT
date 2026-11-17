@@ -3,7 +3,11 @@ vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 vi.mock('./store.js', () => ({ getComment: vi.fn(), listProjectMembers: vi.fn() }))
 import { getComment, listProjectMembers } from './store.js'
 import { getServiceSupabase } from './supabase.js'
-import { CommentEmailEnqueueRejectedError, enqueueCommentEmail, processCommentEmailQueue } from './comment-email-outbox.js'
+import {
+  CommentEmailEnqueueRejectedError,
+  enqueueCommentEmail,
+  processCommentEmailQueue,
+} from './comment-email-outbox.js'
 
 type Row = Record<string, any>
 let rows: Row[]
@@ -14,67 +18,144 @@ const start = new Date('2026-09-23T00:00:00Z').getTime()
 // Stateful PostgREST double exercises compare-and-swap and process restarts,
 // rather than merely checking which fluent methods were called.
 function database() {
-  return { rpc: async (_name: string, args: any) => {
-    if (failure === 'claim') { failure = undefined; return { data: null, error: new Error('claim failed') } }
-    const row = rows.find((row) => row.id === args.p_id && row.status === 'pending' && row.attempts === args.p_attempts && row.next_attempt_at === args.p_next_attempt)
-    if (row) Object.assign(row, { lease_token: args.p_token, attempts: row.attempts + 1, next_attempt_at: args.p_lease_until })
-    return { data: Boolean(row), error: null }
-  }, from: () => {
-    let op = 'select'
-    let values: any
-    let single = false
-    const filters: Array<(row: Row) => boolean> = []
-    const execute = () => {
-      const phase = op === 'update' ? (single ? 'claim' : 'checkpoint') : op
-      if (failure === phase) { failure = undefined; return { data: null, error: { message: 'db failure', code: failureCode } } }
-      if (op === 'upsert') {
-        for (const value of values) {
-          if (!rows.some((row) => row.delivery_id === value.delivery_id && row.batch_index === value.batch_index)) {
-            rows.push({ id: `batch-${rows.length}`, status: 'pending', attempts: 0,
-              next_attempt_at: new Date().toISOString(), created_at: new Date().toISOString(), ...value })
-          }
-        }
-        return { error: null }
+  return {
+    rpc: async (_name: string, args: any) => {
+      if (failure === 'claim') {
+        failure = undefined
+        return { data: null, error: new Error('claim failed') }
       }
-      const matched = rows.filter((row) => filters.every((filter) => filter(row)))
-      if (op === 'update') matched.forEach((row) => Object.assign(row, values))
-      if (op === 'delete') rows = rows.filter((row) => !matched.includes(row))
-      return { data: single ? (matched[0] ? { ...matched[0] } : null) : matched.map((row) => ({ ...row })), error: null }
-    }
-    const query: any = {
-      upsert(value: any) { op = 'upsert'; values = value; return query },
-      select() { return query },
-      update(value: any) { op = 'update'; values = value; return query },
-      delete() { op = 'delete'; return query },
-      eq(key: string, value: any) { filters.push((row) => row[key] === value); return query },
-      lte(key: string, value: any) { filters.push((row) => row[key] <= value); return query },
-      lt(key: string, value: any) { filters.push((row) => row[key] < value); return query },
-      order() { return query }, limit() { return query },
-      maybeSingle() { single = true; return Promise.resolve(execute()) },
-      then(resolve: any, reject: any) { return Promise.resolve(execute()).then(resolve, reject) },
-    }
-    return query
-  } }
+      const row = rows.find(
+        (row) =>
+          row.id === args.p_id &&
+          row.status === 'pending' &&
+          row.attempts === args.p_attempts &&
+          row.next_attempt_at === args.p_next_attempt,
+      )
+      if (row)
+        Object.assign(row, {
+          lease_token: args.p_token,
+          attempts: row.attempts + 1,
+          next_attempt_at: args.p_lease_until,
+        })
+      return { data: Boolean(row), error: null }
+    },
+    from: () => {
+      let op = 'select'
+      let values: any
+      let single = false
+      const filters: Array<(row: Row) => boolean> = []
+      const execute = () => {
+        const phase = op === 'update' ? (single ? 'claim' : 'checkpoint') : op
+        if (failure === phase) {
+          failure = undefined
+          return { data: null, error: { message: 'db failure', code: failureCode } }
+        }
+        if (op === 'upsert') {
+          for (const value of values) {
+            if (!rows.some((row) => row.delivery_id === value.delivery_id && row.batch_index === value.batch_index)) {
+              rows.push({
+                id: `batch-${rows.length}`,
+                status: 'pending',
+                attempts: 0,
+                next_attempt_at: new Date().toISOString(),
+                created_at: new Date().toISOString(),
+                ...value,
+              })
+            }
+          }
+          return { error: null }
+        }
+        const matched = rows.filter((row) => filters.every((filter) => filter(row)))
+        if (op === 'update') matched.forEach((row) => Object.assign(row, values))
+        if (op === 'delete') rows = rows.filter((row) => !matched.includes(row))
+        return {
+          data: single ? (matched[0] ? { ...matched[0] } : null) : matched.map((row) => ({ ...row })),
+          error: null,
+        }
+      }
+      const query: any = {
+        upsert(value: any) {
+          op = 'upsert'
+          values = value
+          return query
+        },
+        select() {
+          return query
+        },
+        update(value: any) {
+          op = 'update'
+          values = value
+          return query
+        },
+        delete() {
+          op = 'delete'
+          return query
+        },
+        eq(key: string, value: any) {
+          filters.push((row) => row[key] === value)
+          return query
+        },
+        lte(key: string, value: any) {
+          filters.push((row) => row[key] <= value)
+          return query
+        },
+        lt(key: string, value: any) {
+          filters.push((row) => row[key] < value)
+          return query
+        },
+        order() {
+          return query
+        },
+        limit() {
+          return query
+        },
+        maybeSingle() {
+          single = true
+          return Promise.resolve(execute())
+        },
+        then(resolve: any, reject: any) {
+          return Promise.resolve(execute()).then(resolve, reject)
+        },
+      }
+      return query
+    },
+  }
 }
 
 beforeEach(() => {
   vi.mocked(getComment).mockResolvedValue({ projectId: 'project' } as never)
   vi.mocked(listProjectMembers).mockResolvedValue([{ email: 'one@example.com' }, { email: 'two@example.com' }] as never)
-  rows = []; failure = undefined; failureCode = ''
-  vi.useFakeTimers(); vi.setSystemTime(start)
+  rows = []
+  failure = undefined
+  failureCode = ''
+  vi.useFakeTimers()
+  vi.setSystemTime(start)
   vi.stubEnv('RESEND_API_KEY', 'test-key')
   vi.mocked(getServiceSupabase).mockReturnValue(database() as never)
-  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response('{}', { status: 200 })))
+  vi.stubGlobal(
+    'fetch',
+    vi.fn().mockImplementation(async () => new Response('{}', { status: 200 })),
+  )
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
-afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllEnvs()
+  vi.unstubAllGlobals()
+  vi.restoreAllMocks()
+})
 const queue = () => enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]', '[{"to":["two@example.com"]}]'])
 
 describe('durable comment email delivery', () => {
   it('holds its delivery fence throughout deferred recipient lookup and clears it after sending', async () => {
     await queue()
     let finish!: (members: any) => void
-    vi.mocked(listProjectMembers).mockImplementationOnce(() => new Promise((resolve) => { finish = resolve }))
+    vi.mocked(listProjectMembers).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve
+        }),
+    )
     const processing = processCommentEmailQueue()
     await vi.advanceTimersByTimeAsync(0)
     expect(rows[0].lease_token).toBeTruthy()
@@ -135,11 +216,15 @@ describe('durable comment email delivery', () => {
     await expect(processCommentEmailQueue()).rejects.toThrow('Comment email queue')
   })
 
-  it.each(['23502', '40000', '40001', '40002', '40P01', '57014', '42P01', 'PGRST205', 'PGRST204'])('identifies definitive enqueue rejection %s', async (code) => {
-    failure = 'upsert'; failureCode = code
-    await expect(queue()).rejects.toBeInstanceOf(CommentEmailEnqueueRejectedError)
-    expect(rows).toEqual([])
-  })
+  it.each(['23502', '40000', '40001', '40002', '40P01', '57014', '42P01', 'PGRST205', 'PGRST204'])(
+    'identifies definitive enqueue rejection %s',
+    async (code) => {
+      failure = 'upsert'
+      failureCode = code
+      await expect(queue()).rejects.toBeInstanceOf(CommentEmailEnqueueRejectedError)
+      expect(rows).toEqual([])
+    },
+  )
 
   it.each(['40003', '08006', ''])('stops after three uncertain enqueue attempts for %s', async (code) => {
     const upsert = vi.fn().mockResolvedValue({ error: { code } })
@@ -184,7 +269,9 @@ describe('durable comment email delivery', () => {
   })
 
   it('preserves uncertainty when a retry is definitively rejected', async () => {
-    const upsert = vi.fn().mockRejectedValueOnce(new Error('connection lost'))
+    const upsert = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('connection lost'))
       .mockResolvedValue({ error: { code: '23502' } })
     vi.mocked(getServiceSupabase).mockReturnValue({ from: () => ({ upsert }) } as never)
     const result = queue().catch((error: unknown) => error)
@@ -202,7 +289,9 @@ describe('durable comment email delivery', () => {
 
   it('retries only a failed batch after restart, preserving its body and idempotency key', async () => {
     await queue()
-    vi.mocked(fetch).mockResolvedValueOnce(new Response('{}')).mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '90' } }))
+    vi.mocked(fetch)
+      .mockResolvedValueOnce(new Response('{}'))
+      .mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': '90' } }))
     await processCommentEmailQueue()
     expect(rows.map((row) => row.status)).toEqual(['sent', 'pending'])
     expect(rows[1].next_attempt_at).toBe(new Date(start + 90_000).toISOString())
@@ -244,7 +333,9 @@ describe('durable comment email delivery', () => {
   })
 
   it.each([
-    ['Wed, 23 Sep 2026 00:02:00 GMT', 120_000], ['nonsense', 30_000], ['-1', 30_000],
+    ['Wed, 23 Sep 2026 00:02:00 GMT', 120_000],
+    ['nonsense', 30_000],
+    ['-1', 30_000],
   ])('handles Retry-After %s', async (header, delay) => {
     await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
     vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 429, headers: { 'retry-after': header } }))
@@ -265,8 +356,9 @@ describe('durable comment email delivery', () => {
     if (scenario === 'expired') vi.setSystemTime(start + 20 * 3600_000)
     if (scenario === 'exhausted') rows[0].attempts = 8
     if (scenario === 'last-attempt') rows[0].attempts = 7
-    vi.mocked(fetch).mockResolvedValueOnce(new Response('', { status: 429,
-      headers: scenario === 'late-retry' ? { 'retry-after': '86400' } : {} }))
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response('', { status: 429, headers: scenario === 'late-retry' ? { 'retry-after': '86400' } : {} }),
+    )
     await processCommentEmailQueue()
     expect(rows[0].status).toBe('failed')
     if (scenario === 'expired' || scenario === 'exhausted') expect(fetch).not.toHaveBeenCalled()
@@ -274,7 +366,10 @@ describe('durable comment email delivery', () => {
 
   it('bounds each invocation and leaves remaining work pending', async () => {
     await queue()
-    vi.mocked(fetch).mockImplementationOnce(async () => { vi.setSystemTime(start + 7_000); return new Response('{}') })
+    vi.mocked(fetch).mockImplementationOnce(async () => {
+      vi.setSystemTime(start + 7_000)
+      return new Response('{}')
+    })
     await processCommentEmailQueue()
     expect(fetch).toHaveBeenCalledTimes(1)
     expect(rows.map((row) => row.status)).toEqual(['sent', 'pending'])
@@ -282,9 +377,12 @@ describe('durable comment email delivery', () => {
 
   it('recovers timeouts with the same idempotency key and clears the timer', async () => {
     await enqueueCommentEmail('delivery', ['[{"to":["one@example.com"]}]'])
-    vi.mocked(fetch).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
-      init!.signal!.addEventListener('abort', () => reject(new Error('timeout')))
-    }))
+    vi.mocked(fetch).mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          init!.signal!.addEventListener('abort', () => reject(new Error('timeout')))
+        }),
+    )
     const processing = processCommentEmailQueue(10)
     await vi.advanceTimersByTimeAsync(10)
     await processing
@@ -298,7 +396,9 @@ describe('durable comment email delivery', () => {
 
   it('removes message content after seven days', async () => {
     await queue()
-    rows.forEach((row) => { row.status = 'sent' })
+    rows.forEach((row) => {
+      row.status = 'sent'
+    })
     vi.setSystemTime(start + 8 * 24 * 3600_000)
     await processCommentEmailQueue()
     expect(rows).toEqual([])

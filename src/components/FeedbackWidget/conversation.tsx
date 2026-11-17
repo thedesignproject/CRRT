@@ -1,11 +1,22 @@
 import { FeedbackAuthor, FeedbackContent, FeedbackSendButton } from './FeedbackParts'
 import { getSelector } from '../../lib/getSelector'
-import type { ClickTarget, Comment, ConversationComment, FeedbackConversationProps, FeedbackPosition, PersonalComments } from './types'
+import type {
+  ClickTarget,
+  Comment,
+  ConversationComment,
+  FeedbackConversationProps,
+  FeedbackPosition,
+  PersonalComments,
+} from './types'
 
 export function positionAt(target: ClickTarget, clientX: number, clientY: number): ClickTarget {
   const rect = document.querySelector(target.selector)!.getBoundingClientRect()
   const clamp = (value: number) => Math.max(0, Math.min(1, value))
-  return { ...target, elementX: rect.width ? clamp((clientX - rect.left) / rect.width) : .5, elementY: rect.height ? clamp((clientY - rect.top) / rect.height) : .5 }
+  return {
+    ...target,
+    elementX: rect.width ? clamp((clientX - rect.left) / rect.width) : 0.5,
+    elementY: rect.height ? clamp((clientY - rect.top) / rect.height) : 0.5,
+  }
 }
 
 export function savedPosition(target: ClickTarget): FeedbackPosition | undefined {
@@ -28,7 +39,7 @@ export function conversationSelector(element: Element, containerSelector: string
   let current = element
   while (current !== root) {
     const parent = current.parentElement!
-    const siblings = [...parent.children].filter(item => item.tagName === current.tagName)
+    const siblings = [...parent.children].filter((item) => item.tagName === current.tagName)
     parts.unshift(`${current.tagName.toLowerCase()}:nth-of-type(${siblings.indexOf(current) + 1})`)
     current = parent
   }
@@ -41,38 +52,154 @@ export function conversationTarget(selection: string, containerSelector = 'body'
   const rect = root?.getBoundingClientRect()
   const target: ClickTarget = {
     selector: root ? containerSelector : 'body',
-    x: rect ? (rect.left + rect.width / 2 + window.scrollX) / document.documentElement.scrollWidth * 100 : 50,
-    y: rect ? (rect.top + rect.height / 2 + window.scrollY) / document.documentElement.scrollHeight * 100 : 20,
+    x: rect ? ((rect.left + rect.width / 2 + window.scrollX) / document.documentElement.scrollWidth) * 100 : 50,
+    y: rect ? ((rect.top + rect.height / 2 + window.scrollY) / document.documentElement.scrollHeight) * 100 : 20,
     url: window.location.href,
-    elementX: .5,
-    elementY: .5,
+    elementX: 0.5,
+    elementY: 0.5,
   }
-  if (selection) target.anchor = { kind: 'text_range', selectedText: selection, normalizedText: selection, prefix: '', suffix: '', containerSelector: target.selector, startOffset: 0, endOffset: selection.length, createdFromUrl: target.url }
+  if (selection)
+    target.anchor = {
+      kind: 'text_range',
+      selectedText: selection,
+      normalizedText: selection,
+      prefix: '',
+      suffix: '',
+      containerSelector: target.selector,
+      startOffset: 0,
+      endOffset: selection.length,
+      createdFromUrl: target.url,
+    }
   return target
 }
 
 export function conversationComments(conversation: FeedbackConversationProps, projectId: string): Comment[] {
-  return conversation.feedback.filter(item => !item.parentId).map(item => {
-    const target = item.target ? { ...item.target, url: window.location.href } : conversationTarget(item.quote, conversation.containerSelector)
-    return { ...target, id: item.id, projectId, pageUrl: target.url, body: item.body, authorName: item.author, reviewStatus: item.reviewStatus, editable: false, createdAt: item.createdAt,
-      anchor: item.quote ? { kind: 'text_range', selectedText: item.quote, normalizedText: item.quote, prefix: '', suffix: '', containerSelector: target.selector, startOffset: 0, endOffset: item.quote.length, createdFromUrl: target.url } : null,
-    }
-  })
+  return conversation.feedback
+    .filter((item) => !item.parentId)
+    .map((item) => {
+      const target = item.target
+        ? { ...item.target, url: window.location.href }
+        : conversationTarget(item.quote, conversation.containerSelector)
+      return {
+        ...target,
+        id: item.id,
+        projectId,
+        pageUrl: target.url,
+        body: item.body,
+        authorName: item.author,
+        reviewStatus: item.reviewStatus,
+        editable: false,
+        createdAt: item.createdAt,
+        anchor: item.quote
+          ? {
+              kind: 'text_range',
+              selectedText: item.quote,
+              normalizedText: item.quote,
+              prefix: '',
+              suffix: '',
+              containerSelector: target.selector,
+              startOffset: 0,
+              endOffset: item.quote.length,
+              createdFromUrl: target.url,
+            }
+          : null,
+      }
+    })
 }
 
 /** Adapter marker keeps project-only actions off the hosted document surface. */
-async function unsupportedMutation(): Promise<never> { throw new Error('Use the host mutation') }
-export const hostedComments: PersonalComments = { label: 'Feedback', list: async () => [], create: unsupportedMutation, update: unsupportedMutation, remove: unsupportedMutation }
+async function unsupportedMutation(): Promise<never> {
+  throw new Error('Use the host mutation')
+}
+export const hostedComments: PersonalComments = {
+  label: 'Feedback',
+  list: async () => [],
+  create: unsupportedMutation,
+  update: unsupportedMutation,
+  remove: unsupportedMutation,
+}
 
-export function ConversationDetails({ conversation, comment, onReply, disabled }: { conversation: FeedbackConversationProps; comment: ConversationComment; onReply(): void; disabled: boolean }) {
-  return <div style={{ marginLeft: 32, marginTop: 12, fontSize: 12, color: 'var(--fw-foreground-muted)' }} onClick={event => event.stopPropagation()}>
-    {comment.contextLabel && <p>{comment.contextLabel}</p>}
-    {(comment.implementationStatus !== 'unassigned' || comment.reviewStatus !== 'open') && <p>{comment.implementationStatus === 'unassigned' ? comment.reviewStatus : comment.implementationStatus.replace(/_/g, ' ')}</p>}
-    {conversation.feedback.filter(item => item.parentId === comment.id).map(reply => <div key={reply.id} style={{ borderLeft: '1px solid var(--fw-contrast-08)', paddingLeft: 12, marginTop: 12 }}><FeedbackAuthor author={reply.author} resolved={false} /><FeedbackContent body={reply.body} resolved={false} /></div>)}
-    {Boolean(comment.progressUpdates?.length) && <details style={{ marginTop: 12 }}><summary>Work updates</summary><ol>{comment.progressUpdates!.map((update, index) => <li key={index}><p>{update.agentId} · {update.operation}</p><p style={{ whiteSpace: 'pre-wrap' }}>{update.summary}</p><time dateTime={update.createdAt}>{new Date(update.createdAt).toLocaleString()}</time></li>)}</ol></details>}
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
-      {!conversation.readOnly && <button type="button" disabled={disabled || conversation.draftLocked} onClick={onReply} style={{ background: 'transparent', border: 0, color: 'var(--fw-foreground-muted)', cursor: 'pointer' }}>Reply</button>}
-      {conversation.onReview && <>{(['accepted','rejected'] as const).map(status => <FeedbackSendButton key={status} type="button" disabled={disabled} onClick={() => conversation.onReview!(comment, status)}>{status === 'accepted' ? 'Accept' : 'Reject'}</FeedbackSendButton>)}<FeedbackSendButton type="button" disabled={disabled} onClick={() => conversation.onReview!(comment, 'accepted', true)}>Done</FeedbackSendButton></>}
+export function ConversationDetails({
+  conversation,
+  comment,
+  onReply,
+  disabled,
+}: {
+  conversation: FeedbackConversationProps
+  comment: ConversationComment
+  onReply(): void
+  disabled: boolean
+}) {
+  return (
+    <div
+      style={{ marginLeft: 32, marginTop: 12, fontSize: 12, color: 'var(--fw-foreground-muted)' }}
+      onClick={(event) => event.stopPropagation()}
+    >
+      {comment.contextLabel && <p>{comment.contextLabel}</p>}
+      {(comment.implementationStatus !== 'unassigned' || comment.reviewStatus !== 'open') && (
+        <p>
+          {comment.implementationStatus === 'unassigned'
+            ? comment.reviewStatus
+            : comment.implementationStatus.replace(/_/g, ' ')}
+        </p>
+      )}
+      {conversation.feedback
+        .filter((item) => item.parentId === comment.id)
+        .map((reply) => (
+          <div key={reply.id} style={{ borderLeft: '1px solid var(--fw-contrast-08)', paddingLeft: 12, marginTop: 12 }}>
+            <FeedbackAuthor author={reply.author} resolved={false} />
+            <FeedbackContent body={reply.body} resolved={false} />
+          </div>
+        ))}
+      {Boolean(comment.progressUpdates?.length) && (
+        <details style={{ marginTop: 12 }}>
+          <summary>Work updates</summary>
+          <ol>
+            {comment.progressUpdates!.map((update, index) => (
+              <li key={index}>
+                <p>
+                  {update.agentId} · {update.operation}
+                </p>
+                <p style={{ whiteSpace: 'pre-wrap' }}>{update.summary}</p>
+                <time dateTime={update.createdAt}>{new Date(update.createdAt).toLocaleString()}</time>
+              </li>
+            ))}
+          </ol>
+        </details>
+      )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 12 }}>
+        {!conversation.readOnly && (
+          <button
+            type="button"
+            disabled={disabled || conversation.draftLocked}
+            onClick={onReply}
+            style={{ background: 'transparent', border: 0, color: 'var(--fw-foreground-muted)', cursor: 'pointer' }}
+          >
+            Reply
+          </button>
+        )}
+        {conversation.onReview && (
+          <>
+            {(['accepted', 'rejected'] as const).map((status) => (
+              <FeedbackSendButton
+                key={status}
+                type="button"
+                disabled={disabled}
+                onClick={() => conversation.onReview!(comment, status)}
+              >
+                {status === 'accepted' ? 'Accept' : 'Reject'}
+              </FeedbackSendButton>
+            ))}
+            <FeedbackSendButton
+              type="button"
+              disabled={disabled}
+              onClick={() => conversation.onReview!(comment, 'accepted', true)}
+            >
+              Done
+            </FeedbackSendButton>
+          </>
+        )}
+      </div>
     </div>
-  </div>
+  )
 }

@@ -11,15 +11,18 @@ export function mountRecordingSurface(sessionId: string) {
   if (mounted?.sessionId === sessionId && mounted.host.isConnected) return mounted.host
   if (mounted) {
     browser.runtime.onMessage.removeListener(mounted.listener)
-    mounted.root.unmount(); mounted.host.remove()
+    mounted.root.unmount()
+    mounted.host.remove()
   }
   const host = document.createElement('div')
   host.dataset.crrtRecording = 'true'
   host.dataset.sessionId = sessionId
   host.style.cssText = 'all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none;display:block;'
   const shadow = host.attachShadow({ mode: 'closed' })
-  const style = document.createElement('style'); style.textContent = `${controlStyles}\n${cameraStyles}`
-  const container = document.createElement('div'); container.className = 'crrt-record-root'
+  const style = document.createElement('style')
+  style.textContent = `${controlStyles}\n${cameraStyles}`
+  const container = document.createElement('div')
+  container.className = 'crrt-record-root'
   shadow.append(style, container)
   document.documentElement.append(host)
   const root = createRoot(container)
@@ -28,7 +31,9 @@ export function mountRecordingSurface(sessionId: string) {
     const value = message as { type?: unknown; sessionId?: unknown }
     if (value.type !== 'record:overlay-remove' || value.sessionId !== sessionId) return false
     browser.runtime.onMessage.removeListener(listener)
-    root.unmount(); host.remove(); mounted = null
+    root.unmount()
+    host.remove()
+    mounted = null
     return false
   }
   browser.runtime.onMessage.addListener(listener)
@@ -38,11 +43,16 @@ export function mountRecordingSurface(sessionId: string) {
 
 export async function mountActiveRecording() {
   try {
-    const response = await browser.runtime.sendMessage({ type: 'record:surface-mount' }) as { ok?: boolean; data?: { sessionId?: string } }
+    const response = (await browser.runtime.sendMessage({ type: 'record:surface-mount' })) as {
+      ok?: boolean
+      data?: { sessionId?: string }
+    }
     if (response?.ok && response.data?.sessionId) mountRecordingSurface(response.data.sessionId)
   } catch {
     // Restricted or stale pages remain untouched.
   }
 }
 
-export default defineUnlistedScript(() => { void mountActiveRecording() })
+export default defineUnlistedScript(() => {
+  void mountActiveRecording()
+})

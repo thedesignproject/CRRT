@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./supabase.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('./supabase.js')>(),
+  ...(await importOriginal<typeof import('./supabase.js')>()),
   getServiceSupabase: vi.fn(),
 }))
 
@@ -71,32 +71,54 @@ beforeEach(() => {
 
 describe('updateProject', () => {
   it('returns the renamed project, defaulting a missing allowlist to []', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      __rpc: [{ data: [{ public_key: 'p', slug: 'p', name: 'New', created_at: 't', updated_at: 't' }], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        __rpc: [{ data: [{ public_key: 'p', slug: 'p', name: 'New', created_at: 't', updated_at: 't' }], error: null }],
+      }) as never,
+    )
     const out = await updateProject('p', { name: 'New' }, 'actor')
     expect(out).toMatchObject({ publicKey: 'p', name: 'New', allowedOrigins: [] })
   })
 
   it('returns the project with its updated allowlist', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      __rpc: [{ data: [{ public_key: 'p', slug: 'p', name: 'P', allowed_origins: ['example.com'], created_at: 't', updated_at: 't' }], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        __rpc: [
+          {
+            data: [
+              {
+                public_key: 'p',
+                slug: 'p',
+                name: 'P',
+                allowed_origins: ['example.com'],
+                created_at: 't',
+                updated_at: 't',
+              },
+            ],
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     const out = await updateProject('p', { allowedOrigins: ['example.com'] }, 'actor')
     expect(out).toMatchObject({ publicKey: 'p', allowedOrigins: ['example.com'] })
   })
 
   it('returns null when no row matched', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      __rpc: [{ data: [], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        __rpc: [{ data: [], error: null }],
+      }) as never,
+    )
     expect(await updateProject('missing', { name: 'New' }, 'actor')).toBeNull()
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      __rpc: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        __rpc: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(updateProject('p', { name: 'New' }, 'actor')).rejects.toThrow('boom')
   })
 })
@@ -126,71 +148,87 @@ describe('normalizeGitHubRepoUrl', () => {
 
 describe('getGithubConnectionVersion', () => {
   it('returns the stored safe version and defaults missing or invalid values to zero', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: { github_connection_version: 4 }, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: { github_connection_version: 4 }, error: null }],
+      }) as never,
+    )
     expect(await getGithubConnectionVersion('p')).toBe(4)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: null, error: null }],
+      }) as never,
+    )
     expect(await getGithubConnectionVersion('missing')).toBe(0)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: { github_connection_version: -1 }, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: { github_connection_version: -1 }, error: null }],
+      }) as never,
+    )
     expect(await getGithubConnectionVersion('invalid')).toBe(0)
   })
 
   it('throws on database errors', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(getGithubConnectionVersion('p')).rejects.toThrow('boom')
   })
 })
 
 describe('updateRepoConfig', () => {
   it('upserts a normalized GitHub repo config', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{
-        data: {
-          project_key: 'p',
-          repo_url: 'https://github.com/acme/widgets',
-          github_owner: 'acme',
-          github_repo: 'widgets',
-          local_path: null,
-          default_branch: 'main',
-          install_command: null,
-          dev_command: null,
-          test_command: null,
-          build_command: null,
-          agent_instructions: null,
-        },
-        error: null,
-      }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [
+          {
+            data: {
+              project_key: 'p',
+              repo_url: 'https://github.com/acme/widgets',
+              github_owner: 'acme',
+              github_repo: 'widgets',
+              local_path: null,
+              default_branch: 'main',
+              install_command: null,
+              dev_command: null,
+              test_command: null,
+              build_command: null,
+              agent_instructions: null,
+            },
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     const out = await updateRepoConfig('p', { repoUrl: 'github.com/nope' }).catch((error) => error)
     expect(out).toBeInstanceOf(Error)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{
-        data: {
-          project_key: 'p',
-          repo_url: 'https://github.com/acme/widgets',
-          github_owner: 'acme',
-          github_repo: 'widgets',
-          local_path: null,
-          default_branch: 'main',
-          install_command: null,
-          dev_command: null,
-          test_command: null,
-          build_command: null,
-          agent_instructions: null,
-        },
-        error: null,
-      }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [
+          {
+            data: {
+              project_key: 'p',
+              repo_url: 'https://github.com/acme/widgets',
+              github_owner: 'acme',
+              github_repo: 'widgets',
+              local_path: null,
+              default_branch: 'main',
+              install_command: null,
+              dev_command: null,
+              test_command: null,
+              build_command: null,
+              agent_instructions: null,
+            },
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     expect(await updateRepoConfig('p', { repoUrl: 'https://github.com/acme/widgets.git' })).toMatchObject({
       repoUrl: 'https://github.com/acme/widgets',
       githubOwner: 'acme',
@@ -199,33 +237,39 @@ describe('updateRepoConfig', () => {
   })
 
   it('clears repo metadata and throws on database errors', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{
-        data: {
-          project_key: 'p',
-          repo_url: null,
-          github_owner: null,
-          github_repo: null,
-          local_path: null,
-          default_branch: 'main',
-          install_command: null,
-          dev_command: null,
-          test_command: null,
-          build_command: null,
-          agent_instructions: null,
-        },
-        error: null,
-      }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [
+          {
+            data: {
+              project_key: 'p',
+              repo_url: null,
+              github_owner: null,
+              github_repo: null,
+              local_path: null,
+              default_branch: 'main',
+              install_command: null,
+              dev_command: null,
+              test_command: null,
+              build_command: null,
+              agent_instructions: null,
+            },
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     expect(await updateRepoConfig('p', { repoUrl: null })).toMatchObject({
       repoUrl: null,
       githubOwner: null,
       githubRepo: null,
     })
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(updateRepoConfig('p', { repoUrl: 'acme/widgets' })).rejects.toThrow('boom')
   })
 
@@ -249,7 +293,10 @@ describe('updateRepoConfig', () => {
     const p: Record<string, unknown> = {}
     const self = () => p
     for (const m of ['select', 'eq']) p[m] = self
-    p.upsert = (payload: unknown) => { upserts.push(payload); return p }
+    p.upsert = (payload: unknown) => {
+      upserts.push(payload)
+      return p
+    }
     p.single = () => Promise.resolve({ data: row, error: null })
     vi.mocked(getServiceSupabase).mockReturnValue({ from: vi.fn(() => p) } as never)
 
@@ -297,17 +344,21 @@ describe('GitHub user installation persistence', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(db as never)
 
     const choices = await listGitHubUserInstallations('user-a')
-    expect(choices).toEqual([{
-      id: 'opaque-ref',
-      githubAccountLogin: 'acme',
-      githubAccountType: 'Organization',
-      lastVerifiedAt: '2026-01-01T00:00:00.000Z',
-    }])
+    expect(choices).toEqual([
+      {
+        id: 'opaque-ref',
+        githubAccountLogin: 'acme',
+        githubAccountType: 'Organization',
+        lastVerifiedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ])
     expect(JSON.stringify(choices)).not.toContain('99')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      github_user_installations: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        github_user_installations: [{ data: null, error: null }],
+      }) as never,
+    )
     await expect(listGitHubUserInstallations('user-a')).resolves.toEqual([])
   })
 
@@ -323,22 +374,26 @@ describe('GitHub user installation persistence', () => {
     expect(builder.eq).toHaveBeenCalledWith('user_id', 'user-a')
     expect(builder.eq).toHaveBeenCalledWith('id', 'opaque-ref')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      github_user_installations: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        github_user_installations: [{ data: null, error: null }],
+      }) as never,
+    )
     await expect(getGitHubUserInstallation('user-b', 'opaque-ref')).resolves.toBeNull()
   })
 
   it('atomically upserts verified metadata on the user-installation key', async () => {
     const db = supabaseWith({ github_user_installations: [{ data: installationRow, error: null }] })
     vi.mocked(getServiceSupabase).mockReturnValue(db as never)
-    await expect(upsertGitHubUserInstallation({
-      userId: 'user-a',
-      installationId: '99',
-      githubAccountId: '7',
-      githubAccountLogin: 'acme',
-      githubAccountType: 'Organization',
-    })).resolves.toMatchObject({ id: 'opaque-ref', installationId: '99' })
+    await expect(
+      upsertGitHubUserInstallation({
+        userId: 'user-a',
+        installationId: '99',
+        githubAccountId: '7',
+        githubAccountLogin: 'acme',
+        githubAccountType: 'Organization',
+      }),
+    ).resolves.toMatchObject({ id: 'opaque-ref', installationId: '99' })
 
     const builder = db.from.mock.results[0].value as { upsert: ReturnType<typeof vi.fn> }
     expect(builder.upsert.mock.calls[0][1]).toEqual({ onConflict: 'user_id,installation_id' })
@@ -355,18 +410,21 @@ describe('GitHub user installation persistence', () => {
     for (const operation of [
       () => listGitHubUserInstallations('user-a'),
       () => getGitHubUserInstallation('user-a', 'opaque-ref'),
-      () => upsertGitHubUserInstallation({
-        userId: 'user-a',
-        installationId: '99',
-        githubAccountId: '7',
-        githubAccountLogin: 'acme',
-        githubAccountType: 'Organization' as const,
-      }),
+      () =>
+        upsertGitHubUserInstallation({
+          userId: 'user-a',
+          installationId: '99',
+          githubAccountId: '7',
+          githubAccountLogin: 'acme',
+          githubAccountType: 'Organization' as const,
+        }),
       () => deleteGitHubUserInstallation('user-a', 'opaque-ref'),
     ]) {
-      vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-        github_user_installations: [{ data: null, error: { message: 'boom' } }],
-      }) as never)
+      vi.mocked(getServiceSupabase).mockReturnValue(
+        supabaseWith({
+          github_user_installations: [{ data: null, error: { message: 'boom' } }],
+        }) as never,
+      )
       await expect(operation()).rejects.toThrow('boom')
     }
   })
@@ -374,38 +432,49 @@ describe('GitHub user installation persistence', () => {
 
 describe('getRepoConfig', () => {
   it('marks a legacy repository without an installation as requiring reconnection', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: {
-        project_key: 'p',
-        repo_url: 'https://github.com/acme/widgets',
-        github_owner: 'acme',
-        github_repo: 'widgets',
-        github_installation_id: null,
-        local_path: null,
-        default_branch: 'main',
-        install_command: null,
-        dev_command: null,
-        test_command: null,
-        build_command: null,
-        agent_instructions: null,
-      }, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [
+          {
+            data: {
+              project_key: 'p',
+              repo_url: 'https://github.com/acme/widgets',
+              github_owner: 'acme',
+              github_repo: 'widgets',
+              github_installation_id: null,
+              local_path: null,
+              default_branch: 'main',
+              install_command: null,
+              dev_command: null,
+              test_command: null,
+              build_command: null,
+              agent_instructions: null,
+            },
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     await expect(getRepoConfig('p')).resolves.toMatchObject({
       githubConnectionStatus: 'reconnect_required',
     })
   })
 
   it('returns null when the project has no repository config', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: null, error: null }],
+      }) as never,
+    )
     await expect(getRepoConfig('missing')).resolves.toBeNull()
   })
 
   it('surfaces repository config query errors', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(getRepoConfig('p')).rejects.toThrow('boom')
   })
 })
@@ -444,32 +513,47 @@ describe('race-safe GitHub connection persistence', () => {
       p_github_installation_id: '99',
     })
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      __rpc: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        __rpc: [{ data: null, error: null }],
+      }) as never,
+    )
     await expect(connectGithubRepo('p', 'u', 'acme/widgets', '99', 4)).rejects.toThrow('stale_connection_attempt')
   })
 
   it('validates connect input and surfaces database errors', async () => {
     await expect(connectGithubRepo('p', 'u', 'not-a-repo', '99', 0)).rejects.toThrow('invalid_github_repo')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      __rpc: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        __rpc: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(connectGithubRepo('p', 'u', 'acme/widgets', '99', 0)).rejects.toThrow('boom')
   })
 
   it('retries disconnect conflicts and returns the winning disconnected state', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [
-        { data: { github_connection_version: 4 }, error: null },
-        { data: { github_connection_version: 5 }, error: null },
-      ],
-      __rpc: [
-        { data: null, error: null },
-        { data: { ...connectedRow, repo_url: null, github_owner: null, github_repo: null, github_installation_id: null }, error: null },
-      ],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [
+          { data: { github_connection_version: 4 }, error: null },
+          { data: { github_connection_version: 5 }, error: null },
+        ],
+        __rpc: [
+          { data: null, error: null },
+          {
+            data: {
+              ...connectedRow,
+              repo_url: null,
+              github_owner: null,
+              github_repo: null,
+              github_installation_id: null,
+            },
+            error: null,
+          },
+        ],
+      }) as never,
+    )
 
     await expect(disconnectGithubRepo('p', 'u')).resolves.toMatchObject({
       repoUrl: null,
@@ -478,31 +562,31 @@ describe('race-safe GitHub connection persistence', () => {
   })
 
   it('fails closed after repeated disconnect contention', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [
-        { data: { github_connection_version: 1 }, error: null },
-        { data: { github_connection_version: 2 }, error: null },
-        { data: { github_connection_version: 3 }, error: null },
-      ],
-      __rpc: [
-        { data: null, error: null },
-        { data: null, error: null },
-        { data: null, error: null },
-      ],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [
+          { data: { github_connection_version: 1 }, error: null },
+          { data: { github_connection_version: 2 }, error: null },
+          { data: { github_connection_version: 3 }, error: null },
+        ],
+        __rpc: [
+          { data: null, error: null },
+          { data: null, error: null },
+          { data: null, error: null },
+        ],
+      }) as never,
+    )
 
     await expect(disconnectGithubRepo('p', 'u')).rejects.toThrow('stale_connection_attempt')
   })
 
   it('does not retry a failed disconnect database write', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [
-        { data: { github_connection_version: 1 }, error: null },
-      ],
-      __rpc: [
-        { data: null, error: { message: 'boom' } },
-      ],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: { github_connection_version: 1 }, error: null }],
+        __rpc: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
 
     await expect(disconnectGithubRepo('p', 'u')).rejects.toThrow('boom')
   })
@@ -510,26 +594,34 @@ describe('race-safe GitHub connection persistence', () => {
   it('keeps legacy repository updates covered until the verified API replaces them', async () => {
     for (const [repoUrl, row, status] of [
       ['acme/widgets', { ...connectedRow, github_installation_id: null }, 'reconnect_required'],
-      [null, {
-        ...connectedRow,
-        repo_url: null,
-        github_owner: null,
-        github_repo: null,
-        github_installation_id: null,
-      }, 'disconnected'],
+      [
+        null,
+        {
+          ...connectedRow,
+          repo_url: null,
+          github_owner: null,
+          github_repo: null,
+          github_installation_id: null,
+        },
+        'disconnected',
+      ],
     ] as const) {
-      vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-        project_repo_configs: [{ data: row, error: null }],
-      }) as never)
+      vi.mocked(getServiceSupabase).mockReturnValue(
+        supabaseWith({
+          project_repo_configs: [{ data: row, error: null }],
+        }) as never,
+      )
       await expect(updateRepoConfig('p', { repoUrl })).resolves.toMatchObject({
         githubConnectionStatus: status,
       })
     }
 
     await expect(updateRepoConfig('p', { repoUrl: 'not-a-repo' })).rejects.toThrow('invalid_github_repo')
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_repo_configs: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_repo_configs: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(updateRepoConfig('p', { repoUrl: 'acme/widgets' })).rejects.toThrow('boom')
   })
 })
@@ -546,12 +638,19 @@ describe('listProjectMembers', () => {
   it('maps rows with null emails when no secret key is configured', async () => {
     delete process.env.SUPABASE_SECRET_KEY
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: [
-        { user_id: 'u1', role: 'admin', is_owner: true, created_at: 't' },
-        { user_id: 'u2', role: 'member', is_owner: false, created_at: 't2' },
-      ], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_members: [
+          {
+            data: [
+              { user_id: 'u1', role: 'admin', is_owner: true, created_at: 't' },
+              { user_id: 'u2', role: 'member', is_owner: false, created_at: 't2' },
+            ],
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     const out = await listProjectMembers('p')
     expect(out).toEqual([
       { userId: 'u1', email: null, role: 'owner', createdAt: 't' },
@@ -560,16 +659,20 @@ describe('listProjectMembers', () => {
   })
 
   it('returns an empty roster when the table yields no rows', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_members: [{ data: null, error: null }],
+      }) as never,
+    )
     expect(await listProjectMembers('p')).toEqual([])
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_members: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_members: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(listProjectMembers('p')).rejects.toThrow('boom')
   })
 })
@@ -613,21 +716,35 @@ describe('removeProjectMember', () => {
 })
 
 describe('changeProjectMemberRole', () => {
-  const change = (role: 'owner' | 'admin' | 'member' = 'admin') => changeProjectMemberRole({
-    projectKey: 'p', actorUserId: 'actor', targetUserId: 'target', role,
-  })
-
-  it('maps updated and unchanged RPC results', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({
-      data: { status: 'updated', previousRole: 'member', role: 'admin', changed: true }, error: null,
-    }) as never)
-    await expect(change()).resolves.toEqual({
-      projectKey: 'p', userId: 'target', previousRole: 'member', role: 'admin', changed: true,
+  const change = (role: 'owner' | 'admin' | 'member' = 'admin') =>
+    changeProjectMemberRole({
+      projectKey: 'p',
+      actorUserId: 'actor',
+      targetUserId: 'target',
+      role,
     })
 
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseRpc({
-      data: { status: 'unchanged', previousRole: 'owner', role: 'owner', changed: false }, error: null,
-    }) as never)
+  it('maps updated and unchanged RPC results', async () => {
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseRpc({
+        data: { status: 'updated', previousRole: 'member', role: 'admin', changed: true },
+        error: null,
+      }) as never,
+    )
+    await expect(change()).resolves.toEqual({
+      projectKey: 'p',
+      userId: 'target',
+      previousRole: 'member',
+      role: 'admin',
+      changed: true,
+    })
+
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseRpc({
+        data: { status: 'unchanged', previousRole: 'owner', role: 'owner', changed: false },
+        error: null,
+      }) as never,
+    )
     await expect(change('owner')).resolves.toMatchObject({ role: 'owner', changed: false })
   })
 
@@ -692,16 +809,20 @@ describe('getUserEmailsByIds', () => {
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'header.payload.signature')
     globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ email: 'a@b.c' })))
     expect(await getUserEmailsByIds(['u1'])).toEqual({ u1: 'a@b.c' })
-    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: {
-      apikey: 'header.payload.signature', Authorization: 'Bearer header.payload.signature',
-    } })
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), {
+      headers: {
+        apikey: 'header.payload.signature',
+        Authorization: 'Bearer header.payload.signature',
+      },
+    })
   })
 
   it('resolves emails, dedupes ids, and skips failures', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (url.endsWith('/ok')) {
         return new Response(JSON.stringify({ email: 'a@b.c' }), {
-          status: 200, headers: { 'content-type': 'application/json' },
+          status: 200,
+          headers: { 'content-type': 'application/json' },
         })
       }
       if (url.endsWith('/noemail')) {
@@ -713,56 +834,72 @@ describe('getUserEmailsByIds', () => {
     globalThis.fetch = fetchMock
     const out = await getUserEmailsByIds(['ok', 'ok', 'bad', 'noemail', 'boom'])
     expect(out).toEqual({ ok: 'a@b.c' })
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://supa.example/auth/v1/admin/users/ok',
-      { headers: { apikey: 'sb_secret_test' } },
-    )
+    expect(fetchMock).toHaveBeenCalledWith('https://supa.example/auth/v1/admin/users/ok', {
+      headers: { apikey: 'sb_secret_test' },
+    })
   })
 })
 
 describe('listProjectInvites', () => {
   it('returns mapped invites', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_invites: [{ data: [{ project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'u', created_at: 't' }], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_invites: [
+          {
+            data: [{ project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'u', created_at: 't' }],
+            error: null,
+          },
+        ],
+      }) as never,
+    )
     const out = await listProjectInvites('p')
     expect(out).toEqual([{ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'u', createdAt: 't' }])
   })
 
   it('returns an empty list when the table yields no rows', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_invites: [{ data: null, error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_invites: [{ data: null, error: null }],
+      }) as never,
+    )
     expect(await listProjectInvites('p')).toEqual([])
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_invites: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_invites: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(listProjectInvites('p')).rejects.toThrow('boom')
   })
 })
 
 describe('deleteProjectInvite', () => {
   it('returns true when a row was deleted', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_invites: [{ data: [{ email: 'x@y.z' }], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_invites: [{ data: [{ email: 'x@y.z' }], error: null }],
+      }) as never,
+    )
     expect(await deleteProjectInvite('p', 'X@Y.Z')).toBe(true)
   })
 
   it('returns false when nothing matched', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_invites: [{ data: [], error: null }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_invites: [{ data: [], error: null }],
+      }) as never,
+    )
     expect(await deleteProjectInvite('p', 'x@y.z')).toBe(false)
   })
 
   it('throws on db error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(supabaseWith({
-      project_invites: [{ data: null, error: { message: 'boom' } }],
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      supabaseWith({
+        project_invites: [{ data: null, error: { message: 'boom' } }],
+      }) as never,
+    )
     await expect(deleteProjectInvite('p', 'x@y.z')).rejects.toThrow('boom')
   })
 })

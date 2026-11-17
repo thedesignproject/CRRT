@@ -284,146 +284,206 @@ GRANT ALL ON public.recordings,public.recording_artifacts,public.recording_event
   public.recording_transcript_segments,public.recording_jobs,public.recording_usage TO service_role;
 --> statement-breakpoint
 NOTIFY pgrst,'reload schema';
-`;
+`
 
 // Record is independent of comments. Source objects survive failed processing
 // and account deletion until a durable cleanup job has removed private media.
-export const recordings = pgTable('recordings', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  ownerId: uuid('owner_id').references(() => authUsers.id, { onDelete: 'set null' }),
-  storagePrefix: text('storage_prefix').notNull(),
-  storageProvider: text('storage_provider').notNull().default('supabase'),
-  storageBucket: text('storage_bucket').notNull().default('record-media'),
-  projectKey: text('project_key').references(() => projects.publicKey, { onDelete: 'set null' }),
-  clientKey: uuid('client_key').notNull(),
-  requestHash: text('request_hash').notNull(),
-  shareHash: text('share_hash').notNull().unique(),
-  title: text('title').notNull(),
-  source: text('source').notNull(),
-  state: text('state').notNull().default('recording'),
-  durationMs: integer('duration_ms'),
-  manifestHash: text('manifest_hash'),
-  manifest: jsonb('manifest'),
-  mediaMetadata: jsonb('media_metadata'),
-  consent: jsonb('consent'),
-  failure: jsonb('failure'),
-  brainReferences: jsonb('brain_references').notNull().default(sql`'[]'::jsonb`),
-  revision: integer('revision').notNull().default(0),
-  reservedBytes: bigint('reserved_bytes', { mode: 'number' }).notNull().default(0),
-  derivationReservedBytes: bigint('derivation_reserved_bytes', { mode: 'number' }).notNull().default(0),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-  abandonedAt: timestamp('abandoned_at', { withTimezone: true }).notNull().default(sql`now()+interval '24 hours'`),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }),
-  cleanedAt: timestamp('cleaned_at', { withTimezone: true }),
-}, t => ({
-  client: uniqueIndex('recordings_owner_client').on(t.ownerId, t.clientKey),
-  library: index('recordings_library').on(t.ownerId, t.createdAt),
-  cleanup: index('recordings_cleanup').on(t.deletedAt, t.abandonedAt),
-  source: check('recordings_source', sql`${t.source} in ('tab','window','screen')`),
-  state: check('recordings_state', sql`${t.state} in ('recording','uploading','processing','ready','failed')`),
-  duration: check('recordings_duration', sql`${t.durationMs} >= 0`),
-  bytes: check('recordings_bytes', sql`${t.reservedBytes} >= 0`),
-  storage: check('recordings_storage_provider', sql`${t.storageProvider} in ('supabase','r2')`),
-})).enableRLS()
+export const recordings = pgTable(
+  'recordings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id').references(() => authUsers.id, { onDelete: 'set null' }),
+    storagePrefix: text('storage_prefix').notNull(),
+    storageProvider: text('storage_provider').notNull().default('supabase'),
+    storageBucket: text('storage_bucket').notNull().default('record-media'),
+    projectKey: text('project_key').references(() => projects.publicKey, { onDelete: 'set null' }),
+    clientKey: uuid('client_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    shareHash: text('share_hash').notNull().unique(),
+    title: text('title').notNull(),
+    source: text('source').notNull(),
+    state: text('state').notNull().default('recording'),
+    durationMs: integer('duration_ms'),
+    manifestHash: text('manifest_hash'),
+    manifest: jsonb('manifest'),
+    mediaMetadata: jsonb('media_metadata'),
+    consent: jsonb('consent'),
+    failure: jsonb('failure'),
+    brainReferences: jsonb('brain_references')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    revision: integer('revision').notNull().default(0),
+    reservedBytes: bigint('reserved_bytes', { mode: 'number' }).notNull().default(0),
+    derivationReservedBytes: bigint('derivation_reserved_bytes', { mode: 'number' }).notNull().default(0),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    abandonedAt: timestamp('abandoned_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now()+interval '24 hours'`),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    cleanedAt: timestamp('cleaned_at', { withTimezone: true }),
+  },
+  (t) => ({
+    client: uniqueIndex('recordings_owner_client').on(t.ownerId, t.clientKey),
+    library: index('recordings_library').on(t.ownerId, t.createdAt),
+    cleanup: index('recordings_cleanup').on(t.deletedAt, t.abandonedAt),
+    source: check('recordings_source', sql`${t.source} in ('tab','window','screen')`),
+    state: check('recordings_state', sql`${t.state} in ('recording','uploading','processing','ready','failed')`),
+    duration: check('recordings_duration', sql`${t.durationMs} >= 0`),
+    bytes: check('recordings_bytes', sql`${t.reservedBytes} >= 0`),
+    storage: check('recordings_storage_provider', sql`${t.storageProvider} in ('supabase','r2')`),
+  }),
+).enableRLS()
 
-export const recordingArtifacts = pgTable('recording_artifacts', {
-  id: uuid('id').primaryKey(),
-  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
-  kind: text('kind').notNull(),
-  path: text('path').notNull().unique(),
-  mime: text('mime').notNull(),
-  bytes: bigint('bytes', { mode: 'number' }).notNull(),
-  sha256: text('sha256').notNull(),
-  offsetMs: integer('offset_ms').notNull().default(0),
-  verifiedAt: timestamp('verified_at', { withTimezone: true }),
-  multipartId: text('multipart_id'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({
-  recording: index('recording_artifacts_recording').on(t.recordingId),
-  bytes: check('recording_artifacts_bytes', sql`${t.bytes}>0`),
-  offset: check('recording_artifacts_offset', sql`${t.offsetMs}>=0`),
-  kind: check('recording_artifacts_kind', sql`${t.kind} in ('screen','camera','audio','keyframe','crop','thumbnail')`),
-})).enableRLS()
+export const recordingArtifacts = pgTable(
+  'recording_artifacts',
+  {
+    id: uuid('id').primaryKey(),
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    path: text('path').notNull().unique(),
+    mime: text('mime').notNull(),
+    bytes: bigint('bytes', { mode: 'number' }).notNull(),
+    sha256: text('sha256').notNull(),
+    offsetMs: integer('offset_ms').notNull().default(0),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    multipartId: text('multipart_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    recording: index('recording_artifacts_recording').on(t.recordingId),
+    bytes: check('recording_artifacts_bytes', sql`${t.bytes}>0`),
+    offset: check('recording_artifacts_offset', sql`${t.offsetMs}>=0`),
+    kind: check(
+      'recording_artifacts_kind',
+      sql`${t.kind} in ('screen','camera','audio','keyframe','crop','thumbnail')`,
+    ),
+  }),
+).enableRLS()
 
-export const recordingEvents = pgTable('recording_events', {
-  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
-  id: uuid('id').notNull(),
-  sequence: integer('sequence').notNull(),
-  kind: text('kind').notNull(),
-  atMs: integer('at_ms').notNull(),
-  data: jsonb('data').notNull(),
-}, t => ({
-  pk: primaryKey({ columns: [t.recordingId, t.id] }),
-  sequence: uniqueIndex('recording_events_sequence').on(t.recordingId, t.sequence),
-  clock: check('recording_events_clock', sql`${t.atMs}>=0 AND ${t.sequence}>=0`),
-  kind: check('recording_events_kind', sql`${t.kind} in ('mark','click','route')`),
-})).enableRLS()
+export const recordingEvents = pgTable(
+  'recording_events',
+  {
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    id: uuid('id').notNull(),
+    sequence: integer('sequence').notNull(),
+    kind: text('kind').notNull(),
+    atMs: integer('at_ms').notNull(),
+    data: jsonb('data').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordingId, t.id] }),
+    sequence: uniqueIndex('recording_events_sequence').on(t.recordingId, t.sequence),
+    clock: check('recording_events_clock', sql`${t.atMs}>=0 AND ${t.sequence}>=0`),
+    kind: check('recording_events_kind', sql`${t.kind} in ('mark','click','route')`),
+  }),
+).enableRLS()
 
-export const recordingTranscriptSegments = pgTable('recording_transcript_segments', {
-  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
-  id: text('id').notNull(),
-  startMs: integer('start_ms').notNull(),
-  endMs: integer('end_ms').notNull(),
-  text: text('text').notNull(),
-  provider: text('provider').notNull(),
-  language: text('language').notNull(),
-}, t => ({
-  pk: primaryKey({ columns: [t.recordingId, t.id] }),
-  clock: check('recording_transcript_clock', sql`${t.startMs}>=0 AND ${t.endMs}>=${t.startMs}`),
-})).enableRLS()
+export const recordingTranscriptSegments = pgTable(
+  'recording_transcript_segments',
+  {
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    id: text('id').notNull(),
+    startMs: integer('start_ms').notNull(),
+    endMs: integer('end_ms').notNull(),
+    text: text('text').notNull(),
+    provider: text('provider').notNull(),
+    language: text('language').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordingId, t.id] }),
+    clock: check('recording_transcript_clock', sql`${t.startMs}>=0 AND ${t.endMs}>=${t.startMs}`),
+  }),
+).enableRLS()
 
-export const recordingKeyframes = pgTable('recording_keyframes', {
-  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
-  id: uuid('id').notNull(),
-  eventId: uuid('event_id'),
-  atMs: integer('at_ms').notNull(),
-  artifactId: uuid('artifact_id').notNull().references(() => recordingArtifacts.id, { onDelete: 'cascade' }),
-  cropArtifactId: uuid('crop_artifact_id').references(() => recordingArtifacts.id, { onDelete: 'set null' }),
-  segmentIds: jsonb('segment_ids').notNull().default(sql`'[]'::jsonb`),
-}, t => ({
-  pk: primaryKey({ columns: [t.recordingId, t.id] }),
-  clock: check('recording_keyframes_clock', sql`${t.atMs}>=0`),
-})).enableRLS()
+export const recordingKeyframes = pgTable(
+  'recording_keyframes',
+  {
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    id: uuid('id').notNull(),
+    eventId: uuid('event_id'),
+    atMs: integer('at_ms').notNull(),
+    artifactId: uuid('artifact_id')
+      .notNull()
+      .references(() => recordingArtifacts.id, { onDelete: 'cascade' }),
+    cropArtifactId: uuid('crop_artifact_id').references(() => recordingArtifacts.id, { onDelete: 'set null' }),
+    segmentIds: jsonb('segment_ids')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordingId, t.id] }),
+    clock: check('recording_keyframes_clock', sql`${t.atMs}>=0`),
+  }),
+).enableRLS()
 
-export const recordingJobs = pgTable('recording_jobs', {
-  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
-  stage: text('stage').notNull(),
-  state: text('state').notNull().default('pending'),
-  attempts: integer('attempts').notNull().default(0),
-  leaseToken: uuid('lease_token'),
-  leaseUntil: timestamp('lease_until', { withTimezone: true }),
-  availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
-  failure: jsonb('failure'),
-}, t => ({
-  pk: primaryKey({ columns: [t.recordingId, t.stage] }),
-  queue: index('recording_jobs_queue').on(t.state, t.availableAt),
-  stage: check('recording_jobs_stage', sql`${t.stage} in ('metadata','transcription','alignment','cleanup')`),
-  state: check('recording_jobs_state', sql`${t.state} in ('pending','running','done','failed')`),
-})).enableRLS()
+export const recordingJobs = pgTable(
+  'recording_jobs',
+  {
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    stage: text('stage').notNull(),
+    state: text('state').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    leaseToken: uuid('lease_token'),
+    leaseUntil: timestamp('lease_until', { withTimezone: true }),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    failure: jsonb('failure'),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordingId, t.stage] }),
+    queue: index('recording_jobs_queue').on(t.state, t.availableAt),
+    stage: check('recording_jobs_stage', sql`${t.stage} in ('metadata','transcription','alignment','cleanup')`),
+    state: check('recording_jobs_state', sql`${t.state} in ('pending','running','done','failed')`),
+  }),
+).enableRLS()
 
-export const recordingUsage = pgTable('recording_usage', {
-  recordingId: uuid('recording_id').notNull().references(() => recordings.id, { onDelete: 'cascade' }),
-  actorId: uuid('actor_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  requestKey: uuid('request_key').notNull(),
-  resource: text('resource').notNull(),
-  amount: bigint('amount', { mode: 'number' }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({
-  pk: primaryKey({ columns: [t.recordingId, t.actorId, t.requestKey, t.resource] }),
-  resource: check('recording_usage_resource', sql`${t.resource} in ('recording','storage_bytes','agent_payload')`),
-  amount: check('recording_usage_amount', sql`${t.amount}>=0`),
-})).enableRLS()
+export const recordingUsage = pgTable(
+  'recording_usage',
+  {
+    recordingId: uuid('recording_id')
+      .notNull()
+      .references(() => recordings.id, { onDelete: 'cascade' }),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    requestKey: uuid('request_key').notNull(),
+    resource: text('resource').notNull(),
+    amount: bigint('amount', { mode: 'number' }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.recordingId, t.actorId, t.requestKey, t.resource] }),
+    resource: check('recording_usage_resource', sql`${t.resource} in ('recording','storage_bytes','agent_payload')`),
+    amount: check('recording_usage_amount', sql`${t.amount}>=0`),
+  }),
+).enableRLS()
 
-export const recordingTranscriptionLimits = pgTable('recording_transcription_limits', {
-  identity: text('identity').primaryKey(),
-  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
-  requests: integer('requests').notNull().default(0),
-  bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
-}, t => ({
-  identity: check('recording_transcription_identity', sql`${t.identity} = 'global' or ${t.identity} ~ '^[a-f0-9]{64}$'`),
-  usage: check('recording_transcription_usage', sql`${t.requests} >= 0 and ${t.bytes} >= 0`),
-})).enableRLS()
+export const recordingTranscriptionLimits = pgTable(
+  'recording_transcription_limits',
+  {
+    identity: text('identity').primaryKey(),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    requests: integer('requests').notNull().default(0),
+    bytes: bigint('bytes', { mode: 'number' }).notNull().default(0),
+  },
+  (t) => ({
+    identity: check(
+      'recording_transcription_identity',
+      sql`${t.identity} = 'global' or ${t.identity} ~ '^[a-f0-9]{64}$'`,
+    ),
+    usage: check('recording_transcription_usage', sql`${t.requests} >= 0 and ${t.bytes} >= 0`),
+  }),
+).enableRLS()
 
 // One short transaction reserves both budgets before provider dispatch. No
 // refund: failures/timeouts/crashes may still incur provider spend.
@@ -472,17 +532,26 @@ NOTIFY pgrst,'reload schema';
 // `notifications_select_own` policy (migration 0002) so the dashboard can
 // subscribe to its own rows over realtime with the authenticated key.
 
-export const projects = pgTable('projects', {
-  publicKey: text('public_key').primaryKey(),
-  slug: text('slug').notNull().unique(),
-  name: text('name').notNull(),
-  allowedOrigins: text('allowed_origins').array().notNull().default(sql`'{}'`),
-  widgetPrivate: boolean('widget_private').notNull().default(false),
-  feedbackAccess: text('feedback_access').notNull().default('team'),
-  claimable: boolean('claimable').notNull().default(true),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({ feedbackAccessCheck: check('projects_feedback_access_check', sql`${t.feedbackAccess} in ('team', 'admins')`) }))
+export const projects = pgTable(
+  'projects',
+  {
+    publicKey: text('public_key').primaryKey(),
+    slug: text('slug').notNull().unique(),
+    name: text('name').notNull(),
+    allowedOrigins: text('allowed_origins')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    widgetPrivate: boolean('widget_private').notNull().default(false),
+    feedbackAccess: text('feedback_access').notNull().default('team'),
+    claimable: boolean('claimable').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    feedbackAccessCheck: check('projects_feedback_access_check', sql`${t.feedbackAccess} in ('team', 'admins')`),
+  }),
+)
 
 // userId / invitedBy reference auth.users(id). Drizzle can't model the auth
 // schema, so the FK is added in the migration SQL by hand (see DRIZZLE-GUIDE.md).
@@ -517,7 +586,9 @@ export const projectMembers = pgTable(
 export const githubUserInstallations = pgTable(
   'github_user_installations',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     userId: uuid('user_id').notNull(),
     installationId: text('installation_id').notNull(),
     githubAccountId: text('github_account_id').notNull(),
@@ -529,8 +600,10 @@ export const githubUserInstallations = pgTable(
   },
   (t) => ({
     userIdx: index('github_user_installations_user_id_idx').on(t.userId),
-    userInstallationUnique: uniqueIndex('github_user_installations_user_installation_unique')
-      .on(t.userId, t.installationId),
+    userInstallationUnique: uniqueIndex('github_user_installations_user_installation_unique').on(
+      t.userId,
+      t.installationId,
+    ),
     accountTypeCheck: check(
       'github_user_installations_account_type_check',
       sql`${t.githubAccountType} in ('User', 'Organization')`,
@@ -557,7 +630,9 @@ export const projectInvites = pgTable(
     role: text('role').notNull().default('member'),
     invitedBy: uuid('invited_by').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull().default(sql`now() + interval '7 days'`),
+    expiresAt: timestamp('expires_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now() + interval '7 days'`),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.projectKey, t.email] }),
@@ -571,36 +646,58 @@ export const projectInvites = pgTable(
 const authUsers = pgSchema('auth').table('users', { id: uuid('id').primaryKey() })
 
 // Company email discovery is separate from widget origin restrictions.
-export const projectEmailDomains = pgTable('project_email_domains', {
-  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
-  domain: text('domain').notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.projectKey, t.domain] }),
-  domainIdx: index('project_email_domains_domain_idx').on(t.domain),
-  normalized: check('project_email_domains_normalized', sql`${t.domain} = lower(${t.domain}) and length(${t.domain}) <= 253 and ${t.domain} ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'`),
-})).enableRLS()
+export const projectEmailDomains = pgTable(
+  'project_email_domains',
+  {
+    projectKey: text('project_key')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    domain: text('domain').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.projectKey, t.domain] }),
+    domainIdx: index('project_email_domains_domain_idx').on(t.domain),
+    normalized: check(
+      'project_email_domains_normalized',
+      sql`${t.domain} = lower(${t.domain}) and length(${t.domain}) <= 253 and ${t.domain} ~ '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$'`,
+    ),
+  }),
+).enableRLS()
 
-export const projectAccessRequests = pgTable('project_access_requests', {
-  id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
-  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  email: text('email').notNull(),
-  status: text('status').notNull().default('pending'),
-  attempt: integer('attempt').notNull().default(1),
-  requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
-  reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
-  reviewedBy: uuid('reviewed_by').references(() => authUsers.id, { onDelete: 'set null' }),
-  grantedRole: text('granted_role'),
-}, (t) => ({
-  userProject: uniqueIndex('project_access_requests_user_project_idx').on(t.projectKey, t.userId),
-  userIdx: index('project_access_requests_user_idx').on(t.userId),
-  statusCheck: check('project_access_requests_status_check', sql`${t.status} in ('pending', 'approved', 'declined')`),
-  roleCheck: check('project_access_requests_role_check', sql`${t.grantedRole} in ('admin', 'member', 'guest')`),
-  attemptCheck: check('project_access_requests_attempt_check', sql`${t.attempt} > 0`),
-  emailCheck: check('project_access_requests_email_check', sql`${t.email} = lower(${t.email})`),
-  reviewCheck: check('project_access_requests_review_check', sql`(${t.status} = 'pending' and ${t.reviewedAt} is null and ${t.grantedRole} is null) or (${t.status} = 'declined' and ${t.reviewedAt} is not null and ${t.grantedRole} is null) or (${t.status} = 'approved' and ${t.reviewedAt} is not null and ${t.grantedRole} is not null)`),
-})).enableRLS()
+export const projectAccessRequests = pgTable(
+  'project_access_requests',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    projectKey: text('project_key')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+    status: text('status').notNull().default('pending'),
+    attempt: integer('attempt').notNull().default(1),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    reviewedAt: timestamp('reviewed_at', { withTimezone: true }),
+    reviewedBy: uuid('reviewed_by').references(() => authUsers.id, { onDelete: 'set null' }),
+    grantedRole: text('granted_role'),
+  },
+  (t) => ({
+    userProject: uniqueIndex('project_access_requests_user_project_idx').on(t.projectKey, t.userId),
+    userIdx: index('project_access_requests_user_idx').on(t.userId),
+    statusCheck: check('project_access_requests_status_check', sql`${t.status} in ('pending', 'approved', 'declined')`),
+    roleCheck: check('project_access_requests_role_check', sql`${t.grantedRole} in ('admin', 'member', 'guest')`),
+    attemptCheck: check('project_access_requests_attempt_check', sql`${t.attempt} > 0`),
+    emailCheck: check('project_access_requests_email_check', sql`${t.email} = lower(${t.email})`),
+    reviewCheck: check(
+      'project_access_requests_review_check',
+      sql`(${t.status} = 'pending' and ${t.reviewedAt} is null and ${t.grantedRole} is null) or (${t.status} = 'declined' and ${t.reviewedAt} is not null and ${t.grantedRole} is null) or (${t.status} = 'approved' and ${t.reviewedAt} is not null and ${t.grantedRole} is not null)`,
+    ),
+  }),
+).enableRLS()
 
 // Server-managed allowlist for Chrome extension identities that may receive an
 // authentication handoff. Removing a client also revokes its outstanding grants.
@@ -626,12 +723,18 @@ export const extensionAuthClients = pgTable(
 export const extensionAuthHandoffs = pgTable(
   'extension_auth_handoffs',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     codeHash: text('code_hash').notNull(),
     stateHash: text('state_hash').notNull(),
     pkceChallenge: text('pkce_challenge').notNull(),
-    userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-    extensionId: text('extension_id').notNull().references(() => extensionAuthClients.extensionId, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    extensionId: text('extension_id')
+      .notNull()
+      .references(() => extensionAuthClients.extensionId, { onDelete: 'cascade' }),
     redirectUri: text('redirect_uri').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
     consumedAt: timestamp('consumed_at', { withTimezone: true }),
@@ -643,7 +746,10 @@ export const extensionAuthHandoffs = pgTable(
     cleanupIdx: index('extension_auth_handoffs_cleanup_idx').on(t.consumedAt, t.expiresAt),
     codeHashCheck: check('extension_auth_handoffs_code_hash_check', sql`${t.codeHash} ~ '^[0-9a-f]{64}$'`),
     stateHashCheck: check('extension_auth_handoffs_state_hash_check', sql`${t.stateHash} ~ '^[0-9a-f]{64}$'`),
-    pkceChallengeCheck: check('extension_auth_handoffs_pkce_challenge_check', sql`${t.pkceChallenge} ~ '^[A-Za-z0-9_-]{43}$'`),
+    pkceChallengeCheck: check(
+      'extension_auth_handoffs_pkce_challenge_check',
+      sql`${t.pkceChallenge} ~ '^[A-Za-z0-9_-]{43}$'`,
+    ),
     extensionIdCheck: check('extension_auth_handoffs_extension_id_check', sql`${t.extensionId} ~ '^[a-p]{32}$'`),
     redirectCheck: check(
       'extension_auth_handoffs_redirect_uri_check',
@@ -662,21 +768,32 @@ export const extensionAuthHandoffs = pgTable(
 ).enableRLS()
 
 // Pairing secrets expire; the connection id is public and grants no access.
-export const storybookConnections = pgTable('storybook_connections', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
-  createdBy: uuid('created_by').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  codeHash: text('code_hash').notNull().unique(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  claimedAt: timestamp('claimed_at', { withTimezone: true }),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  client: jsonb('client'),
-}, (t) => ({
-  projectIdx: index('storybook_connections_project_idx').on(t.projectKey),
-  hashCheck: check('storybook_connections_code_hash_check', sql`${t.codeHash} ~ '^[0-9a-f]{64}$'`),
-  lifetimeCheck: check('storybook_connections_lifetime_check', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`),
-})).enableRLS()
+export const storybookConnections = pgTable(
+  'storybook_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectKey: text('project_key')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    codeHash: text('code_hash').notNull().unique(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    client: jsonb('client'),
+  },
+  (t) => ({
+    projectIdx: index('storybook_connections_project_idx').on(t.projectKey),
+    hashCheck: check('storybook_connections_code_hash_check', sql`${t.codeHash} ~ '^[0-9a-f]{64}$'`),
+    lifetimeCheck: check(
+      'storybook_connections_lifetime_check',
+      sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`,
+    ),
+  }),
+).enableRLS()
 
 // Opaque widget credentials are hashed at rest. A conditional UPDATE consumes
 // each handoff once; the resulting session never grants dashboard access.
@@ -684,13 +801,19 @@ export const widgetAuthSessions = pgTable('widget_auth_sessions', {
   codeHash: text('code_hash').primaryKey(),
   stateHash: text('state_hash').notNull(),
   pkceChallenge: text('pkce_challenge').notNull(),
-  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+  userId: uuid('user_id')
+    .notNull()
+    .references(() => authUsers.id, { onDelete: 'cascade' }),
+  projectKey: text('project_key')
+    .notNull()
+    .references(() => projects.publicKey, { onDelete: 'cascade' }),
   origin: text('origin').notNull(),
   displayName: text('display_name').notNull(),
   handoffExpiresAt: timestamp('handoff_expires_at', { withTimezone: true }).notNull(),
   tokenHash: text('token_hash').unique(),
-  storybookConnectionId: uuid('storybook_connection_id').references(() => storybookConnections.id, { onDelete: 'cascade' }),
+  storybookConnectionId: uuid('storybook_connection_id').references(() => storybookConnections.id, {
+    onDelete: 'cascade',
+  }),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 }).enableRLS()
 
@@ -720,8 +843,12 @@ export const projectRepoConfigs = pgTable('project_repo_configs', {
 export const projectIntegrations = pgTable(
   'project_integrations',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    projectKey: text('project_key').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    projectKey: text('project_key')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
     provider: text('provider').notNull(),
     accessTokenCiphertext: text('access_token_ciphertext').notNull(),
     refreshTokenCiphertext: text('refresh_token_ciphertext'),
@@ -731,7 +858,9 @@ export const projectIntegrations = pgTable(
     workspaceName: text('workspace_name').notNull(),
     containerId: text('container_id'),
     containerName: text('container_name'),
-    createdBy: uuid('created_by').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -754,15 +883,24 @@ export const projectCommentEmailCooldowns = pgTable('project_comment_email_coold
 // A bounded rolling-hour ledger, independent of comment deletion. Versioned
 // compare-and-swap updates through Supabase serialize concurrent reservations.
 export const extensionCommentLimits = pgTable('extension_comment_limits', {
-  userId: uuid('user_id').primaryKey().references(() => authUsers.id, { onDelete: 'cascade' }),
-  attempts: timestamp('attempts', { withTimezone: true }).array().notNull().default(sql`'{}'::timestamptz[]`),
-  version: uuid('version').notNull().default(sql`gen_random_uuid()`),
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => authUsers.id, { onDelete: 'cascade' }),
+  attempts: timestamp('attempts', { withTimezone: true })
+    .array()
+    .notNull()
+    .default(sql`'{}'::timestamptz[]`),
+  version: uuid('version')
+    .notNull()
+    .default(sql`gen_random_uuid()`),
 }).enableRLS()
 
 export const comments = pgTable(
   'comments',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     projectId: text('project_id'),
     source: text('source').notNull().default('widget'),
     visibility: text('visibility').notNull().default('shared'),
@@ -796,20 +934,9 @@ export const comments = pgTable(
   (t) => ({
     projectCreatedIdx: index('comments_project_created_idx').on(t.projectId, t.createdAt.desc()),
     projectUrlIdx: index('comments_project_url_idx').on(t.projectId, t.url, t.createdAt.desc()),
-    projectStatusIdx: index('comments_project_status_idx').on(
-      t.projectId,
-      t.status,
-      t.implementationStatus,
-    ),
-    extensionAuthorCreatedIdx: index('comments_extension_author_created_idx').on(
-      t.createdByUserId,
-      t.createdAt.desc(),
-    ),
-    extensionAuthorUrlIdx: index('comments_extension_author_url_idx').on(
-      t.createdByUserId,
-      t.url,
-      t.createdAt.desc(),
-    ),
+    projectStatusIdx: index('comments_project_status_idx').on(t.projectId, t.status, t.implementationStatus),
+    extensionAuthorCreatedIdx: index('comments_extension_author_created_idx').on(t.createdByUserId, t.createdAt.desc()),
+    extensionAuthorUrlIdx: index('comments_extension_author_url_idx').on(t.createdByUserId, t.url, t.createdAt.desc()),
     sourceCheck: check('comments_source_check', sql`${t.source} in ('widget', 'extension')`),
     visibilityCheck: check('comments_visibility_check', sql`${t.visibility} in ('shared', 'internal')`),
     extensionOwnershipCheck: check(
@@ -846,7 +973,9 @@ export const comments = pgTable(
 export const feedbackShares = pgTable(
   'feedback_shares',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     projectId: text('project_id')
       .notNull()
       .references(() => projects.publicKey, { onDelete: 'cascade' }),
@@ -866,10 +995,7 @@ export const feedbackShares = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    scopeTypeCheck: check(
-      'feedback_shares_scope_type_check',
-      sql`${t.scopeType} in ('page', 'selection', 'project')`,
-    ),
+    scopeTypeCheck: check('feedback_shares_scope_type_check', sql`${t.scopeType} in ('page', 'selection', 'project')`),
     oneProjectScopePerProject: uniqueIndex('feedback_shares_one_project_scope_per_project')
       .on(t.projectId)
       .where(sql`scope_type = 'project' and revoked_at is null`),
@@ -913,7 +1039,9 @@ export const feedbackEvents = pgTable(
     actorType: text('actor_type').notNull(),
     actorId: text('actor_id').notNull(),
     eventType: text('event_type').notNull(),
-    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    payload: jsonb('payload')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -945,10 +1073,14 @@ export const agentPresence = pgTable(
 export const notifications = pgTable(
   'notifications',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     userId: uuid('user_id').notNull(),
     kind: text('kind').notNull(),
-    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    payload: jsonb('payload')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     readAt: timestamp('read_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -975,10 +1107,9 @@ export const feedbackOperationKeys = pgTable(
       .references(() => feedbackShares.id, { onDelete: 'cascade' }),
     agentId: text('agent_id').notNull(),
     idempotencyKey: text('idempotency_key').notNull(),
-    feedbackEventId: bigint('feedback_event_id', { mode: 'bigint' }).references(
-      () => feedbackEvents.id,
-      { onDelete: 'set null' },
-    ),
+    feedbackEventId: bigint('feedback_event_id', { mode: 'bigint' }).references(() => feedbackEvents.id, {
+      onDelete: 'set null',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -992,7 +1123,9 @@ export const feedbackOperationKeys = pgTable(
 export const auditRuns = pgTable(
   'audit_runs',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     projectKey: text('project_key').references(() => projects.publicKey, { onDelete: 'cascade' }),
     creatorUserId: uuid('creator_user_id'),
     ownerKind: text('owner_kind').notNull(),
@@ -1006,10 +1139,19 @@ export const auditRuns = pgTable(
     status: text('status').notNull().default('queued'),
     currentStage: text('current_stage').notNull().default('queued'),
     workflowRunId: text('workflow_run_id').unique(),
-    budgets: jsonb('budgets').notNull().default(sql`'{}'::jsonb`),
-    coverage: jsonb('coverage').notNull().default(sql`'{}'::jsonb`),
-    unavailableSources: text('unavailable_sources').array().notNull().default(sql`'{}'`),
-    sourceSnapshot: jsonb('source_snapshot').notNull().default(sql`'{}'::jsonb`),
+    budgets: jsonb('budgets')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    coverage: jsonb('coverage')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
+    unavailableSources: text('unavailable_sources')
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
+    sourceSnapshot: jsonb('source_snapshot')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     errorCode: text('error_code'),
     errorMessage: text('error_message'),
     stageLeaseToken: uuid('stage_lease_token'),
@@ -1025,10 +1167,11 @@ export const auditRuns = pgTable(
   },
   (t) => ({
     projectCreatedIdx: index('audit_runs_project_created_idx').on(t.projectKey, t.createdAt.desc()),
-    anonymousSessionCreatedIdx: index('audit_runs_anonymous_session_created_idx')
-      .on(t.anonymousSessionHash, t.createdAt.desc()),
-    anonymousIpCreatedIdx: index('audit_runs_anonymous_ip_created_idx')
-      .on(t.anonymousIpHash, t.createdAt.desc()),
+    anonymousSessionCreatedIdx: index('audit_runs_anonymous_session_created_idx').on(
+      t.anonymousSessionHash,
+      t.createdAt.desc(),
+    ),
+    anonymousIpCreatedIdx: index('audit_runs_anonymous_ip_created_idx').on(t.anonymousIpHash, t.createdAt.desc()),
     statusUpdatedIdx: index('audit_runs_status_updated_idx').on(t.status, t.updatedAt),
     expiresIdx: index('audit_runs_expires_idx').on(t.expiresAt),
     projectStartUnique: uniqueIndex('audit_runs_project_start_unique')
@@ -1037,10 +1180,7 @@ export const auditRuns = pgTable(
     anonymousStartUnique: uniqueIndex('audit_runs_anonymous_start_unique')
       .on(t.anonymousSessionHash, t.startIdempotencyKey)
       .where(sql`${t.ownerKind} = 'anonymous'`),
-    ownerKindCheck: check(
-      'audit_runs_owner_kind_check',
-      sql`${t.ownerKind} in ('anonymous', 'project')`,
-    ),
+    ownerKindCheck: check('audit_runs_owner_kind_check', sql`${t.ownerKind} in ('anonymous', 'project')`),
     ownerShapeCheck: check(
       'audit_runs_owner_shape_check',
       sql`(
@@ -1072,9 +1212,15 @@ export const auditRuns = pgTable(
 export const commentExternalWork = pgTable(
   'comment_external_work',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    projectId: text('project_id').notNull().references(() => projects.publicKey, { onDelete: 'cascade' }),
-    commentId: uuid('comment_id').notNull().references(() => comments.id, { onDelete: 'cascade' }),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.publicKey, { onDelete: 'cascade' }),
+    commentId: uuid('comment_id')
+      .notNull()
+      .references(() => comments.id, { onDelete: 'cascade' }),
     provider: text('provider').notNull(),
     state: text('state').notNull().default('creating'),
     workspaceId: text('workspace_id'),
@@ -1118,11 +1264,14 @@ export const commentExternalWork = pgTable(
       'comment_external_work_closed_at_check',
       sql`(${t.lifecycleStatus} = 'closed') = (${t.closedAt} is not null)`,
     ),
-    resultCheck: check('comment_external_work_result_check', sql`(
+    resultCheck: check(
+      'comment_external_work_result_check',
+      sql`(
       (${t.state} = 'creating' and ${t.externalId} is null and ${t.externalKey} is null and ${t.externalUrl} is null)
       or
       (${t.state} = 'created' and ${t.externalId} is not null and ${t.externalKey} is not null and ${t.externalUrl} is not null)
-    )`),
+    )`,
+    ),
   }),
 ).enableRLS()
 
@@ -1130,13 +1279,17 @@ export const auditEvents = pgTable(
   'audit_events',
   {
     id: bigint('id', { mode: 'bigint' }).primaryKey().generatedAlwaysAsIdentity(),
-    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    auditId: uuid('audit_id')
+      .notNull()
+      .references(() => auditRuns.id, { onDelete: 'cascade' }),
     eventType: text('event_type').notNull(),
     actorType: text('actor_type').notNull(),
     actorId: text('actor_id'),
     idempotencyKey: text('idempotency_key').notNull(),
     stage: text('stage'),
-    payload: jsonb('payload').notNull().default(sql`'{}'::jsonb`),
+    payload: jsonb('payload')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -1160,8 +1313,12 @@ export const auditEvents = pgTable(
 export const auditEvidence = pgTable(
   'audit_evidence',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    auditId: uuid('audit_id')
+      .notNull()
+      .references(() => auditRuns.id, { onDelete: 'cascade' }),
     evidenceKey: text('evidence_key').notNull(),
     source: text('source').notNull(),
     signalKey: text('signal_key').notNull(),
@@ -1171,9 +1328,13 @@ export const auditEvidence = pgTable(
     observation: text('observation').notNull(),
     confidence: doublePrecision('confidence').notNull(),
     direct: boolean('direct').notNull(),
-    provenance: jsonb('provenance').notNull().default(sql`'{}'::jsonb`),
+    provenance: jsonb('provenance')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     artifact: jsonb('artifact'),
-    capture: jsonb('capture').notNull().default(sql`'{}'::jsonb`),
+    capture: jsonb('capture')
+      .notNull()
+      .default(sql`'{}'::jsonb`),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
@@ -1183,18 +1344,19 @@ export const auditEvidence = pgTable(
       'audit_evidence_source_check',
       sql`${t.source} in ('customer-rule', 'design-system', 'repository', 'url', 'heuristic')`,
     ),
-    confidenceCheck: check(
-      'audit_evidence_confidence_check',
-      sql`${t.confidence} >= 0 and ${t.confidence} <= 1`,
-    ),
+    confidenceCheck: check('audit_evidence_confidence_check', sql`${t.confidence} >= 0 and ${t.confidence} <= 1`),
   }),
 ).enableRLS()
 
 export const auditCandidates = pgTable(
   'audit_candidates',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    auditId: uuid('audit_id')
+      .notNull()
+      .references(() => auditRuns.id, { onDelete: 'cascade' }),
     candidateKey: text('candidate_key').notNull(),
     payload: jsonb('payload').notNull(),
     decision: text('decision').notNull().default('pending'),
@@ -1215,8 +1377,12 @@ export const auditCandidates = pgTable(
 export const auditFindings = pgTable(
   'audit_findings',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
-    auditId: uuid('audit_id').notNull().references(() => auditRuns.id, { onDelete: 'cascade' }),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    auditId: uuid('audit_id')
+      .notNull()
+      .references(() => auditRuns.id, { onDelete: 'cascade' }),
     findingKey: text('finding_key').notNull(),
     rank: integer('rank').notNull(),
     status: text('status').notNull().default('open'),
@@ -1240,7 +1406,9 @@ export const auditFindings = pgTable(
 export const auditRateLimitWindows = pgTable(
   'audit_rate_limit_windows',
   {
-    id: uuid('id').primaryKey().default(sql`gen_random_uuid()`),
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
     identityKind: text('identity_kind').notNull(),
     identityHash: text('identity_hash').notNull(),
     windowStartedAt: timestamp('window_started_at', { withTimezone: true }).notNull().defaultNow(),
@@ -1248,17 +1416,13 @@ export const auditRateLimitWindows = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
-    identityUnique: uniqueIndex('audit_rate_limit_windows_identity_unique')
-      .on(t.identityKind, t.identityHash),
+    identityUnique: uniqueIndex('audit_rate_limit_windows_identity_unique').on(t.identityKind, t.identityHash),
     windowIdx: index('audit_rate_limit_windows_window_idx').on(t.windowStartedAt),
     identityKindCheck: check(
       'audit_rate_limit_windows_identity_kind_check',
       sql`${t.identityKind} in ('session', 'ip')`,
     ),
-    requestCountCheck: check(
-      'audit_rate_limit_windows_request_count_check',
-      sql`${t.requestCount} >= 0`,
-    ),
+    requestCountCheck: check('audit_rate_limit_windows_request_count_check', sql`${t.requestCount} >= 0`),
   }),
 ).enableRLS()
 
@@ -1269,9 +1433,7 @@ export const adminUserMetrics = pgView('admin_user_metrics', {
   adminProjectCount: bigint('admin_project_count', { mode: 'number' }),
   memberProjectCount: bigint('member_project_count', { mode: 'number' }),
   superAdmin: boolean('super_admin'),
-})
-  .with({ securityInvoker: true })
-  .as(sql`
+}).with({ securityInvoker: true }).as(sql`
     with user_ids as (
       select user_id from ${projectMembers}
       union
@@ -1306,9 +1468,7 @@ export const adminProjectMetrics = pgView('admin_project_metrics', {
   commentedUrlCount: bigint('commented_url_count', { mode: 'number' }),
   firstCommentAt: timestamp('first_comment_at', { withTimezone: true }),
   lastCommentAt: timestamp('last_comment_at', { withTimezone: true }),
-})
-  .with({ securityInvoker: true })
-  .as(sql`
+}).with({ securityInvoker: true }).as(sql`
     with comment_metrics as (
       select project_id,
         count(*)::bigint as comment_count,
@@ -1346,28 +1506,34 @@ export const adminProjectMetrics = pgView('admin_project_metrics', {
 
 // Server-only outbox. Each immutable body is a private Resend batch; never expose
 // recipient addresses or email content through an authenticated/anon RLS policy.
-export const commentEmailBatches = pgTable('comment_email_batches', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  deliveryId: uuid('delivery_id').notNull(),
-  batchIndex: integer('batch_index').notNull(),
-  body: text('body').notNull(),
-  status: text('status').notNull().default('pending'),
-  attempts: integer('attempts').notNull().default(0),
-  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  leaseToken: uuid('lease_token'),
-  lastError: text('last_error'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  deliveryBatchUnique: uniqueIndex('comment_email_batches_delivery_batch_unique').on(t.deliveryId, t.batchIndex),
-  dueIdx: index('comment_email_batches_due_idx').on(t.status, t.nextAttemptAt),
-  statusCheck: check('comment_email_batches_status_check', sql`${t.status} in ('pending', 'sent', 'failed')`),
-})).enableRLS()
+export const commentEmailBatches = pgTable(
+  'comment_email_batches',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    deliveryId: uuid('delivery_id').notNull(),
+    batchIndex: integer('batch_index').notNull(),
+    body: text('body').notNull(),
+    status: text('status').notNull().default('pending'),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    leaseToken: uuid('lease_token'),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    deliveryBatchUnique: uniqueIndex('comment_email_batches_delivery_batch_unique').on(t.deliveryId, t.batchIndex),
+    dueIdx: index('comment_email_batches_due_idx').on(t.status, t.nextAttemptAt),
+    statusCheck: check('comment_email_batches_status_check', sql`${t.status} in ('pending', 'sent', 'failed')`),
+  }),
+).enableRLS()
 
 // One billing account per authenticated owner; future limits resolve project
 // ownership at request time. No paid entitlement enforcement in billing v1.
 export const billingAccounts = pgTable('billing_accounts', {
-  userId: uuid('user_id').primaryKey().references(() => authUsers.id, { onDelete: 'restrict' }),
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => authUsers.id, { onDelete: 'restrict' }),
   customerId: text('customer_id').unique(),
   subscriptionId: text('subscription_id').unique(),
   subscriptionStatus: text('subscription_status'),
@@ -1379,7 +1545,9 @@ export const billingAccounts = pgTable('billing_accounts', {
   graceUntil: timestamp('grace_until', { withTimezone: true }),
   periodEnd: timestamp('period_end', { withTimezone: true }),
   cancelAtPeriodEnd: boolean('cancel_at_period_end').notNull().default(false),
-  checkoutAttempt: uuid('checkout_attempt').notNull().default(sql`gen_random_uuid()`),
+  checkoutAttempt: uuid('checkout_attempt')
+    .notNull()
+    .default(sql`gen_random_uuid()`),
   checkoutSessionId: text('checkout_session_id'),
   checkoutPayload: jsonb('checkout_payload'),
   lockToken: uuid('lock_token'),
@@ -1585,7 +1753,6 @@ $$;
 CREATE TRIGGER fence_comment_delivery_delete BEFORE DELETE ON public.comments
 FOR EACH ROW EXECUTE FUNCTION public.fence_comment_delivery_delete();
 `
-
 
 // Review hardening is installed by migration 0032; keep 0031 immutable.
 export const projectPrivacyReviewSql = `
@@ -2703,54 +2870,90 @@ $$;
 // transfers acquire the same project row exclusively before either sponsor lock.
 // Role updates/deletes already take the delivery fence with NOWAIT before this
 // trigger; inserts can safely wait for the shared project fence.
-export const agentSeatOwnerFenceSql = agentCollaboratorSeatsSql
-  .slice(agentCollaboratorSeatsSql.indexOf('CREATE FUNCTION public.enforce_agent_invite_seat()'), agentCollaboratorSeatsSql.indexOf('CREATE TRIGGER zz_enforce_agent_invite_seat'))
-  .replace('CREATE FUNCTION public.', 'CREATE OR REPLACE FUNCTION public.')
-  .replace('BEGIN\n  SELECT m.user_id INTO v_owner', 'BEGIN\n  PERFORM 1 FROM public.projects p WHERE p.public_key = NEW.project_key FOR SHARE;\n  SELECT m.user_id INTO v_owner')
-  + agentMemberSeatSql.replace('BEGIN\n  IF TG_OP', "BEGIN\n  IF TG_OP = 'INSERT' THEN\n    PERFORM 1 FROM public.projects p WHERE p.public_key = NEW.project_key FOR SHARE;\n  END IF;\n  IF TG_OP")
+export const agentSeatOwnerFenceSql =
+  agentCollaboratorSeatsSql
+    .slice(
+      agentCollaboratorSeatsSql.indexOf('CREATE FUNCTION public.enforce_agent_invite_seat()'),
+      agentCollaboratorSeatsSql.indexOf('CREATE TRIGGER zz_enforce_agent_invite_seat'),
+    )
+    .replace('CREATE FUNCTION public.', 'CREATE OR REPLACE FUNCTION public.')
+    .replace(
+      'BEGIN\n  SELECT m.user_id INTO v_owner',
+      'BEGIN\n  PERFORM 1 FROM public.projects p WHERE p.public_key = NEW.project_key FOR SHARE;\n  SELECT m.user_id INTO v_owner',
+    ) +
+  agentMemberSeatSql.replace(
+    'BEGIN\n  IF TG_OP',
+    "BEGIN\n  IF TG_OP = 'INSERT' THEN\n    PERFORM 1 FROM public.projects p WHERE p.public_key = NEW.project_key FOR SHARE;\n  END IF;\n  IF TG_OP",
+  )
 
 export const widgetAgentWorkflowUpgradeSql = widgetAgentWorkflowSql.replaceAll(
-  'CREATE FUNCTION public.', 'CREATE OR REPLACE FUNCTION public.',
+  'CREATE FUNCTION public.',
+  'CREATE OR REPLACE FUNCTION public.',
 )
 
 // One forward repair also installs the original seat functions when an earlier
 // stack layer has advanced Drizzle's timestamp past the published seat migration.
 // Keep published SQL immutable and install only the final trigger definitions.
-export const agentCollaboratorSeatsUpgradeSql = agentCollaboratorSeatsSql
-  .replaceAll('CREATE FUNCTION public.', 'CREATE OR REPLACE FUNCTION public.')
-  .replace(
-    /CREATE OR REPLACE FUNCTION public\.enforce_agent_invite_seat\(\)[\s\S]*?(?=CREATE TRIGGER zz_enforce_agent_invite_seat)/,
-    () => agentSeatOwnerFenceSql.slice(0, agentSeatOwnerFenceSql.indexOf('CREATE OR REPLACE FUNCTION public.enforce_agent_member_seat()')),
-  )
-  .replace(
-    /CREATE OR REPLACE FUNCTION public\.enforce_agent_member_seat\(\)[\s\S]*?(?=CREATE TRIGGER zz_enforce_agent_member_seat)/,
-    () => agentSeatOwnerFenceSql.slice(agentSeatOwnerFenceSql.indexOf('CREATE OR REPLACE FUNCTION public.enforce_agent_member_seat()')) + '\n--> statement-breakpoint\n',
-  )
-  .replace('CREATE TRIGGER zz_enforce_agent_invite_seat', 'DROP TRIGGER IF EXISTS zz_enforce_agent_invite_seat ON public.project_invites;\n--> statement-breakpoint\nCREATE TRIGGER zz_enforce_agent_invite_seat')
-  .replace('CREATE TRIGGER zz_enforce_agent_member_seat', 'DROP TRIGGER IF EXISTS zz_enforce_agent_member_seat ON public.project_members;\n--> statement-breakpoint\nCREATE TRIGGER zz_enforce_agent_member_seat')
-  + '\n--> statement-breakpoint\n' + agentSeatOwnershipCapacitySql
+export const agentCollaboratorSeatsUpgradeSql =
+  agentCollaboratorSeatsSql
+    .replaceAll('CREATE FUNCTION public.', 'CREATE OR REPLACE FUNCTION public.')
+    .replace(
+      /CREATE OR REPLACE FUNCTION public\.enforce_agent_invite_seat\(\)[\s\S]*?(?=CREATE TRIGGER zz_enforce_agent_invite_seat)/,
+      () =>
+        agentSeatOwnerFenceSql.slice(
+          0,
+          agentSeatOwnerFenceSql.indexOf('CREATE OR REPLACE FUNCTION public.enforce_agent_member_seat()'),
+        ),
+    )
+    .replace(
+      /CREATE OR REPLACE FUNCTION public\.enforce_agent_member_seat\(\)[\s\S]*?(?=CREATE TRIGGER zz_enforce_agent_member_seat)/,
+      () =>
+        agentSeatOwnerFenceSql.slice(
+          agentSeatOwnerFenceSql.indexOf('CREATE OR REPLACE FUNCTION public.enforce_agent_member_seat()'),
+        ) + '\n--> statement-breakpoint\n',
+    )
+    .replace(
+      'CREATE TRIGGER zz_enforce_agent_invite_seat',
+      'DROP TRIGGER IF EXISTS zz_enforce_agent_invite_seat ON public.project_invites;\n--> statement-breakpoint\nCREATE TRIGGER zz_enforce_agent_invite_seat',
+    )
+    .replace(
+      'CREATE TRIGGER zz_enforce_agent_member_seat',
+      'DROP TRIGGER IF EXISTS zz_enforce_agent_member_seat ON public.project_members;\n--> statement-breakpoint\nCREATE TRIGGER zz_enforce_agent_member_seat',
+    ) +
+  '\n--> statement-breakpoint\n' +
+  agentSeatOwnershipCapacitySql
 
 // Deployment-owned switch: migration is inert until the Cloud deployment enables it.
 // Never expose configuration or usage writes to a publishable key.
-export const cloudPlanSettings = pgTable('cloud_plan_settings', {
-  id: integer('id').primaryKey().default(1),
-  enabled: boolean('enabled').notNull().default(false),
-}, (t) => ({ singleton: check('cloud_plan_settings_singleton', sql`${t.id} = 1`) })).enableRLS()
+export const cloudPlanSettings = pgTable(
+  'cloud_plan_settings',
+  {
+    id: integer('id').primaryKey().default(1),
+    enabled: boolean('enabled').notNull().default(false),
+  },
+  (t) => ({ singleton: check('cloud_plan_settings_singleton', sql`${t.id} = 1`) }),
+).enableRLS()
 
 // No resource FK: deleting feedback must never refund monthly usage.
-export const cloudUsage = pgTable('cloud_usage', {
-  resourceId: uuid('resource_id').notNull(),
-  resource: text('resource').notNull(),
-  ownerId: uuid('owner_id').notNull().references(() => authUsers.id, { onDelete: 'restrict' }),
-  windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
-  windowEnd: timestamp('window_end', { withTimezone: true }).notNull(),
-  released: boolean('released').notNull().default(false),
-}, (t) => ({
-  pk: primaryKey({ columns: [t.resource, t.resourceId] }),
-  ownerWindow: index('cloud_usage_owner_window_idx').on(t.ownerId, t.windowStart, t.resource),
-  resourceCheck: check('cloud_usage_resource_check', sql`${t.resource} in ('comments', 'product_audits')`),
-  windowCheck: check('cloud_usage_window_check', sql`${t.windowEnd} > ${t.windowStart}`),
-})).enableRLS()
+export const cloudUsage = pgTable(
+  'cloud_usage',
+  {
+    resourceId: uuid('resource_id').notNull(),
+    resource: text('resource').notNull(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'restrict' }),
+    windowStart: timestamp('window_start', { withTimezone: true }).notNull(),
+    windowEnd: timestamp('window_end', { withTimezone: true }).notNull(),
+    released: boolean('released').notNull().default(false),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.resource, t.resourceId] }),
+    ownerWindow: index('cloud_usage_owner_window_idx').on(t.ownerId, t.windowStart, t.resource),
+    resourceCheck: check('cloud_usage_resource_check', sql`${t.resource} in ('comments', 'product_audits')`),
+    windowCheck: check('cloud_usage_window_check', sql`${t.windowEnd} > ${t.windowStart}`),
+  }),
+).enableRLS()
 
 // Complete Cloud guard source. The first stack layer installs every function/trigger.
 export const cloudPlansSql = `
@@ -3237,13 +3440,17 @@ DROP TRIGGER IF EXISTS zz_enforce_agent_invite_seat ON public.project_invites;
 --> statement-breakpoint
 CREATE TRIGGER zz_enforce_agent_invite_seat BEFORE INSERT OR UPDATE OF project_key,email,role,expires_at
   ON public.project_invites FOR EACH ROW EXECUTE FUNCTION public.enforce_agent_invite_seat();
-`;
+`
 
 export const cloudInviteExpirySql = agentCollaboratorSeatsUpgradeSql
-  .slice(agentCollaboratorSeatsUpgradeSql.indexOf('CREATE OR REPLACE FUNCTION public.accept_project_invite_with_seat('),
-    agentCollaboratorSeatsUpgradeSql.indexOf('CREATE OR REPLACE FUNCTION public.create_widget_agent_share('))
-  .replace('  DELETE FROM public.project_invites i WHERE',
-    "  IF v_invite.expires_at<=now() THEN RAISE EXCEPTION 'not_found'; END IF;\n  DELETE FROM public.project_invites i WHERE")
+  .slice(
+    agentCollaboratorSeatsUpgradeSql.indexOf('CREATE OR REPLACE FUNCTION public.accept_project_invite_with_seat('),
+    agentCollaboratorSeatsUpgradeSql.indexOf('CREATE OR REPLACE FUNCTION public.create_widget_agent_share('),
+  )
+  .replace(
+    '  DELETE FROM public.project_invites i WHERE',
+    "  IF v_invite.expires_at<=now() THEN RAISE EXCEPTION 'not_found'; END IF;\n  DELETE FROM public.project_invites i WHERE",
+  )
 
 // Inbox assignment shares the project-first fence used by membership changes.
 export const inboxBulkAssignmentSql = `
@@ -3273,26 +3480,39 @@ NOTIFY pgrst, 'reload schema';
 
 // Retained independently of users/projects: interrupted or late storage writes
 // must remain eligible for cleanup, and a deleted local UUID cannot resurrect.
-export const deletedExtensionFeedback = pgTable('deleted_extension_feedback', {
-  id: uuid('id').primaryKey(),
-  actorId: uuid('actor_id'),
-  screenshotStoragePath: text('screenshot_storage_path'),
-  deletedAt: timestamp('deleted_at', { withTimezone: true }).notNull().defaultNow(),
-  cleanupPending: boolean('cleanup_pending').notNull().default(true),
-  cleanupAfter: timestamp('cleanup_after', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({ sweep: index('deleted_extension_feedback_sweep').on(t.cleanupAfter, t.id).where(sql`${t.cleanupPending}`) })).enableRLS()
+export const deletedExtensionFeedback = pgTable(
+  'deleted_extension_feedback',
+  {
+    id: uuid('id').primaryKey(),
+    actorId: uuid('actor_id'),
+    screenshotStoragePath: text('screenshot_storage_path'),
+    deletedAt: timestamp('deleted_at', { withTimezone: true }).notNull().defaultNow(),
+    cleanupPending: boolean('cleanup_pending').notNull().default(true),
+    cleanupAfter: timestamp('cleanup_after', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    sweep: index('deleted_extension_feedback_sweep')
+      .on(t.cleanupAfter, t.id)
+      .where(sql`${t.cleanupPending}`),
+  }),
+).enableRLS()
 
 // Only live comments retain upload windows; deletion copies the final deadline.
 export const extensionScreenshotUploadWindows = pgTable('extension_screenshot_upload_windows', {
-  commentId: uuid('comment_id').primaryKey().references(() => comments.id, {onDelete:'cascade'}),
-  expiresAt: timestamp('expires_at', {withTimezone:true}).notNull(),
+  commentId: uuid('comment_id')
+    .primaryKey()
+    .references(() => comments.id, { onDelete: 'cascade' }),
+  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 }).enableRLS()
 
 // Override the inherited 0040 RPC in 0041; both single and bulk callers enter
 // owner quota admission before UPDATE acquires any comment row locks.
 export const cloudInboxAssignmentSql = inboxBulkAssignmentSql
   .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-  .replace('  RETURN QUERY UPDATE', '  PERFORM public.cloud_require_write(public.cloud_owner(p_project));\n  RETURN QUERY UPDATE')
+  .replace(
+    '  RETURN QUERY UPDATE',
+    '  PERFORM public.cloud_require_write(public.cloud_owner(p_project));\n  RETURN QUERY UPDATE',
+  )
 
 export const extensionScreenshotLifecycleSql = `
 CREATE FUNCTION public.record_deleted_extension_feedback() RETURNS trigger
@@ -3363,18 +3583,22 @@ REVOKE ALL ON FUNCTION public.record_deleted_extension_feedback(),public.reject_
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.delete_actor_extension_feedback(uuid,uuid),public.get_deleted_extension_feedback(uuid,uuid),
   public.register_extension_screenshot_upload(uuid,uuid,text,timestamptz) TO service_role;
-`;
+`
 
 // No comment/user FK: cleanup references must survive deletion and account cascades.
-export const extensionImageCleanupJobs = pgTable('extension_image_cleanup_jobs', {
-  storagePath: text('storage_path').primaryKey(),
-  attempts: integer('attempts').notNull().default(0),
-  nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, (t) => ({
-  dueIdx: index('extension_image_cleanup_jobs_due_idx').on(t.nextAttemptAt, t.storagePath),
-  attemptsCheck: check('extension_image_cleanup_jobs_attempts_check', sql`${t.attempts} >= 0`),
-})).enableRLS()
+export const extensionImageCleanupJobs = pgTable(
+  'extension_image_cleanup_jobs',
+  {
+    storagePath: text('storage_path').primaryKey(),
+    attempts: integer('attempts').notNull().default(0),
+    nextAttemptAt: timestamp('next_attempt_at', { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    dueIdx: index('extension_image_cleanup_jobs_due_idx').on(t.nextAttemptAt, t.storagePath),
+    attemptsCheck: check('extension_image_cleanup_jobs_attempts_check', sql`${t.attempts} >= 0`),
+  }),
+).enableRLS()
 
 export const extensionImageCleanupSql = `
 CREATE FUNCTION public.enqueue_extension_image_cleanup()
@@ -3389,7 +3613,7 @@ REVOKE ALL ON FUNCTION public.enqueue_extension_image_cleanup() FROM PUBLIC, ano
 CREATE TRIGGER comments_extension_image_cleanup AFTER DELETE ON public.comments
 FOR EACH ROW WHEN (OLD.source = 'extension' AND OLD.screenshot_storage_path IS NOT NULL)
 EXECUTE FUNCTION public.enqueue_extension_image_cleanup();
-`;
+`
 
 // Additive widget-only helpers preserve older dashboard and widget callers.
 export const approvedWidgetHandoffSql = `
@@ -3516,7 +3740,7 @@ REVOKE ALL ON FUNCTION public.read_approved_widget_comment(text,uuid,uuid,text),
 GRANT EXECUTE ON FUNCTION public.read_approved_widget_comment(text,uuid,uuid,text), public.begin_approved_widget_tracker_dispatch(text,uuid,uuid,uuid,uuid), public.create_approved_widget_agent_share(text,uuid,text,text,text,text[],jsonb,uuid[]) TO service_role;
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
-`;
+`
 
 // Appended to the generated Storybook migration; Supabase remains the runtime layer.
 export const storybookSql = `
@@ -3562,7 +3786,7 @@ REVOKE ALL ON FUNCTION public.claim_storybook_pairing(text,jsonb), public.create
 GRANT EXECUTE ON FUNCTION public.claim_storybook_pairing(text,jsonb), public.create_storybook_comment(uuid,uuid,text,text,jsonb) TO service_role;
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
-`;
+`
 
 // Transaction fences included with the Storybook schema in migration 0042.
 export const storybookFencesSql = String.raw`
@@ -3615,11 +3839,12 @@ REVOKE ALL ON FUNCTION public.create_storybook_comment_snapshot(uuid,uuid,text,t
 GRANT EXECUTE ON FUNCTION public.create_storybook_comment_snapshot(uuid,uuid,text,text,jsonb), public.manage_storybook_connections(text,uuid,uuid) TO service_role;
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
-`;
+`
 
 // Append to the generated migration. Snapshot all auth users once, including
 // people who have never opened Billing; future billing accounts default to free.
-export const legacyBillingSql = `
+export const legacyBillingSql =
+  `
 -- Backfilled placeholders must not prevent deleting a previously unbilled user.
 -- Preserve Stripe history and fence in-flight billing operations with the lease.
 CREATE FUNCTION public.delete_unbilled_legacy_account() RETURNS trigger
@@ -3665,22 +3890,46 @@ END;
 $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.cloud_effective_account(uuid) FROM PUBLIC,anon,authenticated;
-` + cloudPlansSql.split('--> statement-breakpoint')
-  .filter(statement => /CREATE FUNCTION public\.(cloud_limit|cloud_usage_count|cloud_fail|cloud_validate_write|cloud_charge|cloud_entitlements)\(/.test(statement))
-  .map(statement => statement
-    .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-    .replaceAll('FROM public.billing_accounts WHERE user_id=p_owner', 'FROM public.cloud_effective_account(p_owner)')
-    .replace('JOIN public.billing_accounts b ON b.user_id=u.owner_id', 'JOIN public.cloud_effective_account(p_owner) b ON b.user_id=u.owner_id')
-    .replace('SELECT * INTO b FROM public.cloud_effective_account(p_owner) FOR SHARE;',
-      'PERFORM 1 FROM public.billing_accounts WHERE user_id=p_owner FOR SHARE;\n  SELECT * INTO b FROM public.cloud_effective_account(p_owner);')
-    .replace("b.subscription_status IN ('active','trialing')", "b.subscription_status IN ('active','trialing','legacy')")
-    .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,")
-  ).join('\n--> statement-breakpoint\n') + `
+` +
+  cloudPlansSql
+    .split('--> statement-breakpoint')
+    .filter((statement) =>
+      /CREATE FUNCTION public\.(cloud_limit|cloud_usage_count|cloud_fail|cloud_validate_write|cloud_charge|cloud_entitlements)\(/.test(
+        statement,
+      ),
+    )
+    .map((statement) =>
+      statement
+        .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+        .replaceAll(
+          'FROM public.billing_accounts WHERE user_id=p_owner',
+          'FROM public.cloud_effective_account(p_owner)',
+        )
+        .replace(
+          'JOIN public.billing_accounts b ON b.user_id=u.owner_id',
+          'JOIN public.cloud_effective_account(p_owner) b ON b.user_id=u.owner_id',
+        )
+        .replace(
+          'SELECT * INTO b FROM public.cloud_effective_account(p_owner) FOR SHARE;',
+          'PERFORM 1 FROM public.billing_accounts WHERE user_id=p_owner FOR SHARE;\n  SELECT * INTO b FROM public.cloud_effective_account(p_owner);',
+        )
+        .replace(
+          "b.subscription_status IN ('active','trialing')",
+          "b.subscription_status IN ('active','trialing','legacy')",
+        )
+        .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,"),
+    )
+    .join('\n--> statement-breakpoint\n') +
+  `
 --> statement-breakpoint
-` + approvedWidgetHandoffSql.slice(approvedWidgetHandoffSql.indexOf('CREATE FUNCTION public.create_approved_widget_agent_share('))
-  .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-  .replace('  v_status text;\n  v_price text;', '  v_billing public.billing_accounts%ROWTYPE;')
-  .replace(/  SELECT b.subscription_status,b.price_id INTO v_status,v_price[\s\S]*?  END IF;/, `
+` +
+  approvedWidgetHandoffSql
+    .slice(approvedWidgetHandoffSql.indexOf('CREATE FUNCTION public.create_approved_widget_agent_share('))
+    .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+    .replace('  v_status text;\n  v_price text;', '  v_billing public.billing_accounts%ROWTYPE;')
+    .replace(
+      /  SELECT b.subscription_status,b.price_id INTO v_status,v_price[\s\S]*?  END IF;/,
+      `
   -- Only the trusted service-role caller supplies the Community sentinel.
   -- Cloud Agent eligibility remains enforced independently of quota activation.
   IF p_allowed_prices IS DISTINCT FROM ARRAY['community']::text[] THEN
@@ -3694,16 +3943,18 @@ REVOKE ALL ON FUNCTION public.cloud_effective_account(uuid) FROM PUBLIC,anon,aut
       IF v_is_owner THEN RAISE EXCEPTION 'upgrade_required'; END IF;
       RAISE EXCEPTION 'owner_upgrade_required';
     END IF;
-  END IF;`)
-  + `
+  END IF;`,
+    ) +
+  `
 --> statement-breakpoint
 NOTIFY pgrst,'reload schema';
-`;
+`
 
 // Annual payment periods retain monthly usage allowances, anchored in UTC to
 // Stripe's period start. Derive every boundary from the original anchor so a
 // Jan 31 subscription returns to Mar 31 after February's shorter month.
-export const yearlyBillingWindowsSql = `
+export const yearlyBillingWindowsSql =
+  `
 CREATE FUNCTION public.cloud_usage_window(p_start timestamptz,p_end timestamptz,p_now timestamptz DEFAULT now())
 RETURNS TABLE(window_start timestamptz,window_end timestamptz)
 LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' SET timezone = 'UTC' AS $$
@@ -3749,15 +4000,28 @@ $$;
 --> statement-breakpoint
 REVOKE ALL ON FUNCTION public.cloud_usage_window(timestamptz,timestamptz,timestamptz) FROM PUBLIC,anon,authenticated;
 --> statement-breakpoint
-` + ['cloud_fail', 'cloud_entitlements'].map(name => {
-  const source = cloudPlansSql.match(new RegExp('CREATE FUNCTION public\\.' + name + '\\([\\s\\S]*?\\n\\$\\$;'))![0]
-  return source.replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-    .replaceAll('FROM public.billing_accounts WHERE user_id=p_owner', 'FROM public.cloud_effective_account(p_owner)')
-    .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,")
-    .replace('(SELECT period_end FROM public.cloud_effective_account(p_owner))',
-      '(SELECT w.window_end FROM public.cloud_effective_account(p_owner) b CROSS JOIN LATERAL public.cloud_usage_window(b.period_start,b.period_end) w WHERE b.user_id=p_owner)')
-    .replace("'resetAt',b.period_end", "'resetAt',(SELECT w.window_end FROM public.cloud_usage_window(b.period_start,b.period_end) w)")
-}).join('\n--> statement-breakpoint\n') + `
+` +
+  ['cloud_fail', 'cloud_entitlements']
+    .map((name) => {
+      const source = cloudPlansSql.match(new RegExp('CREATE FUNCTION public\\.' + name + '\\([\\s\\S]*?\\n\\$\\$;'))![0]
+      return source
+        .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
+        .replaceAll(
+          'FROM public.billing_accounts WHERE user_id=p_owner',
+          'FROM public.cloud_effective_account(p_owner)',
+        )
+        .replace("'plan',b.plan,", "'isLegacy',coalesce(b.is_legacy,false),'plan',b.plan,")
+        .replace(
+          '(SELECT period_end FROM public.cloud_effective_account(p_owner))',
+          '(SELECT w.window_end FROM public.cloud_effective_account(p_owner) b CROSS JOIN LATERAL public.cloud_usage_window(b.period_start,b.period_end) w WHERE b.user_id=p_owner)',
+        )
+        .replace(
+          "'resetAt',b.period_end",
+          "'resetAt',(SELECT w.window_end FROM public.cloud_usage_window(b.period_start,b.period_end) w)",
+        )
+    })
+    .join('\n--> statement-breakpoint\n') +
+  `
 --> statement-breakpoint
 NOTIFY pgrst,'reload schema';
 `
@@ -3784,66 +4048,109 @@ END;
 $$;
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
-`;
+`
 
 // MCP is a credential boundary over existing CRRT identities and permissions.
 // No Supabase session or raw OAuth credential is persisted in these tables.
-export const mcpClients = pgTable('mcp_clients', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  name: text('name').notNull(),
-  redirectUris: text('redirect_uris').array().notNull(),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({ redirects: check('mcp_clients_redirects', sql`cardinality(${t.redirectUris}) between 1 and 5`) })).enableRLS()
+export const mcpClients = pgTable(
+  'mcp_clients',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    name: text('name').notNull(),
+    redirectUris: text('redirect_uris').array().notNull(),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({ redirects: check('mcp_clients_redirects', sql`cardinality(${t.redirectUris}) between 1 and 5`) }),
+).enableRLS()
 
-export const mcpCodes = pgTable('mcp_codes', {
-  hash: text('hash').primaryKey(),
-  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  clientId: uuid('client_id').notNull().references(() => mcpClients.id, { onDelete: 'cascade' }),
-  redirectUri: text('redirect_uri').notNull(),
-  challenge: text('challenge').notNull(),
-  stateHash: text('state_hash').notNull(),
-  scope: text('scope').notNull().default('crrt:read'),
-  resource: text('resource').notNull(),
-  consumedAt: timestamp('consumed_at', { withTimezone: true }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({
-  expiry: index('mcp_codes_expiry').on(t.expiresAt),
-  hashCheck: check('mcp_codes_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$' and ${t.stateHash} ~ '^[0-9a-f]{64}$'`),
-  scopeCheck: check('mcp_codes_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`),
-  challengeCheck: check('mcp_codes_challenge', sql`${t.challenge} ~ '^[A-Za-z0-9_-]{43}$'`),
-  lifetime: check('mcp_codes_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`),
-})).enableRLS()
+export const mcpCodes = pgTable(
+  'mcp_codes',
+  {
+    hash: text('hash').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => mcpClients.id, { onDelete: 'cascade' }),
+    redirectUri: text('redirect_uri').notNull(),
+    challenge: text('challenge').notNull(),
+    stateHash: text('state_hash').notNull(),
+    scope: text('scope').notNull().default('crrt:read'),
+    resource: text('resource').notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    expiry: index('mcp_codes_expiry').on(t.expiresAt),
+    hashCheck: check('mcp_codes_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$' and ${t.stateHash} ~ '^[0-9a-f]{64}$'`),
+    scopeCheck: check(
+      'mcp_codes_scope',
+      sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`,
+    ),
+    challengeCheck: check('mcp_codes_challenge', sql`${t.challenge} ~ '^[A-Za-z0-9_-]{43}$'`),
+    lifetime: check(
+      'mcp_codes_lifetime',
+      sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '5 minutes'`,
+    ),
+  }),
+).enableRLS()
 
-export const mcpConnections = pgTable('mcp_connections', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  userId: uuid('user_id').notNull().references(() => authUsers.id, { onDelete: 'cascade' }),
-  clientId: uuid('client_id').notNull().references(() => mcpClients.id, { onDelete: 'cascade' }),
-  resource: text('resource').notNull(),
-  scope: text('scope').notNull().default('crrt:read'),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull().default(sql`now() + interval '30 days'`),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({
-  user: index('mcp_connections_user').on(t.userId),
-  scopeCheck: check('mcp_connections_scope', sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`),
-  lifetime: check('mcp_connections_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '30 days'`),
-})).enableRLS()
+export const mcpConnections = pgTable(
+  'mcp_connections',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => authUsers.id, { onDelete: 'cascade' }),
+    clientId: uuid('client_id')
+      .notNull()
+      .references(() => mcpClients.id, { onDelete: 'cascade' }),
+    resource: text('resource').notNull(),
+    scope: text('scope').notNull().default('crrt:read'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now() + interval '30 days'`),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    user: index('mcp_connections_user').on(t.userId),
+    scopeCheck: check(
+      'mcp_connections_scope',
+      sql`${t.scope} in ('crrt:read','crrt:read crrt:implement','crrt:read crrt:review','crrt:read crrt:implement crrt:review','crrt:read crrt:implement crrt:review crrt:dashboard')`,
+    ),
+    lifetime: check(
+      'mcp_connections_lifetime',
+      sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '30 days'`,
+    ),
+  }),
+).enableRLS()
 
-export const mcpCredentials = pgTable('mcp_credentials', {
-  hash: text('hash').primaryKey(),
-  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
-  kind: text('kind').notNull(),
-  consumedAt: timestamp('consumed_at', { withTimezone: true }),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({
-  connection: index('mcp_credentials_connection').on(t.connectionId),
-  hashCheck: check('mcp_credentials_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$'`),
-  kindCheck: check('mcp_credentials_kind', sql`${t.kind} in ('access', 'refresh')`),
-  lifetime: check('mcp_credentials_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + case when ${t.kind} = 'access' then interval '15 minutes' else interval '30 days' end`),
-})).enableRLS()
+export const mcpCredentials = pgTable(
+  'mcp_credentials',
+  {
+    hash: text('hash').primaryKey(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => mcpConnections.id, { onDelete: 'cascade' }),
+    kind: text('kind').notNull(),
+    consumedAt: timestamp('consumed_at', { withTimezone: true }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    connection: index('mcp_credentials_connection').on(t.connectionId),
+    hashCheck: check('mcp_credentials_hash', sql`${t.hash} ~ '^[0-9a-f]{64}$'`),
+    kindCheck: check('mcp_credentials_kind', sql`${t.kind} in ('access', 'refresh')`),
+    lifetime: check(
+      'mcp_credentials_lifetime',
+      sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + case when ${t.kind} = 'access' then interval '15 minutes' else interval '30 days' end`,
+    ),
+  }),
+).enableRLS()
 
 export const mcpLimits = pgTable('mcp_limits', {
   key: text('key').primaryKey(),
@@ -3851,18 +4158,31 @@ export const mcpLimits = pgTable('mcp_limits', {
   attempts: integer('attempts').notNull(),
 }).enableRLS()
 
-export const mcpWorkflows = pgTable('mcp_workflows', {
-  shareId: uuid('share_id').primaryKey().references(() => feedbackShares.id, { onDelete: 'cascade' }),
-  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
-  requestKey: text('request_key').notNull(),
-  requestHash: text('request_hash').notNull(),
-  promptVersion: text('prompt_version').notNull().default('1'),
-}, t => ({ request: uniqueIndex('mcp_workflow_request').on(t.connectionId,t.requestKey),
-  shape: check('mcp_workflow_shape', sql`${t.requestKey} ~ '^[A-Za-z0-9_-]{16,128}$' and ${t.requestHash} ~ '^[0-9a-f]{64}$' and ${t.promptVersion}='1'`),
-})).enableRLS()
+export const mcpWorkflows = pgTable(
+  'mcp_workflows',
+  {
+    shareId: uuid('share_id')
+      .primaryKey()
+      .references(() => feedbackShares.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => mcpConnections.id, { onDelete: 'cascade' }),
+    requestKey: text('request_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    promptVersion: text('prompt_version').notNull().default('1'),
+  },
+  (t) => ({
+    request: uniqueIndex('mcp_workflow_request').on(t.connectionId, t.requestKey),
+    shape: check(
+      'mcp_workflow_shape',
+      sql`${t.requestKey} ~ '^[A-Za-z0-9_-]{16,128}$' and ${t.requestHash} ~ '^[0-9a-f]{64}$' and ${t.promptVersion}='1'`,
+    ),
+  }),
+).enableRLS()
 
 // Service-only transactional operations, sourced here alongside the schema.
-export const mcpSql = `
+export const mcpSql =
+  `
 CREATE INDEX mcp_feedback_page ON public.comments(project_id, created_at DESC, id DESC);
 --> statement-breakpoint
 CREATE FUNCTION public.mcp_exchange(p_hash text,p_client uuid,p_redirect text,p_challenge text,p_resource text,p_access text,p_refresh text)
@@ -3944,10 +4264,21 @@ CREATE FUNCTION public.mcp_cleanup() RETURNS void LANGUAGE sql SET search_path='
   DELETE FROM public.mcp_limits WHERE window_start<now()-interval '1 day';
 $$;
 --> statement-breakpoint
-` + [
-  'mcp_exchange(text,uuid,text,text,text,text,text)', 'mcp_refresh(text,uuid,text,text,text)',
-  'mcp_identity(text,text)', 'mcp_revoke(text,uuid)', 'mcp_reserve(text,integer)', 'mcp_cleanup()',
-].map(signature => `REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC,anon,authenticated;\nGRANT EXECUTE ON FUNCTION public.${signature} TO service_role;`).join('\n--> statement-breakpoint\n') + `
+` +
+  [
+    'mcp_exchange(text,uuid,text,text,text,text,text)',
+    'mcp_refresh(text,uuid,text,text,text)',
+    'mcp_identity(text,text)',
+    'mcp_revoke(text,uuid)',
+    'mcp_reserve(text,integer)',
+    'mcp_cleanup()',
+  ]
+    .map(
+      (signature) =>
+        `REVOKE ALL ON FUNCTION public.${signature} FROM PUBLIC,anon,authenticated;\nGRANT EXECUTE ON FUNCTION public.${signature} TO service_role;`,
+    )
+    .join('\n--> statement-breakpoint\n') +
+  `
 --> statement-breakpoint
 GRANT ALL ON public.mcp_clients,public.mcp_codes,public.mcp_connections,public.mcp_credentials,public.mcp_limits,public.mcp_workflows TO service_role;
 --> statement-breakpoint
@@ -4126,26 +4457,34 @@ REVOKE ALL ON FUNCTION public.mcp_require_connection(uuid,uuid,text), public.mcp
 --> statement-breakpoint
 GRANT EXECUTE ON FUNCTION public.mcp_require_connection(uuid,uuid,text), public.mcp_prepare_work(uuid,uuid,text,uuid[],text,text,jsonb), public.mcp_work_operation(uuid,uuid,uuid,text,uuid,text,text,text,text), public.mcp_set_feedback_status(uuid,uuid,text,uuid,text,text,text,text) TO service_role;
 
-`;
+`
 
 // Optional version check is evaluated while holding the same row lock as the
 // write. Legacy callers omit it; Undo callers must send the version they changed.
 export const feedbackVersionGuardSql = projectPrivacyActorSql
-  .slice(projectPrivacyActorSql.indexOf('CREATE FUNCTION public.mutate_actor_feedback('), projectPrivacyActorSql.indexOf('CREATE FUNCTION public.accept_actor_comment_if_open('))
+  .slice(
+    projectPrivacyActorSql.indexOf('CREATE FUNCTION public.mutate_actor_feedback('),
+    projectPrivacyActorSql.indexOf('CREATE FUNCTION public.accept_actor_comment_if_open('),
+  )
   .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-  .replace('IF NOT FOUND THEN RETURN; END IF;', `IF NOT FOUND THEN RETURN; END IF;
+  .replace(
+    'IF NOT FOUND THEN RETURN; END IF;',
+    `IF NOT FOUND THEN RETURN; END IF;
   IF p_patch ? 'expected_updated_at' AND NOT EXISTS (
     SELECT 1 FROM public.comments c WHERE c.id=p_comment AND c.project_id=p_project
       AND c.updated_at = (p_patch->>'expected_updated_at')::timestamptz
-  ) THEN RAISE EXCEPTION 'status_conflict'; END IF;`)
+  ) THEN RAISE EXCEPTION 'status_conflict'; END IF;`,
+  )
 
 // Additive Inbox APIs: legacy assignment keeps its return shape. The new variant
 // returns the exact committed version required for a safe inverse.
-export const inboxRestoreSql = inboxBulkAssignmentSql
-  .slice(0, inboxBulkAssignmentSql.indexOf('--> statement-breakpoint'))
-  .replace('assign_actor_inbox_feedback(', 'assign_actor_inbox_feedback_with_versions(')
-  .replace('RETURNS TABLE(id uuid)', 'RETURNS TABLE(id uuid, updated_at timestamptz)')
-  .replace('RETURNING c.id;', 'RETURNING c.id,c.updated_at;') + `
+export const inboxRestoreSql =
+  inboxBulkAssignmentSql
+    .slice(0, inboxBulkAssignmentSql.indexOf('--> statement-breakpoint'))
+    .replace('assign_actor_inbox_feedback(', 'assign_actor_inbox_feedback_with_versions(')
+    .replace('RETURNS TABLE(id uuid)', 'RETURNS TABLE(id uuid, updated_at timestamptz)')
+    .replace('RETURNING c.id;', 'RETURNING c.id,c.updated_at;') +
+  `
 --> statement-breakpoint
 CREATE FUNCTION public.restore_actor_inbox_feedback(p_actor uuid,p_project text,p_items jsonb)
 RETURNS TABLE(id uuid) LANGUAGE plpgsql SET search_path = '' AS $$
@@ -4177,17 +4516,28 @@ NOTIFY pgrst, 'reload schema';
 // Forward repair for 0048: keep Cloud quota admission ahead of comment locks,
 // and allow personal extension feedback without charging a NULL project owner.
 export const inboxRestoreCloudSql = [
-  cloudInboxAssignmentSql.slice(0, cloudInboxAssignmentSql.indexOf('--> statement-breakpoint'))
+  cloudInboxAssignmentSql
+    .slice(0, cloudInboxAssignmentSql.indexOf('--> statement-breakpoint'))
     .replace('assign_actor_inbox_feedback(', 'assign_actor_inbox_feedback_with_versions(')
     .replace('RETURNS TABLE(id uuid)', 'RETURNS TABLE(id uuid, updated_at timestamptz)')
     .replace('RETURNING c.id;', 'RETURNING c.id,c.updated_at;'),
-  inboxRestoreSql.slice(inboxRestoreSql.indexOf('CREATE FUNCTION public.restore_actor_inbox_feedback('), inboxRestoreSql.indexOf('--> statement-breakpoint\nREVOKE ALL'))
+  inboxRestoreSql
+    .slice(
+      inboxRestoreSql.indexOf('CREATE FUNCTION public.restore_actor_inbox_feedback('),
+      inboxRestoreSql.indexOf('--> statement-breakpoint\nREVOKE ALL'),
+    )
     .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-    .replace("  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');", `  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');
-  PERFORM public.cloud_require_write(public.cloud_owner(p_project));`),
-  cloudPlansSql.match(/CREATE FUNCTION public\.cloud_comment_guard\(\)[\s\S]*?\n\$\$;/)![0]
+    .replace(
+      "  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');",
+      `  PERFORM public.lock_feedback_actor(p_project,p_actor,'feedback:manage');
+  PERFORM public.cloud_require_write(public.cloud_owner(p_project));`,
+    ),
+  cloudPlansSql
+    .match(/CREATE FUNCTION public\.cloud_comment_guard\(\)[\s\S]*?\n\$\$;/)![0]
     .replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION')
-    .replace('  IF NOT public.cloud_enabled() THEN RETURN NEW; END IF;', `  IF NOT public.cloud_enabled() THEN RETURN NEW; END IF;
+    .replace(
+      '  IF NOT public.cloud_enabled() THEN RETURN NEW; END IF;',
+      `  IF NOT public.cloud_enabled() THEN RETURN NEW; END IF;
   IF NEW.source='extension' AND NEW.project_id IS NULL THEN
     -- Returning to Inbox remains a write against the previous project owner;
     -- new personal Inbox items do not consume a project's Cloud quota.
@@ -4195,26 +4545,38 @@ export const inboxRestoreCloudSql = [
       PERFORM public.cloud_validate_write(public.cloud_owner(OLD.project_id));
     END IF;
     RETURN NEW;
-  END IF;`),
+  END IF;`,
+    ),
   "NOTIFY pgrst, 'reload schema';",
 ].join('\n--> statement-breakpoint\n')
 
 // In-place dashboard permission upgrades. A request is not a credential: the
 // owning dashboard account must approve it, and the live connection is rechecked.
-export const mcpPermissionUpgrades = pgTable('mcp_permission_upgrades', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
-  bundle: text('bundle').notNull().default('dashboard-v1'),
-  state: text('state').notNull().default('pending'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull().default(sql`now() + interval '10 minutes'`),
-  decidedAt: timestamp('decided_at', { withTimezone: true }),
-}, t => ({
-  connection: index('mcp_permission_upgrades_connection').on(t.connectionId),
-  bundleCheck: check('mcp_permission_upgrades_bundle', sql`${t.bundle} = 'dashboard-v1'`),
-  stateCheck: check('mcp_permission_upgrades_state', sql`${t.state} in ('pending','approved','declined')`),
-  lifetime: check('mcp_permission_upgrades_lifetime', sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '10 minutes'`),
-})).enableRLS()
+export const mcpPermissionUpgrades = pgTable(
+  'mcp_permission_upgrades',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => mcpConnections.id, { onDelete: 'cascade' }),
+    bundle: text('bundle').notNull().default('dashboard-v1'),
+    state: text('state').notNull().default('pending'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    expiresAt: timestamp('expires_at', { withTimezone: true })
+      .notNull()
+      .default(sql`now() + interval '10 minutes'`),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+  },
+  (t) => ({
+    connection: index('mcp_permission_upgrades_connection').on(t.connectionId),
+    bundleCheck: check('mcp_permission_upgrades_bundle', sql`${t.bundle} = 'dashboard-v1'`),
+    stateCheck: check('mcp_permission_upgrades_state', sql`${t.state} in ('pending','approved','declined')`),
+    lifetime: check(
+      'mcp_permission_upgrades_lifetime',
+      sql`${t.expiresAt} > ${t.createdAt} and ${t.expiresAt} <= ${t.createdAt} + interval '10 minutes'`,
+    ),
+  }),
+).enableRLS()
 
 export const mcpDashboardUpgradeSql = `
 CREATE FUNCTION public.mcp_request_dashboard_upgrade(p_connection uuid,p_actor uuid)
@@ -4265,97 +4627,154 @@ GRANT EXECUTE ON FUNCTION public.mcp_request_dashboard_upgrade(uuid,uuid),public
 GRANT ALL ON public.mcp_permission_upgrades TO service_role;
 --> statement-breakpoint
 NOTIFY pgrst,'reload schema';
-`;
+`
 
 // Durable retry receipts. A reserved operation without a receipt is deliberately
 // not replayed: a process may have stopped after an external side effect.
-export const mcpDashboardOperations = pgTable('mcp_dashboard_operations', {
-  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
-  requestKey: text('request_key').notNull(),
-  requestHash: text('request_hash').notNull(),
-  response: jsonb('response'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({
-  pk: primaryKey({ columns: [t.connectionId, t.requestKey] }),
-  shape: check('mcp_dashboard_operations_shape', sql`${t.requestKey} ~ '^[A-Za-z0-9_-]{16,128}$' and ${t.requestHash} ~ '^[0-9a-f]{64}$'`),
-})).enableRLS()
+export const mcpDashboardOperations = pgTable(
+  'mcp_dashboard_operations',
+  {
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => mcpConnections.id, { onDelete: 'cascade' }),
+    requestKey: text('request_key').notNull(),
+    requestHash: text('request_hash').notNull(),
+    response: jsonb('response'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.connectionId, t.requestKey] }),
+    shape: check(
+      'mcp_dashboard_operations_shape',
+      sql`${t.requestKey} ~ '^[A-Za-z0-9_-]{16,128}$' and ${t.requestHash} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+).enableRLS()
 
 export const mcpDashboardReceiptsSql = `
 GRANT ALL ON public.mcp_dashboard_operations TO service_role;
-`;
+`
 
-export const documents = pgTable('documents', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  projectId: text('project_id').references(() => projects.publicKey, { onDelete: 'set null' }),
-  accessMode: text('access_mode').notNull().default('private'),
-  title: text('title').notNull(),
-  body: text('body').notNull().default(''),
-  version: integer('version').notNull().default(1),
-  publishedRevision: integer('published_revision'),
-  shareKey: uuid('share_key').notNull().defaultRandom().unique(),
-  sharing: boolean('sharing').notNull().default(false),
-  passwordHash: text('password_hash'),
-  accessVersion: integer('access_version').notNull().default(1),
-  archived: boolean('archived').notNull().default(false),
-  createdBy: uuid('created_by').notNull().references(() => authUsers.id),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({ project: index('documents_project_updated').on(t.projectId, t.updatedAt),
-  access: check('documents_access', sql`${t.accessMode} in ('private','project','link','password') AND (${t.accessMode}<>'project' OR ${t.projectId} IS NOT NULL) AND (${t.accessMode}<>'password' OR ${t.passwordHash} IS NOT NULL)`),
-  size: check('documents_size', sql`length(${t.title}) between 1 and 200 AND octet_length(${t.body}) <= 262144`),
-  version: check('documents_version', sql`${t.version} > 0 AND ${t.accessVersion} > 0`),
-})).enableRLS()
+export const documents = pgTable(
+  'documents',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projectId: text('project_id').references(() => projects.publicKey, { onDelete: 'set null' }),
+    accessMode: text('access_mode').notNull().default('private'),
+    title: text('title').notNull(),
+    body: text('body').notNull().default(''),
+    version: integer('version').notNull().default(1),
+    publishedRevision: integer('published_revision'),
+    shareKey: uuid('share_key').notNull().defaultRandom().unique(),
+    sharing: boolean('sharing').notNull().default(false),
+    passwordHash: text('password_hash'),
+    accessVersion: integer('access_version').notNull().default(1),
+    archived: boolean('archived').notNull().default(false),
+    createdBy: uuid('created_by')
+      .notNull()
+      .references(() => authUsers.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    project: index('documents_project_updated').on(t.projectId, t.updatedAt),
+    access: check(
+      'documents_access',
+      sql`${t.accessMode} in ('private','project','link','password') AND (${t.accessMode}<>'project' OR ${t.projectId} IS NOT NULL) AND (${t.accessMode}<>'password' OR ${t.passwordHash} IS NOT NULL)`,
+    ),
+    size: check('documents_size', sql`length(${t.title}) between 1 and 200 AND octet_length(${t.body}) <= 262144`),
+    version: check('documents_version', sql`${t.version} > 0 AND ${t.accessVersion} > 0`),
+  }),
+).enableRLS()
 
-export const documentUnlockRequests = pgTable('document_unlock_requests', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  connectionId: uuid('connection_id').notNull().references(() => mcpConnections.id, { onDelete: 'cascade' }),
-  shareKey: uuid('share_key').notNull(),
-  browserProofHash: text('browser_proof_hash').notNull(),
-  pollProofHash: text('poll_proof_hash').notNull(),
-  accessToken: text('access_token'),
-  expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-}, t => ({ connection: index('document_unlock_requests_connection').on(t.connectionId) })).enableRLS()
+export const documentUnlockRequests = pgTable(
+  'document_unlock_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    connectionId: uuid('connection_id')
+      .notNull()
+      .references(() => mcpConnections.id, { onDelete: 'cascade' }),
+    shareKey: uuid('share_key').notNull(),
+    browserProofHash: text('browser_proof_hash').notNull(),
+    pollProofHash: text('poll_proof_hash').notNull(),
+    accessToken: text('access_token'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+  },
+  (t) => ({ connection: index('document_unlock_requests_connection').on(t.connectionId) }),
+).enableRLS()
 
-export const documentRevisions = pgTable('document_revisions', {
-  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  number: integer('number').notNull(),
-  title: text('title').notNull(),
-  body: text('body').notNull(),
-  summary: text('summary').notNull(),
-  actorId: uuid('actor_id').notNull().references(() => authUsers.id),
-  agentId: text('agent_id'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({ pk: primaryKey({ columns: [t.documentId, t.number] }),
-  number: check('document_revisions_number', sql`${t.number} > 0`),
-})).enableRLS()
+export const documentRevisions = pgTable(
+  'document_revisions',
+  {
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    number: integer('number').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    summary: text('summary').notNull(),
+    actorId: uuid('actor_id')
+      .notNull()
+      .references(() => authUsers.id),
+    agentId: text('agent_id'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.documentId, t.number] }),
+    number: check('document_revisions_number', sql`${t.number} > 0`),
+  }),
+).enableRLS()
 
-export const documentFeedback = pgTable('document_feedback', {
-  id: uuid('id').primaryKey().defaultRandom(),
-  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  revision: integer('revision').notNull(),
-  parentId: uuid('parent_id'),
-  quote: text('quote').notNull().default(''),
-  prefix: text('prefix').notNull().default(''),
-  suffix: text('suffix').notNull().default(''),
-  target: jsonb('target'),
-  body: text('body').notNull(),
-  author: text('author').notNull(),
-  actorId: uuid('actor_id').references(() => authUsers.id),
-  reviewStatus: text('review_status').notNull().default('open'),
-  implementationStatus: text('implementation_status').notNull().default('unassigned'),
-  claimedBy: text('claimed_by'),
-  progressUpdates: jsonb('progress_updates').notNull().default(sql`'[]'::jsonb`),
-  version: integer('version').notNull().default(1),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-}, t => ({ document: index('document_feedback_document').on(t.documentId, t.createdAt),
-  identity: uniqueIndex('document_feedback_identity').on(t.id, t.documentId, t.revision),
-  revisionFk: foreignKey({ columns: [t.documentId,t.revision], foreignColumns: [documentRevisions.documentId,documentRevisions.number] }).onDelete('cascade'),
-  parentFk: foreignKey({ columns: [t.parentId,t.documentId,t.revision], foreignColumns: [t.id,t.documentId,t.revision] }).onDelete('cascade'),
-  review: check('document_feedback_review', sql`${t.reviewStatus} in ('open','accepted','rejected')`),
-  progress: check('document_feedback_progress', sql`${t.implementationStatus} in ('unassigned','in_progress','blocked','ready_for_testing','done')`),
-  size: check('document_feedback_size', sql`length(${t.body}) between 1 and 8000 AND length(${t.quote}) <= 2000 AND length(${t.author}) between 1 and 100`),
-})).enableRLS()
+export const documentFeedback = pgTable(
+  'document_feedback',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    revision: integer('revision').notNull(),
+    parentId: uuid('parent_id'),
+    quote: text('quote').notNull().default(''),
+    prefix: text('prefix').notNull().default(''),
+    suffix: text('suffix').notNull().default(''),
+    target: jsonb('target'),
+    body: text('body').notNull(),
+    author: text('author').notNull(),
+    actorId: uuid('actor_id').references(() => authUsers.id),
+    reviewStatus: text('review_status').notNull().default('open'),
+    implementationStatus: text('implementation_status').notNull().default('unassigned'),
+    claimedBy: text('claimed_by'),
+    progressUpdates: jsonb('progress_updates')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    version: integer('version').notNull().default(1),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    document: index('document_feedback_document').on(t.documentId, t.createdAt),
+    identity: uniqueIndex('document_feedback_identity').on(t.id, t.documentId, t.revision),
+    revisionFk: foreignKey({
+      columns: [t.documentId, t.revision],
+      foreignColumns: [documentRevisions.documentId, documentRevisions.number],
+    }).onDelete('cascade'),
+    parentFk: foreignKey({
+      columns: [t.parentId, t.documentId, t.revision],
+      foreignColumns: [t.id, t.documentId, t.revision],
+    }).onDelete('cascade'),
+    review: check('document_feedback_review', sql`${t.reviewStatus} in ('open','accepted','rejected')`),
+    progress: check(
+      'document_feedback_progress',
+      sql`${t.implementationStatus} in ('unassigned','in_progress','blocked','ready_for_testing','done')`,
+    ),
+    size: check(
+      'document_feedback_size',
+      sql`length(${t.body}) between 1 and 8000 AND length(${t.quote}) <= 2000 AND length(${t.author}) between 1 and 100`,
+    ),
+  }),
+).enableRLS()
 
 export const documentOperations = pgTable('document_operations', {
   key: text('key').primaryKey(),
@@ -4369,10 +4788,19 @@ export const documentOperations = pgTable('document_operations', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }).enableRLS()
 
-export const documentInvites = pgTable('document_invites', {
-  documentId: uuid('document_id').notNull().references(() => documents.id, { onDelete: 'cascade' }),
-  email: text('email').notNull(),
-}, t => ({ pk: primaryKey({ columns: [t.documentId,t.email] }), email: check('document_invites_email', sql`length(${t.email}) between 3 and 254 AND ${t.email}=lower(${t.email})`) })).enableRLS()
+export const documentInvites = pgTable(
+  'document_invites',
+  {
+    documentId: uuid('document_id')
+      .notNull()
+      .references(() => documents.id, { onDelete: 'cascade' }),
+    email: text('email').notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.documentId, t.email] }),
+    email: check('document_invites_email', sql`length(${t.email}) between 3 and 254 AND ${t.email}=lower(${t.email})`),
+  }),
+).enableRLS()
 
 // Kept in the schema source alongside Drizzle's tables. Append this export to
 // this stack's one generated migration, never to an existing trunk migration.
@@ -4494,5 +4922,4 @@ $$;
 CREATE TRIGGER document_revision_immutable BEFORE UPDATE OR DELETE ON public.document_revisions FOR EACH ROW EXECUTE FUNCTION public.document_revision_immutable();
 --> statement-breakpoint
 NOTIFY pgrst, 'reload schema';
-`;
-
+`

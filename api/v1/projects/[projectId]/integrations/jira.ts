@@ -8,13 +8,25 @@ import {
   getProjectMember,
   updateProjectIntegrationWorkspaceDestination,
 } from '../../../../_lib/store.js'
-import { firstHeaderValue, getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
+import {
+  firstHeaderValue,
+  getAppUrl,
+  getStringQuery,
+  handleOptions,
+  jsonError,
+  methodNotAllowed,
+  setCors,
+} from '../../../../_lib/http.js'
 
 const METHODS = ['GET', 'PATCH', 'DELETE', 'OPTIONS']
 
 function browserOrigin(req: VercelRequest) {
   const raw = firstHeaderValue(req.headers.origin)
-  try { return raw ? new URL(raw).origin : getAppUrl(req) } catch { return getAppUrl(req) }
+  try {
+    return raw ? new URL(raw).origin : getAppUrl(req)
+  } catch {
+    return getAppUrl(req)
+  }
 }
 
 function redirectUri(req: VercelRequest) {
@@ -42,7 +54,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'GET' && getStringQuery(req.query.action) === 'authorize') {
       const callback = redirectUri(req)
       const state = createJiraOAuthState({
-        projectKey, userId: user.userId, origin: browserOrigin(req), redirectUri: callback,
+        projectKey,
+        userId: user.userId,
+        origin: browserOrigin(req),
+        redirectUri: callback,
       })
       setCors(req, res, METHODS)
       res.setHeader('Cache-Control', 'no-store')
@@ -78,17 +93,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       connected: Boolean(current?.containerId),
       provider: 'jira',
       workspace: current?.workspaceName,
-      selectedDestinationId: current?.workspaceId && current.containerId
-        ? `${current.workspaceId}:${current.containerId}`
-        : null,
+      selectedDestinationId:
+        current?.workspaceId && current.containerId ? `${current.workspaceId}:${current.containerId}` : null,
       destinations: destinations.map((destination) => ({
         id: destination.id,
         name: `${destination.siteName} · ${destination.projectKey} · ${destination.projectName}`,
       })),
     })
   } catch (error) {
-    const known = error instanceof Error && ['missing_jira_oauth_credentials', 'jira_reauthorization_required'].includes(error.message)
+    const known =
+      error instanceof Error &&
+      ['missing_jira_oauth_credentials', 'jira_reauthorization_required'].includes(error.message)
     if (!known) console.error('Jira project integration failed')
-    return jsonError(req, res, known ? 409 : 502, known && error instanceof Error ? error.message : 'Jira integration request failed', error)
+    return jsonError(
+      req,
+      res,
+      known ? 409 : 502,
+      known && error instanceof Error ? error.message : 'Jira integration request failed',
+      error,
+    )
   }
 }

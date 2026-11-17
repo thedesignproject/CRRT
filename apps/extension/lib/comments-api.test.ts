@@ -3,26 +3,56 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const sendMessage = vi.hoisted(() => vi.fn())
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 
-import { importLocalProject, createPageComment, deletePageComment, getExternalWorkDraft, listExtensionProjects, listPageComments, listProjectComments, sendExternalWork, updatePageComment } from './comments-api'
+import {
+  importLocalProject,
+  createPageComment,
+  deletePageComment,
+  getExternalWorkDraft,
+  listExtensionProjects,
+  listPageComments,
+  listProjectComments,
+  sendExternalWork,
+  updatePageComment,
+} from './comments-api'
 
-const comment = { id: 'a/b', projectId: null, pageUrl: 'https://example.com', pageHostname: 'example.com', x: 1, y: 2, selector: '#x', body: 'Hi', screenshotUrl: null, authorName: 'u@example.com', createdAt: 'now', updatedAt: 'now' }
+const comment = {
+  id: 'a/b',
+  projectId: null,
+  pageUrl: 'https://example.com',
+  pageHostname: 'example.com',
+  x: 1,
+  y: 2,
+  selector: '#x',
+  body: 'Hi',
+  screenshotUrl: null,
+  authorName: 'u@example.com',
+  createdAt: 'now',
+  updatedAt: 'now',
+}
 
 beforeEach(() => {
-  vi.restoreAllMocks(); sendMessage.mockReset()
+  vi.restoreAllMocks()
+  sendMessage.mockReset()
   vi.stubEnv('WXT_API_BASE', 'https://crrt.ai/api/')
   sendMessage.mockResolvedValue({ ok: true, data: { accessToken: 'token', email: 'u@example.com' } })
 })
 
 describe('extension comments API client', () => {
   it('lists exact-page comments with authenticated headers', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ items: [comment] }), { status: 200 }))
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response(JSON.stringify({ items: [comment] }), { status: 200 }))
     await expect(listPageComments('https://example.com/a?q=1#x')).resolves.toEqual({ items: [comment] })
-    expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/comments?pageUrl=https%3A%2F%2Fexample.com%2Fa%3Fq%3D1%23x&limit=50&page=1', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }))
+    expect(fetch).toHaveBeenCalledWith(
+      'https://crrt.ai/api/v1/extension/comments?pageUrl=https%3A%2F%2Fexample.com%2Fa%3Fq%3D1%23x&limit=50&page=1',
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer token' }) }),
+    )
   })
 
   it('loads projects and scopes page comments to a selected project', async () => {
     const projects = [{ publicKey: 'p', name: 'Project', allowedOrigins: ['example.com'] }]
-    const fetch = vi.spyOn(globalThis, 'fetch')
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(projects), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify({ items: [{ ...comment, projectId: 'p' }] }), { status: 200 }))
     await expect(listExtensionProjects()).resolves.toEqual(projects)
@@ -32,7 +62,9 @@ describe('extension comments API client', () => {
   })
 
   it('loads all canonical project feedback without an exact page filter', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ items: [comment], total: 1 }), { status: 200 }))
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(JSON.stringify({ items: [comment], total: 1 }), { status: 200 }))
     await listProjectComments('project', 2)
     expect(fetch).toHaveBeenCalledWith(
       'https://crrt.ai/api/v1/extension/comments?projectId=project&limit=50&page=2',
@@ -41,11 +73,20 @@ describe('extension comments API client', () => {
   })
 
   it('creates, updates, and deletes comments', async () => {
-    const fetch = vi.spyOn(globalThis, 'fetch')
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(comment), { status: 201 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(comment), { status: 200 }))
       .mockResolvedValueOnce(new Response(null, { status: 204 }))
-    await createPageComment({ projectId: 'p', pageUrl: comment.pageUrl, selector: '#x', x: 1, y: 2, body: 'Hi', screenshot: null })
+    await createPageComment({
+      projectId: 'p',
+      pageUrl: comment.pageUrl,
+      selector: '#x',
+      x: 1,
+      y: 2,
+      body: 'Hi',
+      screenshot: null,
+    })
     await updatePageComment('a/b', 'Updated')
     await expect(deletePageComment('a/b')).resolves.toBeUndefined()
     expect(fetch.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: expect.stringContaining('"projectId":"p"') })
@@ -54,15 +95,30 @@ describe('extension comments API client', () => {
   })
 
   it('prepares and confirms external work through the shared endpoint', async () => {
-    const prepared = { provider: 'github', connected: true, destination: 'acme/store', existing: null, draft: { title: 'T', body: 'B' } }
-    const created = { issueNumber: 1, issueUrl: 'https://github.com/acme/store/issues/1', createdAt: 'now', created: true }
-    const fetch = vi.spyOn(globalThis, 'fetch')
+    const prepared = {
+      provider: 'github',
+      connected: true,
+      destination: 'acme/store',
+      existing: null,
+      draft: { title: 'T', body: 'B' },
+    }
+    const created = {
+      issueNumber: 1,
+      issueUrl: 'https://github.com/acme/store/issues/1',
+      createdAt: 'now',
+      created: true,
+    }
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response(JSON.stringify(prepared), { status: 200 }))
       .mockResolvedValueOnce(new Response(JSON.stringify(created), { status: 201 }))
     await expect(getExternalWorkDraft('a/b')).resolves.toEqual(prepared)
     await expect(sendExternalWork('a/b', 'github', { title: 'Edited', body: 'Body' })).resolves.toEqual(created)
     expect(fetch.mock.calls[0]?.[0]).toContain('/a%2Fb/external-work?provider=github')
-    expect(fetch.mock.calls[1]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify({ provider: 'github', draft: { title: 'Edited', body: 'Body' } }) })
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({
+      method: 'POST',
+      body: JSON.stringify({ provider: 'github', draft: { title: 'Edited', body: 'Body' } }),
+    })
   })
 
   it('rejects missing sessions and background failures', async () => {
@@ -75,28 +131,49 @@ describe('extension comments API client', () => {
   })
 
   it('uses API error messages and status fallbacks', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Nope' }), { status: 400 }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(JSON.stringify({ error: 'Nope' }), { status: 400 }),
+    )
     await expect(listPageComments('https://example.com')).rejects.toThrow('Nope')
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('not json', { status: 503 }))
     await expect(listPageComments('https://example.com')).rejects.toThrow('CRRT request failed (503)')
   })
 })
 
-it('imports local data only after an explicit authenticated request',async()=>{
- const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({projectId:'chosen',imported:0}),{status:200}))
- expect(await importLocalProject('chosen','Local',[],'token')).toEqual({projectId:'chosen',imported:0})
- expect(fetch).toHaveBeenCalledWith('https://crrt.ai/api/v1/extension/import',expect.objectContaining({method:'POST',body:JSON.stringify({projectId:'chosen',name:'Local',comments:[]})}))
+it('imports local data only after an explicit authenticated request', async () => {
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(new Response(JSON.stringify({ projectId: 'chosen', imported: 0 }), { status: 200 }))
+  expect(await importLocalProject('chosen', 'Local', [], 'token')).toEqual({ projectId: 'chosen', imported: 0 })
+  expect(fetch).toHaveBeenCalledWith(
+    'https://crrt.ai/api/v1/extension/import',
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ projectId: 'chosen', name: 'Local', comments: [] }),
+    }),
+  )
 })
 
-it.each([{accessToken:'other',email:'other@example.com'},null])('never sends import data under a changed background session (%j)',async session=>{
- sendMessage.mockResolvedValue({ok:true,data:session})
- const fetch=vi.spyOn(globalThis,'fetch')
- await expect(importLocalProject('chosen','Local',[],'token')).rejects.toThrow('Sign-in changed; import stopped')
- expect(fetch).not.toHaveBeenCalled()
-})
-it('pins import authorization to the initiating session and forwards cancellation',async()=>{
- const controller=new AbortController()
- const fetch=vi.spyOn(globalThis,'fetch').mockResolvedValue(new Response(JSON.stringify({projectId:'chosen',imported:1}),{status:200}))
- await importLocalProject('chosen','Local',[],'token',controller.signal)
- expect(fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({headers:expect.objectContaining({Authorization:'Bearer token'}),signal:controller.signal}))
+it.each([{ accessToken: 'other', email: 'other@example.com' }, null])(
+  'never sends import data under a changed background session (%j)',
+  async (session) => {
+    sendMessage.mockResolvedValue({ ok: true, data: session })
+    const fetch = vi.spyOn(globalThis, 'fetch')
+    await expect(importLocalProject('chosen', 'Local', [], 'token')).rejects.toThrow('Sign-in changed; import stopped')
+    expect(fetch).not.toHaveBeenCalled()
+  },
+)
+it('pins import authorization to the initiating session and forwards cancellation', async () => {
+  const controller = new AbortController()
+  const fetch = vi
+    .spyOn(globalThis, 'fetch')
+    .mockResolvedValue(new Response(JSON.stringify({ projectId: 'chosen', imported: 1 }), { status: 200 }))
+  await importLocalProject('chosen', 'Local', [], 'token', controller.signal)
+  expect(fetch).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer token' }),
+      signal: controller.signal,
+    }),
+  )
 })

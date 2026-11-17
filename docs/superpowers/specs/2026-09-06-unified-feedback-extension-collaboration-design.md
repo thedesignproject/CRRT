@@ -25,18 +25,18 @@ Project feedback appears in the same dashboard, can be reviewed by the same team
 
 CRRT adds a `guest` project role for clients and other feedback contributors. The existing project owner remains an admin with the owner flag.
 
-| Capability | Owner / admin | Member | Guest |
-| --- | --- | --- | --- |
-| View shared feedback | Yes | Yes | Yes |
-| View internal feedback | Yes | Yes | No |
-| Create shared feedback | Yes | Yes | Yes |
-| Create internal feedback | Yes | Yes | No |
-| Edit or delete own open feedback | Yes | Yes | Yes |
-| Review, reject, or mark ready | Yes | Yes | No |
-| Operate Agent workflow | Yes | Yes | No |
-| Send or assign external work | Yes | Yes | No |
-| Configure domains and integrations | Yes | No | No |
-| Invite or remove collaborators | Yes | No | No |
+| Capability                         | Owner / admin | Member | Guest |
+| ---------------------------------- | ------------- | ------ | ----- |
+| View shared feedback               | Yes           | Yes    | Yes   |
+| View internal feedback             | Yes           | Yes    | No    |
+| Create shared feedback             | Yes           | Yes    | Yes   |
+| Create internal feedback           | Yes           | Yes    | No    |
+| Edit or delete own open feedback   | Yes           | Yes    | Yes   |
+| Review, reject, or mark ready      | Yes           | Yes    | No    |
+| Operate Agent workflow             | Yes           | Yes    | No    |
+| Send or assign external work       | Yes           | Yes    | No    |
+| Configure domains and integrations | Yes           | No     | No    |
+| Invite or remove collaborators     | Yes           | No     | No    |
 
 Guest-created project feedback is always `shared`. Members and admins choose `shared` or `internal`; the current choice must be visible in the composer. An API permission check, not a hidden client control, enforces every restricted action.
 

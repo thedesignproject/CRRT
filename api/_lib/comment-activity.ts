@@ -1,6 +1,19 @@
 import { CommentEmailEnqueueRejectedError } from './comment-email-outbox.js'
-import { getComment, listProjectMembers, notifyProjectMembersOfCommentActivity, releaseCommentActivityEmailReservation, removeGuestCommentActivityNotifications, reserveCommentActivityEmail } from './store.js'
-import { canSendCommentActivityEmail, getCommentActivityCooldownSeconds, getCommentActivityDashboardUrl, hasCommentActivityEmailConfig, sendCommentActivityEmail } from './comment-activity-email.js'
+import {
+  getComment,
+  listProjectMembers,
+  notifyProjectMembersOfCommentActivity,
+  releaseCommentActivityEmailReservation,
+  removeGuestCommentActivityNotifications,
+  reserveCommentActivityEmail,
+} from './store.js'
+import {
+  canSendCommentActivityEmail,
+  getCommentActivityCooldownSeconds,
+  getCommentActivityDashboardUrl,
+  hasCommentActivityEmailConfig,
+  sendCommentActivityEmail,
+} from './comment-activity-email.js'
 
 export async function sendCommentActivityEmailInBackground(input: {
   commentId: string
@@ -13,10 +26,7 @@ export async function sendCommentActivityEmailInBackground(input: {
     if (!hasCommentActivityEmailConfig()) return
 
     const cooldownSeconds = getCommentActivityCooldownSeconds()
-    const reservation = await reserveCommentActivityEmail(
-      input.projectKey,
-      cooldownSeconds,
-    )
+    const reservation = await reserveCommentActivityEmail(input.projectKey, cooldownSeconds)
     if (!reservation.shouldSend) return
 
     let enqueueAttempted = false
@@ -31,14 +41,17 @@ export async function sendCommentActivityEmailInBackground(input: {
       }
 
       enqueueAttempted = true
-      await sendCommentActivityEmail({
-        recipients,
-        projectName: input.projectName,
-        pageUrl: input.pageUrl,
-        authorName: input.authorName,
-        activityCount: reservation.activityCount,
-        dashboardUrl: getCommentActivityDashboardUrl(),
-      }, input.commentId)
+      await sendCommentActivityEmail(
+        {
+          recipients,
+          projectName: input.projectName,
+          pageUrl: input.pageUrl,
+          authorName: input.authorName,
+          activityCount: reservation.activityCount,
+          dashboardUrl: getCommentActivityDashboardUrl(),
+        },
+        input.commentId,
+      )
     } catch (error) {
       // Only restore activity when delivery definitely has not been queued.
       // A lost enqueue response may still leave a durable job for the worker.

@@ -29,15 +29,17 @@ describe('local product audit pipeline', () => {
   })
 
   it('rejects unsupported, weak, and low-impact candidates instead of padding the report', () => {
-    const evidence: AuditEvidence[] = [{
-      id: 'indirect-only',
-      source: 'heuristic',
-      signalKey: 'single-signal',
-      location: 'checkout',
-      observation: 'A heuristic suggests possible friction.',
-      confidence: 0.7,
-      direct: false,
-    }]
+    const evidence: AuditEvidence[] = [
+      {
+        id: 'indirect-only',
+        source: 'heuristic',
+        signalKey: 'single-signal',
+        location: 'checkout',
+        observation: 'A heuristic suggests possible friction.',
+        confidence: 0.7,
+        direct: false,
+      },
+    ]
     const baseCandidate: AuditCandidate = {
       id: 'candidate',
       kind: 'problem',
@@ -58,18 +60,33 @@ describe('local product audit pipeline', () => {
   it('admits indirect evidence only when two independent signals agree', () => {
     const evidence: AuditEvidence[] = [
       {
-        id: 'signal-a', source: 'url', signalKey: 'a', location: '/a',
-        observation: 'First observation.', confidence: 0.95, direct: false,
+        id: 'signal-a',
+        source: 'url',
+        signalKey: 'a',
+        location: '/a',
+        observation: 'First observation.',
+        confidence: 0.95,
+        direct: false,
       },
       {
-        id: 'signal-b', source: 'heuristic', signalKey: 'b', location: 'rule:b',
-        observation: 'Second observation.', confidence: 0.94, direct: false,
+        id: 'signal-b',
+        source: 'heuristic',
+        signalKey: 'b',
+        location: 'rule:b',
+        observation: 'Second observation.',
+        confidence: 0.94,
+        direct: false,
       },
     ]
     const candidate: AuditCandidate = {
-      id: 'supported', kind: 'opportunity', title: 'Supported opportunity',
-      summary: 'Two signals support this.', impact: 'high', confidence: 0.93,
-      evidenceIds: ['signal-a', 'signal-b'], recommendation: 'Test it.',
+      id: 'supported',
+      kind: 'opportunity',
+      title: 'Supported opportunity',
+      summary: 'Two signals support this.',
+      impact: 'high',
+      confidence: 0.93,
+      evidenceIds: ['signal-a', 'signal-b'],
+      recommendation: 'Test it.',
     }
 
     expect(verifyCandidates([candidate], evidence)[0]?.admittedBy).toBe('independent-signals')
@@ -87,8 +104,10 @@ describe('local product audit pipeline', () => {
     const report = runLocalAudit()
 
     expect(report.findings).toHaveLength(3)
-    expect(report.findings.every((finding) => (
-      finding.impact === 'high' && finding.confidence >= 0.9 && finding.status === 'open'
-    ))).toBe(true)
+    expect(
+      report.findings.every(
+        (finding) => finding.impact === 'high' && finding.confidence >= 0.9 && finding.status === 'open',
+      ),
+    ).toBe(true)
   })
 })

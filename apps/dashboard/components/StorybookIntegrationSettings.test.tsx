@@ -9,7 +9,9 @@ vi.mock('../api', () => ({
   getStorybookIntegration: vi.fn(),
 }))
 vi.mock('../lib/mocks', () => ({
-  get mocksEnabled() { return mockConfig.enabled },
+  get mocksEnabled() {
+    return mockConfig.enabled
+  },
 }))
 
 import { beginBillingCheckout, createStorybookPairing, getStorybookIntegration } from '../api'
@@ -53,9 +55,11 @@ describe('StorybookIntegrationSettings', () => {
     expect(createStorybookPairing).toHaveBeenCalledWith('/api', 'session', 'demo')
 
     fireEvent.click(screen.getByRole('button', { name: 'Copy command' }))
-    await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
-      'npx @thedesignproject/crrt-storybook connect --code once',
-    ))
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        'npx @thedesignproject/crrt-storybook connect --code once',
+      ),
+    )
     expect(await screen.findByText('Command copied.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByText('Advanced'))
@@ -83,7 +87,10 @@ describe('StorybookIntegrationSettings', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Check connection' }))
     expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /Open Storybook/ })).toHaveAttribute('href', 'https://storybook.example.com/')
+    expect(screen.getByRole('link', { name: /Open Storybook/ })).toHaveAttribute(
+      'href',
+      'https://storybook.example.com/',
+    )
 
     vi.mocked(getStorybookIntegration).mockResolvedValue({ state: 'connected', storybookUrl: 'http://example.com' })
     rendered.rerender(<StorybookIntegrationSettings {...props} projectKey="unsafe" />)
@@ -95,7 +102,10 @@ describe('StorybookIntegrationSettings', () => {
     vi.mocked(getStorybookIntegration).mockResolvedValue({ state: 'connected', storybookUrl: 'http://127.0.0.1:6008' })
     render(<StorybookIntegrationSettings {...props} />)
 
-    expect(await screen.findByRole('link', { name: /Open Storybook/ })).toHaveAttribute('href', 'http://127.0.0.1:6008/')
+    expect(await screen.findByRole('link', { name: /Open Storybook/ })).toHaveAttribute(
+      'href',
+      'http://127.0.0.1:6008/',
+    )
     fireEvent.click(screen.getByRole('button', { name: 'Connect a different Storybook' }))
     expect(await screen.findByText('Run this in your Storybook project')).toBeInTheDocument()
   })
@@ -175,9 +185,7 @@ describe('StorybookIntegrationSettings', () => {
   })
 
   it('maps an expired pairing code to a recoverable state', async () => {
-    vi.mocked(getStorybookIntegration).mockRejectedValue(
-      requestError('Pair expired', undefined, 'pairing_expired'),
-    )
+    vi.mocked(getStorybookIntegration).mockRejectedValue(requestError('Pair expired', undefined, 'pairing_expired'))
     render(<StorybookIntegrationSettings {...props} />)
     expect(await screen.findByText('Connection command expired')).toBeInTheDocument()
   })
@@ -220,7 +228,9 @@ describe('StorybookIntegrationSettings', () => {
 
   it('ignores a stale response after switching projects', async () => {
     let resolveFirst!: (value: { state: 'not_connected' }) => void
-    const first = new Promise<{ state: 'not_connected' }>((resolve) => { resolveFirst = resolve })
+    const first = new Promise<{ state: 'not_connected' }>((resolve) => {
+      resolveFirst = resolve
+    })
     vi.mocked(getStorybookIntegration)
       .mockReturnValueOnce(first)
       .mockResolvedValueOnce({ state: 'connected', storybookUrl: 'https://new.example.com' })
@@ -234,10 +244,10 @@ describe('StorybookIntegrationSettings', () => {
 
   it('ignores a stale load failure after switching projects', async () => {
     let rejectFirst!: (reason: unknown) => void
-    const first = new Promise<never>((_resolve, reject) => { rejectFirst = reject })
-    vi.mocked(getStorybookIntegration)
-      .mockReturnValueOnce(first)
-      .mockResolvedValueOnce({ state: 'connected' })
+    const first = new Promise<never>((_resolve, reject) => {
+      rejectFirst = reject
+    })
+    vi.mocked(getStorybookIntegration).mockReturnValueOnce(first).mockResolvedValueOnce({ state: 'connected' })
     const rendered = render(<StorybookIntegrationSettings {...props} />)
 
     rendered.rerender(<StorybookIntegrationSettings {...props} projectKey="new" />)
@@ -248,7 +258,9 @@ describe('StorybookIntegrationSettings', () => {
 
   it('ignores a stale pairing success after switching projects', async () => {
     let resolvePairing!: (value: { state: 'waiting'; command: string }) => void
-    const pairing = new Promise<{ state: 'waiting'; command: string }>((resolve) => { resolvePairing = resolve })
+    const pairing = new Promise<{ state: 'waiting'; command: string }>((resolve) => {
+      resolvePairing = resolve
+    })
     vi.mocked(createStorybookPairing).mockReturnValue(pairing)
     const rendered = render(<StorybookIntegrationSettings {...props} />)
 
@@ -262,7 +274,9 @@ describe('StorybookIntegrationSettings', () => {
 
   it('ignores a stale pairing failure after switching projects', async () => {
     let rejectPairing!: (reason: unknown) => void
-    const pairing = new Promise<never>((_resolve, reject) => { rejectPairing = reject })
+    const pairing = new Promise<never>((_resolve, reject) => {
+      rejectPairing = reject
+    })
     vi.mocked(createStorybookPairing).mockReturnValue(pairing)
     const rendered = render(<StorybookIntegrationSettings {...props} />)
 
@@ -290,7 +304,10 @@ describe('StorybookIntegrationSettings', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Connect Storybook' }))
     expect(await screen.findByText(/demo-demo/)).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Check connection' }))
-    expect(await screen.findByRole('link', { name: /Open Storybook/ })).toHaveAttribute('href', 'http://localhost:6008/')
+    expect(await screen.findByRole('link', { name: /Open Storybook/ })).toHaveAttribute(
+      'href',
+      'http://localhost:6008/',
+    )
     expect(getStorybookIntegration).not.toHaveBeenCalled()
   })
 })

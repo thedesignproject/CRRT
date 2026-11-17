@@ -23,7 +23,9 @@ describe('getRequestHostname', () => {
   const req = (headers: Record<string, unknown>) => ({ headers }) as never
 
   it('prefers Origin over Referer and lowercases', () => {
-    expect(getRequestHostname(req({ origin: 'https://App.Example.com', referer: 'https://other.com/x' }))).toBe('app.example.com')
+    expect(getRequestHostname(req({ origin: 'https://App.Example.com', referer: 'https://other.com/x' }))).toBe(
+      'app.example.com',
+    )
   })
 
   it('falls back to Referer when Origin is absent or empty', () => {

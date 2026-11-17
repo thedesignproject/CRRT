@@ -104,9 +104,12 @@ describe('api/v1/feedback-shares', () => {
     })
 
     const res = mockRes()
-    await call(mockReq({
-      body: { projectId: 'demo-project', scopeType: 'page', pageUrl: 'https://x' },
-    }), res)
+    await call(
+      mockReq({
+        body: { projectId: 'demo-project', scopeType: 'page', pageUrl: 'https://x' },
+      }),
+      res,
+    )
     expect(res.statusCode).toBe(403)
   })
 
@@ -122,23 +125,26 @@ describe('api/v1/feedback-shares', () => {
 
   it('rejects invalid or partially stale selections instead of silently omitting comments', async () => {
     let res = mockRes()
-    await call(mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1', 'comment-1'] } }), res)
+    await call(
+      mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1', 'comment-1'] } }),
+      res,
+    )
     expect(res.statusCode).toBe(400)
     expect(resolveWidgetAgentAccess).not.toHaveBeenCalled()
 
     vi.mocked(listAcceptedCommentsByIds).mockResolvedValueOnce([{ id: 'comment-1' }] as never)
     res = mockRes()
-    await call(mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1', 'comment-2'] } }), res)
+    await call(
+      mockReq({ body: { projectId: 'demo-project', scopeType: 'selection', commentIds: ['comment-1', 'comment-2'] } }),
+      res,
+    )
     expect(res.statusCode).toBe(409)
     expect(res.body).toEqual({ error: 'Feedback changed. Review the selection and retry.' })
     expect(createShare).not.toHaveBeenCalled()
   })
 
   it('creates a page-scoped share from accepted comments', async () => {
-    vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([
-      { id: 'comment-1' },
-      { id: 'comment-2' },
-    ] as never)
+    vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([{ id: 'comment-1' }, { id: 'comment-2' }] as never)
     vi.mocked(createShare).mockResolvedValue({
       id: 'share-1',
       slug: 'slug1234',
@@ -146,17 +152,23 @@ describe('api/v1/feedback-shares', () => {
     } as never)
 
     const res = mockRes()
-    await call(mockReq({
-      body: {
-        projectId: 'demo-project',
-        scopeType: 'page',
-        pageUrl: 'https://example.com/pricing',
-      },
-    }), res)
+    await call(
+      mockReq({
+        body: {
+          projectId: 'demo-project',
+          scopeType: 'page',
+          pageUrl: 'https://example.com/pricing',
+        },
+      }),
+      res,
+    )
 
     expect(res.statusCode).toBe(201)
     expect(createShare).toHaveBeenCalled()
-    expect(createShare).toHaveBeenCalledWith(expect.anything(), { actorUserId: 'u-test', commentIds: ['comment-1', 'comment-2'] })
+    expect(createShare).toHaveBeenCalledWith(expect.anything(), {
+      actorUserId: 'u-test',
+      commentIds: ['comment-1', 'comment-2'],
+    })
     expect(addShareItems).not.toHaveBeenCalled()
     expect(createFeedbackEvent).not.toHaveBeenCalled()
     expect(res.body).toMatchObject({
@@ -169,9 +181,7 @@ describe('api/v1/feedback-shares', () => {
 
   it('derives generated URLs from the request host when APP_URL is not configured', async () => {
     delete process.env.APP_URL
-    vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([
-      { id: 'comment-1' },
-    ] as never)
+    vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([{ id: 'comment-1' }] as never)
     vi.mocked(createShare).mockResolvedValue({
       id: 'share-1',
       slug: 'slug1234',
@@ -179,21 +189,25 @@ describe('api/v1/feedback-shares', () => {
     } as never)
 
     const res = mockRes()
-    await call(mockReq({
-      headers: {
-        'x-forwarded-host': 'feedback-widget-git-feat-dashboard-zen-redesign-designproject.vercel.app',
-        'x-forwarded-proto': 'https',
-      },
-      body: {
-        projectId: 'demo-project',
-        scopeType: 'page',
-        pageUrl: 'https://example.com/pricing',
-      },
-    }), res)
+    await call(
+      mockReq({
+        headers: {
+          'x-forwarded-host': 'feedback-widget-git-feat-dashboard-zen-redesign-designproject.vercel.app',
+          'x-forwarded-proto': 'https',
+        },
+        body: {
+          projectId: 'demo-project',
+          scopeType: 'page',
+          pageUrl: 'https://example.com/pricing',
+        },
+      }),
+      res,
+    )
 
     expect(res.statusCode).toBe(201)
     expect(res.body).toMatchObject({
-      tokenUrl: 'https://feedback-widget-git-feat-dashboard-zen-redesign-designproject.vercel.app/api/v1/agent/shares/slug1234/state?token=token-123',
+      tokenUrl:
+        'https://feedback-widget-git-feat-dashboard-zen-redesign-designproject.vercel.app/api/v1/agent/shares/slug1234/state?token=token-123',
     })
   })
 
@@ -203,13 +217,19 @@ describe('api/v1/feedback-shares', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const res = mockRes()
-    await call(mockReq({
-      body: { projectId: 'demo-project', scopeType: 'page', pageUrl: 'https://example.com/pricing' },
-    }), res)
+    await call(
+      mockReq({
+        body: { projectId: 'demo-project', scopeType: 'page', pageUrl: 'https://example.com/pricing' },
+      }),
+      res,
+    )
 
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Share could not be created — please retry.' })
-    expect(errorSpy).toHaveBeenCalledWith('[feedback-shares] share creation failed', expect.objectContaining({ projectKey: 'demo-project' }))
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[feedback-shares] share creation failed',
+      expect.objectContaining({ projectKey: 'demo-project' }),
+    )
     errorSpy.mockRestore()
   })
 
@@ -219,21 +239,33 @@ describe('api/v1/feedback-shares', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const res = mockRes()
-    await call(mockReq({
-      body: { projectId: 123, scopeType: 'page', pageUrl: 'https://example.com/pricing' },
-    }), res)
+    await call(
+      mockReq({
+        body: { projectId: 123, scopeType: 'page', pageUrl: 'https://example.com/pricing' },
+      }),
+      res,
+    )
 
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Share could not be created — please retry.' })
-    expect(errorSpy).toHaveBeenCalledWith('[feedback-shares] share creation failed', expect.objectContaining({ projectKey: undefined }))
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[feedback-shares] share creation failed',
+      expect.objectContaining({ projectKey: undefined }),
+    )
     errorSpy.mockRestore()
   })
 })
 
-it.each([['forbidden',403],['share_comments_changed',409]])('rejects a share commit after access or comments change: %s',async(message,status)=>{
-  vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([{id:'c'}] as never)
+it.each([
+  ['forbidden', 403],
+  ['share_comments_changed', 409],
+])('rejects a share commit after access or comments change: %s', async (message, status) => {
+  vi.mocked(listAcceptedCommentsForPage).mockResolvedValue([{ id: 'c' }] as never)
   vi.mocked(createShare).mockRejectedValueOnce(new Error(message as string))
-  const res=mockRes();await call(mockReq({body:{projectId:'p',scopeType:'page',pageUrl:'https://test.local'}}),res)
-  expect(res.statusCode).toBe(status);expect(res.body).not.toHaveProperty('token')
-  expect(addShareItems).not.toHaveBeenCalled();expect(createFeedbackEvent).not.toHaveBeenCalled()
+  const res = mockRes()
+  await call(mockReq({ body: { projectId: 'p', scopeType: 'page', pageUrl: 'https://test.local' } }), res)
+  expect(res.statusCode).toBe(status)
+  expect(res.body).not.toHaveProperty('token')
+  expect(addShareItems).not.toHaveBeenCalled()
+  expect(createFeedbackEvent).not.toHaveBeenCalled()
 })

@@ -27,7 +27,7 @@ async function apiFiles(directory = join(root, 'api')): Promise<string[]> {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name)
     if (entry.isDirectory()) {
-      if (entry.name !== '_lib') files.push(...await apiFiles(path))
+      if (entry.name !== '_lib') files.push(...(await apiFiles(path)))
     } else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
       files.push(relative(root, path))
     }
@@ -38,22 +38,30 @@ async function apiFiles(directory = join(root, 'api')): Promise<string[]> {
 function routeDefinition(file: string) {
   const names: string[] = []
   const path = `/${file.replace(/\.ts$/, '').replace(/\/index$/, '')}`
-  const pattern = path.split('/').map((segment) => {
-    const parameter = segment.match(/^\[([^\]]+)\]$/)
-    if (parameter) {
-      names.push(parameter[1])
-      return '([^/]+)'
-    }
-    return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  }).join('/')
+  const pattern = path
+    .split('/')
+    .map((segment) => {
+      const parameter = segment.match(/^\[([^\]]+)\]$/)
+      if (parameter) {
+        names.push(parameter[1])
+        return '([^/]+)'
+      }
+      return segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    })
+    .join('/')
   return { file, names, pattern: `^${pattern}/?$` }
 }
 
 function routerSource(routes: ReturnType<typeof routeDefinition>[]) {
-  const imports = routes.map(({ file }, index) =>
-    `import route${index} from './${file.slice(4).replace(/\.ts$/, '.js')}'`).join('\n')
-  const definitions = routes.map(({ names, pattern }, index) =>
-    `{ handler: route${index}, pattern: new RegExp(${JSON.stringify(pattern)}), names: ${JSON.stringify(names)} }`).join(',\n')
+  const imports = routes
+    .map(({ file }, index) => `import route${index} from './${file.slice(4).replace(/\.ts$/, '.js')}'`)
+    .join('\n')
+  const definitions = routes
+    .map(
+      ({ names, pattern }, index) =>
+        `{ handler: route${index}, pattern: new RegExp(${JSON.stringify(pattern)}), names: ${JSON.stringify(names)} }`,
+    )
+    .join(',\n')
   return `${imports}
 const routes = [${definitions}]
 export default async function handler(req: any, res: any) {
@@ -72,24 +80,36 @@ export default async function handler(req: any, res: any) {
 async function buildApiFunction(webhook = false) {
   const temporary = await mkdtemp(join(tmpdir(), 'crrt-vercel-'))
   try {
-    const routes = (await apiFiles()).filter((file) => file !== 'api/v1/billing/webhook.ts').map(routeDefinition)
+    const routes = (await apiFiles())
+      .filter((file) => file !== 'api/v1/billing/webhook.ts')
+      .map(routeDefinition)
       .sort((left, right) => left.names.length - right.names.length)
     const generated = join(temporary, '__vercel-router.ts')
-    await writeFile(generated, webhook
-      ? "export { default } from './v1/billing/webhook.js'\nexport const config = { helpers: false }\n"
-      : routerSource(routes))
+    await writeFile(
+      generated,
+      webhook
+        ? "export { default } from './v1/billing/webhook.js'\nexport const config = { helpers: false }\n"
+        : routerSource(routes),
+    )
     const files = await glob('**', {
-      cwd: root, dot: true,
+      cwd: root,
+      dot: true,
       ignore: ['.git/**', '.vercel/**', '.workflow-data/**', 'coverage/**', 'node_modules/**'],
     })
     files['api/__vercel-router.ts'] = new FileFsRef({ fsPath: generated })
     // @vercel/node searches parent manifests for deployment hooks even when
     // considerBuildCommand is false. Keep only this temporary manifest free of
     // those hooks so packaging an API cannot recursively deploy the project.
-    files['package.json'] = new FileBlob({ data: apiBuilderPackage(await readFile(join(root, 'package.json'), 'utf8')) })
+    files['package.json'] = new FileBlob({
+      data: apiBuilderPackage(await readFile(join(root, 'package.json'), 'utf8')),
+    })
     const result = await build({
-      files, entrypoint: 'api/__vercel-router.ts', workPath: temporary, repoRootPath: temporary,
-      config: {}, meta: {},
+      files,
+      entrypoint: 'api/__vercel-router.ts',
+      workPath: temporary,
+      repoRootPath: temporary,
+      config: {},
+      meta: {},
     })
     if (!('output' in result) || result.output.type !== 'Lambda' || !result.output.files) {
       throw new Error('Vercel API builder did not return a Node function')
@@ -105,17 +125,27 @@ async function buildApiFunction(webhook = false) {
     }
     await mkdir(join(functionDirectory, 'node_modules'), { recursive: true })
     for (const packageName of workflowRuntimePackages) {
-      await cp(
-        join(root, 'node_modules', packageName),
-        join(functionDirectory, 'node_modules', packageName),
-        { recursive: true },
-      )
+      await cp(join(root, 'node_modules', packageName), join(functionDirectory, 'node_modules', packageName), {
+        recursive: true,
+      })
     }
-    await writeFile(join(functionDirectory, '.vc-config.json'), JSON.stringify({
-      runtime: lambda.runtime, handler: lambda.handler, launcherType: 'Nodejs',
-      architecture: lambda.architecture, memory: 128, maxDuration: 60,
-      shouldAddHelpers: !webhook, shouldAddSourcemapSupport: true,
-    }, null, 2))
+    await writeFile(
+      join(functionDirectory, '.vc-config.json'),
+      JSON.stringify(
+        {
+          runtime: lambda.runtime,
+          handler: lambda.handler,
+          launcherType: 'Nodejs',
+          architecture: lambda.architecture,
+          memory: 128,
+          maxDuration: 60,
+          shouldAddHelpers: !webhook,
+          shouldAddSourcemapSupport: true,
+        },
+        null,
+        2,
+      ),
+    )
   } finally {
     await rm(temporary, { recursive: true, force: true })
   }
@@ -135,10 +165,15 @@ if (!workflowIds.includes(RECORD_WORKER_WORKFLOW_ID)) throw new Error('Recording
 // The step launches this standalone Node bundle inside Sandbox. Ship it only
 // with the step function; normal API functions never need FFmpeg or media bytes.
 const workerBuild = await Bun.build({
-  entrypoints: [join(root, 'scripts/record-worker.ts')], target: 'node', format: 'esm',
+  entrypoints: [join(root, 'scripts/record-worker.ts')],
+  target: 'node',
+  format: 'esm',
 })
 if (!workerBuild.success) throw new Error('Recording worker bundle failed')
-await writeFile(join(output, 'functions/.well-known/workflow/v1/step.func/record-worker.mjs'), await workerBuild.outputs[0].text())
+await writeFile(
+  join(output, 'functions/.well-known/workflow/v1/step.func/record-worker.mjs'),
+  await workerBuild.outputs[0].text(),
+)
 await rm(join(output, 'static'), { recursive: true, force: true })
 await cp(join(root, 'apps/landing/dist'), join(output, 'static'), { recursive: true })
 await buildApiFunction()
@@ -148,13 +183,21 @@ await rm(join(output, 'static/public-pages.json'))
 const workflowConfig = JSON.parse(await readFile(join(output, 'config.json'), 'utf8'))
 workflowConfig.routes = [
   { src: '^/\\.well-known/oauth-authorization-server$', dest: '/api-router?__audit_path=/api/mcp/oauth/metadata' },
-  { src: '^/\\.well-known/oauth-protected-resource(?:/api/mcp/v1)?$', dest: '/api-router?__audit_path=/api/mcp/oauth/resource' },
-  { src: '^/api(?:/.*)?$', headers: {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token',
-    'Access-Control-Max-Age': '86400',
-  }, continue: true },
+  {
+    src: '^/\\.well-known/oauth-protected-resource(?:/api/mcp/v1)?$',
+    dest: '/api-router?__audit_path=/api/mcp/oauth/resource',
+  },
+  {
+    src: '^/api(?:/.*)?$',
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers':
+        'Content-Type, Authorization, X-Agent-Id, Idempotency-Key, X-Audit-Session, X-Audit-Token, X-Reviewer-Token, X-Share-Token, X-Smoke-Cleanup-Token',
+      'Access-Control-Max-Age': '86400',
+    },
+    continue: true,
+  },
   { src: '^/api/v1/billing/webhook/?$', dest: '/stripe-webhook' },
   ...workflowConfig.routes,
   { src: '^(/api(?:/.*)?)$', dest: '/api-router?__audit_path=$1' },

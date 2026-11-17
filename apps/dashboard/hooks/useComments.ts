@@ -18,41 +18,44 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
   const activeProjectRef = useRef<string | null>(null)
   const refreshSequence = useRef(0)
 
-  const loadComments = useCallback(async (background = false, canApply: () => boolean = () => true) => {
-    const sequence = ++refreshSequence.current
-    activeProjectRef.current = projectId
+  const loadComments = useCallback(
+    async (background = false, canApply: () => boolean = () => true) => {
+      const sequence = ++refreshSequence.current
+      activeProjectRef.current = projectId
 
-    if (!projectId) {
-      setComments([])
-      setCommentsProjectId(null)
-      setLoading(false)
-      return
-    }
-    if (!background) setLoading(true)
-    setError(null)
-    if (mocksEnabled) {
-      setComments(getMockComments(projectId))
-      setCommentsProjectId(projectId)
-      setLoading(false)
-      return
-    }
-    try {
-      const data = await listComments(apiBase, accessToken, projectId)
-      // Race guard: drop response if user switched projects mid-flight.
-      if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence || !canApply()) return
-      setComments(data)
-      setCommentsProjectId(projectId)
-    } catch (err) {
-      if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence || !canApply()) return
-      if (err instanceof Error && 'status' in err && (err.status === 401 || err.status === 403)) {
+      if (!projectId) {
         setComments([])
         setCommentsProjectId(null)
+        setLoading(false)
+        return
       }
-      setError(err instanceof Error ? err.message : 'Failed to load comments')
-    } finally {
-      if (activeProjectRef.current === projectId && refreshSequence.current === sequence) setLoading(false)
-    }
-  }, [apiBase, accessToken, projectId])
+      if (!background) setLoading(true)
+      setError(null)
+      if (mocksEnabled) {
+        setComments(getMockComments(projectId))
+        setCommentsProjectId(projectId)
+        setLoading(false)
+        return
+      }
+      try {
+        const data = await listComments(apiBase, accessToken, projectId)
+        // Race guard: drop response if user switched projects mid-flight.
+        if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence || !canApply()) return
+        setComments(data)
+        setCommentsProjectId(projectId)
+      } catch (err) {
+        if (activeProjectRef.current !== projectId || refreshSequence.current !== sequence || !canApply()) return
+        if (err instanceof Error && 'status' in err && (err.status === 401 || err.status === 403)) {
+          setComments([])
+          setCommentsProjectId(null)
+        }
+        setError(err instanceof Error ? err.message : 'Failed to load comments')
+      } finally {
+        if (activeProjectRef.current === projectId && refreshSequence.current === sequence) setLoading(false)
+      }
+    },
+    [apiBase, accessToken, projectId],
+  )
 
   const refresh = useCallback((canApply?: () => boolean) => loadComments(false, canApply), [loadComments])
 
@@ -69,8 +72,12 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
 
   // Returning to an open dashboard must recheck current membership/privacy.
   useEffect(() => {
-    const onFocus = () => { void loadComments(true) }
-    const onVisibility = () => { if (document.visibilityState === 'visible') onFocus() }
+    const onFocus = () => {
+      void loadComments(true)
+    }
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') onFocus()
+    }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVisibility)
     return () => {
@@ -86,7 +93,9 @@ export function useComments(apiBase: string, accessToken: string, projectId: str
   useEffect(() => {
     const closing = comments.some((comment) => comment.externalWork?.some((work) => work.lifecycleStatus === 'closing'))
     if (!closing) return
-    const timer = window.setTimeout(() => { void loadComments(true) }, 1_000)
+    const timer = window.setTimeout(() => {
+      void loadComments(true)
+    }, 1_000)
     return () => window.clearTimeout(timer)
   }, [comments, loadComments])
 

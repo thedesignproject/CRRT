@@ -15,30 +15,86 @@ export interface AuditExplorer {
 }
 
 const demoEvidence: AuditEvidence[] = [
-  { id: 'pricing-promise', source: 'url', signalKey: 'trial-promise', location: '/pricing · hero copy', observation: 'The primary plan promises “Start free — no card required.”', confidence: 0.99, direct: true },
-  { id: 'signup-card-field', source: 'url', signalKey: 'signup-payment-gate', location: '/signup · step 2 of 2', observation: 'The same trial flow requires a valid card before the workspace can be created.', confidence: 0.99, direct: true },
-  { id: 'signup-field-count', source: 'url', signalKey: 'signup-friction', location: '/signup · first-use path', observation: 'Nine required fields appear before the user sees the product for the first time.', confidence: 0.96, direct: true },
-  { id: 'signup-value-delay', source: 'url', signalKey: 'delayed-value', location: '/signup → /onboarding · observed journey', observation: 'A user must complete account, company, team, and payment steps before reaching a usable screen.', confidence: 0.94, direct: false },
-  { id: 'form-reset', source: 'url', signalKey: 'destructive-error-state', location: '/signup · invalid promo-code interaction', observation: 'Submitting an invalid promo code clears the previously entered company and team fields.', confidence: 0.97, direct: true },
+  {
+    id: 'pricing-promise',
+    source: 'url',
+    signalKey: 'trial-promise',
+    location: '/pricing · hero copy',
+    observation: 'The primary plan promises “Start free — no card required.”',
+    confidence: 0.99,
+    direct: true,
+  },
+  {
+    id: 'signup-card-field',
+    source: 'url',
+    signalKey: 'signup-payment-gate',
+    location: '/signup · step 2 of 2',
+    observation: 'The same trial flow requires a valid card before the workspace can be created.',
+    confidence: 0.99,
+    direct: true,
+  },
+  {
+    id: 'signup-field-count',
+    source: 'url',
+    signalKey: 'signup-friction',
+    location: '/signup · first-use path',
+    observation: 'Nine required fields appear before the user sees the product for the first time.',
+    confidence: 0.96,
+    direct: true,
+  },
+  {
+    id: 'signup-value-delay',
+    source: 'url',
+    signalKey: 'delayed-value',
+    location: '/signup → /onboarding · observed journey',
+    observation: 'A user must complete account, company, team, and payment steps before reaching a usable screen.',
+    confidence: 0.94,
+    direct: false,
+  },
+  {
+    id: 'form-reset',
+    source: 'url',
+    signalKey: 'destructive-error-state',
+    location: '/signup · invalid promo-code interaction',
+    observation: 'Submitting an invalid promo code clears the previously entered company and team fields.',
+    confidence: 0.97,
+    direct: true,
+  },
 ]
 
 export class FixtureAuditExplorer implements AuditExplorer {
   async explore(target: AuditTarget): Promise<ExplorationResult> {
     if (!isAuditDemoHostname(target.hostname)) throw new Error('fixture_target_not_allowed')
     return {
-      evidence: demoEvidence.map((item) => auditEvidenceSchema.parse({
-        ...item,
-        kind: 'observable',
-        route: item.location.split(' · ')[0],
-        provenance: { collector: 'fixture-explorer', target: target.url },
-        capture: { capturedAt: new Date().toISOString() },
-      })),
-      coverage: { evaluatedSources: ['url'], unavailableSources: ['customer-rule', 'design-system', 'repository'], routesAttempted: 1, routesEvaluated: 1 },
+      evidence: demoEvidence.map((item) =>
+        auditEvidenceSchema.parse({
+          ...item,
+          kind: 'observable',
+          route: item.location.split(' · ')[0],
+          provenance: { collector: 'fixture-explorer', target: target.url },
+          capture: { capturedAt: new Date().toISOString() },
+        }),
+      ),
+      coverage: {
+        evaluatedSources: ['url'],
+        unavailableSources: ['customer-rule', 'design-system', 'repository'],
+        routesAttempted: 1,
+        routesEvaluated: 1,
+      },
     }
   }
 }
 
-type SandboxPage = { url: string; status: number; title: string; text: string; links: string[]; formCount: number; controlCount: number; failed?: boolean }
+type SandboxPage = {
+  url: string
+  status: number
+  title: string
+  text: string
+  links: string[]
+  formCount: number
+  controlCount: number
+  failed?: boolean
+}
 type IsolatedCommandOutput = { exitCode: number; stdout: string; stderr: string }
 type DockerExec = (
   file: string,
@@ -97,27 +153,61 @@ function explorationResult(output: string, collector: string): ExplorationResult
   const pages = (JSON.parse(output) as { pages: SandboxPage[] }).pages
   const evidence = pages.flatMap((page, index) => {
     const route = new URL(page.url).pathname
-    return [auditEvidenceSchema.parse({
-      id: `page-${index + 1}-response`, source: 'url', signalKey: 'route-response',
-      location: new URL(page.url).pathname, route: new URL(page.url).pathname, kind: 'network',
-      observation: page.failed ? 'The route could not be fetched safely.' : `The route returned HTTP ${page.status}${page.title ? ` with title “${page.title}”.` : '.'}`,
-      confidence: 1, direct: false,
-      provenance: { collector, target: page.url },
-      capture: { status: page.status, formCount: page.formCount, controlCount: page.controlCount, textExcerpt: page.text.slice(0, 2_000) },
-    }), ...(page.status >= 200 && page.status < 300 && page.text ? [auditEvidenceSchema.parse({
-      id: `page-${index + 1}-content`, source: 'url', signalKey: `route-content:${route}`,
-      location: route, route, kind: 'observable',
-      observation: `The route visibly presents: “${page.text.slice(0, 400)}”`,
-      confidence: 1, direct: true, provenance: { collector, target: page.url },
-      capture: { status: page.status, formCount: page.formCount, controlCount: page.controlCount, textExcerpt: page.text.slice(0, 2_000) },
-    })] : [])]
+    return [
+      auditEvidenceSchema.parse({
+        id: `page-${index + 1}-response`,
+        source: 'url',
+        signalKey: 'route-response',
+        location: new URL(page.url).pathname,
+        route: new URL(page.url).pathname,
+        kind: 'network',
+        observation: page.failed
+          ? 'The route could not be fetched safely.'
+          : `The route returned HTTP ${page.status}${page.title ? ` with title “${page.title}”.` : '.'}`,
+        confidence: 1,
+        direct: false,
+        provenance: { collector, target: page.url },
+        capture: {
+          status: page.status,
+          formCount: page.formCount,
+          controlCount: page.controlCount,
+          textExcerpt: page.text.slice(0, 2_000),
+        },
+      }),
+      ...(page.status >= 200 && page.status < 300 && page.text
+        ? [
+            auditEvidenceSchema.parse({
+              id: `page-${index + 1}-content`,
+              source: 'url',
+              signalKey: `route-content:${route}`,
+              location: route,
+              route,
+              kind: 'observable',
+              observation: `The route visibly presents: “${page.text.slice(0, 400)}”`,
+              confidence: 1,
+              direct: true,
+              provenance: { collector, target: page.url },
+              capture: {
+                status: page.status,
+                formCount: page.formCount,
+                controlCount: page.controlCount,
+                textExcerpt: page.text.slice(0, 2_000),
+              },
+            }),
+          ]
+        : []),
+    ]
   })
   return {
     evidence,
     coverage: {
-      evaluatedSources: ['url'], unavailableSources: ['customer-rule', 'design-system', 'repository'],
-      routesAttempted: pages.length, routesEvaluated: pages.filter((page) => page.status >= 200 && page.status < 300).length,
-      ...(pages.length && pages.every((page) => page.status >= 200 && page.status < 300) ? {} : { partialReason: 'One or more public routes could not be evaluated.' }),
+      evaluatedSources: ['url'],
+      unavailableSources: ['customer-rule', 'design-system', 'repository'],
+      routesAttempted: pages.length,
+      routesEvaluated: pages.filter((page) => page.status >= 200 && page.status < 300).length,
+      ...(pages.length && pages.every((page) => page.status >= 200 && page.status < 300)
+        ? {}
+        : { partialReason: 'One or more public routes could not be evaluated.' }),
     },
   }
 }
@@ -128,16 +218,41 @@ export function runDockerExplorer(
   execute: DockerExec = execFile as unknown as DockerExec,
 ): Promise<IsolatedCommandOutput> {
   const args = [
-    'run', '--rm', '--network', 'bridge', '--memory', '256m', '--cpus', '1',
-    '--pids-limit', '64', '--read-only', '--tmpfs', '/tmp:rw,noexec,nosuid,size=16m',
-    '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges',
-    '--env', `TARGET_URL=${target.url}`, '--env', `MAX_ROUTES=${budgets.maxRoutes}`,
-    '--env', `MAX_ACTIONS=${budgets.maxActions}`, '--env', `TARGET_ADDRESSES=${JSON.stringify(target.addresses)}`, 'node:24-alpine', 'node', '-e', sandboxScript,
+    'run',
+    '--rm',
+    '--network',
+    'bridge',
+    '--memory',
+    '256m',
+    '--cpus',
+    '1',
+    '--pids-limit',
+    '64',
+    '--read-only',
+    '--tmpfs',
+    '/tmp:rw,noexec,nosuid,size=16m',
+    '--cap-drop',
+    'ALL',
+    '--security-opt',
+    'no-new-privileges',
+    '--env',
+    `TARGET_URL=${target.url}`,
+    '--env',
+    `MAX_ROUTES=${budgets.maxRoutes}`,
+    '--env',
+    `MAX_ACTIONS=${budgets.maxActions}`,
+    '--env',
+    `TARGET_ADDRESSES=${JSON.stringify(target.addresses)}`,
+    'node:24-alpine',
+    'node',
+    '-e',
+    sandboxScript,
   ]
-  return new Promise((resolve) => execute(
-    'docker', args, { timeout: budgets.wallClockMs, maxBuffer: 1_000_000 },
-    (error, stdout, stderr) => resolve({ exitCode: error ? 1 : 0, stdout, stderr }),
-  ))
+  return new Promise((resolve) =>
+    execute('docker', args, { timeout: budgets.wallClockMs, maxBuffer: 1_000_000 }, (error, stdout, stderr) =>
+      resolve({ exitCode: error ? 1 : 0, stdout, stderr }),
+    ),
+  )
 }
 
 export class DockerAuditExplorer implements AuditExplorer {
@@ -157,7 +272,12 @@ export class SandboxAuditExplorer implements AuditExplorer {
       const command = await sandbox.runCommand({
         cmd: 'node',
         args: ['-e', sandboxScript],
-        env: { TARGET_URL: target.url, TARGET_ADDRESSES: JSON.stringify(target.addresses), MAX_ROUTES: String(budgets.maxRoutes), MAX_ACTIONS: String(budgets.maxActions) },
+        env: {
+          TARGET_URL: target.url,
+          TARGET_ADDRESSES: JSON.stringify(target.addresses),
+          MAX_ROUTES: String(budgets.maxRoutes),
+          MAX_ACTIONS: String(budgets.maxActions),
+        },
       })
       const output = await command.stdout()
       if (command.exitCode !== 0) throw new Error('sandbox_explorer_failed')

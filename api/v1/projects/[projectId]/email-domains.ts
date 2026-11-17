@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser, requireProjectCapability } from '../../../_lib/auth.js'
-import { addEmailDomain, listEmailDomains, normalizeEmailDomain, removeEmailDomain } from '../../../_lib/domain-access.js'
+import {
+  addEmailDomain,
+  listEmailDomains,
+  normalizeEmailDomain,
+  removeEmailDomain,
+} from '../../../_lib/domain-access.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 
 const METHODS = ['GET', 'POST', 'DELETE', 'OPTIONS']
@@ -11,7 +16,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return
   const project = getStringQuery(req.query.projectId)
   if (!project) return jsonError(req, res, 400, 'Missing projectId')
-  if (!await requireProjectCapability(req, res, user, project, 'project:manage')) return
+  if (!(await requireProjectCapability(req, res, user, project, 'project:manage'))) return
   try {
     if (req.method !== 'GET') {
       const domain = normalizeEmailDomain(req.method === 'DELETE' ? req.query.domain : req.body?.domain)

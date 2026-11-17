@@ -4,11 +4,16 @@ import { getAppUrl, handleOptions, methodNotAllowed, setCors } from '../../../_l
 import { createWidgetAgentShare } from '../../../_lib/store.js'
 import { decryptToken, encryptToken, generateAccessToken, generateSlug, hashToken } from '../../../_lib/tokens.js'
 import { assertWidgetPage, requireWidgetSession, WidgetSessionError } from '../../../_lib/widget-session.js'
-import { parseWidgetAgentSessionRequest, sendWidgetAgentError, widgetAgentRequestHash } from '../../../_lib/widget-agent.js'
+import {
+  parseWidgetAgentSessionRequest,
+  sendWidgetAgentError,
+  widgetAgentRequestHash,
+} from '../../../_lib/widget-agent.js'
 
 function databaseFailureCode(message: string) {
   if (message.includes('idempotency_conflict')) return 'idempotency_conflict' as const
-  if (message.includes('invalid_selection') || message.includes('share_comments_changed')) return 'invalid_selection' as const
+  if (message.includes('invalid_selection') || message.includes('share_comments_changed'))
+    return 'invalid_selection' as const
   if (message.includes('seat_limit_reached')) return 'seat_limit_reached' as const
   if (message.includes('upgrade_required')) return 'upgrade_required' as const
   if (message.includes('forbidden')) return 'project_access_denied' as const

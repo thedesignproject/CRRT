@@ -5,7 +5,17 @@ import { asset, route } from '../lib/routes'
 import { Spinner } from '../components/primitives'
 import { useDocumentRecovery } from './DocumentRecovery'
 import { DocumentWorkspace } from './DocumentWorkspace'
-export function DocumentsPage({ apiBase, session, author, userId = null }: { apiBase: string; session: string; author: string; userId?: string | null }) {
+export function DocumentsPage({
+  apiBase,
+  session,
+  author,
+  userId = null,
+}: {
+  apiBase: string
+  session: string
+  author: string
+  userId?: string | null
+}) {
   const recovery = useDocumentRecovery(userId)
   const { projects, loading, error } = useProjects(apiBase, session)
   const [choice, setChoice] = useState(() => {
@@ -80,7 +90,9 @@ export function DocumentsPage({ apiBase, session, author, userId = null }: { api
             session={session}
             projectId={projectId}
             listScope={listScope}
-            canCreate={Boolean(listScope) || Boolean(project && ['owner', 'admin', 'member'].includes(project.role ?? ''))}
+            canCreate={
+              Boolean(listScope) || Boolean(project && ['owner', 'admin', 'member'].includes(project.role ?? ''))
+            }
             author={author}
             projects={projects}
             onPendingChange={setPending}

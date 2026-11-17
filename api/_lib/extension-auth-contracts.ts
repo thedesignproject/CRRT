@@ -6,7 +6,10 @@ const PKCE_VERIFIER = /^[A-Za-z0-9._~-]{43,128}$/
 const CALLBACK_PATH = '/crrt-auth'
 
 export class ExtensionAuthContractError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message)
   }
 }
@@ -38,15 +41,16 @@ export function parseChromeRedirect(value: unknown) {
     const url = new URL(value)
     const match = /^([a-p]{32})\.chromiumapp\.org$/.exec(url.hostname)
     if (
-      url.protocol !== 'https:'
-      || url.username
-      || url.password
-      || url.port
-      || url.pathname !== CALLBACK_PATH
-      || url.search
-      || url.hash
-      || !match
-    ) throw new Error('invalid')
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.port ||
+      url.pathname !== CALLBACK_PATH ||
+      url.search ||
+      url.hash ||
+      !match
+    )
+      throw new Error('invalid')
     return { extensionId: match[1]!, redirectUri: url.href }
   } catch {
     throw new ExtensionAuthContractError(400, 'Invalid redirect URI')
@@ -55,7 +59,10 @@ export function parseChromeRedirect(value: unknown) {
 
 function configuredIds(value: string | undefined, name: string): string[] {
   if (!value?.trim()) return []
-  const ids = value.split(',').map((entry) => entry.trim()).filter(Boolean)
+  const ids = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean)
   if (ids.some((id) => !EXTENSION_ID.test(id))) {
     throw new ExtensionAuthContractError(500, `Server misconfigured: invalid ${name}`)
   }
@@ -64,8 +71,8 @@ function configuredIds(value: string | undefined, name: string): string[] {
 
 export function allowedExtensionIds(environment = process.env): Set<string> {
   const production = configuredIds(environment.EXTENSION_ALLOWED_IDS, 'EXTENSION_ALLOWED_IDS')
-  const deployedToProduction = environment.VERCEL_ENV === 'production'
-    || (!environment.VERCEL_ENV && environment.NODE_ENV === 'production')
+  const deployedToProduction =
+    environment.VERCEL_ENV === 'production' || (!environment.VERCEL_ENV && environment.NODE_ENV === 'production')
   const development = deployedToProduction
     ? []
     : configuredIds(environment.EXTENSION_DEVELOPMENT_IDS, 'EXTENSION_DEVELOPMENT_IDS')

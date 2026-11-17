@@ -25,14 +25,14 @@ adapter resource-error reports stop the archive build and upload.
 The explicit selection is in `tests/visual/inventory.ts`: 66 primary captures plus
 three mobile checks, for 69 total.
 
-| Surface | Captures | Examples |
-| --- | ---: | --- |
-| Public site | 16 | Homepage, docs, install, resources, article template, three tools, public audit states; mobile homepage |
-| Dashboard | 23 | Feedback, details, settings, onboarding, inbox, billing, auth, MCP connections/consent, audit states; mobile feedback |
-| Widget | 15 | Menu, selection, composer, sending/error/success, identity, sidebar, edit, tracker picker; mobile sidebar |
-| Widget Agent | 4 | Ready, handoff, upgrade, service error |
-| Extension popup | 8 | Disclosure, sign-in, project selection, restricted page, local feedback, import error |
-| Storybook addon | 3 | Connected, sign-in required, offline |
+| Surface         | Captures | Examples                                                                                                              |
+| --------------- | -------: | --------------------------------------------------------------------------------------------------------------------- |
+| Public site     |       16 | Homepage, docs, install, resources, article template, three tools, public audit states; mobile homepage               |
+| Dashboard       |       23 | Feedback, details, settings, onboarding, inbox, billing, auth, MCP connections/consent, audit states; mobile feedback |
+| Widget          |       15 | Menu, selection, composer, sending/error/success, identity, sidebar, edit, tracker picker; mobile sidebar             |
+| Widget Agent    |        4 | Ready, handoff, upgrade, service error                                                                                |
+| Extension popup |        8 | Disclosure, sign-in, project selection, restricted page, local feedback, import error                                 |
+| Storybook addon |        3 | Connected, sign-in required, offline                                                                                  |
 
 There is one primary theme/viewport per surface. Add another only when it exercises
 a distinct layout. Articles share one template baseline instead of repeating the

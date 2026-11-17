@@ -9,7 +9,15 @@ import { Integrations } from './sections/Integrations'
 import { Reviews } from './sections/Reviews'
 
 /** Shared by the interactive app and the build-time HTML renderer. */
-export function MarketingPage({ authenticated = false, accessToken, apiBase }: { authenticated?: boolean; accessToken?: string; apiBase?: string }) {
+export function MarketingPage({
+  authenticated = false,
+  accessToken,
+  apiBase,
+}: {
+  authenticated?: boolean
+  accessToken?: string
+  apiBase?: string
+}) {
   return (
     <>
       <Hero authenticated={authenticated} />

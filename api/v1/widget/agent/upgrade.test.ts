@@ -2,7 +2,11 @@ import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../../../_lib/billing/agent-entitlement.js', () => ({ resolveWidgetAgentAccess: vi.fn() }))
 vi.mock('../../../_lib/billing/service.js', () => ({ checkout: vi.fn() }))
 vi.mock('../../../_lib/billing/config.js', () => ({ stripeEnabled: vi.fn() }))
-vi.mock('../../../_lib/widget-session.js', async (original) => ({ ...await original<any>(), requireWidgetSession: vi.fn(), assertWidgetPage: vi.fn() }))
+vi.mock('../../../_lib/widget-session.js', async (original) => ({
+  ...(await original<any>()),
+  requireWidgetSession: vi.fn(),
+  assertWidgetPage: vi.fn(),
+}))
 import { resolveWidgetAgentAccess } from '../../../_lib/billing/agent-entitlement.js'
 import { checkout } from '../../../_lib/billing/service.js'
 import { stripeEnabled } from '../../../_lib/billing/config.js'
@@ -11,12 +15,26 @@ import handler from './upgrade.js'
 
 const body = { projectKey: 'p', pageUrl: 'https://example.com/page' }
 const response = () => ({ setHeader: vi.fn(), status: vi.fn().mockReturnThis(), json: vi.fn(), end: vi.fn() })
-async function call(nextBody: unknown = body, method = 'POST') { const res = response(); await handler({ method, body: nextBody, headers: {} } as never, res as never); return res }
+async function call(nextBody: unknown = body, method = 'POST') {
+  const res = response()
+  await handler({ method, body: nextBody, headers: {} } as never, res as never)
+  return res
+}
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(requireWidgetSession).mockResolvedValue({ user_id: 'owner', project_key: 'p', origin: 'https://example.com', display_name: 'Ada', expires_at: 'later' })
-  vi.mocked(resolveWidgetAgentAccess).mockResolvedValue({ state: 'upgrade_required', role: 'owner', ownerUserId: 'owner' })
+  vi.mocked(requireWidgetSession).mockResolvedValue({
+    user_id: 'owner',
+    project_key: 'p',
+    origin: 'https://example.com',
+    display_name: 'Ada',
+    expires_at: 'later',
+  })
+  vi.mocked(resolveWidgetAgentAccess).mockResolvedValue({
+    state: 'upgrade_required',
+    role: 'owner',
+    ownerUserId: 'owner',
+  })
   vi.mocked(stripeEnabled).mockReturnValue(true)
   vi.mocked(checkout).mockResolvedValue({ url: 'https://checkout.example/session' })
 })
@@ -42,5 +60,6 @@ it('validates request, billing availability, auth, and transient failures', asyn
   const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
   vi.mocked(checkout).mockRejectedValueOnce(new Error('stripe down'))
   expect((await call()).status).toHaveBeenCalledWith(503)
-  expect(spy).toHaveBeenCalled(); spy.mockRestore()
+  expect(spy).toHaveBeenCalled()
+  spy.mockRestore()
 })

@@ -1,18 +1,37 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./github-app.js', () => ({ createInstallationAccessToken: vi.fn() }))
-vi.mock('./github-issues.js', () => ({ closeGithubIssue: vi.fn(), createCommentRejectionMarker: vi.fn(() => 'marker') }))
+vi.mock('./github-issues.js', () => ({
+  closeGithubIssue: vi.fn(),
+  createCommentRejectionMarker: vi.fn(() => 'marker'),
+}))
 vi.mock('./linear-connection.js', () => ({ getLinearAccessToken: vi.fn() }))
-vi.mock('./linear.js', () => ({ closeLinearIssue: vi.fn(), hasLinearWriteScope: vi.fn((scopes: string | null) => scopes?.includes('write')) }))
+vi.mock('./linear.js', () => ({
+  closeLinearIssue: vi.fn(),
+  hasLinearWriteScope: vi.fn((scopes: string | null) => scopes?.includes('write')),
+}))
 vi.mock('./jira-connection.js', () => ({ getJiraAccessToken: vi.fn() }))
 vi.mock('./jira.js', () => ({ closeJiraIssue: vi.fn() }))
 vi.mock('./store.js', () => ({
-  cancelExternalWorkClose: vi.fn(), claimExternalWorkClose: vi.fn(), completeExternalWorkClose: vi.fn(), ensureGithubExternalWork: vi.fn(),
-  failExternalWorkClose: vi.fn(), getCommentExternalWork: vi.fn(), getCommentForGithubIssue: vi.fn(),
-  getComment: vi.fn(), getGithubIssueConnection: vi.fn(), getProjectIntegration: vi.fn(),
+  cancelExternalWorkClose: vi.fn(),
+  claimExternalWorkClose: vi.fn(),
+  completeExternalWorkClose: vi.fn(),
+  ensureGithubExternalWork: vi.fn(),
+  failExternalWorkClose: vi.fn(),
+  getCommentExternalWork: vi.fn(),
+  getCommentForGithubIssue: vi.fn(),
+  getComment: vi.fn(),
+  getGithubIssueConnection: vi.fn(),
+  getProjectIntegration: vi.fn(),
 }))
 
-import { closeLinkedExternalWork, closeLinkedGithubIssue, closeLinkedJiraIssue, closeLinkedLinearIssue, EXTERNAL_REJECTION_COMMENT } from './external-work-sync.js'
+import {
+  closeLinkedExternalWork,
+  closeLinkedGithubIssue,
+  closeLinkedJiraIssue,
+  closeLinkedLinearIssue,
+  EXTERNAL_REJECTION_COMMENT,
+} from './external-work-sync.js'
 import { createInstallationAccessToken } from './github-app.js'
 import { closeGithubIssue } from './github-issues.js'
 import { getLinearAccessToken } from './linear-connection.js'
@@ -20,18 +39,34 @@ import { closeLinearIssue } from './linear.js'
 import { getJiraAccessToken } from './jira-connection.js'
 import { closeJiraIssue } from './jira.js'
 import {
-  cancelExternalWorkClose, claimExternalWorkClose, completeExternalWorkClose, ensureGithubExternalWork, failExternalWorkClose,
-  getComment, getCommentExternalWork, getCommentForGithubIssue, getGithubIssueConnection, getProjectIntegration,
+  cancelExternalWorkClose,
+  claimExternalWorkClose,
+  completeExternalWorkClose,
+  ensureGithubExternalWork,
+  failExternalWorkClose,
+  getComment,
+  getCommentExternalWork,
+  getCommentForGithubIssue,
+  getGithubIssueConnection,
+  getProjectIntegration,
 } from './store.js'
 
 const work = {
-  id: 'work', lifecycleStatus: 'active', workspaceId: 'workspace', containerId: 'acme/site', externalId: '7', externalUrl: 'url',
+  id: 'work',
+  lifecycleStatus: 'active',
+  workspaceId: 'workspace',
+  containerId: 'acme/site',
+  externalId: '7',
+  externalUrl: 'url',
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.mocked(getComment).mockResolvedValue({
-    id: 'comment', projectId: 'project', reviewStatus: 'rejected', updatedAt: 'version-1',
+    id: 'comment',
+    projectId: 'project',
+    reviewStatus: 'rejected',
+    updatedAt: 'version-1',
   } as never)
   vi.mocked(getCommentExternalWork).mockResolvedValue(work as never)
   vi.mocked(claimExternalWorkClose).mockResolvedValue({ ...work, lifecycleStatus: 'closing' } as never)
@@ -46,7 +81,10 @@ beforeEach(() => {
 describe('external work Linear rejection sync', () => {
   it('ignores Linear sync after the rejection version changes', async () => {
     vi.mocked(getComment).mockResolvedValueOnce({
-      id: 'comment', projectId: 'project', reviewStatus: 'open', updatedAt: 'version-2',
+      id: 'comment',
+      projectId: 'project',
+      reviewStatus: 'open',
+      updatedAt: 'version-2',
     } as never)
     await closeLinkedLinearIssue('project', 'comment', 'version-1')
     expect(getCommentExternalWork).not.toHaveBeenCalled()
@@ -54,16 +92,24 @@ describe('external work Linear rejection sync', () => {
 
   it('closes a stored Linear issue and records completion', async () => {
     await closeLinkedLinearIssue('project', 'comment', 'version-1')
-    expect(closeLinearIssue).toHaveBeenCalledWith('linear-token', expect.objectContaining({
-      issueId: '7', comment: EXTERNAL_REJECTION_COMMENT, marker: 'marker',
-    }))
+    expect(closeLinearIssue).toHaveBeenCalledWith(
+      'linear-token',
+      expect.objectContaining({
+        issueId: '7',
+        comment: EXTERNAL_REJECTION_COMMENT,
+        marker: 'marker',
+      }),
+    )
     expect(completeExternalWorkClose).toHaveBeenCalledWith('work', expect.any(String))
     await expect(vi.mocked(closeLinearIssue).mock.calls[0][1].beforeClose?.()).resolves.toBe(true)
   })
 
   it('ignores absent, closed, or currently leased Linear work', async () => {
     vi.mocked(getComment).mockResolvedValueOnce({
-      id: 'comment', projectId: 'project', reviewStatus: 'open', updatedAt: 'version-2',
+      id: 'comment',
+      projectId: 'project',
+      reviewStatus: 'open',
+      updatedAt: 'version-2',
     } as never)
     await closeLinkedLinearIssue('project', 'comment', 'version-1')
     vi.mocked(getCommentExternalWork).mockResolvedValueOnce(null)
@@ -78,19 +124,46 @@ describe('external work Linear rejection sync', () => {
   it('blocks unsafe workspace, authorization, and identity states', async () => {
     vi.mocked(getProjectIntegration).mockResolvedValueOnce(null)
     await closeLinkedLinearIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'linear_workspace_not_connected', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'linear_workspace_not_connected',
+      true,
+    )
 
-    vi.mocked(getProjectIntegration).mockResolvedValueOnce({ workspaceId: 'other', grantedScopes: 'read,write' } as never)
+    vi.mocked(getProjectIntegration).mockResolvedValueOnce({
+      workspaceId: 'other',
+      grantedScopes: 'read,write',
+    } as never)
     await closeLinkedLinearIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'linear_workspace_not_connected', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'linear_workspace_not_connected',
+      true,
+    )
 
     vi.mocked(getProjectIntegration).mockResolvedValueOnce({ workspaceId: 'workspace', grantedScopes: 'read' } as never)
     await closeLinkedLinearIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'linear_reauthorization_required', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'linear_reauthorization_required',
+      true,
+    )
 
-    vi.mocked(claimExternalWorkClose).mockResolvedValueOnce({ ...work, externalId: null, lifecycleStatus: 'closing' } as never)
+    vi.mocked(claimExternalWorkClose).mockResolvedValueOnce({
+      ...work,
+      externalId: null,
+      lifecycleStatus: 'closing',
+    } as never)
     await closeLinkedLinearIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'linear_issue_identity_invalid', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'linear_issue_identity_invalid',
+      true,
+    )
   })
 
   it('records retryable, blocked, and opaque provider failures', async () => {
@@ -104,7 +177,12 @@ describe('external work Linear rejection sync', () => {
 
     vi.mocked(closeLinearIssue).mockRejectedValueOnce('opaque')
     await closeLinkedLinearIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'linear_issue_close_failed', false)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'linear_issue_close_failed',
+      false,
+    )
   })
 
   it('cancels stale Linear sync without recording a provider failure', async () => {
@@ -125,7 +203,10 @@ describe('external work Linear rejection sync', () => {
 describe('external work Jira rejection sync', () => {
   it('ignores Jira sync after the rejection version changes', async () => {
     vi.mocked(getComment).mockResolvedValueOnce({
-      id: 'comment', projectId: 'project', reviewStatus: 'open', updatedAt: 'version-2',
+      id: 'comment',
+      projectId: 'project',
+      reviewStatus: 'open',
+      updatedAt: 'version-2',
     } as never)
     await closeLinkedJiraIssue('project', 'comment', 'version-1')
     expect(getCommentExternalWork).not.toHaveBeenCalled()
@@ -133,16 +214,25 @@ describe('external work Jira rejection sync', () => {
 
   it('closes a stored Jira issue and records completion', async () => {
     await closeLinkedJiraIssue('project', 'comment', 'version-1')
-    expect(closeJiraIssue).toHaveBeenCalledWith('jira-token', expect.objectContaining({
-      cloudId: 'workspace', issueId: '7', comment: EXTERNAL_REJECTION_COMMENT, marker: 'marker',
-    }))
+    expect(closeJiraIssue).toHaveBeenCalledWith(
+      'jira-token',
+      expect.objectContaining({
+        cloudId: 'workspace',
+        issueId: '7',
+        comment: EXTERNAL_REJECTION_COMMENT,
+        marker: 'marker',
+      }),
+    )
     expect(completeExternalWorkClose).toHaveBeenCalledWith('work', expect.any(String))
     await expect(vi.mocked(closeJiraIssue).mock.calls[0][1].beforeClose?.()).resolves.toBe(true)
   })
 
   it('ignores absent, closed, or currently leased Jira work', async () => {
     vi.mocked(getComment).mockResolvedValueOnce({
-      id: 'comment', projectId: 'project', reviewStatus: 'open', updatedAt: 'version-2',
+      id: 'comment',
+      projectId: 'project',
+      reviewStatus: 'open',
+      updatedAt: 'version-2',
     } as never)
     await closeLinkedJiraIssue('project', 'comment', 'version-1')
     vi.mocked(getCommentExternalWork).mockResolvedValueOnce(null)
@@ -163,9 +253,18 @@ describe('external work Jira rejection sync', () => {
     await closeLinkedJiraIssue('project', 'comment')
     expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'jira_site_not_connected', true)
 
-    vi.mocked(claimExternalWorkClose).mockResolvedValueOnce({ ...work, externalId: null, lifecycleStatus: 'closing' } as never)
+    vi.mocked(claimExternalWorkClose).mockResolvedValueOnce({
+      ...work,
+      externalId: null,
+      lifecycleStatus: 'closing',
+    } as never)
     await closeLinkedJiraIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'jira_issue_identity_invalid', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'jira_issue_identity_invalid',
+      true,
+    )
   })
 
   it('records retryable, blocked, and opaque Jira failures', async () => {
@@ -175,7 +274,12 @@ describe('external work Jira rejection sync', () => {
 
     vi.mocked(closeJiraIssue).mockRejectedValueOnce(new Error('jira_rejection_transition_unavailable'))
     await closeLinkedJiraIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'jira_rejection_transition_unavailable', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'jira_rejection_transition_unavailable',
+      true,
+    )
 
     vi.mocked(closeJiraIssue).mockRejectedValueOnce(new Error('jira_permission_denied'))
     await closeLinkedJiraIssue('project', 'comment')
@@ -197,9 +301,14 @@ describe('external work Jira rejection sync', () => {
 describe('external work GitHub rejection sync', () => {
   it('closes a stored GitHub issue and records completion', async () => {
     await closeLinkedGithubIssue('project', 'comment', 'version-1')
-    expect(closeGithubIssue).toHaveBeenCalledWith(expect.objectContaining({
-      accessToken: 'token', issueNumber: 7, comment: EXTERNAL_REJECTION_COMMENT, marker: 'marker',
-    }))
+    expect(closeGithubIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accessToken: 'token',
+        issueNumber: 7,
+        comment: EXTERNAL_REJECTION_COMMENT,
+        marker: 'marker',
+      }),
+    )
     expect(completeExternalWorkClose).toHaveBeenCalledWith('work', expect.any(String))
     await expect(vi.mocked(closeGithubIssue).mock.calls[0][0].beforeClose?.()).resolves.toBe(true)
   })
@@ -211,13 +320,17 @@ describe('external work GitHub rejection sync', () => {
     } as never)
     vi.mocked(ensureGithubExternalWork).mockResolvedValueOnce(work as never)
     await closeLinkedGithubIssue('project', 'comment')
-    expect(ensureGithubExternalWork).toHaveBeenCalledWith(expect.objectContaining({ owner: 'acme', repo: 'site', issueNumber: 8 }))
+    expect(ensureGithubExternalWork).toHaveBeenCalledWith(
+      expect.objectContaining({ owner: 'acme', repo: 'site', issueNumber: 8 }),
+    )
 
     vi.mocked(getCommentExternalWork).mockResolvedValueOnce(null)
     vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ githubIssue: null } as never)
     await closeLinkedGithubIssue('project', 'comment')
     vi.mocked(getCommentExternalWork).mockResolvedValueOnce(null)
-    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ githubIssue: { issueNumber: 7, issueUrl: 'bad', createdAt: 'now' } } as never)
+    vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({
+      githubIssue: { issueNumber: 7, issueUrl: 'bad', createdAt: 'now' },
+    } as never)
     await closeLinkedGithubIssue('project', 'comment')
     for (const issueUrl of [
       'http://github.com/acme/site/issues/7',
@@ -225,7 +338,9 @@ describe('external work GitHub rejection sync', () => {
       'https://github.com/acme/site/pulls/7',
     ]) {
       vi.mocked(getCommentExternalWork).mockResolvedValueOnce(null)
-      vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({ githubIssue: { issueNumber: 7, issueUrl, createdAt: 'now' } } as never)
+      vi.mocked(getCommentForGithubIssue).mockResolvedValueOnce({
+        githubIssue: { issueNumber: 7, issueUrl, createdAt: 'now' },
+      } as never)
       await closeLinkedGithubIssue('project', 'comment')
     }
     vi.mocked(getCommentExternalWork).mockResolvedValueOnce({ ...work, lifecycleStatus: 'closed' } as never)
@@ -239,11 +354,25 @@ describe('external work GitHub rejection sync', () => {
   it('blocks mismatched routing and invalid issue identities', async () => {
     vi.mocked(getGithubIssueConnection).mockResolvedValueOnce(null)
     await closeLinkedGithubIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'github_repository_not_connected', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'github_repository_not_connected',
+      true,
+    )
 
-    vi.mocked(claimExternalWorkClose).mockResolvedValueOnce({ ...work, externalId: 'bad', lifecycleStatus: 'closing' } as never)
+    vi.mocked(claimExternalWorkClose).mockResolvedValueOnce({
+      ...work,
+      externalId: 'bad',
+      lifecycleStatus: 'closing',
+    } as never)
     await closeLinkedGithubIssue('project', 'comment')
-    expect(failExternalWorkClose).toHaveBeenLastCalledWith('work', expect.any(String), 'github_issue_identity_invalid', true)
+    expect(failExternalWorkClose).toHaveBeenLastCalledWith(
+      'work',
+      expect.any(String),
+      'github_issue_identity_invalid',
+      true,
+    )
   })
 
   it('records provider failures without throwing them into rejection', async () => {
@@ -257,7 +386,10 @@ describe('external work GitHub rejection sync', () => {
 
   it('cancels stale rejection work before mutating GitHub', async () => {
     vi.mocked(getComment).mockResolvedValueOnce({
-      id: 'comment', projectId: 'project', reviewStatus: 'open', updatedAt: 'version-2',
+      id: 'comment',
+      projectId: 'project',
+      reviewStatus: 'open',
+      updatedAt: 'version-2',
     } as never)
     await closeLinkedGithubIssue('project', 'comment', 'version-1')
     expect(claimExternalWorkClose).not.toHaveBeenCalled()

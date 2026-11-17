@@ -12,6 +12,9 @@ export function trustedUser(req: VercelRequest) {
 
 export async function withTrustedUser<T>(req: VercelRequest, user: TrustedUser, run: () => Promise<T>): Promise<T> {
   users.set(req, user)
-  try { return await run() }
-  finally { users.delete(req) }
+  try {
+    return await run()
+  } finally {
+    users.delete(req)
+  }
 }

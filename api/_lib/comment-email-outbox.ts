@@ -37,13 +37,17 @@ export async function enqueueCommentEmail(deliveryId: string, bodies: string[]) 
   // A single INSERT transaction persists all batches before any mail is sent.
   // Re-enqueueing the same delivery never replaces an already frozen payload.
   const snapshot = bodies.map((body, batchIndex) => ({
-    delivery_id: deliveryId, batch_index: batchIndex, body, expires_at: expiresAt,
+    delivery_id: deliveryId,
+    batch_index: batchIndex,
+    body,
+    expires_at: expiresAt,
   }))
   for (let attempt = 0; attempt < 3; attempt++) {
     if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, attempt * 250))
     try {
-      const { error } = await getServiceSupabase().from(TABLE).upsert(snapshot,
-        { onConflict: 'delivery_id,batch_index', ignoreDuplicates: true })
+      const { error } = await getServiceSupabase()
+        .from(TABLE)
+        .upsert(snapshot, { onConflict: 'delivery_id,batch_index', ignoreDuplicates: true })
       if (!error) return
       // A rejection on the first attempt is definitive. After an uncertain
       // attempt, an earlier INSERT could already have committed.
@@ -74,8 +78,13 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
   const db = getServiceSupabase()
   const deadline = Date.now() + WORKER_BUDGET_MS
   const now = new Date().toISOString()
-  const { data, error } = await db.from(TABLE).select('*')
-    .eq('status', 'pending').lte('next_attempt_at', now).order('next_attempt_at').limit(10)
+  const { data, error } = await db
+    .from(TABLE)
+    .select('*')
+    .eq('status', 'pending')
+    .lte('next_attempt_at', now)
+    .order('next_attempt_at')
+    .limit(10)
   if (error) throw new Error('Comment email queue read failed')
 
   for (const batch of data as EmailBatch[]) {
@@ -85,8 +94,11 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
     // A crashed worker's lease becomes eligible again after two minutes.
     const leaseUntil = Date.now() + LEASE_MS
     const { data: claimed, error: claimError } = await db.rpc('claim_comment_email_batch', {
-      p_id: batch.id, p_token: token, p_attempts: batch.attempts,
-      p_next_attempt: batch.next_attempt_at, p_lease_until: new Date(leaseUntil).toISOString(),
+      p_id: batch.id,
+      p_token: token,
+      p_attempts: batch.attempts,
+      p_next_attempt: batch.next_attempt_at,
+      p_lease_until: new Date(leaseUntil).toISOString(),
     })
     if (claimError) throw new Error('Comment email queue claim failed')
     if (!claimed) continue
@@ -107,9 +119,11 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
           // fence. No await occurs between this deadline check and dispatch.
           if (Date.now() >= leaseUntil) throw new Error('Delivery lease expired')
           const response = await fetch('https://api.resend.com/emails/batch', {
-            method: 'POST', signal: controller.signal,
+            method: 'POST',
+            signal: controller.signal,
             headers: {
-              Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json',
+              Authorization: `Bearer ${apiKey}`,
+              'Content-Type': 'application/json',
               'Idempotency-Key': `comment-activity/${batch.delivery_id}/${batch.batch_index}`,
             },
             body: batch.body,
@@ -134,21 +148,33 @@ export async function processCommentEmailQueue(timeoutMs = 5_000) {
       } finally {
         clearTimeout(timeout)
       }
-      if (status === 'pending' && (batch.attempts + 1 >= MAX_ATTEMPTS || Date.now() + delay >= Date.parse(batch.expires_at))) {
+      if (
+        status === 'pending' &&
+        (batch.attempts + 1 >= MAX_ATTEMPTS || Date.now() + delay >= Date.parse(batch.expires_at))
+      ) {
         status = 'failed'
       }
     }
-    const { error: updateError } = await db.from(TABLE).update({
-      status, last_error: lastError, lease_token: null,
-      next_attempt_at: new Date(Date.now() + delay).toISOString(),
-    }).eq('id', batch.id).eq('lease_token', token).eq('status', 'pending')
+    const { error: updateError } = await db
+      .from(TABLE)
+      .update({
+        status,
+        last_error: lastError,
+        lease_token: null,
+        next_attempt_at: new Date(Date.now() + delay).toISOString(),
+      })
+      .eq('id', batch.id)
+      .eq('lease_token', token)
+      .eq('status', 'pending')
     // On failure leave the lease to expire. Its replay uses the original key.
     if (updateError) throw new Error('Comment email queue checkpoint failed')
     if (status === 'failed') console.warn('Comment email delivery failed', { batchId: batch.id, reason: lastError })
   }
 
   // Limit retention of recipient addresses and rendered message content.
-  const { error: cleanupError } = await db.from(TABLE).delete()
+  const { error: cleanupError } = await db
+    .from(TABLE)
+    .delete()
     .lt('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
   if (cleanupError) throw new Error('Comment email queue cleanup failed')
 }

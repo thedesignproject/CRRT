@@ -12,7 +12,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     originExtensionId = setExtensionCors(req, res, methods)
   } catch (error) {
     const status = error instanceof ExtensionAuthContractError ? error.status : 500
-    return extensionJsonError(res, status, status === 500 ? 'Extension authentication unavailable' : 'Extension origin is not allowed')
+    return extensionJsonError(
+      res,
+      status,
+      status === 500 ? 'Extension authentication unavailable' : 'Extension origin is not allowed',
+    )
   }
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return extensionJsonError(res, 405, 'Method not allowed')

@@ -44,7 +44,7 @@ async function githubRequest(url: string, accessToken: string, init: RequestInit
 
 async function githubJson(response: Response) {
   try {
-    return await response.json() as Record<string, unknown>
+    return (await response.json()) as Record<string, unknown>
   } catch {
     throw new Error('github_issue_request_failed')
   }
@@ -106,7 +106,10 @@ function normalizeGithubIssueTitle(value: string) {
   const characters = Array.from(title)
   return characters.length <= MAX_GITHUB_ISSUE_TITLE_LENGTH
     ? title
-    : `${characters.slice(0, MAX_GITHUB_ISSUE_TITLE_LENGTH - 1).join('').trimEnd()}…`
+    : `${characters
+        .slice(0, MAX_GITHUB_ISSUE_TITLE_LENGTH - 1)
+        .join('')
+        .trimEnd()}…`
 }
 
 export function formatGithubIssueBody(
@@ -125,8 +128,12 @@ export function formatGithubIssueBody(
 
   const selected: string[] = []
   if (comment.selector) selected.push(`Selector: \`${comment.selector}\``)
-  if (typeof comment.x === 'number' && typeof comment.y === 'number'
-    && Number.isFinite(comment.x) && Number.isFinite(comment.y)) {
+  if (
+    typeof comment.x === 'number' &&
+    typeof comment.y === 'number' &&
+    Number.isFinite(comment.x) &&
+    Number.isFinite(comment.y)
+  ) {
     selected.push(`Coordinates: ${comment.x}, ${comment.y}`)
   }
   if (comment.targetType) selected.push(`Target type: ${comment.targetType}`)
@@ -170,22 +177,17 @@ export async function findGithubIssueByMarker(input: {
   marker: string
 }) {
   const query = encodeURIComponent(`repo:${input.owner}/${input.repo} is:issue in:body "${input.marker}"`)
-  const response = await githubRequest(
-    `https://api.github.com/search/issues?q=${query}&per_page=10`,
-    input.accessToken,
-  )
+  const response = await githubRequest(`https://api.github.com/search/issues?q=${query}&per_page=10`, input.accessToken)
   const body = await githubJson(response)
   if (!response.ok || !Array.isArray(body.items)) throw new Error('github_issue_search_failed')
-  const matches = (body.items as Array<Record<string, unknown>>)
-    .filter((item) => typeof item.body === 'string' && item.body.includes(input.marker))
+  const matches = (body.items as Array<Record<string, unknown>>).filter(
+    (item) => typeof item.body === 'string' && item.body.includes(input.marker),
+  )
   if (matches.length === 0) return null
   if (matches.length > 1) throw new Error('github_issue_recovery_ambiguous')
   const issue = matches[0]
-  if (
-    typeof issue.number !== 'number'
-    || typeof issue.html_url !== 'string'
-    || typeof issue.created_at !== 'string'
-  ) throw new Error('github_issue_search_failed')
+  if (typeof issue.number !== 'number' || typeof issue.html_url !== 'string' || typeof issue.created_at !== 'string')
+    throw new Error('github_issue_search_failed')
   const issueUrl = validGithubIssueUrl(issue.html_url, input.owner, input.repo, issue.number)
   if (!issueUrl) throw new Error('github_issue_search_failed')
   return { issueNumber: issue.number, issueUrl, createdAt: issue.created_at }
@@ -222,7 +224,7 @@ export async function createGithubIssue(input: {
   if (!response.ok) {
     let providerMessage: string | null = null
     try {
-      const body = await response.json() as Record<string, unknown>
+      const body = (await response.json()) as Record<string, unknown>
       providerMessage = typeof body.message === 'string' ? body.message : null
     } catch {
       // The status and request id still make malformed provider responses useful.
@@ -237,15 +239,12 @@ export async function createGithubIssue(input: {
 
   let issue: Record<string, unknown>
   try {
-    issue = await response.json() as Record<string, unknown>
+    issue = (await response.json()) as Record<string, unknown>
   } catch {
     throw new Error('github_issue_result_indeterminate')
   }
-  if (
-    typeof issue.number !== 'number'
-    || typeof issue.html_url !== 'string'
-    || typeof issue.created_at !== 'string'
-  ) throw new Error('github_issue_result_indeterminate')
+  if (typeof issue.number !== 'number' || typeof issue.html_url !== 'string' || typeof issue.created_at !== 'string')
+    throw new Error('github_issue_result_indeterminate')
   const issueUrl = validGithubIssueUrl(issue.html_url, input.owner, input.repo, issue.number)
   if (!issueUrl) throw new Error('github_issue_result_indeterminate')
   return { issueNumber: issue.number, issueUrl, createdAt: issue.created_at }
@@ -270,18 +269,19 @@ export async function closeGithubIssue(input: {
   if (!closeResponse.ok) throw new Error('github_issue_close_failed')
 
   for (let page = 1; ; page += 1) {
-    const commentsResponse = await githubRequest(
-      `${issueUrl}/comments?per_page=100&page=${page}`,
-      input.accessToken,
-    )
+    const commentsResponse = await githubRequest(`${issueUrl}/comments?per_page=100&page=${page}`, input.accessToken)
     const commentsBody = await githubJson(commentsResponse)
     if (!commentsResponse.ok || !Array.isArray(commentsBody)) throw new Error('github_issue_comments_failed')
-    if (commentsBody.some((comment) => (
-      typeof comment === 'object'
-      && comment !== null
-      && typeof (comment as { body?: unknown }).body === 'string'
-      && (comment as { body: string }).body.includes(input.marker)
-    ))) return
+    if (
+      commentsBody.some(
+        (comment) =>
+          typeof comment === 'object' &&
+          comment !== null &&
+          typeof (comment as { body?: unknown }).body === 'string' &&
+          (comment as { body: string }).body.includes(input.marker),
+      )
+    )
+      return
     if (commentsBody.length < 100) break
   }
 

@@ -6,13 +6,18 @@ if (process.env.CRRT_RECORD_ENABLED !== 'true') throw new Error('Record worker r
 
 const once = process.argv.includes('--once')
 let stopping = false
-process.on('SIGTERM', () => { stopping = true })
-process.on('SIGINT', () => { stopping = true })
+process.on('SIGTERM', () => {
+  stopping = true
+})
+process.on('SIGINT', () => {
+  stopping = true
+})
 try {
   do {
     await rpc('record_sweep', {})
     let worked = false
-    for (const stage of ['metadata', 'transcription', 'alignment', 'cleanup'] as Stage[]) worked = await runNext(stage) || worked
+    for (const stage of ['metadata', 'transcription', 'alignment', 'cleanup'] as Stage[])
+      worked = (await runNext(stage)) || worked
     if (!worked && !once) await Bun.sleep(2000)
   } while (!once && !stopping)
   if (once) {

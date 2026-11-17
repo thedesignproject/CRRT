@@ -66,7 +66,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           token = decryptToken(currentShare.accessTokenCiphertext)
         }
       } catch (rotationError) {
-        if (rotationError instanceof Error && rotationError.message === 'forbidden') return jsonError(req, res, 403, 'Forbidden')
+        if (rotationError instanceof Error && rotationError.message === 'forbidden')
+          return jsonError(req, res, 403, 'Forbidden')
         console.error('[feedback-shares/prompt] share token rotation failed', {
           shareId: share.id,
           projectKey: share.projectId,

@@ -3,7 +3,9 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 export function issueScreenshotToken(projectId: string, commentId: string, storagePath: string) {
   const secret = process.env.WIDGET_AUTH_SECRET
   if (!secret) throw new Error('missing_widget_auth_secret')
-  return createHmac('sha256', secret).update(JSON.stringify(['issue-screenshot:v1', projectId, commentId, storagePath])).digest('base64url')
+  return createHmac('sha256', secret)
+    .update(JSON.stringify(['issue-screenshot:v1', projectId, commentId, storagePath]))
+    .digest('base64url')
 }
 
 export function issueScreenshotUrl(projectId: string, commentId: string, storagePath: string) {

@@ -1,6 +1,9 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ from: vi.fn(), sign: vi.fn() }))
-vi.mock('./core.js', async original => ({ ...await original<typeof import('./core')>(), database: () => ({ from: m.from }) }))
+vi.mock('./core.js', async (original) => ({
+  ...(await original<typeof import('./core')>()),
+  database: () => ({ from: m.from }),
+}))
 vi.mock('./object-storage.js', () => ({ recordObjectStorage: () => ({ signPlayback: m.sign }) }))
 import { librarySummaries } from './library-previews'
 const id = 'a84f2f14-4c62-4b7e-9831-b539fb1ddfba'
@@ -9,13 +12,18 @@ const row: any = { id, title: 'Review', state: 'ready', storage_provider: 'r2', 
 let query: any
 beforeEach(() => {
   vi.clearAllMocks()
-  query = { in: vi.fn(() => query), eq: vi.fn(() => query), not: vi.fn().mockResolvedValue({ data: [{ recording_id: id, path }], error: null }) }
+  query = {
+    in: vi.fn(() => query),
+    eq: vi.fn(() => query),
+    not: vi.fn().mockResolvedValue({ data: [{ recording_id: id, path }], error: null }),
+  }
   m.from.mockReturnValue({ select: vi.fn(() => query) })
   m.sign.mockResolvedValue({ data: { signedUrl: 'https://private.test/signed' }, error: null })
 })
 it('signs verified thumbnails only from the authorized page without exposing object paths', async () => {
   expect(await librarySummaries([row, { ...row, id: 'other' }])).toEqual([
-    expect.objectContaining({ id, thumbnailUrl: 'https://private.test/signed' }), expect.objectContaining({ id: 'other', thumbnailUrl: null }),
+    expect.objectContaining({ id, thumbnailUrl: 'https://private.test/signed' }),
+    expect.objectContaining({ id: 'other', thumbnailUrl: null }),
   ])
   expect(query.in).toHaveBeenCalledWith('recording_id', [id, 'other'])
   expect(query.eq).toHaveBeenCalledWith('kind', 'thumbnail')

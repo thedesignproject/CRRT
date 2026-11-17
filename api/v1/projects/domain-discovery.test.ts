@@ -4,9 +4,28 @@ import domains from './[projectId]/email-domains.js'
 import { requireUser, requireProjectCapability } from '../../_lib/auth.js'
 import { addEmailDomain, listEmailDomains, removeEmailDomain, suggestDomainProjects } from '../../_lib/domain-access.js'
 vi.mock('../../_lib/auth.js', () => ({ requireUser: vi.fn(), requireProjectCapability: vi.fn() }))
-vi.mock('../../_lib/domain-access.js', async importOriginal => ({ ...await importOriginal<object>(), addEmailDomain: vi.fn(), listEmailDomains: vi.fn(), removeEmailDomain: vi.fn(), suggestDomainProjects: vi.fn() }))
+vi.mock('../../_lib/domain-access.js', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  addEmailDomain: vi.fn(),
+  listEmailDomains: vi.fn(),
+  removeEmailDomain: vi.fn(),
+  suggestDomainProjects: vi.fn(),
+}))
 async function call(handler: typeof suggestions, method = 'GET', query: object = { projectId: 'p' }, body?: unknown) {
-  const res = { statusCode: 200, body: undefined as unknown, status(n: number) { this.statusCode = n; return this }, json(data: unknown) { this.body = data; return this }, end() {}, setHeader() {} }
+  const res = {
+    statusCode: 200,
+    body: undefined as unknown,
+    status(n: number) {
+      this.statusCode = n
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {},
+    setHeader() {},
+  }
   await handler({ method, query, body, headers: {} } as never, res as never)
   return res
 }
@@ -41,12 +60,19 @@ it('only discovers projects for the authenticated identity', async () => {
 })
 it('lists, adds and removes normalized domains with admin permissions', async () => {
   expect((await call(domains)).body).toEqual([{ domain: 'company.com' }])
-  expect(requireProjectCapability).toHaveBeenCalledWith(expect.anything(), expect.anything(), expect.anything(), 'p', 'project:manage')
+  expect(requireProjectCapability).toHaveBeenCalledWith(
+    expect.anything(),
+    expect.anything(),
+    expect.anything(),
+    'p',
+    'project:manage',
+  )
   expect((await call(domains, 'POST', { projectId: 'p' }, { domain: ' @Company.COM ' })).statusCode).toBe(200)
   expect(addEmailDomain).toHaveBeenCalledWith('p', 'u', 'company.com')
   expect((await call(domains, 'DELETE', { projectId: 'p', domain: 'company.com' })).statusCode).toBe(200)
   expect(removeEmailDomain).toHaveBeenCalledWith('p', 'u', 'company.com')
-  for (const body of [undefined, {}, { domain: '*' }]) expect((await call(domains, 'POST', { projectId: 'p' }, body)).statusCode).toBe(400)
+  for (const body of [undefined, {}, { domain: '*' }])
+    expect((await call(domains, 'POST', { projectId: 'p' }, body)).statusCode).toBe(400)
   expect((await call(domains, 'DELETE')).statusCode).toBe(400)
   vi.mocked(listEmailDomains).mockRejectedValueOnce(new Error('failed'))
   expect((await call(domains)).statusCode).toBe(500)
@@ -56,7 +82,16 @@ it('rejects domain changes if permissions were revoked after the initial check',
   for (const method of ['POST', 'DELETE']) {
     vi.mocked(addEmailDomain).mockResolvedValueOnce('forbidden')
     vi.mocked(removeEmailDomain).mockResolvedValueOnce('forbidden')
-    expect((await call(domains, method, { projectId: 'p', domain: 'company.com' }, { domain: 'company.com', actor: 'spoof' })).statusCode).toBe(403)
+    expect(
+      (
+        await call(
+          domains,
+          method,
+          { projectId: 'p', domain: 'company.com' },
+          { domain: 'company.com', actor: 'spoof' },
+        )
+      ).statusCode,
+    ).toBe(403)
   }
   expect(listEmailDomains).not.toHaveBeenCalled()
 })

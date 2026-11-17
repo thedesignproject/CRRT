@@ -1,13 +1,15 @@
 import { getPrivilegedHeaders, getServiceSupabase } from './supabase.js'
 import { issueScreenshotUrl } from './issue-screenshot.js'
-import {
-  AdminQueryError,
-  decodeAdminCursor,
-  encodeAdminCursor,
-  type AdminPage,
-} from './admin-pagination.js'
+import { AdminQueryError, decodeAdminCursor, encodeAdminCursor, type AdminPage } from './admin-pagination.js'
 import { fromLegacyStatus, toLegacyStatus, type ImplementationStatus, type ReviewStatus } from './status.js'
-import { effectiveProjectRole, projectCapabilities, projectFeedbackAllowed, type FeedbackVisibility, type ProjectRole, type StoredProjectRole } from './project-capabilities.js'
+import {
+  effectiveProjectRole,
+  projectCapabilities,
+  projectFeedbackAllowed,
+  type FeedbackVisibility,
+  type ProjectRole,
+  type StoredProjectRole,
+} from './project-capabilities.js'
 
 // Every table/storage operation in this module goes through the secret-key
 // client. Every public table has RLS enabled with no permissive policy
@@ -52,10 +54,8 @@ type CommentRow = {
 // hand-rolled select list elsewhere) silently drops fields from responses.
 const COMMENT_COLUMNS =
   'id, project_id, created_by_user_id, url, x, y, element, comment, status, implementation_status, claimed_by_agent_id, image_url, source, visibility, screenshot_storage_path, author_name, target_type, anchor, created_at, updated_at'
-const COMMENT_GITHUB_ISSUE_COLUMNS =
-  `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
-const COMMENT_PROJECT_EXTERNAL_WORK_COLUMNS =
-  `${COMMENT_GITHUB_ISSUE_COLUMNS}, comment_external_work(state, provider, external_id, external_key, external_url, lifecycle_status, closed_at, created_at, updated_at)`
+const COMMENT_GITHUB_ISSUE_COLUMNS = `${COMMENT_COLUMNS}, github_issue_number, github_issue_url, github_issue_created_at, github_issue_lease_token, github_issue_lease_expires_at, github_issue_uncertain_at`
+const COMMENT_PROJECT_EXTERNAL_WORK_COLUMNS = `${COMMENT_GITHUB_ISSUE_COLUMNS}, comment_external_work(state, provider, external_id, external_key, external_url, lifecycle_status, closed_at, created_at, updated_at)`
 
 type ProjectRow = {
   public_key: string
@@ -68,7 +68,8 @@ type ProjectRow = {
   updated_at: string
 }
 
-const PROJECT_COLUMNS = 'public_key, slug, name, allowed_origins, widget_private, feedback_access, created_at, updated_at'
+const PROJECT_COLUMNS =
+  'public_key, slug, name, allowed_origins, widget_private, feedback_access, created_at, updated_at'
 
 type ProjectMemberRow = {
   project_key: string
@@ -108,8 +109,18 @@ type GitHubUserInstallationRow = {
 export type ExternalIntegrationProvider = 'linear' | 'jira'
 export type ExternalWorkProvider = 'github' | ExternalIntegrationProvider
 
-type PublicCommentExternalWorkRow = Pick<CommentExternalWorkRow,
-  'state' | 'provider' | 'external_id' | 'external_key' | 'external_url' | 'lifecycle_status' | 'last_sync_error' | 'closed_at' | 'created_at' | 'updated_at'
+type PublicCommentExternalWorkRow = Pick<
+  CommentExternalWorkRow,
+  | 'state'
+  | 'provider'
+  | 'external_id'
+  | 'external_key'
+  | 'external_url'
+  | 'lifecycle_status'
+  | 'last_sync_error'
+  | 'closed_at'
+  | 'created_at'
+  | 'updated_at'
 >
 
 type ProjectIntegrationRow = {
@@ -163,7 +174,13 @@ const PROJECT_INTEGRATION_COLUMNS =
 const COMMENT_EXTERNAL_WORK_COLUMNS =
   'id, project_id, comment_id, provider, state, workspace_id, container_id, external_id, external_key, external_url, lease_token, lease_expires_at, uncertain_at, lifecycle_status, sync_lease_token, sync_lease_expires_at, last_sync_error, closed_at, created_at, updated_at'
 
-export type ExternalWorkSyncAction = 'retry' | 'reconnect' | 'check_permissions' | 'check_issue' | 'configure_workflow' | null
+export type ExternalWorkSyncAction =
+  | 'retry'
+  | 'reconnect'
+  | 'check_permissions'
+  | 'check_issue'
+  | 'configure_workflow'
+  | null
 
 function externalWorkSyncAction(
   status: CommentExternalWorkRow['lifecycle_status'],
@@ -173,12 +190,18 @@ function externalWorkSyncAction(
   if (status !== 'blocked' || !errorCode) return null
   if (errorCode.includes('not_connected') || errorCode.includes('reauthorization_required')) return 'reconnect'
   if (errorCode.includes('permission_denied')) return 'check_permissions'
-  if (errorCode.includes('identity_invalid') || errorCode.includes('not_found') || errorCode.includes('resource_not_found')) return 'check_issue'
   if (
-    errorCode.includes('transition')
-    || errorCode.includes('state_unavailable')
-    || errorCode.includes('status_invalid')
-  ) return 'configure_workflow'
+    errorCode.includes('identity_invalid') ||
+    errorCode.includes('not_found') ||
+    errorCode.includes('resource_not_found')
+  )
+    return 'check_issue'
+  if (
+    errorCode.includes('transition') ||
+    errorCode.includes('state_unavailable') ||
+    errorCode.includes('status_invalid')
+  )
+    return 'configure_workflow'
   return 'retry'
 }
 
@@ -342,13 +365,14 @@ export function mapComment(row: CommentRow): StoredComment {
 }
 
 function mapProjectComment(row: CommentRow) {
-  const githubIssue = row.github_issue_number && row.github_issue_url && row.github_issue_created_at
-    ? {
-        issueNumber: row.github_issue_number,
-        issueUrl: row.github_issue_url,
-        createdAt: row.github_issue_created_at,
-      }
-    : null
+  const githubIssue =
+    row.github_issue_number && row.github_issue_url && row.github_issue_created_at
+      ? {
+          issueNumber: row.github_issue_number,
+          issueUrl: row.github_issue_url,
+          createdAt: row.github_issue_created_at,
+        }
+      : null
   const externalWork = row.comment_external_work
     ?.filter((work) => work.state === 'created' && work.external_id && work.external_key && work.external_url)
     .map((work) => ({
@@ -389,19 +413,30 @@ async function mapProjectCommentWithPrivateImage(
 ) {
   const comment = includeExternalWork ? mapProjectComment(row) : mapComment(row)
   if (!row.screenshot_storage_path) return comment
-  const { data, error } = await client.storage.from('extension-feedback-images').createSignedUrl(row.screenshot_storage_path, 300)
+  const { data, error } = await client.storage
+    .from('extension-feedback-images')
+    .createSignedUrl(row.screenshot_storage_path, 300)
   if (error && error.message !== 'Object not found') throw new Error(`Screenshot signing failed: ${error.message}`)
   return { ...comment, imageUrl: data?.signedUrl ?? null }
 }
 
-function mapProject(row: ProjectRow): { publicKey: string; slug: string; name: string; allowedOrigins: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins'; createdAt: string; updatedAt: string } {
+function mapProject(row: ProjectRow): {
+  publicKey: string
+  slug: string
+  name: string
+  allowedOrigins: string[]
+  widgetPrivate?: boolean
+  feedbackAccess?: 'team' | 'admins'
+  createdAt: string
+  updatedAt: string
+} {
   return {
     publicKey: row.public_key,
     slug: row.slug,
     name: row.name,
     allowedOrigins: row.allowed_origins ?? [],
     widgetPrivate: row.widget_private === true,
-    feedbackAccess: row.feedback_access === 'admins' ? 'admins' as const : 'team' as const,
+    feedbackAccess: row.feedback_access === 'admins' ? ('admins' as const) : ('team' as const),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -469,7 +504,10 @@ function mapEvent(row: EventRow) {
   }
 }
 
-export async function listProjectsForUser(userId: string, options: { after?: string; limit?: number; name?: string } = {}) {
+export async function listProjectsForUser(
+  userId: string,
+  options: { after?: string; limit?: number; name?: string } = {},
+) {
   const supabase = getSupabase()
   let membershipQuery = supabase
     .from('project_members')
@@ -492,14 +530,22 @@ export async function listProjectsForUser(userId: string, options: { after?: str
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
-  const accessByProject = new Map(memberships.map((membership) => {
-    const role = effectiveProjectRole(membership.role, membership.is_owner)
-    return [membership.project_key, { role, capabilities: projectCapabilities(role) }]
-  }))
+  const accessByProject = new Map(
+    memberships.map((membership) => {
+      const role = effectiveProjectRole(membership.role, membership.is_owner)
+      return [membership.project_key, { role, capabilities: projectCapabilities(role) }]
+    }),
+  )
   return (data || []).map((row) => ({
     ...mapProject(row as ProjectRow),
     ...accessByProject.get((row as ProjectRow).public_key),
-    capabilities: projectFeedbackAllowed(accessByProject.get((row as ProjectRow).public_key)!.role, (row as ProjectRow).widget_private, (row as ProjectRow).feedback_access) ? accessByProject.get((row as ProjectRow).public_key)!.capabilities : ['feedback:create'],
+    capabilities: projectFeedbackAllowed(
+      accessByProject.get((row as ProjectRow).public_key)!.role,
+      (row as ProjectRow).widget_private,
+      (row as ProjectRow).feedback_access,
+    )
+      ? accessByProject.get((row as ProjectRow).public_key)!.capabilities
+      : ['feedback:create'],
   }))
 }
 
@@ -519,7 +565,15 @@ export async function getProjectMember(
   if (!data) return null
   const member = data as ProjectMemberRow
   const project = (data as unknown as { projects: { widget_private: boolean; feedback_access: string } }).projects
-  return { role: member.role, isOwner: member.is_owner, feedbackAllowed: projectFeedbackAllowed(effectiveProjectRole(member.role, member.is_owner), project?.widget_private, project?.feedback_access) }
+  return {
+    role: member.role,
+    isOwner: member.is_owner,
+    feedbackAllowed: projectFeedbackAllowed(
+      effectiveProjectRole(member.role, member.is_owner),
+      project?.widget_private,
+      project?.feedback_access,
+    ),
+  }
 }
 
 export async function isProjectMember(userId: string, projectKey: string): Promise<boolean> {
@@ -547,12 +601,24 @@ export async function listProjectMembers(projectKey: string, feedbackOnly = fals
     .order('created_at', { ascending: true })
 
   if (error) throw new Error(error.message)
-  const rows = ((data || []) as unknown as Array<ProjectMemberDetailRow & { projects?: { widget_private: boolean; feedback_access: string } }>).filter((row) => !feedbackOnly || projectFeedbackAllowed(effectiveProjectRole(row.role, row.is_owner), row.projects?.widget_private, row.projects?.feedback_access))
+  const rows = (
+    (data || []) as unknown as Array<
+      ProjectMemberDetailRow & { projects?: { widget_private: boolean; feedback_access: string } }
+    >
+  ).filter(
+    (row) =>
+      !feedbackOnly ||
+      projectFeedbackAllowed(
+        effectiveProjectRole(row.role, row.is_owner),
+        row.projects?.widget_private,
+        row.projects?.feedback_access,
+      ),
+  )
   const emails = await getUserEmailsByIds(rows.map((r) => r.user_id))
   return rows.map((r) => ({
     userId: r.user_id,
     email: emails[r.user_id] ?? null,
-    role: r.is_owner ? 'owner' as const : r.role,
+    role: r.is_owner ? ('owner' as const) : r.role,
     createdAt: r.created_at,
   }))
 }
@@ -565,7 +631,22 @@ export async function listProjectMemberIds(projectKey: string) {
     .eq('project_key', projectKey)
 
   if (error) throw new Error(error.message)
-  return ((data || []) as unknown as Array<{ user_id: string; role: StoredProjectRole; is_owner: boolean; projects?: { widget_private: boolean; feedback_access: string } }>).filter((row) => projectFeedbackAllowed(effectiveProjectRole(row.role, row.is_owner), row.projects?.widget_private, row.projects?.feedback_access)).map((row) => row.user_id)
+  return (
+    (data || []) as unknown as Array<{
+      user_id: string
+      role: StoredProjectRole
+      is_owner: boolean
+      projects?: { widget_private: boolean; feedback_access: string }
+    }>
+  )
+    .filter((row) =>
+      projectFeedbackAllowed(
+        effectiveProjectRole(row.role, row.is_owner),
+        row.projects?.widget_private,
+        row.projects?.feedback_access,
+      ),
+    )
+    .map((row) => row.user_id)
 }
 
 /**
@@ -639,13 +720,14 @@ export async function changeProjectMemberRole(input: {
   if (result.status === 'invalid_role') throw new Error('invalid_role')
   const expectedChanged = result.status === 'updated'
   if (
-    (result.status !== 'updated' && result.status !== 'unchanged')
-    || !isProjectMemberRole(result.previousRole)
-    || !isProjectMemberRole(result.role)
-    || typeof result.changed !== 'boolean'
-    || result.changed !== expectedChanged
-    || (expectedChanged ? result.previousRole === result.role : result.previousRole !== result.role)
-  ) throw new Error('invalid_role_change_result')
+    (result.status !== 'updated' && result.status !== 'unchanged') ||
+    !isProjectMemberRole(result.previousRole) ||
+    !isProjectMemberRole(result.role) ||
+    typeof result.changed !== 'boolean' ||
+    result.changed !== expectedChanged ||
+    (expectedChanged ? result.previousRole === result.role : result.previousRole !== result.role)
+  )
+    throw new Error('invalid_role_change_result')
 
   return {
     projectKey: input.projectKey,
@@ -711,16 +793,19 @@ function parseAdminUserCursor(cursor: string | undefined, limit: number): AdminU
   if (!cursor) return { kind: 'users', page: 1, limit, lastId: '' }
   const value = decodeAdminCursor(cursor) as Partial<AdminUserCursor> | null
   if (
-    !value || value.kind !== 'users' || !Number.isInteger(value.page) || Number(value.page) < 2
-    || value.limit !== limit || typeof value.lastId !== 'string' || !value.lastId
-  ) throw new AdminQueryError('Invalid cursor')
+    !value ||
+    value.kind !== 'users' ||
+    !Number.isInteger(value.page) ||
+    Number(value.page) < 2 ||
+    value.limit !== limit ||
+    typeof value.lastId !== 'string' ||
+    !value.lastId
+  )
+    throw new AdminQueryError('Invalid cursor')
   return value as AdminUserCursor
 }
 
-export async function listAllUsers(options: {
-  limit: number
-  cursor?: string
-}): Promise<AdminPage<AdminUser>> {
+export async function listAllUsers(options: { limit: number; cursor?: string }): Promise<AdminPage<AdminUser>> {
   const supabase = getSupabase()
   const position = parseAdminUserCursor(options.cursor, options.limit)
   const { data, error } = await supabase.auth.admin.listUsers({
@@ -745,9 +830,7 @@ export async function listAllUsers(options: {
     member_project_count: number
     super_admin: boolean
   }
-  const metricsByUser = new Map(
-    (metricRows as MetricRow[]).map((row) => [row.user_id, row]),
-  )
+  const metricsByUser = new Map((metricRows as MetricRow[]).map((row) => [row.user_id, row]))
   const items = users.map((u) => {
     const metrics = metricsByUser.get(u.id)
     return {
@@ -768,7 +851,10 @@ export async function listAllUsers(options: {
     hasMore,
     nextCursor: hasMore
       ? encodeAdminCursor({
-          kind: 'users', page: nextPage, limit: options.limit, lastId: items[items.length - 1].id,
+          kind: 'users',
+          page: nextPage,
+          limit: options.limit,
+          lastId: items[items.length - 1].id,
         })
       : null,
   }
@@ -786,7 +872,12 @@ export type AdminProject = {
   commentCount: number
   commentStatusCounts: { pending: number; accepted: number; rejected: number }
   implementationStatusCounts: {
-    unassigned: number; claimed: number; inProgress: number; blocked: number; readyForTesting: number; done: number
+    unassigned: number
+    claimed: number
+    inProgress: number
+    blocked: number
+    readyForTesting: number
+    done: number
   }
   feedbackShareCount: number
   commentedUrlCount: number
@@ -797,9 +888,13 @@ export type AdminProject = {
 }
 
 export const ADMIN_PROJECT_SORTS = [
-  'lastCommentAt', 'createdAt', 'commentCount', 'feedbackShareCount', 'commentedUrlCount',
+  'lastCommentAt',
+  'createdAt',
+  'commentCount',
+  'feedbackShareCount',
+  'commentedUrlCount',
 ] as const
-export type AdminProjectSort = typeof ADMIN_PROJECT_SORTS[number]
+export type AdminProjectSort = (typeof ADMIN_PROJECT_SORTS)[number]
 export type AdminSortDirection = 'asc' | 'desc'
 
 type AdminProjectCursor = {
@@ -864,15 +959,22 @@ export async function listProjectsWithComments(options: {
   if (options.cursor) {
     const value = decodeAdminCursor(options.cursor) as Partial<AdminProjectCursor> | null
     if (
-      !value || value.kind !== 'projects' || value.sort !== options.sort
-      || value.direction !== options.direction || !['string', 'number'].includes(typeof value.value)
-      || typeof value.id !== 'string' || !value.id
-    ) throw new AdminQueryError('Invalid cursor')
+      !value ||
+      value.kind !== 'projects' ||
+      value.sort !== options.sort ||
+      value.direction !== options.direction ||
+      !['string', 'number'].includes(typeof value.value) ||
+      typeof value.id !== 'string' ||
+      !value.id
+    )
+      throw new AdminQueryError('Invalid cursor')
     cursor = value as AdminProjectCursor
   }
   let query = supabase
     .from('admin_project_metrics')
-    .select('public_key, name, claimable, created_at, comment_count, pending_comment_count, accepted_comment_count, rejected_comment_count, unassigned_comment_count, claimed_comment_count, in_progress_comment_count, blocked_comment_count, ready_for_testing_comment_count, done_comment_count, feedback_share_count, commented_url_count, first_comment_at, last_comment_at')
+    .select(
+      'public_key, name, claimable, created_at, comment_count, pending_comment_count, accepted_comment_count, rejected_comment_count, unassigned_comment_count, claimed_comment_count, in_progress_comment_count, blocked_comment_count, ready_for_testing_comment_count, done_comment_count, feedback_share_count, commented_url_count, first_comment_at, last_comment_at',
+    )
   if (cursor) {
     const operator = options.direction === 'asc' ? 'gt' : 'lt'
     query = query.or(
@@ -940,10 +1042,15 @@ export async function listProjectsWithComments(options: {
   return {
     items,
     hasMore,
-    nextCursor: hasMore ? encodeAdminCursor({
-      kind: 'projects', sort: options.sort, direction: options.direction,
-      value: last[options.sort], id: last.publicKey,
-    }) : null,
+    nextCursor: hasMore
+      ? encodeAdminCursor({
+          kind: 'projects',
+          sort: options.sort,
+          direction: options.direction,
+          value: last[options.sort],
+          id: last.publicKey,
+        })
+      : null,
   }
 }
 
@@ -959,9 +1066,7 @@ export type AdminStats = {
 export async function getAdminStats(now = new Date()): Promise<AdminStats> {
   const supabase = getSupabase()
   const countTable = async (table: string) => {
-    const { count, error } = await supabase
-      .from(table)
-      .select('*', { count: 'exact', head: true })
+    const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true })
     if (error) throw new Error(error.message)
     return count ?? 0
   }
@@ -992,7 +1097,10 @@ export async function getAdminStats(now = new Date()): Promise<AdminStats> {
     .select('*', { count: 'exact', head: true })
     .gte('last_seen_at', presenceCutoff)
   const [auth, projects, comments, shares, presenceResult] = await Promise.all([
-    loadAuthStats(), countTable('projects'), countTable('comments'), countTable('feedback_shares'),
+    loadAuthStats(),
+    countTable('projects'),
+    countTable('comments'),
+    countTable('feedback_shares'),
     presencePromise,
   ])
   if (presenceResult.error) throw new Error(presenceResult.error.message)
@@ -1040,18 +1148,23 @@ export async function claimProject(
 function isClaimedProjectRow(value: unknown, projectKey: string): value is ProjectRow {
   if (!value || typeof value !== 'object') return false
   const row = value as Partial<ProjectRow>
-  return row.public_key === projectKey
-    && typeof row.slug === 'string'
-    && typeof row.name === 'string'
-    && (row.allowed_origins === null
-      || (Array.isArray(row.allowed_origins) && row.allowed_origins.every((origin) => typeof origin === 'string')))
-    && typeof row.created_at === 'string'
-    && typeof row.updated_at === 'string'
+  return (
+    row.public_key === projectKey &&
+    typeof row.slug === 'string' &&
+    typeof row.name === 'string' &&
+    (row.allowed_origins === null ||
+      (Array.isArray(row.allowed_origins) && row.allowed_origins.every((origin) => typeof origin === 'string'))) &&
+    typeof row.created_at === 'string' &&
+    typeof row.updated_at === 'string'
+  )
 }
 
 /** Slugify a display name into a candidate project key (matches the dashboard's rule). */
 export function slugifyProjectKey(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 /** A project key is 1–63 chars of lowercase alphanumerics and single internal hyphens. */
@@ -1095,7 +1208,11 @@ export async function getProject(projectKey: string) {
  * public_key and slug are immutable). Returns the updated project, or null
  * when no project matched the key so the caller can map that to a 404.
  */
-export async function updateProject(projectKey: string, patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' }, actorUserId: string) {
+export async function updateProject(
+  projectKey: string,
+  patch: { name?: string; allowedOrigins?: string[]; widgetPrivate?: boolean; feedbackAccess?: 'team' | 'admins' },
+  actorUserId: string,
+) {
   const supabase = getSupabase()
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (patch.name !== undefined) update.name = patch.name
@@ -1103,9 +1220,13 @@ export async function updateProject(projectKey: string, patch: { name?: string; 
   if (patch.widgetPrivate !== undefined) update.widget_private = patch.widgetPrivate
   if (patch.feedbackAccess !== undefined) update.feedback_access = patch.feedbackAccess
 
-  const { data, error } = await supabase.rpc('update_project_settings', {
-    p_project: projectKey, p_actor: actorUserId, p_patch: update,
-  } as never).select(PROJECT_COLUMNS)
+  const { data, error } = await supabase
+    .rpc('update_project_settings', {
+      p_project: projectKey,
+      p_actor: actorUserId,
+      p_patch: update,
+    } as never)
+    .select(PROJECT_COLUMNS)
 
   if (error) throw new Error(error.message)
   const rows = data as ProjectRow[] | null
@@ -1120,12 +1241,14 @@ export async function ensurePublicProject(publicKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('projects')
-    .insert([{
-      public_key: publicKey,
-      slug: publicKey,
-      name: publicKey,
-      allowed_origins: [],
-    }] as never)
+    .insert([
+      {
+        public_key: publicKey,
+        slug: publicKey,
+        name: publicKey,
+        allowed_origins: [],
+      },
+    ] as never)
     .select(PROJECT_COLUMNS)
     .single()
 
@@ -1138,12 +1261,12 @@ export async function ensurePublicProject(publicKey: string) {
     throw new Error(error.message)
   }
 
-  const { error: repoError } = await supabase
-    .from('project_repo_configs')
-    .insert([{
+  const { error: repoError } = await supabase.from('project_repo_configs').insert([
+    {
       project_key: publicKey,
       default_branch: 'main',
-    }] as never)
+    },
+  ] as never)
 
   if (repoError && repoError.code !== '23505') {
     throw new Error(repoError.message)
@@ -1227,20 +1350,23 @@ export async function upsertProjectIntegration(input: {
   const now = new Date().toISOString()
   const { data, error } = await getSupabase()
     .from('project_integrations')
-    .upsert({
-      project_key: input.projectKey,
-      provider: input.provider,
-      access_token_ciphertext: input.accessTokenCiphertext,
-      refresh_token_ciphertext: input.refreshTokenCiphertext,
-      token_expires_at: input.tokenExpiresAt,
-      granted_scopes: input.grantedScopes ?? null,
-      workspace_id: input.workspaceId,
-      workspace_name: input.workspaceName,
-      container_id: input.containerId,
-      container_name: input.containerName,
-      created_by: input.createdBy,
-      updated_at: now,
-    } as never, { onConflict: 'project_key,provider' })
+    .upsert(
+      {
+        project_key: input.projectKey,
+        provider: input.provider,
+        access_token_ciphertext: input.accessTokenCiphertext,
+        refresh_token_ciphertext: input.refreshTokenCiphertext,
+        token_expires_at: input.tokenExpiresAt,
+        granted_scopes: input.grantedScopes ?? null,
+        workspace_id: input.workspaceId,
+        workspace_name: input.workspaceName,
+        container_id: input.containerId,
+        container_name: input.containerName,
+        created_by: input.createdBy,
+        updated_at: now,
+      } as never,
+      { onConflict: 'project_key,provider' },
+    )
     .select(PROJECT_INTEGRATION_COLUMNS)
     .single()
   if (error) throw new Error(error.message)
@@ -1355,21 +1481,24 @@ export async function ensureGithubExternalWork(input: {
 }) {
   const { data, error } = await getSupabase()
     .from('comment_external_work')
-    .upsert({
-      project_id: input.projectId,
-      comment_id: input.commentId,
-      provider: 'github',
-      state: 'created',
-      workspace_id: input.owner,
-      container_id: `${input.owner}/${input.repo}`,
-      external_id: String(input.issueNumber),
-      external_key: `#${input.issueNumber}`,
-      external_url: input.issueUrl,
-      lease_token: input.leaseToken,
-      lease_expires_at: input.createdAt,
-      lifecycle_status: 'active',
-      updated_at: new Date().toISOString(),
-    } as never, { onConflict: 'comment_id,provider', ignoreDuplicates: true })
+    .upsert(
+      {
+        project_id: input.projectId,
+        comment_id: input.commentId,
+        provider: 'github',
+        state: 'created',
+        workspace_id: input.owner,
+        container_id: `${input.owner}/${input.repo}`,
+        external_id: String(input.issueNumber),
+        external_key: `#${input.issueNumber}`,
+        external_url: input.issueUrl,
+        lease_token: input.leaseToken,
+        lease_expires_at: input.createdAt,
+        lifecycle_status: 'active',
+        updated_at: new Date().toISOString(),
+      } as never,
+      { onConflict: 'comment_id,provider', ignoreDuplicates: true },
+    )
     .select(COMMENT_EXTERNAL_WORK_COLUMNS)
     .maybeSingle()
   if (error) throw new Error(error.message)
@@ -1456,12 +1585,7 @@ export async function completeExternalWorkClose(id: string, leaseToken: string) 
   return data ? mapCommentExternalWork(data as CommentExternalWorkRow) : null
 }
 
-export async function failExternalWorkClose(
-  id: string,
-  leaseToken: string,
-  errorCode: string,
-  blocked = false,
-) {
+export async function failExternalWorkClose(id: string, leaseToken: string, errorCode: string, blocked = false) {
   const { data, error } = await getSupabase()
     .from('comment_external_work')
     .update({
@@ -1504,11 +1628,8 @@ export async function claimCommentExternalWork(input: {
   if (error && (error as { code?: string }).code !== '23505') throw new Error(error.message)
   if (data) return mapCommentExternalWork(data as CommentExternalWorkRow)
   const existing = await getCommentExternalWork(input.commentId, input.provider)
-  if (
-    existing?.state !== 'creating'
-    || existing.uncertainAt
-    || Date.parse(existing.leaseExpiresAt) >= now.getTime()
-  ) return existing
+  if (existing?.state !== 'creating' || existing.uncertainAt || Date.parse(existing.leaseExpiresAt) >= now.getTime())
+    return existing
 
   // A process that died before marking the result uncertain could not have
   // contacted the external provider yet, so its expired lease is safe to take.
@@ -1617,15 +1738,20 @@ export async function upsertGitHubUserInstallation(input: {
   const now = new Date().toISOString()
   const { data, error } = await getSupabase()
     .from('github_user_installations')
-    .upsert([{
-      user_id: input.userId,
-      installation_id: input.installationId,
-      github_account_id: input.githubAccountId,
-      github_account_login: input.githubAccountLogin,
-      github_account_type: input.githubAccountType,
-      last_verified_at: now,
-      updated_at: now,
-    }] as never, { onConflict: 'user_id,installation_id' })
+    .upsert(
+      [
+        {
+          user_id: input.userId,
+          installation_id: input.installationId,
+          github_account_id: input.githubAccountId,
+          github_account_login: input.githubAccountLogin,
+          github_account_type: input.githubAccountType,
+          last_verified_at: now,
+          updated_at: now,
+        },
+      ] as never,
+      { onConflict: 'user_id,installation_id' },
+    )
     .select(GITHUB_USER_INSTALLATION_COLUMNS)
     .single()
 
@@ -1774,7 +1900,9 @@ export async function updateRepoConfig(projectKey: string, patch: RepoConfigPatc
   const { data, error } = await supabase
     .from('project_repo_configs')
     .upsert(update as never, { onConflict: 'project_key' })
-    .select('project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions')
+    .select(
+      'project_key, repo_url, github_owner, github_repo, local_path, default_branch, install_command, dev_command, test_command, build_command, agent_instructions',
+    )
     .single()
 
   if (error) throw new Error(error.message)
@@ -1798,25 +1926,27 @@ export async function createPublicComment(input: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
-    .insert([{
-      project_id: input.projectKey,
-      visibility: 'shared',
-      url: input.pageUrl,
-      x: input.x,
-      y: input.y,
-      element: input.selector,
-      comment: input.body,
-      status: 'pending',
-      implementation_status: 'unassigned',
-      created_by: 'public',
-      created_by_user_id: input.userId ?? null,
-      image_url: input.imageUrl ?? null,
-      screenshot_storage_path: input.screenshotStoragePath ?? null,
-      author_name: input.authorName ?? null,
-      target_type: input.targetType ?? 'element_point',
-      anchor: input.anchor ?? null,
-      updated_at: new Date().toISOString(),
-    }] as never)
+    .insert([
+      {
+        project_id: input.projectKey,
+        visibility: 'shared',
+        url: input.pageUrl,
+        x: input.x,
+        y: input.y,
+        element: input.selector,
+        comment: input.body,
+        status: 'pending',
+        implementation_status: 'unassigned',
+        created_by: 'public',
+        created_by_user_id: input.userId ?? null,
+        image_url: input.imageUrl ?? null,
+        screenshot_storage_path: input.screenshotStoragePath ?? null,
+        author_name: input.authorName ?? null,
+        target_type: input.targetType ?? 'element_point',
+        anchor: input.anchor ?? null,
+        updated_at: new Date().toISOString(),
+      },
+    ] as never)
     .select(COMMENT_COLUMNS)
     .single()
 
@@ -1826,9 +1956,7 @@ export async function createPublicComment(input: {
 
 export async function reserveCommentActivityEmail(projectKey: string, cooldownSeconds: number) {
   const supabase = getSupabase()
-  const safeCooldownSeconds = Number.isFinite(cooldownSeconds)
-    ? Math.max(0, Math.floor(cooldownSeconds))
-    : 0
+  const safeCooldownSeconds = Number.isFinite(cooldownSeconds) ? Math.max(0, Math.floor(cooldownSeconds)) : 0
   if (safeCooldownSeconds <= 0) {
     return { shouldSend: true, activityCount: 1 }
   }
@@ -1850,45 +1978,53 @@ export async function reserveCommentActivityEmail(projectKey: string, cooldownSe
 }
 
 export async function releaseCommentActivityEmailReservation(projectKey: string, activityCount: number) {
-  const safeActivityCount = Number.isFinite(activityCount)
-    ? Math.max(1, Math.floor(activityCount))
-    : 1
-  const { error } = await getSupabase()
-    .rpc('release_comment_activity_email_reservation', {
-      p_project_key: projectKey,
-      p_activity_count: safeActivityCount,
-    })
+  const safeActivityCount = Number.isFinite(activityCount) ? Math.max(1, Math.floor(activityCount)) : 1
+  const { error } = await getSupabase().rpc('release_comment_activity_email_reservation', {
+    p_project_key: projectKey,
+    p_activity_count: safeActivityCount,
+  })
 
   if (error) throw new Error(error.message)
 }
 
 export async function listPublicComments(projectKey: string, filters: { pageUrl?: string } = {}) {
   const supabase = getSupabase()
-  const { data, error } = await supabase.rpc('read_public_comments', { p_project: projectKey, p_page_url: filters.pageUrl ?? null }).select(COMMENT_COLUMNS)
+  const { data, error } = await supabase
+    .rpc('read_public_comments', { p_project: projectKey, p_page_url: filters.pageUrl ?? null })
+    .select(COMMENT_COLUMNS)
   if (error) throw new Error(error.message)
-  return Promise.all(((data as CommentRow[] | null) ?? []).map((row: CommentRow) => mapProjectCommentWithPrivateImage(supabase, row, false)))
+  return Promise.all(
+    ((data as CommentRow[] | null) ?? []).map((row: CommentRow) =>
+      mapProjectCommentWithPrivateImage(supabase, row, false),
+    ),
+  )
 }
 
 export async function updatePublicReviewStatus(projectKey: string, commentId: string, reviewStatus: ReviewStatus) {
-  const { data, error } = await getSupabase().rpc('mutate_public_comment', {
-    p_project: projectKey, p_comment: commentId, p_status: toLegacyStatus(reviewStatus), p_delete: false,
-  }).select(COMMENT_COLUMNS).maybeSingle()
+  const { data, error } = await getSupabase()
+    .rpc('mutate_public_comment', {
+      p_project: projectKey,
+      p_comment: commentId,
+      p_status: toLegacyStatus(reviewStatus),
+      p_delete: false,
+    })
+    .select(COMMENT_COLUMNS)
+    .maybeSingle()
   if (error) throw new Error(error.message)
   return data ? mapComment(data as CommentRow) : null
 }
 
-export async function listComments(projectKey: string, filters: {
-  userId?: string
-  pageUrl?: string
-  reviewStatus?: ReviewStatus
-  implementationStatus?: ImplementationStatus
-} = {}) {
+export async function listComments(
+  projectKey: string,
+  filters: {
+    userId?: string
+    pageUrl?: string
+    reviewStatus?: ReviewStatus
+    implementationStatus?: ImplementationStatus
+  } = {},
+) {
   const supabase = getSupabase()
-  let query = supabase
-    .from('comments')
-    .select(COMMENT_COLUMNS)
-    .eq('project_id', projectKey)
-    .eq('visibility', 'shared')
+  let query = supabase.from('comments').select(COMMENT_COLUMNS).eq('project_id', projectKey).eq('visibility', 'shared')
 
   if (filters.userId) query = query.eq('created_by_user_id', filters.userId).eq('source', 'widget')
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
@@ -1900,52 +2036,69 @@ export async function listComments(projectKey: string, filters: {
   return Promise.all((data || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row as CommentRow, false)))
 }
 
-export async function listProjectComments(projectKey: string, filters: {
-  readyForAgent?: boolean
-  actorUserId?: string
-  pageUrl?: string
-  reviewStatus?: ReviewStatus
-  implementationStatus?: ImplementationStatus
-  visibility?: CommentVisibility
-  includeExternalWork?: boolean
-  limit?: number
-  cursor?: { createdAt: string; id: string }
-  ids?: string[]
-} = {}) {
+export async function listProjectComments(
+  projectKey: string,
+  filters: {
+    readyForAgent?: boolean
+    actorUserId?: string
+    pageUrl?: string
+    reviewStatus?: ReviewStatus
+    implementationStatus?: ImplementationStatus
+    visibility?: CommentVisibility
+    includeExternalWork?: boolean
+    limit?: number
+    cursor?: { createdAt: string; id: string }
+    ids?: string[]
+  } = {},
+) {
   const supabase = getSupabase()
-  const columns: string = filters.includeExternalWork === false
-    ? COMMENT_COLUMNS
-    : COMMENT_PROJECT_EXTERNAL_WORK_COLUMNS
-  let query = (filters.actorUserId
-    ? supabase.rpc('read_project_feedback', { p_project: projectKey, p_actor: filters.actorUserId } as never)
-    : supabase.from('comments'))
+  const columns: string =
+    filters.includeExternalWork === false ? COMMENT_COLUMNS : COMMENT_PROJECT_EXTERNAL_WORK_COLUMNS
+  let query = (
+    filters.actorUserId
+      ? supabase.rpc('read_project_feedback', { p_project: projectKey, p_actor: filters.actorUserId } as never)
+      : supabase.from('comments')
+  )
     .select(columns)
     .eq('project_id', projectKey)
 
-  if (filters.readyForAgent) query = query.eq('status', 'approved').or('implementation_status.is.null,implementation_status.not.in.(ready_for_testing,done)')
+  if (filters.readyForAgent)
+    query = query
+      .eq('status', 'approved')
+      .or('implementation_status.is.null,implementation_status.not.in.(ready_for_testing,done)')
   if (filters.pageUrl) query = query.eq('url', filters.pageUrl)
   if (filters.reviewStatus) query = query.eq('status', toLegacyStatus(filters.reviewStatus))
   if (filters.implementationStatus) query = query.eq('implementation_status', filters.implementationStatus)
   if (filters.visibility) query = query.eq('visibility', filters.visibility)
 
   if (filters.ids) query = query.in('id', filters.ids)
-  if (filters.cursor) query = query.or(`created_at.lt.${filters.cursor.createdAt},and(created_at.eq.${filters.cursor.createdAt},id.lt.${filters.cursor.id})`)
+  if (filters.cursor)
+    query = query.or(
+      `created_at.lt.${filters.cursor.createdAt},and(created_at.eq.${filters.cursor.createdAt},id.lt.${filters.cursor.id})`,
+    )
   query = query.order('created_at', { ascending: false })
   if (filters.limit) query = query.order('id', { ascending: false }).limit(filters.limit)
   const { data, error } = await query
   if (error) throw new Error(error.message)
-  return Promise.all(((data as unknown as CommentRow[] | null) || []).map((row) => mapProjectCommentWithPrivateImage(
-    supabase,
-    row as unknown as CommentRow,
-    filters.includeExternalWork !== false,
-  )))
+  return Promise.all(
+    ((data as unknown as CommentRow[] | null) || []).map((row) =>
+      mapProjectCommentWithPrivateImage(supabase, row as unknown as CommentRow, filters.includeExternalWork !== false),
+    ),
+  )
 }
 
 export async function getCommentForGithubIssue(projectKey: string, commentId: string, actorUserId?: string) {
   const db = getSupabase()
-  const { data, error } = await (actorUserId
-    ? db.rpc('read_actor_comment', { p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_capability: 'integrations:send' } as never)
-    : db.from('comments'))
+  const { data, error } = await (
+    actorUserId
+      ? db.rpc('read_actor_comment', {
+          p_project: projectKey,
+          p_actor: actorUserId,
+          p_comment: commentId,
+          p_capability: 'integrations:send',
+        } as never)
+      : db.from('comments')
+  )
     .select(COMMENT_GITHUB_ISSUE_COLUMNS)
     .eq('id', commentId)
     .eq('project_id', projectKey)
@@ -1956,7 +2109,9 @@ export async function getCommentForGithubIssue(projectKey: string, commentId: st
   const row = data as CommentRow
   return {
     ...mapProjectComment(row),
-    imageUrl: row.screenshot_storage_path ? issueScreenshotUrl(row.project_id, row.id, row.screenshot_storage_path) : row.image_url,
+    imageUrl: row.screenshot_storage_path
+      ? issueScreenshotUrl(row.project_id, row.id, row.screenshot_storage_path)
+      : row.image_url,
     githubIssueLeaseToken: row.github_issue_lease_token ?? null,
     githubIssueLeaseExpiresAt: row.github_issue_lease_expires_at ?? null,
     githubIssueUncertainAt: row.github_issue_uncertain_at ?? null,
@@ -1970,9 +2125,7 @@ export async function claimCommentGithubIssue(
   leaseMilliseconds = 5 * 60_000,
   recovery = false,
 ) {
-  const leaseSeconds = Number.isFinite(leaseMilliseconds)
-    ? Math.ceil(leaseMilliseconds / 1_000)
-    : 5 * 60
+  const leaseSeconds = Number.isFinite(leaseMilliseconds) ? Math.ceil(leaseMilliseconds / 1_000) : 5 * 60
   const { data, error } = await getSupabase()
     .rpc('claim_comment_github_issue_v2', {
       p_comment_id: commentId,
@@ -1994,63 +2147,47 @@ export async function finalizeCommentGithubIssue(
   leaseToken: string,
   issue: { issueNumber: number; issueUrl: string; createdAt: string },
 ) {
-  const { data, error } = await getSupabase()
-    .rpc('finalize_comment_github_issue', {
-      p_comment_id: commentId,
-      p_project_key: projectKey,
-      p_lease_token: leaseToken,
-      p_issue_number: issue.issueNumber,
-      p_issue_url: issue.issueUrl,
-      p_issue_created_at: issue.createdAt,
-    } as never)
+  const { data, error } = await getSupabase().rpc('finalize_comment_github_issue', {
+    p_comment_id: commentId,
+    p_project_key: projectKey,
+    p_lease_token: leaseToken,
+    p_issue_number: issue.issueNumber,
+    p_issue_url: issue.issueUrl,
+    p_issue_created_at: issue.createdAt,
+  } as never)
 
   if (error) throw new Error(error.message)
   return data === true
 }
 
-export async function releaseCommentGithubIssue(
-  projectKey: string,
-  commentId: string,
-  leaseToken: string,
-) {
-  const { data, error } = await getSupabase()
-    .rpc('release_comment_github_issue_v2', {
-      p_comment_id: commentId,
-      p_project_key: projectKey,
-      p_lease_token: leaseToken,
-    } as never)
+export async function releaseCommentGithubIssue(projectKey: string, commentId: string, leaseToken: string) {
+  const { data, error } = await getSupabase().rpc('release_comment_github_issue_v2', {
+    p_comment_id: commentId,
+    p_project_key: projectKey,
+    p_lease_token: leaseToken,
+  } as never)
 
   if (error) throw new Error(error.message)
   return data === true
 }
 
-export async function markCommentGithubIssueUncertain(
-  projectKey: string,
-  commentId: string,
-  leaseToken: string,
-) {
-  const { data, error } = await getSupabase()
-    .rpc('mark_comment_github_issue_uncertain', {
-      p_comment_id: commentId,
-      p_project_key: projectKey,
-      p_lease_token: leaseToken,
-    } as never)
+export async function markCommentGithubIssueUncertain(projectKey: string, commentId: string, leaseToken: string) {
+  const { data, error } = await getSupabase().rpc('mark_comment_github_issue_uncertain', {
+    p_comment_id: commentId,
+    p_project_key: projectKey,
+    p_lease_token: leaseToken,
+  } as never)
 
   if (error) throw new Error(error.message)
   return data === true
 }
 
-export async function resetCommentGithubIssueAttempt(
-  projectKey: string,
-  commentId: string,
-  leaseToken: string,
-) {
-  const { data, error } = await getSupabase()
-    .rpc('reset_comment_github_issue_attempt', {
-      p_comment_id: commentId,
-      p_project_key: projectKey,
-      p_lease_token: leaseToken,
-    } as never)
+export async function resetCommentGithubIssueAttempt(projectKey: string, commentId: string, leaseToken: string) {
+  const { data, error } = await getSupabase().rpc('reset_comment_github_issue_attempt', {
+    p_comment_id: commentId,
+    p_project_key: projectKey,
+    p_lease_token: leaseToken,
+  } as never)
 
   if (error) throw new Error(error.message)
   return data === true
@@ -2088,10 +2225,7 @@ export async function listAcceptedCommentsByIds(projectKey: string, commentIds: 
 
 export async function deleteCommentsForProject(projectKey: string) {
   const supabase = getSupabase()
-  const { error } = await supabase
-    .from('comments')
-    .delete()
-    .eq('project_id', projectKey)
+  const { error } = await supabase.from('comments').delete().eq('project_id', projectKey)
 
   if (error) throw new Error(error.message)
 }
@@ -2115,21 +2249,13 @@ export async function deleteCommentById(commentId: string, projectKey: string): 
 
 export async function getComment(commentId: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('comments')
-    .select(COMMENT_COLUMNS)
-    .eq('id', commentId)
-    .maybeSingle()
+  const { data, error } = await supabase.from('comments').select(COMMENT_COLUMNS).eq('id', commentId).maybeSingle()
 
   if (error) throw new Error(error.message)
   return data ? mapComment(data as CommentRow) : null
 }
 
-export async function updateReviewStatus(
-  projectKey: string,
-  commentId: string,
-  reviewStatus: ReviewStatus,
-) {
+export async function updateReviewStatus(projectKey: string, commentId: string, reviewStatus: ReviewStatus) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .rpc('update_comment_review_status', {
@@ -2145,17 +2271,25 @@ export async function updateReviewStatus(
 }
 
 export async function acceptCommentIfOpen(projectKey: string, commentId: string, actorUserId: string) {
-  const { data, error } = await getSupabase().rpc('accept_actor_comment_if_open', {
-    p_project: projectKey, p_actor: actorUserId, p_comment: commentId,
-  } as never).select(COMMENT_COLUMNS).maybeSingle()
+  const { data, error } = await getSupabase()
+    .rpc('accept_actor_comment_if_open', {
+      p_project: projectKey,
+      p_actor: actorUserId,
+      p_comment: commentId,
+    } as never)
+    .select(COMMENT_COLUMNS)
+    .maybeSingle()
   if (error) throw new Error(error.message)
   return data ? mapComment(data as CommentRow) : null
 }
 
-export async function updateImplementationStatus(commentId: string, patch: {
-  implementationStatus?: ImplementationStatus
-  claimedByAgentId?: string | null
-}) {
+export async function updateImplementationStatus(
+  commentId: string,
+  patch: {
+    implementationStatus?: ImplementationStatus
+    claimedByAgentId?: string | null
+  },
+) {
   const supabase = getSupabase()
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -2176,22 +2310,33 @@ export async function updateImplementationStatus(commentId: string, patch: {
 }
 
 // Human mutations check current capability under the database privacy fence.
-export async function mutateProjectFeedback(projectKey: string, actorUserId: string, commentId: string, patch: {
-  expectedUpdatedAt?: string
-  reviewStatus?: ReviewStatus
-  implementationStatus?: ImplementationStatus
-  claimedByAgentId?: string | null
-  visibility?: CommentVisibility
-}) {
+export async function mutateProjectFeedback(
+  projectKey: string,
+  actorUserId: string,
+  commentId: string,
+  patch: {
+    expectedUpdatedAt?: string
+    reviewStatus?: ReviewStatus
+    implementationStatus?: ImplementationStatus
+    claimedByAgentId?: string | null
+    visibility?: CommentVisibility
+  },
+) {
   const changes: Record<string, unknown> = {}
   if (patch.expectedUpdatedAt !== undefined) changes.expected_updated_at = patch.expectedUpdatedAt
   if (patch.reviewStatus !== undefined) changes.status = toLegacyStatus(patch.reviewStatus)
   if (patch.implementationStatus !== undefined) changes.implementation_status = patch.implementationStatus
   if (patch.claimedByAgentId !== undefined) changes.claimed_by_agent_id = patch.claimedByAgentId
   if (patch.visibility !== undefined) changes.visibility = patch.visibility
-  const { data, error } = await getSupabase().rpc('mutate_actor_feedback', {
-    p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_patch: changes,
-  } as never).select(COMMENT_COLUMNS).maybeSingle()
+  const { data, error } = await getSupabase()
+    .rpc('mutate_actor_feedback', {
+      p_project: projectKey,
+      p_actor: actorUserId,
+      p_comment: commentId,
+      p_patch: changes,
+    } as never)
+    .select(COMMENT_COLUMNS)
+    .maybeSingle()
   if (error) throw new Error(error.message)
   return data ? mapComment(data as CommentRow) : null
 }
@@ -2242,11 +2387,7 @@ export async function applyAgentFeedbackOperation(input: {
   }
 }
 
-export async function updateCommentVisibility(
-  projectKey: string,
-  commentId: string,
-  visibility: CommentVisibility,
-) {
+export async function updateCommentVisibility(projectKey: string, commentId: string, visibility: CommentVisibility) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('comments')
@@ -2260,24 +2401,40 @@ export async function updateCommentVisibility(
   return data ? mapComment(data as CommentRow) : null
 }
 
-export async function createShare(input: {
-  projectKey: string
-  scopeType: 'page' | 'selection' | 'project'
-  scopePageUrl: string | null
-  slug: string
-  accessTokenHash: string
-  accessTokenCiphertext: string
-  createdBy: string
-  expiresAt: string
-}, authorization: { actorUserId: string; commentIds: string[] }) {
+export async function createShare(
+  input: {
+    projectKey: string
+    scopeType: 'page' | 'selection' | 'project'
+    scopePageUrl: string | null
+    slug: string
+    accessTokenHash: string
+    accessTokenCiphertext: string
+    createdBy: string
+    expiresAt: string
+  },
+  authorization: { actorUserId: string; commentIds: string[] },
+) {
   const supabase = getSupabase()
   const values = {
-    project_id: input.projectKey, scope_type: input.scopeType, scope_page_url: input.scopePageUrl,
-    slug: input.slug, access_token_hash: input.accessTokenHash, access_token_ciphertext: input.accessTokenCiphertext,
-    created_by: input.createdBy, expires_at: input.expiresAt,
+    project_id: input.projectKey,
+    scope_type: input.scopeType,
+    scope_page_url: input.scopePageUrl,
+    slug: input.slug,
+    access_token_hash: input.accessTokenHash,
+    access_token_ciphertext: input.accessTokenCiphertext,
+    created_by: input.createdBy,
+    expires_at: input.expiresAt,
   }
-  const { data, error } = await supabase.rpc('create_actor_share', { p_project: input.projectKey, p_actor: authorization.actorUserId, p_share: values, p_comments: authorization.commentIds } as never)
-    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+  const { data, error } = await supabase
+    .rpc('create_actor_share', {
+      p_project: input.projectKey,
+      p_actor: authorization.actorUserId,
+      p_share: values,
+      p_comments: authorization.commentIds,
+    } as never)
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
     .single()
 
   if (error) throw new Error(error.message)
@@ -2303,27 +2460,34 @@ export async function createWidgetAgentShare(input: {
     access_token_ciphertext: input.accessTokenCiphertext,
     expires_at: input.expiresAt,
   }
-  const { data, error } = await getServiceSupabase().rpc('create_widget_agent_share', {
-    p_project: input.projectKey,
-    p_actor: input.actorUserId,
-    p_page_url: input.pageUrl,
-    p_idempotency_key: input.idempotencyKey,
-    p_request_hash: input.requestHash,
-    p_allowed_prices: input.allowedPriceIds,
-    p_share: share,
-    p_comments: input.commentIds,
-  } as never).select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at').single()
+  const { data, error } = await getServiceSupabase()
+    .rpc('create_widget_agent_share', {
+      p_project: input.projectKey,
+      p_actor: input.actorUserId,
+      p_page_url: input.pageUrl,
+      p_idempotency_key: input.idempotencyKey,
+      p_request_hash: input.requestHash,
+      p_allowed_prices: input.allowedPriceIds,
+      p_share: share,
+      p_comments: input.commentIds,
+    } as never)
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
+    .single()
 
   if (error) throw new Error(error.message)
   return mapShare(data as ShareRow)
 }
 
 export async function listWidgetAgentFeedback(projectKey: string, actorUserId: string, pageUrl: string) {
-  const { data, error } = await getServiceSupabase().rpc('read_widget_agent_feedback', {
-    p_project: projectKey,
-    p_actor: actorUserId,
-    p_page_url: pageUrl,
-  } as never).select(COMMENT_COLUMNS)
+  const { data, error } = await getServiceSupabase()
+    .rpc('read_widget_agent_feedback', {
+      p_project: projectKey,
+      p_actor: actorUserId,
+      p_page_url: pageUrl,
+    } as never)
+    .select(COMMENT_COLUMNS)
   if (error) throw new Error(error.message)
   return ((data as unknown as CommentRow[] | null) || []).map(mapComment)
 }
@@ -2335,13 +2499,15 @@ export async function mutateWidgetFeedbackBatch(input: {
   commentIds: string[]
   action: 'accept' | 'reject' | 'resolve'
 }) {
-  const { data, error } = await getServiceSupabase().rpc('mutate_widget_feedback_batch', {
-    p_project: input.projectKey,
-    p_actor: input.actorUserId,
-    p_page_url: input.pageUrl,
-    p_comments: input.commentIds,
-    p_action: input.action,
-  } as never).select(COMMENT_COLUMNS)
+  const { data, error } = await getServiceSupabase()
+    .rpc('mutate_widget_feedback_batch', {
+      p_project: input.projectKey,
+      p_actor: input.actorUserId,
+      p_page_url: input.pageUrl,
+      p_comments: input.commentIds,
+      p_action: input.action,
+    } as never)
+    .select(COMMENT_COLUMNS)
   if (error) throw new Error(error.message)
   return ((data as unknown as CommentRow[] | null) || []).map(mapComment)
 }
@@ -2349,13 +2515,28 @@ export async function mutateWidgetFeedbackBatch(input: {
 // Automatic project credentials remain unusable while the project is private.
 // Reviewer-created shares always use createShare with an authenticated actor.
 export async function createSystemShare(input: {
-  projectKey: string; slug: string; accessTokenHash: string; accessTokenCiphertext: string; expiresAt: string
+  projectKey: string
+  slug: string
+  accessTokenHash: string
+  accessTokenCiphertext: string
+  expiresAt: string
 }) {
-  const { data, error } = await getSupabase().from('feedback_shares').insert({
-    project_id: input.projectKey, scope_type: 'project', scope_page_url: null,
-    slug: input.slug, access_token_hash: input.accessTokenHash,
-    access_token_ciphertext: input.accessTokenCiphertext, created_by: 'system', expires_at: input.expiresAt,
-  } as never).select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at').single()
+  const { data, error } = await getSupabase()
+    .from('feedback_shares')
+    .insert({
+      project_id: input.projectKey,
+      scope_type: 'project',
+      scope_page_url: null,
+      slug: input.slug,
+      access_token_hash: input.accessTokenHash,
+      access_token_ciphertext: input.accessTokenCiphertext,
+      created_by: 'system',
+      expires_at: input.expiresAt,
+    } as never)
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
+    .single()
   if (error) throw new Error(error.message)
   return mapShare(data as ShareRow)
 }
@@ -2368,17 +2549,18 @@ export async function addShareItems(shareId: string, commentIds: string[]) {
     comment_id: commentId,
   }))
 
-  const { error } = await supabase
-    .from('feedback_share_items')
-    .insert(rows as never)
+  const { error } = await supabase.from('feedback_share_items').insert(rows as never)
 
   if (error) throw new Error(error.message)
 }
 
 export async function getShareById(shareId: string, actorUserId: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase.rpc('read_actor_share', { p_share: shareId, p_actor: actorUserId } as never)
-    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+  const { data, error } = await supabase
+    .rpc('read_actor_share', { p_share: shareId, p_actor: actorUserId } as never)
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
     .eq('id', shareId)
     .maybeSingle()
 
@@ -2390,7 +2572,9 @@ export async function getShareBySlug(slug: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('feedback_shares')
-    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
     .eq('slug', slug)
     .maybeSingle()
 
@@ -2400,10 +2584,7 @@ export async function getShareBySlug(slug: string) {
 
 export async function listShareCommentIds(shareId: string) {
   const supabase = getSupabase()
-  const { data, error } = await supabase
-    .from('feedback_share_items')
-    .select('comment_id')
-    .eq('share_id', shareId)
+  const { data, error } = await supabase.from('feedback_share_items').select('comment_id').eq('share_id', shareId)
 
   if (error) throw new Error(error.message)
   return (data || []).map((row) => String((row as { comment_id: string }).comment_id))
@@ -2432,17 +2613,24 @@ export async function shareContainsComment(
   return Boolean(data)
 }
 
-export async function listCommentsForShare(share: {
-  id: string
-  projectId: string
-  scopeType: 'page' | 'selection' | 'project'
-  scopePageUrl: string | null
-}, tokenHash: string) {
+export async function listCommentsForShare(
+  share: {
+    id: string
+    projectId: string
+    scopeType: 'page' | 'selection' | 'project'
+    scopePageUrl: string | null
+  },
+  tokenHash: string,
+) {
   const supabase = getSupabase()
-  const { data, error } = await supabase.rpc('read_share_feedback', { p_share: share.id, p_token_hash: tokenHash } as never)
-    .select(COMMENT_COLUMNS).order('created_at', { ascending: false })
+  const { data, error } = await supabase
+    .rpc('read_share_feedback', { p_share: share.id, p_token_hash: tokenHash } as never)
+    .select(COMMENT_COLUMNS)
+    .order('created_at', { ascending: false })
   if (error) throw new Error(error.message)
-  return Promise.all(((data as CommentRow[] | null) || []).map(row => mapProjectCommentWithPrivateImage(supabase, row, false)))
+  return Promise.all(
+    ((data as CommentRow[] | null) || []).map((row) => mapProjectCommentWithPrivateImage(supabase, row, false)),
+  )
 }
 
 export async function listAcceptedCommentsForProject(projectKey: string) {
@@ -2463,26 +2651,42 @@ export async function listAcceptedCommentsForProject(projectKey: string) {
  * legacy rows whose ciphertext no longer authenticates under the current
  * SHARE_TOKEN_SECRET — the row survives, the token is reissued.
  */
-export async function rotateShareToken(shareId: string, expected: {
-  accessTokenHash: string
-  accessTokenCiphertext: string
-}, input: {
-  accessTokenHash: string
-  accessTokenCiphertext: string
-}, actorUserId?: string) {
+export async function rotateShareToken(
+  shareId: string,
+  expected: {
+    accessTokenHash: string
+    accessTokenCiphertext: string
+  },
+  input: {
+    accessTokenHash: string
+    accessTokenCiphertext: string
+  },
+  actorUserId?: string,
+) {
   const supabase = getSupabase()
-  const { data, error } = await (actorUserId
-    ? supabase.rpc('rotate_actor_share', { p_share: shareId, p_actor: actorUserId, p_expected_hash: expected.accessTokenHash, p_expected_cipher: expected.accessTokenCiphertext, p_hash: input.accessTokenHash, p_cipher: input.accessTokenCiphertext } as never)
-    : supabase
-    .from('feedback_shares')
-    .update({
-      access_token_hash: input.accessTokenHash,
-      access_token_ciphertext: input.accessTokenCiphertext,
-    } as never)
-    .eq('id', shareId)
-    .eq('access_token_hash', expected.accessTokenHash)
-    .eq('access_token_ciphertext', expected.accessTokenCiphertext))
-    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+  const { data, error } = await (
+    actorUserId
+      ? supabase.rpc('rotate_actor_share', {
+          p_share: shareId,
+          p_actor: actorUserId,
+          p_expected_hash: expected.accessTokenHash,
+          p_expected_cipher: expected.accessTokenCiphertext,
+          p_hash: input.accessTokenHash,
+          p_cipher: input.accessTokenCiphertext,
+        } as never)
+      : supabase
+          .from('feedback_shares')
+          .update({
+            access_token_hash: input.accessTokenHash,
+            access_token_ciphertext: input.accessTokenCiphertext,
+          } as never)
+          .eq('id', shareId)
+          .eq('access_token_hash', expected.accessTokenHash)
+          .eq('access_token_ciphertext', expected.accessTokenCiphertext)
+  )
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
     .maybeSingle()
 
   if (error) throw new Error(error.message)
@@ -2493,7 +2697,9 @@ export async function getProjectShare(projectKey: string) {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('feedback_shares')
-    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
     .eq('project_id', projectKey)
     .eq('scope_type', 'project')
     .is('revoked_at', null)
@@ -2514,14 +2720,16 @@ export async function createFeedbackEvent(input: {
   const supabase = getSupabase()
   const { data, error } = await supabase
     .from('feedback_events')
-    .insert([{
-      share_id: input.shareId,
-      comment_id: input.commentId || null,
-      actor_type: input.actorType,
-      actor_id: input.actorId,
-      event_type: input.eventType,
-      payload: input.payload || {},
-    }] as never)
+    .insert([
+      {
+        share_id: input.shareId,
+        comment_id: input.commentId || null,
+        actor_type: input.actorType,
+        actor_id: input.actorId,
+        event_type: input.eventType,
+        payload: input.payload || {},
+      },
+    ] as never)
     .select('id, share_id, comment_id, actor_type, actor_id, event_type, payload, created_at')
     .maybeSingle()
 
@@ -2530,16 +2738,31 @@ export async function createFeedbackEvent(input: {
 }
 
 export async function listFeedbackEvents(shareId: string, after: number, limit: number, tokenHash: string) {
-  const { data, error } = await getSupabase().rpc('read_agent_events', {
-    p_share: shareId, p_token_hash: tokenHash, p_after: after, p_limit: limit,
-  } as never).select('id, share_id, comment_id, actor_type, actor_id, event_type, payload, created_at')
+  const { data, error } = await getSupabase()
+    .rpc('read_agent_events', {
+      p_share: shareId,
+      p_token_hash: tokenHash,
+      p_after: after,
+      p_limit: limit,
+    } as never)
+    .select('id, share_id, comment_id, actor_type, actor_id, event_type, payload, created_at')
   if (error) throw new Error(error.message)
   return ((data as EventRow[] | null) || []).map((row) => mapEvent(row))
 }
 
-export async function writeAgentPresence(shareId: string, tokenHash: string, agentId: string, status: string, summary: string | null) {
+export async function writeAgentPresence(
+  shareId: string,
+  tokenHash: string,
+  agentId: string,
+  status: string,
+  summary: string | null,
+) {
   const { error } = await getSupabase().rpc('write_agent_presence', {
-    p_share: shareId, p_token_hash: tokenHash, p_agent: agentId, p_status: status, p_summary: summary,
+    p_share: shareId,
+    p_token_hash: tokenHash,
+    p_agent: agentId,
+    p_status: status,
+    p_summary: summary,
   } as never)
   if (error) throw new Error(error.message)
 }
@@ -2572,7 +2795,9 @@ export async function findActiveSharesForComment(commentId: string) {
   const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('feedback_shares')
-    .select('id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at')
+    .select(
+      'id, project_id, scope_type, scope_page_url, slug, access_token_hash, access_token_ciphertext, created_by, expires_at, revoked_at, created_at',
+    )
     .in('id', shareIds)
     .is('revoked_at', null)
     .gt('expires_at', now)
@@ -2627,28 +2852,50 @@ export async function listLivePresence(shareId: string, cutoffIso: string) {
 }
 
 export async function getOperationKey(shareId: string, agentId: string, idempotencyKey: string, tokenHash: string) {
-  const { data, error } = await getSupabase().rpc('read_agent_operation_key', {
-    p_share: shareId, p_token_hash: tokenHash, p_agent: agentId, p_key: idempotencyKey,
-  } as never).select('share_id, agent_id, idempotency_key, feedback_event_id, created_at').maybeSingle()
+  const { data, error } = await getSupabase()
+    .rpc('read_agent_operation_key', {
+      p_share: shareId,
+      p_token_hash: tokenHash,
+      p_agent: agentId,
+      p_key: idempotencyKey,
+    } as never)
+    .select('share_id, agent_id, idempotency_key, feedback_event_id, created_at')
+    .maybeSingle()
   if (error) throw new Error(error.message)
-  return data as { share_id: string, agent_id: string, idempotency_key: string, feedback_event_id: number | null, created_at: string } | null
+  return data as {
+    share_id: string
+    agent_id: string
+    idempotency_key: string
+    feedback_event_id: number | null
+    created_at: string
+  } | null
 }
 
-export async function saveOperationKey(shareId: string, agentId: string, idempotencyKey: string, feedbackEventId: number | null) {
+export async function saveOperationKey(
+  shareId: string,
+  agentId: string,
+  idempotencyKey: string,
+  feedbackEventId: number | null,
+) {
   const supabase = getSupabase()
-  const { error } = await supabase
-    .from('feedback_operation_keys')
-    .insert([{
+  const { error } = await supabase.from('feedback_operation_keys').insert([
+    {
       share_id: shareId,
       agent_id: agentId,
       idempotency_key: idempotencyKey,
       feedback_event_id: feedbackEventId,
-    }] as never)
+    },
+  ] as never)
 
   if (error) throw new Error(error.message)
 }
 
-export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity' | 'project.access_requested'
+export type NotificationKind =
+  | 'invite.received'
+  | 'invite.accepted'
+  | 'invite.declined'
+  | 'comment.activity'
+  | 'project.access_requested'
 
 type NotificationRow = {
   id: string
@@ -2721,16 +2968,18 @@ export async function notifyProjectMembersOfCommentActivity(input: {
   pageUrl: string
 }) {
   const memberIds = await listProjectMemberIds(input.projectKey)
-  await Promise.all(memberIds.map((userId) =>
-    createOrIncrementCommentActivityNotification({
-      userId,
-      projectKey: input.projectKey,
-      projectName: input.projectName,
-      commentId: input.commentId,
-      authorName: input.authorName ?? null,
-      pageUrl: input.pageUrl,
-    }),
-  ))
+  await Promise.all(
+    memberIds.map((userId) =>
+      createOrIncrementCommentActivityNotification({
+        userId,
+        projectKey: input.projectKey,
+        projectName: input.projectName,
+        commentId: input.commentId,
+        authorName: input.authorName ?? null,
+        pageUrl: input.pageUrl,
+      }),
+    ),
+  )
 }
 
 export async function removeGuestCommentActivityNotifications(projectKey: string, commentId: string) {
@@ -2754,10 +3003,7 @@ export async function removeGuestCommentActivityNotifications(projectKey: string
   if (error) throw new Error(error.message)
 }
 
-export async function listNotificationsForUser(
-  userId: string,
-  opts: { unreadOnly?: boolean; limit?: number } = {},
-) {
+export async function listNotificationsForUser(userId: string, opts: { unreadOnly?: boolean; limit?: number } = {}) {
   const supabase = getSupabase()
   let query = supabase
     .from('notifications')
@@ -2768,14 +3014,16 @@ export async function listNotificationsForUser(
   if (opts.unreadOnly) query = query.is('read_at', null)
   const { data, error } = await query
   if (error) throw new Error(error.message)
-  const notifications = await Promise.all((data || []).map(async (row) => {
-    const notification = mapNotification(row as NotificationRow)
-    if (notification.kind === 'comment.activity') {
-      const membership = await getProjectMember(userId, String(notification.payload.projectKey))
-      if (!membership || membership.feedbackAllowed === false) return null
-    }
-    return notification
-  }))
+  const notifications = await Promise.all(
+    (data || []).map(async (row) => {
+      const notification = mapNotification(row as NotificationRow)
+      if (notification.kind === 'comment.activity') {
+        const membership = await getProjectMember(userId, String(notification.payload.projectKey))
+        if (!membership || membership.feedbackAllowed === false) return null
+      }
+      return notification
+    }),
+  )
   return notifications.filter((notification): notification is NonNullable<typeof notification> => notification !== null)
 }
 
@@ -2830,12 +3078,14 @@ export async function createInvite(input: {
   const email = input.email.toLowerCase().trim()
   const { data, error } = await supabase
     .from('project_invites')
-    .insert([{
-      project_key: input.projectKey,
-      email,
-      role: input.role,
-      invited_by: input.invitedBy,
-    }] as never)
+    .insert([
+      {
+        project_key: input.projectKey,
+        email,
+        role: input.role,
+        invited_by: input.invitedBy,
+      },
+    ] as never)
     .select('project_key, email, role, invited_by, created_at')
     .single()
   if (error) {
@@ -2947,25 +3197,51 @@ export async function findUserIdByEmail(email: string): Promise<string | null> {
   }
 }
 
-export async function beginTrackerDispatch(projectKey: string, commentId: string, actorUserId: string, leaseToken: string, workId: string | null) {
+export async function beginTrackerDispatch(
+  projectKey: string,
+  commentId: string,
+  actorUserId: string,
+  leaseToken: string,
+  workId: string | null,
+) {
   const { data, error } = await getSupabase().rpc('begin_actor_tracker_dispatch', {
-    p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_lease: leaseToken, p_work: workId,
+    p_project: projectKey,
+    p_actor: actorUserId,
+    p_comment: commentId,
+    p_lease: leaseToken,
+    p_work: workId,
   } as never)
   if (error) throw new Error(error.message)
   return data === true
 }
 
-export async function resolveTrackerDispatch(projectKey: string, actorUserId: string, commentId: string, provider: 'github' | 'linear' | 'jira') {
+export async function resolveTrackerDispatch(
+  projectKey: string,
+  actorUserId: string,
+  commentId: string,
+  provider: 'github' | 'linear' | 'jira',
+) {
   const { data, error } = await getSupabase().rpc('resolve_actor_tracker_dispatch', {
-    p_project: projectKey, p_actor: actorUserId, p_comment: commentId, p_provider: provider,
+    p_project: projectKey,
+    p_actor: actorUserId,
+    p_comment: commentId,
+    p_provider: provider,
   } as never)
   if (error) throw new Error(error.message)
   return data === true
 }
 
-export async function acknowledgeTrackerDispatchStopped(projectKey: string, commentId: string, leaseToken: string, workId: string | null) {
+export async function acknowledgeTrackerDispatchStopped(
+  projectKey: string,
+  commentId: string,
+  leaseToken: string,
+  workId: string | null,
+) {
   const { error } = await getSupabase().rpc('acknowledge_tracker_dispatch_stopped', {
-    p_project: projectKey, p_comment: commentId, p_lease: leaseToken, p_work: workId,
+    p_project: projectKey,
+    p_comment: commentId,
+    p_lease: leaseToken,
+    p_work: workId,
   } as never)
   if (error) throw new Error(error.message)
 }

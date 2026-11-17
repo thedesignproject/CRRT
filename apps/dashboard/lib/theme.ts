@@ -11,5 +11,9 @@ export function getDashboardTheme(): DashboardTheme {
 export function applyDashboardTheme(theme: DashboardTheme) {
   document.documentElement.dataset.theme = theme
   document.documentElement.classList.toggle('light', theme === 'light')
-  try { localStorage.setItem('dashboard-theme', theme) } catch { /* Storage may be blocked. */ }
+  try {
+    localStorage.setItem('dashboard-theme', theme)
+  } catch {
+    /* Storage may be blocked. */
+  }
 }

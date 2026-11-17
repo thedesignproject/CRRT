@@ -4,29 +4,44 @@ import { execFileSync } from 'node:child_process'
 import { describe, expect, it, vi } from 'vitest'
 
 const root = 'apps/landing/public/widget-updates/assets/'
-const yaml = (name: string) => JSON.parse(execFileSync('bun', ['-e',
-  'console.log(JSON.stringify(Bun.YAML.parse(await Bun.file(process.argv[1]).text())))',
-  root + name], { encoding: 'utf8' }))
+const yaml = (name: string) =>
+  JSON.parse(
+    execFileSync(
+      'bun',
+      ['-e', 'console.log(JSON.stringify(Bun.YAML.parse(await Bun.file(process.argv[1]).text())))', root + name],
+      { encoding: 'utf8' },
+    ),
+  )
 const workflow = yaml('patch-auto-merge.yml')
 const script = workflow.jobs.enable.steps[1].with.script
-const run = new (Object.getPrototypeOf(async function () {}).constructor)(
-  'github', 'context', 'core', script,
-)
+const run = new (Object.getPrototypeOf(async function () {}).constructor)('github', 'context', 'core', script)
 const fixture = () => ({
   autoMergeAllowed: true,
   squashMergeAllowed: true,
-  defaultBranchRef: { name: 'trunk', branchProtectionRule: {
-    requiresStatusChecks: true, requiredStatusCheckContexts: ['tests', 'build'],
-  } },
+  defaultBranchRef: {
+    name: 'trunk',
+    branchProtectionRule: {
+      requiresStatusChecks: true,
+      requiredStatusCheckContexts: ['tests', 'build'],
+    },
+  },
   pullRequest: {
-    id: 'PR_123', state: 'OPEN', isDraft: false, headRefOid: 'abc123',
-    baseRefName: 'trunk', author: { __typename: 'Bot', login: 'dependabot' },
-    headRepository: { nameWithOwner: 'customer/site' }, autoMergeRequest: null,
+    id: 'PR_123',
+    state: 'OPEN',
+    isDraft: false,
+    headRefOid: 'abc123',
+    baseRefName: 'trunk',
+    author: { __typename: 'Bot', login: 'dependabot' },
+    headRepository: { nameWithOwner: 'customer/site' },
+    autoMergeRequest: null,
   },
 })
-const context = { repo: { owner: 'customer', repo: 'site' }, payload: {
-  pull_request: { number: 123, head: { sha: 'abc123' } },
-} }
+const context = {
+  repo: { owner: 'customer', repo: 'site' },
+  payload: {
+    pull_request: { number: 123, head: { sha: 'abc123' } },
+  },
+}
 async function execute(repo: unknown) {
   const graphql = vi.fn().mockResolvedValueOnce({ repository: repo }).mockResolvedValueOnce({})
   await run({ graphql }, context, { notice: vi.fn() })
@@ -69,23 +84,33 @@ describe('consumer update templates', () => {
     ['missing default branch', { defaultBranchRef: null }],
     ['ruleset-only protection', { defaultBranchRef: { name: 'trunk', branchProtectionRule: null } }],
     ['optional checks', { defaultBranchRef: { name: 'trunk', branchProtectionRule: { requiresStatusChecks: false } } }],
-    ['no named checks', { defaultBranchRef: { name: 'trunk', branchProtectionRule: { requiresStatusChecks: true, requiredStatusCheckContexts: [] } } }],
+    [
+      'no named checks',
+      {
+        defaultBranchRef: {
+          name: 'trunk',
+          branchProtectionRule: { requiresStatusChecks: true, requiredStatusCheckContexts: [] },
+        },
+      },
+    ],
   ])('keeps manual review: %s', async (_name, changes) => {
     expect(await execute({ ...fixture(), ...changes })).toHaveBeenCalledTimes(1)
   })
 
   it.each([
-    ['closed', { state: 'CLOSED' }], ['draft', { isDraft: true }],
+    ['closed', { state: 'CLOSED' }],
+    ['draft', { isDraft: true }],
     ['already queued', { autoMergeRequest: { enabledAt: 'today' } }],
     ['not bot', { author: { __typename: 'User', login: 'dependabot' } }],
-    ['other bot', { author: { __typename: 'Bot', login: 'other' } }], ['deleted author', { author: null }],
+    ['other bot', { author: { __typename: 'Bot', login: 'other' } }],
+    ['deleted author', { author: null }],
     ['fork', { headRepository: { nameWithOwner: 'other/site' } }],
     ['deleted fork', { headRepository: null }],
-    ['other target', { baseRefName: 'release' }], ['stale event', { headRefOid: 'new-sha' }],
+    ['other target', { baseRefName: 'release' }],
+    ['stale event', { headRefOid: 'new-sha' }],
   ])('does not enable merge for %s PR', async (_name, changes) => {
     const repo = fixture()
-    expect(await execute({ ...repo, pullRequest: { ...repo.pullRequest, ...changes } }))
-      .toHaveBeenCalledTimes(1)
+    expect(await execute({ ...repo, pullRequest: { ...repo.pullRequest, ...changes } })).toHaveBeenCalledTimes(1)
   })
 
   it('does not attempt a mutation when verification fails', async () => {

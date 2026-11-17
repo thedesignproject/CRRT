@@ -4,21 +4,26 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const enabled = process.env.DOMAIN_ACCESS_DB_TEST === 'true'
 const url = process.env.DATABASE_URL || ''
-if (enabled && !/^postgres(?:ql)?:\/\/[^/]+@(localhost|127\.0\.0\.1):/.test(url)) throw new Error('Local database required')
+if (enabled && !/^postgres(?:ql)?:\/\/[^/]+@(localhost|127\.0\.0\.1):/.test(url))
+  throw new Error('Local database required')
 const db = enabled ? postgres(url, { max: 5 }) : null
 const suite = enabled ? describe : describe.skip
 const project = `domain-test-${randomUUID()}`
-const admin = `f${randomUUID().slice(1)}`, user = `0${randomUUID().slice(1)}`, other = randomUUID()
-const submit = () => db!`select public.submit_project_access_request(${project}, ${user}::uuid) as result`.then(r => r[0].result)
-const review = (id: string, decision = 'approved', role = 'member', actor = admin, attempt = 1) => db!`
+const admin = `f${randomUUID().slice(1)}`,
+  user = `0${randomUUID().slice(1)}`,
+  other = randomUUID()
+const submit = () =>
+  db!`select public.submit_project_access_request(${project}, ${user}::uuid) as result`.then((r) => r[0].result)
+const review = (id: string, decision = 'approved', role = 'member', actor = admin, attempt = 1) =>
+  db!`
   select public.review_project_access_request(${project}, ${id}::uuid, ${actor}::uuid, ${decision}, ${role}, ${attempt}) as result
-`.then(r => r[0].result)
+`.then((r) => r[0].result)
 
 async function waitForBlocked(pid: number) {
   for (let i = 0; i < 200; i++) {
     const [row] = await db!`select cardinality(pg_blocking_pids(${pid})) > 0 as blocked`
     if (row.blocked) return
-    await new Promise(resolve => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
   }
   throw new Error('Expected the concurrent operation to wait on the held row lock')
 }
@@ -42,32 +47,48 @@ afterAll(async () => {
 suite('company domain access against local Supabase', () => {
   it('keeps tables and RPCs private and enforces domain constraints', async () => {
     for (const role of ['anon', 'authenticated']) {
-      await expect(db!.begin(async tx => {
-        await tx.unsafe(`set local role ${role}`)
-        await tx`select public.suggest_domain_projects(${user}::uuid)`
-      })).rejects.toThrow()
+      await expect(
+        db!.begin(async (tx) => {
+          await tx.unsafe(`set local role ${role}`)
+          await tx`select public.suggest_domain_projects(${user}::uuid)`
+        }),
+      ).rejects.toThrow()
       for (const signature of [
-        'submit_project_access_request(text,uuid)', 'review_project_access_request(text,uuid,uuid,text,text,integer)',
-        'mutate_project_email_domain(text,uuid,text,boolean)', 'suggest_domain_projects(uuid)',
+        'submit_project_access_request(text,uuid)',
+        'review_project_access_request(text,uuid,uuid,text,text,integer)',
+        'mutate_project_email_domain(text,uuid,text,boolean)',
+        'suggest_domain_projects(uuid)',
       ]) {
         const [access] = await db!`select has_function_privilege(${role}, ${signature}, 'EXECUTE') as allowed,
           has_function_privilege('service_role', ${signature}, 'EXECUTE') as service`
         expect(access).toEqual({ allowed: false, service: true })
       }
-      const rows = await db!.begin(async tx => {
-        await tx.unsafe(`set local role ${role}`)
-        return tx`select * from public.project_email_domains`
-      }).catch(() => [])
+      const rows = await db!
+        .begin(async (tx) => {
+          await tx.unsafe(`set local role ${role}`)
+          return tx`select * from public.project_email_domains`
+        })
+        .catch(() => [])
       expect(rows).toHaveLength(0)
     }
     for (const domain of ['Company.test', '*.company.test', 'https://company.test', 'company..test', '-bad.test']) {
-      await expect(db!`insert into public.project_email_domains (project_key, domain) values (${project}, ${domain})`).rejects.toThrow()
+      await expect(
+        db!`insert into public.project_email_domains (project_key, domain) values (${project}, ${domain})`,
+      ).rejects.toThrow()
     }
-    await expect(db!`insert into public.project_email_domains (project_key, domain) values (${project}, 'company.test')`).rejects.toThrow()
+    await expect(
+      db!`insert into public.project_email_domains (project_key, domain) values (${project}, 'company.test')`,
+    ).rejects.toThrow()
   })
   it('discovers exact verified domains without exposing existing members or invitees', async () => {
     const suggestions = await db!`select * from public.suggest_domain_projects(${user}::uuid)`
-    expect(suggestions).toContainEqual({ project_key: project, name: 'Domain test', domain: 'company.test', status: null, retry_at: null })
+    expect(suggestions).toContainEqual({
+      project_key: project,
+      name: 'Domain test',
+      domain: 'company.test',
+      status: null,
+      retry_at: null,
+    })
     expect(await db!`select * from public.suggest_domain_projects(${admin}::uuid)`).toHaveLength(0)
     expect(await db!`select * from public.suggest_domain_projects(${other}::uuid)`).toHaveLength(0)
     await db!`update auth.users set email = ${`${user}@sub.company.test`} where id = ${user}`
@@ -83,7 +104,7 @@ suite('company domain access against local Supabase', () => {
   })
   it('serializes submissions, rejects unauthorized reviews, and enforces cooldown', async () => {
     const results = await Promise.all([submit(), submit()])
-    expect(results.map(r => r.outcome).sort()).toEqual(['created', 'existing'])
+    expect(results.map((r) => r.outcome).sort()).toEqual(['created', 'existing'])
     const id = results[0].request.id
     expect((await review(id, 'approved', 'owner')).outcome).toBe('invalid')
     expect((await review(id, 'approved', 'member', other)).outcome).toBe('forbidden')
@@ -106,15 +127,20 @@ suite('company domain access against local Supabase', () => {
     await db!`update auth.users set email = ${`${user}@elsewhere.test`} where id = ${user}`
     expect((await review(request.id, 'approved', 'member', admin, request.attempt)).outcome).toBe('ineligible')
     await db!`update auth.users set email = ${`${user}@company.test`} where id = ${user}`
-    const decisions = await Promise.all([review(request.id, 'approved', 'member', admin, request.attempt), review(request.id, 'declined', 'member', admin, request.attempt)])
-    expect(decisions.map(r => r.outcome).sort()).toEqual(['resolved', 'reviewed'])
-    expect(new Set(decisions.map(r => r.request.status)).size).toBe(1)
+    const decisions = await Promise.all([
+      review(request.id, 'approved', 'member', admin, request.attempt),
+      review(request.id, 'declined', 'member', admin, request.attempt),
+    ])
+    expect(decisions.map((r) => r.outcome).sort()).toEqual(['resolved', 'reviewed'])
+    expect(new Set(decisions.map((r) => r.request.status)).size).toBe(1)
     // Regardless of the race winner, finish with a request eligible for approval.
     await db!`delete from public.project_members where project_key = ${project} and user_id = ${user}`
     await db!`update public.project_access_requests set reviewed_at = now() - interval '8 days' where id = ${request.id}`
     const next = await submit()
     await db!`insert into public.project_members (project_key, user_id, role) values (${project}, ${user}, 'guest')`
-    expect((await review(next.request.id, 'approved', 'admin', admin, next.request.attempt)).request.granted_role).toBe('guest')
+    expect((await review(next.request.id, 'approved', 'admin', admin, next.request.attempt)).request.granted_role).toBe(
+      'guest',
+    )
     expect((await submit()).outcome).toBe('already_has_access')
     expect(await db!`select * from public.suggest_domain_projects(${user}::uuid)`).toHaveLength(0)
   })
@@ -126,13 +152,14 @@ suite('company domain access against local Supabase', () => {
     const [{ pid }] = await connection`select pg_backend_pid() as pid`
     let pending: Promise<any> | undefined
     try {
-      await db!.begin(async tx => {
+      await db!.begin(async (tx) => {
         // Existing membership RPCs acquire the lower requester UUID first.
         await tx`select 1 from public.project_members where project_key = ${project} and user_id = ${user} for update`
         pending = connection`select public.review_project_access_request(${project}, ${request.id}::uuid,
-          ${admin}::uuid, 'approved', 'admin', ${request.attempt}) as result`.then(rows => rows[0].result)
+          ${admin}::uuid, 'approved', 'admin', ${request.attempt}) as result`.then((rows) => rows[0].result)
         await waitForBlocked(pid)
-        const [changed] = await tx`select public.change_project_member_role(${project}, ${admin}::uuid, ${user}::uuid, 'member') as result`
+        const [changed] =
+          await tx`select public.change_project_member_role(${project}, ${admin}::uuid, ${user}::uuid, 'member') as result`
         expect(changed.result.status).toBe('updated')
       })
       expect(await pending).toMatchObject({ outcome: 'reviewed', request: { granted_role: 'member' } })
@@ -147,25 +174,32 @@ suite('company domain access against local Supabase', () => {
     const [{ pid }] = await connection`select pg_backend_pid() as pid`
     let pending: Promise<any> | undefined
     try {
-      await db!.begin(async tx => {
+      await db!.begin(async (tx) => {
         await tx`select public.change_project_member_role(${project}, ${admin}::uuid, ${other}::uuid, 'member')`
-        pending = connection`select public.mutate_project_email_domain(${project}, ${other}::uuid, 'revoked.test', false) as result`
-          .then(rows => rows[0].result)
+        pending =
+          connection`select public.mutate_project_email_domain(${project}, ${other}::uuid, 'revoked.test', false) as result`.then(
+            (rows) => rows[0].result,
+          )
         await waitForBlocked(pid)
       })
       expect(await pending).toBe('forbidden')
-      expect(await db!`select 1 from public.project_email_domains where project_key = ${project} and domain = 'revoked.test'`).toHaveLength(0)
+      expect(
+        await db!`select 1 from public.project_email_domains where project_key = ${project} and domain = 'revoked.test'`,
+      ).toHaveLength(0)
       for (const remove of [false, false, true, true]) {
-        const [result] = await db!`select public.mutate_project_email_domain(${project}, ${admin}::uuid, 'allowed.test', ${remove}) as result`
+        const [result] =
+          await db!`select public.mutate_project_email_domain(${project}, ${admin}::uuid, 'allowed.test', ${remove}) as result`
         expect(result.result).toBe('updated')
       }
-      const [denied] = await db!`select public.mutate_project_email_domain(${project}, ${other}::uuid, 'company.test', true) as result`
+      const [denied] =
+        await db!`select public.mutate_project_email_domain(${project}, ${other}::uuid, 'company.test', true) as result`
       expect(denied.result).toBe('forbidden')
-      expect(await db!`select 1 from public.project_email_domains where project_key = ${project} and domain = 'company.test'`).toHaveLength(1)
+      expect(
+        await db!`select 1 from public.project_email_domains where project_key = ${project} and domain = 'company.test'`,
+      ).toHaveLength(1)
     } finally {
       await pending?.catch(() => {})
       connection.release()
     }
   })
-
 })

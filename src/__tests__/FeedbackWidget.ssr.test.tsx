@@ -7,15 +7,11 @@ import { FeedbackWidget } from '../components/FeedbackWidget'
 
 describe('FeedbackWidget SSR', () => {
   it('renders without accessing browser globals', () => {
-    expect(() => renderToString(
-      createElement(FeedbackWidget, { projectId: 'project-test' }),
-    )).not.toThrow()
+    expect(() => renderToString(createElement(FeedbackWidget, { projectId: 'project-test' }))).not.toThrow()
   })
 
   it('renders the system theme without accessing browser globals', () => {
-    const html = renderToString(
-      createElement(FeedbackWidget, { projectId: 'project-test', theme: 'system' }),
-    )
+    const html = renderToString(createElement(FeedbackWidget, { projectId: 'project-test', theme: 'system' }))
     expect(html).toContain('data-crrt-theme="system"')
   })
 })

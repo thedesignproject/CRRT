@@ -16,7 +16,14 @@ interface AddProjectPopoverProps {
 
 type KeyStatus = 'idle' | 'invalid' | 'checking' | 'available' | 'taken'
 
-export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, error, suggestedProjects }: AddProjectPopoverProps) {
+export function AddProjectPopover({
+  onAdd,
+  onClose,
+  checkAvailability,
+  busy,
+  error,
+  suggestedProjects,
+}: AddProjectPopoverProps) {
   const [name, setName] = useState('')
   const [key, setKey] = useState('')
   const [keyEdited, setKeyEdited] = useState(false)
@@ -75,7 +82,12 @@ export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, err
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-center pt-[18vh] px-4" role="dialog" aria-modal="true" aria-labelledby="add-project-title">
+    <div
+      className="fixed inset-0 z-50 flex justify-center pt-[18vh] px-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="add-project-title"
+    >
       <button
         type="button"
         aria-label="Close create project"
@@ -89,7 +101,8 @@ export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, err
             Create a project
           </h2>
           <p className="mt-1 text-[12px] text-muted-foreground leading-relaxed">
-            Name your product or app — we'll suggest a public key from the name. Paste the snippet with that key into the host app to start collecting feedback.
+            Name your product or app — we'll suggest a public key from the name. Paste the snippet with that key into
+            the host app to start collecting feedback.
           </p>
         </div>
 
@@ -121,7 +134,10 @@ export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, err
               id="project-key"
               type="text"
               value={key}
-              onChange={(e) => { setKeyEdited(true); setKey(e.target.value) }}
+              onChange={(e) => {
+                setKeyEdited(true)
+                setKey(e.target.value)
+              }}
               placeholder="acme-marketing-site"
               disabled={busy}
               aria-label="Project public key"
@@ -131,8 +147,16 @@ export function AddProjectPopover({ onAdd, onClose, checkAvailability, busy, err
             />
             <span className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center" aria-hidden="true">
               {status === 'checking' && <Spinner size={14} strokeWidth={3} />}
-              {status === 'available' && <span className="text-status-accepted flex"><CheckIcon size={15} /></span>}
-              {(status === 'taken' || status === 'invalid') && <span className="text-status-rejected flex"><XIcon size={15} /></span>}
+              {status === 'available' && (
+                <span className="text-status-accepted flex">
+                  <CheckIcon size={15} />
+                </span>
+              )}
+              {(status === 'taken' || status === 'invalid') && (
+                <span className="text-status-rejected flex">
+                  <XIcon size={15} />
+                </span>
+              )}
             </span>
           </div>
 

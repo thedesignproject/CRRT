@@ -3,14 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const local = vi.hoisted(() => ({ get: vi.fn(), set: vi.fn() }))
 vi.mock('wxt/browser', () => ({ browser: { storage: { local } } }))
 
-import { EXTENSION_DISCLOSURE_KEY, EXTENSION_DISCLOSURE_VERSION, acceptDisclosure, hasAcceptedDisclosure, publicCrrtUrl } from './disclosure'
+import {
+  EXTENSION_DISCLOSURE_KEY,
+  EXTENSION_DISCLOSURE_VERSION,
+  acceptDisclosure,
+  hasAcceptedDisclosure,
+  publicCrrtUrl,
+} from './disclosure'
 
-beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('WXT_DASHBOARD_URL', 'https://crrt.ai/dashboard/') })
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubEnv('WXT_DASHBOARD_URL', 'https://crrt.ai/dashboard/')
+})
 afterEach(() => vi.unstubAllEnvs())
 
 describe('extension disclosure', () => {
   it('requires the exact current disclosure version', async () => {
-    local.get.mockResolvedValueOnce({ [EXTENSION_DISCLOSURE_KEY]: EXTENSION_DISCLOSURE_VERSION })
+    local.get
+      .mockResolvedValueOnce({ [EXTENSION_DISCLOSURE_KEY]: EXTENSION_DISCLOSURE_VERSION })
       .mockResolvedValueOnce({ [EXTENSION_DISCLOSURE_KEY]: EXTENSION_DISCLOSURE_VERSION - 1 })
       .mockResolvedValueOnce({})
     await expect(hasAcceptedDisclosure()).resolves.toBe(true)

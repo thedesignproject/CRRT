@@ -1,19 +1,64 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, it, vi } from 'vitest'
-const auth = vi.hoisted(() => ({ value: { session: null as null | { access_token: string }, user: null as null | { id: string }, loading: true, signOut: vi.fn() } }))
+const auth = vi.hoisted(() => ({
+  value: {
+    session: null as null | { access_token: string },
+    user: null as null | { id: string },
+    loading: true,
+    signOut: vi.fn(),
+  },
+}))
 const data = vi.hoisted(() => ({ projects: [] as any[], comments: [] as any[], refresh: vi.fn(), claim: vi.fn() }))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => auth.value }))
-vi.mock('./hooks/useProjects', () => ({ useProjects: () => ({ projects: data.projects, loading: false, error: null, refresh: data.refresh, claimProject: data.claim, checkAvailability: data.refresh }) }))
-vi.mock('./hooks/useComments', () => ({ useComments: () => ({ comments: data.comments, loading: false, error: null, refresh: data.refresh }) }))
+vi.mock('./hooks/useProjects', () => ({
+  useProjects: () => ({
+    projects: data.projects,
+    loading: false,
+    error: null,
+    refresh: data.refresh,
+    claimProject: data.claim,
+    checkAvailability: data.refresh,
+  }),
+}))
+vi.mock('./hooks/useComments', () => ({
+  useComments: () => ({ comments: data.comments, loading: false, error: null, refresh: data.refresh }),
+}))
 vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: false }) }))
-vi.mock('./hooks/useAgentSession', () => ({ useAgentSession: () => ({ session: null, shareState: null, events: [], error: null, copyPrompt: data.refresh, adoptSession: data.refresh }) }))
-vi.mock('./components/Header', () => ({ Header: (props: any) => <nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button onClick={() => props.setSelectedProject('project')}>Project</button></nav> }))
+vi.mock('./hooks/useAgentSession', () => ({
+  useAgentSession: () => ({
+    session: null,
+    shareState: null,
+    events: [],
+    error: null,
+    copyPrompt: data.refresh,
+    adoptSession: data.refresh,
+  }),
+}))
+vi.mock('./components/Header', () => ({
+  Header: (props: any) => (
+    <nav aria-label="Dashboard">
+      <button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>
+        Recordings
+      </button>
+      <button onClick={props.onOpenExtensionComments}>Inbox</button>
+      <button onClick={() => props.setSelectedProject('project')}>Project</button>
+    </nav>
+  ),
+}))
 vi.mock('./components/RecordingsPage', () => ({ RecordingsPage: () => <h1>Recording library</h1> }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <h1>Personal Inbox</h1> }))
 vi.mock('./lib/supabase', () => ({ supabase: { auth: {} } }))
-vi.mock('./components/RecordingSharePage', () => ({ RecordingSharePage: ({ ownerToken }: { ownerToken?: string }) => <p>{ownerToken ? `Owner ${ownerToken}` : 'Anonymous recording'}</p> }))
+vi.mock('./components/RecordingSharePage', () => ({
+  RecordingSharePage: ({ ownerToken }: { ownerToken?: string }) => (
+    <p>{ownerToken ? `Owner ${ownerToken}` : 'Anonymous recording'}</p>
+  ),
+}))
 import { App } from './App'
-beforeEach(() => { auth.value = { session: null, user: null, loading: true, signOut: vi.fn() }; data.projects = []; localStorage.clear() })
+beforeEach(() => {
+  auth.value = { session: null, user: null, loading: true, signOut: vi.fn() }
+  data.projects = []
+  localStorage.clear()
+})
 it('opens human share links without waiting for or requiring dashboard authentication', () => {
   history.replaceState(null, '', '/recording#capability')
   render(<App />)

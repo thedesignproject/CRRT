@@ -8,13 +8,21 @@ export const extensionIcons = {
   128: 'icons/icon-128.png',
 } as const
 type ServiceName = 'api' | 'dashboard' | 'supabase'
-type ExtensionBuildEnvironment = Partial<Record<'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL' | 'WXT_DEPLOYMENT_MODE' | 'WXT_RECORD_STORAGE_ORIGIN', string>>
+type ExtensionBuildEnvironment = Partial<
+  Record<
+    'WXT_API_BASE' | 'WXT_DASHBOARD_URL' | 'WXT_SUPABASE_URL' | 'WXT_DEPLOYMENT_MODE' | 'WXT_RECORD_STORAGE_ORIGIN',
+    string
+  >
+>
 
 function serviceUrl(raw: string | undefined, variable: string, mode: string): URL {
   if (!raw?.trim()) throw new Error(`${variable} is required to build the CRRT extension`)
   let url: URL
-  try { url = new URL(raw) }
-  catch { throw new Error(`${variable} must be a valid absolute URL`) }
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error(`${variable} must be a valid absolute URL`)
+  }
   if (url.username) throw new Error(`${variable} must not include credentials`)
   if (url.search) throw new Error(`${variable} must not include a query`)
   if (url.hash) throw new Error(`${variable} must not include a fragment`)
@@ -58,11 +66,14 @@ export function extensionManifest(
   { mode }: Pick<ConfigEnv, 'mode'>,
   environment: ExtensionBuildEnvironment = process.env,
 ): UserManifest {
-  if (environment.WXT_DEPLOYMENT_MODE && !['cloud','community'].includes(environment.WXT_DEPLOYMENT_MODE)) throw new Error('WXT_DEPLOYMENT_MODE must be cloud or community')
+  if (environment.WXT_DEPLOYMENT_MODE && !['cloud', 'community'].includes(environment.WXT_DEPLOYMENT_MODE))
+    throw new Error('WXT_DEPLOYMENT_MODE must be cloud or community')
   const api = configuredUrl(environment, 'WXT_API_BASE', 'api', mode)
   configuredUrl(environment, 'WXT_DASHBOARD_URL', 'dashboard', mode)
   const supabase = configuredUrl(environment, 'WXT_SUPABASE_URL', 'supabase', mode)
-  const media = environment.WXT_RECORD_STORAGE_ORIGIN ? serviceUrl(environment.WXT_RECORD_STORAGE_ORIGIN, 'WXT_RECORD_STORAGE_ORIGIN', mode) : null
+  const media = environment.WXT_RECORD_STORAGE_ORIGIN
+    ? serviceUrl(environment.WXT_RECORD_STORAGE_ORIGIN, 'WXT_RECORD_STORAGE_ORIGIN', mode)
+    : null
   if (media && media.pathname !== '/') throw new Error('WXT_RECORD_STORAGE_ORIGIN must be an origin')
   return {
     name: 'CRRT',
@@ -70,10 +81,14 @@ export function extensionManifest(
     version: readExtensionVersion(),
     permissions: ['activeTab', 'identity', 'offscreen', 'scripting', 'storage', 'tabCapture'],
     optional_host_permissions: ['http://*/*', 'https://*/*'],
-    host_permissions: [...new Set([`${api.origin}/*`, `${supabase.origin}/*`, ...(media ? [`${media.origin}/*`] : [])])],
+    host_permissions: [
+      ...new Set([`${api.origin}/*`, `${supabase.origin}/*`, ...(media ? [`${media.origin}/*`] : [])]),
+    ],
     // This only lets the explicitly injected, isolated iframe load on a chosen HTTP(S) page.
     // It does not grant CRRT persistent access to those pages.
-    web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] }],
+    web_accessible_resources: [
+      { resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] },
+    ],
     content_security_policy: { extension_pages: "script-src 'self'; object-src 'self'" },
     icons: extensionIcons,
     action: { default_title: 'CRRT', default_icon: extensionIcons },

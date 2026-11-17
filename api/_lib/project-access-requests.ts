@@ -27,19 +27,38 @@ export const accessErrors: Record<string, [number, string]> = {
 }
 
 export async function listAccessRequests(project: string): Promise<AccessRequest[]> {
-  const { data, error } = await getServiceSupabase().from('project_access_requests')
-    .select('*').eq('project_key', project).eq('status', 'pending').order('requested_at')
+  const { data, error } = await getServiceSupabase()
+    .from('project_access_requests')
+    .select('*')
+    .eq('project_key', project)
+    .eq('status', 'pending')
+    .order('requested_at')
   if (error) throw new Error(error.message)
   return data!
 }
 export async function submitAccessRequest(project: string, userId: string): Promise<AccessResult> {
-  const { data, error } = await getServiceSupabase().rpc('submit_project_access_request', { p_project: project, p_user: userId })
+  const { data, error } = await getServiceSupabase().rpc('submit_project_access_request', {
+    p_project: project,
+    p_user: userId,
+  })
   if (error) throw new Error(error.message)
   return data
 }
-export async function reviewAccessRequest(project: string, requestId: string, reviewer: string, attempt: number, decision: 'approved' | 'declined', role: 'admin' | 'member' | 'guest'): Promise<AccessResult> {
+export async function reviewAccessRequest(
+  project: string,
+  requestId: string,
+  reviewer: string,
+  attempt: number,
+  decision: 'approved' | 'declined',
+  role: 'admin' | 'member' | 'guest',
+): Promise<AccessResult> {
   const { data, error } = await getServiceSupabase().rpc('review_project_access_request', {
-    p_project: project, p_request: requestId, p_reviewer: reviewer, p_attempt: attempt, p_decision: decision, p_role: role,
+    p_project: project,
+    p_request: requestId,
+    p_reviewer: reviewer,
+    p_attempt: attempt,
+    p_decision: decision,
+    p_role: role,
   })
   if (error) {
     if (error.message.includes('agent_seat_limit_reached')) return { outcome: 'agent_seat_limit_reached' }

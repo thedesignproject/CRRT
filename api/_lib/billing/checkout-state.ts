@@ -16,14 +16,27 @@ export function createCheckoutState(plan: CloudPlan, cycle: BillingCycle, now = 
 }
 
 /** A signed selection carries no account identity, payment authority, or redirect. */
-export function readCheckoutState(value: unknown, now = Math.floor(Date.now() / 1000)): { plan: CloudPlan; cycle: BillingCycle } {
-  if (typeof value !== 'string' || value.length > 512 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value)) throw new InvalidCheckoutState('Invalid or expired checkout selection')
+export function readCheckoutState(
+  value: unknown,
+  now = Math.floor(Date.now() / 1000),
+): { plan: CloudPlan; cycle: BillingCycle } {
+  if (typeof value !== 'string' || value.length > 512 || !/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value))
+    throw new InvalidCheckoutState('Invalid or expired checkout selection')
   const [body, mac] = value.split('.')
   const expected = signature(body)
-  if (mac.length !== expected.length || !timingSafeEqual(Buffer.from(mac), Buffer.from(expected))) throw new InvalidCheckoutState('Invalid or expired checkout selection')
+  if (mac.length !== expected.length || !timingSafeEqual(Buffer.from(mac), Buffer.from(expected)))
+    throw new InvalidCheckoutState('Invalid or expired checkout selection')
   try {
     const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'))
-    if (!Number.isInteger(payload.iat) || !Number.isInteger(payload.exp) || payload.iat > now || payload.exp <= now || payload.exp - payload.iat !== TTL_SECONDS || !payload.cycle) throw new Error('Invalid lifetime')
+    if (
+      !Number.isInteger(payload.iat) ||
+      !Number.isInteger(payload.exp) ||
+      payload.iat > now ||
+      payload.exp <= now ||
+      payload.exp - payload.iat !== TTL_SECONDS ||
+      !payload.cycle
+    )
+      throw new Error('Invalid lifetime')
     return { plan: parseCloudPlan(payload.plan), cycle: parseBillingCycle(payload.cycle) }
   } catch {
     throw new InvalidCheckoutState('Invalid or expired checkout selection')

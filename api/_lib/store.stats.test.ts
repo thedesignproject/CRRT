@@ -14,10 +14,7 @@ function countQuery(result: Result) {
   return { select: vi.fn(() => query), query }
 }
 
-function setup(opts: {
-  listUsers: ReturnType<typeof vi.fn>
-  counts?: Partial<Record<string, Result>>
-}) {
+function setup(opts: { listUsers: ReturnType<typeof vi.fn>; counts?: Partial<Record<string, Result>> }) {
   const queries = new Map<string, ReturnType<typeof countQuery>>()
   const client = {
     auth: { admin: { listUsers: opts.listUsers } },
@@ -36,13 +33,11 @@ beforeEach(() => vi.mocked(getServiceSupabase).mockReset())
 describe('getAdminStats', () => {
   it('returns totals and inclusive signup/presence windows', async () => {
     const now = new Date('2026-06-19T00:00:00.000Z')
-    const listUsers = vi.fn()
+    const listUsers = vi
+      .fn()
       .mockResolvedValueOnce({
         data: {
-          users: [
-            { created_at: '2026-06-18T00:00:00.000Z' },
-            { created_at: '2026-06-12T00:00:00.000Z' },
-          ],
+          users: [{ created_at: '2026-06-18T00:00:00.000Z' }, { created_at: '2026-06-12T00:00:00.000Z' }],
           total: 9,
           nextPage: 2,
         },
@@ -50,10 +45,7 @@ describe('getAdminStats', () => {
       })
       .mockResolvedValueOnce({
         data: {
-          users: [
-            { created_at: '2026-05-20T00:00:00.000Z' },
-            { created_at: '2026-05-19T23:59:59.000Z' },
-          ],
+          users: [{ created_at: '2026-05-20T00:00:00.000Z' }, { created_at: '2026-05-19T23:59:59.000Z' }],
           total: 9,
           nextPage: null,
         },
@@ -62,25 +54,30 @@ describe('getAdminStats', () => {
     const { queries } = setup({
       listUsers,
       counts: {
-        projects: { count: 2, error: null }, comments: { count: 3, error: null },
-        feedback_shares: { count: 4, error: null }, agent_presence: { count: 5, error: null },
+        projects: { count: 2, error: null },
+        comments: { count: 3, error: null },
+        feedback_shares: { count: 4, error: null },
+        agent_presence: { count: 5, error: null },
       },
     })
 
     await expect(getAdminStats(now)).resolves.toEqual({
-      accounts: 9, projects: 2, comments: 3, shares: 4, activeAgentPresence: 5,
+      accounts: 9,
+      projects: 2,
+      comments: 3,
+      shares: 4,
+      activeAgentPresence: 5,
       signups: { last24Hours: 1, last7Days: 2, last30Days: 3 },
     })
     expect(listUsers).toHaveBeenNthCalledWith(2, { page: 2, perPage: 1000 })
-    expect(queries.get('agent_presence')?.query.gte).toHaveBeenCalledWith(
-      'last_seen_at', '2026-06-18T23:59:00.000Z',
-    )
+    expect(queries.get('agent_presence')?.query.gte).toHaveBeenCalledWith('last_seen_at', '2026-06-18T23:59:00.000Z')
   })
 
   it('falls back when auth total and database counts are null', async () => {
     setup({
       listUsers: vi.fn().mockResolvedValue({
-        data: { users: [{ created_at: 'invalid' }], nextPage: null }, error: null,
+        data: { users: [{ created_at: 'invalid' }], nextPage: null },
+        error: null,
       }),
       counts: {
         projects: { count: null, error: null },

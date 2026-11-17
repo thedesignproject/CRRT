@@ -12,10 +12,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -74,7 +84,9 @@ describe('api/v1/admin/users', () => {
       await call({ method: 'GET', query, headers: {} }, res)
       expect(res.statusCode).toBe(400)
     }
-    vi.mocked(listAllUsers).mockRejectedValueOnce(new (await import('../../_lib/admin-pagination.js')).AdminQueryError('Invalid cursor'))
+    vi.mocked(listAllUsers).mockRejectedValueOnce(
+      new (await import('../../_lib/admin-pagination.js')).AdminQueryError('Invalid cursor'),
+    )
     const res = mockRes()
     await call({ method: 'GET', query: { limit: '10', cursor: 'bad' }, headers: {} }, res)
     expect(res.statusCode).toBe(400)

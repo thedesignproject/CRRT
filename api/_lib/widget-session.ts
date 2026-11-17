@@ -3,12 +3,28 @@ import { createProof, hashProof, pkceChallenge } from './extension-auth-contract
 import { getServiceSupabase } from './supabase.js'
 import { getProject } from './store.js'
 import { isHostnameAllowed } from './origins.js'
-import { parseWidgetAuthRequest, WIDGET_PROOF, widgetOrigin, type WidgetAuthRequest } from '../../src/lib/widgetAuthContract.js'
+import {
+  parseWidgetAuthRequest,
+  WIDGET_PROOF,
+  widgetOrigin,
+  type WidgetAuthRequest,
+} from '../../src/lib/widgetAuthContract.js'
 
 export class WidgetSessionError extends Error {
-  constructor(public status: number, message: string) { super(message) }
+  constructor(
+    public status: number,
+    message: string,
+  ) {
+    super(message)
+  }
 }
-export type WidgetSession = { user_id: string; project_key: string; origin: string; display_name: string; expires_at: string }
+export type WidgetSession = {
+  user_id: string
+  project_key: string
+  origin: string
+  display_name: string
+  expires_at: string
+}
 const SESSION_COLUMNS = 'user_id, project_key, origin, display_name, expires_at'
 
 export async function assertWidgetProject(projectKey: string, origin: string) {
@@ -18,7 +34,11 @@ export async function assertWidgetProject(projectKey: string, origin: string) {
   }
 }
 
-export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, user: { userId: string; email: string }, connectionId: string | null = null) {
+export async function createWidgetHandoff(
+  input: Partial<WidgetAuthRequest>,
+  user: { userId: string; email: string },
+  connectionId: string | null = null,
+) {
   const request = parseWidgetAuthRequest(input)
   if (!request) throw new WidgetSessionError(400, 'Invalid widget sign-in request')
   await assertWidgetProject(request.projectKey, request.origin)
@@ -28,8 +48,13 @@ export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, use
   const cleanup = await db.from('widget_auth_sessions').delete().lt('expires_at', new Date(now).toISOString())
   if (cleanup.error) throw new Error('Widget session cleanup failed')
   const { error } = await db.from('widget_auth_sessions').insert({
-    code_hash: hashProof(code), state_hash: hashProof(request.state), pkce_challenge: request.codeChallenge,
-    user_id: user.userId, project_key: request.projectKey, origin: request.origin, storybook_connection_id: connectionId,
+    code_hash: hashProof(code),
+    state_hash: hashProof(request.state),
+    pkce_challenge: request.codeChallenge,
+    user_id: user.userId,
+    project_key: request.projectKey,
+    origin: request.origin,
+    storybook_connection_id: connectionId,
     display_name: user.email.split('@')[0],
     handoff_expires_at: new Date(now + 5 * 60_000).toISOString(),
     expires_at: new Date(now + 60 * 60_000).toISOString(),
@@ -38,23 +63,42 @@ export async function createWidgetHandoff(input: Partial<WidgetAuthRequest>, use
   return { code, state: request.state }
 }
 
-export async function exchangeWidgetHandoff(input: Record<string, unknown>, origin: unknown, connectionId: string | null = null) {
+export async function exchangeWidgetHandoff(
+  input: Record<string, unknown>,
+  origin: unknown,
+  connectionId: string | null = null,
+) {
   const { code, state, verifier, projectKey } = input
-  if (!widgetOrigin(origin) || typeof projectKey !== 'string' || !projectKey
-    || typeof code !== 'string' || !WIDGET_PROOF.test(code)
-    || typeof state !== 'string' || !WIDGET_PROOF.test(state)
-    || typeof verifier !== 'string' || !WIDGET_PROOF.test(verifier)) {
+  if (
+    !widgetOrigin(origin) ||
+    typeof projectKey !== 'string' ||
+    !projectKey ||
+    typeof code !== 'string' ||
+    !WIDGET_PROOF.test(code) ||
+    typeof state !== 'string' ||
+    !WIDGET_PROOF.test(state) ||
+    typeof verifier !== 'string' ||
+    !WIDGET_PROOF.test(verifier)
+  ) {
     throw new WidgetSessionError(400, 'Invalid widget exchange')
   }
   await assertWidgetProject(projectKey, origin as string)
   const token = `crrt_widget_${createProof()}`
   // Postgres rechecks the token_hash predicate after concurrent updates: one winner.
-  let query = getServiceSupabase().from('widget_auth_sessions')
-    .update({ token_hash: hashProof(token) }).eq('code_hash', hashProof(code))
-    .eq('state_hash', hashProof(state)).eq('pkce_challenge', pkceChallenge(verifier))
-    .eq('project_key', projectKey).eq('origin', origin).is('token_hash', null)
+  let query = getServiceSupabase()
+    .from('widget_auth_sessions')
+    .update({ token_hash: hashProof(token) })
+    .eq('code_hash', hashProof(code))
+    .eq('state_hash', hashProof(state))
+    .eq('pkce_challenge', pkceChallenge(verifier))
+    .eq('project_key', projectKey)
+    .eq('origin', origin)
+    .is('token_hash', null)
     .gt('handoff_expires_at', new Date().toISOString())
-  query = connectionId === null ? query.is('storybook_connection_id', null) : query.eq('storybook_connection_id', connectionId)
+  query =
+    connectionId === null
+      ? query.is('storybook_connection_id', null)
+      : query.eq('storybook_connection_id', connectionId)
   const { data, error } = await query.select(SESSION_COLUMNS).maybeSingle()
   if (error) throw new Error('Widget exchange failed')
   if (!data) throw new WidgetSessionError(400, 'Invalid or expired widget sign-in')
@@ -66,18 +110,31 @@ function requestOrigin(req: VercelRequest): string | null {
   // Same-origin GETs can omit Origin. Referer is checked against the same
   // exact credential origin; it is never used as authentication on its own.
   if (typeof req.headers.referer !== 'string') return null
-  try { return widgetOrigin(new URL(req.headers.referer).origin) } catch { return null }
+  try {
+    return widgetOrigin(new URL(req.headers.referer).origin)
+  } catch {
+    return null
+  }
 }
 
-export async function requireWidgetSession(req: VercelRequest, connectionId: string | null = null): Promise<WidgetSession> {
+export async function requireWidgetSession(
+  req: VercelRequest,
+  connectionId: string | null = null,
+): Promise<WidgetSession> {
   const authorization = req.headers.authorization
   const origin = requestOrigin(req)
-  if (typeof authorization !== 'string' || !/^Bearer crrt_widget_[A-Za-z0-9_-]{43}$/.test(authorization)
-    || !origin) throw new WidgetSessionError(401, 'Sign in to CRRT again')
-  let query = getServiceSupabase().from('widget_auth_sessions')
-    .select(SESSION_COLUMNS).eq('token_hash', hashProof(authorization.slice(7)))
-    .eq('origin', origin).gt('expires_at', new Date().toISOString())
-  query = connectionId === null ? query.is('storybook_connection_id', null) : query.eq('storybook_connection_id', connectionId)
+  if (typeof authorization !== 'string' || !/^Bearer crrt_widget_[A-Za-z0-9_-]{43}$/.test(authorization) || !origin)
+    throw new WidgetSessionError(401, 'Sign in to CRRT again')
+  let query = getServiceSupabase()
+    .from('widget_auth_sessions')
+    .select(SESSION_COLUMNS)
+    .eq('token_hash', hashProof(authorization.slice(7)))
+    .eq('origin', origin)
+    .gt('expires_at', new Date().toISOString())
+  query =
+    connectionId === null
+      ? query.is('storybook_connection_id', null)
+      : query.eq('storybook_connection_id', connectionId)
   const { data, error } = await query.maybeSingle()
   if (error) throw new Error('Widget session lookup failed')
   if (!data) throw new WidgetSessionError(401, 'Sign in to CRRT again')
@@ -87,14 +144,20 @@ export async function requireWidgetSession(req: VercelRequest, connectionId: str
 
 export async function revokeWidgetSession(req: VercelRequest) {
   await requireWidgetSession(req)
-  const { error } = await getServiceSupabase().from('widget_auth_sessions').delete()
+  const { error } = await getServiceSupabase()
+    .from('widget_auth_sessions')
+    .delete()
     .eq('token_hash', hashProof((req.headers.authorization as string).slice(7)))
   if (error) throw new Error('Widget sign-out failed')
 }
 
 export function assertWidgetPage(session: WidgetSession, projectKey: string, pageUrl: string) {
   let origin: string
-  try { origin = new URL(pageUrl).origin } catch { throw new WidgetSessionError(400, 'Invalid page URL') }
+  try {
+    origin = new URL(pageUrl).origin
+  } catch {
+    throw new WidgetSessionError(400, 'Invalid page URL')
+  }
   if (session.project_key !== projectKey || session.origin !== origin) {
     throw new WidgetSessionError(403, 'Widget session does not allow this project or page')
   }

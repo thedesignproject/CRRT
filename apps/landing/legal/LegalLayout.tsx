@@ -9,7 +9,11 @@ const linkStyle = {
 } as const
 
 export function LegalLink({ children, href }: { children: ReactNode; href: string }) {
-  return <a href={href} style={linkStyle}>{children}</a>
+  return (
+    <a href={href} style={linkStyle}>
+      {children}
+    </a>
+  )
 }
 
 export function LegalLayout({
@@ -26,11 +30,16 @@ export function LegalLayout({
   useEffect(() => {
     const previousTitle = document.title
     document.title = `${title} — CRRT`
-    return () => { document.title = previousTitle }
+    return () => {
+      document.title = previousTitle
+    }
   }, [title])
 
   return (
-    <div className="scanlines" style={{ minHeight: '100vh', background: 'var(--crrt-bg-deep)', color: 'var(--crrt-white)' }}>
+    <div
+      className="scanlines"
+      style={{ minHeight: '100vh', background: 'var(--crrt-bg-deep)', color: 'var(--crrt-white)' }}
+    >
       <header
         style={{
           borderBottom: '1px solid var(--crrt-rule-dark)',
@@ -56,10 +65,18 @@ export function LegalLayout({
           <a href="/" aria-label="CRRT home" style={{ color: 'inherit', textDecoration: 'none' }}>
             <Wordmark level="nav" />
           </a>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, fontFamily: 'var(--crrt-font-mono)', fontSize: 12 }}>
-            <a href="/privacy" style={linkStyle}>Privacy</a>
-            <a href="/support" style={linkStyle}>Support</a>
-            <a href="/docs/install" style={linkStyle}>Docs</a>
+          <div
+            style={{ display: 'flex', flexWrap: 'wrap', gap: 20, fontFamily: 'var(--crrt-font-mono)', fontSize: 12 }}
+          >
+            <a href="/privacy" style={linkStyle}>
+              Privacy
+            </a>
+            <a href="/support" style={linkStyle}>
+              Support
+            </a>
+            <a href="/docs/install" style={linkStyle}>
+              Docs
+            </a>
           </div>
         </nav>
       </header>

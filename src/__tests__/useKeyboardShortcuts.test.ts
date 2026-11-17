@@ -4,7 +4,10 @@ import { shortcutPreferenceKey, useKeyboardShortcuts } from '../lib/useKeyboardS
 const data = new Map<string, string>()
 beforeEach(() => {
   data.clear()
-  vi.stubGlobal('localStorage', { getItem: (key: string) => data.get(key) ?? null, setItem: (key: string, value: string) => data.set(key, value) })
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => data.set(key, value),
+  })
 })
 afterEach(() => vi.unstubAllGlobals())
 it('shares changes across widget instances, persists reloads, and isolates the dashboard', () => {
@@ -34,7 +37,14 @@ it('updates on another tab changing the preference or clearing storage', () => {
   expect(hook.result.current[0]).toBe(true)
 })
 it('works in memory when browser storage is blocked', () => {
-  vi.stubGlobal('localStorage', { getItem: () => { throw Error('blocked') }, setItem: () => { throw Error('blocked') } })
+  vi.stubGlobal('localStorage', {
+    getItem: () => {
+      throw Error('blocked')
+    },
+    setItem: () => {
+      throw Error('blocked')
+    },
+  })
   const hook = renderHook(() => useKeyboardShortcuts('widget'))
   expect(hook.result.current[0]).toBe(true)
   act(() => hook.result.current[1](false))
@@ -54,7 +64,12 @@ it('works in memory when browser storage is blocked', () => {
 })
 
 it('retains a dashboard opt-out across Inbox mounts when storage writes fail', () => {
-  vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw Error('quota') } })
+  vi.stubGlobal('localStorage', {
+    getItem: () => null,
+    setItem: () => {
+      throw Error('quota')
+    },
+  })
   const app = renderHook(() => useKeyboardShortcuts('dashboard'))
   act(() => app.result.current[1](false))
   const inbox = renderHook(() => useKeyboardShortcuts('dashboard'))

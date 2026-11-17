@@ -13,7 +13,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const commentId = getStringQuery(req.query.commentId)
   const provider = req.body?.provider
   if (!commentId) return jsonError(req, res, 400, 'Missing commentId')
-  if (!['github', 'linear', 'jira'].includes(provider) || req.body?.confirmCheckedTracker !== true) return jsonError(req, res, 400, 'Check the tracker before resolving a pending export')
+  if (!['github', 'linear', 'jira'].includes(provider) || req.body?.confirmCheckedTracker !== true)
+    return jsonError(req, res, 400, 'Check the tracker before resolving a pending export')
   try {
     const comment = await getComment(commentId)
     if (!comment?.projectId) return jsonError(req, res, 404, 'Comment not found')
@@ -24,8 +25,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
     if (code === 'forbidden') return jsonError(req, res, 403, 'Project admin required', error)
-    if (code === 'tracker_dispatch_unconfirmed') return jsonError(req, res, 409, 'The sender has not confirmed it stopped. An operator must confirm termination before recovery.', error)
-    if (code === 'tracker_dispatch_active') return jsonError(req, res, 409, 'The export is still running. Wait for it to finish before resolving it.', error)
+    if (code === 'tracker_dispatch_unconfirmed')
+      return jsonError(
+        req,
+        res,
+        409,
+        'The sender has not confirmed it stopped. An operator must confirm termination before recovery.',
+        error,
+      )
+    if (code === 'tracker_dispatch_active')
+      return jsonError(req, res, 409, 'The export is still running. Wait for it to finish before resolving it.', error)
     return jsonError(req, res, 500, 'Could not resolve the pending export', error)
   }
 }

@@ -4,13 +4,13 @@ Schema source of truth: `schema.ts`. Drizzle owns DDL only — runtime queries s
 
 ## Workflow
 
-| Need | Command |
-|---|---|
-| Sync schema edits to dev DB (no migration file) | `bun run db:push` |
-| Generate a versioned migration from schema diff | `bun run db:generate` |
-| Apply pending migrations (used by `deploy-build`) | `bun run db:migrate` |
-| Open the Drizzle Studio GUI | `bun run db:studio` |
-| Re-seed demo project | `bun run db:seed` |
+| Need                                                                         | Command               |
+| ---------------------------------------------------------------------------- | --------------------- |
+| Sync schema edits to dev DB (no migration file)                              | `bun run db:push`     |
+| Generate a versioned migration from schema diff                              | `bun run db:generate` |
+| Apply pending migrations (used by `deploy-build`)                            | `bun run db:migrate`  |
+| Open the Drizzle Studio GUI                                                  | `bun run db:studio`   |
+| Re-seed demo project                                                         | `bun run db:seed`     |
 | Mark 0000_baseline as already-applied on a pre-existing DB (one-off per env) | `bun run db:baseline` |
 
 ## Environments

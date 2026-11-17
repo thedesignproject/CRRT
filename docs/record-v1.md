@@ -54,21 +54,21 @@ detachment does not require continuing project access. Attachment adds context,
 not implicit project-wide access to a personal recording. Agent output additionally
 requires current project Agent permission and the project's sponsor entitlement.
 
-| Method | `/api/v1/` path | Request / response |
-|---|---|---|
-| POST | `recordings` | `{clientKey,title,source,consent}` → recording summary and immediate `shareId` |
-| GET | `recordings?before=<recording UUID>` | Owner-only cursor page, up to 50 summaries and next cursor |
-| GET | `recordings/capabilities` | Free human capabilities, personal paid eligibility, Record limits and usage |
-| GET/PATCH/DELETE | `recordings/:id` | Summary / `{title}` / idempotent deletion and cleanup schedule |
-| POST | `recordings/:id/project` | `{projectKey:string|null}` |
-| POST | `recordings/:id/uploads` | Artifact declaration → scoped signed TUS authorization |
-| POST | `recordings/:id/complete` | `{artifactId}` → verified storage completion |
-| POST | `recordings/:id/finalize` | Immutable versioned manifest → processing state |
-| POST | `recordings/:id/retry` | `{stage:metadata|transcription|alignment}` for a retryable failed stage |
-| GET | `recordings/:id/playback` | Owner playback, signed artifacts and synchronized context |
-| GET/POST/DELETE | `recordings/:id/share` | Read current link / enable sharing idempotently / unshare |
-| GET | `recording-shares/:token` | Anonymous human playback/state, authorized only by opaque capability |
-| POST | `recordings/:id/agent-payload` | `{requestKey:UUID}` → paid deterministic payload and digest |
+| Method           | `/api/v1/` path                      | Request / response                                                             |
+| ---------------- | ------------------------------------ | ------------------------------------------------------------------------------ |
+| POST             | `recordings`                         | `{clientKey,title,source,consent}` → recording summary and immediate `shareId` |
+| GET              | `recordings?before=<recording UUID>` | Owner-only cursor page, up to 50 summaries and next cursor                     |
+| GET              | `recordings/capabilities`            | Free human capabilities, personal paid eligibility, Record limits and usage    |
+| GET/PATCH/DELETE | `recordings/:id`                     | Summary / `{title}` / idempotent deletion and cleanup schedule                 |
+| POST             | `recordings/:id/project`             | `{projectKey:string                                                            | null}`        |
+| POST             | `recordings/:id/uploads`             | Artifact declaration → scoped signed TUS authorization                         |
+| POST             | `recordings/:id/complete`            | `{artifactId}` → verified storage completion                                   |
+| POST             | `recordings/:id/finalize`            | Immutable versioned manifest → processing state                                |
+| POST             | `recordings/:id/retry`               | `{stage:metadata                                                               | transcription | alignment}` for a retryable failed stage |
+| GET              | `recordings/:id/playback`            | Owner playback, signed artifacts and synchronized context                      |
+| GET/POST/DELETE  | `recordings/:id/share`               | Read current link / enable sharing idempotently / unshare                      |
+| GET              | `recording-shares/:token`            | Anonymous human playback/state, authorized only by opaque capability           |
+| POST             | `recordings/:id/agent-payload`       | `{requestKey:UUID}` → paid deterministic payload and digest                    |
 
 Owners can share from dashboard library cards or the recording player's Share
 dialog. Reading/copying a link never rotates it. GET returns the current link or
@@ -289,18 +289,18 @@ All Record variables are listed in `.env.example`. Example flags are disabled by
 default; enable them deliberately for the deployment being activated. Credentials
 are server-only and must never have `VITE_` or `WXT_` prefixes.
 
-| Variable | Example default / value | Used by |
-| --- | --- | --- |
-| `CRRT_RECORD_ENABLED` | `false`; set `true` to enable | API and processing worker |
-| `RECORD_STORAGE_PROVIDER` | `supabase`; set `r2` for Cloudflare | API when creating recordings |
-| `RECORD_R2_ACCOUNT_ID` | Cloudflare account ID | API and worker |
-| `RECORD_R2_BUCKET` | Private bucket, e.g. `crrt-record-media` | API and worker |
-| `RECORD_R2_ACCESS_KEY_ID` | Bucket-scoped S3 access key ID | API and worker; secret configuration |
-| `RECORD_R2_SECRET_ACCESS_KEY` | Corresponding S3 secret access key | API and worker; secret configuration |
-| `DEEPGRAM_API_KEY` | Hosted transcription key | Worker; also the demo endpoint only if enabled |
-| `RECORD_TRANSCRIPTION_ENABLED` | `false`; set `true` after policy approval | Worker |
-| `RECORD_TRANSCRIPTION_POLICY_VERSION` | `record-v1` | Worker; must match the approved consent policy |
-| `RECORD_DEMO_TRANSCRIPTION_ENABLED` | `false`; keep disabled in production | API; legacy account-free transcription endpoint |
+| Variable                              | Example default / value                   | Used by                                         |
+| ------------------------------------- | ----------------------------------------- | ----------------------------------------------- |
+| `CRRT_RECORD_ENABLED`                 | `false`; set `true` to enable             | API and processing worker                       |
+| `RECORD_STORAGE_PROVIDER`             | `supabase`; set `r2` for Cloudflare       | API when creating recordings                    |
+| `RECORD_R2_ACCOUNT_ID`                | Cloudflare account ID                     | API and worker                                  |
+| `RECORD_R2_BUCKET`                    | Private bucket, e.g. `crrt-record-media`  | API and worker                                  |
+| `RECORD_R2_ACCESS_KEY_ID`             | Bucket-scoped S3 access key ID            | API and worker; secret configuration            |
+| `RECORD_R2_SECRET_ACCESS_KEY`         | Corresponding S3 secret access key        | API and worker; secret configuration            |
+| `DEEPGRAM_API_KEY`                    | Hosted transcription key                  | Worker; also the demo endpoint only if enabled  |
+| `RECORD_TRANSCRIPTION_ENABLED`        | `false`; set `true` after policy approval | Worker                                          |
+| `RECORD_TRANSCRIPTION_POLICY_VERSION` | `record-v1`                               | Worker; must match the approved consent policy  |
+| `RECORD_DEMO_TRANSCRIPTION_ENABLED`   | `false`; keep disabled in production      | API; legacy account-free transcription endpoint |
 
 Set API variables in the appropriate Vercel environment. Adding worker settings
 to Vercel does not configure or start the independent worker: supply its R2 and
@@ -353,7 +353,19 @@ Create the CORS file with exact deployment origins (including the installed
 extension ID), never `*`:
 
 ```json
-{"rules":[{"allowed":{"origins":["https://your-dashboard.example","chrome-extension://YOUR_EXTENSION_ID"],"methods":["GET","HEAD","PUT"],"headers":["Content-Type","Content-Length","Range","If-None-Match"]},"exposeHeaders":["ETag","Content-Range","Accept-Ranges"],"maxAgeSeconds":3600}]}
+{
+  "rules": [
+    {
+      "allowed": {
+        "origins": ["https://your-dashboard.example", "chrome-extension://YOUR_EXTENSION_ID"],
+        "methods": ["GET", "HEAD", "PUT"],
+        "headers": ["Content-Type", "Content-Length", "Range", "If-None-Match"]
+      },
+      "exposeHeaders": ["ETag", "Content-Range", "Accept-Ranges"],
+      "maxAgeSeconds": 3600
+    }
+  ]
+}
 ```
 
 Keep r2.dev and custom-domain public access disabled. The one-day lifecycle rule

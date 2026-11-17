@@ -67,17 +67,25 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
         <div className="landing-photo-shade" aria-hidden="true" />
 
         <div className="landing-photo-copy">
-          <h1><span>Humans give feedback.</span>{' '}<span>Agents ship the fix.</span></h1>
+          <h1>
+            <span>Humans give feedback.</span> <span>Agents ship the fix.</span>
+          </h1>
           <p>Point to what needs changing. Give your coding agent the context to fix it. Review the result.</p>
           <div className="landing-hero-actions">
-          <a className="landing-hero-cta" href="#try-crrt" onClick={(event) => {
-            posthog.capture('live_demo_started')
-            tryCrrt(event)
-          }}>
-            <span><CarrotIcon size={28} /></span>
-            Try it live
-          </a>
-          <ConnectAgent />
+            <a
+              className="landing-hero-cta"
+              href="#try-crrt"
+              onClick={(event) => {
+                posthog.capture('live_demo_started')
+                tryCrrt(event)
+              }}
+            >
+              <span>
+                <CarrotIcon size={28} />
+              </span>
+              Try it live
+            </a>
+            <ConnectAgent />
           </div>
         </div>
 
@@ -87,7 +95,9 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
               <span className="landing-comment-avatar">{feedback.initials}</span>
               <div>
                 <p>{feedback.message}</p>
-                <span><Check size={12} aria-hidden="true" /> {feedback.meta}</span>
+                <span>
+                  <Check size={12} aria-hidden="true" /> {feedback.meta}
+                </span>
               </div>
             </article>
           ))}
@@ -95,14 +105,20 @@ export function Hero({ authenticated }: { authenticated: boolean }) {
 
         <aside className="landing-glass-widget" aria-label="CRRT feedback widget preview">
           <header>
-            <span><MessageCircle size={15} aria-hidden="true" /> CRRT feedback</span>
+            <span>
+              <MessageCircle size={15} aria-hidden="true" /> CRRT feedback
+            </span>
             <i>Live</i>
           </header>
-          <div className="landing-widget-target"><span /> Selected: hero headline</div>
+          <div className="landing-widget-target">
+            <span /> Selected: hero headline
+          </div>
           <p>Make the promise more specific to what CRRT helps me ship.</p>
           <footer>
             <span>Screenshot attached</span>
-            <button type="button" aria-label="Send example feedback"><Send size={14} aria-hidden="true" /></button>
+            <button type="button" aria-label="Send example feedback">
+              <Send size={14} aria-hidden="true" />
+            </button>
           </footer>
         </aside>
       </div>

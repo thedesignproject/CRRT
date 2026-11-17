@@ -14,18 +14,37 @@ const mocks = vi.hoisted(() => ({
   listeners: new Set<(message: unknown) => unknown>(),
 }))
 
-vi.mock('wxt/browser', () => ({ browser: { runtime: {
-  sendMessage: mocks.sendMessage,
-  getURL: (path: string) => `chrome-extension://test${path}`,
-  onMessage: { addListener: (listener: any) => mocks.listeners.add(listener), removeListener: (listener: any) => mocks.listeners.delete(listener) },
-}, permissions: { request: mocks.requestPermission }, tabs: { update: vi.fn() } } }))
+vi.mock('wxt/browser', () => ({
+  browser: {
+    runtime: {
+      sendMessage: mocks.sendMessage,
+      getURL: (path: string) => `chrome-extension://test${path}`,
+      onMessage: {
+        addListener: (listener: any) => mocks.listeners.add(listener),
+        removeListener: (listener: any) => mocks.listeners.delete(listener),
+      },
+    },
+    permissions: { request: mocks.requestPermission },
+    tabs: { update: vi.fn() },
+  },
+}))
 vi.mock('../../lib/recording-capture', () => ({ startRecordingCapture: mocks.startCapture }))
 vi.mock('../../lib/recording-store', () => ({
   getLocalRecording: mocks.getRecording,
   saveLocalRecording: mocks.saveRecording,
 }))
-vi.mock('../../lib/recording-cloud', () => ({ syncRecording: (recording: unknown, changed: (r: unknown) => void) => mocks.withTranscript(recording).then((r: unknown) => { changed(r); return r }), ownerRecordRequest: mocks.withTranscript }))
-vi.mock('../../components/recording-cloud', () => ({ RecordingCloud: () => null, RecordingAgentContext: () => <p>Paid agent context</p> }))
+vi.mock('../../lib/recording-cloud', () => ({
+  syncRecording: (recording: unknown, changed: (r: unknown) => void) =>
+    mocks.withTranscript(recording).then((r: unknown) => {
+      changed(r)
+      return r
+    }),
+  ownerRecordRequest: mocks.withTranscript,
+}))
+vi.mock('../../components/recording-cloud', () => ({
+  RecordingCloud: () => null,
+  RecordingAgentContext: () => <p>Paid agent context</p>,
+}))
 
 function mediaStream() {
   const track = { addEventListener: vi.fn(), stop: vi.fn(), kind: 'video' }
@@ -34,9 +53,17 @@ function mediaStream() {
 
 function capture(): RecordingCapture {
   return {
-    screenStream: mediaStream() as unknown as MediaStream, cameraStream: mediaStream() as unknown as MediaStream, previewStream: mediaStream() as unknown as MediaStream,
+    screenStream: mediaStream() as unknown as MediaStream,
+    cameraStream: mediaStream() as unknown as MediaStream,
+    previewStream: mediaStream() as unknown as MediaStream,
     setCameraEnabled: vi.fn(() => true),
-    pause: vi.fn(), resume: vi.fn(), stop: vi.fn().mockResolvedValue({ screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']), audioBlob: new Blob(['audio']) }),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    stop: vi.fn().mockResolvedValue({
+      screenBlob: new Blob(['screen']),
+      cameraBlob: new Blob(['camera']),
+      audioBlob: new Blob(['audio']),
+    }),
   }
 }
 
@@ -54,16 +81,20 @@ beforeEach(() => {
   mocks.listeners.clear()
   mocks.requestPermission.mockResolvedValue(true)
   vi.useFakeTimers({ shouldAdvanceTime: true })
-  mocks.sendMessage.mockImplementation(async (message: { type: string }) => message.type === 'record:tab-stream'
-    ? { ok: true, data: 'stream-7' }
-    : message.type === 'record:resolve-target'
-      ? { ok: true, data: { selector: 'button.pay', pageUrl: 'https://acme.test/checkout', tagName: 'button' } }
-      : { ok: true })
+  mocks.sendMessage.mockImplementation(async (message: { type: string }) =>
+    message.type === 'record:tab-stream'
+      ? { ok: true, data: 'stream-7' }
+      : message.type === 'record:resolve-target'
+        ? { ok: true, data: { selector: 'button.pay', pageUrl: 'https://acme.test/checkout', tagName: 'button' } }
+        : { ok: true },
+  )
   mocks.startCapture.mockResolvedValue(capture())
   mocks.getRecording.mockResolvedValue(undefined)
   mocks.saveRecording.mockResolvedValue('saved')
   mocks.withTranscript.mockImplementation(async (recording) => ({
-    ...recording, status: 'ready', transcriptionStatus: 'ready',
+    ...recording,
+    status: 'ready',
+    transcriptionStatus: 'ready',
     transcript: [{ id: 'speech', startMs: 1_000, endMs: 2_500, text: 'This is the actual narration.' }],
   }))
   Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: mocks.play })
@@ -71,19 +102,30 @@ beforeEach(() => {
   Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', { configurable: true, writable: true, value: null })
   Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:recording') })
   Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() })
-  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: { writeText: vi.fn().mockResolvedValue(undefined) },
+  })
   Object.defineProperty(SVGElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() })
   Object.defineProperty(window, 'prompt', { configurable: true, value: vi.fn(() => 'Needs more contrast') })
 })
 
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); document.body.innerHTML = '' })
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+  document.body.innerHTML = ''
+})
 
 it('automatically saves when the capture deadline fires', async () => {
   await load()
   expect(screen.getByText(/Up to 5 minutes/)).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
-  await act(async () => { mocks.startCapture.mock.calls[0]![0].onLimitReached() })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_200)
+  })
+  await act(async () => {
+    mocks.startCapture.mock.calls[0]![0].onLimitReached()
+  })
   expect(mocks.saveRecording).toHaveBeenCalled()
   expect(await screen.findByText('Capture ready')).toBeInTheDocument()
 })
@@ -106,37 +148,70 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:camera')
   expect(helpers.recordingTitle([], undefined)).toBe('Untitled recording')
   expect(helpers.recordingTitle([], 'Checkout')).toBe('Checkout')
-  expect(helpers.recordingTitle([{ id: 'note', type: 'text', atMs: 0, points: [], text: 'Title note' }], 'Checkout')).toBe('Title note')
+  expect(
+    helpers.recordingTitle([{ id: 'note', type: 'text', atMs: 0, points: [], text: 'Title note' }], 'Checkout'),
+  ).toBe('Title note')
   const legacyRecording = {
-    id: 'legacy', title: 'Legacy', source: 'tab' as const, status: 'ready' as const, durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
+    id: 'legacy',
+    title: 'Legacy',
+    source: 'tab' as const,
+    status: 'ready' as const,
+    durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    marks: [],
+    transcript: [],
   }
   expect(helpers.normalizeStoredRecording(legacyRecording).transcriptionStatus).toBe('failed')
-  expect(helpers.normalizeStoredRecording({ ...legacyRecording, transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Hello' }] }).transcriptionStatus).toBe('ready')
+  expect(
+    helpers.normalizeStoredRecording({
+      ...legacyRecording,
+      transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Hello' }],
+    }).transcriptionStatus,
+  ).toBe('ready')
   const currentRecording = { ...legacyRecording, transcriptionStatus: 'processing' as const }
   expect(helpers.normalizeStoredRecording(currentRecording)).toStrictEqual(currentRecording)
-  expect(helpers.normalizeStoredRecording({
-    ...legacyRecording,
+  expect(
+    helpers.normalizeStoredRecording({
+      ...legacyRecording,
+      transcriptionStatus: 'failed',
+      transcriptionError: 'Sign in to CRRT to transcribe this recording.',
+    }),
+  ).toMatchObject({ transcriptionError: 'Transcript is ready to retry.', transcriptionErrorCode: 'request-failed' })
+  expect(
+    helpers.normalizeStoredRecording({
+      ...legacyRecording,
+      transcriptionError: 'Sign in to CRRT to transcribe this recording.',
+    }),
+  ).toMatchObject({
     transcriptionStatus: 'failed',
-    transcriptionError: 'Sign in to CRRT to transcribe this recording.',
-  })).toMatchObject({ transcriptionError: 'Transcript is ready to retry.', transcriptionErrorCode: 'request-failed' })
-  expect(helpers.normalizeStoredRecording({
-    ...legacyRecording,
-    transcriptionError: 'Sign in to CRRT to transcribe this recording.',
-  })).toMatchObject({ transcriptionStatus: 'failed', transcriptionError: 'Transcript is ready to retry.', transcriptionErrorCode: 'request-failed' })
+    transcriptionError: 'Transcript is ready to retry.',
+    transcriptionErrorCode: 'request-failed',
+  })
   const drawImage = vi.fn()
   expect(helpers.captureThumbnail(null)).toBeUndefined()
   expect(helpers.captureThumbnail({ videoWidth: 10, videoHeight: 0 } as HTMLVideoElement)).toBeUndefined()
   const originalCreate = document.createElement.bind(document)
-  vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => tag === 'canvas'
-    ? { width: 0, height: 0, getContext: () => ({ drawImage }), toDataURL: () => 'data:image/jpeg;base64,eA==' }
-    : originalCreate(tag)) as typeof document.createElement)
-  expect(helpers.captureThumbnail({ videoWidth: 1920, videoHeight: 1080 } as HTMLVideoElement)).toContain('data:image/jpeg')
+  vi.spyOn(document, 'createElement').mockImplementation(((tag: string) =>
+    tag === 'canvas'
+      ? { width: 0, height: 0, getContext: () => ({ drawImage }), toDataURL: () => 'data:image/jpeg;base64,eA==' }
+      : originalCreate(tag)) as typeof document.createElement)
+  expect(helpers.captureThumbnail({ videoWidth: 1920, videoHeight: 1080 } as HTMLVideoElement)).toContain(
+    'data:image/jpeg',
+  )
   expect(drawImage).toHaveBeenCalled()
   vi.mocked(document.createElement).mockRestore()
-  vi.spyOn(document, 'createElement').mockImplementation(((tag: string) => tag === 'canvas'
-    ? { width: 0, height: 0, getContext: () => null, toDataURL: () => { throw new Error('tainted') } }
-    : originalCreate(tag)) as typeof document.createElement)
+  vi.spyOn(document, 'createElement').mockImplementation(((tag: string) =>
+    tag === 'canvas'
+      ? {
+          width: 0,
+          height: 0,
+          getContext: () => null,
+          toDataURL: () => {
+            throw new Error('tainted')
+          },
+        }
+      : originalCreate(tag)) as typeof document.createElement)
   expect(helpers.captureThumbnail({ videoWidth: 10, videoHeight: 10 } as HTMLVideoElement)).toBeUndefined()
   vi.mocked(document.createElement).mockRestore()
   fireEvent.click(screen.getByRole('button', { name: 'Camera ON' }))
@@ -146,9 +221,13 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.click(screen.getByRole('radio', { name: /Window/ }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalled())
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   expect(screen.getByText(/Transcribed after Done/)).toBeInTheDocument()
-  await act(async () => { await vi.advanceTimersByTimeAsync(4_200) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(4_200)
+  })
   expect(screen.getByText(/Voice recording/)).toBeInTheDocument()
 
   const overlay = document.querySelector('.record-overlay') as SVGSVGElement
@@ -195,7 +274,8 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   Object.defineProperty(videos[1], 'currentTime', { configurable: true, writable: true, value: 0 })
   fireEvent.timeUpdate(videos[0])
   expect(videos[1].currentTime).toBe(2)
-  fireEvent.play(videos[0]); fireEvent.pause(videos[0])
+  fireEvent.play(videos[0])
+  fireEvent.pause(videos[0])
   fireEvent.click(screen.getByRole('button', { name: 'For agents' }))
   expect(await screen.findByText('Paid agent context')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: /Copy browser-only link/ }))
@@ -205,23 +285,41 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
 it('moves tab recording controls to the injected surface and accepts its commands', async () => {
   await load()
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:session-create' })))
+  await waitFor(() =>
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:session-create' })),
+  )
   const create = mocks.sendMessage.mock.calls.find(([message]) => message.type === 'record:session-create')?.[0]
   expect(create.snapshot).toMatchObject({ status: 'countdown', source: 'tab' })
   expect(await screen.findByRole('heading', { name: 'Controls are on the page.' })).toBeInTheDocument()
   const earlyDeliver = async (command: unknown) => {
-    await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command }) })
+    await act(async () => {
+      for (const listener of mocks.listeners)
+        listener({ type: 'record:controller-command', sessionId: create.sessionId, command })
+    })
   }
   await earlyDeliver({ kind: 'pause.toggle' })
   await earlyDeliver({ kind: 'camera.toggled' })
   await earlyDeliver({ kind: 'finish' })
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   const deliver = async (command: unknown) => {
-    await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command }) })
+    await act(async () => {
+      for (const listener of mocks.listeners)
+        listener({ type: 'record:controller-command', sessionId: create.sessionId, command })
+    })
   }
-  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: 'other', command: { kind: 'finish' } }) })
-  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'unrelated', sessionId: create.sessionId }) })
-  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'future.command' } }) })
+  await act(async () => {
+    for (const listener of mocks.listeners)
+      listener({ type: 'record:controller-command', sessionId: 'other', command: { kind: 'finish' } })
+  })
+  await act(async () => {
+    for (const listener of mocks.listeners) listener({ type: 'unrelated', sessionId: create.sessionId })
+  })
+  await act(async () => {
+    for (const listener of mocks.listeners)
+      listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'future.command' } })
+  })
   await deliver({ kind: 'pause.toggle' })
   const capture = await mocks.startCapture.mock.results[0]!.value
   capture.setCameraEnabled.mockReturnValueOnce(false)
@@ -233,14 +331,39 @@ it('moves tab recording controls to the injected surface and accepts its command
   expect(capture.setCameraEnabled).toHaveBeenLastCalledWith(!attemptedCameraState)
   await deliver({ kind: 'tool.changed', tool: 'box' })
   await deliver({ kind: 'mark.added', mark: { id: 'empty', type: 'box', atMs: 900, points: [] } })
-  await deliver({ kind: 'mark.added', mark: { id: 'box', type: 'box', atMs: 1_000, points: [{ x: 10, y: 20 }, { x: 30, y: 40 }] } })
-  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:resolve-target' })))
-  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-warning', sessionId: create.sessionId, warning: 'Limited navigation' }) })
-  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:session-sync', snapshot: expect.objectContaining({ warning: 'Limited navigation' }) })))
+  await deliver({
+    kind: 'mark.added',
+    mark: {
+      id: 'box',
+      type: 'box',
+      atMs: 1_000,
+      points: [
+        { x: 10, y: 20 },
+        { x: 30, y: 40 },
+      ],
+    },
+  })
+  await waitFor(() =>
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:resolve-target' })),
+  )
+  await act(async () => {
+    for (const listener of mocks.listeners)
+      listener({ type: 'record:controller-warning', sessionId: create.sessionId, warning: 'Limited navigation' })
+  })
+  await waitFor(() =>
+    expect(mocks.sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: 'record:session-sync',
+        snapshot: expect.objectContaining({ warning: 'Limited navigation' }),
+      }),
+    ),
+  )
   const implementation = mocks.sendMessage.getMockImplementation()!
-  mocks.sendMessage.mockImplementation(async (message: { type: string }) => message.type === 'record:resolve-target'
-    ? Promise.reject(new Error('target unavailable'))
-    : implementation(message))
+  mocks.sendMessage.mockImplementation(async (message: { type: string }) =>
+    message.type === 'record:resolve-target'
+      ? Promise.reject(new Error('target unavailable'))
+      : implementation(message),
+  )
   await deliver({ kind: 'mark.added', mark: { id: 'draw', type: 'draw', atMs: 1_200, points: [{ x: 5, y: 6 }] } })
   await act(async () => {})
   await deliver({ kind: 'pause.toggle' })
@@ -259,15 +382,23 @@ it('restarts an active recording and handles a share ending during countdown', a
   await screen.findByRole('heading', { name: 'Controls are on the page.' })
   const first = await mocks.startCapture.mock.results[0]!.value
   const ended = first.screenStream.getVideoTracks()[0].addEventListener.mock.calls[0][1] as () => void
-  await act(async () => { ended() })
+  await act(async () => {
+    ended()
+  })
   expect(await screen.findByRole('alert', {}, { timeout: 5_000 })).toHaveTextContent('ended before recording started')
 
   const create = mocks.sendMessage.mock.calls.find(([message]) => message.type === 'record:session-create')?.[0]
-  if (create) await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'restart' } }) })
+  if (create)
+    await act(async () => {
+      for (const listener of mocks.listeners)
+        listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'restart' } })
+    })
 
   fireEvent.click(screen.getByRole('radio', { name: /Window/ }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Restart' }))
   expect(await screen.findByRole('heading', { name: /Show it once/ })).toBeInTheDocument()
 })
@@ -278,7 +409,9 @@ it('finishes automatically when the shared surface ends after recording starts',
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalledOnce())
   const active = await mocks.startCapture.mock.results[0]!.value
   const ended = active.screenStream.getVideoTracks()[0].addEventListener.mock.calls[0][1] as () => void
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   ended()
   expect(await screen.findByText('Capture ready')).toBeInTheDocument()
 })
@@ -291,7 +424,9 @@ it('reports target lookup, saved-recording, and finalization failures safely', a
   await load('?recording=missing&tabId=7&pageUrl=https%3A%2F%2Facme.test')
   fireEvent.click(screen.getByRole('radio', { name: /Window/ }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Could not finish this recording')
   const close = vi.spyOn(window, 'close').mockImplementation(() => {})
@@ -306,7 +441,9 @@ it('surfaces an Error thrown while finalizing', async () => {
   await load()
   fireEvent.click(screen.getByRole('radio', { name: /Window/ }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(await screen.findByRole('alert')).toHaveTextContent('Encoder failed')
 })
@@ -331,7 +468,9 @@ it('finishes a camera-free capture without a camera recording', async () => {
   fireEvent.click(screen.getByRole('radio', { name: /Entire screen/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Camera ON' }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3_100)
+  })
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
   expect(await screen.findByText('Capture ready')).toBeInTheDocument()
   expect(mocks.saveRecording.mock.calls[mocks.saveRecording.mock.calls.length - 1]?.[0].cameraBlob).toBeUndefined()
@@ -352,9 +491,14 @@ it('recovers from denied capture and lets the user choose another source', async
 it('returns a tab recording to setup when the injected surface requests restart', async () => {
   await load()
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
-  await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:session-create' })))
+  await waitFor(() =>
+    expect(mocks.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:session-create' })),
+  )
   const create = mocks.sendMessage.mock.calls.find(([message]) => message.type === 'record:session-create')![0]
-  await act(async () => { for (const listener of mocks.listeners) listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'restart' } }) })
+  await act(async () => {
+    for (const listener of mocks.listeners)
+      listener({ type: 'record:controller-command', sessionId: create.sessionId, command: { kind: 'restart' } })
+  })
   expect(await screen.findByRole('heading', { name: /Show it once/ })).toBeInTheDocument()
   expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'record:session-stop', sessionId: create.sessionId })
 })
@@ -366,12 +510,19 @@ it('disables This tab when no recordable page context is available', async () =>
 
 it('opens a locally stored recording directly in review', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'saved', title: 'Saved review', source: 'screen', status: 'ready', durationMs: 12_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', pageTitle: 'Checkout',
+    id: 'saved',
+    title: 'Saved review',
+    source: 'screen',
+    status: 'ready',
+    durationMs: 12_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    pageTitle: 'Checkout',
     marks: [{ id: 'pin', type: 'pin', atMs: 0, points: [{ x: 20, y: 20 }], pinNumber: 1 }],
     transcript: [{ id: 'line', startMs: 2_000, endMs: 4_000, text: 'Change this.' }],
     transcriptionStatus: 'ready',
-    screenBlob: new Blob(['screen']), cameraBlob: new Blob(['camera']),
+    screenBlob: new Blob(['screen']),
+    cameraBlob: new Blob(['camera']),
   })
   history.replaceState(null, '', '/record.html?recording=saved')
   document.body.innerHTML = '<div id="root"></div>'
@@ -390,8 +541,15 @@ it('ignores a missing local recording', async () => {
 
 it('opens a stored recording without media blobs and renders an empty text mark safely', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'saved-lite', title: 'Notes only', source: 'screen', status: 'ready', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [{ id: 'text', type: 'text', atMs: 0, points: [{ x: 5, y: 5 }] }], transcript: [],
+    id: 'saved-lite',
+    title: 'Notes only',
+    source: 'screen',
+    status: 'ready',
+    durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    marks: [{ id: 'text', type: 'text', atMs: 0, points: [{ x: 5, y: 5 }] }],
+    transcript: [],
   })
   history.replaceState(null, '', '/record.html?recording=saved-lite')
   document.body.innerHTML = '<div id="root"></div>'
@@ -402,13 +560,27 @@ it('opens a stored recording without media blobs and renders an empty text mark 
 
 it('retries a failed transcript from the locally retained audio', async () => {
   const stored = {
-    id: 'retry', title: 'Retry review', source: 'tab', status: 'ready', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [],
-    transcriptionStatus: 'failed', transcriptionError: 'Provider unavailable',
-    screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
+    id: 'retry',
+    title: 'Retry review',
+    source: 'tab',
+    status: 'ready',
+    durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    marks: [],
+    transcript: [],
+    transcriptionStatus: 'failed',
+    transcriptionError: 'Provider unavailable',
+    screenBlob: new Blob(['screen']),
+    audioBlob: new Blob(['audio']),
   }
   mocks.getRecording.mockResolvedValue(stored)
-  mocks.withTranscript.mockResolvedValue({ ...stored, transcriptionStatus: 'ready', transcriptionError: undefined, transcript: [{ id: 's', startMs: 0, endMs: 500, text: 'Recovered speech.' }] })
+  mocks.withTranscript.mockResolvedValue({
+    ...stored,
+    transcriptionStatus: 'ready',
+    transcriptionError: undefined,
+    transcript: [{ id: 's', startMs: 0, endMs: 500, text: 'Recovered speech.' }],
+  })
   history.replaceState(null, '', '/record.html?recording=retry')
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
@@ -420,10 +592,19 @@ it('retries a failed transcript from the locally retained audio', async () => {
 
 it('shows transcripts while routing agent actions to the paid control', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'free-transcript', title: 'Free transcript', source: 'tab', status: 'ready', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [],
+    id: 'free-transcript',
+    title: 'Free transcript',
+    source: 'tab',
+    status: 'ready',
+    durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    marks: [],
     transcript: [{ id: 'line', startMs: 0, endMs: 500, text: 'Visible without an account.' }],
-    transcriptionStatus: 'ready', hostedTranscription: true, screenBlob: new Blob(['screen']), audioBlob: new Blob(['audio']),
+    transcriptionStatus: 'ready',
+    hostedTranscription: true,
+    screenBlob: new Blob(['screen']),
+    audioBlob: new Blob(['audio']),
   })
   history.replaceState(null, '', '/record.html?recording=free-transcript')
   document.body.innerHTML = '<div id="root"></div>'
@@ -437,8 +618,16 @@ it('shows transcripts while routing agent actions to the paid control', async ()
 
 it('renders a processing transcript state honestly', async () => {
   mocks.getRecording.mockResolvedValue({
-    id: 'processing', title: 'Processing', source: 'tab', status: 'processing', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'processing',
+    id: 'processing',
+    title: 'Processing',
+    source: 'tab',
+    status: 'processing',
+    durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    marks: [],
+    transcript: [],
+    transcriptionStatus: 'processing',
   })
   history.replaceState(null, '', '/record.html?recording=processing')
   document.body.innerHTML = '<div id="root"></div>'
@@ -448,8 +637,17 @@ it('renders a processing transcript state honestly', async () => {
 
 it('renders a successful silent transcript without treating it as an error', async () => {
   mocks.getRecording.mockResolvedValue({
-    hostedTranscription: true, id: 'silent', title: 'Silent', source: 'tab', status: 'ready', durationMs: 1_000,
-    createdAt: '2026-10-24T00:00:00Z', authorName: 'Tomás', marks: [], transcript: [], transcriptionStatus: 'ready',
+    hostedTranscription: true,
+    id: 'silent',
+    title: 'Silent',
+    source: 'tab',
+    status: 'ready',
+    durationMs: 1_000,
+    createdAt: '2026-10-24T00:00:00Z',
+    authorName: 'Tomás',
+    marks: [],
+    transcript: [],
+    transcriptionStatus: 'ready',
   })
   history.replaceState(null, '', '/record.html?recording=silent')
   document.body.innerHTML = '<div id="root"></div>'
@@ -466,20 +664,50 @@ it('requires explicit hosted transcription consent in setup', async () => {
 })
 
 it('shows declined hosted transcription without claiming that no speech was recorded', async () => {
-  mocks.getRecording.mockResolvedValue({ id: 'declined', title: 'No hosted consent', source: 'tab', status: 'ready', durationMs: 1000, createdAt: 'now', authorName: 'You', marks: [], transcript: [], transcriptionStatus: 'ready', hostedTranscription: false })
+  mocks.getRecording.mockResolvedValue({
+    id: 'declined',
+    title: 'No hosted consent',
+    source: 'tab',
+    status: 'ready',
+    durationMs: 1000,
+    createdAt: 'now',
+    authorName: 'You',
+    marks: [],
+    transcript: [],
+    transcriptionStatus: 'ready',
+    hostedTranscription: false,
+  })
   history.replaceState(null, '', '/record.html?recording=declined')
   document.body.innerHTML = '<div id="root"></div>'
   await import('./main')
   expect(await screen.findByText('Transcription off')).toBeInTheDocument()
 })
 
-it.each([false, true])('retries cloud transcription through the owner endpoint and reports failure=%s', async failure => {
-  mocks.getRecording.mockResolvedValue({ id: 'cloud-retry', title: 'Cloud retry', source: 'tab', status: 'ready', durationMs: 1000, createdAt: 'now', authorName: 'You', marks: [], transcript: [], transcriptionStatus: 'failed', audioBlob: new Blob(['audio']), cloud: { id: 'remote', finalized: true } })
-  history.replaceState(null, '', '/record.html?recording=cloud-retry')
-  document.body.innerHTML = '<div id="root"></div>'
-  await import('./main')
-  if (failure) mocks.withTranscript.mockRejectedValueOnce(new Error('Stage retry failed'))
-  fireEvent.click(await screen.findByRole('button', { name: 'Retry transcription' }))
-  await waitFor(() => expect(mocks.withTranscript).toHaveBeenCalledWith('recordings/remote/retry', { stage: 'transcription' }))
-  if (failure) expect(await screen.findByText('Stage retry failed')).toBeInTheDocument()
-})
+it.each([false, true])(
+  'retries cloud transcription through the owner endpoint and reports failure=%s',
+  async (failure) => {
+    mocks.getRecording.mockResolvedValue({
+      id: 'cloud-retry',
+      title: 'Cloud retry',
+      source: 'tab',
+      status: 'ready',
+      durationMs: 1000,
+      createdAt: 'now',
+      authorName: 'You',
+      marks: [],
+      transcript: [],
+      transcriptionStatus: 'failed',
+      audioBlob: new Blob(['audio']),
+      cloud: { id: 'remote', finalized: true },
+    })
+    history.replaceState(null, '', '/record.html?recording=cloud-retry')
+    document.body.innerHTML = '<div id="root"></div>'
+    await import('./main')
+    if (failure) mocks.withTranscript.mockRejectedValueOnce(new Error('Stage retry failed'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry transcription' }))
+    await waitFor(() =>
+      expect(mocks.withTranscript).toHaveBeenCalledWith('recordings/remote/retry', { stage: 'transcription' }),
+    )
+    if (failure) expect(await screen.findByText('Stage retry failed')).toBeInTheDocument()
+  },
+)

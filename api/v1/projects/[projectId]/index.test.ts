@@ -18,10 +18,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -46,7 +56,8 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
     expect(res.statusCode).toBe(405)
 
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
-      r.status(401).json({ error: 'Unauthorized' }); return null
+      r.status(401).json({ error: 'Unauthorized' })
+      return null
     })
     res = mockRes()
     await call({ method: 'PATCH', query: { projectId: 'p' }, body: { name: 'x' }, headers: {} }, res)
@@ -122,14 +133,20 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
     })
 
     it('normalizes and dedupes domains before saving, without requiring a name', async () => {
-      vi.mocked(updateProject).mockResolvedValueOnce({ publicKey: 'p', allowedOrigins: ['example.com', 'app.foo.io'] } as never)
+      vi.mocked(updateProject).mockResolvedValueOnce({
+        publicKey: 'p',
+        allowedOrigins: ['example.com', 'app.foo.io'],
+      } as never)
       const res = mockRes()
-      await call({
-        method: 'PATCH',
-        query: { projectId: 'p' },
-        body: { allowedOrigins: ['Example.com/', 'https://app.foo.io/path', 'example.com'] },
-        headers: {},
-      }, res)
+      await call(
+        {
+          method: 'PATCH',
+          query: { projectId: 'p' },
+          body: { allowedOrigins: ['Example.com/', 'https://app.foo.io/path', 'example.com'] },
+          headers: {},
+        },
+        res,
+      )
       expect(res.statusCode).toBe(200)
       expect(updateProject).toHaveBeenCalledWith('p', { allowedOrigins: ['example.com', 'app.foo.io'] }, 'u')
     })
@@ -143,26 +160,36 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
     })
 
     it('updates name and allowlist together', async () => {
-      vi.mocked(updateProject).mockResolvedValueOnce({ publicKey: 'p', name: 'New', allowedOrigins: ['example.com'] } as never)
+      vi.mocked(updateProject).mockResolvedValueOnce({
+        publicKey: 'p',
+        name: 'New',
+        allowedOrigins: ['example.com'],
+      } as never)
       const res = mockRes()
-      await call({
-        method: 'PATCH',
-        query: { projectId: 'p' },
-        body: { name: 'New', allowedOrigins: ['example.com'] },
-        headers: {},
-      }, res)
+      await call(
+        {
+          method: 'PATCH',
+          query: { projectId: 'p' },
+          body: { name: 'New', allowedOrigins: ['example.com'] },
+          headers: {},
+        },
+        res,
+      )
       expect(res.statusCode).toBe(200)
       expect(updateProject).toHaveBeenCalledWith('p', { name: 'New', allowedOrigins: ['example.com'] }, 'u')
     })
 
     it('still validates the name when sent alongside allowedOrigins', async () => {
       const res = mockRes()
-      await call({
-        method: 'PATCH',
-        query: { projectId: 'p' },
-        body: { name: '   ', allowedOrigins: ['example.com'] },
-        headers: {},
-      }, res)
+      await call(
+        {
+          method: 'PATCH',
+          query: { projectId: 'p' },
+          body: { name: '   ', allowedOrigins: ['example.com'] },
+          headers: {},
+        },
+        res,
+      )
       expect(res.statusCode).toBe(400)
       expect(updateProject).not.toHaveBeenCalled()
     })
@@ -170,12 +197,23 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
     it('rejects malformed allowlists', async () => {
       // not an array
       let res = mockRes()
-      await call({ method: 'PATCH', query: { projectId: 'p' }, body: { allowedOrigins: 'example.com' }, headers: {} }, res)
+      await call(
+        { method: 'PATCH', query: { projectId: 'p' }, body: { allowedOrigins: 'example.com' }, headers: {} },
+        res,
+      )
       expect(res.statusCode).toBe(400)
 
       // over the entry limit
       res = mockRes()
-      await call({ method: 'PATCH', query: { projectId: 'p' }, body: { allowedOrigins: Array(51).fill('example.com') }, headers: {} }, res)
+      await call(
+        {
+          method: 'PATCH',
+          query: { projectId: 'p' },
+          body: { allowedOrigins: Array(51).fill('example.com') },
+          headers: {},
+        },
+        res,
+      )
       expect(res.statusCode).toBe(400)
 
       // non-string entry
@@ -185,7 +223,10 @@ describe('api/v1/projects/[projectId] PATCH (rename)', () => {
 
       // unparseable domain
       res = mockRes()
-      await call({ method: 'PATCH', query: { projectId: 'p' }, body: { allowedOrigins: ['not a domain'] }, headers: {} }, res)
+      await call(
+        { method: 'PATCH', query: { projectId: 'p' }, body: { allowedOrigins: ['not a domain'] }, headers: {} },
+        res,
+      )
       expect(res.statusCode).toBe(400)
 
       expect(updateProject).not.toHaveBeenCalled()
@@ -198,15 +239,26 @@ it('validates privacy options and protects screenshots before enabling privacy',
   vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
   vi.mocked(updateProject).mockResolvedValue({ publicKey: 'p' } as never)
   for (const body of [{ widgetPrivate: 'true' }, { feedbackAccess: 'everyone' }]) {
-    const res = mockRes(); await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body }, res); expect(res.statusCode).toBe(400)
+    const res = mockRes()
+    await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body }, res)
+    expect(res.statusCode).toBe(400)
   }
   const res = mockRes()
-  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true, feedbackAccess: 'admins' } }, res)
+  await call(
+    {
+      method: 'PATCH',
+      headers: {},
+      query: { projectId: 'p' },
+      body: { widgetPrivate: true, feedbackAccess: 'admins' },
+    },
+    res,
+  )
   expect(res.statusCode).toBe(200)
   expect(protectProjectScreenshots).toHaveBeenCalledWith('p')
   expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true, feedbackAccess: 'admins' }, 'u')
   vi.mocked(protectProjectScreenshots).mockRejectedValueOnce(new Error('Storage failed'))
-  const failed = mockRes(); await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true } }, failed)
+  const failed = mockRes()
+  await call({ method: 'PATCH', headers: {}, query: { projectId: 'p' }, body: { widgetPrivate: true } }, failed)
   expect(failed.statusCode).toBe(500)
 })
 
@@ -246,10 +298,12 @@ it('denies the commit when admin access is revoked during screenshot protection'
   expect(updateProject).toHaveBeenCalledWith('p', { widgetPrivate: true }, 'u')
 })
 
-it('reports a retryable conflict while an outbound tracker dispatch is unresolved',async()=>{
- vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
- vi.mocked(getProjectMember).mockResolvedValue({role:'admin'})
- vi.mocked(updateProject).mockRejectedValueOnce(new Error('tracker_dispatch_in_progress'))
- const res=mockRes();await call({method:'PATCH',query:{projectId:'p'},headers:{},body:{widgetPrivate:true}},res)
- expect(res.statusCode).toBe(409);expect(res.body).toEqual({error:expect.stringContaining('tracker export')})
+it('reports a retryable conflict while an outbound tracker dispatch is unresolved', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
+  vi.mocked(updateProject).mockRejectedValueOnce(new Error('tracker_dispatch_in_progress'))
+  const res = mockRes()
+  await call({ method: 'PATCH', query: { projectId: 'p' }, headers: {}, body: { widgetPrivate: true } }, res)
+  expect(res.statusCode).toBe(409)
+  expect(res.body).toEqual({ error: expect.stringContaining('tracker export') })
 })

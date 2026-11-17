@@ -77,9 +77,7 @@ export function CommandPalette({
       if (action.id === 'toggle-sidebar') return canOperateAgent
       return true
     })
-    const matchedActions = q
-      ? allowedActions.filter((a) => a.label.toLowerCase().includes(q))
-      : allowedActions
+    const matchedActions = q ? allowedActions.filter((a) => a.label.toLowerCase().includes(q)) : allowedActions
 
     return q ? [...matchedComments, ...matchedActions] : [...matchedActions, ...matchedComments]
   }, [query, comments, canManageFeedback, canOperateAgent])
@@ -98,20 +96,23 @@ export function CommandPalette({
     else onAction(item.id)
   }, [results, activeIdx, onSelect, onAction])
 
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      setActiveIdx((i) => Math.min(i + 1, results.length - 1))
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      setActiveIdx((i) => Math.max(i - 1, 0))
-    } else if (e.key === 'Enter') {
-      e.preventDefault()
-      handleSelect()
-    } else if (e.key === 'Escape') {
-      onClose()
-    }
-  }, [results.length, handleSelect, onClose])
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setActiveIdx((i) => Math.min(i + 1, results.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setActiveIdx((i) => Math.max(i - 1, 0))
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        handleSelect()
+      } else if (e.key === 'Escape') {
+        onClose()
+      }
+    },
+    [results.length, handleSelect, onClose],
+  )
 
   return (
     <div className="fixed inset-0 z-50 flex justify-center pt-[20vh]">
@@ -165,9 +166,7 @@ export function CommandPalette({
                   <button
                     className={cn(
                       'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors',
-                      i === activeIdx
-                        ? 'bg-accent text-foreground'
-                        : 'text-foreground/80 hover:bg-accent/50'
+                      i === activeIdx ? 'bg-accent text-foreground' : 'text-foreground/80 hover:bg-accent/50',
                     )}
                     onMouseEnter={() => setActiveIdx(i)}
                     onClick={() => {
@@ -175,25 +174,27 @@ export function CommandPalette({
                       else onAction(item.id)
                     }}
                   >
-                    <div className={cn(
-                      'w-7 h-7 rounded-lg shrink-0 flex items-center justify-center',
-                      i === activeIdx ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-                    )}>
+                    <div
+                      className={cn(
+                        'w-7 h-7 rounded-lg shrink-0 flex items-center justify-center',
+                        i === activeIdx ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                      )}
+                    >
                       <CmdIcon type={item.icon} />
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <p className={cn(
-                        'text-[13px] leading-snug truncate',
-                        i === activeIdx ? 'text-foreground' : 'text-foreground/80',
-                        item.type === 'comment' && item.id === selectedCommentId && 'font-semibold'
-                      )}>
+                      <p
+                        className={cn(
+                          'text-[13px] leading-snug truncate',
+                          i === activeIdx ? 'text-foreground' : 'text-foreground/80',
+                          item.type === 'comment' && item.id === selectedCommentId && 'font-semibold',
+                        )}
+                      >
                         {item.label}
                       </p>
                       {item.detail && (shortcutsEnabled || item.type === 'comment') && (
-                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                          {item.detail}
-                        </p>
+                        <p className="text-[11px] text-muted-foreground truncate mt-0.5">{item.detail}</p>
                       )}
                     </div>
 
@@ -216,9 +217,16 @@ export function CommandPalette({
         </div>
 
         <div className="flex items-center gap-4 px-4 h-[36px] border-t border-border text-[10px] font-mono text-muted-foreground">
-          <span className="flex items-center gap-1"><Kbd>↑</Kbd><Kbd>↓</Kbd> navigate</span>
-          <span className="flex items-center gap-1"><Kbd>↵</Kbd> select</span>
-          <span className="flex items-center gap-1"><Kbd>esc</Kbd> close</span>
+          <span className="flex items-center gap-1">
+            <Kbd>↑</Kbd>
+            <Kbd>↓</Kbd> navigate
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>↵</Kbd> select
+          </span>
+          <span className="flex items-center gap-1">
+            <Kbd>esc</Kbd> close
+          </span>
         </div>
       </div>
     </div>

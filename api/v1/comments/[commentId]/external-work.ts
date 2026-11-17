@@ -40,7 +40,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res, METHODS)) return
   if (req.method !== 'GET' && req.method !== 'POST') return methodNotAllowed(req, res, METHODS)
   const provider = req.method === 'GET' ? getStringQuery(req.query.provider) : req.body?.provider
-  if (provider !== 'github' && provider !== 'linear' && provider !== 'jira') return jsonError(req, res, 400, 'unsupported_external_work_provider')
+  if (provider !== 'github' && provider !== 'linear' && provider !== 'jira')
+    return jsonError(req, res, 400, 'unsupported_external_work_provider')
   if (req.method === 'POST' && provider === 'github') return githubIssueHandler(req, res)
 
   const user = await requireUser(req, res)
@@ -67,12 +68,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           provider,
           connected: Boolean(integration?.containerId),
           destination: integration?.containerName ?? null,
-          existing: existing?.state === 'created' ? {
-            externalId: existing.externalId,
-            externalKey: existing.externalKey,
-            externalUrl: existing.externalUrl,
-            createdAt: existing.createdAt,
-          } : null,
+          existing:
+            existing?.state === 'created'
+              ? {
+                  externalId: existing.externalId,
+                  externalKey: existing.externalKey,
+                  externalUrl: existing.externalUrl,
+                  createdAt: existing.createdAt,
+                }
+              : null,
           draft: { title: currentContent.title, body: formatGithubIssueBody(current, currentContent, '').trim() },
         })
       }
@@ -96,7 +100,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       const leaseToken = randomUUID()
       const claim = await claimCommentExternalWork({
-        projectId: publicComment.projectId, commentId, provider, leaseToken,
+        projectId: publicComment.projectId,
+        commentId,
+        provider,
+        leaseToken,
       })
       if (claim?.state === 'created' && claim.externalUrl) {
         await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
@@ -110,64 +117,79 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         })
       }
       if (!claim || claim.leaseToken !== leaseToken) {
-        return jsonError(req, res, 409, claim?.uncertainAt ? `${provider}_issue_recovery_pending` : `${provider}_issue_creation_in_progress`)
+        return jsonError(
+          req,
+          res,
+          409,
+          claim?.uncertainAt ? `${provider}_issue_recovery_pending` : `${provider}_issue_creation_in_progress`,
+        )
       }
       const containerId = integration.containerId
-      return await withTrackerDispatchLock(publicComment.projectId, async signal => {
-        let dispatchStarted = false
-        try {
-          const accessToken = provider === 'linear'
-            ? await getLinearAccessToken(integration)
-            : await getJiraAccessToken(integration)
-          // Complete all provider preparation before making the atomic dispatch decision.
-          const destinations = provider === 'jira' ? await getJiraDestinations(accessToken) : null
-          const destination = destinations?.find((candidate) => (
-            candidate.cloudId === integration.workspaceId && candidate.projectId === containerId
-          ))
-          if (provider === 'jira' && !destination) throw new Error('jira_project_unavailable')
-          if (!(await requireProjectCapability(req, res, user, publicComment.projectId, 'integrations:send'))) {
-            await releaseCommentExternalWork(claim.id, leaseToken)
-            return
+      return await withTrackerDispatchLock(
+        publicComment.projectId,
+        async (signal) => {
+          let dispatchStarted = false
+          try {
+            const accessToken =
+              provider === 'linear' ? await getLinearAccessToken(integration) : await getJiraAccessToken(integration)
+            // Complete all provider preparation before making the atomic dispatch decision.
+            const destinations = provider === 'jira' ? await getJiraDestinations(accessToken) : null
+            const destination = destinations?.find(
+              (candidate) => candidate.cloudId === integration.workspaceId && candidate.projectId === containerId,
+            )
+            if (provider === 'jira' && !destination) throw new Error('jira_project_unavailable')
+            if (!(await requireProjectCapability(req, res, user, publicComment.projectId, 'integrations:send'))) {
+              await releaseCommentExternalWork(claim.id, leaseToken)
+              return
+            }
+            if (!(await beginTrackerDispatch(publicComment.projectId, commentId, user.userId, leaseToken, claim.id)))
+              throw new Error(`${provider}_issue_creation_in_progress`)
+            dispatchStarted = true
+            const result =
+              provider === 'linear'
+                ? await createLinearIssue(accessToken, { teamId: containerId, title, description: body, signal })
+                : await createJiraIssue(accessToken, {
+                    signal,
+                    cloudId: destination!.cloudId,
+                    siteUrl: destination!.siteUrl,
+                    projectId: destination!.projectId,
+                    title,
+                    description: body,
+                  })
+            const finalized = await finalizeCommentExternalWork({
+              id: claim.id,
+              leaseToken,
+              workspaceId: integration.workspaceId,
+              containerId: containerId,
+              ...result,
+            })
+            if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
+            await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
+            setCors(req, res, METHODS)
+            return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
+          } catch (error) {
+            const code = error instanceof Error ? error.message : ''
+            const deterministicProviderFailure =
+              (code.startsWith('linear_') &&
+                ![
+                  'linear_result_indeterminate',
+                  'linear_issue_persistence_failed',
+                  'linear_issue_creation_in_progress',
+                ].includes(code)) ||
+              (code.startsWith('jira_') &&
+                ![
+                  'jira_result_indeterminate',
+                  'jira_issue_persistence_failed',
+                  'jira_issue_creation_in_progress',
+                ].includes(code))
+            if (!dispatchStarted || deterministicProviderFailure) {
+              await releaseCommentExternalWork(claim.id, leaseToken)
+            }
+            throw error
           }
-          if (!(await beginTrackerDispatch(publicComment.projectId, commentId, user.userId, leaseToken, claim.id))) throw new Error(`${provider}_issue_creation_in_progress`)
-          dispatchStarted = true
-          const result = provider === 'linear'
-            ? await createLinearIssue(accessToken, { teamId: containerId, title, description: body, signal })
-            : await createJiraIssue(accessToken, {
-                signal,
-                cloudId: destination!.cloudId,
-                siteUrl: destination!.siteUrl,
-                projectId: destination!.projectId,
-                title,
-                description: body,
-              })
-          const finalized = await finalizeCommentExternalWork({
-            id: claim.id,
-            leaseToken,
-            workspaceId: integration.workspaceId,
-            containerId: containerId,
-            ...result,
-          })
-          if (!finalized) throw new Error(`${provider}_issue_persistence_failed`)
-          await acceptOpenOrCloseRejected(publicComment.projectId, commentId, user.userId)
-          setCors(req, res, METHODS)
-          return res.status(201).json({ ...result, createdAt: finalized.createdAt, created: true })
-        } catch (error) {
-          const code = error instanceof Error ? error.message : ''
-          const deterministicProviderFailure = (
-            (code.startsWith('linear_') && ![
-              'linear_result_indeterminate', 'linear_issue_persistence_failed', 'linear_issue_creation_in_progress',
-            ].includes(code))
-            || (code.startsWith('jira_') && ![
-              'jira_result_indeterminate', 'jira_issue_persistence_failed', 'jira_issue_creation_in_progress',
-            ].includes(code))
-          )
-          if (!dispatchStarted || deterministicProviderFailure) {
-            await releaseCommentExternalWork(claim.id, leaseToken)
-          }
-          throw error
-        }
-      }, () => acknowledgeTrackerDispatchStopped(publicComment.projectId, commentId, leaseToken, claim.id))
+        },
+        () => acknowledgeTrackerDispatchStopped(publicComment.projectId, commentId, leaseToken, claim.id),
+      )
     }
 
     const connection = await getGithubIssueConnection(publicComment.projectId)
@@ -188,10 +210,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error) {
     const code = error instanceof Error ? error.message : ''
     if (code === 'forbidden') return jsonError(req, res, 403, 'Forbidden', error)
-    const status = code.includes('recovery_pending') || code.includes('creation_in_progress')
-      ? 409
-      : code.startsWith('linear_') || code.startsWith('jira_') ? 502 : 500
+    const status =
+      code.includes('recovery_pending') || code.includes('creation_in_progress')
+        ? 409
+        : code.startsWith('linear_') || code.startsWith('jira_')
+          ? 502
+          : 500
     if (status === 500) console.error(error)
-    return jsonError(req, res, status, req.method === 'POST' ? 'External issue creation failed' : 'Could not prepare external work', error)
+    return jsonError(
+      req,
+      res,
+      status,
+      req.method === 'POST' ? 'External issue creation failed' : 'Could not prepare external work',
+      error,
+    )
   }
 }

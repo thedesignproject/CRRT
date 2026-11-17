@@ -49,10 +49,7 @@ export interface BuiltTextRangeTarget {
   midpointClient: { x: number; y: number }
 }
 
-export function resolveContainer(
-  range: RangeLike,
-  isExcluded?: (el: Element) => boolean,
-): HTMLElement | null {
+export function resolveContainer(range: RangeLike, isExcluded?: (el: Element) => boolean): HTMLElement | null {
   const node = range.commonAncestorContainer
   const el = node.nodeType === TEXT_NODE ? node.parentElement : (node as Element)
   if (!(el instanceof HTMLElement)) return null
@@ -113,10 +110,7 @@ function walkToBoundary(
  * is excluded or not a regular HTML element — callers fall through to the
  * click-to-pin path.
  */
-export function buildTextRangeAnchor(
-  range: RangeLike,
-  opts: BuildTextRangeOptions,
-): BuiltTextRangeTarget | null {
+export function buildTextRangeAnchor(range: RangeLike, opts: BuildTextRangeOptions): BuiltTextRangeTarget | null {
   const selectedText = range.toString()
   if (selectedText.trim() === '') return null
 

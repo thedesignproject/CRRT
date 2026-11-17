@@ -46,4 +46,3 @@ Source: `branding/AGENTIC-DESIGN-SYSTEM.md:3-5`, `branding/AGENTIC-DESIGN-SYSTEM
 - Convention (rollout in progress): document identity, usage guidance, API props/events/slots, design tokens, composition, behavior/a11y, motion, and examples.
 - Convention (rollout in progress): keep descriptions to one sentence, make `whenToUse` bullets imperative, name alternatives in `whenNotToUse`, list every consumed token, match every prop to the actual component API, and make examples compile.
 - Convention (rollout in progress): when using component meta, filter deprecated and experimental components unless the user opts in, confirm fit from `whenToUse` and `whenNotToUse`, start from the first example, and walk internal dependencies.
-

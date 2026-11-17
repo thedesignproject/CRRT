@@ -5,8 +5,12 @@ import { isRecordingSurfaceCommand, isRecordingTool, sessionSnapshot } from './r
 describe('recording session protocol', () => {
   it('carries annotation capacity feedback to the integrated recording controls', () => {
     expect(sessionSnapshot({ ...initialRecorderState, annotationLimitReached: true }).annotationLimitReached).toBe(true)
-    expect(sessionSnapshot({ ...initialRecorderState, annotationLimitReached: false }).annotationLimitReached).toBeUndefined()
-    expect(sessionSnapshot({ ...initialRecorderState, annotationError: 'Shorten your note' }).annotationError).toBe('Shorten your note')
+    expect(
+      sessionSnapshot({ ...initialRecorderState, annotationLimitReached: false }).annotationLimitReached,
+    ).toBeUndefined()
+    expect(sessionSnapshot({ ...initialRecorderState, annotationError: 'Shorten your note' }).annotationError).toBe(
+      'Shorten your note',
+    )
     expect(sessionSnapshot({ ...initialRecorderState, annotationError: null }).annotationError).toBeUndefined()
   })
   it('recognizes supported tools and rejects other values', () => {
@@ -21,9 +25,21 @@ describe('recording session protocol', () => {
     expect(isRecordingSurfaceCommand({ kind: 'source.changed', source: 'camera' })).toBe(false)
     expect(isRecordingSurfaceCommand({ kind: 'tool.changed', tool: 'box' })).toBe(true)
     expect(isRecordingSurfaceCommand({ kind: 'tool.changed', tool: 'zoom' })).toBe(false)
-    expect(isRecordingSurfaceCommand({ kind: 'mark.added', mark: { id: 'm', type: 'pin', atMs: 4, points: [{ x: 2, y: 3 }] } })).toBe(true)
-    expect(isRecordingSurfaceCommand({ kind: 'mark.added', mark: { id: 'm', type: 'pin', atMs: 4, points: [] } })).toBe(false)
-    expect(isRecordingSurfaceCommand({ kind: 'mark.added', mark: { id: 'm', type: 'pin', atMs: 4, points: [{ x: Number.NaN, y: 3 }] } })).toBe(false)
+    expect(
+      isRecordingSurfaceCommand({
+        kind: 'mark.added',
+        mark: { id: 'm', type: 'pin', atMs: 4, points: [{ x: 2, y: 3 }] },
+      }),
+    ).toBe(true)
+    expect(isRecordingSurfaceCommand({ kind: 'mark.added', mark: { id: 'm', type: 'pin', atMs: 4, points: [] } })).toBe(
+      false,
+    )
+    expect(
+      isRecordingSurfaceCommand({
+        kind: 'mark.added',
+        mark: { id: 'm', type: 'pin', atMs: 4, points: [{ x: Number.NaN, y: 3 }] },
+      }),
+    ).toBe(false)
     expect(isRecordingSurfaceCommand({ kind: 'mark.added' })).toBe(false)
     expect(isRecordingSurfaceCommand(null)).toBe(false)
   })

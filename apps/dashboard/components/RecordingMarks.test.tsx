@@ -3,9 +3,21 @@ import { expect, it } from 'vitest'
 import { RecordingMarks } from './RecordingMarks'
 import type { CaptureEvent } from '../../../shared/record/contracts'
 
-const event = (type: string, points = [{ x: .2, y: .3 }, { x: .6, y: .7 }]) => ({ id: type, kind: 'mark', atMs: 1000, mark: { type, points, text: 'Fix this button', pinNumber: 2 } }) as CaptureEvent
+const event = (
+  type: string,
+  points = [
+    { x: 0.2, y: 0.3 },
+    { x: 0.6, y: 0.7 },
+  ],
+) =>
+  ({
+    id: type,
+    kind: 'mark',
+    atMs: 1000,
+    mark: { type, points, text: 'Fix this button', pinNumber: 2 },
+  }) as CaptureEvent
 it('renders every annotation tool with normalized geometry and safe text', () => {
-  render(<RecordingMarks events={['draw', 'arrow', 'box', 'text', 'pin'].map(type => event(type))} atMs={1500} />)
+  render(<RecordingMarks events={['draw', 'arrow', 'box', 'text', 'pin'].map((type) => event(type))} atMs={1500} />)
   const svg = screen.getByRole('img', { name: 'Recording annotations' })
   expect(svg).toHaveClass('pointer-events-none')
   expect(svg.querySelector('polyline')).toHaveAttribute('points', '20,30 60,70')
@@ -28,7 +40,16 @@ it('seeks, fades and expires marks on the same three-second timeline as local re
   expect(screen.queryByText('Fix this button')).toBeNull()
 })
 it('ignores non-mark/empty events and supports a one-point annotation', () => {
-  render(<RecordingMarks events={[{ id: 'route', kind: 'route', atMs: 0 } as CaptureEvent, event('draw', []), event('arrow', [{ x: .2, y: .3 }])]} atMs={1000} />)
+  render(
+    <RecordingMarks
+      events={[
+        { id: 'route', kind: 'route', atMs: 0 } as CaptureEvent,
+        event('draw', []),
+        event('arrow', [{ x: 0.2, y: 0.3 }]),
+      ]}
+      atMs={1000}
+    />,
+  )
   const svg = screen.getByRole('img', { name: 'Recording annotations' })
   expect(svg.querySelector('polyline')).toBeNull()
   expect(svg.querySelector('line')).toHaveAttribute('x2', '20')

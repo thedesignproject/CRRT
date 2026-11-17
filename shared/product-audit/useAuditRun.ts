@@ -15,21 +15,30 @@ export function useAuditRun(apiBase: string, auditId: string, accessToken?: stri
   const [cancelling, setCancelling] = useState(false)
   const cursor = useRef('0')
   useEffect(() => {
-    setRun(null); setEvents([]); setError(null); setCancelling(false)
+    setRun(null)
+    setEvents([])
+    setError(null)
+    setCancelling(false)
     cursor.current = '0'
   }, [accessToken, apiBase, auditId])
-  const refresh = useCallback(async (signal?: AbortSignal) => {
-    const eventRequest = getAuditEvents(apiBase, auditId, cursor.current, accessToken, signal).catch(() => null)
-    const nextRun = await getAudit(apiBase, auditId, accessToken, signal)
-    setRun(nextRun)
-    const nextEvents = await eventRequest
-    if (nextEvents) {
-      setEvents((current) => [...current, ...nextEvents.events.filter((event) => !current.some((item) => item.sequence === event.sequence))])
-      cursor.current = nextEvents.nextCursor
-    }
-    setError(null)
-    return nextRun
-  }, [accessToken, apiBase, auditId])
+  const refresh = useCallback(
+    async (signal?: AbortSignal) => {
+      const eventRequest = getAuditEvents(apiBase, auditId, cursor.current, accessToken, signal).catch(() => null)
+      const nextRun = await getAudit(apiBase, auditId, accessToken, signal)
+      setRun(nextRun)
+      const nextEvents = await eventRequest
+      if (nextEvents) {
+        setEvents((current) => [
+          ...current,
+          ...nextEvents.events.filter((event) => !current.some((item) => item.sequence === event.sequence)),
+        ])
+        cursor.current = nextEvents.nextCursor
+      }
+      setError(null)
+      return nextRun
+    },
+    [accessToken, apiBase, auditId],
+  )
   useEffect(() => {
     const controller = new AbortController()
     let timer: number | undefined

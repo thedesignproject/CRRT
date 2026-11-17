@@ -33,8 +33,15 @@ const globallyReachableIanaIpv6 = [
   '2001:4:112::/48',
   '2001:30::/28',
 ].map((range) => ipaddr.parseCIDR(range) as [ipaddr.IPv6, number])
-const blockedUnicastIpv6 = ['64:ff9b:1::/48', '100::/64', '100:0:0:1::/64', '2001:db8::/32', '2002::/16', '3fff::/20', '5f00::/16']
-  .map((range) => ipaddr.parseCIDR(range) as [ipaddr.IPv6, number])
+const blockedUnicastIpv6 = [
+  '64:ff9b:1::/48',
+  '100::/64',
+  '100:0:0:1::/64',
+  '2001:db8::/32',
+  '2002::/16',
+  '3fff::/20',
+  '5f00::/16',
+].map((range) => ipaddr.parseCIDR(range) as [ipaddr.IPv6, number])
 
 function publicIpv4(address: ipaddr.IPv4) {
   return publicSpecialIpv4.has(address.toString()) || (address.range() === 'unicast' && !address.match(benchmarkIpv4))
@@ -53,9 +60,8 @@ export function isPublicAddress(address: string) {
 
 export async function validateAuditUrl(
   raw: string,
-  resolver: (hostname: string) => Promise<string[]> = async (hostname) => (
-    (await lookup(hostname, { all: true, verbatim: true })).map((item) => item.address)
-  ),
+  resolver: (hostname: string) => Promise<string[]> = async (hostname) =>
+    (await lookup(hostname, { all: true, verbatim: true })).map((item) => item.address),
 ): Promise<AuditTarget> {
   let url: URL
   try {

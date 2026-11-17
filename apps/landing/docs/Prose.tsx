@@ -331,7 +331,15 @@ export function PropsTable({
   )
 }
 
-export function NextStep({ href, label, onNavigate }: { href: string; label: string; onNavigate: (path: string) => void }) {
+export function NextStep({
+  href,
+  label,
+  onNavigate,
+}: {
+  href: string
+  label: string
+  onNavigate: (path: string) => void
+}) {
   return (
     <a
       href={href}

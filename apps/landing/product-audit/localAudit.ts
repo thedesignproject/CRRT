@@ -97,7 +97,8 @@ export function critiqueEvidence(evidence: AuditEvidence[]): AuditCandidate[] {
       id: 'finding-trial-contradiction',
       kind: 'problem',
       title: 'The free-trial promise breaks at signup',
-      summary: 'The acquisition page says no card is required, but the signup path blocks workspace creation behind payment details.',
+      summary:
+        'The acquisition page says no card is required, but the signup path blocks workspace creation behind payment details.',
       impact: 'high',
       confidence: 0.99,
       evidenceIds: ['pricing-promise', 'signup-card-field'],
@@ -114,7 +115,8 @@ export function critiqueEvidence(evidence: AuditEvidence[]): AuditCandidate[] {
       impact: 'high',
       confidence: 0.95,
       evidenceIds: ['signup-field-count', 'signup-value-delay'],
-      recommendation: 'Create the workspace after the minimum account fields and defer company, team, and billing setup.',
+      recommendation:
+        'Create the workspace after the minimum account fields and defer company, team, and billing setup.',
     })
   }
 
@@ -134,10 +136,7 @@ export function critiqueEvidence(evidence: AuditEvidence[]): AuditCandidate[] {
   return candidates.map((candidate) => auditCandidateSchema.parse(candidate))
 }
 
-export function verifyCandidates(
-  candidates: AuditCandidate[],
-  evidence: AuditEvidence[],
-): AuditFinding[] {
+export function verifyCandidates(candidates: AuditCandidate[], evidence: AuditEvidence[]): AuditFinding[] {
   const evidenceById = new Map(evidence.map((item) => [item.id, item]))
 
   return candidates

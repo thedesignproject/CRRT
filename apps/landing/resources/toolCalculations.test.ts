@@ -24,15 +24,33 @@ it('converts CSS lengths with explicit root size, negatives, zero, and rounding'
   expect(convertCssUnits('-24', '16', 'px-to-rem')).toBe('-1.5rem')
   expect(convertCssUnits('0', '16', 'px-to-rem')).toBe('0rem')
   expect(convertCssUnits('1', '3', 'px-to-rem')).toBe('0.333333rem')
-  for (const [value, root] of [['', '16'], ['24', ''], ['24', '0'], ['24', '-1'], ['bad', '16'], ['24', 'Infinity'], ['1e309', '16']]) expect(convertCssUnits(value, root, 'px-to-rem')).toBeNull()
+  for (const [value, root] of [
+    ['', '16'],
+    ['24', ''],
+    ['24', '0'],
+    ['24', '-1'],
+    ['bad', '16'],
+    ['24', 'Infinity'],
+    ['1e309', '16'],
+  ])
+    expect(convertCssUnits(value, root, 'px-to-rem')).toBeNull()
   expect(convertCssUnits('1e308', '1e308', 'rem-to-px')).toBeNull()
 })
 
 it('builds a reviewable brief and requires the essential context', () => {
-  const fields = { target: ' /settings ', observation: 'Action is clipped', outcome: 'Action is reachable', constraints: '', verification: 'Try a narrow screen\nComplete the task' }
+  const fields = {
+    target: ' /settings ',
+    observation: 'Action is clipped',
+    outcome: 'Action is reachable',
+    constraints: '',
+    verification: 'Try a narrow screen\nComplete the task',
+  }
   expect(buildFeedbackBrief(fields)).toContain('## Target\n/settings')
   expect(buildFeedbackBrief(fields)).toContain('Confirm relevant constraints before implementation.')
-  expect(buildFeedbackBrief({ ...fields, constraints: ' Keep the field labels ' })).toContain('## Preserve and reuse\nKeep the field labels')
+  expect(buildFeedbackBrief({ ...fields, constraints: ' Keep the field labels ' })).toContain(
+    '## Preserve and reuse\nKeep the field labels',
+  )
   expect(buildFeedbackBrief(fields)).toContain('Try a narrow screen\nComplete the task')
-  for (const key of ['target', 'observation', 'outcome', 'verification']) expect(buildFeedbackBrief({ ...fields, [key]: ' ' })).toBe('')
+  for (const key of ['target', 'observation', 'outcome', 'verification'])
+    expect(buildFeedbackBrief({ ...fields, [key]: ' ' })).toBe('')
 })

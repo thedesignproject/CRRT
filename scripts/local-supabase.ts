@@ -29,11 +29,7 @@ function ensureNetwork() {
     stderr: 'ignore',
   })
   if (inspect.exitCode !== 0) {
-    run([
-      'docker', 'network', 'create',
-      '-o', 'com.docker.network.bridge.host_binding_ipv4=127.0.0.1',
-      'crrt-local',
-    ])
+    run(['docker', 'network', 'create', '-o', 'com.docker.network.bridge.host_binding_ipv4=127.0.0.1', 'crrt-local'])
   }
 }
 
@@ -61,15 +57,21 @@ function writeLocalEnv(status: Record<string, string>) {
     MCP_DASHBOARD_URL: 'http://127.0.0.1:5173/dashboard/mcp-auth',
     MCP_BROWSER_ORIGINS: 'http://127.0.0.1:5173,http://localhost:6274',
   }
-  const block = [managedStart, ...Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`), managedEnd].join('\n')
+  const block = [
+    managedStart,
+    ...Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`),
+    managedEnd,
+  ].join('\n')
   const path = `${root}.env.docker.local`
   const existing = Bun.file(path).size ? Bun.file(path).text() : Promise.resolve('')
 
-  return removeLegacyLocalEnv().then(() => existing).then((contents) => {
-    const pattern = new RegExp(`${managedStart}[\\s\\S]*?${managedEnd}\\n?`)
-    const unmanaged = contents.replace(pattern, '').trimEnd()
-    return Bun.write(path, `${unmanaged ? `${unmanaged}\n\n` : ''}${block}\n`)
-  })
+  return removeLegacyLocalEnv()
+    .then(() => existing)
+    .then((contents) => {
+      const pattern = new RegExp(`${managedStart}[\\s\\S]*?${managedEnd}\\n?`)
+      const unmanaged = contents.replace(pattern, '').trimEnd()
+      return Bun.write(path, `${unmanaged ? `${unmanaged}\n\n` : ''}${block}\n`)
+    })
 }
 
 async function removeLegacyLocalEnv() {
@@ -92,7 +94,20 @@ function applyLocalGrants() {
     'grant select on table public.notifications to authenticated',
     "notify pgrst, 'reload schema'",
   ].join('; ')
-  run(['docker', 'exec', 'supabase_db_crrt', 'psql', '-U', 'postgres', '-d', 'postgres', '-v', 'ON_ERROR_STOP=1', '-c', sql])
+  run([
+    'docker',
+    'exec',
+    'supabase_db_crrt',
+    'psql',
+    '-U',
+    'postgres',
+    '-d',
+    'postgres',
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
+    sql,
+  ])
 }
 
 async function smoke(status: Record<string, string>) {
@@ -106,7 +121,7 @@ async function smoke(status: Record<string, string>) {
       fetch(`${status.API_URL}/storage/v1/bucket/feedback-images`, { headers }),
     ])
     if (auth.ok && project.ok && bucket.ok) {
-      const projects = await project.json() as Array<{ public_key?: string }>
+      const projects = (await project.json()) as Array<{ public_key?: string }>
       if (projects[0]?.public_key === 'demo-project') return
     }
     await Bun.sleep(500)
@@ -138,6 +153,5 @@ else if (action === 'reset') {
 } else if (action === 'status') {
   const status = captureJson([process.execPath, 'x', 'supabase', 'status', '-o', 'json'])
   console.log(`API: ${status.API_URL}\nStudio: ${status.STUDIO_URL}\nMailpit: ${status.MAILPIT_URL}`)
-}
-else if (action === 'up') await up()
+} else if (action === 'up') await up()
 else throw new Error(`Unknown local Supabase action: ${action}`)

@@ -1,43 +1,26 @@
 import { z } from 'zod'
 
-export const auditSourceSchema = z.enum([
-  'customer-rule',
-  'design-system',
-  'repository',
-  'url',
-  'heuristic',
-])
+export const auditSourceSchema = z.enum(['customer-rule', 'design-system', 'repository', 'url', 'heuristic'])
 
 export const auditModeSchema = z.enum(['local-fixture', 'live'])
 
-export const auditRunStatusSchema = z.enum([
-  'queued',
-  'running',
-  'completed',
-  'partial',
-  'failed',
-  'cancelled',
-])
+export const auditRunStatusSchema = z.enum(['queued', 'running', 'completed', 'partial', 'failed', 'cancelled'])
 
-export const auditStageSchema = z.enum([
-  'queued',
-  'explorer',
-  'critic',
-  'verifier',
-  'completed',
-  'failed',
-  'cancelled',
-])
+export const auditStageSchema = z.enum(['queued', 'explorer', 'critic', 'verifier', 'completed', 'failed', 'cancelled'])
 
 export const auditInputSchema = z.object({
   url: z.url(),
-  repository: z.object({
-    url: z.url(),
-    ref: z.string().min(1).optional(),
-  }).optional(),
-  designSystem: z.object({
-    url: z.url(),
-  }).optional(),
+  repository: z
+    .object({
+      url: z.url(),
+      ref: z.string().min(1).optional(),
+    })
+    .optional(),
+  designSystem: z
+    .object({
+      url: z.url(),
+    })
+    .optional(),
   customerRules: z.array(z.string().min(1)).optional(),
 })
 
@@ -137,10 +120,12 @@ export const auditEventSchema = z.object({
   createdAt: z.iso.datetime({ offset: true }),
 })
 
-export const auditCreateRequestSchema = z.object({
-  url: z.url(),
-  projectKey: z.string().min(1).max(120).optional(),
-}).strict()
+export const auditCreateRequestSchema = z
+  .object({
+    url: z.url(),
+    projectKey: z.string().min(1).max(120).optional(),
+  })
+  .strict()
 
 export const auditCreateResponseSchema = z.object({
   auditId: z.string().uuid(),

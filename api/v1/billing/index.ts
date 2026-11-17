@@ -30,7 +30,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       res.setHeader('Location', destination.href)
       return res.status(303).end()
     } catch (error) {
-      if (error instanceof Error && (error.message === 'Choose Cloud Pro or Cloud Studio' || error.message === 'Choose monthly or yearly billing')) return jsonError(req, res, 400, error.message)
+      if (
+        error instanceof Error &&
+        (error.message === 'Choose Cloud Pro or Cloud Studio' || error.message === 'Choose monthly or yearly billing')
+      )
+        return jsonError(req, res, 400, error.message)
       return jsonError(req, res, 503, 'Billing is temporarily unavailable')
     }
   }
@@ -42,7 +46,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'GET' && req.query.availability === '1') return res.status(200).json({ enabled: true })
   try {
     billingConfig()
-    if (req.method === 'GET') return res.status(200).json(await (isCloud() ? cloudBillingSummary(user.userId) : billingSummary(user.userId)))
+    if (req.method === 'GET')
+      return res.status(200).json(await (isCloud() ? cloudBillingSummary(user.userId) : billingSummary(user.userId)))
     if (req.body?.action === 'checkout_state') {
       const selection = readCheckoutState(req.body.state)
       return res.status(200).json(await checkout(user, selection.plan, selection.cycle))
@@ -50,8 +55,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.body?.action === 'checkout') {
       if (!isCloud()) return res.status(200).json(await checkout(user))
       let plan, cycle
-      try { plan = parseCloudPlan(req.body.plan); cycle = parseBillingCycle(req.body.cycle) }
-      catch (error) { return jsonError(req, res, 400, (error as Error).message) }
+      try {
+        plan = parseCloudPlan(req.body.plan)
+        cycle = parseBillingCycle(req.body.cycle)
+      } catch (error) {
+        return jsonError(req, res, 400, (error as Error).message)
+      }
       return res.status(200).json(await checkout(user, plan, cycle))
     }
     if (req.body?.action === 'portal') {

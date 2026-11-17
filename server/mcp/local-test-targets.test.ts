@@ -9,5 +9,7 @@ it('requires both privileged destinations to be local before any fixture work', 
       expect(() => assertLocalMcpTargets({ ...env, [name]: value })).toThrow(`loopback ${name}`)
     }
   }
-  expect(() => assertLocalMcpTargets({ DATABASE_URL: 'postgresql://localhost/db', SUPABASE_URL: 'https://127.0.0.1:54321' })).not.toThrow()
+  expect(() =>
+    assertLocalMcpTargets({ DATABASE_URL: 'postgresql://localhost/db', SUPABASE_URL: 'https://127.0.0.1:54321' }),
+  ).not.toThrow()
 })

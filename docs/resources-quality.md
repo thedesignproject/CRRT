@@ -22,18 +22,18 @@ The runner starts and stops its own production preview on port 4323. Override wi
 
 ## Regression budgets
 
-| Check | Required result |
-| --- | --- |
-| Performance | At least 95/100 |
-| Accessibility | 100/100 automated score |
-| Best practices | 100/100 automated score |
-| SEO | 100/100 automated score |
-| Largest Contentful Paint | At most 2,500 ms |
-| Total Blocking Time | At most 250 ms (200 ms target plus 50 ms CI headroom) |
-| Cumulative Layout Shift | At most 0.1 |
-| Downloaded scripts | At most 450,000 bytes |
-| Downloaded stylesheets | At most 145,000 bytes |
-| Agentic browsing | Applicable binary checks pass; errors or missing checks fail |
+| Check                    | Required result                                              |
+| ------------------------ | ------------------------------------------------------------ |
+| Performance              | At least 95/100                                              |
+| Accessibility            | 100/100 automated score                                      |
+| Best practices           | 100/100 automated score                                      |
+| SEO                      | 100/100 automated score                                      |
+| Largest Contentful Paint | At most 2,500 ms                                             |
+| Total Blocking Time      | At most 250 ms (200 ms target plus 50 ms CI headroom)        |
+| Cumulative Layout Shift  | At most 0.1                                                  |
+| Downloaded scripts       | At most 450,000 bytes                                        |
+| Downloaded stylesheets   | At most 145,000 bytes                                        |
+| Agentic browsing         | Applicable binary checks pass; errors or missing checks fail |
 
 Asset budgets use the uncompressed local preview. Production CDN compression can reduce transfer sizes further, but cannot hide asset growth from these checks. Missing metrics, category scores, or resource-size measurements fail the gate instead of being treated as zero. Three-run checks use medians to reduce timing noise.
 

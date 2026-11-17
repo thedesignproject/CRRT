@@ -77,27 +77,59 @@ describe('comment GitHub issue persistence', () => {
   it('exports private widget screenshots with a durable capability instead of dropping them', async () => {
     vi.stubEnv('WIDGET_AUTH_SECRET', 'test-secret')
     mockResult({ data: { ...row, screenshot_storage_path: 'project-1/image.png' }, error: null })
-    expect((await getCommentForGithubIssue('project-1', 'comment-1'))?.imageUrl).toContain('/api/v1/comments/comment-1/issue-screenshot?token=')
+    expect((await getCommentForGithubIssue('project-1', 'comment-1'))?.imageUrl).toContain(
+      '/api/v1/comments/comment-1/issue-screenshot?token=',
+    )
     vi.unstubAllEnvs()
   })
   it('keeps issue metadata out of public comments and includes it for project comments', async () => {
     mockResult({ data: [row], error: null })
     expect((await listComments('project-1'))[0]).not.toHaveProperty('githubIssue')
 
-    mockResult({ data: [{ ...row, comment_external_work: [
-      {
-        state: 'created', provider: 'github', external_id: '42', external_key: '#42', external_url: row.github_issue_url,
-        lifecycle_status: 'closed', closed_at: '2026-07-24T12:00:00.000Z', created_at: row.github_issue_created_at, updated_at: '2026-07-24T12:00:00.000Z',
-      },
-      {
-        state: 'created', provider: 'linear', external_id: 'linear-id', external_key: 'WEB-7', external_url: 'https://linear.app/issue/WEB-7',
-        lifecycle_status: 'failed', last_sync_error: 'linear_request_failed', closed_at: null, created_at: row.github_issue_created_at, updated_at: row.github_issue_created_at,
-      },
-      {
-        state: 'creating', provider: 'jira', external_id: null, external_key: null, external_url: null,
-        lifecycle_status: 'active', closed_at: null, created_at: row.github_issue_created_at, updated_at: row.github_issue_created_at,
-      },
-    ] }], error: null })
+    mockResult({
+      data: [
+        {
+          ...row,
+          comment_external_work: [
+            {
+              state: 'created',
+              provider: 'github',
+              external_id: '42',
+              external_key: '#42',
+              external_url: row.github_issue_url,
+              lifecycle_status: 'closed',
+              closed_at: '2026-07-24T12:00:00.000Z',
+              created_at: row.github_issue_created_at,
+              updated_at: '2026-07-24T12:00:00.000Z',
+            },
+            {
+              state: 'created',
+              provider: 'linear',
+              external_id: 'linear-id',
+              external_key: 'WEB-7',
+              external_url: 'https://linear.app/issue/WEB-7',
+              lifecycle_status: 'failed',
+              last_sync_error: 'linear_request_failed',
+              closed_at: null,
+              created_at: row.github_issue_created_at,
+              updated_at: row.github_issue_created_at,
+            },
+            {
+              state: 'creating',
+              provider: 'jira',
+              external_id: null,
+              external_key: null,
+              external_url: null,
+              lifecycle_status: 'active',
+              closed_at: null,
+              created_at: row.github_issue_created_at,
+              updated_at: row.github_issue_created_at,
+            },
+          ],
+        },
+      ],
+      error: null,
+    })
     const projectComment = (await listProjectComments('project-1'))[0]
     expect(projectComment.githubIssue).toEqual({
       issueNumber: 42,
@@ -106,7 +138,12 @@ describe('comment GitHub issue persistence', () => {
     })
     expect(projectComment.externalWork).toEqual([
       expect.objectContaining({ provider: 'github', externalKey: '#42', lifecycleStatus: 'closed' }),
-      expect.objectContaining({ provider: 'linear', externalKey: 'WEB-7', lifecycleStatus: 'failed', syncAction: 'retry' }),
+      expect.objectContaining({
+        provider: 'linear',
+        externalKey: 'WEB-7',
+        lifecycleStatus: 'failed',
+        syncAction: 'retry',
+      }),
     ])
 
     mockResult({ data: [{ ...row, comment_external_work: [] }], error: null })
@@ -115,9 +152,14 @@ describe('comment GitHub issue persistence', () => {
     ])
 
     const guestBuilder = mockResult({ data: [row], error: null })
-    expect((await listProjectComments('project-1', {
-      visibility: 'shared', includeExternalWork: false,
-    }))[0]).not.toHaveProperty('githubIssue')
+    expect(
+      (
+        await listProjectComments('project-1', {
+          visibility: 'shared',
+          includeExternalWork: false,
+        })
+      )[0],
+    ).not.toHaveProperty('githubIssue')
     expect(guestBuilder.select).toHaveBeenCalledWith(expect.not.stringContaining('github_issue_url'))
     expect(guestBuilder.select).toHaveBeenCalledWith(expect.not.stringContaining('comment_external_work'))
   })
@@ -165,13 +207,7 @@ describe('comment GitHub issue persistence', () => {
 
   it('claims through the project-scoped database clock RPC', async () => {
     const { rpc } = mockRpcResult({ data: { ...row, github_issue_number: null }, error: null })
-    const claimed = await claimCommentGithubIssue(
-      'project-1',
-      'comment-1',
-      'new-lease',
-      1_000,
-      true,
-    )
+    const claimed = await claimCommentGithubIssue('project-1', 'comment-1', 'new-lease', 1_000, true)
     expect(claimed?.id).toBe('comment-1')
     expect(rpc).toHaveBeenCalledWith('claim_comment_github_issue_v2', {
       p_comment_id: 'comment-1',
@@ -182,44 +218,51 @@ describe('comment GitHub issue persistence', () => {
     })
 
     mockRpcResult({ data: null, error: null })
-    await expect(claimCommentGithubIssue('project-1', 'comment-1', 'lease', Number.NaN))
-      .resolves.toBeNull()
+    await expect(claimCommentGithubIssue('project-1', 'comment-1', 'lease', Number.NaN)).resolves.toBeNull()
   })
 
   it('finalizes, releases, and marks uncertain through fenced RPCs', async () => {
     const finalize = mockRpcResult({ data: true, error: null })
-    await expect(finalizeCommentGithubIssue('project-1', 'comment-1', 'lease', {
-      issueNumber: 42,
-      issueUrl: row.github_issue_url,
-      createdAt: row.github_issue_created_at,
-    })).resolves.toBe(true)
-    expect(finalize.rpc).toHaveBeenCalledWith('finalize_comment_github_issue', expect.objectContaining({
-      p_project_key: 'project-1',
-      p_lease_token: 'lease',
-    }))
+    await expect(
+      finalizeCommentGithubIssue('project-1', 'comment-1', 'lease', {
+        issueNumber: 42,
+        issueUrl: row.github_issue_url,
+        createdAt: row.github_issue_created_at,
+      }),
+    ).resolves.toBe(true)
+    expect(finalize.rpc).toHaveBeenCalledWith(
+      'finalize_comment_github_issue',
+      expect.objectContaining({
+        p_project_key: 'project-1',
+        p_lease_token: 'lease',
+      }),
+    )
 
     const release = mockRpcResult({ data: false, error: null })
     await expect(releaseCommentGithubIssue('project-1', 'comment-1', 'wrong')).resolves.toBe(false)
     expect(release.rpc).toHaveBeenCalledWith('release_comment_github_issue_v2', {
-      p_project_key: 'project-1', p_comment_id: 'comment-1', p_lease_token: 'wrong',
+      p_project_key: 'project-1',
+      p_comment_id: 'comment-1',
+      p_lease_token: 'wrong',
     })
 
     mockRpcResult({ data: true, error: null })
-    await expect(markCommentGithubIssueUncertain('project-1', 'comment-1', 'lease'))
-      .resolves.toBe(true)
+    await expect(markCommentGithubIssueUncertain('project-1', 'comment-1', 'lease')).resolves.toBe(true)
 
     mockRpcResult({ data: true, error: null })
-    await expect(resetCommentGithubIssueAttempt('project-1', 'comment-1', 'lease'))
-      .resolves.toBe(true)
+    await expect(resetCommentGithubIssueAttempt('project-1', 'comment-1', 'lease')).resolves.toBe(true)
   })
 
   it('returns only complete private repository connections', async () => {
-    mockResult({ data: {
-      github_owner: 'acme',
-      github_repo: 'site',
-      github_installation_id: '99',
-      github_connection_version: 3,
-    }, error: null })
+    mockResult({
+      data: {
+        github_owner: 'acme',
+        github_repo: 'site',
+        github_installation_id: '99',
+        github_connection_version: 3,
+      },
+      error: null,
+    })
     await expect(getGithubIssueConnection('project-1')).resolves.toEqual({
       owner: 'acme',
       repo: 'site',
@@ -246,11 +289,12 @@ describe('comment GitHub issue persistence', () => {
       () => listPublicComments('project-1'),
       () => updatePublicReviewStatus('project-1', 'comment-1', 'accepted'),
       () => claimCommentGithubIssue('project-1', 'comment-1', 'lease'),
-      () => finalizeCommentGithubIssue('project-1', 'comment-1', 'lease', {
-        issueNumber: 1,
-        issueUrl: 'https://github.com/acme/site/issues/1',
-        createdAt: new Date().toISOString(),
-      }),
+      () =>
+        finalizeCommentGithubIssue('project-1', 'comment-1', 'lease', {
+          issueNumber: 1,
+          issueUrl: 'https://github.com/acme/site/issues/1',
+          createdAt: new Date().toISOString(),
+        }),
       () => releaseCommentGithubIssue('project-1', 'comment-1', 'lease'),
       () => markCommentGithubIssueUncertain('project-1', 'comment-1', 'lease'),
       () => resetCommentGithubIssueAttempt('project-1', 'comment-1', 'lease'),

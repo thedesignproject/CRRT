@@ -1,9 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../../_lib/auth.js'
-import {
-  assertGitHubInstallationRepoAccess,
-  verifyGitHubAppInstallationToken,
-} from '../../../_lib/github-app.js'
+import { assertGitHubInstallationRepoAccess, verifyGitHubAppInstallationToken } from '../../../_lib/github-app.js'
 import {
   connectGithubRepo,
   disconnectGithubRepo,
@@ -26,8 +23,7 @@ const TEXT_FIELDS = [
 ] as const satisfies ReadonlyArray<{ key: keyof RepoConfigPatch; max: number }>
 
 function hasAuthorizationBearer(req: VercelRequest) {
-  return typeof req.headers.authorization === 'string'
-    && /^Bearer\s+\S+$/.test(req.headers.authorization)
+  return typeof req.headers.authorization === 'string' && /^Bearer\s+\S+$/.test(req.headers.authorization)
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -91,11 +87,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!normalized) return jsonError(req, res, 400, 'Invalid GitHub repository')
 
         const installation = verifyGitHubAppInstallationToken(body.installationToken)
-        if (
-          !installation
-          || installation.projectKey !== projectKey
-          || installation.userId !== user.userId
-        ) {
+        if (!installation || installation.projectKey !== projectKey || installation.userId !== user.userId) {
           return jsonError(req, res, 403, 'GitHub connection could not be verified')
         }
 
@@ -146,10 +138,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (error instanceof Error && error.message === 'github_installation_repo_inaccessible') {
       return jsonError(req, res, 403, 'GitHub connection could not be verified', error)
     }
-    if (error instanceof Error && [
-      'github_installation_token_failed',
-      'github_installation_repo_lookup_failed',
-    ].includes(error.message)) {
+    if (
+      error instanceof Error &&
+      ['github_installation_token_failed', 'github_installation_repo_lookup_failed'].includes(error.message)
+    ) {
       return jsonError(req, res, 502, 'GitHub connection verification failed', error)
     }
     console.error('GitHub repository configuration failed')

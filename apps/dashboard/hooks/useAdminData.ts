@@ -9,12 +9,7 @@ import {
   type AdminStats,
   type AdminUser,
 } from '../api'
-import {
-  getMockAdminProjectsPage,
-  getMockAdminStats,
-  getMockAdminUsersPage,
-  mocksEnabled,
-} from '../lib/mocks'
+import { getMockAdminProjectsPage, getMockAdminStats, getMockAdminUsersPage, mocksEnabled } from '../lib/mocks'
 
 const PAGE_SIZE = 50
 
@@ -51,20 +46,26 @@ export function useAdminData(apiBase: string, accessToken: string): UseAdminData
   const [projectSort, setProjectSortState] = useState<AdminProjectSort>('lastCommentAt')
   const [projectDirection, setProjectDirection] = useState<AdminSortDirection>('desc')
 
-  const fetchUsers = useCallback(async (cursor?: string | null) => {
-    if (mocksEnabled) return getMockAdminUsersPage({ cursor, limit: PAGE_SIZE })
-    return listAdminUsers(apiBase, accessToken, { cursor, limit: PAGE_SIZE })
-  }, [apiBase, accessToken])
+  const fetchUsers = useCallback(
+    async (cursor?: string | null) => {
+      if (mocksEnabled) return getMockAdminUsersPage({ cursor, limit: PAGE_SIZE })
+      return listAdminUsers(apiBase, accessToken, { cursor, limit: PAGE_SIZE })
+    },
+    [apiBase, accessToken],
+  )
 
-  const fetchProjects = useCallback(async (
-    cursor?: string | null,
-    sort: AdminProjectSort = projectSort,
-    direction: AdminSortDirection = projectDirection,
-  ) => {
-    const opts = { cursor, limit: PAGE_SIZE, sort, direction }
-    if (mocksEnabled) return getMockAdminProjectsPage(opts)
-    return listAdminProjects(apiBase, accessToken, opts)
-  }, [apiBase, accessToken, projectSort, projectDirection])
+  const fetchProjects = useCallback(
+    async (
+      cursor?: string | null,
+      sort: AdminProjectSort = projectSort,
+      direction: AdminSortDirection = projectDirection,
+    ) => {
+      const opts = { cursor, limit: PAGE_SIZE, sort, direction }
+      if (mocksEnabled) return getMockAdminProjectsPage(opts)
+      return listAdminProjects(apiBase, accessToken, opts)
+    },
+    [apiBase, accessToken, projectSort, projectDirection],
+  )
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -72,7 +73,11 @@ export function useAdminData(apiBase: string, accessToken: string): UseAdminData
     try {
       if (mocksEnabled) {
         const usersPage = getMockAdminUsersPage({ limit: PAGE_SIZE })
-        const projectsPage = getMockAdminProjectsPage({ limit: PAGE_SIZE, sort: projectSort, direction: projectDirection })
+        const projectsPage = getMockAdminProjectsPage({
+          limit: PAGE_SIZE,
+          sort: projectSort,
+          direction: projectDirection,
+        })
         setStats(getMockAdminStats())
         setUsers(usersPage.items)
         setProjects(projectsPage.items)

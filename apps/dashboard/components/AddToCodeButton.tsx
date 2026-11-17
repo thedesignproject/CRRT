@@ -12,9 +12,12 @@ export function AddToCodeButton({ projectId, apiBase, variant = 'compact' }: Add
   const [copied, setCopied] = useState(false)
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  useEffect(() => () => {
-    if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
-  }, [])
+  useEffect(
+    () => () => {
+      if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current)
+    },
+    [],
+  )
 
   const handleCopy = useCallback(async () => {
     const prompt = buildIntegrationPrompt(projectId, apiBase)
@@ -38,7 +41,8 @@ export function AddToCodeButton({ projectId, apiBase, variant = 'compact' }: Add
           <p className="text-sm font-bold text-foreground">Add widget to your code</p>
         </div>
         <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-          Copy a setup prompt for any AI coding agent. It includes the npm package, mount snippet, and this project's credentials.
+          Copy a setup prompt for any AI coding agent. It includes the npm package, mount snippet, and this project's
+          credentials.
         </p>
         <div className="rounded-md bg-muted/60 border border-border px-3 py-2 mb-4 space-y-1">
           <div className="flex items-center gap-2 text-[11px] font-mono text-muted-foreground">

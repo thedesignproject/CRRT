@@ -26,7 +26,11 @@ it('presents the agent-led promise, conversion action, and all feedback surfaces
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()
   const { Hero } = await import('./Hero')
   const { ThemeProvider } = await import('../../../src/design-system')
-  render(<ThemeProvider><Hero authenticated={false} /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <Hero authenticated={false} />
+    </ThemeProvider>,
+  )
 
   const heroVideo = screen.getByLabelText('Close portrait of a person looking at a screen')
   expect(heroVideo).toHaveAttribute('src', '/crrt-hero.mp4')
@@ -56,7 +60,11 @@ it('reveals the hero poster without autoplay when reduced motion is preferred', 
   vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList)
   const { Hero } = await import('./Hero')
   const { ThemeProvider } = await import('../../../src/design-system')
-  render(<ThemeProvider><Hero authenticated={false} /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <Hero authenticated={false} />
+    </ThemeProvider>,
+  )
   fireEvent.canPlay(screen.getByLabelText('Close portrait of a person looking at a screen'))
   expect(play).not.toHaveBeenCalled()
 })
@@ -64,11 +72,18 @@ it('reveals the hero poster without autoplay when reduced motion is preferred', 
 it('keeps the conversion navigation available after the intro', async () => {
   const { Navigation } = await import('./Hero')
   const { ThemeProvider } = await import('../../../src/design-system')
-  render(<ThemeProvider><Navigation authenticated /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <Navigation authenticated />
+    </ThemeProvider>,
+  )
 
   expect(screen.getByRole('navigation', { name: 'Main navigation' })).toBeInTheDocument()
   expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', 'http://localhost:5173')
-  expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute('href', 'https://github.com/thedesignproject/CRRT')
+  expect(screen.getByRole('link', { name: 'GitHub' })).toHaveAttribute(
+    'href',
+    'https://github.com/thedesignproject/CRRT',
+  )
   expect(screen.queryByRole('link', { name: 'Capture anywhere' })).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: 'Product' })).not.toBeInTheDocument()
 })
@@ -77,7 +92,11 @@ it('preserves the navigation theme control, including its label and stored prefe
   const { Navigation } = await import('../components/Navigation')
   const { ThemeProvider } = await import('../../../src/design-system/theme')
   localStorage.removeItem('navigation-test-theme')
-  render(<ThemeProvider storageKey="navigation-test-theme" defaultTheme="light"><Navigation authenticated={false} /></ThemeProvider>)
+  render(
+    <ThemeProvider storageKey="navigation-test-theme" defaultTheme="light">
+      <Navigation authenticated={false} />
+    </ThemeProvider>,
+  )
   fireEvent.click(screen.getByRole('button', { name: 'Switch to dark mode' }))
   expect(document.documentElement.dataset.theme).toBe('dark')
   expect(localStorage.getItem('navigation-test-theme')).toBe('dark')
@@ -89,7 +108,11 @@ it('preserves the navigation theme control, including its label and stored prefe
 it('keeps the portrait and conversion content when video loading fails or stalls', async () => {
   const { Hero } = await import('./Hero')
   const { ThemeProvider } = await import('../../../src/design-system')
-  render(<ThemeProvider><Hero authenticated={false} /></ThemeProvider>)
+  render(
+    <ThemeProvider>
+      <Hero authenticated={false} />
+    </ThemeProvider>,
+  )
   const video = screen.getByLabelText('Close portrait of a person looking at a screen')
   // No canplay event: the portrait and content are already rendered.
   expect(document.querySelector('.landing-photo-image')).toHaveAttribute('src', '/crrt-hero-portrait.jpg')

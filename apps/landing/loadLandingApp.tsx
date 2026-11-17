@@ -10,7 +10,7 @@ export async function loadLandingApp(pathname: string) {
     let article = readResourceData(path)
     if (!article && path !== '/resources' && import.meta.env.DEV) {
       const { resources } = await import('./resources/content')
-      article = resources.find(resource => resourcePath(resource) === path)
+      article = resources.find((resource) => resourcePath(resource) === path)
     }
     // Await the tool before hydration so its prerendered controls stay intact.
     let content
@@ -26,7 +26,13 @@ export async function loadLandingApp(pathname: string) {
       }
       content = <ResourceArticle resource={article} tool={tool} />
     }
-    return <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate><ResourcesPage pathname={pathname} article={article}>{content}</ResourcesPage></ThemeProvider>
+    return (
+      <ThemeProvider storageKey="crrt-landing-theme" defaultTheme="light" hydrate>
+        <ResourcesPage pathname={pathname} article={article}>
+          {content}
+        </ResourcesPage>
+      </ThemeProvider>
+    )
   }
   const { App } = await import('./App')
   return <App />

@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
-vi.mock('./auth.js', async original => ({ ...await original<object>(), oauth: vi.fn() }))
+vi.mock('./auth.js', async (original) => ({ ...(await original<object>()), oauth: vi.fn() }))
 vi.mock('./transport.js', () => ({ mcpHandler: vi.fn() }))
 import { oauth } from './auth.js'
 import { mcpHandler } from './transport.js'
@@ -12,73 +12,152 @@ const transport = vi.fn()
 beforeEach(() => {
   vi.stubEnv('MCP_ORIGIN', 'http://127.0.0.1:3001')
   vi.stubEnv('MCP_BROWSER_ORIGINS', undefined)
-  vi.mocked(oauth).mockReset().mockImplementation(async () => Response.json({ oauth: true }))
+  vi.mocked(oauth)
+    .mockReset()
+    .mockImplementation(async () => Response.json({ oauth: true }))
   vi.mocked(mcpHandler).mockReturnValue(transport)
   transport.mockReset().mockImplementation(async () => Response.json({ tools: true }))
 })
 afterEach(() => vi.unstubAllEnvs())
 it('routes discovery metadata and preserves authorization query parameters', async () => {
-  for (const path of ['/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/api/mcp/v1']) {
+  for (const path of [
+    '/.well-known/oauth-authorization-server',
+    '/.well-known/oauth-protected-resource',
+    '/.well-known/oauth-protected-resource/api/mcp/v1',
+  ]) {
     expect((await mcpHttp(new Request(`http://127.0.0.1:3001${path}`))).status).toBe(200)
   }
   expect(metadataPath('/other')).toBe('/other')
   transport.mockResolvedValueOnce(Response.json({}, { headers: { 'X-Request-Id': 'existing-request-id' } }))
-  expect((await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', body: '{}' }))).headers.get('x-request-id')).toBe('existing-request-id')
+  expect(
+    (await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', body: '{}' }))).headers.get(
+      'x-request-id',
+    ),
+  ).toBe('existing-request-id')
   await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/oauth/authorize?state=preserved'))
   expect(vi.mocked(oauth).mock.lastCall![0].url).toContain('state=preserved')
-  expect(await (await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', body: '{}' }))).json()).toEqual({ tools: true })
+  expect(
+    await (await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'POST', body: '{}' }))).json(),
+  ).toEqual({ tools: true })
 })
 it('allows configured browser origins, rejects others, and handles preflight', async () => {
   vi.stubEnv('MCP_BROWSER_ORIGINS', 'http://localhost:6274')
-  const response = await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { method: 'OPTIONS', headers: { origin: 'http://localhost:6274' } }))
-  expect(response.status).toBe(204); expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:6274')
+  const response = await mcpHttp(
+    new Request('http://127.0.0.1:3001/api/mcp/v1', {
+      method: 'OPTIONS',
+      headers: { origin: 'http://localhost:6274' },
+    }),
+  )
+  expect(response.status).toBe(204)
+  expect(response.headers.get('access-control-allow-origin')).toBe('http://localhost:6274')
   expect(response.headers.get('cache-control')).toBe('no-store')
-  expect((await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { headers: { origin: 'https://evil.test' } }))).status).toBe(403)
+  expect(
+    (await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { headers: { origin: 'https://evil.test' } })))
+      .status,
+  ).toBe(403)
 })
 it('adapts Node/Vercel requests, including body formats, query values, and route parameters', async () => {
-  const res = () => ({ code: 200, body: undefined as unknown, headers: {} as Record<string, string>, status(n: number) { this.code = n; return this }, setHeader(n: string, v: string) { this.headers[n] = v }, send(v: unknown) { this.body = v }, json(v: unknown) { this.body = v } })
+  const res = () => ({
+    code: 200,
+    body: undefined as unknown,
+    headers: {} as Record<string, string>,
+    status(n: number) {
+      this.code = n
+      return this
+    },
+    setHeader(n: string, v: string) {
+      this.headers[n] = v
+    },
+    send(v: unknown) {
+      this.body = v
+    },
+    json(v: unknown) {
+      this.body = v
+    },
+  })
   const call = (req: object, target = '/api/mcp/oauth/metadata') => nodeMcp(req as never, res() as never, target)
-  await call({ headers: { accept: ['application/json', 'text/event-stream'], absent: undefined }, query: { action: 'metadata', state: 'value', ignored: ['a', 'b'] } })
+  await call({
+    headers: { accept: ['application/json', 'text/event-stream'], absent: undefined },
+    query: { action: 'metadata', state: 'value', ignored: ['a', 'b'] },
+  })
   expect(vi.mocked(oauth).mock.lastCall![0].url).toContain('state=value')
   expect(vi.mocked(oauth).mock.lastCall![0].url).not.toContain('action=')
-  await call({ method: 'POST', headers: { 'content-type': 'application/json' }, query: {}, body: { value: 1 } }, '/api/mcp/v1')
+  await call(
+    { method: 'POST', headers: { 'content-type': 'application/json' }, query: {}, body: { value: 1 } },
+    '/api/mcp/v1',
+  )
   expect(await transport.mock.lastCall![0].text()).toBe('{"value":1}')
   await call({ method: 'POST', headers: {}, query: {}, body: 'form=value' }, '/api/mcp/v1')
   expect(await transport.mock.lastCall![0].text()).toBe('form=value')
   for (const action of ['token', 'revoke']) {
     const fields = { client_id: 'client', grant_type: 'refresh_token', refresh_token: 'private-test-token' }
-    await call({ method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, query: {}, body: fields }, `/api/mcp/oauth/${action}`)
+    await call(
+      { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, query: {}, body: fields },
+      `/api/mcp/oauth/${action}`,
+    )
     const forwarded = vi.mocked(oauth).mock.lastCall![0]
     expect(forwarded.headers.get('content-type')).toBe('application/json')
     expect(await forwarded.json()).toEqual(fields)
   }
   await call({ method: 'OPTIONS', headers: {}, query: {}, body: {} })
-  const one = res(); await mcpRoute({ method: 'GET', headers: {}, query: {} } as never, one as never)
+  const one = res()
+  await mcpRoute({ method: 'GET', headers: {}, query: {} } as never, one as never)
   expect(one.code).toBe(200)
-  const two = res(); await oauthRoute({ method: 'GET', headers: {}, query: { action: 'metadata' } } as never, two as never)
+  const two = res()
+  await oauthRoute({ method: 'GET', headers: {}, query: { action: 'metadata' } } as never, two as never)
   expect(two.headers['content-type']).toContain('application/json')
   vi.stubEnv('MCP_ORIGIN', undefined)
-  const failure = res(); await nodeMcp({ headers: {}, query: {} } as never, failure as never, '/api/mcp/v1')
+  const failure = res()
+  await nodeMcp({ headers: {}, query: {} } as never, failure as never, '/api/mcp/v1')
   expect(failure.code).toBe(400)
 })
 it('correlates origin-denial security events with the response request ID', async () => {
   const log = vi.spyOn(console, 'info').mockImplementation(() => {})
   try {
-    const response = await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/v1', { headers: { origin: 'https://private-origin.test' } }))
-    expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({ event: 'crrt.mcp.security', requestId: response.headers.get('x-request-id'), action: 'http', userId: null, failureCategory: 'origin_not_allowed' })
+    const response = await mcpHttp(
+      new Request('http://127.0.0.1:3001/api/mcp/v1', { headers: { origin: 'https://private-origin.test' } }),
+    )
+    expect(JSON.parse(log.mock.calls[0][0])).toMatchObject({
+      event: 'crrt.mcp.security',
+      requestId: response.headers.get('x-request-id'),
+      action: 'http',
+      userId: null,
+      failureCategory: 'origin_not_allowed',
+    })
     expect(JSON.stringify(log.mock.calls)).not.toContain('private-origin')
-  } finally { log.mockRestore() }
+  } finally {
+    log.mockRestore()
+  }
 })
 
-it('routes browser unlock through the authenticated, no-store HTTP boundary',async()=>{
-  const denied=await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/document-unlock',{method:'POST',body:'{}'}));expect(denied.status).toBe(401);expect(denied.headers.get('cache-control')).toBe('no-store')
-  const res={code:200,body:'',status(n:number){this.code=n;return this},setHeader(){},send(v:string){this.body=v}};await unlockRoute({method:'GET',headers:{},query:{}} as never,res as never);expect(res.code).toBe(405)
+it('routes browser unlock through the authenticated, no-store HTTP boundary', async () => {
+  const denied = await mcpHttp(
+    new Request('http://127.0.0.1:3001/api/mcp/document-unlock', { method: 'POST', body: '{}' }),
+  )
+  expect(denied.status).toBe(401)
+  expect(denied.headers.get('cache-control')).toBe('no-store')
+  const res = {
+    code: 200,
+    body: '',
+    status(n: number) {
+      this.code = n
+      return this
+    },
+    setHeader() {},
+    send(v: string) {
+      this.body = v
+    },
+  }
+  await unlockRoute({ method: 'GET', headers: {}, query: {} } as never, res as never)
+  expect(res.code).toBe(405)
 })
 
 it('preserves CORS on browser unlock errors only for allowed origins', async () => {
   vi.stubEnv('MCP_BROWSER_ORIGINS', 'http://127.0.0.1:5173')
   for (const origin of ['http://127.0.0.1:3001', 'http://127.0.0.1:5173', 'https://untrusted.test']) {
-    const response = await mcpHttp(new Request('http://127.0.0.1:3001/api/mcp/document-unlock', { method: 'POST', headers: { origin }, body: '{}' }))
+    const response = await mcpHttp(
+      new Request('http://127.0.0.1:3001/api/mcp/document-unlock', { method: 'POST', headers: { origin }, body: '{}' }),
+    )
     const allowed = origin !== 'https://untrusted.test'
     expect(response.status).toBe(allowed ? 401 : 403)
     expect(await response.json()).toEqual({ error: allowed ? 'login_required' : 'origin_not_allowed' })

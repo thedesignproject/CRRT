@@ -60,10 +60,12 @@ export async function createWidgetAgentSession(
   input: { projectKey: string; pageUrl: string; commentIds: string[]; idempotencyKey: string },
   session: WidgetLoginSession,
 ): Promise<WidgetAgentSessionResponse> {
-  return (await widgetRequest(apiBase, '/v1/widget/agent/session', session, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })).json()
+  return (
+    await widgetRequest(apiBase, '/v1/widget/agent/session', session, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  ).json()
 }
 
 export async function mutateWidgetFeedback(
@@ -71,10 +73,12 @@ export async function mutateWidgetFeedback(
   input: { projectKey: string; pageUrl: string; commentIds: string[]; action: 'accept' | 'reject' | 'resolve' },
   session: WidgetLoginSession,
 ): Promise<{ comments: WidgetAgentComment[] }> {
-  return (await widgetRequest(apiBase, '/v1/widget/feedback', session, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })).json()
+  return (
+    await widgetRequest(apiBase, '/v1/widget/feedback', session, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  ).json()
 }
 
 export async function startWidgetAgentUpgrade(
@@ -82,13 +86,19 @@ export async function startWidgetAgentUpgrade(
   input: { projectKey: string; pageUrl: string },
   session: WidgetLoginSession,
 ): Promise<{ url: string }> {
-  return (await widgetRequest(apiBase, '/v1/widget/agent/upgrade', session, {
-    method: 'POST',
-    body: JSON.stringify(input),
-  })).json()
+  return (
+    await widgetRequest(apiBase, '/v1/widget/agent/upgrade', session, {
+      method: 'POST',
+      body: JSON.stringify(input),
+    })
+  ).json()
 }
 
-export async function fetchProjectComments(apiBase: string, projectId: string, onPrivacy?: (required: boolean) => void): Promise<Comment[]> {
+export async function fetchProjectComments(
+  apiBase: string,
+  projectId: string,
+  onPrivacy?: (required: boolean) => void,
+): Promise<Comment[]> {
   const res = await fetch(`${apiBase}/v1/public/comments?projectKey=${encodeURIComponent(projectId)}`)
   if (!res.ok && res.status !== 401) throw new Error('Could not refresh feedback')
   onPrivacy?.(res.status === 401)
@@ -114,7 +124,7 @@ export async function fetchAgentEligibility(apiBase: string, projectId: string):
     const res = await fetch(url.toString())
     if (!res.ok) return null
 
-    const data = await res.json() as Partial<AgentEligibility> & {
+    const data = (await res.json()) as Partial<AgentEligibility> & {
       can_request?: boolean
       must_sign_up?: boolean
       is_project_member?: boolean
@@ -144,8 +154,9 @@ export async function postComment(
   if (res.status === 401) onLoginRequired?.()
   if (!res.ok) {
     if (res.status === 402 || res.status === 409) {
-      const failure = await res.json().catch(() => null) as { code?: string; error?: string } | null
-      if (failure?.code === 'plan_limit') throw new Error(failure.error || 'The project owner has reached a Cloud plan limit')
+      const failure = (await res.json().catch(() => null)) as { code?: string; error?: string } | null
+      if (failure?.code === 'plan_limit')
+        throw new Error(failure.error || 'The project owner has reached a Cloud plan limit')
     }
     console.warn('[FeedbackWidget] API returned', res.status)
     return null

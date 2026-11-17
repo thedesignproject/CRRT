@@ -76,7 +76,7 @@ export function hostProjectStorageKey(hostname: string) {
 async function getLegacyHostProjectPreferences(): Promise<HostProjectPreferences> {
   const stored = await browser.storage.local.get(HOST_PROJECTS_STORAGE_KEY)
   const value = stored[HOST_PROJECTS_STORAGE_KEY]
-  return value && typeof value === 'object' ? value as HostProjectPreferences : {}
+  return value && typeof value === 'object' ? (value as HostProjectPreferences) : {}
 }
 
 async function getHostProjectPreference(hostname: string): Promise<{
@@ -121,8 +121,8 @@ export async function resolveProjectForPage(pageUrl: string, projects: Extension
   const preference = await getHostProjectPreference(hostname)
   const preferences = preference.present ? { [hostname]: preference.value } : {}
   const preferred = preference.value
-  const hasAccessiblePreference = preferred === null
-    || projects.some((project) => project.publicKey === preferred.publicKey)
+  const hasAccessiblePreference =
+    preferred === null || projects.some((project) => project.publicKey === preferred.publicKey)
   const selection = resolveProjectSelection(pageUrl, projects, preferences)
   if (!preference.present || !hasAccessiblePreference) {
     const key = hostProjectStorageKey(hostname)

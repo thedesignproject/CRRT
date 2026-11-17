@@ -9,7 +9,8 @@ const project = { project_key: 'p', name: 'Company app', domain: 'company.com', 
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(domainAccessApi).mockReturnValue(api as never)
-  api.suggestions.mockResolvedValue([project]); api.submit.mockResolvedValue({})
+  api.suggestions.mockResolvedValue([project])
+  api.submit.mockResolvedValue({})
 })
 const view = () => render(<SuggestedProjects apiBase="/api" accessToken="token" onProjectsChanged={changed} />)
 it('requests access, shows pending approval and refreshes membership state', async () => {

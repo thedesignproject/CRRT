@@ -82,12 +82,13 @@ export async function mintExtensionSession(userId: string): Promise<ExtensionSes
   })
   const session = verified?.session
   if (
-    verificationError
-    || !session?.access_token
-    || !session.refresh_token
-    || session.user.id !== userId
-    || session.user.email !== email
-  ) throw databaseError('session creation')
+    verificationError ||
+    !session?.access_token ||
+    !session.refresh_token ||
+    session.user.id !== userId ||
+    session.user.email !== email
+  )
+    throw databaseError('session creation')
 
   return {
     accessToken: session.access_token,

@@ -1,8 +1,4 @@
-import {
-  MAX_GITHUB_ISSUE_TITLE_LENGTH,
-  type GithubIssueComment,
-  type GithubIssueContent,
-} from './github-issues.js'
+import { MAX_GITHUB_ISSUE_TITLE_LENGTH, type GithubIssueComment, type GithubIssueContent } from './github-issues.js'
 
 const DEFAULT_BASE_URL = 'https://api.openai.com/v1'
 const MAX_SUMMARY = 1_000
@@ -40,11 +36,8 @@ export function createDefaultCommentIssueContent(comment: GithubIssueComment): G
   const normalized = comment.body.trim().replace(/\s+/g, ' ')
   const short = normalized.slice(0, 72)
   return {
-    title: short
-      ? `Feedback: ${short}`.slice(0, MAX_GITHUB_ISSUE_TITLE_LENGTH)
-      : 'Address visual feedback',
-    summary: normalized.slice(0, MAX_SUMMARY)
-      || 'Address the accepted visual feedback captured by CRRT.',
+    title: short ? `Feedback: ${short}`.slice(0, MAX_GITHUB_ISSUE_TITLE_LENGTH) : 'Address visual feedback',
+    summary: normalized.slice(0, MAX_SUMMARY) || 'Address the accepted visual feedback captured by CRRT.',
     implementationContext: [
       'Review the feedback and the captured page and element context.',
       'Implement the smallest change that addresses the request, then verify the affected UI.',
@@ -68,12 +61,9 @@ function safePageUrl(value: string | null) {
 function aiEndpoint() {
   const raw = process.env.AI_API_BASE_URL?.trim() || DEFAULT_BASE_URL
   const url = new URL(raw)
-  const localHttp = url.protocol === 'http:'
-    && (
-      url.hostname === '127.0.0.1'
-      || url.hostname === 'localhost'
-      || url.hostname === '[::1]'
-    )
+  const localHttp =
+    url.protocol === 'http:' &&
+    (url.hostname === '127.0.0.1' || url.hostname === 'localhost' || url.hostname === '[::1]')
   if (url.protocol !== 'https:' && !(process.env.NODE_ENV !== 'production' && localHttp)) {
     throw new Error('invalid_ai_api_base_url')
   }
@@ -85,15 +75,17 @@ function aiEndpoint() {
 
 function aiInput(comment: GithubIssueComment) {
   const anchor = comment.anchor
-    ? Object.fromEntries([
-        ['selectedText', MAX_AI_ANCHOR_TEXT],
-        ['prefix', 64],
-        ['suffix', 64],
-        ['containerSelector', MAX_AI_SELECTOR],
-      ].flatMap(([key, limit]) => {
-        const value = cleanText(comment.anchor?.[key as string], limit as number)
-        return value ? [[key, value]] : []
-      }))
+    ? Object.fromEntries(
+        [
+          ['selectedText', MAX_AI_ANCHOR_TEXT],
+          ['prefix', 64],
+          ['suffix', 64],
+          ['containerSelector', MAX_AI_SELECTOR],
+        ].flatMap(([key, limit]) => {
+          const value = cleanText(comment.anchor?.[key as string], limit as number)
+          return value ? [[key, value]] : []
+        }),
+      )
     : null
   const context: Record<string, unknown> = {
     feedback: cleanText(comment.body, MAX_AI_FEEDBACK),
@@ -109,16 +101,11 @@ function parseContent(value: unknown): GithubIssueContent | null {
   if (typeof value !== 'string') return null
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>
-    if (
-      Object.keys(parsed).sort().join(',')
-      !== 'implementationContext,summary,title'
-    ) return null
+    if (Object.keys(parsed).sort().join(',') !== 'implementationContext,summary,title') return null
     const title = cleanText(parsed.title, MAX_GITHUB_ISSUE_TITLE_LENGTH)
     const summary = cleanText(parsed.summary, MAX_SUMMARY)
     const implementationContext = cleanText(parsed.implementationContext, MAX_CONTEXT)
-    return title && summary && implementationContext
-      ? { title, summary, implementationContext }
-      : null
+    return title && summary && implementationContext ? { title, summary, implementationContext } : null
   } catch {
     return null
   }
@@ -150,16 +137,21 @@ export async function generateCommentIssueContent(comment: GithubIssueComment, s
             response_format: { type: 'json_object' },
             messages: [
               { role: 'system', content: SYSTEM_PROMPT },
-              ...(attempt === 0 ? [] : [{
-                role: 'system',
-                content: 'The previous response was invalid. Follow the schema exactly; all three fields must be strings.',
-              }]),
+              ...(attempt === 0
+                ? []
+                : [
+                    {
+                      role: 'system',
+                      content:
+                        'The previous response was invalid. Follow the schema exactly; all three fields must be strings.',
+                    },
+                  ]),
               { role: 'user', content: userContent },
             ],
           }),
         })
         if (!response.ok) continue
-        const body = await response.json() as {
+        const body = (await response.json()) as {
           choices?: Array<{ message?: { content?: unknown } }>
         }
         const content = parseContent(body.choices?.[0]?.message?.content)

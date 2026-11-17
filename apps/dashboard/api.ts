@@ -12,7 +12,13 @@ export interface Project {
   capabilities?: ProjectCapability[]
 }
 
-export type ProjectCapability = 'feedback:read' | 'feedback:create' | 'feedback:manage' | 'agent:operate' | 'integrations:send' | 'project:manage'
+export type ProjectCapability =
+  | 'feedback:read'
+  | 'feedback:create'
+  | 'feedback:manage'
+  | 'agent:operate'
+  | 'integrations:send'
+  | 'project:manage'
 
 export type CommentTargetType = 'element_point' | 'text_range'
 
@@ -81,7 +87,10 @@ export interface ExternalWorkDraft {
   provider: ExternalWorkProvider
   connected: boolean
   destination: string | null
-  existing: (GitHubIssueRecord & { externalUrl?: string }) | { externalId: string; externalKey: string; externalUrl: string; createdAt: string } | null
+  existing:
+    | (GitHubIssueRecord & { externalUrl?: string })
+    | { externalId: string; externalKey: string; externalUrl: string; createdAt: string }
+    | null
   draft: { title: string; body: string }
 }
 
@@ -94,12 +103,7 @@ export interface ProjectTrackerIntegration {
   reauthorizationRequired?: boolean
 }
 
-export type StorybookIntegrationState =
-  | 'not_connected'
-  | 'waiting'
-  | 'connected'
-  | 'upgrade_required'
-  | 'expired'
+export type StorybookIntegrationState = 'not_connected' | 'waiting' | 'connected' | 'upgrade_required' | 'expired'
 
 export interface StorybookIntegration {
   state: StorybookIntegrationState
@@ -215,15 +219,16 @@ export interface ExtensionCommentsPage {
   total: number
 }
 
-export type ExtensionCommentBulkSelection =
-  | { mode: 'ids'; ids: string[] }
-  | { mode: 'all'; excludedIds: string[] }
+export type ExtensionCommentBulkSelection = { mode: 'ids'; ids: string[] } | { mode: 'all'; excludedIds: string[] }
 
-export type InboxUndoItem = {id:string;updatedAt:string}
+export type InboxUndoItem = { id: string; updatedAt: string }
 export interface ExtensionCommentBulkResult {
   undoItems?: InboxUndoItem[]
   processedIds: string[]
-  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed' }>
+  skipped: Array<{
+    id: string
+    reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed'
+  }>
   selectedTotal: number
 }
 
@@ -312,11 +317,7 @@ export interface ExtensionAuthHandoffRequest {
   redirectUri: string
 }
 
-export function createExtensionAuthHandoff(
-  apiBase: string,
-  accessToken: string,
-  input: ExtensionAuthHandoffRequest,
-) {
+export function createExtensionAuthHandoff(apiBase: string, accessToken: string, input: ExtensionAuthHandoffRequest) {
   return requestJson<{ redirectUrl: string }>(`${apiBase.replace(/\/$/, '')}/v1/extension/auth/handoff`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
@@ -333,14 +334,29 @@ type LegacyBillingSummary = {
   canManage?: boolean
   cancelAtPeriodEnd?: boolean
   periodEnd?: string | null
-  plans?: Array<{ id: BillingPlanKey; name: string; monthlyUsd: number; projects: number; internal_users: number; comments: number; product_audits: number; amount: string; interval: 'month' | 'year' }>
+  plans?: Array<{
+    id: BillingPlanKey
+    name: string
+    monthlyUsd: number
+    projects: number
+    internal_users: number
+    comments: number
+    product_audits: number
+    amount: string
+    interval: 'month' | 'year'
+  }>
   entitlements?: {
     isLegacy?: boolean
     plan: BillingPlanKey | null
     status: string
     resetAt: string | null
     usage: { projects: number; internal_users: number; comments: number; product_audits: number }
-    limits: { projects: number | null; internal_users: number | null; comments: number | null; product_audits: number | null }
+    limits: {
+      projects: number | null
+      internal_users: number | null
+      comments: number | null
+      product_audits: number | null
+    }
   }
 }
 
@@ -362,7 +378,13 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
     hosting: 'cloud',
     monthlyPriceUsd: plan.monthlyUsd,
     trialDays: 14,
-    limits: { projects: plan.projects, internalUsers: plan.internal_users, commentsPerMonth: plan.comments, auditsPerMonth: plan.product_audits, guests: null },
+    limits: {
+      projects: plan.projects,
+      internalUsers: plan.internal_users,
+      commentsPerMonth: plan.comments,
+      auditsPerMonth: plan.product_audits,
+      guests: null,
+    },
   }))
   const priceEntries = legacy.plans?.map((plan) => [plan.id, { amount: plan.amount, interval: plan.interval }] as const)
   return {
@@ -380,12 +402,20 @@ function normalizeBillingSummary(value: BillingSummary | LegacyBillingSummary): 
     canManage: legacy.canManage,
     actions: legacy.actions ?? { checkoutState: false, changePlan: false },
     plans,
-    planPrices: priceEntries ? Object.fromEntries(priceEntries) as BillingSummary['planPrices'] : undefined,
+    planPrices: priceEntries ? (Object.fromEntries(priceEntries) as BillingSummary['planPrices']) : undefined,
     usage: {
       projects: { used: entitlement.usage.projects, limit: entitlement.limits.projects, resetAt: null },
-      internalUsers: { used: entitlement.usage.internal_users, limit: entitlement.limits.internal_users, resetAt: null },
+      internalUsers: {
+        used: entitlement.usage.internal_users,
+        limit: entitlement.limits.internal_users,
+        resetAt: null,
+      },
       comments: { used: entitlement.usage.comments, limit: entitlement.limits.comments, resetAt: entitlement.resetAt },
-      productAudits: { used: entitlement.usage.product_audits, limit: entitlement.limits.product_audits, resetAt: entitlement.resetAt },
+      productAudits: {
+        used: entitlement.usage.product_audits,
+        limit: entitlement.limits.product_audits,
+        resetAt: entitlement.resetAt,
+      },
     },
   }
 }
@@ -414,19 +444,34 @@ export function getBillingAvailability(apiBase: string, accessToken: string, sig
 }
 
 export async function getBillingSummary(apiBase: string, accessToken: string, reconcile = false, signal?: AbortSignal) {
-  const value = await requestJson<BillingSummary | LegacyBillingSummary>(`${apiBase}/v1/billing${reconcile ? '?reconcile=1' : ''}`, {
-    signal,
-    cache: 'no-store',
-    headers: { ...authHeaders(accessToken) },
-  })
+  const value = await requestJson<BillingSummary | LegacyBillingSummary>(
+    `${apiBase}/v1/billing${reconcile ? '?reconcile=1' : ''}`,
+    {
+      signal,
+      cache: 'no-store',
+      headers: { ...authHeaders(accessToken) },
+    },
+  )
   return normalizeBillingSummary(value)
 }
 
-export function runBillingAction(apiBase: string, accessToken: string, action: BillingAction, plan?: BillingPlanKey, state?: string, cycle?: 'monthly' | 'yearly') {
+export function runBillingAction(
+  apiBase: string,
+  accessToken: string,
+  action: BillingAction,
+  plan?: BillingPlanKey,
+  state?: string,
+  cycle?: 'monthly' | 'yearly',
+) {
   return requestJson<BillingActionResult>(`${apiBase}/v1/billing`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-    body: JSON.stringify({ action, ...(plan ? { plan } : {}), ...(state ? { state } : {}), ...(cycle ? { cycle } : {}) }),
+    body: JSON.stringify({
+      action,
+      ...(plan ? { plan } : {}),
+      ...(state ? { state } : {}),
+      ...(cycle ? { cycle } : {}),
+    }),
   })
 }
 
@@ -500,7 +545,11 @@ export function getSuperAdminStatus(apiBase: string, accessToken: string) {
   })
 }
 
-export function listAdminUsers(apiBase: string, accessToken: string, opts: { cursor?: string | null; limit?: number } = {}) {
+export function listAdminUsers(
+  apiBase: string,
+  accessToken: string,
+  opts: { cursor?: string | null; limit?: number } = {},
+) {
   const query = new URLSearchParams()
   if (opts.limit) query.set('limit', String(opts.limit))
   if (opts.cursor) query.set('cursor', opts.cursor)
@@ -510,12 +559,16 @@ export function listAdminUsers(apiBase: string, accessToken: string, opts: { cur
   })
 }
 
-export function listAdminProjects(apiBase: string, accessToken: string, opts: {
-  cursor?: string | null
-  limit?: number
-  sort?: AdminProjectSort
-  direction?: AdminSortDirection
-} = {}) {
+export function listAdminProjects(
+  apiBase: string,
+  accessToken: string,
+  opts: {
+    cursor?: string | null
+    limit?: number
+    sort?: AdminProjectSort
+    direction?: AdminSortDirection
+  } = {},
+) {
   const query = new URLSearchParams()
   if (opts.limit) query.set('limit', String(opts.limit))
   if (opts.cursor) query.set('cursor', opts.cursor)
@@ -550,14 +603,11 @@ export interface ProjectKeyAvailability {
 // Check whether a candidate project key is free, and get a suggested
 // alternative (slug + short suffix) when it isn't.
 export function checkProjectKeyAvailability(apiBase: string, accessToken: string, key: string) {
-  return requestJson<ProjectKeyAvailability>(
-    `${apiBase}/v1/projects/availability?key=${encodeURIComponent(key)}`,
-    {
-      headers: {
-        ...authHeaders(accessToken),
-      },
+  return requestJson<ProjectKeyAvailability>(`${apiBase}/v1/projects/availability?key=${encodeURIComponent(key)}`, {
+    headers: {
+      ...authHeaders(accessToken),
     },
-  )
+  })
 }
 
 // Claim a project key as the current user, creating the project with the given
@@ -684,10 +734,10 @@ export function getProjectGitHubStatus(apiBase: string, accessToken: string, pro
 }
 
 export function getGitHubInstallOptions(apiBase: string, accessToken: string, projectKey: string) {
-  return requestJson<GitHubInstallOptions>(
-    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/github/install`,
-    { headers: { ...authHeaders(accessToken) }, cache: 'no-store' },
-  )
+  return requestJson<GitHubInstallOptions>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/github/install`, {
+    headers: { ...authHeaders(accessToken) },
+    cache: 'no-store',
+  })
 }
 
 export function connectProjectGitHubRepo(
@@ -697,25 +747,19 @@ export function connectProjectGitHubRepo(
   repoUrl: string,
   installationToken: string,
 ) {
-  return requestJson<GitHubRepoConfig>(
-    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-      body: JSON.stringify({ repoUrl, installationToken }),
-    },
-  )
+  return requestJson<GitHubRepoConfig>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ repoUrl, installationToken }),
+  })
 }
 
 export function disconnectProjectGitHubRepo(apiBase: string, accessToken: string, projectKey: string) {
-  return requestJson<GitHubRepoConfig>(
-    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`,
-    {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-      body: JSON.stringify({ repoUrl: null }),
-    },
-  )
+  return requestJson<GitHubRepoConfig>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/repo-config`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ repoUrl: null }),
+  })
 }
 
 // Partial patch: absent keys stay untouched, null (or '') clears a field.
@@ -743,7 +787,12 @@ export function renameProject(apiBase: string, accessToken: string, projectKey: 
 
 // Replace the project's domain allowlist. An empty array disables the
 // restriction (comments accepted from any origin).
-export function updateProjectAllowedOrigins(apiBase: string, accessToken: string, projectKey: string, allowedOrigins: string[]) {
+export function updateProjectAllowedOrigins(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  allowedOrigins: string[],
+) {
   return requestJson<Project>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
@@ -757,7 +806,13 @@ export function listProjectInvites(apiBase: string, accessToken: string, project
   })
 }
 
-export function inviteProjectMember(apiBase: string, accessToken: string, projectKey: string, email: string, role: 'admin' | 'member' | 'guest' = 'member') {
+export function inviteProjectMember(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+  email: string,
+  role: 'admin' | 'member' | 'guest' = 'member',
+) {
   return requestJson<ProjectInvite>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/invites`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
@@ -773,7 +828,12 @@ export function cancelProjectInvite(apiBase: string, accessToken: string, projec
   )
 }
 
-export type NotificationKind = 'invite.received' | 'invite.accepted' | 'invite.declined' | 'comment.activity' | 'project.access_requested'
+export type NotificationKind =
+  | 'invite.received'
+  | 'invite.accepted'
+  | 'invite.declined'
+  | 'comment.activity'
+  | 'project.access_requested'
 
 export interface Notification {
   id: string
@@ -852,18 +912,34 @@ export function updateCommentVisibility(
   })
 }
 
-export function updateReviewStatus(apiBase: string, accessToken: string, commentId: string, reviewStatus: CommentRecord['reviewStatus'], expectedUpdatedAt?: string, implementationStatus?: CommentRecord['implementationStatus'], undo?: { captureUndo?: boolean; preserveExternalWork?: boolean; undoToken?: string }) {
-  return requestJson<CommentRecord & { undoToken?: string }>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`, {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(accessToken),
+export function updateReviewStatus(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  reviewStatus: CommentRecord['reviewStatus'],
+  expectedUpdatedAt?: string,
+  implementationStatus?: CommentRecord['implementationStatus'],
+  undo?: { captureUndo?: boolean; preserveExternalWork?: boolean; undoToken?: string },
+) {
+  return requestJson<CommentRecord & { undoToken?: string }>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/review-status`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(accessToken),
+      },
+      body: JSON.stringify({ reviewStatus, expectedUpdatedAt, implementationStatus, ...undo }),
     },
-    body: JSON.stringify({ reviewStatus, expectedUpdatedAt, implementationStatus, ...undo }),
-  })
+  )
 }
 
-export function updateImplementationStatus(apiBase: string, accessToken: string, commentId: string, implementationStatus: CommentRecord['implementationStatus']) {
+export function updateImplementationStatus(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  implementationStatus: CommentRecord['implementationStatus'],
+) {
   return requestJson<CommentRecord>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/implementation-status`, {
     method: 'PATCH',
     headers: {
@@ -898,7 +974,8 @@ export function assignExtensionComment(apiBase: string, accessToken: string, com
 
 export async function deleteExtensionComment(apiBase: string, accessToken: string, commentId: string) {
   const response = await fetch(`${apiBase}/v1/extension/comments/${encodeURIComponent(commentId)}`, {
-    method: 'DELETE', headers: { ...authHeaders(accessToken) },
+    method: 'DELETE',
+    headers: { ...authHeaders(accessToken) },
   })
   if (!response.ok) throw responseError(await response.text(), response.status)
 }
@@ -928,7 +1005,12 @@ export function bulkDeleteExtensionComments(
   })
 }
 
-export function getExternalWorkDraft(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider = 'github') {
+export function getExternalWorkDraft(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  provider: ExternalWorkProvider = 'github',
+) {
   return requestJson<ExternalWorkDraft>(
     `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work?provider=${provider}`,
     { headers: { ...authHeaders(accessToken) } },
@@ -942,14 +1024,19 @@ export function sendExternalWork(
   provider: ExternalWorkProvider,
   draft: { title: string; body: string },
 ) {
-  return requestJson<{ issueNumber?: number; issueUrl?: string; externalId?: string; externalKey?: string; externalUrl?: string; createdAt: string; created: boolean }>(
-    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-      body: JSON.stringify({ provider, draft }),
-    },
-  )
+  return requestJson<{
+    issueNumber?: number
+    issueUrl?: string
+    externalId?: string
+    externalKey?: string
+    externalUrl?: string
+    createdAt: string
+    created: boolean
+  }>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ provider, draft }),
+  })
 }
 
 export function retryExternalWorkSync(apiBase: string, accessToken: string, commentId: string) {
@@ -966,7 +1053,7 @@ export function createCommentGithubIssue(
   draft?: { title: string; body: string },
 ) {
   return draft
-    ? sendExternalWork(apiBase, accessToken, commentId, 'github', draft) as Promise<GitHubIssueCreationResponse>
+    ? (sendExternalWork(apiBase, accessToken, commentId, 'github', draft) as Promise<GitHubIssueCreationResponse>)
     : requestJson<GitHubIssueCreationResponse>(
         `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work`,
         {
@@ -987,15 +1074,19 @@ export function getLinearIntegration(apiBase: string, accessToken: string, proje
 export function selectLinearTeam(apiBase: string, accessToken: string, projectKey: string, containerId: string) {
   return requestJson<ProjectTrackerIntegration>(
     `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
-    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) }, body: JSON.stringify({ containerId }) },
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ containerId }),
+    },
   )
 }
 
 export function disconnectLinear(apiBase: string, accessToken: string, projectKey: string) {
-  return requestJson<void>(
-    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`,
-    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
-  )
+  return requestJson<void>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/linear`, {
+    method: 'DELETE',
+    headers: { ...authHeaders(accessToken) },
+  })
 }
 
 export function getJiraIntegration(apiBase: string, accessToken: string, projectKey: string, authorize = false) {
@@ -1008,15 +1099,19 @@ export function getJiraIntegration(apiBase: string, accessToken: string, project
 export function selectJiraProject(apiBase: string, accessToken: string, projectKey: string, containerId: string) {
   return requestJson<ProjectTrackerIntegration>(
     `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
-    { method: 'PATCH', headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) }, body: JSON.stringify({ containerId }) },
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ containerId }),
+    },
   )
 }
 
 export function disconnectJira(apiBase: string, accessToken: string, projectKey: string) {
-  return requestJson<void>(
-    `${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`,
-    { method: 'DELETE', headers: { ...authHeaders(accessToken) } },
-  )
+  return requestJson<void>(`${apiBase}/v1/projects/${encodeURIComponent(projectKey)}/integrations/jira`, {
+    method: 'DELETE',
+    headers: { ...authHeaders(accessToken) },
+  })
 }
 
 export async function getStorybookIntegration(
@@ -1069,15 +1164,16 @@ export async function getStorybookIntegration(
     : { state: 'not_connected' }
 }
 
-export async function createStorybookPairing(apiBase: string, accessToken: string, projectKey: string): Promise<StorybookIntegration> {
-  const pairing = await requestJson<StorybookPairingResponse>(
-    `${apiBase}/v1/storybook/pairings`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
-      body: JSON.stringify({ projectKey }),
-    },
-  )
+export async function createStorybookPairing(
+  apiBase: string,
+  accessToken: string,
+  projectKey: string,
+): Promise<StorybookIntegration> {
+  const pairing = await requestJson<StorybookPairingResponse>(`${apiBase}/v1/storybook/pairings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify({ projectKey }),
+  })
   return {
     state: 'waiting',
     command: `npx @thedesignproject/crrt-storybook connect --code ${pairing.code}`,
@@ -1105,8 +1201,13 @@ export function beginBillingCheckout(apiBase: string, accessToken: string) {
   })
 }
 
-export function getPrompt(apiBase: string, accessToken: string, shareId: string, target: 'codex' | 'claude-code' | 'generic') {
-  return requestJson<{ prompt: string, tokenUrl: string }>(
+export function getPrompt(
+  apiBase: string,
+  accessToken: string,
+  shareId: string,
+  target: 'codex' | 'claude-code' | 'generic',
+) {
+  return requestJson<{ prompt: string; tokenUrl: string }>(
     `${apiBase}/v1/feedback-shares/${encodeURIComponent(shareId)}/prompt?target=${encodeURIComponent(target)}`,
     {
       headers: {
@@ -1157,15 +1258,29 @@ export function getShareEvents(apiBase: string, slug: string, token: string, aft
   )
 }
 
-export function resolvePendingExternalWork(apiBase: string, accessToken: string, commentId: string, provider: ExternalWorkProvider) {
-  return requestJson<{resolved: boolean}>(`${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-recovery`, {
-    method: 'POST', headers: {'Content-Type': 'application/json', ...authHeaders(accessToken)},
-    body: JSON.stringify({provider, confirmCheckedTracker: true}),
-  })
+export function resolvePendingExternalWork(
+  apiBase: string,
+  accessToken: string,
+  commentId: string,
+  provider: ExternalWorkProvider,
+) {
+  return requestJson<{ resolved: boolean }>(
+    `${apiBase}/v1/comments/${encodeURIComponent(commentId)}/external-work-recovery`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ provider, confirmCheckedTracker: true }),
+    },
+  )
 }
 
-export function restoreInboxComments(apiBase:string, accessToken:string, projectId:string, items:InboxUndoItem[]) {
-  return requestJson<Pick<ExtensionCommentBulkResult,'processedIds'|'skipped'>>(`${apiBase}/v1/extension/comments/restore`, {
-    method:'POST', headers:{'Content-Type':'application/json',...authHeaders(accessToken)}, body:JSON.stringify({projectId,items}),
-  })
+export function restoreInboxComments(apiBase: string, accessToken: string, projectId: string, items: InboxUndoItem[]) {
+  return requestJson<Pick<ExtensionCommentBulkResult, 'processedIds' | 'skipped'>>(
+    `${apiBase}/v1/extension/comments/restore`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+      body: JSON.stringify({ projectId, items }),
+    },
+  )
 }

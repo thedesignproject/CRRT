@@ -1,11 +1,26 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const auth = vi.hoisted(() => ({ session: null as null | { access_token: string }, user: null as null | { id: string }, loading: false, signOut: vi.fn() }))
+const auth = vi.hoisted(() => ({
+  session: null as null | { access_token: string },
+  user: null as null | { id: string },
+  loading: false,
+  signOut: vi.fn(),
+}))
 vi.mock('./hooks/useAuth', () => ({ useAuth: () => auth }))
-vi.mock('./components/McpAuthPage', () => ({ McpAuthPage: ({ accessToken }: { accessToken: string | null }) => <div>mcp auth {accessToken ?? 'anonymous'}</div> }))
-vi.mock('./components/WidgetAuthPage', () => ({ WidgetAuthPage: ({ accessToken }: { accessToken: string | null }) => <div>widget auth {accessToken ?? 'anonymous'}</div> }))
-vi.mock('./components/ExtensionAuthPage', () => ({ ExtensionAuthPage: ({ accessToken }: { accessToken: string | null }) => <div>extension auth {accessToken ?? 'anonymous'}</div> }))
+vi.mock('./components/McpAuthPage', () => ({
+  McpAuthPage: ({ accessToken }: { accessToken: string | null }) => <div>mcp auth {accessToken ?? 'anonymous'}</div>,
+}))
+vi.mock('./components/WidgetAuthPage', () => ({
+  WidgetAuthPage: ({ accessToken }: { accessToken: string | null }) => (
+    <div>widget auth {accessToken ?? 'anonymous'}</div>
+  ),
+}))
+vi.mock('./components/ExtensionAuthPage', () => ({
+  ExtensionAuthPage: ({ accessToken }: { accessToken: string | null }) => (
+    <div>extension auth {accessToken ?? 'anonymous'}</div>
+  ),
+}))
 vi.mock('./components/NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./lib/supabase', () => ({ supabase: {} }))
 
@@ -13,7 +28,9 @@ import { App } from './App'
 
 describe('dashboard extension auth routing', () => {
   beforeEach(() => {
-    auth.session = null; auth.user = null; auth.loading = false
+    auth.session = null
+    auth.user = null
+    auth.loading = false
     window.history.replaceState({}, '', '/extension-auth')
   })
 
@@ -23,29 +40,36 @@ describe('dashboard extension auth routing', () => {
   })
 
   it('passes the existing dashboard access token to the hosted route', () => {
-    auth.session = { access_token: 'access' }; auth.user = { id: 'user' }
+    auth.session = { access_token: 'access' }
+    auth.user = { id: 'user' }
     render(<App />)
     expect(screen.getByText('extension auth access')).toBeInTheDocument()
   })
 })
 
 it.each([null, { access_token: 'access' }])('routes widget auth before dashboard onboarding', (session) => {
-  auth.session = session; auth.user = null; auth.loading = false
+  auth.session = session
+  auth.user = null
+  auth.loading = false
   window.history.replaceState({}, '', '/widget-auth')
   render(<App />)
   expect(screen.getByText(`widget auth ${session?.access_token ?? 'anonymous'}`)).toBeInTheDocument()
 })
 
-it.each([false, true])('keeps fresh reset requests accessible with an existing session (loading=%s)', loading => {
-  auth.session = { access_token: 'access' }; auth.user = { id: 'user' }; auth.loading = loading
+it.each([false, true])('keeps fresh reset requests accessible with an existing session (loading=%s)', (loading) => {
+  auth.session = { access_token: 'access' }
+  auth.user = { id: 'user' }
+  auth.loading = loading
   window.history.replaceState({}, '', '/forgot-password')
   render(<App />)
   expect(screen.getByRole('heading', { name: /reset your password/ })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: /send reset link/ })).toBeEnabled()
 })
 
-it.each([null, { access_token: 'access' }])('routes MCP consent using the existing session', session => {
-  auth.session = session; auth.user = null; auth.loading = false
+it.each([null, { access_token: 'access' }])('routes MCP consent using the existing session', (session) => {
+  auth.session = session
+  auth.user = null
+  auth.loading = false
   window.history.replaceState({}, '', '/mcp-auth')
   render(<App />)
   expect(screen.getByText(`mcp auth ${session?.access_token ?? 'anonymous'}`)).toBeInTheDocument()

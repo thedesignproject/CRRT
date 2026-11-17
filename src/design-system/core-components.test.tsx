@@ -8,7 +8,14 @@ import { cn } from './lib/cn'
 afterEach(cleanup)
 
 it('renders shared buttons with stable defaults and explicit variants', () => {
-  render(<><Button>Continue</Button><Button tone="secondary" size="lg" className="extra">Compare</Button></>)
+  render(
+    <>
+      <Button>Continue</Button>
+      <Button tone="secondary" size="lg" className="extra">
+        Compare
+      </Button>
+    </>,
+  )
   expect(screen.getByRole('button', { name: 'Continue' })).toHaveAttribute('type', 'button')
   expect(screen.getByRole('button', { name: 'Continue' })).toHaveClass('ds-button-primary', 'ds-button-md')
   expect(screen.getByRole('button', { name: 'Compare' })).toHaveClass('ds-button-secondary', 'ds-button-lg', 'extra')
@@ -25,7 +32,18 @@ it('renders section guidance only when supplied', () => {
 
 it('announces and changes a generic segmented selection', () => {
   const change = vi.fn()
-  render(<SegmentedControl label="Billing cycle" value="monthly" onChange={change} className="billing-cycle" options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save' }]} />)
+  render(
+    <SegmentedControl
+      label="Billing cycle"
+      value="monthly"
+      onChange={change}
+      className="billing-cycle"
+      options={[
+        { value: 'monthly', label: 'Monthly' },
+        { value: 'yearly', label: 'Yearly', note: 'Save' },
+      ]}
+    />,
+  )
   expect(screen.getByRole('group', { name: 'Billing cycle' })).toHaveClass('billing-cycle')
   expect(screen.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true')
   fireEvent.click(screen.getByRole('button', { name: /Yearly/ }))

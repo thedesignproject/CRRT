@@ -12,10 +12,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -42,7 +52,9 @@ describe('api/v1/projects/claim', () => {
     expect(res.statusCode).toBe(400)
 
     // claimProject throws something that isn't an Error → falls back to 500
-    vi.mocked(claimProject).mockImplementationOnce(() => { throw 'string-not-error' })
+    vi.mocked(claimProject).mockImplementationOnce(() => {
+      throw 'string-not-error'
+    })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'k' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)

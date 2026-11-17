@@ -24,7 +24,8 @@ type InstallMessage = {
   githubAccountType?: 'User' | 'Organization'
 }
 
-const button = 'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all btn-press disabled:cursor-not-allowed disabled:opacity-50'
+const button =
+  'inline-flex items-center justify-center gap-1.5 rounded-md px-3 py-2 text-xs font-semibold transition-all btn-press disabled:cursor-not-allowed disabled:opacity-50'
 
 function errorMessage(error: unknown, fallback: string) {
   if (!(error instanceof Error)) return fallback
@@ -41,10 +42,12 @@ function installedRepos(value: unknown[] | undefined): InstalledRepo[] | null {
   const repos = value.filter((repo): repo is InstalledRepo => {
     if (!repo || typeof repo !== 'object') return false
     const candidate = repo as Record<string, unknown>
-    return typeof candidate.owner === 'string'
-      && typeof candidate.name === 'string'
-      && typeof candidate.repoUrl === 'string'
-      && candidate.repoUrl.startsWith('https://github.com/')
+    return (
+      typeof candidate.owner === 'string' &&
+      typeof candidate.name === 'string' &&
+      typeof candidate.repoUrl === 'string' &&
+      candidate.repoUrl.startsWith('https://github.com/')
+    )
   })
   return repos.length === value.length ? repos : null
 }
@@ -61,7 +64,11 @@ function openGitHubPopup(url: string) {
   return window.open(url, 'crrt-github-connect')
 }
 
-export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
+export function GitHubRepositorySettings({
+  apiBase,
+  accessToken,
+  projectKey,
+}: {
   apiBase: string
   accessToken: string
   projectKey: string
@@ -96,7 +103,9 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
     }
   }, [apiBase, accessToken, projectKey])
 
-  useEffect(() => { void loadConfig() }, [loadConfig])
+  useEffect(() => {
+    void loadConfig()
+  }, [loadConfig])
 
   useEffect(() => {
     const callbackOrigin = new URL(apiBase, window.location.href).origin
@@ -112,11 +121,7 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
         return
       }
       const nextRepos = installedRepos(message.repositories)
-      if (
-        message.projectKey !== projectKey
-        || typeof message.installationToken !== 'string'
-        || !nextRepos
-      ) return
+      if (message.projectKey !== projectKey || typeof message.installationToken !== 'string' || !nextRepos) return
       stopPopupPoll()
       popup.current = null
       setRepos(nextRepos)
@@ -209,24 +214,50 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
 
   return (
     <section className="mt-8" aria-labelledby="github-repository-heading">
-      <h2 id="github-repository-heading" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">GitHub repository</h2>
-      <p className="mt-1 text-[11px] text-muted-foreground">Choose where CRRT will create detailed issues from accepted feedback.</p>
+      <h2
+        id="github-repository-heading"
+        className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground"
+      >
+        GitHub repository
+      </h2>
+      <p className="mt-1 text-[11px] text-muted-foreground">
+        Choose where CRRT will create detailed issues from accepted feedback.
+      </p>
       <div className="mt-3 rounded-lg border border-border bg-card p-4">
         {loading ? (
-          <div className="flex items-center justify-center py-5" aria-label="Loading GitHub connection"><Spinner size={16} /></div>
+          <div className="flex items-center justify-center py-5" aria-label="Loading GitHub connection">
+            <Spinner size={16} />
+          </div>
         ) : (
           <div className="space-y-4">
             {status !== 'disconnected' && config?.repoUrl && (
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <a className="inline-flex max-w-full items-center gap-1.5 text-[13px] font-semibold text-foreground hover:text-primary" href={config.repoUrl} target="_blank" rel="noreferrer">
-                    <span className="truncate">{config.githubOwner}/{config.githubRepo}</span><ExternalLinkIcon size={12} />
+                  <a
+                    className="inline-flex max-w-full items-center gap-1.5 text-[13px] font-semibold text-foreground hover:text-primary"
+                    href={config.repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    <span className="truncate">
+                      {config.githubOwner}/{config.githubRepo}
+                    </span>
+                    <ExternalLinkIcon size={12} />
                   </a>
                   <p className="mt-1 text-[11px] text-muted-foreground">
-                    {status === 'connected' ? 'Connected and ready for GitHub issues.' : 'Reconnect this legacy repository before creating issues.'}
+                    {status === 'connected'
+                      ? 'Connected and ready for GitHub issues.'
+                      : 'Reconnect this legacy repository before creating issues.'}
                   </p>
                 </div>
-                <span className={cn('shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold', status === 'connected' ? 'bg-status-accepted-bg text-status-accepted' : 'bg-primary/15 text-primary')}>
+                <span
+                  className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                    status === 'connected'
+                      ? 'bg-status-accepted-bg text-status-accepted'
+                      : 'bg-primary/15 text-primary',
+                  )}
+                >
                   {status === 'connected' ? 'Connected' : 'Reconnect required'}
                 </span>
               </div>
@@ -236,9 +267,16 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <p className="text-[13px] font-semibold text-foreground">No repository connected</p>
-                  <p className="mt-1 text-[11px] text-muted-foreground">Connect GitHub to choose the repository that will receive feedback issues.</p>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    Connect GitHub to choose the repository that will receive feedback issues.
+                  </p>
                 </div>
-                <button type="button" disabled={busy} onClick={chooseConnection} className={cn(button, 'w-full bg-primary text-primary-foreground hover:opacity-90 sm:w-auto')}>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={chooseConnection}
+                  className={cn(button, 'w-full bg-primary text-primary-foreground hover:opacity-90 sm:w-auto')}
+                >
                   {busy ? 'Loading…' : 'Connect GitHub'}
                 </button>
               </div>
@@ -247,28 +285,81 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
             {options && !installationToken && (
               <div className="space-y-2">
                 {options.installations.map((installation) => (
-                  <button key={installation.id} type="button" disabled={busy} onClick={() => authorize(installation.authorizeUrl)} className={cn(button, 'w-full border border-border bg-background text-foreground hover:bg-accent')}>
-                    Use {installation.githubAccountType === 'Organization' ? 'organization' : 'account'} @{installation.githubAccountLogin}
+                  <button
+                    key={installation.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => authorize(installation.authorizeUrl)}
+                    className={cn(button, 'w-full border border-border bg-background text-foreground hover:bg-accent')}
+                  >
+                    Use {installation.githubAccountType === 'Organization' ? 'organization' : 'account'} @
+                    {installation.githubAccountLogin}
                   </button>
                 ))}
-                <button type="button" disabled={busy} onClick={() => authorize(options.installUrl)} className={cn(button, 'w-full border border-border bg-background text-foreground hover:bg-accent')}>
-                  {options.installations.length > 0 ? 'Install for another GitHub account' : 'Install the CRRT GitHub App'}
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => authorize(options.installUrl)}
+                  className={cn(button, 'w-full border border-border bg-background text-foreground hover:bg-accent')}
+                >
+                  {options.installations.length > 0
+                    ? 'Install for another GitHub account'
+                    : 'Install the CRRT GitHub App'}
                 </button>
-                <button type="button" disabled={busy} onClick={() => setOptions(null)} className="w-full text-[11px] font-medium text-muted-foreground hover:text-foreground">Cancel</button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => setOptions(null)}
+                  className="w-full text-[11px] font-medium text-muted-foreground hover:text-foreground"
+                >
+                  Cancel
+                </button>
               </div>
             )}
 
             {installationToken && repos.length > 0 && (
               <div className="space-y-3">
                 <div>
-                  <label htmlFor="github-repository" className="mb-1 block text-[11px] font-medium text-muted-foreground">Repository{account ? ` · @${account}` : ''}</label>
-                  <select id="github-repository" value={selectedRepo} onChange={(event) => setSelectedRepo(event.target.value)} disabled={busy} className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px] text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20">
-                    {repos.map((repo) => <option key={repo.repoUrl} value={repo.repoUrl}>{repo.owner}/{repo.name}</option>)}
+                  <label
+                    htmlFor="github-repository"
+                    className="mb-1 block text-[11px] font-medium text-muted-foreground"
+                  >
+                    Repository{account ? ` · @${account}` : ''}
+                  </label>
+                  <select
+                    id="github-repository"
+                    value={selectedRepo}
+                    onChange={(event) => setSelectedRepo(event.target.value)}
+                    disabled={busy}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-[13px] text-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20"
+                  >
+                    {repos.map((repo) => (
+                      <option key={repo.repoUrl} value={repo.repoUrl}>
+                        {repo.owner}/{repo.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
                 <div className="flex justify-end gap-2">
-                  <button type="button" disabled={busy} onClick={() => { setInstallationToken(null); setRepos([]) }} className={cn(button, 'border border-border text-muted-foreground hover:text-foreground')}>Cancel</button>
-                  <button type="button" disabled={busy || !selectedRepo} onClick={connect} className={cn(button, 'bg-primary text-primary-foreground hover:opacity-90')}>{busy ? 'Connecting…' : 'Connect repository'}</button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setInstallationToken(null)
+                      setRepos([])
+                    }}
+                    className={cn(button, 'border border-border text-muted-foreground hover:text-foreground')}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || !selectedRepo}
+                    onClick={connect}
+                    className={cn(button, 'bg-primary text-primary-foreground hover:opacity-90')}
+                  >
+                    {busy ? 'Connecting…' : 'Connect repository'}
+                  </button>
                 </div>
               </div>
             )}
@@ -276,26 +367,68 @@ export function GitHubRepositorySettings({ apiBase, accessToken, projectKey }: {
             {status !== 'disconnected' && !options && !installationToken && !confirmDisconnect && (
               <div className="flex justify-end">
                 {status === 'connected' ? (
-                  <button type="button" disabled={busy} onClick={() => setConfirmDisconnect(true)} className={cn(button, 'border border-border text-muted-foreground hover:text-status-rejected')}>Disconnect</button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmDisconnect(true)}
+                    className={cn(button, 'border border-border text-muted-foreground hover:text-status-rejected')}
+                  >
+                    Disconnect
+                  </button>
                 ) : (
-                  <button type="button" disabled={busy} onClick={chooseConnection} className={cn(button, 'bg-primary text-primary-foreground hover:opacity-90')}>{busy ? 'Loading…' : 'Reconnect GitHub'}</button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={chooseConnection}
+                    className={cn(button, 'bg-primary text-primary-foreground hover:opacity-90')}
+                  >
+                    {busy ? 'Loading…' : 'Reconnect GitHub'}
+                  </button>
                 )}
               </div>
             )}
 
             {confirmDisconnect && (
               <div className="rounded-md border border-border bg-background p-3">
-                <p className="text-[11px] text-muted-foreground">CRRT will stop creating issues for this project until another repository is connected.</p>
+                <p className="text-[11px] text-muted-foreground">
+                  CRRT will stop creating issues for this project until another repository is connected.
+                </p>
                 <div className="mt-3 flex justify-end gap-2">
-                  <button type="button" disabled={busy} onClick={() => setConfirmDisconnect(false)} className={cn(button, 'border border-border text-foreground')}>Cancel</button>
-                  <button type="button" disabled={busy} onClick={disconnect} className={cn(button, 'bg-destructive text-destructive-foreground')}>{busy ? 'Disconnecting…' : 'Disconnect repository'}</button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setConfirmDisconnect(false)}
+                    className={cn(button, 'border border-border text-foreground')}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={disconnect}
+                    className={cn(button, 'bg-destructive text-destructive-foreground')}
+                  >
+                    {busy ? 'Disconnecting…' : 'Disconnect repository'}
+                  </button>
                 </div>
               </div>
             )}
 
-            {busy && popup.current && <p className="text-center text-[11px] text-muted-foreground" role="status">Complete authorization in the GitHub window…</p>}
-            {error && <p className="text-[11px] text-status-rejected" role="alert">{error}</p>}
-            {error && !loading && !config && <button type="button" onClick={loadConfig} className="text-[11px] font-semibold text-primary">Retry</button>}
+            {busy && popup.current && (
+              <p className="text-center text-[11px] text-muted-foreground" role="status">
+                Complete authorization in the GitHub window…
+              </p>
+            )}
+            {error && (
+              <p className="text-[11px] text-status-rejected" role="alert">
+                {error}
+              </p>
+            )}
+            {error && !loading && !config && (
+              <button type="button" onClick={loadConfig} className="text-[11px] font-semibold text-primary">
+                Retry
+              </button>
+            )}
           </div>
         )}
       </div>

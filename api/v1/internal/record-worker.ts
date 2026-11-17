@@ -7,7 +7,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
   const secret = process.env.CRON_SECRET
   if (!secret) return res.status(503).json({ error: 'Worker unavailable' })
-  if (firstHeaderValue(req.headers.authorization) !== `Bearer ${secret}`) return res.status(401).json({ error: 'Unauthorized' })
+  if (firstHeaderValue(req.headers.authorization) !== `Bearer ${secret}`)
+    return res.status(401).json({ error: 'Unauthorized' })
   if (process.env.CRRT_RECORD_ENABLED !== 'true') return res.status(204).end()
   try {
     await dispatchRecordWorker()

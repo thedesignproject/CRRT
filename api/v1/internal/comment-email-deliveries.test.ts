@@ -5,9 +5,18 @@ import handler from './comment-email-deliveries.js'
 
 function response() {
   return {
-    code: 0, body: null as unknown, setHeader: vi.fn(),
-    status(code: number) { this.code = code; return this },
-    json(body: unknown) { this.body = body; return this }, end: vi.fn(),
+    code: 0,
+    body: null as unknown,
+    setHeader: vi.fn(),
+    status(code: number) {
+      this.code = code
+      return this
+    },
+    json(body: unknown) {
+      this.body = body
+      return this
+    },
+    end: vi.fn(),
   }
 }
 async function call(method: string, authorization?: string | string[]) {

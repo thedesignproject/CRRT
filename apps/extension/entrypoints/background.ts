@@ -4,7 +4,11 @@ import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../li
 import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn, type HostedAuthMessage } from '../lib/hosted-auth'
 import { hasAcceptedDisclosure } from '../lib/disclosure'
-import { isRecordingSurfaceCommand, type RecordingSessionDescriptor, type RecordingSessionSnapshot } from '../lib/recording-session'
+import {
+  isRecordingSurfaceCommand,
+  type RecordingSessionDescriptor,
+  type RecordingSessionSnapshot,
+} from '../lib/recording-session'
 import { initialRecorderState } from '../lib/recording'
 
 type MessageResponse = { ok: true; data?: unknown } | { ok: false; error: string }
@@ -16,9 +20,13 @@ const recordingSessionKey = 'crrt:recording-session'
 async function recordingSession(): Promise<RecordingSessionDescriptor | null> {
   const stored = await browser.storage.session.get(recordingSessionKey)
   const value = stored[recordingSessionKey] as Partial<RecordingSessionDescriptor> | undefined
-  return value && typeof value.sessionId === 'string' && Number.isInteger(value.tabId)
-    && Number.isInteger(value.revision) && value.snapshot && typeof value.snapshot === 'object'
-    ? value as RecordingSessionDescriptor
+  return value &&
+    typeof value.sessionId === 'string' &&
+    Number.isInteger(value.tabId) &&
+    Number.isInteger(value.revision) &&
+    value.snapshot &&
+    typeof value.snapshot === 'object'
+    ? (value as RecordingSessionDescriptor)
     : null
 }
 
@@ -30,7 +38,9 @@ async function storeRecordingSession(value: RecordingSessionDescriptor | null) {
 async function withTabOperation<T>(tabId: number, operation: () => Promise<T>): Promise<T> {
   const previous = tabOperationTails.get(tabId) ?? Promise.resolve()
   let release!: () => void
-  const current = new Promise<void>((resolve) => { release = resolve })
+  const current = new Promise<void>((resolve) => {
+    release = resolve
+  })
   const tail = previous.then(() => current)
   tabOperationTails.set(tabId, tail)
   await previous
@@ -58,11 +68,11 @@ function senderTab(sender: unknown) {
 
 function activeTabState(value: unknown): value is ActiveTabState {
   return Boolean(
-    value
-    && typeof value === 'object'
-    && typeof (value as Partial<ActiveTabState>).origin === 'string'
-    && typeof (value as Partial<ActiveTabState>).activationId === 'string'
-    && typeof (value as Partial<ActiveTabState>).attemptId === 'string',
+    value &&
+    typeof value === 'object' &&
+    typeof (value as Partial<ActiveTabState>).origin === 'string' &&
+    typeof (value as Partial<ActiveTabState>).activationId === 'string' &&
+    typeof (value as Partial<ActiveTabState>).attemptId === 'string',
   )
 }
 
@@ -86,11 +96,18 @@ async function openRecorder(allowStandalone = false) {
     const [tab] = await browser.tabs.query({ active: true, currentWindow: true })
     if (typeof tab?.id !== 'number' || !webOrigin(tab.url)) {
       if (!allowStandalone) throw new Error('Open a regular web page to start recording')
-      await browser.windows.create({ url: browser.runtime.getURL('/record.html' as any), type: 'popup', width: 1180, height: 820 })
+      await browser.windows.create({
+        url: browser.runtime.getURL('/record.html' as any),
+        type: 'popup',
+        width: 1180,
+        height: 820,
+      })
       return
     }
     const descriptor: RecordingSessionDescriptor = {
-      sessionId: crypto.randomUUID(), revision: 1, tabId: tab.id,
+      sessionId: crypto.randomUUID(),
+      revision: 1,
+      tabId: tab.id,
       snapshot: { ...initialRecorderState },
     }
     await storeRecordingSession(descriptor)
@@ -102,7 +119,8 @@ async function openRecorder(allowStandalone = false) {
 function isExtensionPage(sender: unknown) {
   const url = (sender as { url?: string } | null)?.url
   if (typeof url !== 'string') return false
-  const actual = new URL(url), expected = new URL(browser.runtime.getURL('/private.html'))
+  const actual = new URL(url),
+    expected = new URL(browser.runtime.getURL('/private.html'))
   return actual.protocol === expected.protocol && actual.host === expected.host
 }
 
@@ -125,15 +143,22 @@ async function resolveRecordingTargetForTab(tabId: number, x: number, y: number)
     func: (xPercent: number, yPercent: number) => {
       /* v8 ignore next -- elementsFromPoint is present in supported Chrome; fallback protects older test/browser surfaces */
       const candidates = document.elementsFromPoint
-        ? document.elementsFromPoint(innerWidth * xPercent / 100, innerHeight * yPercent / 100)
-        : [document.elementFromPoint(innerWidth * xPercent / 100, innerHeight * yPercent / 100)].filter(Boolean) as Element[]
-      const element = candidates
-        .find((candidate) => !(candidate as HTMLElement).closest?.('[data-crrt-recording]')) as HTMLElement | undefined
+        ? document.elementsFromPoint((innerWidth * xPercent) / 100, (innerHeight * yPercent) / 100)
+        : ([document.elementFromPoint((innerWidth * xPercent) / 100, (innerHeight * yPercent) / 100)].filter(
+            Boolean,
+          ) as Element[])
+      const element = candidates.find((candidate) => !(candidate as HTMLElement).closest?.('[data-crrt-recording]')) as
+        | HTMLElement
+        | undefined
       if (!element) return null
-      const escaped = (value: string) => globalThis.CSS?.escape ? globalThis.CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
+      const escaped = (value: string) =>
+        globalThis.CSS?.escape ? globalThis.CSS.escape(value) : value.replace(/[^a-zA-Z0-9_-]/g, '\\$&')
       const selector = element.id
         ? `#${escaped(element.id)}`
-        : `${element.tagName.toLowerCase()}${Array.from(element.classList).slice(0, 2).map((name) => `.${escaped(name)}`).join('')}`
+        : `${element.tagName.toLowerCase()}${Array.from(element.classList)
+            .slice(0, 2)
+            .map((name) => `.${escaped(name)}`)
+            .join('')}`
       return { selector, pageUrl: location.href, tagName: element.tagName.toLowerCase() }
     },
   })
@@ -157,20 +182,26 @@ function extensionSenderTab(sender: unknown) {
   if (!isExtensionPage(sender)) throw new Error('Invalid recording controller')
   const tab = (sender as { tab?: { id?: number; windowId?: number } }).tab
   /* v8 ignore next -- representative missing browser tab metadata is covered at the message boundary */
-  if (!Number.isInteger(tab?.id) || !Number.isInteger(tab?.windowId)) throw new Error('Recording controller unavailable')
+  if (!Number.isInteger(tab?.id) || !Number.isInteger(tab?.windowId))
+    throw new Error('Recording controller unavailable')
   return { id: tab!.id!, windowId: tab!.windowId! }
 }
 
 async function createRecordingSession(tabId: unknown, sessionId: unknown, snapshot: unknown, sender: unknown) {
   /* v8 ignore next -- controller schema validation has representative malformed-message coverage */
-  if (!Number.isInteger(tabId) || typeof sessionId !== 'string' || !snapshot || typeof snapshot !== 'object') throw new Error('Invalid recording session')
+  if (!Number.isInteger(tabId) || typeof sessionId !== 'string' || !snapshot || typeof snapshot !== 'object')
+    throw new Error('Invalid recording session')
   const controller = extensionSenderTab(sender)
   const target = await browser.tabs.get(tabId as number)
   /* v8 ignore next -- internal/restricted target tabs are covered by the modern integrated entry path */
   if (!webOrigin(target.url)) throw new Error('Open a regular web page to record this tab')
   const descriptor: RecordingSessionDescriptor = {
-    sessionId, revision: 1, tabId: tabId as number, controllerTabId: controller.id,
-    controllerWindowId: controller.windowId, snapshot: snapshot as RecordingSessionSnapshot,
+    sessionId,
+    revision: 1,
+    tabId: tabId as number,
+    controllerTabId: controller.id,
+    controllerWindowId: controller.windowId,
+    snapshot: snapshot as RecordingSessionSnapshot,
   }
   await storeRecordingSession(descriptor)
   await injectRecordingSurface(descriptor.tabId)
@@ -184,27 +215,44 @@ async function syncRecordingSession(sessionId: unknown, snapshot: unknown, sende
   const controller = extensionSenderTab(sender)
   const current = await recordingSession()
   /* v8 ignore next -- representative stale and malformed controller messages share this rejection */
-  if (!current || current.sessionId !== sessionId || current.controllerTabId !== controller.id || !snapshot || typeof snapshot !== 'object') throw new Error('Recording session unavailable')
+  if (
+    !current ||
+    current.sessionId !== sessionId ||
+    current.controllerTabId !== controller.id ||
+    !snapshot ||
+    typeof snapshot !== 'object'
+  )
+    throw new Error('Recording session unavailable')
   const next = { ...current, revision: current.revision + 1, snapshot: snapshot as RecordingSessionSnapshot }
   await storeRecordingSession(next)
   const frameId = next.surfaceFrameId
   /* v8 ignore next -- a not-yet-mounted surface simply receives the next state after ready */
-  if (frameId !== undefined) await browser.tabs.sendMessage(next.tabId, { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot }, { frameId }).catch(() => undefined)
+  if (frameId !== undefined)
+    await browser.tabs
+      .sendMessage(
+        next.tabId,
+        { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot },
+        { frameId },
+      )
+      .catch(() => undefined)
   return next.revision
 }
 
 async function mountRecordingSurface(sender: unknown) {
-  const tab = senderTab(sender), current = await recordingSession()
+  const tab = senderTab(sender),
+    current = await recordingSession()
   /* v8 ignore next -- representative missing and wrong-tab surface messages share this rejection */
   if (!current || tab?.id !== current.tabId) throw new Error('Recording session unavailable')
   return { sessionId: current.sessionId }
 }
 
 async function readyRecordingSurface(sessionId: unknown, sender: unknown) {
-  const tab = senderTab(sender), frameId = (sender as { frameId?: number } | null)?.frameId
+  const tab = senderTab(sender),
+    frameId = (sender as { frameId?: number } | null)?.frameId
   const current = await recordingSession()
   /* v8 ignore next -- surface identity validation is exercised with valid and invalid coordinates */
-  if (!current || current.sessionId !== sessionId || tab?.id !== current.tabId || !Number.isInteger(frameId)) throw new Error('Invalid recording surface')
+  if (!current || current.sessionId !== sessionId || tab?.id !== current.tabId || !Number.isInteger(frameId))
+    throw new Error('Invalid recording surface')
   await storeRecordingSession({ ...current, surfaceFrameId: frameId })
   return current.snapshot
 }
@@ -212,29 +260,53 @@ async function readyRecordingSurface(sessionId: unknown, sender: unknown) {
 async function recordingSurfaceLayout(message: any, sender: unknown) {
   const current = await recordingSession()
   /* v8 ignore next -- legacy iframe layout validation remains as a compatibility boundary */
-  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender)) throw new Error('Invalid recording surface')
-  await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-interaction', sessionId: current.sessionId, tool: message.tool, rects: message.rects }, { frameId: 0 })
+  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender))
+    throw new Error('Invalid recording surface')
+  await browser.tabs.sendMessage(
+    current.tabId,
+    { type: 'record:overlay-interaction', sessionId: current.sessionId, tool: message.tool, rects: message.rects },
+    { frameId: 0 },
+  )
 }
 
 async function recordingSurfacePointer(message: any, sender: unknown) {
   const current = await recordingSession()
   /* v8 ignore next -- representative invalid pointer messages cover the shared rejection path */
-  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender)
-    || typeof message.x !== 'number' || typeof message.y !== 'number') throw new Error('Invalid recording surface')
-  await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-pointer', sessionId: current.sessionId, x: message.x, y: message.y }, { frameId: 0 })
+  if (
+    !current ||
+    current.sessionId !== message.sessionId ||
+    !isRecordingSurface(current, sender) ||
+    typeof message.x !== 'number' ||
+    typeof message.y !== 'number'
+  )
+    throw new Error('Invalid recording surface')
+  await browser.tabs.sendMessage(
+    current.tabId,
+    { type: 'record:overlay-pointer', sessionId: current.sessionId, x: message.x, y: message.y },
+    { frameId: 0 },
+  )
 }
 
 async function recordingSurfaceCommand(message: any, sender: unknown) {
   const current = await recordingSession()
   /* v8 ignore next -- protocol validation is unit-tested; malformed field combinations share this rejection */
-  if (!current || current.sessionId !== message.sessionId || !isRecordingSurface(current, sender) || !isRecordingSurfaceCommand(message.command)) throw new Error('Invalid recording command')
+  if (
+    !current ||
+    current.sessionId !== message.sessionId ||
+    !isRecordingSurface(current, sender) ||
+    !isRecordingSurfaceCommand(message.command)
+  )
+    throw new Error('Invalid recording command')
   const command = message.command
   /* v8 ignore next -- source selection is the same tested setup-snapshot path as the device toggles */
   if (command.kind === 'source.changed') return updateSetupSnapshot(current, { source: command.source })
-  if (command.kind === 'camera.toggled' && ['setup', 'failed'].includes(current.snapshot.status)) return updateSetupSnapshot(current, { cameraEnabled: !current.snapshot.cameraEnabled })
-  if (command.kind === 'microphone.toggled') return updateSetupSnapshot(current, { microphoneEnabled: !current.snapshot.microphoneEnabled })
+  if (command.kind === 'camera.toggled' && ['setup', 'failed'].includes(current.snapshot.status))
+    return updateSetupSnapshot(current, { cameraEnabled: !current.snapshot.cameraEnabled })
+  if (command.kind === 'microphone.toggled')
+    return updateSetupSnapshot(current, { microphoneEnabled: !current.snapshot.microphoneEnabled })
   if (command.kind === 'transcription.toggled') {
-    if (!['setup', 'failed'].includes(current.snapshot.status)) throw new Error('Transcription consent is locked after capture starts.')
+    if (!['setup', 'failed'].includes(current.snapshot.status))
+      throw new Error('Transcription consent is locked after capture starts.')
     return updateSetupSnapshot(current, { hostedTranscription: !current.snapshot.hostedTranscription })
   }
   if (command.kind === 'start') return startOffscreenRecording(current)
@@ -245,19 +317,34 @@ async function recordingSurfaceCommand(message: any, sender: unknown) {
     /* v8 ignore next -- a page may legitimately provide no DOM target; the mark remains coordinate-based */
     command.mark = { ...command.mark, ...(target ? { target } : {}) }
   }
-  await browser.runtime.sendMessage({ type: 'record:offscreen-command', target: 'offscreen', sessionId: current.sessionId, command })
+  await browser.runtime.sendMessage({
+    type: 'record:offscreen-command',
+    target: 'offscreen',
+    sessionId: current.sessionId,
+    command,
+  })
 }
 
 async function updateSetupSnapshot(current: RecordingSessionDescriptor, changes: Partial<RecordingSessionSnapshot>) {
-  const next = { ...current, revision: current.revision + 1, snapshot: { ...current.snapshot, error: null, ...changes } }
+  const next = {
+    ...current,
+    revision: current.revision + 1,
+    snapshot: { ...current.snapshot, error: null, ...changes },
+  }
   await storeRecordingSession(next)
-  await browser.tabs.sendMessage(next.tabId, { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot }, { frameId: 0 })
+  await browser.tabs.sendMessage(
+    next.tabId,
+    { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot },
+    { frameId: 0 },
+  )
 }
 
 async function ensureOffscreenDocument() {
   const extension = browser as any
   const offscreenUrl = browser.runtime.getURL('/offscreen.html' as any)
-  const contexts = await extension.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] }) as { documentUrl?: string }[]
+  const contexts = (await extension.runtime.getContexts({ contextTypes: ['OFFSCREEN_DOCUMENT'] })) as {
+    documentUrl?: string
+  }[]
   /* v8 ignore next -- Chrome owns the already-created offscreen-context branch */
   if (contexts.some((context) => context.documentUrl === offscreenUrl)) return
   await extension.offscreen.createDocument({
@@ -269,34 +356,58 @@ async function ensureOffscreenDocument() {
 
 async function startOffscreenRecording(current: RecordingSessionDescriptor) {
   await ensureOffscreenDocument()
-  const permissions = await browser.runtime.sendMessage({ type: 'record:permissions-check', target: 'offscreen', devices: current.snapshot })
+  const permissions = await browser.runtime.sendMessage({
+    type: 'record:permissions-check',
+    target: 'offscreen',
+    devices: current.snapshot,
+  })
   if (!permissions.granted) {
     const url = new URL('/record-permissions.html', browser.runtime.getURL('/private.html'))
-    url.search = new URLSearchParams({ session: current.sessionId, camera: current.snapshot.cameraEnabled ? '1' : '0', microphone: current.snapshot.microphoneEnabled ? '1' : '0' }).toString()
+    url.search = new URLSearchParams({
+      session: current.sessionId,
+      camera: current.snapshot.cameraEnabled ? '1' : '0',
+      microphone: current.snapshot.microphoneEnabled ? '1' : '0',
+    }).toString()
     await browser.windows.create({ url: url.toString(), type: 'popup', width: 760, height: 520 })
     return
   }
   const tab = await browser.tabs.get(current.tabId)
   /* v8 ignore next -- non-tab sources deliberately omit a tab stream id for getDisplayMedia */
-  const tabStreamId = current.snapshot.source === 'tab'
-    ? await browser.tabCapture.getMediaStreamId({ targetTabId: current.tabId })
-    : undefined
+  const tabStreamId =
+    current.snapshot.source === 'tab'
+      ? await browser.tabCapture.getMediaStreamId({ targetTabId: current.tabId })
+      : undefined
   const started = await browser.runtime.sendMessage({
-    type: 'record:offscreen-start', target: 'offscreen', sessionId: current.sessionId,
-    snapshot: current.snapshot, tabStreamId, pageUrl: tab.url, pageTitle: tab.title,
+    type: 'record:offscreen-start',
+    target: 'offscreen',
+    sessionId: current.sessionId,
+    snapshot: current.snapshot,
+    tabStreamId,
+    pageUrl: tab.url,
+    pageTitle: tab.title,
   })
   if (!started.ok) throw new Error(started.error)
 }
 
 async function cancelIntegratedRecording(current: RecordingSessionDescriptor) {
-  await browser.runtime.sendMessage({ type: 'record:offscreen-command', target: 'offscreen', sessionId: current.sessionId, command: { kind: 'cancel' } }).catch(() => undefined)
-  await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
+  await browser.runtime
+    .sendMessage({
+      type: 'record:offscreen-command',
+      target: 'offscreen',
+      sessionId: current.sessionId,
+      command: { kind: 'cancel' },
+    })
+    .catch(() => undefined)
+  await browser.tabs
+    .sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 })
+    .catch(() => undefined)
   await storeRecordingSession(null)
   await closePermissionWindow(current)
 }
 
 async function closePermissionWindow(current: RecordingSessionDescriptor) {
-  if (current.permissionWindowId !== undefined) await browser.windows.remove(current.permissionWindowId).catch(() => undefined)
+  if (current.permissionWindowId !== undefined)
+    await browser.windows.remove(current.permissionWindowId).catch(() => undefined)
 }
 
 async function handleOffscreenState(message: any) {
@@ -305,19 +416,32 @@ async function handleOffscreenState(message: any) {
   if (!current || message.sessionId !== current.sessionId || !message.snapshot) return
   const next = { ...current, revision: current.revision + 1, snapshot: message.snapshot as RecordingSessionSnapshot }
   await storeRecordingSession(next)
-  await browser.tabs.sendMessage(next.tabId, { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot }, { frameId: 0 }).catch(() => undefined)
+  await browser.tabs
+    .sendMessage(
+      next.tabId,
+      { type: 'record:surface-state', sessionId: next.sessionId, snapshot: next.snapshot },
+      { frameId: 0 },
+    )
+    .catch(() => undefined)
 }
 
 async function handleOffscreenFinished(message: any) {
   const current = await recordingSession()
   /* v8 ignore next -- stale/malformed offscreen events are intentionally no-ops */
   if (!current || message.sessionId !== current.sessionId || typeof message.recordingId !== 'string') return
-  await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
+  await browser.tabs
+    .sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 })
+    .catch(() => undefined)
   await storeRecordingSession(null)
   await closePermissionWindow(current)
   await browser.windows.create({
-    url: new URL(`/record.html?recording=${encodeURIComponent(message.recordingId)}`, browser.runtime.getURL('/private.html')).toString(),
-    type: 'popup', width: 1180, height: 820,
+    url: new URL(
+      `/record.html?recording=${encodeURIComponent(message.recordingId)}`,
+      browser.runtime.getURL('/private.html'),
+    ).toString(),
+    type: 'popup',
+    width: 1180,
+    height: 820,
   })
 }
 
@@ -327,14 +451,26 @@ async function handleOffscreenError(message: any) {
   if (!current || message.sessionId !== current.sessionId) return
   await closePermissionWindow(current)
   /* v8 ignore next -- malformed error payloads use the stable fallback copy */
-  await updateSetupSnapshot(current, { status: 'failed', error: typeof message.error === 'string' ? message.error : 'Could not start recording.' })
+  await updateSetupSnapshot(current, {
+    status: 'failed',
+    error: typeof message.error === 'string' ? message.error : 'Could not start recording.',
+  })
 }
 
 async function stopRecordingSession(sessionId: unknown, sender: unknown) {
-  const controller = extensionSenderTab(sender), current = await recordingSession()
+  const controller = extensionSenderTab(sender),
+    current = await recordingSession()
   /* v8 ignore next -- session ownership validation shares one defensive rejection path */
-  if (!current || current.sessionId !== sessionId || current.controllerTabId !== controller.id || !Number.isInteger(current.controllerWindowId)) return false
-  await browser.tabs.sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 }).catch(() => undefined)
+  if (
+    !current ||
+    current.sessionId !== sessionId ||
+    current.controllerTabId !== controller.id ||
+    !Number.isInteger(current.controllerWindowId)
+  )
+    return false
+  await browser.tabs
+    .sendMessage(current.tabId, { type: 'record:overlay-remove', sessionId: current.sessionId }, { frameId: 0 })
+    .catch(() => undefined)
   await storeRecordingSession(null)
   await browser.windows.update(current.controllerWindowId!, { focused: true }).catch(() => undefined)
   await browser.tabs.update(current.controllerTabId!, { active: true }).catch(() => undefined)
@@ -346,7 +482,7 @@ export async function tabActivation(tabId: number, pageUrl?: string): Promise<Ac
     const key = activeTabKey(tabId)
     const stored = await browser.storage.session.get(key)
     const value = stored[key]
-    if (!await hasAcceptedDisclosure()) {
+    if (!(await hasAcceptedDisclosure())) {
       if (value !== undefined) await browser.storage.session.remove(key)
       return null
     }
@@ -402,7 +538,7 @@ async function clearNavigatedTab(tabId: number, pageUrl: string): Promise<void> 
 }
 
 export async function activateCurrentTab(): Promise<void> {
-  if (!await hasAcceptedDisclosure()) throw new Error('Review the CRRT privacy summary before commenting')
+  if (!(await hasAcceptedDisclosure())) throw new Error('Review the CRRT privacy summary before commenting')
   const tab = await currentWebTab()
   const key = activeTabKey(tab.id)
   const activation = await withTabOperation(tab.id, async () => {
@@ -410,9 +546,8 @@ export async function activateCurrentTab(): Promise<void> {
     const previous = stored[key]
     const value = {
       origin: tab.origin,
-      activationId: activeTabState(previous) && previous.origin === tab.origin
-        ? previous.activationId
-        : crypto.randomUUID(),
+      activationId:
+        activeTabState(previous) && previous.origin === tab.origin ? previous.activationId : crypto.randomUUID(),
       attemptId: crypto.randomUUID(),
     } satisfies ActiveTabState
     await browser.storage.session.set({ [key]: value })
@@ -429,21 +564,37 @@ export async function activateCurrentTab(): Promise<void> {
 export default defineBackground(() => {
   const captureRevisions = new Map<string, number>()
   const invalidateCapture = (key: string) => captureRevisions.set(key, (captureRevisions.get(key) ?? 0) + 1)
-  browser.tabs.onActivated.addListener(({ windowId }) => { invalidateCapture(`window:${windowId}`) })
+  browser.tabs.onActivated.addListener(({ windowId }) => {
+    invalidateCapture(`window:${windowId}`)
+  })
   let captureTail = Promise.resolve()
   let lastCapture = -Infinity
   async function capture(sender: any): Promise<string> {
-    if (sender?.id !== browser.runtime.id || sender.frameId !== 0 || !Number.isInteger(sender.tab?.id)
-      || !Number.isInteger(sender.tab.windowId) || !webOrigin(sender.url)) throw new Error('Invalid screenshot sender')
-    const tabId = sender.tab.id, windowId = sender.tab.windowId, url = sender.url
-    const windowRevision = captureRevisions.get(`window:${windowId}`), tabRevision = captureRevisions.get(`tab:${tabId}`)
+    if (
+      sender?.id !== browser.runtime.id ||
+      sender.frameId !== 0 ||
+      !Number.isInteger(sender.tab?.id) ||
+      !Number.isInteger(sender.tab.windowId) ||
+      !webOrigin(sender.url)
+    )
+      throw new Error('Invalid screenshot sender')
+    const tabId = sender.tab.id,
+      windowId = sender.tab.windowId,
+      url = sender.url
+    const windowRevision = captureRevisions.get(`window:${windowId}`),
+      tabRevision = captureRevisions.get(`tab:${tabId}`)
     const initial = await tabActivation(tabId, url)
     if (!initial) throw new Error('Screenshot activation unavailable')
     async function validate() {
       const [tab] = await browser.tabs.query({ active: true, windowId })
       const activation = await tabActivation(tabId, url)
-      if (tab?.id !== tabId || tab.url !== url || activation?.activationId !== initial!.activationId
-        || captureRevisions.get(`window:${windowId}`) !== windowRevision || captureRevisions.get(`tab:${tabId}`) !== tabRevision) {
+      if (
+        tab?.id !== tabId ||
+        tab.url !== url ||
+        activation?.activationId !== initial!.activationId ||
+        captureRevisions.get(`window:${windowId}`) !== windowRevision ||
+        captureRevisions.get(`tab:${tabId}`) !== tabRevision
+      ) {
         throw new Error('Page changed during screenshot capture')
       }
     }
@@ -457,40 +608,70 @@ export default defineBackground(() => {
       await validate()
       return image
     })
-    captureTail = operation.then(() => {}, () => {})
+    captureTail = operation.then(
+      () => {},
+      () => {},
+    )
     return operation
   }
   let client: ReturnType<typeof createExtensionSupabase> | undefined
   async function authClient() {
     // Constructing Supabase reads persisted account data and may refresh tokens.
     // Defer even that initialization until this disclosure version is accepted.
-    if (!await hasAcceptedDisclosure()) throw new Error('Review the CRRT privacy summary before signing in')
-    return client ??= createExtensionSupabase()
+    if (!(await hasAcceptedDisclosure())) throw new Error('Review the CRRT privacy summary before signing in')
+    return (client ??= createExtensionSupabase())
   }
   async function handleMessage(message: unknown, sender: unknown): Promise<MessageResponse | undefined> {
     try {
       if ((message as any)?.type === 'record:permissions-ready') {
         const current = await recordingSession()
         const windowId = (sender as { tab?: { windowId?: number } }).tab?.windowId
-        if (!isExtensionPage(sender) || !current || current.sessionId !== (message as any).sessionId
-          || !['setup', 'failed'].includes(current.snapshot.status) || !Number.isInteger(windowId)) throw new Error('Recording setup expired. Start a new recording.')
+        if (
+          !isExtensionPage(sender) ||
+          !current ||
+          current.sessionId !== (message as any).sessionId ||
+          !['setup', 'failed'].includes(current.snapshot.status) ||
+          !Number.isInteger(windowId)
+        )
+          throw new Error('Recording setup expired. Start a new recording.')
         const next = { ...current, permissionWindowId: windowId }
         await storeRecordingSession(next)
         await startOffscreenRecording(next)
         await browser.windows.update(windowId!, { state: 'minimized' })
         return { ok: true }
       }
-      if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-state') { await handleOffscreenState(message); return { ok: true } }
-      if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-finished') { await handleOffscreenFinished(message); return { ok: true } }
-      if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-error') { await handleOffscreenError(message); return { ok: true } }
+      if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-state') {
+        await handleOffscreenState(message)
+        return { ok: true }
+      }
+      if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-finished') {
+        await handleOffscreenFinished(message)
+        return { ok: true }
+      }
+      if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-error') {
+        await handleOffscreenError(message)
+        return { ok: true }
+      }
       if ((message as any)?.target === 'background' && (message as any)?.type === 'record:offscreen-restart') {
         const current = await recordingSession()
         /* v8 ignore next -- stale restart events are intentionally ignored after their session is cleared */
-        if (current && (message as any).sessionId === current.sessionId) await startOffscreenRecording({ ...current, snapshot: { ...initialRecorderState, source: current.snapshot.source, cameraEnabled: current.snapshot.cameraEnabled, microphoneEnabled: current.snapshot.microphoneEnabled, hostedTranscription: current.snapshot.hostedTranscription === true } })
+        if (current && (message as any).sessionId === current.sessionId)
+          await startOffscreenRecording({
+            ...current,
+            snapshot: {
+              ...initialRecorderState,
+              source: current.snapshot.source,
+              cameraEnabled: current.snapshot.cameraEnabled,
+              microphoneEnabled: current.snapshot.microphoneEnabled,
+              hostedTranscription: current.snapshot.hostedTranscription === true,
+            },
+          })
         return { ok: true }
       }
-      if ((message as { type?: string } | null)?.type === 'comment:capture') return { ok: true, data: await capture(sender) }
-      if ((message as { type?: string } | null)?.type === 'private:relay') return { ok: true, data: await relayFrameMessage(message, sender) }
+      if ((message as { type?: string } | null)?.type === 'comment:capture')
+        return { ok: true, data: await capture(sender) }
+      if ((message as { type?: string } | null)?.type === 'private:relay')
+        return { ok: true, data: await relayFrameMessage(message, sender) }
       if ((message as { type?: string } | null)?.type === 'auth:hosted-sign-in') {
         return { ok: true, data: await startHostedSignIn(await authClient(), (message as HostedAuthMessage).intent) }
       }
@@ -525,7 +706,8 @@ export default defineBackground(() => {
       if ((message as { type?: unknown } | null)?.type === 'record:session-stop') {
         return { ok: true, data: await stopRecordingSession((message as { sessionId?: unknown }).sessionId, sender) }
       }
-      if ((message as { type?: unknown } | null)?.type === 'record:surface-mount') return { ok: true, data: await mountRecordingSurface(sender) }
+      if ((message as { type?: unknown } | null)?.type === 'record:surface-mount')
+        return { ok: true, data: await mountRecordingSurface(sender) }
       if ((message as { type?: unknown } | null)?.type === 'record:surface-ready') {
         return { ok: true, data: await readyRecordingSurface((message as { sessionId?: unknown }).sessionId, sender) }
       }
@@ -575,13 +757,19 @@ export default defineBackground(() => {
   browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
     if (changeInfo.url || changeInfo.status === 'loading') invalidateCapture(`tab:${tabId}`)
     if (changeInfo.url) void clearNavigatedTab(tabId, changeInfo.url)
-    if (changeInfo.status === 'complete') void recordingSession().then(async (current) => {
-      if (current?.tabId !== tabId) return
-      await injectRecordingSurface(tabId).catch(() => browser.runtime.sendMessage({
-        type: 'record:controller-warning', sessionId: current.sessionId,
-        warning: 'Recording continues, but controls and DOM context are unavailable on this page.',
-      }).catch(() => undefined))
-    })
+    if (changeInfo.status === 'complete')
+      void recordingSession().then(async (current) => {
+        if (current?.tabId !== tabId) return
+        await injectRecordingSurface(tabId).catch(() =>
+          browser.runtime
+            .sendMessage({
+              type: 'record:controller-warning',
+              sessionId: current.sessionId,
+              warning: 'Recording continues, but controls and DOM context are unavailable on this page.',
+            })
+            .catch(() => undefined),
+        )
+      })
   })
   browser.commands?.onCommand.addListener((command) => {
     /* v8 ignore next -- Chrome may dispatch other configured commands in future manifests */

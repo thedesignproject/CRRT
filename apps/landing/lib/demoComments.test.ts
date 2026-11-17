@@ -6,10 +6,15 @@ beforeEach(() => {
   const values = new Map<string, string>()
   vi.stubGlobal('sessionStorage', {
     getItem: (key: string) => values.get(key) ?? null,
-    setItem: (key: string, value: string) => { values.set(key, value) },
+    setItem: (key: string, value: string) => {
+      values.set(key, value)
+    },
   })
 })
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals() })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
 
 it('creates, reloads, edits, and removes feedback without contacting an API', async () => {
   const fetch = vi.spyOn(globalThis, 'fetch')
@@ -27,8 +32,12 @@ it('creates, reloads, edits, and removes feedback without contacting an API', as
 })
 
 it('still accepts feedback when session storage is disabled', async () => {
-  vi.spyOn(sessionStorage, 'getItem').mockImplementation(() => { throw new Error('disabled') })
-  vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => { throw new Error('disabled') })
+  vi.spyOn(sessionStorage, 'getItem').mockImplementation(() => {
+    throw new Error('disabled')
+  })
+  vi.spyOn(sessionStorage, 'setItem').mockImplementation(() => {
+    throw new Error('disabled')
+  })
   const demo = createDemoComments()
   const comment = await demo.create(payload)
   expect(await demo.list(payload.pageUrl)).toEqual([comment])
@@ -54,13 +63,27 @@ it('persists text and pins if screenshots exceed the storage quota', async () =>
   const second = await demo.create({ ...payload, body: 'Another comment' })
   await demo.update(first.id, 'Edited')
   expect(await createDemoComments().list(payload.pageUrl)).toEqual([
-    second, { ...first, body: 'Edited', imageUrl: null },
+    second,
+    { ...first, body: 'Edited', imageUrl: null },
   ])
   await demo.remove(first.id)
   expect(await demo.list(payload.pageUrl)).toEqual([second])
 })
 
-it.each([{ saved: {} }, { saved: [null, {}, { id: 'x' }, { id: 'x', pageUrl: '/' }, { id: 'x', pageUrl: '/', body: 'a' }, { id: 'x', pageUrl: '/', body: 'a', selector: 'h2' }, { id: 'x', pageUrl: '/', body: 'a', selector: 'h2', x: 1 }] }])('ignores invalid saved comments: %j', async ({ saved }) => {
+it.each([
+  { saved: {} },
+  {
+    saved: [
+      null,
+      {},
+      { id: 'x' },
+      { id: 'x', pageUrl: '/' },
+      { id: 'x', pageUrl: '/', body: 'a' },
+      { id: 'x', pageUrl: '/', body: 'a', selector: 'h2' },
+      { id: 'x', pageUrl: '/', body: 'a', selector: 'h2', x: 1 },
+    ],
+  },
+])('ignores invalid saved comments: %j', async ({ saved }) => {
   sessionStorage.setItem('crrt:landing-demo-comments:v1', JSON.stringify(saved))
   expect(await createDemoComments().list(payload.pageUrl)).toEqual([])
 })

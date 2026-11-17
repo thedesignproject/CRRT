@@ -1,6 +1,13 @@
 export type ReviewStatus = 'open' | 'accepted' | 'rejected'
-export const IMPLEMENTATION_STATUSES = ['unassigned', 'claimed', 'in_progress', 'blocked', 'ready_for_testing', 'done'] as const
-export type ImplementationStatus = typeof IMPLEMENTATION_STATUSES[number]
+export const IMPLEMENTATION_STATUSES = [
+  'unassigned',
+  'claimed',
+  'in_progress',
+  'blocked',
+  'ready_for_testing',
+  'done',
+] as const
+export type ImplementationStatus = (typeof IMPLEMENTATION_STATUSES)[number]
 
 export function fromLegacyStatus(status: string | null | undefined): ReviewStatus {
   if (status === 'approved' || status === 'accepted') return 'accepted'

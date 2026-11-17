@@ -15,7 +15,10 @@ describe('widget Agent workflow migration', () => {
 
   it('records a forward-only linked snapshot', () => {
     const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-    expect(journal.entries.find((entry: { idx: number }) => entry.idx === 36)).toMatchObject({ idx: 36, tag: '0036_widget_agent_workflow' })
+    expect(journal.entries.find((entry: { idx: number }) => entry.idx === 36)).toMatchObject({
+      idx: 36,
+      tag: '0036_widget_agent_workflow',
+    })
     const previous = JSON.parse(readFileSync('db/migrations/meta/0035_snapshot.json', 'utf8'))
     const current = JSON.parse(readFileSync('db/migrations/meta/0036_snapshot.json', 'utf8'))
     expect(current.prevId).toBe(previous.id)
@@ -34,4 +37,3 @@ it('reasserts workflow functions after a deployed seat repair without rewriting 
   expect(current.prevId).toBe(previous.id)
   expect(current.tables).toEqual(previous.tables)
 })
-

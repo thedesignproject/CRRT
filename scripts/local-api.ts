@@ -24,7 +24,7 @@ process.env.AUDIT_LOCAL_EXECUTION = 'true'
 // across browser profiles without weakening deployed capability-token checks.
 process.env.AUDIT_LOCAL_ACCESS_BYPASS = 'true'
 const routeFiles = Array.from(new Bun.Glob('api/**/*.ts').scanSync({ cwd: fileURLToPath(root) }))
-  .map(file => file.replace(/\\/g, '/'))
+  .map((file) => file.replace(/\\/g, '/'))
   .filter((file) => !file.includes('/_lib/') && !file.endsWith('.test.ts'))
 
 function buildRoute(file: string): Route {
@@ -49,10 +49,7 @@ const routes = routeFiles
   .map(buildRoute)
   .sort((left, right) => left.parameterNames.length - right.parameterNames.length)
 
-const rawBodyRoutes = new Set([
-  'api/v1/billing/webhook.ts',
-  'api/v1/extension/recordings/transcribe.ts',
-])
+const rawBodyRoutes = new Set(['api/v1/billing/webhook.ts', 'api/v1/extension/recordings/transcribe.ts'])
 
 function addQueryValue(query: Record<string, QueryValue>, key: string, value: string) {
   const current = query[key]
@@ -74,8 +71,12 @@ function createResponseAdapter() {
   const headers = new Headers()
 
   const response = {
-    get statusCode() { return statusCode },
-    set statusCode(value: number) { statusCode = value },
+    get statusCode() {
+      return statusCode
+    },
+    set statusCode(value: number) {
+      statusCode = value
+    },
     status(code: number) {
       statusCode = code
       return response
@@ -113,7 +114,8 @@ Bun.serve({
   port,
   async fetch(request, server) {
     const url = new URL(request.url)
-    if (request.method === 'GET' && ['/skill.md', '/openapi.json'].includes(url.pathname)) return new Response(Bun.file(new URL(`../apps/landing/public${url.pathname}`, import.meta.url)))
+    if (request.method === 'GET' && ['/skill.md', '/openapi.json'].includes(url.pathname))
+      return new Response(Bun.file(new URL(`../apps/landing/public${url.pathname}`, import.meta.url)))
     url.pathname = metadataPath(url.pathname)
     const route = routes.find((candidate) => candidate.pattern.test(url.pathname))
     if (!route) return Response.json({ error: 'Not found' }, { status: 404 })

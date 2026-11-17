@@ -1,16 +1,15 @@
 import { createClient, type Session, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js'
 import { browser } from 'wxt/browser'
 
-export type AuthMessage =
-  | { type: 'auth:get' }
-  | { type: 'auth:sign-out' }
+export type AuthMessage = { type: 'auth:get' } | { type: 'auth:sign-out' }
 
 export type SessionSummary = { accessToken: string; email: string; userId: string }
 
 const activeAuthOperations = new WeakSet<SupabaseClient>()
 
 function requireIdleAuth(client: SupabaseClient) {
-  if (activeAuthOperations.has(client)) throw new Error('CRRT sign-in is in progress. Complete or close the sign-in window first.')
+  if (activeAuthOperations.has(client))
+    throw new Error('CRRT sign-in is in progress. Complete or close the sign-in window first.')
 }
 
 // The background owns one client across popup instances. Keep sign-out and the
@@ -30,8 +29,12 @@ const extensionStorage: SupportedStorage = {
     const values = await browser.storage.local.get(key)
     return typeof values[key] === 'string' ? values[key] : null
   },
-  async setItem(key, value) { await browser.storage.local.set({ [key]: value }) },
-  async removeItem(key) { await browser.storage.local.remove(key) },
+  async setItem(key, value) {
+    await browser.storage.local.set({ [key]: value })
+  },
+  async removeItem(key) {
+    await browser.storage.local.remove(key)
+  },
 }
 
 function summarize(session: Session | null): SessionSummary | null {

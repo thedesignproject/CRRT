@@ -8,9 +8,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   setCors(req, res, ['GET', 'OPTIONS'])
   if (req.method === 'OPTIONS') return res.status(204).end()
-  if (process.env.CRRT_RECORD_ENABLED !== 'true') return res.status(503).json({ error: { code: 'record_disabled', retryable: false } })
+  if (process.env.CRRT_RECORD_ENABLED !== 'true')
+    return res.status(503).json({ error: { code: 'record_disabled', retryable: false } })
   if (req.method !== 'GET') return res.status(405).json({ error: { code: 'record_method', retryable: false } })
-  try { return res.status(200).json(await readShare(req.query.token)) } catch (error) {
+  try {
+    return res.status(200).json(await readShare(req.query.token))
+  } catch (error) {
     const failure = error instanceof RecordError ? error : new RecordError('record_unavailable', 503, true)
     return res.status(failure.status).json({ error: { code: failure.code, retryable: failure.retryable } })
   }

@@ -18,18 +18,18 @@ There is no permanently free CRRT Cloud plan. Each Cloud plan includes a 14-day 
 
 ## 2. Plans at a glance
 
-| Capability | Community | Cloud Pro | Cloud Studio |
-| --- | --- | --- | --- |
-| Price | Free | USD 19/month | USD 49/month |
-| Delivery | Self-hosted | Managed Cloud | Managed Cloud |
-| Trial | Not applicable | 14 days | 14 days |
-| Projects | No commercial limit | 10 | 50 |
-| Internal users | No commercial limit | 10 | 25 |
-| Guests | No commercial limit | Unlimited | Unlimited |
-| New comments | No commercial limit | 2,000/month | 10,000/month |
-| Product Audits | Uses the operator's infrastructure and credentials | 5/month | 30/month |
-| Browser extension sync | Available when connected to the self-hosted instance | Included | Included |
-| Managed hosting, storage, backups, and updates | No | Included | Included |
+| Capability                                     | Community                                            | Cloud Pro     | Cloud Studio  |
+| ---------------------------------------------- | ---------------------------------------------------- | ------------- | ------------- |
+| Price                                          | Free                                                 | USD 19/month  | USD 49/month  |
+| Delivery                                       | Self-hosted                                          | Managed Cloud | Managed Cloud |
+| Trial                                          | Not applicable                                       | 14 days       | 14 days       |
+| Projects                                       | No commercial limit                                  | 10            | 50            |
+| Internal users                                 | No commercial limit                                  | 10            | 25            |
+| Guests                                         | No commercial limit                                  | Unlimited     | Unlimited     |
+| New comments                                   | No commercial limit                                  | 2,000/month   | 10,000/month  |
+| Product Audits                                 | Uses the operator's infrastructure and credentials   | 5/month       | 30/month      |
+| Browser extension sync                         | Available when connected to the self-hosted instance | Included      | Included      |
+| Managed hosting, storage, backups, and updates | No                                                   | Included      | Included      |
 
 Cloud pricing supports monthly or yearly payment: Pro is $18/month or $192/year; Studio is $54/month or $492/year. Comment and audit allowances renew monthly on both cycles. Taxes, when applicable, are added by the payment provider.
 

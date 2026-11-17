@@ -10,7 +10,10 @@ export function cn(...inputs: ClassValue[]) {
  * `slugifyProjectKey` so the suggested key matches what the API will accept.
  */
 export function slugify(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
 
 /** Client mirror of the server's `isValidProjectKey`: 1–63 chars, lowercase

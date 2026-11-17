@@ -14,20 +14,28 @@ export function parseWidgetAgentSessionRequest(body: unknown, headerKey?: string
   const bodyKey = typeof input.idempotencyKey === 'string' ? input.idempotencyKey : ''
   const idempotencyKey = bodyKey || (typeof headerKey === 'string' ? headerKey : '')
   const commentIds = Array.isArray(input.commentIds) ? input.commentIds : []
-  if (!projectKey || !pageUrl || !IDEMPOTENCY_KEY.test(idempotencyKey)
-    || commentIds.length < 1 || commentIds.length > 100
-    || !commentIds.every((id): id is string => typeof id === 'string' && UUID.test(id))
-    || new Set(commentIds).size !== commentIds.length) return null
-  try { new URL(pageUrl) } catch { return null }
+  if (
+    !projectKey ||
+    !pageUrl ||
+    !IDEMPOTENCY_KEY.test(idempotencyKey) ||
+    commentIds.length < 1 ||
+    commentIds.length > 100 ||
+    !commentIds.every((id): id is string => typeof id === 'string' && UUID.test(id)) ||
+    new Set(commentIds).size !== commentIds.length
+  )
+    return null
+  try {
+    new URL(pageUrl)
+  } catch {
+    return null
+  }
   return { projectKey, pageUrl, idempotencyKey, commentIds }
 }
 
 export function widgetAgentRequestHash(input: { projectKey: string; pageUrl: string; commentIds: string[] }) {
-  return createHash('sha256').update(JSON.stringify([
-    input.projectKey,
-    input.pageUrl,
-    [...input.commentIds].sort(),
-  ])).digest('hex')
+  return createHash('sha256')
+    .update(JSON.stringify([input.projectKey, input.pageUrl, [...input.commentIds].sort()]))
+    .digest('hex')
 }
 
 const ACCESS_ERRORS: Record<Exclude<WidgetAgentAccessState, 'ready'>, { status: number; message: string }> = {
@@ -41,13 +49,20 @@ const ACCESS_ERRORS: Record<Exclude<WidgetAgentAccessState, 'ready'>, { status: 
 export function sendWidgetAgentError(
   req: VercelRequest,
   res: VercelResponse,
-  code: Exclude<WidgetAgentAccessState, 'ready'> | 'authentication_required' | 'invalid_selection' | 'idempotency_conflict' | 'error',
+  code:
+    | Exclude<WidgetAgentAccessState, 'ready'>
+    | 'authentication_required'
+    | 'invalid_selection'
+    | 'idempotency_conflict'
+    | 'error',
   cause?: unknown,
 ) {
   setCors(req, res, ['GET', 'POST', 'OPTIONS'])
   if (code === 'authentication_required') return res.status(401).json({ error: 'Sign in to CRRT again', code })
-  if (code === 'invalid_selection') return res.status(409).json({ error: 'Feedback changed. Review the selection and retry.', code })
-  if (code === 'idempotency_conflict') return res.status(409).json({ error: 'This Agent request key was already used for another selection.', code })
+  if (code === 'invalid_selection')
+    return res.status(409).json({ error: 'Feedback changed. Review the selection and retry.', code })
+  if (code === 'idempotency_conflict')
+    return res.status(409).json({ error: 'This Agent request key was already used for another selection.', code })
   if (code === 'error') return jsonError(req, res, 500, 'Agent is temporarily unavailable', cause)
   const failure = ACCESS_ERRORS[code]
   return res.status(failure.status).json({ error: failure.message, code })

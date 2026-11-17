@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { extensionAuthContinuation, extensionAuthRecoveryDestination, parseExtensionAuthRequest, validateExtensionAuthRedirect } from './extension-auth'
+import {
+  extensionAuthContinuation,
+  extensionAuthRecoveryDestination,
+  parseExtensionAuthRequest,
+  validateExtensionAuthRedirect,
+} from './extension-auth'
 
 const proof = 'a'.repeat(43)
 const redirect = 'https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/crrt-auth'
@@ -8,7 +13,10 @@ describe('dashboard extension auth contract', () => {
   it('parses the fixed Chrome callback and supported intent', () => {
     const query = new URLSearchParams({ state: proof, code_challenge: proof, redirect_uri: redirect, intent: 'signup' })
     expect(parseExtensionAuthRequest(`?${query}`)).toEqual({
-      state: proof, codeChallenge: proof, redirectUri: redirect, intent: 'signup',
+      state: proof,
+      codeChallenge: proof,
+      redirectUri: redirect,
+      intent: 'signup',
     })
     query.set('intent', 'unexpected')
     expect(parseExtensionAuthRequest(`?${query}`)?.intent).toBe('signin')
@@ -34,10 +42,22 @@ describe('dashboard extension auth contract', () => {
 
   it('accepts only a valid same-origin extension continuation after password recovery', () => {
     const continuation = `/extension-auth?${new URLSearchParams({ state: proof, code_challenge: proof, redirect_uri: redirect })}`
-    expect(extensionAuthRecoveryDestination(`?${new URLSearchParams({ continue: continuation })}`, 'https://crrt.ai')).toBe(continuation)
+    expect(
+      extensionAuthRecoveryDestination(`?${new URLSearchParams({ continue: continuation })}`, 'https://crrt.ai'),
+    ).toBe(continuation)
     expect(extensionAuthRecoveryDestination('', 'https://crrt.ai')).toBeNull()
-    expect(extensionAuthRecoveryDestination(`?${new URLSearchParams({ continue: 'https://evil.example/extension-auth' })}`, 'https://crrt.ai')).toBeNull()
-    expect(extensionAuthRecoveryDestination(`?${new URLSearchParams({ continue: '/dashboard/extension-auth?state=bad' })}`, 'https://crrt.ai')).toBeNull()
+    expect(
+      extensionAuthRecoveryDestination(
+        `?${new URLSearchParams({ continue: 'https://evil.example/extension-auth' })}`,
+        'https://crrt.ai',
+      ),
+    ).toBeNull()
+    expect(
+      extensionAuthRecoveryDestination(
+        `?${new URLSearchParams({ continue: '/dashboard/extension-auth?state=bad' })}`,
+        'https://crrt.ai',
+      ),
+    ).toBeNull()
     expect(extensionAuthRecoveryDestination('?continue=http://%', 'https://crrt.ai')).toBeNull()
   })
 
@@ -54,6 +74,7 @@ describe('dashboard extension auth contract', () => {
       `${redirect}?code=${'c'.repeat(43)}&other=${proof}`,
       `${redirect}?code=short&state=${proof}`,
       `${redirect}?code=${'c'.repeat(43)}&state=${'x'.repeat(43)}`,
-    ]) expect(validateExtensionAuthRedirect(value, request)).toBe('')
+    ])
+      expect(validateExtensionAuthRedirect(value, request)).toBe('')
   })
 })

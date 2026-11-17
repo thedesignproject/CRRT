@@ -15,10 +15,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -50,7 +60,8 @@ describe('api/v1/invites/accept', () => {
     expect(res.statusCode).toBe(405)
 
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
-      r.status(401).json({ error: 'Unauthorized' }); return null
+      r.status(401).json({ error: 'Unauthorized' })
+      return null
     })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
@@ -78,9 +89,12 @@ describe('api/v1/invites/accept', () => {
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'inviter-1', kind: 'invite.accepted',
-    }))
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'inviter-1',
+        kind: 'invite.accepted',
+      }),
+    )
 
     // A repeated magic-link continuation is idempotent and emits no duplicate notice.
     vi.mocked(createNotification).mockClear()
@@ -106,7 +120,9 @@ describe('api/v1/invites/accept', () => {
     expect(res.statusCode).toBe(500)
 
     // non-Error throw → 500
-    vi.mocked(acceptInvite).mockImplementationOnce(() => { throw 'string-not-error' })
+    vi.mocked(acceptInvite).mockImplementationOnce(() => {
+      throw 'string-not-error'
+    })
     res = mockRes()
     await call({ method: 'POST', body: { projectKey: 'p' }, query: {}, headers: {} }, res)
     expect(res.statusCode).toBe(500)

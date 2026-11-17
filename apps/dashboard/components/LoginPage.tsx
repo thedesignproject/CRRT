@@ -23,13 +23,19 @@ export function LoginPage({
   initialMode?: Extract<Mode, 'signin' | 'signup'>
   continuationPath?: string
 } = {}) {
-  const continuationPath = suppliedContinuationPath ?? (typeof window === 'undefined' ? undefined
-    : extensionAuthRecoveryDestination(window.location.search, window.location.origin)
-      ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin) ?? undefined)
-  const [mode, setMode] = useState<Mode>(() =>
-    initialMode ?? (typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname))),
+  const continuationPath =
+    suppliedContinuationPath ??
+    (typeof window === 'undefined'
+      ? undefined
+      : (extensionAuthRecoveryDestination(window.location.search, window.location.origin) ??
+        widgetAuthRecoveryDestination(window.location.search, window.location.origin) ??
+        undefined))
+  const [mode, setMode] = useState<Mode>(
+    () => initialMode ?? (typeof window === 'undefined' ? 'signin' : modeFromPath(relPath(window.location.pathname))),
   )
-  const [email, setEmail] = useState(() => typeof window === 'undefined' ? '' : new URLSearchParams(window.location.search).get('email') ?? '')
+  const [email, setEmail] = useState(() =>
+    typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get('email') ?? ''),
+  )
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +115,9 @@ export function LoginPage({
           setSignupSent(true)
         }
       } else {
-        const resetUrl = new URL(`${window.location.origin}${route('/reset-password')}${dashboardAuthSearch(window.location.search)}`)
+        const resetUrl = new URL(
+          `${window.location.origin}${route('/reset-password')}${dashboardAuthSearch(window.location.search)}`,
+        )
         if (continuationPath) resetUrl.searchParams.set('continue', continuationPath)
         const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: resetUrl.href,
@@ -125,7 +133,8 @@ export function LoginPage({
   }
 
   async function sendMagicLink() {
-    setError(null); setBusy(true)
+    setError(null)
+    setBusy(true)
     try {
       const { error: magicError } = await supabase.auth.signInWithOtp({
         email,
@@ -135,7 +144,9 @@ export function LoginPage({
       setMagicSent(true)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send sign-in link')
-    } finally { setBusy(false) }
+    } finally {
+      setBusy(false)
+    }
   }
 
   if (signupSent) return <CheckEmail email={email} variant="signup" onBackToSignIn={() => navigate('/login')} />
@@ -174,7 +185,9 @@ export function LoginPage({
           width: '100%',
         }}
       >
-        <span className="crrt-section-marker" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>/ 00 auth</span>
+        <span className="crrt-section-marker" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+          / 00 auth
+        </span>
         <span style={{ flex: 1, height: 1, background: 'var(--border)', minWidth: 12 }} />
         <span
           style={{
@@ -380,8 +393,23 @@ export function LoginPage({
       </form>
 
       {!isSignup && !isForgot && (
-        <button type="button" disabled={busy || !email} onClick={() => { void sendMagicLink() }}
-          style={{ marginTop: 14, border: 0, background: 'transparent', color: 'var(--crrt-carrot)', fontFamily: 'var(--crrt-font-body)', fontSize: 14, cursor: busy || !email ? 'not-allowed' : 'pointer', opacity: busy || !email ? 0.5 : 1 }}>
+        <button
+          type="button"
+          disabled={busy || !email}
+          onClick={() => {
+            void sendMagicLink()
+          }}
+          style={{
+            marginTop: 14,
+            border: 0,
+            background: 'transparent',
+            color: 'var(--crrt-carrot)',
+            fontFamily: 'var(--crrt-font-body)',
+            fontSize: 14,
+            cursor: busy || !email ? 'not-allowed' : 'pointer',
+            opacity: busy || !email ? 0.5 : 1,
+          }}
+        >
           email me a sign-in link →
         </button>
       )}
@@ -517,18 +545,18 @@ function CheckEmail({
   const body =
     variant === 'reset' ? (
       <>
-        we sent a password reset link to{' '}
-        <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. open it to choose a new password.
+        we sent a password reset link to <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>.
+        open it to choose a new password.
       </>
     ) : variant === 'magic' ? (
       <>
-        we sent a secure sign-in link to{' '}
-        <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. open it to continue to your project invitation.
+        we sent a secure sign-in link to <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>.
+        open it to continue to your project invitation.
       </>
     ) : (
       <>
-        we sent a confirmation link to{' '}
-        <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>. click it, then come back here to sign in.
+        we sent a confirmation link to <span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{email}</span>.
+        click it, then come back here to sign in.
       </>
     )
   return <AuthNotice heading={heading} body={body} actionLabel="← back to sign in" onAction={onBackToSignIn} />

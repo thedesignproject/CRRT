@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockFlags = vi.hoisted(() => ({ mocksEnabled: false }))
 vi.mock('../lib/mocks', () => ({
-  get mocksEnabled() { return mockFlags.mocksEnabled },
+  get mocksEnabled() {
+    return mockFlags.mocksEnabled
+  },
   getMockComments: vi.fn(() => []),
 }))
 vi.mock('../api', () => ({ listComments: vi.fn() }))
@@ -14,16 +16,20 @@ import { useComments } from './useComments'
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason: unknown) => void
-  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail })
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done
+    reject = fail
+  })
   return { promise, resolve, reject }
 }
 
 const comment = (body: string) => ({ id: body, body }) as CommentRecord
 
-const linkedComment = (lifecycleStatus: 'closing' | 'closed') => ({
-  ...comment('linked'),
-  externalWork: [{ provider: 'linear', lifecycleStatus }],
-}) as CommentRecord
+const linkedComment = (lifecycleStatus: 'closing' | 'closed') =>
+  ({
+    ...comment('linked'),
+    externalWork: [{ provider: 'linear', lifecycleStatus }],
+  }) as CommentRecord
 
 beforeEach(() => {
   mockFlags.mocksEnabled = false
@@ -42,14 +48,20 @@ describe('useComments refresh ordering', () => {
       await act(async () => {})
       expect(result.current.comments[0]?.externalWork?.[0]?.lifecycleStatus).toBe('closing')
 
-      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
       expect(listComments).toHaveBeenCalledTimes(2)
       expect(result.current.loading).toBe(false)
 
       terminal.resolve([linkedComment('closed')])
-      await act(async () => { await terminal.promise })
+      await act(async () => {
+        await terminal.promise
+      })
       expect(result.current.comments[0]?.externalWork?.[0]?.lifecycleStatus).toBe('closed')
-      await act(async () => { await vi.advanceTimersByTimeAsync(2_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000)
+      })
       expect(listComments).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
@@ -68,7 +80,9 @@ describe('useComments refresh ordering', () => {
       await act(async () => {})
       view.rerender({ project: 'second' })
       await act(async () => {})
-      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
       expect(listComments).toHaveBeenCalledTimes(2)
       expect(view.result.current.comments[0]?.body).toBe('other')
     } finally {
@@ -79,13 +93,13 @@ describe('useComments refresh ordering', () => {
   it('drops an older response for the same project', async () => {
     const first = deferred<CommentRecord[]>()
     const second = deferred<CommentRecord[]>()
-    vi.mocked(listComments)
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
+    vi.mocked(listComments).mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
     const { result } = renderHook(() => useComments('/api', 'token', 'project'))
     await waitFor(() => expect(listComments).toHaveBeenCalledTimes(1))
     let refresh!: Promise<void>
-    act(() => { refresh = result.current.refresh() })
+    act(() => {
+      refresh = result.current.refresh()
+    })
     await waitFor(() => expect(listComments).toHaveBeenCalledTimes(2))
 
     second.resolve([comment('new')])
@@ -105,7 +119,9 @@ describe('useComments refresh ordering', () => {
     await waitFor(() => expect(listComments).toHaveBeenCalledTimes(1))
     await act(() => result.current.refresh())
     first.reject(new Error('old failure'))
-    await act(async () => { await first.promise.catch(() => undefined) })
+    await act(async () => {
+      await first.promise.catch(() => undefined)
+    })
     expect(result.current.error).toBeNull()
     expect(result.current.comments[0]?.body).toBe('new')
     expect(result.current.loading).toBe(false)
@@ -129,35 +145,39 @@ describe('useComments refresh ordering', () => {
     second.rerender({ project: 'second' })
     await waitFor(() => expect(second.result.current.comments[0]?.body).toBe('other'))
     pending.reject(new Error('old project failure'))
-    await act(async () => { await pending.promise.catch(() => undefined) })
+    await act(async () => {
+      await pending.promise.catch(() => undefined)
+    })
     expect(second.result.current.error).toBeNull()
   })
 })
 
 it('clears previously loaded private comments when focus revalidation denies access', async () => {
-  vi.mocked(listComments).mockResolvedValueOnce([comment('private')]).mockRejectedValueOnce(Object.assign(new Error('Forbidden'),{status:403}))
-  const {result}=renderHook(()=>useComments('/api','token','project'))
-  await waitFor(()=>expect(result.current.comments).toHaveLength(1))
-  await act(async()=>window.dispatchEvent(new Event('focus')))
-  await waitFor(()=>expect(result.current.comments).toEqual([]))
+  vi.mocked(listComments)
+    .mockResolvedValueOnce([comment('private')])
+    .mockRejectedValueOnce(Object.assign(new Error('Forbidden'), { status: 403 }))
+  const { result } = renderHook(() => useComments('/api', 'token', 'project'))
+  await waitFor(() => expect(result.current.comments).toHaveLength(1))
+  await act(async () => window.dispatchEvent(new Event('focus')))
+  await waitFor(() => expect(result.current.comments).toEqual([]))
   expect(result.current.commentsProjectId).toBeNull()
   expect(result.current.error).toBe('Forbidden')
 })
 
 it('revalidates on visible tabs, ignores hidden transitions, and removes listeners on unmount', async () => {
   vi.mocked(listComments).mockResolvedValue([comment('private')])
-  const {result,unmount}=renderHook(()=>useComments('/api','token','project'))
-  await waitFor(()=>expect(result.current.comments).toHaveLength(1))
-  const before=vi.mocked(listComments).mock.calls.length
-  const visibility=vi.spyOn(document,'visibilityState','get').mockReturnValue('hidden')
-  await act(async()=>document.dispatchEvent(new Event('visibilitychange')))
+  const { result, unmount } = renderHook(() => useComments('/api', 'token', 'project'))
+  await waitFor(() => expect(result.current.comments).toHaveLength(1))
+  const before = vi.mocked(listComments).mock.calls.length
+  const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')))
   expect(listComments).toHaveBeenCalledTimes(before)
   visibility.mockReturnValue('visible')
-  vi.mocked(listComments).mockRejectedValueOnce(Object.assign(new Error('Expired'),{status:401}))
-  await act(async()=>document.dispatchEvent(new Event('visibilitychange')))
+  vi.mocked(listComments).mockRejectedValueOnce(Object.assign(new Error('Expired'), { status: 401 }))
+  await act(async () => document.dispatchEvent(new Event('visibilitychange')))
   expect(result.current.comments).toEqual([])
   expect(result.current.error).toBe('Expired')
-  const after=vi.mocked(listComments).mock.calls.length
+  const after = vi.mocked(listComments).mock.calls.length
   unmount()
   window.dispatchEvent(new Event('focus'))
   document.dispatchEvent(new Event('visibilitychange'))
@@ -166,18 +186,22 @@ it('revalidates on visible tabs, ignores hidden transitions, and removes listene
 })
 
 it.each(['success', 'failure'])('discards a reconciliation %s invalidated during its request', async (outcome) => {
- const pending = deferred<CommentRecord[]>()
- vi.mocked(listComments).mockResolvedValueOnce([comment('current')]).mockReturnValueOnce(pending.promise)
- const { result } = renderHook(() => useComments('/api', 'token', 'project'))
- await waitFor(() => expect(result.current.comments[0]?.body).toBe('current'))
- let canApply = true
- let refresh!: Promise<void>
- act(() => { refresh = result.current.refresh(() => canApply) })
- canApply = false
- if (outcome === 'success') pending.resolve([comment('stale')])
- else pending.reject(Object.assign(new Error('stale denial'), {status:403}))
- await act(async () => refresh)
- expect(result.current.comments[0]?.body).toBe('current')
- expect(result.current.error).toBeNull()
- expect(result.current.loading).toBe(false)
+  const pending = deferred<CommentRecord[]>()
+  vi.mocked(listComments)
+    .mockResolvedValueOnce([comment('current')])
+    .mockReturnValueOnce(pending.promise)
+  const { result } = renderHook(() => useComments('/api', 'token', 'project'))
+  await waitFor(() => expect(result.current.comments[0]?.body).toBe('current'))
+  let canApply = true
+  let refresh!: Promise<void>
+  act(() => {
+    refresh = result.current.refresh(() => canApply)
+  })
+  canApply = false
+  if (outcome === 'success') pending.resolve([comment('stale')])
+  else pending.reject(Object.assign(new Error('stale denial'), { status: 403 }))
+  await act(async () => refresh)
+  expect(result.current.comments[0]?.body).toBe('current')
+  expect(result.current.error).toBeNull()
+  expect(result.current.loading).toBe(false)
 })

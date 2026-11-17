@@ -11,7 +11,11 @@ import {
 } from '../components/FeedbackWidget/api'
 
 const API = 'https://api.example.com'
-const widgetSession = { accessToken: `crrt_widget_${'a'.repeat(43)}`, displayName: 'Ada', expiresAt: '2099-01-01T00:00:00Z' }
+const widgetSession = {
+  accessToken: `crrt_widget_${'a'.repeat(43)}`,
+  displayName: 'Ada',
+  expiresAt: '2099-01-01T00:00:00Z',
+}
 
 function mockFetch(impl: (url: string, init?: RequestInit) => Promise<Response> | Response) {
   const spy = vi.fn(impl)
@@ -42,11 +46,9 @@ describe('fetchProjectComments', () => {
   })
 
   it('normalizes reviewStatus on each comment', async () => {
-    mockFetch(() => jsonResponse([
-      { id: 'a', reviewStatus: 'accepted' },
-      { id: 'b', reviewStatus: 'banana' },
-      { id: 'c' },
-    ]))
+    mockFetch(() =>
+      jsonResponse([{ id: 'a', reviewStatus: 'accepted' }, { id: 'b', reviewStatus: 'banana' }, { id: 'c' }]),
+    )
     const out = await fetchProjectComments(API, 'p')
     expect(out.map((c) => c.reviewStatus)).toEqual(['accepted', 'open', 'open'])
   })
@@ -62,7 +64,9 @@ describe('fetchProjectComments', () => {
   })
 
   it('propagates network errors', async () => {
-    mockFetch(() => { throw new Error('offline') })
+    mockFetch(() => {
+      throw new Error('offline')
+    })
     await expect(fetchProjectComments(API, 'p')).rejects.toThrow('offline')
   })
 })
@@ -84,12 +88,14 @@ describe('fetchAgentEligibility', () => {
   })
 
   it('maps the camelCase response shape', async () => {
-    mockFetch(() => jsonResponse({
-      canRequest: true,
-      mustSignUp: true,
-      isProjectMember: true,
-      currentTier: 'pro',
-    }))
+    mockFetch(() =>
+      jsonResponse({
+        canRequest: true,
+        mustSignUp: true,
+        isProjectMember: true,
+        currentTier: 'pro',
+      }),
+    )
     expect(await fetchAgentEligibility(API, 'p')).toEqual({
       canRequest: true,
       mustSignUp: true,
@@ -99,12 +105,14 @@ describe('fetchAgentEligibility', () => {
   })
 
   it('maps the snake_case response shape', async () => {
-    mockFetch(() => jsonResponse({
-      can_request: true,
-      must_sign_up: true,
-      is_project_member: true,
-      current_tier: 'free',
-    }))
+    mockFetch(() =>
+      jsonResponse({
+        can_request: true,
+        must_sign_up: true,
+        is_project_member: true,
+        current_tier: 'free',
+      }),
+    )
     expect(await fetchAgentEligibility(API, 'p')).toEqual({
       canRequest: true,
       mustSignUp: true,
@@ -129,14 +137,20 @@ describe('fetchAgentEligibility', () => {
   })
 
   it('returns null when fetch throws', async () => {
-    mockFetch(() => { throw new Error('offline') })
+    mockFetch(() => {
+      throw new Error('offline')
+    })
     expect(await fetchAgentEligibility(API, 'p')).toBeNull()
   })
 })
 
 describe('premium widget Agent API', () => {
-  beforeEach(() => { vi.unstubAllGlobals() })
-  afterEach(() => { vi.unstubAllGlobals() })
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
 
   it('checks eligibility with encoded page scope and widget authorization', async () => {
     const spy = mockFetch(() => jsonResponse({ state: 'ready', comments: [] }))
@@ -145,7 +159,10 @@ describe('premium widget Agent API', () => {
     expect(url).toContain('/v1/widget/agent/eligibility?')
     expect(new URL(url as string).searchParams.get('projectKey')).toBe('acme/internal')
     expect(new URL(url as string).searchParams.get('pageUrl')).toBe('https://site.test/a b')
-    expect(init?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: `Bearer ${widgetSession.accessToken}` })
+    expect(init?.headers).toEqual({
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${widgetSession.accessToken}`,
+    })
   })
 
   it('creates exact sessions and lifecycle mutations through authenticated widget endpoints', async () => {
@@ -165,7 +182,10 @@ describe('premium widget Agent API', () => {
     expect(JSON.parse(spy.mock.calls[0]![1]!.body as string)).toEqual(handoff)
     expect(JSON.parse(spy.mock.calls[1]![1]!.body as string)).toEqual(lifecycle)
     for (const [, init] of spy.mock.calls) {
-      expect(init?.headers).toEqual({ 'Content-Type': 'application/json', Authorization: `Bearer ${widgetSession.accessToken}` })
+      expect(init?.headers).toEqual({
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${widgetSession.accessToken}`,
+      })
     }
   })
 })
@@ -216,7 +236,9 @@ describe('patchReviewStatus', () => {
   })
 
   it('swallows fetch errors and warns', async () => {
-    mockFetch(() => { throw new Error('boom') })
+    mockFetch(() => {
+      throw new Error('boom')
+    })
     await expect(patchReviewStatus(API, 'abc', 'accepted')).resolves.toBeUndefined()
     expect(console.warn).toHaveBeenCalled()
   })
@@ -224,7 +246,8 @@ describe('patchReviewStatus', () => {
 
 it('reports private mode and requests login after an anonymous submit is rejected', async () => {
   mockFetch(() => new Response('{}', { status: 401 }))
-  const privacy = vi.fn(), login = vi.fn()
+  const privacy = vi.fn(),
+    login = vi.fn()
   expect(await fetchProjectComments(API, 'private', privacy)).toEqual([])
   expect(privacy).toHaveBeenCalledWith(true)
   expect(await postComment(API, {}, login)).toBeNull()
@@ -233,12 +256,19 @@ it('reports private mode and requests login after an anonymous submit is rejecte
 })
 
 it('surfaces Cloud plan errors from public widgets instead of silently dropping submissions', async () => {
-  for (const status of [402,409]) {
-    mockFetch(() => new Response(JSON.stringify({code:'plan_limit',error:'Owner allowance exhausted. Usage: 2000/2000.'}),{status}))
-    await expect(postComment(API,{body:'feedback'})).rejects.toThrow('Usage: 2000/2000')
+  for (const status of [402, 409]) {
+    mockFetch(
+      () =>
+        new Response(JSON.stringify({ code: 'plan_limit', error: 'Owner allowance exhausted. Usage: 2000/2000.' }), {
+          status,
+        }),
+    )
+    await expect(postComment(API, { body: 'feedback' })).rejects.toThrow('Usage: 2000/2000')
   }
-  mockFetch(() => new Response(JSON.stringify({code:'plan_limit'}),{status:409}))
-  await expect(postComment(API,{})).rejects.toThrow('Cloud plan limit')
-  mockFetch(() => new Response('{}',{status:409}));expect(await postComment(API,{})).toBeNull()
-  mockFetch(() => new Response('invalid',{status:409}));expect(await postComment(API,{})).toBeNull()
+  mockFetch(() => new Response(JSON.stringify({ code: 'plan_limit' }), { status: 409 }))
+  await expect(postComment(API, {})).rejects.toThrow('Cloud plan limit')
+  mockFetch(() => new Response('{}', { status: 409 }))
+  expect(await postComment(API, {})).toBeNull()
+  mockFetch(() => new Response('invalid', { status: 409 }))
+  expect(await postComment(API, {})).toBeNull()
 })

@@ -7,7 +7,8 @@ import { processExtensionImageCleanup } from './extension-image-cleanup.js'
 import { fromLegacyStatus } from './status.js'
 
 const BUCKET = 'extension-feedback-images'
-const SELECT = 'id,project_id,source,created_by_user_id,url,page_hostname,x,y,element,comment,status,visibility,image_url,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
+const SELECT =
+  'id,project_id,source,created_by_user_id,url,page_hostname,x,y,element,comment,status,visibility,image_url,screenshot_storage_path,author_name,created_at,updated_at,target_type,anchor'
 const MAX_BODY = 8_000
 const MAX_SELECTOR = 1_000
 const MAX_URL = 2_048
@@ -17,7 +18,10 @@ const IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export class ExtensionCommentError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(
+    public status: number,
+    message: string,
+  ) {
     super(message)
   }
 }
@@ -64,14 +68,15 @@ export type ExtensionComment = {
   anchor: Record<string, unknown> | null
 }
 
-export type ExtensionCommentBulkSelection =
-  | { mode: 'ids'; ids: string[] }
-  | { mode: 'all'; excludedIds: string[] }
+export type ExtensionCommentBulkSelection = { mode: 'ids'; ids: string[] } | { mode: 'all'; excludedIds: string[] }
 
 export type ExtensionCommentBulkResult = {
   undoItems?: Array<{ id: string; updatedAt: string }>
   processedIds: string[]
-  skipped: Array<{ id: string; reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed' }>
+  skipped: Array<{
+    id: string
+    reason: 'not_in_inbox' | 'concurrent_change' | 'storage_delete_failed' | 'mutation_failed' | 'access_changed'
+  }>
   selectedTotal: number
 }
 
@@ -79,7 +84,10 @@ type InboxBulkRow = { id: string; screenshot_storage_path: string | null }
 
 function bulkIds(value: unknown, name: string, allowEmpty: boolean) {
   if (!Array.isArray(value) || (!allowEmpty && value.length === 0) || value.length > MAX_BULK_IDS) {
-    throw new ExtensionCommentError(400, `${name} must contain ${allowEmpty ? `at most ${MAX_BULK_IDS}` : `between 1 and ${MAX_BULK_IDS}`} comment ids`)
+    throw new ExtensionCommentError(
+      400,
+      `${name} must contain ${allowEmpty ? `at most ${MAX_BULK_IDS}` : `between 1 and ${MAX_BULK_IDS}`} comment ids`,
+    )
   }
   const ids = [...new Set(value)]
   if (ids.some((id) => typeof id !== 'string' || !UUID_PATTERN.test(id))) {
@@ -92,7 +100,8 @@ export function parseExtensionCommentBulkSelection(value: unknown): ExtensionCom
   if (!value || typeof value !== 'object') throw new ExtensionCommentError(400, 'selection is required')
   const selection = value as { mode?: unknown; ids?: unknown; excludedIds?: unknown }
   if (selection.mode === 'ids') return { mode: 'ids', ids: bulkIds(selection.ids, 'selection.ids', false) }
-  if (selection.mode === 'all') return { mode: 'all', excludedIds: bulkIds(selection.excludedIds ?? [], 'selection.excludedIds', true) }
+  if (selection.mode === 'all')
+    return { mode: 'all', excludedIds: bulkIds(selection.excludedIds ?? [], 'selection.excludedIds', true) }
   throw new ExtensionCommentError(400, 'selection.mode must be ids or all')
 }
 
@@ -104,9 +113,14 @@ async function resolveInboxBulkRows(userId: string, selection: ExtensionCommentB
   // Keyset pagination survives rows disappearing between pages without skipping
   // the next page, and never relies on PostgREST's default row cap.
   for (;;) {
-    let query = client.from('comments').select('id,screenshot_storage_path')
-      .eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
-      .order('id', { ascending: true }).limit(500)
+    let query = client
+      .from('comments')
+      .select('id,screenshot_storage_path')
+      .eq('source', 'extension')
+      .eq('created_by_user_id', userId)
+      .is('project_id', null)
+      .order('id', { ascending: true })
+      .limit(500)
     if (selection.mode === 'ids') query = query.in('id', selection.ids)
     if (cursor) query = query.gt('id', cursor)
     const { data, error } = await query
@@ -133,28 +147,44 @@ export async function bulkAssignExtensionCommentsToProject(
   captureUndo = false,
 ): Promise<ExtensionCommentBulkResult> {
   const rows = await resolveInboxBulkRows(userId, selection)
-  const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows)
-    .map((id) => ({ id, reason: 'not_in_inbox' }))
-  if (rows.length === 0) return { processedIds: [], skipped, selectedTotal: selection.mode === 'ids' ? selection.ids.length : 0 }
+  const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows).map((id) => ({
+    id,
+    reason: 'not_in_inbox',
+  }))
+  if (rows.length === 0)
+    return { processedIds: [], skipped, selectedTotal: selection.mode === 'ids' ? selection.ids.length : 0 }
 
   const client = getServiceSupabase()
   const processedIds: string[] = []
-  const undoItems: Array<{id:string;updatedAt:string}> = []
+  const undoItems: Array<{ id: string; updatedAt: string }> = []
   for (let offset = 0; offset < rows.length; offset += 500) {
     try {
-      const { data, error } = await client.rpc(captureUndo ? 'assign_actor_inbox_feedback_with_versions' : 'assign_actor_inbox_feedback', {
-        p_actor: userId, p_project: projectId, p_ids: rows.slice(offset, offset + 500).map((row) => row.id), p_visibility: visibility,
-      })
+      const { data, error } = await client.rpc(
+        captureUndo ? 'assign_actor_inbox_feedback_with_versions' : 'assign_actor_inbox_feedback',
+        {
+          p_actor: userId,
+          p_project: projectId,
+          p_ids: rows.slice(offset, offset + 500).map((row) => row.id),
+          p_visibility: visibility,
+        },
+      )
       if (error) {
-        if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
+        if (error.message === 'forbidden')
+          throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
         throw new Error(error.message)
       }
-      if (captureUndo) undoItems.push(...((data as Array<{id:string;updated_at:string}> | null) ?? []).map(row => ({id:row.id,updatedAt:row.updated_at})))
+      if (captureUndo)
+        undoItems.push(
+          ...((data as Array<{ id: string; updated_at: string }> | null) ?? []).map((row) => ({
+            id: row.id,
+            updatedAt: row.updated_at,
+          })),
+        )
       processedIds.push(...((data as Array<{ id: string }> | null) ?? []).map((row) => row.id))
     } catch (error) {
       if (processedIds.length === 0) throw error
       const reason = error instanceof ExtensionCommentError ? 'access_changed' : 'mutation_failed'
-      skipped.push(...rows.slice(offset).map((row) => ({ id: row.id, reason } as const)))
+      skipped.push(...rows.slice(offset).map((row) => ({ id: row.id, reason }) as const))
       break
     }
   }
@@ -164,7 +194,7 @@ export async function bulkAssignExtensionCommentsToProject(
   }
   return {
     processedIds,
-    ...(captureUndo ? {undoItems} : {}),
+    ...(captureUndo ? { undoItems } : {}),
     skipped,
     selectedTotal: selection.mode === 'ids' ? selection.ids.length : rows.length,
   }
@@ -175,29 +205,41 @@ export async function bulkDeleteExtensionComments(
   selection: ExtensionCommentBulkSelection,
 ): Promise<ExtensionCommentBulkResult> {
   const rows = await resolveInboxBulkRows(userId, selection)
-  const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows)
-    .map((id) => ({ id, reason: 'not_in_inbox' }))
+  const skipped: ExtensionCommentBulkResult['skipped'] = missingSelectionIds(selection, rows).map((id) => ({
+    id,
+    reason: 'not_in_inbox',
+  }))
   const client = getServiceSupabase()
   const deletedRows: InboxBulkRow[] = []
   // Only the row snapshots returned by DELETE may have their images removed.
   // A concurrent move, ownership change, or failed DELETE retains its image.
   for (let offset = 0; offset < rows.length; offset += 100) {
     try {
-      const { data, error } = await client.from('comments').delete()
-        .eq('source', 'extension').eq('created_by_user_id', userId).is('project_id', null)
-        .in('id', rows.slice(offset, offset + 100).map((row) => row.id))
+      const { data, error } = await client
+        .from('comments')
+        .delete()
+        .eq('source', 'extension')
+        .eq('created_by_user_id', userId)
+        .is('project_id', null)
+        .in(
+          'id',
+          rows.slice(offset, offset + 100).map((row) => row.id),
+        )
         .select('id,screenshot_storage_path')
       if (error) throw new Error(error.message)
       const batch = (data as InboxBulkRow[] | null) ?? []
       deletedRows.push(...batch)
-      const paths = batch.flatMap((row) => row.screenshot_storage_path ? [row.screenshot_storage_path] : [])
+      const paths = batch.flatMap((row) => (row.screenshot_storage_path ? [row.screenshot_storage_path] : []))
       if (paths.length) {
-        try { await processExtensionImageCleanup(paths) }
-        catch (error) { console.error('Inbox image cleanup deferred to durable queue', error) }
+        try {
+          await processExtensionImageCleanup(paths)
+        } catch (error) {
+          console.error('Inbox image cleanup deferred to durable queue', error)
+        }
       }
     } catch (error) {
       if (deletedRows.length === 0) throw error
-      skipped.push(...rows.slice(offset).map((row) => ({ id: row.id, reason: 'mutation_failed' } as const)))
+      skipped.push(...rows.slice(offset).map((row) => ({ id: row.id, reason: 'mutation_failed' }) as const))
       break
     }
   }
@@ -298,12 +340,14 @@ async function serialize(client: SupabaseClient, row: CommentRow, viewerUserId?:
 
 function hasRenderableTarget(row: unknown): row is CommentRow {
   const value = row as Partial<CommentRow>
-  return typeof value.url === 'string'
-    && typeof value.element === 'string'
-    && typeof value.x === 'number'
-    && Number.isFinite(value.x)
-    && typeof value.y === 'number'
-    && Number.isFinite(value.y)
+  return (
+    typeof value.url === 'string' &&
+    typeof value.element === 'string' &&
+    typeof value.x === 'number' &&
+    Number.isFinite(value.x) &&
+    typeof value.y === 'number' &&
+    Number.isFinite(value.y)
+  )
 }
 
 export async function listExtensionComments(
@@ -313,11 +357,14 @@ export async function listExtensionComments(
 ) {
   const client = getServiceSupabase()
   const { page, limit } = parseExtensionPagination(input)
-  let query = (input.projectId
-    ? client.rpc('read_project_feedback', { p_project: input.projectId, p_actor: userId } as never)
-    : client.from('comments')).select(SELECT, { count: 'exact' })
+  let query = (
+    input.projectId
+      ? client.rpc('read_project_feedback', { p_project: input.projectId, p_actor: userId } as never)
+      : client.from('comments')
+  ).select(SELECT, { count: 'exact' })
   if (input.projectId) {
-    query = query.eq('project_id', input.projectId)
+    query = query
+      .eq('project_id', input.projectId)
       .not('url', 'is', null)
       .not('element', 'is', null)
       .not('x', 'is', null)
@@ -334,7 +381,12 @@ export async function listExtensionComments(
     throw new Error(error.message)
   }
   const renderable = ((data as unknown as Parameters<typeof serialize>[1][] | null) ?? []).filter(hasRenderableTarget)
-  return { items: await Promise.all(renderable.map((row) => serialize(client, row, userId))), page, limit, total: count ?? 0 }
+  return {
+    items: await Promise.all(renderable.map((row) => serialize(client, row, userId))),
+    page,
+    limit,
+    total: count ?? 0,
+  }
 }
 
 export async function createExtensionComment(
@@ -353,7 +405,8 @@ export async function createExtensionComment(
   const screenshot = parseScreenshot(input.screenshot)
   const target = parseCommentTarget(input.targetType, input.anchor)
   if (!target.ok) throw new ExtensionCommentError(400, target.error)
-  if (!await reserveExtensionComment(client, userId)) throw new ExtensionCommentError(429, 'Comment limit reached; try again later')
+  if (!(await reserveExtensionComment(client, userId)))
+    throw new ExtensionCommentError(429, 'Comment limit reached; try again later')
 
   let screenshotStoragePath: string | null = null
   if (screenshot) {
@@ -361,23 +414,50 @@ export async function createExtensionComment(
     screenshotStoragePath = `${userId}/${crypto.randomUUID()}.${ext}`
   }
 
-  const { data, error } = await client.from('comments').insert({
-    source: 'extension', created_by_user_id: userId, project_id: projectId, visibility,
-    url: pageUrl, page_hostname: pageHostname, x, y, element: selector,
-    comment: body, created_by: 'extension', author_name: authorName,
-    screenshot_storage_path: screenshotStoragePath,
-    target_type: target.targetType, anchor: target.anchor,
-  }).select(SELECT).single()
+  const { data, error } = await client
+    .from('comments')
+    .insert({
+      source: 'extension',
+      created_by_user_id: userId,
+      project_id: projectId,
+      visibility,
+      url: pageUrl,
+      page_hostname: pageHostname,
+      x,
+      y,
+      element: selector,
+      comment: body,
+      created_by: 'extension',
+      author_name: authorName,
+      screenshot_storage_path: screenshotStoragePath,
+      target_type: target.targetType,
+      anchor: target.anchor,
+    })
+    .select(SELECT)
+    .single()
   if (error) throw new Error(error.message)
   // Persist the cleanup reference before writing an object. If upload and its
   // rollback both fail, durable deletion receipts remain eligible for cleanup.
   if (screenshot && screenshotStoragePath) {
-    let uploadError:{message:string}|null
-    try { ({error:uploadError}=await uploadExtensionScreenshot(client,userId,data.id,screenshotStoragePath,screenshot.buffer,screenshot.mimeType)) }
-    catch(error){uploadError={message:error instanceof Error ? error.message : 'Upload unavailable'}}
+    let uploadError: { message: string } | null
+    try {
+      ;({ error: uploadError } = await uploadExtensionScreenshot(
+        client,
+        userId,
+        data.id,
+        screenshotStoragePath,
+        screenshot.buffer,
+        screenshot.mimeType,
+      ))
+    } catch (error) {
+      uploadError = { message: error instanceof Error ? error.message : 'Upload unavailable' }
+    }
     if (uploadError) {
-      try { await deleteExtensionComment(userId, data.id) }
-      catch { throw new Error('Screenshot upload failed; cleanup reference retained. Reload your comments before retrying.') }
+      try {
+        await deleteExtensionComment(userId, data.id)
+      } catch {
+        throw new Error('Screenshot upload failed; cleanup reference retained. Reload your comments before retrying.')
+      }
       throw new Error(`Screenshot upload failed: ${uploadError.message}`)
     }
   }
@@ -387,8 +467,14 @@ export async function createExtensionComment(
 export async function updateExtensionComment(userId: string, commentId: string, bodyValue: unknown) {
   const body = requiredText(bodyValue, 'body', MAX_BODY)
   const client = getServiceSupabase()
-  const { data, error } = await client.from('comments').update({ comment: body, updated_at: new Date().toISOString() })
-    .eq('id', commentId).eq('source', 'extension').eq('created_by_user_id', userId).select(SELECT).maybeSingle()
+  const { data, error } = await client
+    .from('comments')
+    .update({ comment: body, updated_at: new Date().toISOString() })
+    .eq('id', commentId)
+    .eq('source', 'extension')
+    .eq('created_by_user_id', userId)
+    .select(SELECT)
+    .maybeSingle()
   if (error) throw new Error(error.message)
   if (!data) throw new ExtensionCommentError(404, 'Comment not found')
   return serialize(client, data as CommentRow, userId)
@@ -396,17 +482,20 @@ export async function updateExtensionComment(userId: string, commentId: string, 
 
 export async function getOwnedExtensionCommentScope(userId: string, commentId: string) {
   const client = getServiceSupabase()
-  const { data, error } = await client.from('comments')
+  const { data, error } = await client
+    .from('comments')
     .select('project_id,visibility')
     .eq('id', commentId)
     .eq('source', 'extension')
     .eq('created_by_user_id', userId)
     .maybeSingle()
   if (error) throw new Error(error.message)
-  return data ? {
-    projectId: data.project_id as string | null,
-    visibility: (data.visibility ?? 'shared') as 'shared' | 'internal',
-  } : null
+  return data
+    ? {
+        projectId: data.project_id as string | null,
+        visibility: (data.visibility ?? 'shared') as 'shared' | 'internal',
+      }
+    : null
 }
 
 export async function assignExtensionCommentToProject(
@@ -417,14 +506,19 @@ export async function assignExtensionCommentToProject(
 ) {
   const client = getServiceSupabase()
   const { error } = await client.rpc('assign_actor_inbox_feedback', {
-    p_actor: userId, p_project: projectId, p_ids: [commentId], p_visibility: visibility,
+    p_actor: userId,
+    p_project: projectId,
+    p_ids: [commentId],
+    p_visibility: visibility,
   })
   if (error) {
-    if (error.message === 'forbidden') throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
+    if (error.message === 'forbidden')
+      throw new ExtensionCommentError(403, 'Project access changed. Review the destination and retry.')
     throw new Error(error.message)
   }
 
-  const { data: current, error: currentError } = await client.from('comments')
+  const { data: current, error: currentError } = await client
+    .from('comments')
     .select(SELECT)
     .eq('id', commentId)
     .eq('source', 'extension')
@@ -442,7 +536,10 @@ export async function deleteExtensionComment(userId: string, commentId: string, 
   const client = getServiceSupabase()
   // Delete + durable cleanup receipt commit atomically. An owned tombstone lets
   // a retry recover even when the first response or storage removal was lost.
-  const { data, error } = await client.rpc(cleanupOnly ? 'get_deleted_extension_feedback' : 'delete_actor_extension_feedback', { p_actor: userId, p_id: commentId })
+  const { data, error } = await client.rpc(
+    cleanupOnly ? 'get_deleted_extension_feedback' : 'delete_actor_extension_feedback',
+    { p_actor: userId, p_id: commentId },
+  )
   if (error) throw new Error(error.message)
   if (!data) throw new ExtensionCommentError(404, 'Comment not found')
   if (data.path) {

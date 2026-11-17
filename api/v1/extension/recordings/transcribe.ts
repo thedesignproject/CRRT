@@ -26,14 +26,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setExtensionCors(req, res, methods)
   } catch (error) {
     const status = error instanceof ExtensionAuthContractError ? error.status : 500
-    return extensionJsonError(res, status, status === 500 ? 'Recording transcription is unavailable.' : 'Extension origin is not allowed')
+    return extensionJsonError(
+      res,
+      status,
+      status === 500 ? 'Recording transcription is unavailable.' : 'Extension origin is not allowed',
+    )
   }
   if (req.method === 'OPTIONS') return res.status(204).end()
   if (req.method !== 'POST') return extensionJsonError(res, 405, 'Method not allowed')
   // The account-free demo endpoint is deliberately unavailable by default.
   // Production transcription runs from the consented, quota-controlled jobs.
-  if (process.env.RECORD_DEMO_TRANSCRIPTION_ENABLED !== 'true') return extensionJsonError(res, 503, 'Demo transcription is disabled. Use the recording upload API.')
-  if (firstHeaderValue(req.headers['content-type'])?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/octet-stream') {
+  if (process.env.RECORD_DEMO_TRANSCRIPTION_ENABLED !== 'true')
+    return extensionJsonError(res, 503, 'Demo transcription is disabled. Use the recording upload API.')
+  if (
+    firstHeaderValue(req.headers['content-type'])?.split(';', 1)[0]?.trim().toLowerCase() !== 'application/octet-stream'
+  ) {
     return extensionJsonError(res, 415, 'Recording audio must be WebM.')
   }
   const declaredLength = Number(req.headers['content-length'])

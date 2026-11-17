@@ -25,7 +25,7 @@ export function DocumentWorkspace({
   author,
   projects = [],
   onPendingChange,
-  userId = null
+  userId = null,
 }: {
   apiBase: string
   session: string
@@ -41,7 +41,9 @@ export function DocumentWorkspace({
   const cached = recovery.read()
   const resume = useRef(cached)
   const [selection, setSelection] = useState<DocumentSelection>(resume.current?.feedback?.selection ?? emptySelection)
-  const [publication, setPublication] = useState<{ context: object; id: string; number: number; body: string } | null>(null)
+  const [publication, setPublication] = useState<{ context: object; id: string; number: number; body: string } | null>(
+    null,
+  )
   const [denied, setDenied] = useState(false)
   const [documents, setDocuments] = useState<DocumentView[]>([]),
     [data, setData] = useState<DocumentResult>(),
@@ -60,7 +62,10 @@ export function DocumentWorkspace({
     [conflict, setConflict] = useState(false),
     [reading, setReading] = useState(false),
     [feedbackPending, setFeedbackPending] = useState(Boolean(resume.current?.feedback?.body))
-  useEffect(() => onPendingChange?.(dirty || busy || conflict || feedbackPending), [dirty, busy, conflict, feedbackPending, onPendingChange])
+  useEffect(
+    () => onPendingChange?.(dirty || busy || conflict || feedbackPending),
+    [dirty, busy, conflict, feedbackPending, onPendingChange],
+  )
   const pending = useRef({ fingerprint: '', key: '', id: '' }),
     mounted = useRef(true),
     working = useRef(false)
@@ -68,7 +73,9 @@ export function DocumentWorkspace({
   const listFilter = useMemo(() => ({ projectId, ...(listScope ? { scope: listScope } : {}) }), [projectId, listScope])
   const [validatedContext, setValidatedContext] = useState(context)
   const concealed = denied || validatedContext !== context
-  const feedbackPages = useRef(1), selected = useRef(data), draft = useRef({ dirty, conflict, tab })
+  const feedbackPages = useRef(1),
+    selected = useRef(data),
+    draft = useRef({ dirty, conflict, tab })
   selected.current = data
   draft.current = { dirty, conflict, tab }
   const activeContext = useRef(context)
@@ -76,31 +83,60 @@ export function DocumentWorkspace({
   const isCurrent = useCallback(() => mounted.current && activeContext.current === context, [context])
   useEffect(() => {
     mounted.current = true
-    return () => { mounted.current = false }
-  }, [])
-  const reportError = useCallback((error: unknown) => {
-    if (!isCurrent()) return
-    if (error instanceof DocumentRequestError && ['Unauthorized', 'login_required', 'forbidden', 'document_not_found'].includes(error.code)) {
-      setDenied(true)
-      setDocuments([])
+    return () => {
+      mounted.current = false
     }
-    setError(documentMessage(error))
-  }, [isCurrent])
-  const onOperation = useCallback((operation: DocumentCommentOperation, event: 'started' | 'pending' | 'discarded' | 'confirmed') => {
-    const saved = recovery.read()
-    const location = { projectId, listScope, documentId: operation.input.id, tab: 'Feedback' as const }
-    if (event === 'started') recovery.update(location, { operation })
-    else if (saved?.operation?.key === operation.key) recovery.update(location, {
-      operation: event === 'pending' ? operation : undefined,
-      ...(event === 'confirmed' ? { feedback: undefined } : {}),
-    })
-  }, [recovery, projectId, listScope])
-  const feedback = useDocumentComment(apiBase, session, userId, { initialOperation: resume.current?.operation, onOperation })
+  }, [])
+  const reportError = useCallback(
+    (error: unknown) => {
+      if (!isCurrent()) return
+      if (
+        error instanceof DocumentRequestError &&
+        ['Unauthorized', 'login_required', 'forbidden', 'document_not_found'].includes(error.code)
+      ) {
+        setDenied(true)
+        setDocuments([])
+      }
+      setError(documentMessage(error))
+    },
+    [isCurrent],
+  )
+  const onOperation = useCallback(
+    (operation: DocumentCommentOperation, event: 'started' | 'pending' | 'discarded' | 'confirmed') => {
+      const saved = recovery.read()
+      const location = { projectId, listScope, documentId: operation.input.id, tab: 'Feedback' as const }
+      if (event === 'started') recovery.update(location, { operation })
+      else if (saved?.operation?.key === operation.key)
+        recovery.update(location, {
+          operation: event === 'pending' ? operation : undefined,
+          ...(event === 'confirmed' ? { feedback: undefined } : {}),
+        })
+    },
+    [recovery, projectId, listScope],
+  )
+  const feedback = useDocumentComment(apiBase, session, userId, {
+    initialOperation: resume.current?.operation,
+    onOperation,
+  })
   const request = useCallback((input: object) => documentRequest(apiBase, session, input), [apiBase, session])
-  const readLoaded = useCallback(async (id: string, count = feedbackPages.current) => {
-    const pages = await Promise.all(Array.from({ length: count }, (_, page) => request({ action: 'read', id, ...(page ? { offset: page * 50 } : {}) })))
-    return { ...pages[0], feedback: mergeFeedback([], pages.flatMap(page => page.feedback ?? [])), nextOffset: pages[pages.length - 1].nextOffset ?? null }
-  }, [request])
+  const readLoaded = useCallback(
+    async (id: string, count = feedbackPages.current) => {
+      const pages = await Promise.all(
+        Array.from({ length: count }, (_, page) =>
+          request({ action: 'read', id, ...(page ? { offset: page * 50 } : {}) }),
+        ),
+      )
+      return {
+        ...pages[0],
+        feedback: mergeFeedback(
+          [],
+          pages.flatMap((page) => page.feedback ?? []),
+        ),
+        nextOffset: pages[pages.length - 1].nextOffset ?? null,
+      }
+    },
+    [request],
+  )
   useEffect(() => {
     working.current = false
     setBusy(false)
@@ -135,21 +171,33 @@ export function DocumentWorkspace({
       }
       return result
     }
-    restore().then(result => {
-      if (!isCurrent()) return
-      const keepDraft = draft.current.dirty || draft.current.conflict
-      setValidatedContext(context)
-      setDenied(false)
-      setData(result)
-      setConflict(keepDraft)
-      if (recovering) {
-        resume.current = undefined
-        setNotice('Your unsaved work was restored in this tab. Review it before continuing.')
-      }
-      if (!keepDraft && ((!result.document!.canEdit && ['Edit', 'History'].includes(draft.current.tab)) || (!result.document!.canManage && draft.current.tab === 'Sharing'))) setTab('Preview')
-    }).catch(reportError).finally(() => {
-      if (isCurrent()) { working.current = false; setBusy(false); setReading(false) }
-    })
+    restore()
+      .then((result) => {
+        if (!isCurrent()) return
+        const keepDraft = draft.current.dirty || draft.current.conflict
+        setValidatedContext(context)
+        setDenied(false)
+        setData(result)
+        setConflict(keepDraft)
+        if (recovering) {
+          resume.current = undefined
+          setNotice('Your unsaved work was restored in this tab. Review it before continuing.')
+        }
+        if (
+          !keepDraft &&
+          ((!result.document!.canEdit && ['Edit', 'History'].includes(draft.current.tab)) ||
+            (!result.document!.canManage && draft.current.tab === 'Sharing'))
+        )
+          setTab('Preview')
+      })
+      .catch(reportError)
+      .finally(() => {
+        if (isCurrent()) {
+          working.current = false
+          setBusy(false)
+          setReading(false)
+        }
+      })
   }, [context, readLoaded, isCurrent, reportError, request])
   async function select(id: string, preserve = false) {
     if (working.current) return
@@ -182,31 +230,81 @@ export function DocumentWorkspace({
       }
     }
   }
-  const document = concealed && data?.document
-    ? { ...data.document, title: denied ? 'Document unavailable' : 'Checking document access', body: '', canEdit: false, canPublish: false, canManage: false, canComment: false }
-    : data?.document
+  const document =
+    concealed && data?.document
+      ? {
+          ...data.document,
+          title: denied ? 'Document unavailable' : 'Checking document access',
+          body: '',
+          canEdit: false,
+          canPublish: false,
+          canManage: false,
+          canComment: false,
+        }
+      : data?.document
   const documentId = data?.document?.id
   const publishedBody = document?.canEdit
-    ? publication?.context === context && publication.id === document.id && publication.number === document.publishedRevision ? publication.body : null
-    : document?.body ?? ''
+    ? publication?.context === context &&
+      publication.id === document.id &&
+      publication.number === document.publishedRevision
+      ? publication.body
+      : null
+    : (document?.body ?? '')
   const publicationPending = Boolean(document?.canEdit && document.publishedRevision && publishedBody === null)
   useEffect(() => {
     if (tab !== 'Feedback' || concealed || !document?.publishedRevision || !publicationPending) return
     let active = true
     const controller = new AbortController()
-    documentRequest(apiBase, session, { action: 'revision', id: document.id, revision: document.publishedRevision }, controller.signal)
+    documentRequest(
+      apiBase,
+      session,
+      { action: 'revision', id: document.id, revision: document.publishedRevision },
+      controller.signal,
+    )
       .then((result) => {
-        if (active && isCurrent()) setPublication({ context, id: document.id, number: document.publishedRevision!, body: result.revision!.body! })
+        if (active && isCurrent())
+          setPublication({
+            context,
+            id: document.id,
+            number: document.publishedRevision!,
+            body: result.revision!.body!,
+          })
       })
-      .catch((error) => { if (active) reportError(error) })
-    return () => { active = false; controller.abort() }
-  }, [tab, concealed, document?.id, document?.publishedRevision, publicationPending, context, editorGeneration, apiBase, session, isCurrent, reportError])
-  const rememberEditor = useCallback((editor: EditorDraft | null) => {
-    recovery.update({ projectId, listScope, documentId: documentId!, tab: 'Edit' }, { editor: editor ?? undefined })
-  }, [documentId, projectId, listScope, recovery])
-  const rememberFeedback = useCallback((feedback: FeedbackDraft | null) => {
-    recovery.update({ projectId, listScope, documentId: documentId!, tab: 'Feedback' }, { feedback: feedback ? { ...feedback, selection } : undefined })
-  }, [documentId, projectId, listScope, recovery, selection])
+      .catch((error) => {
+        if (active) reportError(error)
+      })
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [
+    tab,
+    concealed,
+    document?.id,
+    document?.publishedRevision,
+    publicationPending,
+    context,
+    editorGeneration,
+    apiBase,
+    session,
+    isCurrent,
+    reportError,
+  ])
+  const rememberEditor = useCallback(
+    (editor: EditorDraft | null) => {
+      recovery.update({ projectId, listScope, documentId: documentId!, tab: 'Edit' }, { editor: editor ?? undefined })
+    },
+    [documentId, projectId, listScope, recovery],
+  )
+  const rememberFeedback = useCallback(
+    (feedback: FeedbackDraft | null) => {
+      recovery.update(
+        { projectId, listScope, documentId: documentId!, tab: 'Feedback' },
+        { feedback: feedback ? { ...feedback, selection } : undefined },
+      )
+    },
+    [documentId, projectId, listScope, recovery, selection],
+  )
   const action = useCallback(
     async (action: string, fields: object): Promise<boolean> => {
       if (working.current) return false
@@ -215,14 +313,15 @@ export function DocumentWorkspace({
       setError('')
       setNotice('')
       const fingerprint = JSON.stringify({ action, id: document?.id, version: document?.version, fields })
-      if (pending.current.fingerprint !== fingerprint) pending.current = { fingerprint, key: crypto.randomUUID(), id: crypto.randomUUID() }
+      if (pending.current.fingerprint !== fingerprint)
+        pending.current = { fingerprint, key: crypto.randomUUID(), id: crypto.randomUUID() }
       const current = action === 'create' ? undefined : document
       const input = {
         action,
         id: current?.id ?? pending.current.id,
         key: pending.current.key,
         ...(current && !['comment', 'review', 'progress'].includes(action) ? { expectedVersion: current.version } : {}),
-        ...fields
+        ...fields,
       }
       try {
         const result = await request(input)
@@ -236,16 +335,28 @@ export function DocumentWorkspace({
           try {
             const updated = await readLoaded(result.id!, action === 'create' ? 1 : feedbackPages.current)
             if (!isCurrent()) return false
-            if (action === 'save' && updated.document!.version !== result.version) throw new DocumentRequestError('version_conflict')
+            if (action === 'save' && updated.document!.version !== result.version)
+              throw new DocumentRequestError('version_conflict')
             setValidatedContext(context)
             if (action === 'create') feedbackPages.current = 1
             setDenied(false)
-            setData(current => ({ ...updated, feedback: current?.document?.id === updated.document!.id ? mergeFeedback(current.feedback!, updated.feedback) : updated.feedback }))
+            setData((current) => ({
+              ...updated,
+              feedback:
+                current?.document?.id === updated.document!.id
+                  ? mergeFeedback(current.feedback!, updated.feedback)
+                  : updated.feedback,
+            }))
             setConflict(false)
             if (['sharing', 'assign'].includes(action) && !updated.document!.canManage) setTab('Preview')
           } catch (error) {
             if (!isCurrent()) return false
-            if (!['sharing', 'assign'].includes(action) || !(error instanceof DocumentRequestError) || !['forbidden', 'document_not_found'].includes(error.code)) throw error
+            if (
+              !['sharing', 'assign'].includes(action) ||
+              !(error instanceof DocumentRequestError) ||
+              !['forbidden', 'document_not_found'].includes(error.code)
+            )
+              throw error
             unavailable = true
             setData(undefined)
             setDirty(false)
@@ -264,7 +375,7 @@ export function DocumentWorkspace({
                 ? 'Revision published.'
                 : action === 'delete'
                   ? 'Document deleted.'
-                  : 'Changes saved.'
+                  : 'Changes saved.',
         )
         if (action === 'create' || action === 'restore') setTab('Edit')
         pending.current = { fingerprint: '', key: '', id: '' }
@@ -282,7 +393,7 @@ export function DocumentWorkspace({
         }
       }
     },
-    [document, listFilter, request, reportError, isCurrent, readLoaded, context]
+    [document, listFilter, request, reportError, isCurrent, readLoaded, context],
   )
   const save = useCallback((title: string, body: string) => action('save', { title, body }), [action])
   async function more(kind: 'feedback' | 'documents') {
@@ -290,13 +401,16 @@ export function DocumentWorkspace({
     working.current = true
     setBusy(true)
     try {
-      const page = await request(kind === 'feedback' ? { action: 'read', id: document!.id, offset: data!.nextOffset } : { action: 'list', ...listFilter, offset: next })
+      const page = await request(
+        kind === 'feedback'
+          ? { action: 'read', id: document!.id, offset: data!.nextOffset }
+          : { action: 'list', ...listFilter, offset: next },
+      )
       if (isCurrent()) {
         if (kind === 'feedback') {
           feedbackPages.current++
           setData((current) => ({ ...page, feedback: mergeFeedback(current!.feedback!, page.feedback!) }))
-        }
-        else {
+        } else {
           setDocuments((current) => [...current, ...page.documents!])
           setNext(page.nextOffset!)
         }
@@ -316,14 +430,25 @@ export function DocumentWorkspace({
         <div className="flex items-center justify-between gap-3 px-5 py-5">
           <h1 className="text-base font-semibold">Documents</h1>
           {canCreate && (
-            <button type="button" aria-label="New document" className="dashboard-bulk-secondary" disabled={busy || dirty || feedbackPending} onClick={() => setCreating(true)}>
+            <button
+              type="button"
+              aria-label="New document"
+              className="dashboard-bulk-secondary"
+              disabled={busy || dirty || feedbackPending}
+              onClick={() => setCreating(true)}
+            >
               <Plus size={15} />
             </button>
           )}
         </div>
         <label className="mx-5 mb-4 block">
           <span className="sr-only">Search documents</span>
-          <input className="document-input" placeholder="Search documents…" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <input
+            className="document-input"
+            placeholder="Search documents…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </label>
         {loading && (
           <div className="px-5" role="status" aria-label="Loading documents">
@@ -331,7 +456,9 @@ export function DocumentWorkspace({
           </div>
         )}
         {!loading && !documents.length && (
-          <p className="px-5 text-sm leading-6 text-muted-foreground">{canCreate ? 'Create your first document and share it for review.' : 'No documents in this project yet.'}</p>
+          <p className="px-5 text-sm leading-6 text-muted-foreground">
+            {canCreate ? 'Create your first document and share it for review.' : 'No documents in this project yet.'}
+          </p>
         )}
         {documents
           .filter((d) => d.title.toLowerCase().includes(search.toLowerCase()))
@@ -347,12 +474,19 @@ export function DocumentWorkspace({
               <FileText size={16} />
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">{d.title}</span>
-                <span className="mt-1 block text-xs text-muted-foreground">{d.archived ? 'Archived' : d.publishedRevision ? `Revision ${d.publishedRevision}` : 'Draft'}</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  {d.archived ? 'Archived' : d.publishedRevision ? `Revision ${d.publishedRevision}` : 'Draft'}
+                </span>
               </span>
             </button>
           ))}
         {next !== null && (
-          <button type="button" className="document-text-button m-5" disabled={busy} onClick={() => void more('documents')}>
+          <button
+            type="button"
+            className="document-text-button m-5"
+            disabled={busy}
+            onClick={() => void more('documents')}
+          >
             Load more documents
           </button>
         )}
@@ -380,16 +514,29 @@ export function DocumentWorkspace({
             }}
           >
             <h2 className="text-xl font-semibold">Create a document</h2>
-            <p className="text-sm leading-6 text-muted-foreground">Start with a private draft. Publish and configure sharing when you’re ready for feedback.</p>
+            <p className="text-sm leading-6 text-muted-foreground">
+              Start with a private draft. Publish and configure sharing when you’re ready for feedback.
+            </p>
             <label className="block text-xs font-medium">
               Document title
-              <input className="document-input mt-2" value={newTitle} required maxLength={200} onChange={(e) => setNewTitle(e.target.value)} />
+              <input
+                className="document-input mt-2"
+                value={newTitle}
+                required
+                maxLength={200}
+                onChange={(e) => setNewTitle(e.target.value)}
+              />
             </label>
             <div className="flex gap-3">
               <button className="dashboard-bulk-primary" disabled={busy || !newTitle.trim()}>
                 Create draft
               </button>
-              <button type="button" className="dashboard-bulk-secondary" disabled={busy} onClick={() => setCreating(false)}>
+              <button
+                type="button"
+                className="dashboard-bulk-secondary"
+                disabled={busy}
+                onClick={() => setCreating(false)}
+              >
                 Cancel
               </button>
             </div>
@@ -408,22 +555,46 @@ export function DocumentWorkspace({
                         : 'Private draft · not published'}
                   </p>
                 </div>
-                <button type="button" className="dashboard-bulk-secondary gap-2" disabled={busy || feedbackPending} onClick={() => void select(document.id, dirty || conflict)}>
+                <button
+                  type="button"
+                  className="dashboard-bulk-secondary gap-2"
+                  disabled={busy || feedbackPending}
+                  onClick={() => void select(document.id, dirty || conflict)}
+                >
                   <RefreshCw size={13} />
                   Reload latest
                 </button>
               </div>
               <nav className="flex flex-wrap gap-2" aria-label="Document sections">
-                {[...(document.canEdit || conflict ? ['Edit'] : []), 'Preview', 'Feedback', ...(document.canEdit ? ['History'] : []), ...(document.canManage ? ['Sharing'] : [])].map((name) => (
-                  <button key={name} type="button" className="document-tab" aria-pressed={tab === name} disabled={busy || dirty || feedbackPending} onClick={() => setTab(name)}>
+                {[
+                  ...(document.canEdit || conflict ? ['Edit'] : []),
+                  'Preview',
+                  'Feedback',
+                  ...(document.canEdit ? ['History'] : []),
+                  ...(document.canManage ? ['Sharing'] : []),
+                ].map((name) => (
+                  <button
+                    key={name}
+                    type="button"
+                    className="document-tab"
+                    aria-pressed={tab === name}
+                    disabled={busy || dirty || feedbackPending}
+                    onClick={() => setTab(name)}
+                  >
                     {name === 'Edit' && !document.canEdit ? 'Your draft' : name}
                   </button>
                 ))}
               </nav>
-              {feedbackPending && <p className="text-xs text-muted-foreground">Send or discard your feedback before switching sections.</p>}
+              {feedbackPending && (
+                <p className="text-xs text-muted-foreground">
+                  Send or discard your feedback before switching sections.
+                </p>
+              )}
               {dirty && (
                 <p className="text-xs text-muted-foreground">
-                  {document.canEdit ? 'Save or discard your changes before switching sections.' : 'Copy or discard your draft before switching sections.'}
+                  {document.canEdit
+                    ? 'Save or discard your changes before switching sections.'
+                    : 'Copy or discard your draft before switching sections.'}
                 </p>
               )}
             </header>
@@ -455,9 +626,18 @@ export function DocumentWorkspace({
                   >
                     <label className="block text-xs font-medium">
                       What changed?
-                      <input className="document-input mt-2" value={summary} maxLength={1000} required onChange={(e) => setSummary(e.target.value)} placeholder="A short summary for this revision" />
+                      <input
+                        className="document-input mt-2"
+                        value={summary}
+                        maxLength={1000}
+                        required
+                        onChange={(e) => setSummary(e.target.value)}
+                        placeholder="A short summary for this revision"
+                      />
                     </label>
-                    <p className="text-xs leading-5 text-muted-foreground">Publishing saves an immutable revision. Reviewers with access see it at the same link.</p>
+                    <p className="text-xs leading-5 text-muted-foreground">
+                      Publishing saves an immutable revision. Reviewers with access see it at the same link.
+                    </p>
                     <button className="dashboard-bulk-primary" disabled={busy || dirty || !summary.trim()}>
                       Publish revision
                     </button>
@@ -470,14 +650,41 @@ export function DocumentWorkspace({
                 <DocumentBody source={document.body} />
               </div>
             )}
-            {tab === 'History' && !concealed && <DocumentHistory onError={reportError} document={document} apiBase={apiBase} session={session} disabled={busy} onRestore={(revision) => void action('restore', { revision })} />}
-            {tab === 'Sharing' && !concealed && <DocumentSharing key={`${document.id}:${document.version}`} document={document} disabled={busy} onAction={action} projects={projects} invites={data!.invites ?? []} />}
+            {tab === 'History' && !concealed && (
+              <DocumentHistory
+                onError={reportError}
+                document={document}
+                apiBase={apiBase}
+                session={session}
+                disabled={busy}
+                onRestore={(revision) => void action('restore', { revision })}
+              />
+            )}
+            {tab === 'Sharing' && !concealed && (
+              <DocumentSharing
+                key={`${document.id}:${document.version}`}
+                document={document}
+                disabled={busy}
+                onAction={action}
+                projects={projects}
+                invites={data!.invites ?? []}
+              />
+            )}
             {tab === 'Feedback' && (
               <>
-                {!concealed && <div className="document-reading-surface">
-                  {publicationPending ? <div role="status" aria-label="Loading published document"><Spinner /></div>
-                    : document.publishedRevision ? <DocumentBody source={publishedBody!} /> : <p className="text-sm text-muted-foreground">Publish a revision to collect feedback.</p>}
-                </div>}
+                {!concealed && (
+                  <div className="document-reading-surface">
+                    {publicationPending ? (
+                      <div role="status" aria-label="Loading published document">
+                        <Spinner />
+                      </div>
+                    ) : document.publishedRevision ? (
+                      <DocumentBody source={publishedBody!} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Publish a revision to collect feedback.</p>
+                    )}
+                  </div>
+                )}
                 <DocumentThreads
                   disabled={busy || publicationPending}
                   initialDraft={cached?.documentId === document.id ? cached.feedback : undefined}
@@ -501,13 +708,28 @@ export function DocumentWorkspace({
                   readOnly={!document.canComment}
                   onComment={async (input) => {
                     if (working.current) throw new DocumentRequestError('document_busy')
-                    if (!feedback.hasPending() && input.quote && selection.revision !== document.publishedRevision && !quoteMatches(publishedBody!, input)) throw new DocumentRequestError('selection_changed')
+                    if (
+                      !feedback.hasPending() &&
+                      input.quote &&
+                      selection.revision !== document.publishedRevision &&
+                      !quoteMatches(publishedBody!, input)
+                    )
+                      throw new DocumentRequestError('selection_changed')
                     working.current = true
                     setBusy(true)
                     setError('')
                     try {
-                      const updated = await feedback.submit({ ...input, id: document.id, revision: input.revision ?? document.publishedRevision! })
-                      if (isCurrent()) setData((current) => ({ ...current, document: updated.document, feedback: mergeFeedback(current!.feedback!, updated.feedback!) }))
+                      const updated = await feedback.submit({
+                        ...input,
+                        id: document.id,
+                        revision: input.revision ?? document.publishedRevision!,
+                      })
+                      if (isCurrent())
+                        setData((current) => ({
+                          ...current,
+                          document: updated.document,
+                          feedback: mergeFeedback(current!.feedback!, updated.feedback!),
+                        }))
                     } catch (error) {
                       reportError(error)
                       throw error
@@ -526,13 +748,18 @@ export function DocumentWorkspace({
                             feedbackVersion: comment.version,
                             reviewStatus: status,
                             ...(done ? { implementationStatus: 'done' } : {}),
-                            userRequested: true
+                            userRequested: true,
                           })
                       : undefined
                   }
                 />
                 {!concealed && data!.nextOffset !== null && (
-                  <button type="button" className="document-text-button m-6" disabled={busy} onClick={() => void more('feedback')}>
+                  <button
+                    type="button"
+                    className="document-text-button m-6"
+                    disabled={busy}
+                    onClick={() => void more('feedback')}
+                  >
                     Load more feedback
                   </button>
                 )}
@@ -540,21 +767,28 @@ export function DocumentWorkspace({
             )}
           </>
         ) : resume.current && error ? (
-          <DocumentRecoveryPanel draft={resume.current} disabled={busy} onDiscard={() => {
-            feedback.discard()
-            recovery.clear()
-            resume.current = undefined
-            setDirty(false)
-            setConflict(false)
-            setFeedbackPending(false)
-            setError('')
-          }} />
+          <DocumentRecoveryPanel
+            draft={resume.current}
+            disabled={busy}
+            onDiscard={() => {
+              feedback.discard()
+              recovery.clear()
+              resume.current = undefined
+              setDirty(false)
+              setConflict(false)
+              setFeedbackPending(false)
+              setError('')
+            }}
+          />
         ) : (
           !loading && (
             <div className="mx-auto max-w-lg px-6 py-16">
               <FileText size={28} className="mb-5 text-muted-foreground" />
               <h2 className="text-xl font-semibold">A document. One review link.</h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">Publish your work, collect feedback on specific passages, and turn accepted changes into the next revision.</p>
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                Publish your work, collect feedback on specific passages, and turn accepted changes into the next
+                revision.
+              </p>
               <p className="mt-4 text-xs text-muted-foreground">Select a document to get started.</p>
             </div>
           )

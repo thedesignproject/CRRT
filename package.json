@@ -2,15 +2,19 @@
   "name": "@thedesignproject/crrt",
   "version": "0.3.26",
   "description": "CRRT 🥕 visual feedback capture for React apps",
+  "homepage": "https://crrt.ai",
+  "bugs": {
+    "url": "https://github.com/thedesignproject/CRRT/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/thedesignproject/CRRT.git"
   },
-  "homepage": "https://crrt.ai",
-  "bugs": {
-    "url": "https://github.com/thedesignproject/CRRT/issues"
-  },
+  "files": [
+    "dist",
+    "THIRD_PARTY_NOTICES.md"
+  ],
   "type": "module",
   "main": "dist/crrt.umd.js",
   "module": "dist/crrt.es.js",
@@ -22,10 +26,6 @@
       "require": "./dist/crrt.umd.js"
     }
   },
-  "files": [
-    "dist",
-    "THIRD_PARTY_NOTICES.md"
-  ],
   "scripts": {
     "dev": "node scripts/generate-resource-catalog.ts && vite --config apps/landing/vite.config.ts",
     "dev:landing": "node scripts/generate-resource-catalog.ts && vite --config apps/landing/vite.config.ts",
@@ -72,10 +72,6 @@
     "test:visual:types": "bun check --project tests/visual/tsconfig.json",
     "chromatic:local": "bun run test:visual && bun --env-file=.env.docker.local run chromatic",
     "chromatic": "CHROMATIC_ARCHIVE_LOCATION=artifacts/chromatic-simple/captures chromatic --no-interactive --no-diagnostics-file --junit-report=artifacts/chromatic-simple/cloud.xml"
-  },
-  "peerDependencies": {
-    "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1161.0",
@@ -147,6 +143,10 @@
     "vite-plugin-dts": "^5.0.2",
     "vitest": "^4.1.4",
     "wxt": "^0.21.4"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "overrides": {
     "devalue": "5.9.4",

@@ -9,10 +9,12 @@ export async function sendFrameMessage<T = unknown>(to: number, payload: unknown
 export function receiveFrameMessages(handle: (payload: any, from: number) => unknown) {
   const listener = (message: any, sender: any, respond: (value: unknown) => void) => {
     if (sender.id !== browser.runtime.id || message?.type !== 'private:deliver') return false
-    Promise.resolve().then(() => handle(message.payload, message.from)).then(
-      (data) => respond({ ok: true, data }),
-      (error) => respond({ ok: false, error: String(error.message) }),
-    )
+    Promise.resolve()
+      .then(() => handle(message.payload, message.from))
+      .then(
+        (data) => respond({ ok: true, data }),
+        (error) => respond({ ok: false, error: String(error.message) }),
+      )
     return true
   }
   browser.runtime.onMessage.addListener(listener)
@@ -28,9 +30,15 @@ export async function relayFrameMessage(message: any, sender: any) {
   } else if (message.to !== 0 || sender.url !== browser.runtime.getURL('/private.html')) {
     throw new Error('Invalid private frame')
   }
-  const response = await browser.tabs.sendMessage(sender.tab.id, {
-    type: 'private:deliver', from, payload: message.payload,
-  }, { frameId: message.to })
+  const response = await browser.tabs.sendMessage(
+    sender.tab.id,
+    {
+      type: 'private:deliver',
+      from,
+      payload: message.payload,
+    },
+    { frameId: message.to },
+  )
   if (!response?.ok) throw new Error(response?.error || 'CRRT frame unavailable')
   return response.data
 }

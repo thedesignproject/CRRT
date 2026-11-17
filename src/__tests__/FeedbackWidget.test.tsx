@@ -10,9 +10,7 @@ const screenshotMock = vi.hoisted(() => ({
 // Replace the hook with a minimal in-test version so the screenshot preview
 // path (`imagePreviewUrl &&`) actually mounts when capture() fires.
 vi.mock('../lib/screenshotCapture', async () => {
-  const actual = await vi.importActual<typeof import('../lib/screenshotCapture')>(
-    '../lib/screenshotCapture',
-  )
+  const actual = await vi.importActual<typeof import('../lib/screenshotCapture')>('../lib/screenshotCapture')
   const React = await import('react')
   return {
     ...actual,
@@ -34,8 +32,7 @@ vi.mock('../lib/screenshotCapture', async () => {
           setImage(null)
           setStatus('idle')
         },
-        toBase64: async () =>
-          image ? { base64: 'eA==', mimeType: image.type } : null,
+        toBase64: async () => (image ? { base64: 'eA==', mimeType: image.type } : null),
       }
     },
   }
@@ -54,9 +51,7 @@ function mockFetch(
   const impl = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(url), init })
     if (init?.method === 'POST') {
-      return postResponder
-        ? postResponder(init)
-        : new Response(JSON.stringify({ success: true }), { status: 200 })
+      return postResponder ? postResponder(init) : new Response(JSON.stringify({ success: true }), { status: 200 })
     }
     if (init?.method === 'PATCH') {
       return new Response(JSON.stringify({ success: true }), { status: 200 })
@@ -71,8 +66,8 @@ function mockFetch(
 }
 
 function findWidgetSidebar() {
-  return Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
-    (el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''),
+  return Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+    /width:\s*340px/.test(el.getAttribute('style') ?? ''),
   )
 }
 
@@ -142,20 +137,25 @@ async function openCardEditByBody(bodyText: string) {
   await waitFor(() => {
     if (!document.body.textContent?.includes(bodyText)) throw new Error('comment not loaded')
   })
-  const card = Array.from(
-    document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card'),
-  ).find((c) => c.textContent?.includes(bodyText))
+  const card = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card')).find((c) =>
+    c.textContent?.includes(bodyText),
+  )
   if (!card) throw new Error('card not found')
   const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
   if (!moreBtn) throw new Error('More button not found')
-  await act(async () => { fireEvent.click(moreBtn) })
+  await act(async () => {
+    fireEvent.click(moreBtn)
+  })
   const editMenuItem = await waitFor(() => {
-    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-      .find((b) => b.textContent?.trim() === 'Edit')
+    const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+      (b) => b.textContent?.trim() === 'Edit',
+    )
     if (!btn) throw new Error('Edit menu item not found')
     return btn
   })
-  await act(async () => { fireEvent.click(editMenuItem) })
+  await act(async () => {
+    fireEvent.click(editMenuItem)
+  })
   return await waitFor(() => {
     const ta = card.querySelector<HTMLTextAreaElement>('textarea')
     if (!ta) throw new Error('edit textarea not mounted')
@@ -176,9 +176,19 @@ describe('<FeedbackWidget />', () => {
     // happy-dom returns zero for all bounding rects; the CRRT widget skips
     // rendering pins when width+height === 0. Return non-zero so pins mount.
     vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
-      width: 800, height: 600, top: 0, left: 0, right: 800, bottom: 600, x: 0, y: 0, toJSON: () => {},
+      width: 800,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 800,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => {},
     })
-    try { localStorage.clear() } catch {}
+    try {
+      localStorage.clear()
+    } catch {}
   })
 
   afterEach(() => {
@@ -219,7 +229,9 @@ describe('<FeedbackWidget />', () => {
     await enterCommentingMode()
     const record = document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')
     expect(record).not.toBeNull()
-    await act(async () => { fireEvent.click(record!) })
+    await act(async () => {
+      fireEvent.click(record!)
+    })
     expect(onRecord).toHaveBeenCalledOnce()
   })
 
@@ -228,7 +240,9 @@ describe('<FeedbackWidget />', () => {
     const onRecord = vi.fn().mockRejectedValue(new Error('offline'))
     render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" onRecord={onRecord} />)
     await enterCommentingMode()
-    await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!) })
+    await act(async () => {
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!)
+    })
     expect(document.body.textContent).toContain('Open the CRRT Chrome extension')
   })
 
@@ -238,8 +252,12 @@ describe('<FeedbackWidget />', () => {
     window.addEventListener('crrt:record-request', requested)
     render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)
     await enterCommentingMode()
-    await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!) })
-    await act(async () => { fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!) })
+    await act(async () => {
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!)
+    })
+    await act(async () => {
+      fireEvent.click(document.querySelector<HTMLButtonElement>('button[aria-label="Record screen"]')!)
+    })
     expect(requested).toHaveBeenCalledTimes(2)
     expect(document.body.textContent).toContain('Open the CRRT Chrome extension')
     window.removeEventListener('crrt:record-request', requested)
@@ -282,8 +300,9 @@ describe('<FeedbackWidget />', () => {
     expect(lightThemeStyles).toContain('--fw-foreground-disabled: #A8A29A;')
     expect(lightThemeStyles).toContain('--fw-empty-state: #6B6560;')
 
-    const emptyState = Array.from(root?.querySelectorAll<HTMLDivElement>('div') ?? [])
-      .find((element) => element.childElementCount === 0 && element.textContent === 'No comments yet')
+    const emptyState = Array.from(root?.querySelectorAll<HTMLDivElement>('div') ?? []).find(
+      (element) => element.childElementCount === 0 && element.textContent === 'No comments yet',
+    )
     expect(emptyState?.style.color).toBe('var(--fw-empty-state)')
 
     const launcher = root?.querySelector<HTMLButtonElement>('button[aria-label="Open CRRT menu"]')
@@ -300,9 +319,7 @@ describe('<FeedbackWidget />', () => {
 
   it('updates the theme attribute when the prop changes', () => {
     mockFetch()
-    const { rerender } = render(
-      <FeedbackWidget projectId="p" apiBase="https://x.example/api" theme="dark" />,
-    )
+    const { rerender } = render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" theme="dark" />)
     rerender(<FeedbackWidget projectId="p" apiBase="https://x.example/api" theme="light" />)
     expect(document.querySelector('[data-fw-crrt]')).toHaveAttribute('data-crrt-theme', 'light')
   })
@@ -329,9 +346,7 @@ describe('<FeedbackWidget />', () => {
 
   it('unmounts the widget when disabled flips to true at runtime', () => {
     mockFetch()
-    const { rerender } = render(
-      <FeedbackWidget projectId="p" apiBase="https://x.example/api" disabled={false} />,
-    )
+    const { rerender } = render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" disabled={false} />)
     expect(document.querySelectorAll('[data-fw]').length).toBeGreaterThan(0)
 
     rerender(<FeedbackWidget projectId="p" apiBase="https://x.example/api" disabled />)
@@ -346,39 +361,40 @@ describe('<FeedbackWidget />', () => {
       }),
     )
     // Should mount cleanly even if the API is offline — sidebar just stays empty.
-    expect(() =>
-      render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />),
-    ).not.toThrow()
+    expect(() => render(<FeedbackWidget projectId="p" apiBase="https://x.example/api" />)).not.toThrow()
   })
 
   it('rerenders and refetches when projectId changes', async () => {
     const calls = mockFetch()
-    const { rerender } = render(
-      <FeedbackWidget projectId="first" apiBase="https://x.example/api" />,
-    )
+    const { rerender } = render(<FeedbackWidget projectId="first" apiBase="https://x.example/api" />)
     await waitFor(() => expect(calls.some((c) => c.url.includes('projectKey=first'))).toBe(true))
 
     rerender(<FeedbackWidget projectId="second" apiBase="https://x.example/api" />)
-    await waitFor(() =>
-      expect(calls.some((c) => c.url.includes('projectKey=second'))).toBe(true),
-    )
+    await waitFor(() => expect(calls.some((c) => c.url.includes('projectKey=second'))).toBe(true))
   })
 
   it('PATCHes review status through the public comments endpoint', async () => {
     const pageUrl = window.location.href.split('#')[0]
-    const calls = mockFetch(undefined, () => new Response(JSON.stringify([
-      {
-        id: 'comment-1',
-        projectId: 'proj',
-        pageUrl,
-        x: 20,
-        y: 30,
-        selector: 'body',
-        body: 'resolve me',
-        reviewStatus: 'open',
-        createdAt: '2026-04-22T00:00:00Z',
-      },
-    ]), { status: 200 }))
+    const calls = mockFetch(
+      undefined,
+      () =>
+        new Response(
+          JSON.stringify([
+            {
+              id: 'comment-1',
+              projectId: 'proj',
+              pageUrl,
+              x: 20,
+              y: 30,
+              selector: 'body',
+              body: 'resolve me',
+              reviewStatus: 'open',
+              createdAt: '2026-04-22T00:00:00Z',
+            },
+          ]),
+          { status: 200 },
+        ),
+    )
 
     render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
@@ -433,12 +449,14 @@ describe('<FeedbackWidget />', () => {
       expect(badge!.style.animation).toContain('fw-badge-pop')
 
       await act(async () => {
-        targetNode.dispatchEvent(new MouseEvent('click', {
-          bubbles: true,
-          cancelable: true,
-          clientX: 130,
-          clientY: 210,
-        }))
+        targetNode.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 130,
+            clientY: 210,
+          }),
+        )
       })
 
       await waitFor(() => {
@@ -451,11 +469,7 @@ describe('<FeedbackWidget />', () => {
       const calls = mockFetch(
         () =>
           new Promise<Response>((resolve) =>
-            setTimeout(
-              () =>
-                resolve(new Response(JSON.stringify({ success: true }), { status: 200 })),
-              30,
-            ),
+            setTimeout(() => resolve(new Response(JSON.stringify({ success: true }), { status: 200 })), 30),
           ),
       )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
@@ -538,9 +552,7 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('a failed POST does not add a ghost comment to the sidebar', async () => {
-      const calls = mockFetch(
-        () => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }),
-      )
+      const calls = mockFetch(() => new Response(JSON.stringify({ error: 'boom' }), { status: 500 }))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       // Suppress the component's warn-log for the expected failure.
       vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -558,9 +570,9 @@ describe('<FeedbackWidget />', () => {
 
       // Textarea still holds the draft, so body.textContent would false-match.
       // The sidebar empty-state is the real signal that state wasn't mutated.
-      const sidebarEmpty = Array.from(
-        document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-      ).some((el) => el.textContent === 'No comments yet')
+      const sidebarEmpty = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).some(
+        (el) => el.textContent === 'No comments yet',
+      )
       expect(sidebarEmpty).toBe(true)
 
       expect(console.warn).toHaveBeenCalled()
@@ -587,9 +599,9 @@ describe('<FeedbackWidget />', () => {
       })
       // The Esc badge styling is the line we're guarding here — assert the
       // dedicated badge node, not just a substring of the whole document.
-      const badge = Array.from(
-        document.querySelectorAll<HTMLSpanElement>('[data-fw] span'),
-      ).find((el) => el.textContent === 'Esc')
+      const badge = Array.from(document.querySelectorAll<HTMLSpanElement>('[data-fw] span')).find(
+        (el) => el.textContent === 'Esc',
+      )
       expect(badge).toBeDefined()
       const instruction = badge?.closest('[data-fw]') as HTMLDivElement | null
       expect(instruction?.getAttribute('style')).toMatch(/bottom:\s*24px/)
@@ -622,9 +634,15 @@ describe('<FeedbackWidget />', () => {
       const store: Record<string, string> = { 'fw-crrt-author-name': name }
       vi.stubGlobal('localStorage', {
         getItem: (k: string) => store[k] ?? null,
-        setItem: (k: string, v: string) => { store[k] = v },
-        removeItem: (k: string) => { delete store[k] },
-        clear: () => { for (const k of Object.keys(store)) delete store[k] },
+        setItem: (k: string, v: string) => {
+          store[k] = v
+        },
+        removeItem: (k: string) => {
+          delete store[k]
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k]
+        },
         key: () => null,
         length: 0,
       })
@@ -817,8 +835,7 @@ describe('<FeedbackWidget />', () => {
       await startSelecting()
       expect(document.body.style.cursor).toBe('crosshair')
 
-      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
-        () => ({ offsetNode: p.firstChild })
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint = () => ({ offsetNode: p.firstChild })
       vi.spyOn(document, 'createRange').mockReturnValue({
         selectNodeContents: vi.fn(),
         getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
@@ -845,8 +862,7 @@ describe('<FeedbackWidget />', () => {
       await startSelecting()
 
       delete (document as unknown as Record<string, unknown>).caretPositionFromPoint
-      ;(document as unknown as Record<string, unknown>).caretRangeFromPoint =
-        () => ({ startContainer: p.firstChild })
+      ;(document as unknown as Record<string, unknown>).caretRangeFromPoint = () => ({ startContainer: p.firstChild })
       vi.spyOn(document, 'createRange').mockReturnValue({
         selectNodeContents: vi.fn(),
         getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
@@ -881,8 +897,9 @@ describe('<FeedbackWidget />', () => {
       await startSelecting()
 
       // A text node whose textContent is null/blank must not flip to a text cursor.
-      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
-        () => ({ offsetNode: { nodeType: Node.TEXT_NODE, textContent: null } })
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint = () => ({
+        offsetNode: { nodeType: Node.TEXT_NODE, textContent: null },
+      })
 
       await act(async () => {
         fireEvent.mouseMove(p, { clientX: 40, clientY: 40 })
@@ -898,8 +915,7 @@ describe('<FeedbackWidget />', () => {
       const { p } = appendCopyTarget()
       await startSelecting()
 
-      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint =
-        () => ({ offsetNode: p.firstChild })
+      ;(document as unknown as Record<string, unknown>).caretPositionFromPoint = () => ({ offsetNode: p.firstChild })
       vi.spyOn(document, 'createRange').mockReturnValue({
         selectNodeContents: vi.fn(),
         getClientRects: () => [{ left: 0, right: 800, top: 0, bottom: 600 }],
@@ -1002,9 +1018,9 @@ describe('<FeedbackWidget />', () => {
       })
       await getTextarea()
 
-      const backdrop = Array.from(
-        document.querySelectorAll<HTMLDivElement>('div[data-fw]'),
-      ).find((el) => el.style.zIndex === '2147483645' && !el.hasAttribute('data-fw-selector-frame'))!
+      const backdrop = Array.from(document.querySelectorAll<HTMLDivElement>('div[data-fw]')).find(
+        (el) => el.style.zIndex === '2147483645' && !el.hasAttribute('data-fw-selector-frame'),
+      )!
       await act(async () => {
         fireEvent.click(backdrop)
       })
@@ -1030,30 +1046,39 @@ describe('<FeedbackWidget />', () => {
 
     it('renders a fetched text_range comment as a pin via its container selector', async () => {
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'c-text',
-        projectId: 'proj',
-        pageUrl,
-        x: 20,
-        y: 30,
-        selector: 'body',
-        body: 'anchored to copy',
-        authorName: 'Ada',
-        reviewStatus: 'open',
-        createdAt: '2026-06-01T00:00:00Z',
-        targetType: 'text_range',
-        anchor: {
-          kind: 'text_range',
-          selectedText: 'selectable',
-          normalizedText: 'selectable',
-          prefix: 'Some ',
-          suffix: ' page copy',
-          containerSelector: 'body',
-          startOffset: 5,
-          endOffset: 15,
-          createdFromUrl: pageUrl,
-        },
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'c-text',
+                projectId: 'proj',
+                pageUrl,
+                x: 20,
+                y: 30,
+                selector: 'body',
+                body: 'anchored to copy',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-06-01T00:00:00Z',
+                targetType: 'text_range',
+                anchor: {
+                  kind: 'text_range',
+                  selectedText: 'selectable',
+                  normalizedText: 'selectable',
+                  prefix: 'Some ',
+                  suffix: ' page copy',
+                  containerSelector: 'body',
+                  startOffset: 5,
+                  endOffset: 15,
+                  createdFromUrl: pageUrl,
+                },
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       await waitFor(() => {
@@ -1118,9 +1143,9 @@ describe('<FeedbackWidget />', () => {
       await openCardEditByBody('sidebar entry')
 
       const cancel = await waitFor(() => {
-        const btn = Array.from(
-          document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
-        ).find((b) => b.textContent === 'Cancel')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent === 'Cancel',
+        )
         if (!btn) throw new Error('Cancel button not mounted yet')
         return btn
       })
@@ -1146,9 +1171,9 @@ describe('<FeedbackWidget />', () => {
       // The detail popover meta line is "#<n> · <timeAgo>" — the middot is
       // unique to that popover and a stable signal that line 1190 mounted.
       await waitFor(() => {
-        const meta = Array.from(
-          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-        ).find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        const meta = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+          /#1\s*·/.test(el.textContent ?? ''),
+        )
         if (!meta) throw new Error('pin detail meta line not rendered yet')
       })
     })
@@ -1166,9 +1191,16 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('shows the anchored selection quote in the sidebar card', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ body: 'tighten this copy', targetType: 'text_range', anchor: textRangeAnchor('quoted snippet') }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([
+          seedComment({
+            body: 'tighten this copy',
+            targetType: 'text_range',
+            anchor: textRangeAnchor('quoted snippet'),
+          }),
+        ]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       const card = await waitFor(() => {
@@ -1181,9 +1213,16 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('shows the anchored selection quote in the pin detail popover', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ body: 'tighten this copy', targetType: 'text_range', anchor: textRangeAnchor('quoted snippet') }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([
+          seedComment({
+            body: 'tighten this copy',
+            targetType: 'text_range',
+            anchor: textRangeAnchor('quoted snippet'),
+          }),
+        ]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       const card = await waitFor(() => {
@@ -1194,17 +1233,24 @@ describe('<FeedbackWidget />', () => {
       fireEvent.click(card)
 
       await waitFor(() => {
-        const quote = Array.from(
-          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-        ).find((el) => el.textContent === '“quoted snippet”')
+        const quote = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (el) => el.textContent === '“quoted snippet”',
+        )
         if (!quote) throw new Error('pin detail quote not rendered yet')
       })
     })
 
     it('shows the anchored selection quote in the pin hover tooltip', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ body: 'tighten this copy', targetType: 'text_range', anchor: textRangeAnchor('quoted snippet') }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([
+          seedComment({
+            body: 'tighten this copy',
+            targetType: 'text_range',
+            anchor: textRangeAnchor('quoted snippet'),
+          }),
+        ]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       const pin = await waitFor(() => {
@@ -1216,9 +1262,9 @@ describe('<FeedbackWidget />', () => {
         fireEvent.mouseEnter(pin)
       })
       await waitFor(() => {
-        const quote = Array.from(
-          document.querySelectorAll<HTMLDivElement>('[data-fw] div'),
-        ).find((el) => el.textContent === '“quoted snippet”')
+        const quote = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
+          (el) => el.textContent === '“quoted snippet”',
+        )
         if (!quote) throw new Error('hover tooltip quote not rendered yet')
       })
     })
@@ -1244,9 +1290,9 @@ describe('<FeedbackWidget />', () => {
 
       // Click the "Open" filter — only accepted exists, so the list goes empty.
       const openOption = await waitFor(() => {
-        const btn = Array.from(
-          document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
-        ).find((b) => b.textContent?.trim() === 'Open 0')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Open 0',
+        )
         if (!btn) throw new Error('Open filter not mounted yet')
         return btn
       })
@@ -1287,10 +1333,11 @@ describe('<FeedbackWidget />', () => {
       fireEvent.mouseEnter(pin)
       return await waitFor(() => {
         const wrappers = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        const tooltip = wrappers.find((el) =>
-          !el.hasAttribute('data-fw-selector-frame') &&
-          /pointer-events:\s*none/.test(el.getAttribute('style') ?? '') &&
-          /position:\s*fixed/.test(el.getAttribute('style') ?? ''),
+        const tooltip = wrappers.find(
+          (el) =>
+            !el.hasAttribute('data-fw-selector-frame') &&
+            /pointer-events:\s*none/.test(el.getAttribute('style') ?? '') &&
+            /position:\s*fixed/.test(el.getAttribute('style') ?? ''),
         )
         if (!tooltip) throw new Error('tooltip wrapper not rendered')
         return tooltip
@@ -1345,11 +1392,14 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('numbers pins descending so the newest comment is #N for N comments', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ id: 'c1', body: 'first', createdAt: '2026-04-22T00:00:00Z' }),
-        seedComment({ id: 'c2', body: 'second', createdAt: '2026-04-23T00:00:00Z' }),
-        seedComment({ id: 'c3', body: 'third', createdAt: '2026-04-24T00:00:00Z' }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([
+          seedComment({ id: 'c1', body: 'first', createdAt: '2026-04-22T00:00:00Z' }),
+          seedComment({ id: 'c2', body: 'second', createdAt: '2026-04-23T00:00:00Z' }),
+          seedComment({ id: 'c3', body: 'third', createdAt: '2026-04-24T00:00:00Z' }),
+        ]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       await waitFor(() => {
@@ -1358,9 +1408,7 @@ describe('<FeedbackWidget />', () => {
         }
       })
 
-      const cards = Array.from(
-        document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card'),
-      )
+      const cards = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card'))
       expect(cards.length).toBe(3)
       // Cards render in API-supplied order; pin number = total - index, so
       // the first card gets the highest number.
@@ -1370,10 +1418,13 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('hides comments created before COMMENT_CUTOFF and shows ones after', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ id: 'pre', body: 'legacy comment', createdAt: '2026-04-18T00:00:00Z' }),
-        seedComment({ id: 'post', body: 'fresh comment', createdAt: '2026-04-22T00:00:00Z' }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([
+          seedComment({ id: 'pre', body: 'legacy comment', createdAt: '2026-04-18T00:00:00Z' }),
+          seedComment({ id: 'post', body: 'fresh comment', createdAt: '2026-04-22T00:00:00Z' }),
+        ]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       await waitFor(() => {
@@ -1437,8 +1488,8 @@ describe('<FeedbackWidget />', () => {
       // The sidebar is always rendered; only its transform changes. Find the
       // single root-level sidebar by its width: 340px footprint.
       const findSidebar = () =>
-        Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find(
-          (el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''),
+        Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+          /width:\s*340px/.test(el.getAttribute('style') ?? ''),
         )
 
       expect(findSidebar()?.getAttribute('style')).toMatch(/translateX\(100%\)/)
@@ -1517,11 +1568,18 @@ describe('<FeedbackWidget />', () => {
           throw new Error('widget not mounted')
         }
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
       await act(async () => {
-        targetNode.dispatchEvent(new MouseEvent('click', {
-          bubbles: true, cancelable: true, clientX: 80, clientY: 80,
-        }))
+        fireEvent.keyDown(window, { key: 'c' })
+      })
+      await act(async () => {
+        targetNode.dispatchEvent(
+          new MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+            clientX: 80,
+            clientY: 80,
+          }),
+        )
       })
 
       const nameInput = await waitFor(() => {
@@ -1553,7 +1611,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('widget not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await act(async () => {
         targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 80 }))
       })
@@ -1564,8 +1624,12 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('name input not mounted')
         return el
       })
-      await act(async () => { fireEvent.change(firstNameInput, { target: { value: 'Tomas' } }) })
-      await act(async () => { fireEvent.submit(firstNameInput.closest('form')!) })
+      await act(async () => {
+        fireEvent.change(firstNameInput, { target: { value: 'Tomas' } })
+      })
+      await act(async () => {
+        fireEvent.submit(firstNameInput.closest('form')!)
+      })
 
       // Now in commenting mode — textarea and avatar button should be visible.
       await waitFor(() => {
@@ -1580,7 +1644,9 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Click avatar → name modal reopens (existingName="Tomas" → Close button shown).
-      await act(async () => { fireEvent.click(avatar) })
+      await act(async () => {
+        fireEvent.click(avatar)
+      })
       const nameInput = await waitFor(() => {
         const el = document.querySelector<HTMLInputElement>('input[placeholder^="e.g."]')
         if (!el) throw new Error('name input not mounted after avatar click')
@@ -1588,11 +1654,17 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Change name to 'Alex' and submit.
-      await act(async () => { fireEvent.change(nameInput, { target: { value: 'Alex' } }) })
-      await act(async () => { fireEvent.submit(nameInput.closest('form')!) })
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: 'Alex' } })
+      })
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
 
       // Modal closes, commenting mode stays (textarea still visible), avatar updates.
-      await waitFor(() => { expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull() })
+      await waitFor(() => {
+        expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
+      })
       expect(document.querySelector('textarea')).not.toBeNull()
       expect(document.querySelector('button[title^="Signed in as Alex"]')).not.toBeNull()
     })
@@ -1608,9 +1680,13 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('widget not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
       await act(async () => {
-        targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }))
+        fireEvent.keyDown(window, { key: 'c' })
+      })
+      await act(async () => {
+        targetNode.dispatchEvent(
+          new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 100, clientY: 100 }),
+        )
       })
 
       // Set initial name to 'Tomas'.
@@ -1619,8 +1695,12 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('name input not mounted')
         return el
       })
-      await act(async () => { fireEvent.change(firstInput, { target: { value: 'Tomas' } }) })
-      await act(async () => { fireEvent.submit(firstInput.closest('form')!) })
+      await act(async () => {
+        fireEvent.change(firstInput, { target: { value: 'Tomas' } })
+      })
+      await act(async () => {
+        fireEvent.submit(firstInput.closest('form')!)
+      })
 
       // Wait for commenting popover + avatar button.
       await waitFor(() => {
@@ -1633,7 +1713,9 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Click avatar → name modal shows Close button (existingName="Tomas").
-      await act(async () => { fireEvent.click(avatar) })
+      await act(async () => {
+        fireEvent.click(avatar)
+      })
       const closeBtn = await waitFor(() => {
         // Use form selector to target NameModal's Close button, not sidebar's Close button.
         const el = document.querySelector<HTMLButtonElement>('form button[aria-label="Close"]')
@@ -1642,9 +1724,13 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Close → modal dismissed, name unchanged.
-      await act(async () => { fireEvent.click(closeBtn) })
+      await act(async () => {
+        fireEvent.click(closeBtn)
+      })
       // Wait for NameModal to unmount (form no longer present).
-      await waitFor(() => { expect(document.querySelector('form button[aria-label="Close"]')).toBeNull() })
+      await waitFor(() => {
+        expect(document.querySelector('form button[aria-label="Close"]')).toBeNull()
+      })
       // Avatar still shows original name — cancel did not save.
       expect(document.querySelector('button[title^="Signed in as Tomas"]')).not.toBeNull()
     })
@@ -1665,16 +1751,29 @@ describe('<FeedbackWidget />', () => {
       // Render with a seeded comment whose selector will throw — the widget
       // must mount cleanly (null path prevents any crash).
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'cx1', projectId: 'proj', pageUrl,
-        x: 10, y: 10, selector: '!!invalid!!',
-        body: 'bad selector', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'cx1',
+                projectId: 'proj',
+                pageUrl,
+                x: 10,
+                y: 10,
+                selector: '!!invalid!!',
+                body: 'bad selector',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
 
-      expect(() =>
-        render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      ).not.toThrow()
+      expect(() => render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)).not.toThrow()
     })
   })
 
@@ -1695,7 +1794,9 @@ describe('<FeedbackWidget />', () => {
 
       // Enter selecting mode and click the target — first click opens the
       // name modal (authorName is not set yet).
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await act(async () => {
         targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 80 }))
       })
@@ -1708,8 +1809,12 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Fill name and submit — mode becomes 'commenting'.
-      await act(async () => { fireEvent.change(nameInput, { target: { value: 'Bob' } }) })
-      await act(async () => { fireEvent.submit(nameInput.closest('form')!) })
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: 'Bob' } })
+      })
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
 
       // Wait for textarea, type a comment.
       const textarea = await waitFor(() => {
@@ -1717,12 +1822,16 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('textarea not mounted')
         return el
       })
-      await act(async () => { fireEvent.change(textarea, { target: { value: 'pending send test' } }) })
+      await act(async () => {
+        fireEvent.change(textarea, { target: { value: 'pending send test' } })
+      })
 
       // Hitting Send now should NOT open name modal again (name is saved), so
       // it should go straight to POST.
       const sendBtn = document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
-      await act(async () => { fireEvent.click(sendBtn) })
+      await act(async () => {
+        fireEvent.click(sendBtn)
+      })
 
       await waitFor(() => {
         const post = calls.find((c) => c.init?.method === 'POST')
@@ -1745,7 +1854,9 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Enter selecting + click.
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await act(async () => {
         targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 80, clientY: 80 }))
       })
@@ -1756,17 +1867,25 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('name input not mounted')
         return el
       })
-      await act(async () => { fireEvent.change(nameInput, { target: { value: 'Carol' } }) })
-      await act(async () => { fireEvent.submit(nameInput.closest('form')!) })
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: 'Carol' } })
+      })
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
 
       const textarea = await waitFor(() => {
         const el = document.querySelector<HTMLTextAreaElement>('textarea')
         if (!el) throw new Error('textarea not mounted')
         return el
       })
-      await act(async () => { fireEvent.change(textarea, { target: { value: 'carol comment' } }) })
+      await act(async () => {
+        fireEvent.change(textarea, { target: { value: 'carol comment' } })
+      })
       const sendBtn = document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')!
-      await act(async () => { fireEvent.click(sendBtn) })
+      await act(async () => {
+        fireEvent.click(sendBtn)
+      })
 
       await waitFor(() => {
         const post = calls.find((c) => c.init?.method === 'POST')
@@ -1788,7 +1907,9 @@ describe('<FeedbackWidget />', () => {
       target.id = 'hover-target'
       document.body.appendChild(target)
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
 
       // Simulate mousemove over the target element — sets hovered state which
       // triggers the outline effect (line 265).
@@ -1836,17 +1957,22 @@ describe('<FeedbackWidget />', () => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'f' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'f' })
+      })
       const sidebar = await waitFor(() => {
         const el = findWidgetSidebar()
         if (!el || !/translateX\(0/.test(el.getAttribute('style') ?? '')) throw new Error('sidebar not open')
         return el
       })
-      const agentCta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button'))
-        .find((b) => b.textContent?.includes('Open agent') && b.textContent?.includes('Shift + A'))
+      const agentCta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button')).find(
+        (b) => b.textContent?.includes('Open agent') && b.textContent?.includes('Shift + A'),
+      )
       expect(agentCta).toBeDefined()
 
-      await act(async () => { fireEvent.click(agentCta!) })
+      await act(async () => {
+        fireEvent.click(agentCta!)
+      })
 
       await waitFor(() => {
         const modal = document.querySelector('[data-fw-agent-dialog="premium"]')
@@ -1902,7 +2028,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'S' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'S' })
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
@@ -1912,12 +2040,27 @@ describe('<FeedbackWidget />', () => {
   describe('"h"/"H" toggles pin visibility (line 480)', () => {
     it('"h" key hides existing pins, second press restores them', async () => {
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'pin1', projectId: 'proj', pageUrl,
-        x: 20, y: 30, selector: 'body',
-        body: 'visible pin', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'pin1',
+                projectId: 'proj',
+                pageUrl,
+                x: 20,
+                y: 30,
+                selector: 'body',
+                body: 'visible pin',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
 
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
@@ -1927,13 +2070,17 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Press 'h' — pins should disappear.
-      await act(async () => { fireEvent.keyDown(window, { key: 'h' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'h' })
+      })
       await waitFor(() => {
         expect(document.querySelector('[data-fw-pin]')).toBeNull()
       })
 
       // Press 'H' — pins should reappear.
-      await act(async () => { fireEvent.keyDown(window, { key: 'H' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'H' })
+      })
       await waitFor(() => {
         expect(document.querySelector('[data-fw-pin]')).not.toBeNull()
       })
@@ -1991,7 +2138,9 @@ describe('<FeedbackWidget />', () => {
       fireEvent.mouseEnter(removeBtn!)
       fireEvent.mouseLeave(removeBtn!)
 
-      await act(async () => { fireEvent.click(removeBtn!) })
+      await act(async () => {
+        fireEvent.click(removeBtn!)
+      })
 
       await waitFor(() => {
         expect(document.querySelector('[aria-label="Remove screenshot"]')).toBeNull()
@@ -2007,16 +2156,18 @@ describe('<FeedbackWidget />', () => {
       fireEvent.change(textarea, { target: { value: 'cancelling' } })
 
       // Find the Cancel button in the popover footer (not in any modal).
-      const cancelBtn = Array.from(
-        document.querySelectorAll<HTMLButtonElement>('[data-fw] button'),
-      ).find((b) => b.textContent?.trim() === 'Cancel' && !b.closest('form'))
+      const cancelBtn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.textContent?.trim() === 'Cancel' && !b.closest('form'),
+      )
 
       expect(cancelBtn).toBeDefined()
       // Cover onMouseEnter/Leave (lines 833-834).
       fireEvent.mouseEnter(cancelBtn!)
       fireEvent.mouseLeave(cancelBtn!)
 
-      await act(async () => { fireEvent.click(cancelBtn!) })
+      await act(async () => {
+        fireEvent.click(cancelBtn!)
+      })
 
       await waitFor(() => {
         // After cancel, the popover textarea should be gone.
@@ -2032,7 +2183,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Feedback')
@@ -2048,15 +2201,20 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       const readyFilter = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ready 0')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Ready 0',
+        )
         if (!btn) throw new Error('Ready filter not found')
         return btn
       })
-      await act(async () => { fireEvent.click(readyFilter) })
+      await act(async () => {
+        fireEvent.click(readyFilter)
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Ready for agent')
@@ -2070,7 +2228,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'sidebar entry', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'sidebar entry',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     it('handles mouseEnter/Leave on a themed card without throwing', async () => {
@@ -2096,7 +2266,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'pin detail body', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'pin detail body',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     // Helper to open pin popover and then its "More options" menu → Edit.
@@ -2110,20 +2292,26 @@ describe('<FeedbackWidget />', () => {
 
       // PinActionCluster has a "More options" button that reveals Edit.
       const moreBtn = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.getAttribute('aria-label') === 'More options')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.getAttribute('aria-label') === 'More options',
+        )
         if (!btn) throw new Error('More options button not found')
         return btn
       })
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
 
       const editItem = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Edit')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Edit',
+        )
         if (!btn) throw new Error('Edit menu item not found')
         return btn
       })
-      await act(async () => { fireEvent.click(editItem) })
+      await act(async () => {
+        fireEvent.click(editItem)
+      })
 
       const editArea = await waitFor(() => {
         const areas = document.querySelectorAll<HTMLTextAreaElement>('[data-fw] textarea')
@@ -2169,12 +2357,16 @@ describe('<FeedbackWidget />', () => {
       const calls = mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const area = await openPinEditMode()
-      act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
+      act(() =>
+        window.dispatchEvent(
+          new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } }),
+        ),
+      )
       fireEvent.change(area, { target: { value: 'keep editing' } })
       fireEvent.keyDown(area, { key: 'Enter' })
       fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
       expect(area).toBeInTheDocument()
-      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
+      expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(false)
       fireEvent.keyDown(area, { key: 'Escape' })
       expect(area).not.toBeInTheDocument()
     })
@@ -2213,7 +2405,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'menu test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'menu test',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     async function openCardMenu() {
@@ -2226,7 +2430,9 @@ describe('<FeedbackWidget />', () => {
       // structurally present and can be clicked.
       const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
       if (!moreBtn) throw new Error('More button not found')
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
       return { card, moreBtn }
     }
 
@@ -2250,8 +2456,9 @@ describe('<FeedbackWidget />', () => {
 
       for (const label of ['Approve', 'Edit', 'Delete']) {
         const item = await waitFor(() => {
-          const button = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-            .find((candidate) => candidate.textContent?.trim() === label)
+          const button = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+            (candidate) => candidate.textContent?.trim() === label,
+          )
           if (!button) throw new Error(`${label} menu item not found`)
           return button
         })
@@ -2267,12 +2474,15 @@ describe('<FeedbackWidget />', () => {
       await openCardMenu()
 
       const approveItem = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Approve')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Approve',
+        )
         if (!btn) throw new Error('Approve menu item not found')
         return btn
       })
-      await act(async () => { fireEvent.click(approveItem) })
+      await act(async () => {
+        fireEvent.click(approveItem)
+      })
 
       await waitFor(() => {
         const patch = calls.find((c) => c.init?.method === 'PATCH')
@@ -2286,12 +2496,15 @@ describe('<FeedbackWidget />', () => {
       await openCardMenu()
 
       const editItem = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Edit')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Edit',
+        )
         if (!btn) throw new Error('Edit menu item not found')
         return btn
       })
-      await act(async () => { fireEvent.click(editItem) })
+      await act(async () => {
+        fireEvent.click(editItem)
+      })
 
       await waitFor(() => {
         const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
@@ -2305,12 +2518,15 @@ describe('<FeedbackWidget />', () => {
       await openCardMenu()
 
       const deleteItem = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Delete')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Delete',
+        )
         if (!btn) throw new Error('Delete menu item not found')
         return btn
       })
-      await act(async () => { fireEvent.click(deleteItem) })
+      await act(async () => {
+        fireEvent.click(deleteItem)
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).not.toContain('menu test')
@@ -2331,13 +2547,14 @@ describe('<FeedbackWidget />', () => {
       fireEvent.mouseEnter(approveBtn)
       fireEvent.mouseLeave(approveBtn)
 
-      await act(async () => { fireEvent.click(approveBtn) })
+      await act(async () => {
+        fireEvent.click(approveBtn)
+      })
       await waitFor(() => {
         const patch = calls.find((c) => c.init?.method === 'PATCH')
         expect(patch).toBeDefined()
       })
     })
-
   })
 
   describe('sidebar card inline edit via keyboard (lines 1336-1338, 1349)', () => {
@@ -2346,7 +2563,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'inline edit body', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'inline edit body',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     it('Cmd+Enter in sidebar card textarea saves edit (line 1337)', async () => {
@@ -2397,7 +2626,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       await waitFor(() => {
         const sidebar = findWidgetSidebar()
@@ -2417,25 +2648,32 @@ describe('<FeedbackWidget />', () => {
       })
 
       const pill = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.getAttribute('aria-label') === 'Open CRRT menu',
+        )
         if (!btn) throw new Error('pill button not found')
         return btn
       })
 
-      await act(async () => { fireEvent.click(pill) })
+      await act(async () => {
+        fireEvent.click(pill)
+      })
       const drop = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.includes('Drop comment'))
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) =>
+          b.textContent?.includes('Drop comment'),
+        )
         if (!btn) throw new Error('drop action not found')
         return btn
       })
-      await act(async () => { fireEvent.click(drop) })
+      await act(async () => {
+        fireEvent.click(drop)
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
-        const sidebar = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-          .find((el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''))
+        const sidebar = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+          /width:\s*340px/.test(el.getAttribute('style') ?? ''),
+        )
         expect(sidebar?.getAttribute('style')).toMatch(/translateX\(100%\)/)
       })
     })
@@ -2448,14 +2686,17 @@ describe('<FeedbackWidget />', () => {
       })
 
       // Enter selecting mode.
-      await act(async () => { fireEvent.keyDown(window, { key: 's' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 's' })
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
 
-      const launcher = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-        .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
-          && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
+      const launcher = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]')).find(
+        (el) =>
+          /right:\s*24px/.test(el.getAttribute('style') ?? '') && /top:\s*50%/.test(el.getAttribute('style') ?? ''),
+      )
       expect(launcher?.getAttribute('style')).toMatch(/opacity:\s*1/)
       expect(launcher?.getAttribute('style')).toMatch(/pointer-events:\s*auto/)
       expect(document.body.textContent).not.toContain('Activo')
@@ -2491,24 +2732,33 @@ describe('<FeedbackWidget />', () => {
     })
 
     it.each(['metaKey', 'ctrlKey', 'altKey', 'shiftKey'] as const)(
-      'ignores C with %s in idle and selecting modes', async (modifier) => {
+      'ignores C with %s in idle and selecting modes',
+      async (modifier) => {
         mockFetch()
         render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
         await waitFor(() => expect(document.querySelector('[data-fw]')).not.toBeNull())
 
         const hint = 'Click an element or select text to leave feedback'
         const key = modifier === 'shiftKey' ? 'C' : 'c'
-        await act(async () => { fireEvent.keyDown(window, { key, [modifier]: true }) })
+        await act(async () => {
+          fireEvent.keyDown(window, { key, [modifier]: true })
+        })
         expect(document.body.textContent).not.toContain(hint)
         expect(document.body.style.cursor).not.toBe('crosshair')
 
-        await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+        await act(async () => {
+          fireEvent.keyDown(window, { key: 'c' })
+        })
         expect(document.body.style.cursor).toBe('crosshair')
-        await act(async () => { fireEvent.keyDown(window, { key, [modifier]: true }) })
+        await act(async () => {
+          fireEvent.keyDown(window, { key, [modifier]: true })
+        })
         expect(document.body.textContent).toContain(hint)
         expect(document.body.style.cursor).toBe('crosshair')
 
-        await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+        await act(async () => {
+          fireEvent.keyDown(window, { key: 'c' })
+        })
         expect(document.body.textContent).not.toContain(hint)
         expect(document.body.style.cursor).not.toBe('crosshair')
       },
@@ -2521,28 +2771,39 @@ describe('<FeedbackWidget />', () => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await waitFor(() => {
         expect(document.body.style.cursor).toBe('crosshair')
       })
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'c', repeat: true }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c', repeat: true })
+      })
       expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await waitFor(() => {
         expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
       })
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await waitFor(() => {
         expect(document.body.style.cursor).toBe('crosshair')
       })
 
-      const pill = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
+      const pill = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.getAttribute('aria-label') === 'Open CRRT menu',
+      )
       expect(pill).toBeDefined()
-      await act(async () => { fireEvent.click(pill!) })
+      await act(async () => {
+        fireEvent.click(pill!)
+      })
 
       expect(document.body.style.cursor).toBe('crosshair')
       expect(pill?.getAttribute('style')).toMatch(/rgba\(228,\s*110,\s*57,\s*0\.72\)/)
@@ -2557,18 +2818,23 @@ describe('<FeedbackWidget />', () => {
       })
 
       const pill = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.getAttribute('aria-label') === 'Open CRRT menu',
+        )
         if (!btn) throw new Error('pill button not found')
         return btn
       })
 
-      await act(async () => { fireEvent.click(pill) })
+      await act(async () => {
+        fireEvent.click(pill)
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Drop comment')
       })
 
-      await act(async () => { fireEvent.pointerDown(document.body) })
+      await act(async () => {
+        fireEvent.pointerDown(document.body)
+      })
       await waitFor(() => {
         const menu = document.querySelector<HTMLDivElement>('[data-fw-launcher-menu]')
         expect(menu?.getAttribute('style')).toMatch(/opacity:\s*0/)
@@ -2584,11 +2850,14 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       const findSidebar = () =>
-        Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-          .find((el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''))
+        Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+          /width:\s*340px/.test(el.getAttribute('style') ?? ''),
+        )
 
       await waitFor(() => {
         expect(findSidebar()?.getAttribute('style')).toMatch(/translateX\(0/)
@@ -2604,7 +2873,9 @@ describe('<FeedbackWidget />', () => {
       fireEvent.mouseEnter(closeBtn)
       fireEvent.mouseLeave(closeBtn)
 
-      await act(async () => { fireEvent.click(closeBtn) })
+      await act(async () => {
+        fireEvent.click(closeBtn)
+      })
 
       await waitFor(() => {
         expect(findSidebar()?.getAttribute('style')).toMatch(/translateX\(100%\)/)
@@ -2618,18 +2889,24 @@ describe('<FeedbackWidget />', () => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
       // Enter selecting mode then open sidebar.
-      await act(async () => { fireEvent.keyDown(window, { key: 's' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 's' })
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       const closeBtn = await waitFor(() => {
         const btn = document.querySelector<HTMLButtonElement>('[data-fw] button[aria-label="Close"]')
         if (!btn) throw new Error('Close button not found')
         return btn
       })
-      await act(async () => { fireEvent.click(closeBtn) })
+      await act(async () => {
+        fireEvent.click(closeBtn)
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
@@ -2644,16 +2921,21 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       const ready = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ready 0')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Ready 0',
+        )
         if (!btn) throw new Error('Ready filter not found')
         return btn
       })
 
-      await act(async () => { fireEvent.click(ready) })
+      await act(async () => {
+        fireEvent.click(ready)
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Ready for agent')
       })
@@ -2663,27 +2945,47 @@ describe('<FeedbackWidget />', () => {
   describe('Ready filter empty-state', () => {
     it('shows "Approve comments to queue them here" when open comments exist but none are ready', async () => {
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'c1', projectId: 'proj', pageUrl,
-        x: 20, y: 30, selector: 'body',
-        body: 'open comment', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'c1',
+                projectId: 'proj',
+                pageUrl,
+                x: 20,
+                y: 30,
+                selector: 'body',
+                body: 'open comment',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       await waitFor(() => {
         if (!document.body.textContent?.includes('open comment')) throw new Error('not loaded')
       })
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
 
       const readyFilter = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ready 0')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Ready 0',
+        )
         if (!btn) throw new Error('Ready filter not found')
         return btn
       })
-      await act(async () => { fireEvent.click(readyFilter) })
+      await act(async () => {
+        fireEvent.click(readyFilter)
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Approve comments to queue them here')
@@ -2711,7 +3013,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'img card', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'img card',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     it('clicking imageUrl thumbnail in sidebar card calls window.open', async () => {
@@ -2725,12 +3039,17 @@ describe('<FeedbackWidget />', () => {
         return el
       })
 
-      await act(async () => { fireEvent.click(img) })
+      await act(async () => {
+        fireEvent.click(img)
+      })
       expect(openSpy).toHaveBeenCalledWith('https://example.com/card.png', '_blank')
     })
 
     it('resolved comment imageUrl shows greyed-out filter (line 1384)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment({ imageUrl: 'https://example.com/r.png', reviewStatus: 'accepted' })]))
+      mockFetch(
+        undefined,
+        commentsResponse([seedComment({ imageUrl: 'https://example.com/r.png', reviewStatus: 'accepted' })]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       const img = await waitFor(() => {
@@ -2749,7 +3068,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'more btn hover', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'more btn hover',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     it('hovering the More button changes its background style', async () => {
@@ -2779,9 +3110,10 @@ describe('<FeedbackWidget />', () => {
 
       // The launcher wrapper is the fixed right-center [data-fw] div.
       const pillWrapper = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
-            && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]')).find(
+          (el) =>
+            /right:\s*24px/.test(el.getAttribute('style') ?? '') && /top:\s*50%/.test(el.getAttribute('style') ?? ''),
+        )
         if (!el) throw new Error('pill wrapper not found')
         return el
       })
@@ -2797,9 +3129,10 @@ describe('<FeedbackWidget />', () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pillWrapper = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
-            && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]')).find(
+          (el) =>
+            /right:\s*24px/.test(el.getAttribute('style') ?? '') && /top:\s*50%/.test(el.getAttribute('style') ?? ''),
+        )
         if (!el) throw new Error('pill wrapper not found')
         return el
       })
@@ -2822,9 +3155,10 @@ describe('<FeedbackWidget />', () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pillWrapper = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .find((el) => /right:\s*24px/.test(el.getAttribute('style') ?? '')
-            && /top:\s*50%/.test(el.getAttribute('style') ?? ''))
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]')).find(
+          (el) =>
+            /right:\s*24px/.test(el.getAttribute('style') ?? '') && /top:\s*50%/.test(el.getAttribute('style') ?? ''),
+        )
         if (!el) throw new Error('pill wrapper not found')
         return el
       })
@@ -2855,12 +3189,27 @@ describe('<FeedbackWidget />', () => {
       el.id = 'catch-test-el'
       document.body.appendChild(el)
 
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'catch1', projectId: 'proj', pageUrl,
-        x: 10, y: 10, selector: '#catch-test-el',
-        body: 'catch test', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'catch1',
+                projectId: 'proj',
+                pageUrl,
+                x: 10,
+                y: 10,
+                selector: '#catch-test-el',
+                body: 'catch test',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
 
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
@@ -2914,8 +3263,12 @@ describe('<FeedbackWidget />', () => {
     it('dispatching crrt:activate on window enters selecting mode when idle', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
-      await act(async () => { window.dispatchEvent(new CustomEvent('crrt:activate')) })
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw]')) throw new Error('not mounted')
+      })
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('crrt:activate'))
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
@@ -2924,10 +3277,16 @@ describe('<FeedbackWidget />', () => {
     it('crrt:activate while not idle is ignored', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw]')) throw new Error('not mounted')
+      })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await waitFor(() => expect(document.body.textContent).toContain('Click an element'))
-      await act(async () => { window.dispatchEvent(new CustomEvent('crrt:activate')) })
+      await act(async () => {
+        window.dispatchEvent(new CustomEvent('crrt:activate'))
+      })
       // Still in selecting mode (not re-entered), no crash
       expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
     })
@@ -2938,11 +3297,15 @@ describe('<FeedbackWidget />', () => {
       const calls = mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { textarea } = await enterCommentingMode()
-      act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
+      act(() =>
+        window.dispatchEvent(
+          new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } }),
+        ),
+      )
       fireEvent.change(textarea, { target: { value: 'still writing' } })
       fireEvent.keyDown(textarea, { key: 'Enter' })
       fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true })
-      expect(calls.some(c => c.init?.method === 'POST')).toBe(false)
+      expect(calls.some((c) => c.init?.method === 'POST')).toBe(false)
       expect(textarea).toBeInTheDocument()
     })
 
@@ -2990,7 +3353,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'pc1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'pin click test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'pc1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'pin click test',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     it('clicking a pin marker opens the detail popover (lines 924-925)', async () => {
@@ -3001,10 +3376,13 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('pin not rendered')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       await waitFor(() => {
-        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
-          .find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div')).find((el) =>
+          /#1\s*·/.test(el.textContent ?? ''),
+        )
         if (!meta) throw new Error('pin detail popover not rendered')
       })
     })
@@ -3017,17 +3395,22 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('pin not rendered')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       // Popover is open — find the backdrop (fixed inset:0 overlay behind popover)
       const backdrop = await waitFor(() => {
         const el = document.querySelector<HTMLElement>('[data-fw-pin-backdrop]')
         if (!el) throw new Error('backdrop not found')
         return el
       })
-      await act(async () => { fireEvent.click(backdrop) })
+      await act(async () => {
+        fireEvent.click(backdrop)
+      })
       await waitFor(() => {
-        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
-          .find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div')).find((el) =>
+          /#1\s*·/.test(el.textContent ?? ''),
+        )
         expect(meta).toBeUndefined()
       })
     })
@@ -3041,16 +3424,21 @@ describe('<FeedbackWidget />', () => {
         return el
       })
       // First click: select
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       await waitFor(() => {
         if (!Array.from(document.querySelectorAll('[data-fw] div')).find((el) => /#1\s*·/.test(el.textContent ?? '')))
           throw new Error('not selected')
       })
       // Second click: deselect
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       await waitFor(() => {
-        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div'))
-          .find((el) => /#1\s*·/.test(el.textContent ?? ''))
+        const meta = Array.from(document.querySelectorAll<HTMLElement>('[data-fw] div')).find((el) =>
+          /#1\s*·/.test(el.textContent ?? ''),
+        )
         expect(meta).toBeUndefined()
       })
     })
@@ -3062,12 +3450,27 @@ describe('<FeedbackWidget />', () => {
       el.id = 'l23-test-el'
       document.body.appendChild(el)
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'l23id', projectId: 'proj', pageUrl,
-        x: 10, y: 10, selector: '#l23-test-el',
-        body: 'l23 test', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'l23id',
+                projectId: 'proj',
+                pageUrl,
+                x: 10,
+                y: 10,
+                selector: '#l23-test-el',
+                body: 'l23 test',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (!document.body.textContent?.includes('l23 test')) throw new Error('not loaded')
@@ -3094,15 +3497,38 @@ describe('<FeedbackWidget />', () => {
     it('pin is hidden when getBoundingClientRect returns zero dimensions', async () => {
       // Override the beforeEach spy to return zero dimensions
       vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
-        width: 0, height: 0, top: 0, left: 0, right: 0, bottom: 0, x: 0, y: 0, toJSON: () => {},
+        width: 0,
+        height: 0,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
       })
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'l25id', projectId: 'proj', pageUrl,
-        x: 10, y: 10, selector: 'body',
-        body: 'l25 test', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'l25id',
+                projectId: 'proj',
+                pageUrl,
+                x: 10,
+                y: 10,
+                selector: 'body',
+                body: 'l25 test',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (!document.body.textContent?.includes('l25 test')) throw new Error('not loaded')
@@ -3114,15 +3540,38 @@ describe('<FeedbackWidget />', () => {
     it('pin renders when width=0 but height is non-zero (L25 height-falsy branch)', async () => {
       // Width=0 alone is not enough to skip; the guard requires BOTH dims = 0.
       vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
-        width: 0, height: 100, top: 0, left: 0, right: 0, bottom: 100, x: 0, y: 0, toJSON: () => {},
+        width: 0,
+        height: 100,
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {},
       })
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'l25b', projectId: 'proj', pageUrl,
-        x: 10, y: 10, selector: 'body',
-        body: 'l25 height branch', authorName: 'Ada',
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'l25b',
+                projectId: 'proj',
+                pageUrl,
+                x: 10,
+                y: 10,
+                selector: 'body',
+                body: 'l25 height branch',
+                authorName: 'Ada',
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await waitFor(() => {
         if (!document.body.textContent?.includes('l25 height branch')) throw new Error('not loaded')
@@ -3137,15 +3586,22 @@ describe('<FeedbackWidget />', () => {
     it('Ready filter becomes active when clicked', async () => {
       mockFetch()
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await waitFor(() => { if (!document.querySelector('[data-fw]')) throw new Error('not mounted') })
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await waitFor(() => {
+        if (!document.querySelector('[data-fw]')) throw new Error('not mounted')
+      })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
       const ready = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Ready 0')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Ready 0',
+        )
         if (!btn) throw new Error('Ready filter not found')
         return btn
       })
-      await act(async () => { fireEvent.click(ready) })
+      await act(async () => {
+        fireEvent.click(ready)
+      })
       expect(ready.style.color).toBe('var(--fw-active-label)')
     })
   })
@@ -3153,19 +3609,36 @@ describe('<FeedbackWidget />', () => {
   describe('getInitials null fallback in pin popover (L1293)', () => {
     it('uses body[0] as initial when authorName is null', async () => {
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'init1', projectId: 'proj', pageUrl,
-        x: 20, y: 30, selector: 'body',
-        body: 'xray comment', authorName: null,
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'init1',
+                projectId: 'proj',
+                pageUrl,
+                x: 20,
+                y: 30,
+                selector: 'body',
+                body: 'xray comment',
+                authorName: null,
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pin = await waitFor(() => {
         const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
         if (!el) throw new Error('pin not rendered')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       // Popover should be open — body[0].toUpperCase() = 'X'
       await waitFor(() => {
         if (!Array.from(document.querySelectorAll('[data-fw] div')).find((el) => /#1\s*·/.test(el.textContent ?? '')))
@@ -3176,19 +3649,36 @@ describe('<FeedbackWidget />', () => {
 
     it('uses U as initial when authorName is null and body is empty', async () => {
       const pageUrl = window.location.href.split('#')[0]
-      mockFetch(undefined, () => new Response(JSON.stringify([{
-        id: 'init2', projectId: 'proj', pageUrl,
-        x: 20, y: 30, selector: 'body',
-        body: '', authorName: null,
-        reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z',
-      }]), { status: 200 }))
+      mockFetch(
+        undefined,
+        () =>
+          new Response(
+            JSON.stringify([
+              {
+                id: 'init2',
+                projectId: 'proj',
+                pageUrl,
+                x: 20,
+                y: 30,
+                selector: 'body',
+                body: '',
+                authorName: null,
+                reviewStatus: 'open',
+                createdAt: '2026-04-22T00:00:00Z',
+              },
+            ]),
+            { status: 200 },
+          ),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const pin = await waitFor(() => {
         const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
         if (!el) throw new Error('pin not rendered')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       await waitFor(() => {
         if (!Array.from(document.querySelectorAll('[data-fw] div')).find((el) => /#1\s*·/.test(el.textContent ?? '')))
           throw new Error('popover not open')
@@ -3202,7 +3692,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'edit1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'edit kbd test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'edit1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'edit kbd test',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     function openEditMode() {
@@ -3213,12 +3715,16 @@ describe('<FeedbackWidget />', () => {
       const calls = mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const area = await openEditMode()
-      act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
+      act(() =>
+        window.dispatchEvent(
+          new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } }),
+        ),
+      )
       fireEvent.change(area, { target: { value: 'keep editing' } })
       fireEvent.keyDown(area, { key: 'Enter' })
       fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
       expect(area).toBeInTheDocument()
-      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
+      expect(calls.some((c) => c.init?.method === 'PATCH')).toBe(false)
       fireEvent.keyDown(area, { key: 'Escape' })
       expect(area).not.toBeInTheDocument()
     })
@@ -3228,8 +3734,12 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const editArea = await openEditMode()
       fireEvent.change(editArea, { target: { value: 'cmd enter saved' } })
-      await act(async () => { fireEvent.keyDown(editArea, { key: 'Enter', metaKey: true }) })
-      await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
+      await act(async () => {
+        fireEvent.keyDown(editArea, { key: 'Enter', metaKey: true })
+      })
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw] textarea')).toBeNull()
+      })
       expect(document.body.textContent).toContain('cmd enter saved')
     })
 
@@ -3238,8 +3748,12 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const editArea = await openEditMode()
       fireEvent.change(editArea, { target: { value: 'ctrl enter saved' } })
-      await act(async () => { fireEvent.keyDown(editArea, { key: 'Enter', ctrlKey: true }) })
-      await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
+      await act(async () => {
+        fireEvent.keyDown(editArea, { key: 'Enter', ctrlKey: true })
+      })
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw] textarea')).toBeNull()
+      })
       expect(document.body.textContent).toContain('ctrl enter saved')
     })
 
@@ -3248,8 +3762,12 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const editArea = await openEditMode()
       fireEvent.change(editArea, { target: { value: 'discarded' } })
-      await act(async () => { fireEvent.keyDown(editArea, { key: 'Escape' }) })
-      await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
+      await act(async () => {
+        fireEvent.keyDown(editArea, { key: 'Escape' })
+      })
+      await waitFor(() => {
+        expect(document.querySelector('[data-fw] textarea')).toBeNull()
+      })
       expect(document.body.textContent).not.toContain('discarded')
     })
   })
@@ -3260,7 +3778,19 @@ describe('<FeedbackWidget />', () => {
     }
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
-      return { id: 'menu2', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body: 'menu toggle test', authorName: 'Ada', reviewStatus: 'open', createdAt: '2026-04-22T00:00:00Z', ...overrides }
+      return {
+        id: 'menu2',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'menu toggle test',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
+      }
     }
 
     it('clicking More again when menu is open closes it (isMenuOpen → null)', async () => {
@@ -3274,13 +3804,17 @@ describe('<FeedbackWidget />', () => {
       const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
       if (!moreBtn) throw new Error('More button not found')
       // First click: open menu
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
       })
       // Second click: close menu
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
@@ -3295,9 +3829,17 @@ describe('<FeedbackWidget />', () => {
     function seedComment(overrides: Record<string, unknown> = {}) {
       const pageUrl = window.location.href.split('#')[0]
       return {
-        id: 'c1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body',
-        body: 'gap test', authorName: 'Ada', reviewStatus: 'open',
-        createdAt: '2026-04-22T00:00:00Z', ...overrides,
+        id: 'c1',
+        projectId: 'proj',
+        pageUrl,
+        x: 20,
+        y: 30,
+        selector: 'body',
+        body: 'gap test',
+        authorName: 'Ada',
+        reviewStatus: 'open',
+        createdAt: '2026-04-22T00:00:00Z',
+        ...overrides,
       }
     }
 
@@ -3305,9 +3847,15 @@ describe('<FeedbackWidget />', () => {
       const store: Record<string, string> = { 'fw-crrt-author-name': 'Stored User' }
       vi.stubGlobal('localStorage', {
         getItem: (k: string) => store[k] ?? null,
-        setItem: (k: string, v: string) => { store[k] = v },
-        removeItem: (k: string) => { delete store[k] },
-        clear: () => { for (const k of Object.keys(store)) delete store[k] },
+        setItem: (k: string, v: string) => {
+          store[k] = v
+        },
+        removeItem: (k: string) => {
+          delete store[k]
+        },
+        clear: () => {
+          for (const k of Object.keys(store)) delete store[k]
+        },
         key: () => null,
         length: 0,
       })
@@ -3323,7 +3871,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('no widget')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await act(async () => {
         targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 50 }))
       })
@@ -3348,7 +3898,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('no widget')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await act(async () => {
         targetNode.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: 50, clientY: 50 }))
       })
@@ -3356,7 +3908,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (!document.querySelector('input[placeholder^="e.g."]')) throw new Error('name modal not open')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'Escape' })
+      })
       await waitFor(() => {
         expect(document.querySelector('input[placeholder^="e.g."]')).toBeNull()
       })
@@ -3368,8 +3922,9 @@ describe('<FeedbackWidget />', () => {
 
       const editArea = await openCardEditByBody('gap test')
       fireEvent.change(editArea, { target: { value: '   ' } })
-      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.textContent === 'Save')
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.textContent === 'Save',
+      )
       fireEvent.click(save!)
 
       // Early return: still in edit mode, textarea preserves whitespace draft.
@@ -3379,16 +3934,17 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('saveEdit leaves non-matching comments unchanged when multiple exist (L495 false arm)', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ id: 'a', body: 'keep me' }),
-        seedComment({ id: 'b', body: 'edit me' }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([seedComment({ id: 'a', body: 'keep me' }), seedComment({ id: 'b', body: 'edit me' })]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       const editArea = await openCardEditByBody('edit me')
       fireEvent.change(editArea, { target: { value: 'edited' } })
-      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.textContent === 'Save')
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.textContent === 'Save',
+      )
       fireEvent.click(save!)
 
       await waitFor(() => {
@@ -3438,8 +3994,9 @@ describe('<FeedbackWidget />', () => {
       fireEvent.mouseLeave(pin)
       // hover tooltip should unmount on leave.
       await waitFor(() => {
-        const tooltips = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]'))
-          .filter((el) => el.textContent === 'hover & leave')
+        const tooltips = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw]')).filter(
+          (el) => el.textContent === 'hover & leave',
+        )
         expect(tooltips.length).toBe(0)
       })
     })
@@ -3454,15 +4011,14 @@ describe('<FeedbackWidget />', () => {
       })
       // L978 is inside the HOVER tooltip (`{isHovered && (...)}`), not the
       // selected popover. Trigger mouseEnter to mount it.
-      await act(async () => { fireEvent.mouseEnter(pin) })
+      await act(async () => {
+        fireEvent.mouseEnter(pin)
+      })
       const avatar = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('div'))
-          .find((d) => {
-            const style = d.getAttribute('style') ?? ''
-            return /width:\s*28px/.test(style)
-              && /border-radius:\s*50%/.test(style)
-              && /gradient/.test(style)
-          })
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('div')).find((d) => {
+          const style = d.getAttribute('style') ?? ''
+          return /width:\s*28px/.test(style) && /border-radius:\s*50%/.test(style) && /gradient/.test(style)
+        })
         if (!el) throw new Error('hover tooltip avatar not mounted')
         return el
       })
@@ -3470,9 +4026,10 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('editing a pin-popover comment with imageUrl uses the image-margin branch (L1045)', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ body: 'with image', imageUrl: 'https://x.example/img.png' }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([seedComment({ body: 'with image', imageUrl: 'https://x.example/img.png' })]),
+      )
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
 
       // Select the pin to open the popover (which contains PinActionCluster).
@@ -3481,7 +4038,9 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('pin not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
 
       // Open the More-options menu inside the popover.
       const moreBtn = await waitFor(() => {
@@ -3489,16 +4048,21 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('More options button not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
 
       // Click the Edit item to enter pin-popover edit mode.
       const editItem = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Edit')
+        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Edit',
+        )
         if (!el) throw new Error('Edit menu item not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(editItem) })
+      await act(async () => {
+        fireEvent.click(editItem)
+      })
 
       const editArea = await waitFor(() => {
         const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
@@ -3512,10 +4076,13 @@ describe('<FeedbackWidget />', () => {
     it('compact filters can move from Open back to All', async () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
       const open = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Open 1')
+        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Open 1',
+        )
         if (!el) throw new Error('Open filter not mounted')
         return el
       })
@@ -3523,8 +4090,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain('Open comments')
       })
-      const all = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.textContent?.includes('All'))
+      const all = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) =>
+        b.textContent?.includes('All'),
+      )
       expect(all).toBeDefined()
       fireEvent.click(all!)
       await waitFor(() => {
@@ -3542,7 +4110,9 @@ describe('<FeedbackWidget />', () => {
       })
       const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
       // Open menu first so isMenuOpen=true.
-      await act(async () => { fireEvent.click(moreBtn!) })
+      await act(async () => {
+        fireEvent.click(moreBtn!)
+      })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
@@ -3574,7 +4144,9 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('more button not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
@@ -3595,16 +4167,21 @@ describe('<FeedbackWidget />', () => {
         return el
       })
       const moreBtn = card.querySelector<HTMLButtonElement>('button[title="More"]')
-      await act(async () => { fireEvent.click(moreBtn!) })
+      await act(async () => {
+        fireEvent.click(moreBtn!)
+      })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
       })
       // Backdrop is the fixed inset:0 div with zIndex 99998.
-      const backdrop = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        .find((el) => /z-index:\s*99998/.test(el.getAttribute('style') ?? ''))
+      const backdrop = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+        /z-index:\s*99998/.test(el.getAttribute('style') ?? ''),
+      )
       expect(backdrop).toBeDefined()
-      await act(async () => { fireEvent.click(backdrop!) })
+      await act(async () => {
+        fireEvent.click(backdrop!)
+      })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
@@ -3621,20 +4198,27 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('pin not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       const moreBtn = await waitFor(() => {
         const el = document.querySelector<HTMLButtonElement>('[data-fw] button[aria-label="More options"]')
         if (!el) throw new Error('More options not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
       const editItem = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'Edit')
+        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'Edit',
+        )
         if (!el) throw new Error('Edit menu item not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(editItem) })
+      await act(async () => {
+        fireEvent.click(editItem)
+      })
       return await waitFor(() => {
         const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
         if (!ta) throw new Error('edit textarea not mounted')
@@ -3645,9 +4229,12 @@ describe('<FeedbackWidget />', () => {
     it('pin popover edit: Cancel exits without persisting (L1069)', async () => {
       const editArea = await openPinPopoverEditMode('pop edit cancel')
       fireEvent.change(editArea, { target: { value: 'discarded body' } })
-      const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.textContent === 'Cancel')
-      await act(async () => { fireEvent.click(cancel!) })
+      const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.textContent === 'Cancel',
+      )
+      await act(async () => {
+        fireEvent.click(cancel!)
+      })
       await waitFor(() => {
         if (document.querySelector('[data-fw] textarea')) throw new Error('still editing')
       })
@@ -3658,9 +4245,12 @@ describe('<FeedbackWidget />', () => {
     it('pin popover edit: Save persists the edit (L1073)', async () => {
       const editArea = await openPinPopoverEditMode('pop edit save')
       fireEvent.change(editArea, { target: { value: 'saved body' } })
-      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.textContent === 'Save')
-      await act(async () => { fireEvent.click(save!) })
+      const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.textContent === 'Save',
+      )
+      await act(async () => {
+        fireEvent.click(save!)
+      })
       await waitFor(() => {
         if (document.querySelector('[data-fw] textarea')) throw new Error('still editing')
       })
@@ -3668,9 +4258,10 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('pin popover image click opens the image in a new tab (L1088)', async () => {
-      mockFetch(undefined, commentsResponse([
-        seedComment({ body: 'with image', imageUrl: 'https://x.example/shot.png' }),
-      ]))
+      mockFetch(
+        undefined,
+        commentsResponse([seedComment({ body: 'with image', imageUrl: 'https://x.example/shot.png' })]),
+      )
       const openSpy = vi.fn()
       const origOpen = window.open
       window.open = openSpy as unknown as typeof window.open
@@ -3681,14 +4272,18 @@ describe('<FeedbackWidget />', () => {
           if (!el) throw new Error('pin not mounted')
           return el
         })
-        await act(async () => { fireEvent.click(pin) })
+        await act(async () => {
+          fireEvent.click(pin)
+        })
         const popoverImage = await waitFor(() => {
           const imgs = Array.from(document.querySelectorAll<HTMLImageElement>('[data-fw] img'))
           const el = imgs.find((i) => i.src === 'https://x.example/shot.png')
           if (!el) throw new Error('popover image not mounted')
           return el
         })
-        await act(async () => { fireEvent.click(popoverImage) })
+        await act(async () => {
+          fireEvent.click(popoverImage)
+        })
         expect(openSpy).toHaveBeenCalledWith('https://x.example/shot.png', '_blank')
       } finally {
         window.open = origOpen
@@ -3703,25 +4298,33 @@ describe('<FeedbackWidget />', () => {
         if (!el) throw new Error('pin not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(pin) })
+      await act(async () => {
+        fireEvent.click(pin)
+      })
       const moreBtn = await waitFor(() => {
         const el = document.querySelector<HTMLButtonElement>('[data-fw] button[aria-label="More options"]')
         if (!el) throw new Error('More options not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(moreBtn) })
+      await act(async () => {
+        fireEvent.click(moreBtn)
+      })
       const viewList = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.textContent?.trim() === 'View list')
+        const el = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.textContent?.trim() === 'View list',
+        )
         if (!el) throw new Error('View list not mounted')
         return el
       })
-      await act(async () => { fireEvent.click(viewList) })
+      await act(async () => {
+        fireEvent.click(viewList)
+      })
       // Pin popover backdrop should be gone (selectedPin cleared).
       expect(document.querySelector('[data-fw-pin-backdrop]')).toBeNull()
       // Sidebar should be visible (translateX(0) not 100%).
-      const sidebar = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
-        .find((el) => /width:\s*340px/.test(el.getAttribute('style') ?? ''))
+      const sidebar = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div')).find((el) =>
+        /width:\s*340px/.test(el.getAttribute('style') ?? ''),
+      )
       expect(sidebar?.getAttribute('style')).not.toMatch(/translateX\(100%\)/)
     })
 
@@ -3732,8 +4335,9 @@ describe('<FeedbackWidget />', () => {
         if (!document.body.textContent?.includes('unread comment')) throw new Error('seed not rendered')
       })
       const pill = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-          .find((b) => b.getAttribute('aria-label') === 'Open CRRT menu')
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+          (b) => b.getAttribute('aria-label') === 'Open CRRT menu',
+        )
         if (!btn) throw new Error('pill not mounted')
         return btn
       })
@@ -3752,14 +4356,18 @@ describe('<FeedbackWidget />', () => {
       expect(dot!.style.height).toBe('10px')
 
       const wrapper = pill.parentElement!.parentElement!
-      await act(async () => { fireEvent.mouseEnter(wrapper) })
+      await act(async () => {
+        fireEvent.mouseEnter(wrapper)
+      })
       await waitFor(() => {
         expect(pill.style.transform).toBe('translateY(-1px) scale(1.02)')
       })
       expect(dot!.style.top).toBe('-2px')
       expect(dot!.style.right).toBe('-2px')
 
-      await act(async () => { fireEvent.mouseLeave(wrapper) })
+      await act(async () => {
+        fireEvent.mouseLeave(wrapper)
+      })
       await waitFor(() => {
         expect(pill.style.transform).toBe('translateY(0) scale(1)')
       })
@@ -3779,7 +4387,9 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         if (document.querySelectorAll('[data-fw]').length === 0) throw new Error('not mounted')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await act(async () => {
         target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, clientX: 60, clientY: 60 }))
       })
@@ -3789,8 +4399,12 @@ describe('<FeedbackWidget />', () => {
         return el
       })
       // Submit the name modal to enter commenting mode.
-      await act(async () => { fireEvent.change(nameInput, { target: { value: 'Dana' } }) })
-      await act(async () => { fireEvent.submit(nameInput.closest('form')!) })
+      await act(async () => {
+        fireEvent.change(nameInput, { target: { value: 'Dana' } })
+      })
+      await act(async () => {
+        fireEvent.submit(nameInput.closest('form')!)
+      })
 
       // Wait for the comment textarea (commenting mode).
       const textarea = await waitFor(() => {
@@ -3817,7 +4431,9 @@ describe('<FeedbackWidget />', () => {
         fireEvent.change(textarea, { target: { value: 'pending-flow' } })
         const sendBtn = document.querySelector<HTMLButtonElement>('button[aria-label="Send"]')
         expect(sendBtn).not.toBeNull()
-        await act(async () => { fireEvent.click(sendBtn!) })
+        await act(async () => {
+          fireEvent.click(sendBtn!)
+        })
         await waitFor(() => {
           const posts = calls.filter((c) => c.init?.method === 'POST')
           if (posts.length === 0) throw new Error('no POST sent')
@@ -3851,34 +4467,57 @@ describe('<FeedbackWidget />', () => {
           return new Response(JSON.stringify(comments), { status: 200 })
         }
         if (url?.includes('/v1/public/project')) {
-          return new Response(JSON.stringify({
-            projectKey: 'proj', projectName: 'Project',
-            doc: { slug: 'share-1', token: 'token-1', docUrl: 'https://x.example/doc', promptUrl: 'https://x.example/prompt' },
-          }), { status: 200 })
+          return new Response(
+            JSON.stringify({
+              projectKey: 'proj',
+              projectName: 'Project',
+              doc: {
+                slug: 'share-1',
+                token: 'token-1',
+                docUrl: 'https://x.example/doc',
+                promptUrl: 'https://x.example/prompt',
+              },
+            }),
+            { status: 200 },
+          )
         }
         if (url?.includes('/v1/agent/eligibility')) {
           return new Response(JSON.stringify(opts.eligibility ?? {}), { status: 200 })
         }
         if (url?.includes('/v1/shares/share-1/prompt')) {
-          return new Response(JSON.stringify({
-            slug: 'share-1', target: 'claude-code', prompt: 'Use this CRRT context', docUrl: 'https://x.example/doc',
-          }), { status: 200 })
+          return new Response(
+            JSON.stringify({
+              slug: 'share-1',
+              target: 'claude-code',
+              prompt: 'Use this CRRT context',
+              docUrl: 'https://x.example/doc',
+            }),
+            { status: 200 },
+          )
         }
         if (url?.includes('/v1/agent/shares/share-1/state')) {
-          return new Response(JSON.stringify({
-            share: { slug: 'share-1', scopeType: 'project', revision: 1 },
-            project: { publicKey: 'proj', name: 'Project', repoUrl: null },
-            comments: [], presence: [],
-          }), { status: 200 })
+          return new Response(
+            JSON.stringify({
+              share: { slug: 'share-1', scopeType: 'project', revision: 1 },
+              project: { publicKey: 'proj', name: 'Project', repoUrl: null },
+              comments: [],
+              presence: [],
+            }),
+            { status: 200 },
+          )
         }
         return new Response('[]', { status: 200 })
       }
     }
 
-    const pillButton = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-      .find((b) => b.getAttribute('aria-label')?.endsWith('CRRT menu'))!
-    const menuAction = (title: string) => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button[role="menuitem"]'))
-      .find((b) => b.textContent?.includes(title))!
+    const pillButton = () =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) =>
+        b.getAttribute('aria-label')?.endsWith('CRRT menu'),
+      )!
+    const menuAction = (title: string) =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button[role="menuitem"]')).find((b) =>
+        b.textContent?.includes(title),
+      )!
 
     async function mountWidget(getResponder = agentGet()) {
       mockFetch(undefined, getResponder)
@@ -3897,21 +4536,31 @@ describe('<FeedbackWidget />', () => {
       expect(menu.id).toBe('crrt-launcher-menu')
       expect(menu.getAttribute('aria-hidden')).toBe('true')
 
-      await act(async () => { fireEvent.click(pillButton()) })
+      await act(async () => {
+        fireEvent.click(pillButton())
+      })
       expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
       expect(menu.getAttribute('aria-hidden')).toBe('false')
 
       // Hover a menu action (its mouse handlers).
       const drop = menuAction('Drop comment')
-      await act(async () => { fireEvent.mouseEnter(drop) })
-      await act(async () => { fireEvent.mouseLeave(drop) })
+      await act(async () => {
+        fireEvent.mouseEnter(drop)
+      })
+      await act(async () => {
+        fireEvent.mouseLeave(drop)
+      })
 
       // Pointerdown inside the launcher root keeps the menu open.
-      await act(async () => { fireEvent.pointerDown(drop) })
+      await act(async () => {
+        fireEvent.pointerDown(drop)
+      })
       expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
 
       // Pointerdown outside closes it.
-      await act(async () => { fireEvent.pointerDown(document.body) })
+      await act(async () => {
+        fireEvent.pointerDown(document.body)
+      })
       await waitFor(() => {
         expect(pillButton().getAttribute('aria-label')).toBe('Open CRRT menu')
         expect(menu.getAttribute('aria-hidden')).toBe('true')
@@ -3920,10 +4569,14 @@ describe('<FeedbackWidget />', () => {
 
     it('Escape closes the launcher menu', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.click(pillButton()) })
+      await act(async () => {
+        fireEvent.click(pillButton())
+      })
       expect(pillButton().getAttribute('aria-label')).toBe('Close CRRT menu')
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'Escape' })
+      })
       await waitFor(() => {
         expect(pillButton().getAttribute('aria-label')).toBe('Open CRRT menu')
       })
@@ -3931,12 +4584,16 @@ describe('<FeedbackWidget />', () => {
 
     it('Escape closes an open sidebar', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
       await waitFor(() => {
         const sidebar = findWidgetSidebar()
         if (!sidebar || !/translateX\(0/.test(sidebar.getAttribute('style') ?? '')) throw new Error('sidebar not open')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'Escape' })
+      })
       await waitFor(() => {
         expect(findWidgetSidebar()?.getAttribute('style')).toMatch(/translateX\(100%\)/)
       })
@@ -3944,11 +4601,15 @@ describe('<FeedbackWidget />', () => {
 
     it('pressing "c" while selecting exits feedback mode', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await waitFor(() => {
         expect(document.body.textContent).toContain('Click an element or select text to leave feedback')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       await waitFor(() => {
         expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
       })
@@ -3956,8 +4617,12 @@ describe('<FeedbackWidget />', () => {
 
     it('launcher "Open sidebar" action opens the sidebar', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.click(pillButton()) })
-      await act(async () => { fireEvent.click(menuAction('Open sidebar')) })
+      await act(async () => {
+        fireEvent.click(pillButton())
+      })
+      await act(async () => {
+        fireEvent.click(menuAction('Open sidebar'))
+      })
       await waitFor(() => {
         const sidebar = findWidgetSidebar()
         if (!sidebar || !/translateX\(0/.test(sidebar.getAttribute('style') ?? '')) throw new Error('sidebar not open')
@@ -3966,15 +4631,23 @@ describe('<FeedbackWidget />', () => {
 
     it('launcher "Open agent" action opens the agent modal', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.click(pillButton()) })
-      await act(async () => { fireEvent.click(menuAction('Open agent')) })
+      await act(async () => {
+        fireEvent.click(pillButton())
+      })
+      await act(async () => {
+        fireEvent.click(menuAction('Open agent'))
+      })
       await waitFor(() => {
         if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
 
       // Closing the modal via its own Close button runs onClose.
-      const close = document.querySelector<HTMLButtonElement>('[data-fw-agent-dialog="premium"] button[aria-label="Close Agent Bridge"]')!
-      await act(async () => { fireEvent.click(close) })
+      const close = document.querySelector<HTMLButtonElement>(
+        '[data-fw-agent-dialog="premium"] button[aria-label="Close Agent Bridge"]',
+      )!
+      await act(async () => {
+        fireEvent.click(close)
+      })
       await waitFor(() => {
         expect(document.querySelector('[data-fw-agent-dialog="premium"]')).toBeNull()
       })
@@ -3982,52 +4655,70 @@ describe('<FeedbackWidget />', () => {
 
     it('sidebar agent CTA shows the ready count and reacts to hover', async () => {
       await mountWidget(agentGet({ comments: [seedAccepted('c1'), seedAccepted('c2')] }))
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
       const sidebar = await waitFor(() => {
         const el = findWidgetSidebar()
         if (!el || !/translateX\(0/.test(el.getAttribute('style') ?? '')) throw new Error('sidebar not open')
         return el
       })
-      const cta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button'))
-        .find((b) => b.textContent?.includes('Open agent'))!
+      const cta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('Open agent'),
+      )!
       expect(cta.textContent).toContain('2 ready comments')
-      await act(async () => { fireEvent.mouseEnter(cta) })
-      await act(async () => { fireEvent.mouseLeave(cta) })
+      await act(async () => {
+        fireEvent.mouseEnter(cta)
+      })
+      await act(async () => {
+        fireEvent.mouseLeave(cta)
+      })
     })
 
     it('sidebar agent CTA shows a singular ready count for one approved comment', async () => {
       await mountWidget(agentGet({ comments: [seedAccepted('c1')] }))
-      await act(async () => { fireEvent.keyDown(window, { key: 'm' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'm' })
+      })
       const sidebar = await waitFor(() => {
         const el = findWidgetSidebar()
         if (!el || !/translateX\(0/.test(el.getAttribute('style') ?? '')) throw new Error('sidebar not open')
         return el
       })
-      const cta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button'))
-        .find((b) => b.textContent?.includes('Open agent'))!
+      const cta = Array.from(sidebar.querySelectorAll<HTMLButtonElement>('button')).find((b) =>
+        b.textContent?.includes('Open agent'),
+      )!
       expect(cta.textContent).toContain('1 ready comment')
       expect(cta.textContent).not.toContain('1 ready comments')
     })
 
     it('the login step ignores non-Escape keys', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      })
       await waitFor(() => {
         if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
-      await act(async () => { fireEvent.keyDown(window, { key: 'a' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'a' })
+      })
       expect(document.querySelector('[data-fw-agent-dialog="premium"]')).not.toBeNull()
     })
 
     it('repeated Shift+A keeps a single Agent bridge open', async () => {
       await mountWidget()
-      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      })
       await waitFor(() => {
         if (!document.querySelector('[data-fw-agent-dialog="premium"]')) throw new Error('agent modal not open')
       })
       const dialog = document.querySelector<HTMLElement>('[data-fw-agent-dialog="premium"]')!
       const focus = vi.spyOn(dialog, 'focus')
-      await act(async () => { fireEvent.keyDown(window, { key: 'A', shiftKey: true }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'A', shiftKey: true })
+      })
       await waitFor(() => {
         expect(document.querySelectorAll('[data-fw-agent-dialog="premium"]')).toHaveLength(1)
       })
@@ -4039,14 +4730,19 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       const { textarea, getSendButton } = await enterCommentingMode()
       fireEvent.change(textarea, { target: { value: 'bug here' } })
-      await act(async () => { fireEvent.click(getSendButton()) })
+      await act(async () => {
+        fireEvent.click(getSendButton())
+      })
 
       await waitFor(() => {
         expect(document.body.textContent).toContain('Drop another or review comments')
       })
-      const review = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        .find((b) => b.textContent === 'review')!
-      await act(async () => { fireEvent.click(review) })
+      const review = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find(
+        (b) => b.textContent === 'review',
+      )!
+      await act(async () => {
+        fireEvent.click(review)
+      })
 
       await waitFor(() => {
         const sidebar = findWidgetSidebar()
@@ -4060,20 +4756,25 @@ describe('<FeedbackWidget />', () => {
       await enterCommentingMode()
       expect(document.querySelector('textarea')).not.toBeNull()
 
-      await act(async () => { fireEvent.keyDown(window, { key: 'c' }) })
+      await act(async () => {
+        fireEvent.keyDown(window, { key: 'c' })
+      })
       // Still in commenting mode — the composer stays mounted.
       expect(document.querySelector('textarea')).not.toBeNull()
     })
   })
   it('keeps the composer recoverable when a request rejects with a non-Error value', async () => {
-    mockFetch(async () => { throw 'offline' })
+    mockFetch(async () => {
+      throw 'offline'
+    })
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
     const { textarea, getSendButton } = await enterCommentingMode()
     fireEvent.change(textarea, { target: { value: 'Keep my draft' } })
     fireEvent.click(getSendButton())
-    await waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not save comment'))
+    await waitFor(() =>
+      expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not save comment'),
+    )
     expect(textarea).toHaveValue('Keep my draft')
   })
-
 })

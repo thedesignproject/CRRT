@@ -32,10 +32,7 @@ vi.mock('../../../../_lib/store.js', () => ({
 }))
 
 import handler from './ops.js'
-import {
-  applyAgentFeedbackOperation,
-  getComment,
-} from '../../../../_lib/store.js'
+import { applyAgentFeedbackOperation, getComment } from '../../../../_lib/store.js'
 
 interface MockRes {
   statusCode: number
@@ -92,30 +89,35 @@ beforeEach(() => {
     claimedByAgentId: null,
     implementationStatus: 'in_progress',
   } as never)
-  vi.mocked(applyAgentFeedbackOperation).mockReset().mockResolvedValue({
-    outcome: 'applied',
-    feedbackEventId: 91,
-    comment: {
-      id: 'comment-1',
-      implementationStatus: 'ready_for_testing',
-      claimedByAgentId: 'codex-local',
-    },
-  } as never)
+  vi.mocked(applyAgentFeedbackOperation)
+    .mockReset()
+    .mockResolvedValue({
+      outcome: 'applied',
+      feedbackEventId: 91,
+      comment: {
+        id: 'comment-1',
+        implementationStatus: 'ready_for_testing',
+        claimedByAgentId: 'codex-local',
+      },
+    } as never)
 })
 
 describe('api/v1/agent/shares/[slug]/ops', () => {
   it('moves completed agent work to human testing and records the operation key', async () => {
     const res = mockRes()
 
-    await call(mockReq({
-      body: {
-        op: 'comment.complete',
-        commentId: 'comment-1',
-        payload: {
-          note: 'Shipped the CTA fix.',
+    await call(
+      mockReq({
+        body: {
+          op: 'comment.complete',
+          commentId: 'comment-1',
+          payload: {
+            note: 'Shipped the CTA fix.',
+          },
         },
-      },
-    }), res)
+      }),
+      res,
+    )
 
     expect(res.statusCode).toBe(200)
     expect(applyAgentFeedbackOperation).toHaveBeenCalledWith({
@@ -145,23 +147,30 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
     let res = mockRes()
     await call(mockReq({ body: { op: 'comment.reopen', commentId: 'comment-1' } }), res)
     expect(res.statusCode).toBe(409)
-    expect(res.body).toEqual(expect.objectContaining({ error: 'Comment status can only be changed by a human reviewer' }))
+    expect(res.body).toEqual(
+      expect.objectContaining({ error: 'Comment status can only be changed by a human reviewer' }),
+    )
     expect(applyAgentFeedbackOperation).not.toHaveBeenCalled()
 
     res = mockRes()
-    await call(mockReq({
-      headers: {
-        authorization: 'Bearer token-123',
-        'x-agent-id': 'codex-local',
-        'idempotency-key': 'op-2',
-      },
-      body: { op: 'comment.note', commentId: 'comment-1' },
-    }), res)
+    await call(
+      mockReq({
+        headers: {
+          authorization: 'Bearer token-123',
+          'x-agent-id': 'codex-local',
+          'idempotency-key': 'op-2',
+        },
+        body: { op: 'comment.note', commentId: 'comment-1' },
+      }),
+      res,
+    )
     expect(res.statusCode).toBe(200)
-    expect(applyAgentFeedbackOperation).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'comment.noted',
-      implementationStatus: undefined,
-    }))
+    expect(applyAgentFeedbackOperation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'comment.noted',
+        implementationStatus: undefined,
+      }),
+    )
 
     vi.mocked(getComment).mockResolvedValue({
       id: 'comment-1',
@@ -169,29 +178,39 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
       implementationStatus: 'done',
     } as never)
     res = mockRes()
-    await call(mockReq({
-      headers: {
-        authorization: 'Bearer token-123',
-        'x-agent-id': 'codex-local',
-        'idempotency-key': 'op-3',
-      },
-      body: { op: 'comment.complete', commentId: 'comment-1' },
-    }), res)
+    await call(
+      mockReq({
+        headers: {
+          authorization: 'Bearer token-123',
+          'x-agent-id': 'codex-local',
+          'idempotency-key': 'op-3',
+        },
+        body: { op: 'comment.complete', commentId: 'comment-1' },
+      }),
+      res,
+    )
     expect(res.statusCode).toBe(409)
   })
 
   it('does not overwrite a terminal status set while an agent operation is in flight', async () => {
     vi.mocked(applyAgentFeedbackOperation).mockResolvedValue({
-      outcome: 'reviewer_owned', feedbackEventId: null, comment: null,
+      outcome: 'reviewer_owned',
+      feedbackEventId: null,
+      comment: null,
     })
     const res = mockRes()
 
-    await call(mockReq({
-      body: { op: 'comment.complete', commentId: 'comment-1' },
-    }), res)
+    await call(
+      mockReq({
+        body: { op: 'comment.complete', commentId: 'comment-1' },
+      }),
+      res,
+    )
 
     expect(res.statusCode).toBe(409)
-    expect(res.body).toEqual(expect.objectContaining({ error: 'Comment status can only be changed by a human reviewer' }))
+    expect(res.body).toEqual(
+      expect.objectContaining({ error: 'Comment status can only be changed by a human reviewer' }),
+    )
   })
 
   it.each([
@@ -200,7 +219,9 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
     ['claimed_conflict', 409, undefined],
   ] as const)('handles an atomic %s result', async (outcome, status, duplicate) => {
     vi.mocked(applyAgentFeedbackOperation).mockResolvedValue({
-      outcome, feedbackEventId: outcome === 'duplicate' ? 91 : null, comment: null,
+      outcome,
+      feedbackEventId: outcome === 'duplicate' ? 91 : null,
+      comment: null,
     })
     const res = mockRes()
 
@@ -211,25 +232,32 @@ describe('api/v1/agent/shares/[slug]/ops', () => {
   })
 })
 
-it.each(['share_unavailable', 'database unavailable'])('denies an operation after a concurrent share access change: %s', async message => {
-  vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce(new Error(message))
-  const res=mockRes()
-  await call(mockReq({ body:{op:'comment.complete',commentId:'comment-1',payload:{}} }),res)
-  expect(res.statusCode).toBe(message === 'share_unavailable' ? 410 : 500)
-  expect(res.body).not.toHaveProperty('comment')
+it.each(['share_unavailable', 'database unavailable'])(
+  'denies an operation after a concurrent share access change: %s',
+  async (message) => {
+    vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce(new Error(message))
+    const res = mockRes()
+    await call(mockReq({ body: { op: 'comment.complete', commentId: 'comment-1', payload: {} } }), res)
+    expect(res.statusCode).toBe(message === 'share_unavailable' ? 410 : 500)
+    expect(res.body).not.toHaveProperty('comment')
+  },
+)
+
+it('denies duplicate acknowledgments when the atomic lookup sees revoked credentials', async () => {
+  const { getOperationKey } = await import('../../../../_lib/store.js')
+  vi.mocked(getOperationKey).mockRejectedValueOnce(new Error('share_unavailable'))
+  const res = mockRes()
+  await call(mockReq({ body: { op: 'comment.note', commentId: 'comment-1' } }), res)
+  expect(res.statusCode).toBe(410)
+  expect(res.body).not.toHaveProperty('feedbackEventId')
+  expect(getOperationKey).toHaveBeenLastCalledWith('share-1', 'codex-local', 'op-1', hashToken('token-123'))
+  expect(applyAgentFeedbackOperation).not.toHaveBeenCalled()
 })
 
-it('denies duplicate acknowledgments when the atomic lookup sees revoked credentials',async()=>{
- const {getOperationKey}=await import('../../../../_lib/store.js')
- vi.mocked(getOperationKey).mockRejectedValueOnce(new Error('share_unavailable'))
- const res=mockRes();await call(mockReq({body:{op:'comment.note',commentId:'comment-1'}}),res)
- expect(res.statusCode).toBe(410);expect(res.body).not.toHaveProperty('feedbackEventId')
- expect(getOperationKey).toHaveBeenLastCalledWith('share-1','codex-local','op-1',hashToken('token-123'))
- expect(applyAgentFeedbackOperation).not.toHaveBeenCalled()
-})
-
-it('returns a stable fallback for non-Error failures without acknowledging an operation',async()=>{
- vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce('opaque failure')
- const res=mockRes();await call(mockReq({body:{op:'comment.start',commentId:'comment-1'}}),res)
- expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
+it('returns a stable fallback for non-Error failures without acknowledging an operation', async () => {
+  vi.mocked(applyAgentFeedbackOperation).mockRejectedValueOnce('opaque failure')
+  const res = mockRes()
+  await call(mockReq({ body: { op: 'comment.start', commentId: 'comment-1' } }), res)
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({ error: 'Unexpected error' })
 })

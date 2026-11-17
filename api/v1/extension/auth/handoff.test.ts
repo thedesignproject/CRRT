@@ -3,11 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const generatedCode = 'c'.repeat(43)
 vi.mock('../../../_lib/auth.js', () => ({ requireUser: vi.fn() }))
 vi.mock('../../../_lib/extension-auth-contracts.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../../../_lib/extension-auth-contracts.js')>(),
+  ...(await importOriginal<typeof import('../../../_lib/extension-auth-contracts.js')>()),
   createProof: vi.fn(() => generatedCode),
 }))
 vi.mock('../../../_lib/extension-auth-store.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../../../_lib/extension-auth-store.js')>(),
+  ...(await importOriginal<typeof import('../../../_lib/extension-auth-store.js')>()),
   createExtensionAuthHandoff: vi.fn(),
   cleanupExtensionAuthHandoffs: vi.fn(),
 }))
@@ -15,7 +15,11 @@ vi.mock('../../../_lib/extension-auth-store.js', async (importOriginal) => ({
 import handler from './handoff.js'
 import { requireUser } from '../../../_lib/auth.js'
 import { hashProof } from '../../../_lib/extension-auth-contracts.js'
-import { cleanupExtensionAuthHandoffs, createExtensionAuthHandoff, EXTENSION_HANDOFF_TTL_MS } from '../../../_lib/extension-auth-store.js'
+import {
+  cleanupExtensionAuthHandoffs,
+  createExtensionAuthHandoff,
+  EXTENSION_HANDOFF_TTL_MS,
+} from '../../../_lib/extension-auth-store.js'
 
 const extensionId = 'abcdefghijklmnopabcdefghijklmnop'
 const redirectUri = `https://${extensionId}.chromiumapp.org/crrt-auth`
@@ -28,15 +32,29 @@ function response() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    setHeader(key: string, value: string) { this.headers[key] = value },
-    status(code: number) { this.statusCode = code; return this },
-    json(body: unknown) { this.body = body; return this },
-    end() { return this },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(body: unknown) {
+      this.body = body
+      return this
+    },
+    end() {
+      return this
+    },
   }
 }
-const call = (request: unknown, res: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(request, res)
+const call = (request: unknown, res: unknown) =>
+  (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(request, res)
 const post = (body: unknown, headers: Record<string, unknown> = { authorization: 'Bearer dashboard-token' }) => ({
-  method: 'POST', headers, query: {}, body,
+  method: 'POST',
+  headers,
+  query: {},
+  body,
 })
 
 beforeEach(() => {
@@ -87,8 +105,12 @@ describe('extension auth handoff endpoint', () => {
       body: { redirectUrl: `${redirectUri}?code=${generatedCode}&state=${state}` },
     })
     expect(createExtensionAuthHandoff).toHaveBeenCalledWith({
-      codeHash: hashProof(generatedCode), stateHash: hashProof(state), codeChallenge: challenge,
-      userId: 'user-1', extensionId, redirectUri,
+      codeHash: hashProof(generatedCode),
+      stateHash: hashProof(state),
+      codeChallenge: challenge,
+      userId: 'user-1',
+      extensionId,
+      redirectUri,
       expiresAt: new Date(Date.now() + EXTENSION_HANDOFF_TTL_MS),
     })
     expect(cleanupExtensionAuthHandoffs).toHaveBeenCalledOnce()

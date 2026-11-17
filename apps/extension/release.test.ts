@@ -3,7 +3,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { collectReleaseFiles, pngDimensions, readExtensionVersion, relativeReleasePath, releaseMetadata, STORE_CSP, STORE_ICON_SIZES, STORE_OPTIONAL_HOST_PERMISSIONS, STORE_PERMISSIONS, validatePublicSupabaseKey, validateReleaseFiles } from './release'
+import {
+  collectReleaseFiles,
+  pngDimensions,
+  readExtensionVersion,
+  relativeReleasePath,
+  releaseMetadata,
+  STORE_CSP,
+  STORE_ICON_SIZES,
+  STORE_OPTIONAL_HOST_PERMISSIONS,
+  STORE_PERMISSIONS,
+  validatePublicSupabaseKey,
+  validateReleaseFiles,
+} from './release'
 
 // Synthetic JWTs: these carry no valid signature and cannot authenticate.
 function jwt(payload: unknown) {
@@ -31,7 +43,9 @@ function manifest(overrides: Record<string, unknown> = {}) {
     content_security_policy: { extension_pages: STORE_CSP },
     icons,
     action: { default_icon: icons },
-    web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] }],
+    web_accessible_resources: [
+      { resources: ['private.html', 'record-controls.html'], matches: ['http://*/*', 'https://*/*'] },
+    ],
     ...overrides,
   }
 }
@@ -48,7 +62,12 @@ function releaseFiles(overrides: Record<string, Uint8Array | string> = {}) {
     ...Object.fromEntries(STORE_ICON_SIZES.map((size) => [`icons/icon-${size}.png`, png(size)])),
     ...overrides,
   }
-  return new Map(Object.entries(values).map(([path, value]) => [path, typeof value === 'string' ? new TextEncoder().encode(value) : value]))
+  return new Map(
+    Object.entries(values).map(([path, value]) => [
+      path,
+      typeof value === 'string' ? new TextEncoder().encode(value) : value,
+    ]),
+  )
 }
 
 const options = { version: '1.0.0', apiBase: 'https://crrt.ai/api', supabaseUrl: 'https://project.supabase.co' }
@@ -56,26 +75,44 @@ const options = { version: '1.0.0', apiBase: 'https://crrt.ai/api', supabaseUrl:
 describe('extension Store release', () => {
   it('allows only the explicitly configured recording storage origin', () => {
     const storageOrigin = 'https://account.r2.cloudflarestorage.com'
-    const files = releaseFiles({ 'manifest.json': JSON.stringify(manifest({
-      host_permissions: ['https://crrt.ai/*', 'https://project.supabase.co/*', `${storageOrigin}/*`],
-    })) })
+    const files = releaseFiles({
+      'manifest.json': JSON.stringify(
+        manifest({
+          host_permissions: ['https://crrt.ai/*', 'https://project.supabase.co/*', `${storageOrigin}/*`],
+        }),
+      ),
+    })
     expect(() => validateReleaseFiles(files, { ...options, storageOrigin })).not.toThrow()
     expect(() => validateReleaseFiles(files, options)).toThrow('host permissions')
-    expect(() => validateReleaseFiles(files, { ...options, storageOrigin: 'https://other.example' })).toThrow('host permissions')
+    expect(() => validateReleaseFiles(files, { ...options, storageOrigin: 'https://other.example' })).toThrow(
+      'host permissions',
+    )
     for (const invalid of ['http://storage.example', 'https://storage.example/bucket', 'https://storage.example/']) {
       expect(() => validateReleaseFiles(files, { ...options, storageOrigin: invalid })).toThrow('exact HTTPS origin')
     }
-    expect(() => validateReleaseFiles(releaseFiles(), { ...options, storageOrigin: 'https://project.supabase.co' })).not.toThrow()
+    expect(() =>
+      validateReleaseFiles(releaseFiles(), { ...options, storageOrigin: 'https://project.supabase.co' }),
+    ).not.toThrow()
   })
 
   it('accepts only public Supabase key types', () => {
     expect(() => validatePublicSupabaseKey('sb_publishable_ci_build_fixture')).not.toThrow()
     expect(() => validatePublicSupabaseKey(jwt({ role: 'anon' }))).not.toThrow()
     for (const key of [
-      '', 'public-ci-build-key', 'sb_publishable_', 'sb_publishable_bad key',
-      'sb_secret_ci_build_fixture', jwt({ role: 'service_role' }), jwt({ role: 'authenticated' }),
-      jwt({}), jwt(null), jwt('anon'), jwt({ role: 1 }), 'header.invalid.signature',
-      `${jwt({ role: 'anon' })}.extra`, ` ${jwt({ role: 'anon' })}`,
+      '',
+      'public-ci-build-key',
+      'sb_publishable_',
+      'sb_publishable_bad key',
+      'sb_secret_ci_build_fixture',
+      jwt({ role: 'service_role' }),
+      jwt({ role: 'authenticated' }),
+      jwt({}),
+      jwt(null),
+      jwt('anon'),
+      jwt({ role: 1 }),
+      'header.invalid.signature',
+      `${jwt({ role: 'anon' })}.extra`,
+      ` ${jwt({ role: 'anon' })}`,
     ]) {
       expect(() => validatePublicSupabaseKey(key)).toThrow('must be a publishable key or an anon-role JWT')
     }
@@ -84,9 +121,18 @@ describe('extension Store release', () => {
   it('detects encoded service-role JWTs and modern secret keys in built output', () => {
     const elevated = jwt({ iss: 'supabase', role: 'service_role' })
     expect(elevated).not.toContain('service_role')
-    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': `const key = "${elevated}"` }), options)).toThrow('service-role JWT')
-    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': 'const key = "sb_secret_ci_build_fixture"' }), options)).toThrow('Supabase secret key')
-    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': `const key = "${jwt({ role: 'anon' })}"; window.location.href` }), options)).not.toThrow()
+    expect(() => validateReleaseFiles(releaseFiles({ 'background.js': `const key = "${elevated}"` }), options)).toThrow(
+      'service-role JWT',
+    )
+    expect(() =>
+      validateReleaseFiles(releaseFiles({ 'background.js': 'const key = "sb_secret_ci_build_fixture"' }), options),
+    ).toThrow('Supabase secret key')
+    expect(() =>
+      validateReleaseFiles(
+        releaseFiles({ 'background.js': `const key = "${jwt({ role: 'anon' })}"; window.location.href` }),
+        options,
+      ),
+    ).not.toThrow()
   })
 
   it('reads the single package version source and rejects invalid Chrome versions', () => {
@@ -130,14 +176,31 @@ describe('extension Store release', () => {
     ['Manifest must declare', { icons: { 16: 'wrong.png' } }],
     ['Manifest must declare', { action: { default_icon: { 16: 'wrong.png' } } }],
     ['web-accessible', { web_accessible_resources: [] }],
-    ['Only private recording frames', { web_accessible_resources: [{ resources: ['comment.js'], matches: ['http://*/*', 'https://*/*'] }] }],
-    ['matches', { web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['https://*/*'] }] }],
+    [
+      'Only private recording frames',
+      { web_accessible_resources: [{ resources: ['comment.js'], matches: ['http://*/*', 'https://*/*'] }] },
+    ],
+    [
+      'matches',
+      { web_accessible_resources: [{ resources: ['private.html', 'record-controls.html'], matches: ['https://*/*'] }] },
+    ],
   ])('rejects an unsafe %s manifest', (message, change) => {
-    expect(() => validateReleaseFiles(releaseFiles({ 'manifest.json': JSON.stringify(manifest(change)) }), options)).toThrow(message)
+    expect(() =>
+      validateReleaseFiles(releaseFiles({ 'manifest.json': JSON.stringify(manifest(change)) }), options),
+    ).toThrow(message)
   })
 
-  it.each(['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html'])('requires %s', (path) => {
-    const files = releaseFiles(); files.delete(path)
+  it.each([
+    'manifest.json',
+    'background.js',
+    'comment.js',
+    'offscreen.html',
+    'popup.html',
+    'private.html',
+    'record-controls.html',
+  ])('requires %s', (path) => {
+    const files = releaseFiles()
+    files.delete(path)
     expect(() => validateReleaseFiles(files, options)).toThrow(`missing ${path}`)
   })
 
@@ -146,7 +209,9 @@ describe('extension Store release', () => {
     ['.env', 'environment'],
     ['assets/.env.production', 'environment'],
   ])('rejects release artifact %s', (path) => {
-    expect(() => validateReleaseFiles(releaseFiles({ [path]: 'value' }), options)).toThrow('source maps or environment files')
+    expect(() => validateReleaseFiles(releaseFiles({ [path]: 'value' }), options)).toThrow(
+      'source maps or environment files',
+    )
   })
 
   it.each([
@@ -166,14 +231,21 @@ describe('extension Store release', () => {
     expect(validateReleaseFiles(releaseFiles({ 'opaque.png': 'localhost' }), options).files).toContain('opaque.png')
     expect(pngDimensions(png(32))).toEqual({ width: 32, height: 32 })
     expect(() => pngDimensions(new Uint8Array(2))).toThrow('must be a PNG')
-    expect(() => validateReleaseFiles(releaseFiles({ 'icons/icon-16.png': png(15, 16) }), options)).toThrow('exactly 16x16')
-    const files = releaseFiles(); files.delete('icons/icon-32.png')
+    expect(() => validateReleaseFiles(releaseFiles({ 'icons/icon-16.png': png(15, 16) }), options)).toThrow(
+      'exactly 16x16',
+    )
+    const files = releaseFiles()
+    files.delete('icons/icon-32.png')
     expect(() => validateReleaseFiles(files, options)).toThrow('missing icons/icon-32.png')
   })
 
   it('enforces the unpacked size ceiling', () => {
-    expect(() => validateReleaseFiles(releaseFiles({ 'large.png': new Uint8Array(2_000_000) }), options)).toThrow('2 MB')
-    expect(() => validateReleaseFiles(releaseFiles({ 'README.md': 'not shipped' }), options)).toThrow('unexpected file type')
+    expect(() => validateReleaseFiles(releaseFiles({ 'large.png': new Uint8Array(2_000_000) }), options)).toThrow(
+      '2 MB',
+    )
+    expect(() => validateReleaseFiles(releaseFiles({ 'README.md': 'not shipped' }), options)).toThrow(
+      'unexpected file type',
+    )
   })
 
   it('collects files safely within the release directory', () => {
@@ -187,7 +259,15 @@ describe('extension Store release', () => {
 
   it('rejects invalid provenance metadata', () => {
     const validation = validateReleaseFiles(releaseFiles(), options)
-    const base = { version: '1.0.0', commit: 'a'.repeat(40), sourceDateEpoch: 1, zip: png(1), validation, apiOrigin: 'https://crrt.ai', supabaseOrigin: 'https://project.supabase.co' }
+    const base = {
+      version: '1.0.0',
+      commit: 'a'.repeat(40),
+      sourceDateEpoch: 1,
+      zip: png(1),
+      validation,
+      apiOrigin: 'https://crrt.ai',
+      supabaseOrigin: 'https://project.supabase.co',
+    }
     expect(() => releaseMetadata({ ...base, commit: 'short' })).toThrow('full Git SHA')
     expect(() => releaseMetadata({ ...base, sourceDateEpoch: 0 })).toThrow('positive integer')
     expect(() => releaseMetadata({ ...base, sourceDateEpoch: 1.5 })).toThrow('positive integer')

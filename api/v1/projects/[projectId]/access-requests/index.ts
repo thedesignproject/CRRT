@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!project) return jsonError(req, res, 400, 'Missing projectId')
   try {
     if (req.method === 'GET') {
-      if (!await requireProjectCapability(req, res, user, project, 'project:manage')) return
+      if (!(await requireProjectCapability(req, res, user, project, 'project:manage'))) return
       const requests = await listAccessRequests(project)
       setCors(req, res, METHODS)
       return res.status(200).json(requests)

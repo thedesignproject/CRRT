@@ -3,7 +3,12 @@ import { expect, it } from 'vitest'
 import { ResourcesMenu } from './ResourcesMenu'
 
 it('opens the directory, supports keyboard dismissal, and handles inside/outside focus and pointer events', () => {
-  const view = render(<div><ResourcesMenu /><button type="button">Outside</button></div>)
+  const view = render(
+    <div>
+      <ResourcesMenu />
+      <button type="button">Outside</button>
+    </div>,
+  )
   const trigger = screen.getByRole('button', { name: 'Resources' })
   expect(trigger).toHaveAttribute('aria-expanded', 'false')
   fireEvent.click(trigger)

@@ -14,7 +14,11 @@ export async function getAccessToken(credentials, expectedEmail, request = fetch
   const issuedAt = Math.floor(now / 1000)
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url')
   const message = `${encode({ alg: 'RS256', typ: 'JWT', kid: credentials.private_key_id })}.${encode({
-    iss: credentials.client_email, scope, aud: tokenUrl, iat: issuedAt, exp: issuedAt + 3600,
+    iss: credentials.client_email,
+    scope,
+    aud: tokenUrl,
+    iat: issuedAt,
+    exp: issuedAt + 3600,
   })}`
   const signature = createSign('RSA-SHA256').update(message).sign(credentials.private_key, 'base64url')
   const response = await request(tokenUrl, {
@@ -41,7 +45,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     appendFileSync(process.env.GITHUB_OUTPUT, `access_token=${token}\n`)
   } catch {
     // Parser/crypto exceptions may include key material. Keep credentials out of logs.
-    console.error('Service account authentication failed. Check the JSON secret, configured account, key validity, and Chrome Web Store API enablement.')
+    console.error(
+      'Service account authentication failed. Check the JSON secret, configured account, key validity, and Chrome Web Store API enablement.',
+    )
     process.exitCode = 1
   }
 }

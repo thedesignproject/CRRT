@@ -1,8 +1,14 @@
 import type { CaptureEvent, Failure, RecordingState } from './contracts'
 
 export type RecordingSummary = {
-  id: string; title: string; source: 'tab' | 'window' | 'screen'; state: RecordingState
-  durationMs: number | null; authorId: string; markCount: number; createdAt: string
+  id: string
+  title: string
+  source: 'tab' | 'window' | 'screen'
+  state: RecordingState
+  durationMs: number | null
+  authorId: string
+  markCount: number
+  createdAt: string
   failure: Failure | null
   thumbnailUrl?: string | null
 }
@@ -23,16 +29,35 @@ const messages: Record<string, string> = {
   record_not_found: 'This recording is unavailable or its link has been revoked.',
 }
 
-export async function recordRequest<T>(base: string, path: string, token: string | null, body?: unknown, method = body === undefined ? 'GET' : 'POST'): Promise<T> {
+export async function recordRequest<T>(
+  base: string,
+  path: string,
+  token: string | null,
+  body?: unknown,
+  method = body === undefined ? 'GET' : 'POST',
+): Promise<T> {
   const response = await fetch(`${base.replace(/\/$/, '')}/v1/${path}`, {
-    method, credentials: 'omit', referrerPolicy: 'no-referrer', cache: 'no-store',
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
+    method,
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer',
+    cache: 'no-store',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   })
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}))
     const code = payload.error?.code
-    throw Object.assign(new Error(response.status === 401 ? 'Sign in to CRRT to upload recordings.' : messages[code] || `Recording request failed (${response.status}). Retry when your connection is restored.`), { status: response.status, code })
+    throw Object.assign(
+      new Error(
+        response.status === 401
+          ? 'Sign in to CRRT to upload recordings.'
+          : messages[code] || `Recording request failed (${response.status}). Retry when your connection is restored.`,
+      ),
+      { status: response.status, code },
+    )
   }
   return response.json()
 }

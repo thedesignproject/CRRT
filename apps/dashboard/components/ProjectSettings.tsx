@@ -15,12 +15,16 @@ import { StorybookIntegrationSettings } from './StorybookIntegrationSettings'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
-const inputField = 'flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50'
+const inputField =
+  'flex-1 px-3 py-2 rounded-md border border-border bg-background text-sm text-foreground placeholder:text-muted-foreground outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors disabled:opacity-50'
 
-const submitBtn = (enabled: boolean) => cn(
-  'px-3 py-2 rounded-md text-xs font-semibold transition-all btn-press shrink-0',
-  enabled ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed',
-)
+const submitBtn = (enabled: boolean) =>
+  cn(
+    'px-3 py-2 rounded-md text-xs font-semibold transition-all btn-press shrink-0',
+    enabled
+      ? 'bg-primary text-primary-foreground hover:opacity-90'
+      : 'bg-muted text-muted-foreground cursor-not-allowed',
+  )
 
 interface ProjectSettingsProps {
   project: Project
@@ -31,7 +35,14 @@ interface ProjectSettingsProps {
   onProjectsChanged: () => void
 }
 
-export function ProjectSettings({ project, apiBase, accessToken, currentUserId, onBack, onProjectsChanged }: ProjectSettingsProps) {
+export function ProjectSettings({
+  project,
+  apiBase,
+  accessToken,
+  currentUserId,
+  onBack,
+  onProjectsChanged,
+}: ProjectSettingsProps) {
   const settings = useProjectSettings(apiBase, accessToken, project.publicKey, currentUserId, onProjectsChanged)
   const { members, invites, loading, error, isAdmin, isOwner } = settings
 
@@ -56,8 +67,12 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   projectKeyRef.current = project.publicKey
 
   // Re-sync the name field when switching to a different project.
-  useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
-  useEffect(() => { setDomains(project.allowedOrigins) }, [project.publicKey, project.allowedOrigins])
+  useEffect(() => {
+    setName(project.name)
+  }, [project.publicKey, project.name])
+  useEffect(() => {
+    setDomains(project.allowedOrigins)
+  }, [project.publicKey, project.allowedOrigins])
   useEffect(() => {
     actionSequence.current += 1
     pendingAction.current = false
@@ -68,7 +83,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     transferTriggerRef.current = null
   }, [project.publicKey])
   // Repo config loads async (and re-loads per project): sync when it lands.
-  useEffect(() => { setInstructions(settings.repoConfig?.agentInstructions ?? '') }, [project.publicKey, settings.repoConfig])
+  useEffect(() => {
+    setInstructions(settings.repoConfig?.agentInstructions ?? '')
+  }, [project.publicKey, settings.repoConfig])
 
   const nameChanged = name.trim() !== '' && name.trim() !== project.name
 
@@ -167,8 +184,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
     if (role === 'owner') {
       transferTriggerRef.current = trigger
       setTransferTarget(member)
-    }
-    else void run(() => settings.changeRole(member.userId, role), member.userId)
+    } else void run(() => settings.changeRole(member.userId, role), member.userId)
   }
 
   function closeOwnershipTransfer() {
@@ -182,10 +198,7 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   }
 
   async function confirmOwnershipTransfer(target: ProjectMember) {
-    const transferred = await run(
-      () => settings.changeRole(target.userId, 'owner'),
-      target.userId,
-    )
+    const transferred = await run(() => settings.changeRole(target.userId, 'owner'), target.userId)
     if (transferred) closeOwnershipTransfer()
   }
 
@@ -207,17 +220,35 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
         <ExportProjectFeedback apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
 
-        {error && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{error}</p>}
-        {actionError && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{actionError}</p>}
+        {error && (
+          <p className="mt-4 text-[12px] text-status-rejected" role="alert">
+            {error}
+          </p>
+        )}
+        {actionError && (
+          <p className="mt-4 text-[12px] text-status-rejected" role="alert">
+            {actionError}
+          </p>
+        )}
 
-        {isAdmin && <ProjectDomainAccess key={`domains:${project.publicKey}`} apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} onMembersChanged={settings.refresh} />}
+        {isAdmin && (
+          <ProjectDomainAccess
+            key={`domains:${project.publicKey}`}
+            apiBase={apiBase}
+            accessToken={accessToken}
+            projectKey={project.publicKey}
+            onMembersChanged={settings.refresh}
+          />
+        )}
 
         {/* Details */}
         <section className="mt-8">
           <h2 className={sectionTitle}>Details</h2>
           <div className={cn(card, 'mt-3 p-4 space-y-4')}>
             <div>
-              <label htmlFor="ps-name" className="block mb-1 text-[11px] font-medium text-muted-foreground">Name</label>
+              <label htmlFor="ps-name" className="block mb-1 text-[11px] font-medium text-muted-foreground">
+                Name
+              </label>
               <div className="flex items-center gap-2">
                 <input
                   id="ps-name"
@@ -236,7 +267,9 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                     disabled={!nameChanged || nameBusy}
                     className={cn(
                       'px-3 py-2 rounded-md text-xs font-semibold transition-all btn-press shrink-0',
-                      nameChanged && !nameBusy ? 'bg-primary text-primary-foreground hover:opacity-90' : 'bg-muted text-muted-foreground cursor-not-allowed',
+                      nameChanged && !nameBusy
+                        ? 'bg-primary text-primary-foreground hover:opacity-90'
+                        : 'bg-muted text-muted-foreground cursor-not-allowed',
                     )}
                   >
                     {nameBusy ? 'Saving…' : 'Save'}
@@ -255,12 +288,20 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           </div>
         </section>
 
-        <ProjectPrivacy key={`privacy:${project.publicKey}`} project={project} apiBase={apiBase} accessToken={accessToken} canEdit={isAdmin} onSaved={onProjectsChanged} />
+        <ProjectPrivacy
+          key={`privacy:${project.publicKey}`}
+          project={project}
+          apiBase={apiBase}
+          accessToken={accessToken}
+          canEdit={isAdmin}
+          onSaved={onProjectsChanged}
+        />
         {/* Allowed domains */}
         <section className="mt-8">
           <h2 className={sectionTitle}>Allowed domains{domains.length > 0 && ` (${domains.length})`}</h2>
           <p className="mt-1 text-[11px] text-muted-foreground">
-            Feedback is only accepted from pages on these domains (subdomains included). Leave the list empty to accept feedback from anywhere.
+            Feedback is only accepted from pages on these domains (subdomains included). Leave the list empty to accept
+            feedback from anywhere.
           </p>
           <div className={cn(card, 'mt-3 divide-y divide-border')}>
             {domains.length === 0 ? (
@@ -288,7 +329,10 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
           {isAdmin && (
             <form
-              onSubmit={(e) => { e.preventDefault(); addDomain() }}
+              onSubmit={(e) => {
+                e.preventDefault()
+                addDomain()
+              }}
               className="mt-3 flex items-center gap-2"
             >
               <input
@@ -314,30 +358,27 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
         </section>
 
         {isOwner && (
-          <StorybookIntegrationSettings
-            apiBase={apiBase}
-            accessToken={accessToken}
-            projectKey={project.publicKey}
-          />
+          <StorybookIntegrationSettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
         )}
 
         {isAdmin && (
-          <GitHubRepositorySettings
-            apiBase={apiBase}
-            accessToken={accessToken}
-            projectKey={project.publicKey}
-          />
+          <GitHubRepositorySettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
         )}
 
-        {isAdmin && <LinearIntegrationSettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />}
-        {isAdmin && <JiraIntegrationSettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />}
+        {isAdmin && (
+          <LinearIntegrationSettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
+        )}
+        {isAdmin && (
+          <JiraIntegrationSettings apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
+        )}
 
         {/* Agent instructions */}
         {isAdmin && (
           <section className="mt-8">
             <h2 className={sectionTitle}>Agent instructions</h2>
             <p className="mt-1 text-[11px] text-muted-foreground">
-              Injected into every agent handoff prompt for this project — e.g. &ldquo;Read AGENTS.md first and follow its read order.&rdquo;
+              Injected into every agent handoff prompt for this project — e.g. &ldquo;Read AGENTS.md first and follow
+              its read order.&rdquo;
             </p>
             {settings.repoConfigError && (
               <p className="mt-2 text-[11px] text-status-rejected" role="alert">
@@ -374,10 +415,14 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
         {/* Team */}
         <section className="mt-8">
-          <h2 ref={teamHeadingRef} tabIndex={-1} className={sectionTitle}>Team{members.length > 0 && ` (${members.length})`}</h2>
+          <h2 ref={teamHeadingRef} tabIndex={-1} className={sectionTitle}>
+            Team{members.length > 0 && ` (${members.length})`}
+          </h2>
           <div className={cn(card, 'mt-3 divide-y divide-border')}>
             {loading ? (
-              <div className="flex items-center justify-center py-8"><Spinner size={16} /></div>
+              <div className="flex items-center justify-center py-8">
+                <Spinner size={16} />
+              </div>
             ) : members.length === 0 ? (
               <p className="px-4 py-6 text-center text-[12px] text-muted-foreground">No members yet.</p>
             ) : (
@@ -393,13 +438,16 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-[13px] text-foreground truncate">
-                        {m.email ?? m.userId}{isSelf && <span className="text-muted-foreground"> (you)</span>}
+                        {m.email ?? m.userId}
+                        {isSelf && <span className="text-muted-foreground"> (you)</span>}
                       </div>
                     </div>
                     {isAdmin && !isProjectOwner ? (
                       <select
                         value={m.role}
-                        onChange={(event) => requestRoleChange(m, event.target.value as ProjectMemberRole, event.currentTarget)}
+                        onChange={(event) =>
+                          requestRoleChange(m, event.target.value as ProjectMemberRole, event.currentTarget)
+                        }
                         disabled={pendingId !== null || transferTarget !== null}
                         aria-label={`Role for ${label}`}
                         className="px-2 py-1 rounded-md border border-border bg-background text-[11px] font-semibold text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
@@ -410,10 +458,12 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                         {isOwner && <option value="owner">owner</option>}
                       </select>
                     ) : (
-                      <span className={cn(
-                        'text-[10px] font-semibold px-2 py-0.5 rounded-full',
-                        m.role !== 'member' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
-                      )}>
+                      <span
+                        className={cn(
+                          'text-[10px] font-semibold px-2 py-0.5 rounded-full',
+                          m.role !== 'member' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+                        )}
+                      >
                         {m.role}
                       </span>
                     )}
@@ -443,19 +493,28 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
               className="mt-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3"
             >
               <p className="text-[12px] text-foreground">
-                Transfer ownership to <span className="font-semibold">{transferTarget.email ?? transferTarget.userId}</span>?
+                Transfer ownership to{' '}
+                <span className="font-semibold">{transferTarget.email ?? transferTarget.userId}</span>?
               </p>
               <p className="mt-1 text-[11px] text-muted-foreground">You will remain an admin after the transfer.</p>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => { void confirmOwnershipTransfer(transferTarget) }}
+                  onClick={() => {
+                    void confirmOwnershipTransfer(transferTarget)
+                  }}
                   disabled={pendingId !== null}
                   className={submitBtn(pendingId === null)}
                 >
                   {pendingId === transferTarget.userId ? 'Transferring…' : 'Transfer ownership'}
                 </button>
-                <button type="button" onClick={closeOwnershipTransfer} disabled={pendingId !== null} autoFocus className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={closeOwnershipTransfer}
+                  disabled={pendingId !== null}
+                  autoFocus
+                  className="px-3 py-2 rounded-md text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-50"
+                >
                   Cancel
                 </button>
               </div>
@@ -464,7 +523,10 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
 
           {isAdmin && (
             <form
-              onSubmit={(e) => { e.preventDefault(); sendInvite() }}
+              onSubmit={(e) => {
+                e.preventDefault()
+                sendInvite()
+              }}
               className="mt-3 flex flex-col items-stretch gap-2 sm:flex-row sm:items-center"
             >
               <input

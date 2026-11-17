@@ -1,8 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-vi.mock('../../../_lib/recording-transcription-limit.js', async original => ({ ...await original<typeof import('../../../_lib/recording-transcription-limit.js')>(), reserveTranscription: vi.fn() }))
+vi.mock('../../../_lib/recording-transcription-limit.js', async (original) => ({
+  ...(await original<typeof import('../../../_lib/recording-transcription-limit.js')>()),
+  reserveTranscription: vi.fn(),
+}))
 
 vi.mock('../../../_lib/recording-transcription.js', async () => {
-  const actual = await vi.importActual<typeof import('../../../_lib/recording-transcription.js')>('../../../_lib/recording-transcription.js')
+  const actual = await vi.importActual<typeof import('../../../_lib/recording-transcription.js')>(
+    '../../../_lib/recording-transcription.js',
+  )
   return { ...actual, transcribeRecordingAudio: vi.fn() }
 })
 
@@ -17,23 +22,44 @@ const originalAllowed = process.env.EXTENSION_ALLOWED_IDS
 
 function response() {
   return {
-    statusCode: 200, body: null as unknown, headers: {} as Record<string, string>,
-    setHeader(key: string, value: string) { this.headers[key] = value },
-    status(value: number) { this.statusCode = value; return this },
-    json(value: unknown) { this.body = value; return this },
-    end() { return this },
+    statusCode: 200,
+    body: null as unknown,
+    headers: {} as Record<string, string>,
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
+    status(value: number) {
+      this.statusCode = value
+      return this
+    },
+    json(value: unknown) {
+      this.body = value
+      return this
+    },
+    end() {
+      return this
+    },
   }
 }
 function request(overrides: Record<string, unknown> = {}) {
-  return { method: 'POST', query: {}, headers: { origin, 'content-type': 'application/octet-stream', 'content-length': String(webm.length) }, body: webm, ...overrides }
+  return {
+    method: 'POST',
+    query: {},
+    headers: { origin, 'content-type': 'application/octet-stream', 'content-length': String(webm.length) },
+    body: webm,
+    ...overrides,
+  }
 }
-const call = (req: unknown, res: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(req, res)
+const call = (req: unknown, res: unknown) =>
+  (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
   vi.mocked(reserveTranscription).mockReset().mockResolvedValue(undefined)
   vi.stubEnv('RECORD_DEMO_TRANSCRIPTION_ENABLED', 'true')
   process.env.EXTENSION_ALLOWED_IDS = extensionId
-  vi.mocked(transcribeRecordingAudio).mockReset().mockResolvedValue({ source: 'deepgram:nova-3', language: 'es', segments: [] })
+  vi.mocked(transcribeRecordingAudio)
+    .mockReset()
+    .mockResolvedValue({ source: 'deepgram:nova-3', language: 'es', segments: [] })
 })
 afterEach(() => {
   vi.unstubAllEnvs()
@@ -45,18 +71,24 @@ describe('recording transcription endpoint', () => {
   it('reserves quota before dispatch and never calls the provider when limited/unavailable', async () => {
     for (const status of [429, 503] as const) {
       vi.mocked(reserveTranscription).mockRejectedValueOnce(new TranscriptionLimitError(status, 'Quota blocked'))
-      const res = response(); await call(request(), res)
+      const res = response()
+      await call(request(), res)
       expect(res).toMatchObject({ statusCode: status, body: { error: 'Quota blocked' } })
       expect(transcribeRecordingAudio).not.toHaveBeenCalled()
     }
-    const res = response(); await call(request(), res)
+    const res = response()
+    await call(request(), res)
     expect(res.statusCode).toBe(200)
     expect(reserveTranscription).toHaveBeenLastCalledWith(expect.anything(), webm.length)
-    expect(vi.mocked(reserveTranscription).mock.invocationCallOrder.slice(-1)[0]).toBeLessThan(vi.mocked(transcribeRecordingAudio).mock.invocationCallOrder.slice(-1)[0])
+    expect(vi.mocked(reserveTranscription).mock.invocationCallOrder.slice(-1)[0]).toBeLessThan(
+      vi.mocked(transcribeRecordingAudio).mock.invocationCallOrder.slice(-1)[0],
+    )
   })
   it('disables the anonymous demo route unless deliberately enabled', async () => {
     vi.stubEnv('RECORD_DEMO_TRANSCRIPTION_ENABLED', '')
-    const res = response(); await call(request(), res); expect(res.statusCode).toBe(503)
+    const res = response()
+    await call(request(), res)
+    expect(res.statusCode).toBe(503)
     expect(transcribeRecordingAudio).not.toHaveBeenCalled()
   })
   it('allows exact-origin preflight and returns transcription without an account', async () => {
@@ -74,27 +106,48 @@ describe('recording transcription endpoint', () => {
     let res = response()
     await call(request({ headers: { origin: 'https://example.com' } }), res)
     expect(res.statusCode).toBe(403)
-    res = response(); await call(request({ method: 'GET' }), res); expect(res.statusCode).toBe(405)
-    res = response(); await call(request({ headers: { origin, 'content-type': 'audio/webm' } }), res); expect(res.statusCode).toBe(415)
+    res = response()
+    await call(request({ method: 'GET' }), res)
+    expect(res.statusCode).toBe(405)
+    res = response()
+    await call(request({ headers: { origin, 'content-type': 'audio/webm' } }), res)
+    expect(res.statusCode).toBe(415)
   })
 
   it('rejects empty, malformed, declared oversized, and actual oversized audio', async () => {
     for (const body of [Buffer.alloc(0), Buffer.from('not-webm'), {}]) {
-      const res = response(); await call(request({ body, headers: { origin, 'content-type': 'application/octet-stream' } }), res); expect(res.statusCode).toBe(400)
+      const res = response()
+      await call(request({ body, headers: { origin, 'content-type': 'application/octet-stream' } }), res)
+      expect(res.statusCode).toBe(400)
     }
     let res = response()
-    await call(request({ headers: { origin, 'content-type': 'application/octet-stream', 'content-length': String(4 * 1024 * 1024 + 1) } }), res)
+    await call(
+      request({
+        headers: { origin, 'content-type': 'application/octet-stream', 'content-length': String(4 * 1024 * 1024 + 1) },
+      }),
+      res,
+    )
     expect(res.statusCode).toBe(413)
     const oversized = Buffer.concat([webm, Buffer.alloc(4 * 1024 * 1024)])
-    res = response(); await call(request({ body: oversized, headers: { origin, 'content-type': 'application/octet-stream' } }), res); expect(res.statusCode).toBe(413)
-    res = response(); await call(request({ body: new Uint8Array(webm) }), res); expect(res.statusCode).toBe(200)
+    res = response()
+    await call(request({ body: oversized, headers: { origin, 'content-type': 'application/octet-stream' } }), res)
+    expect(res.statusCode).toBe(413)
+    res = response()
+    await call(request({ body: new Uint8Array(webm) }), res)
+    expect(res.statusCode).toBe(200)
   })
 
   it('maps stable provider errors and hides unexpected failures', async () => {
-    vi.mocked(transcribeRecordingAudio).mockRejectedValueOnce(new RecordingTranscriptionError(504, 'Recording transcription timed out.'))
-    let res = response(); await call(request(), res); expect(res).toMatchObject({ statusCode: 504, body: { error: 'Recording transcription timed out.' } })
+    vi.mocked(transcribeRecordingAudio).mockRejectedValueOnce(
+      new RecordingTranscriptionError(504, 'Recording transcription timed out.'),
+    )
+    let res = response()
+    await call(request(), res)
+    expect(res).toMatchObject({ statusCode: 504, body: { error: 'Recording transcription timed out.' } })
     vi.mocked(transcribeRecordingAudio).mockRejectedValueOnce(new Error('provider secret'))
-    res = response(); await call(request(), res); expect(res).toMatchObject({ statusCode: 502, body: { error: 'Recording transcription failed.' } })
+    res = response()
+    await call(request(), res)
+    expect(res).toMatchObject({ statusCode: 502, body: { error: 'Recording transcription failed.' } })
     expect(JSON.stringify(res.body)).not.toContain('secret')
   })
 
@@ -108,8 +161,12 @@ describe('recording transcription endpoint', () => {
 
   it('fails closed when CORS validation throws an unexpected error', async () => {
     const brokenRequest = {
-      method: 'POST', query: {}, body: webm,
-      get headers() { throw new Error('unexpected request shape') },
+      method: 'POST',
+      query: {},
+      body: webm,
+      get headers() {
+        throw new Error('unexpected request shape')
+      },
     }
     const res = response()
     await call(brokenRequest, res)

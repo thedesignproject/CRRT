@@ -1,8 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import {
-  createGitHubAppSetupAuthState,
-  verifyGitHubAppInstallState,
-} from '../../_lib/github-app.js'
+import { createGitHubAppSetupAuthState, verifyGitHubAppInstallState } from '../../_lib/github-app.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { buildGitHubAuthorizeUrl } from '../../_lib/widget-github-auth.js'
 

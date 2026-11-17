@@ -81,10 +81,7 @@ export function VtooltipRoot({
       bottomHeight += ToolTipRef.current[i]?.getBoundingClientRect().height || 0
     }
 
-    const totalHeight = ToolTipRef.current.reduce(
-      (sum, el) => sum + (el?.getBoundingClientRect().height || 0),
-      0,
-    )
+    const totalHeight = ToolTipRef.current.reduce((sum, el) => sum + (el?.getBoundingClientRect().height || 0), 0)
 
     setMV(clipPathTop, totalHeight > 0 ? (topHeight / totalHeight) * 100 : 20)
     setMV(clipPathBottom, totalHeight > 0 ? (bottomHeight / totalHeight) * 100 : 20)
@@ -165,10 +162,7 @@ export function VtooltipRoot({
       <LazyMotion features={domAnimation} strict>
         <div style={{ position: 'relative', color: '#fff' }}>
           {/* Tooltip container — positioned to the left */}
-          <div
-            ref={ToolTipParentRef}
-            style={{ position: 'absolute', right: 52, top: 0 }}
-          >
+          <div ref={ToolTipParentRef} style={{ position: 'absolute', right: 52, top: 0 }}>
             <m.div
               style={{
                 opacity,
@@ -204,13 +198,7 @@ export function VtooltipRoot({
 
 // ---- Item ----
 
-export function VtooltipItem({
-  children,
-  index,
-}: {
-  children: React.ReactNode
-  index: number
-}) {
+export function VtooltipItem({ children, index }: { children: React.ReactNode; index: number }) {
   const { registerContent, unregisterContent } = useVtooltipContext()
   const prevRef = useRef<React.ReactNode>(null)
 

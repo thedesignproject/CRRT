@@ -13,7 +13,10 @@ it('accepts only a valid public Storybook connection in a widget continuation', 
   const { widgetAuthContinuation } = await import('./widget-auth')
   const connectionId = '11111111-1111-4111-8111-111111111111'
   expect(widgetAuthContinuation(path.split('?')[1] + `&connectionId=${connectionId}`)?.connectionId).toBe(connectionId)
-  for (const connection of ['', 'bad', '../connections']) expect(widgetAuthContinuation(path.split('?')[1] + `&connectionId=${connection}`)).toBeNull()
+  for (const connection of ['', 'bad', '../connections'])
+    expect(widgetAuthContinuation(path.split('?')[1] + `&connectionId=${connection}`)).toBeNull()
   expect(widgetAuthContinuation('?connectionId=' + connectionId)).toBeNull()
-  expect(widgetAuthRecoveryDestination(`?continue=${encodeURIComponent(path + '&connectionId=' + connectionId)}`, origin)).toBe(path + '&connectionId=' + connectionId)
+  expect(
+    widgetAuthRecoveryDestination(`?continue=${encodeURIComponent(path + '&connectionId=' + connectionId)}`, origin),
+  ).toBe(path + '&connectionId=' + connectionId)
 })

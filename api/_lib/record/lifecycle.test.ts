@@ -2,25 +2,52 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), query: vi.fn(), result: { data: null as any, error: null as any } }))
 vi.mock('../supabase.js', () => ({ getServiceSupabase: () => ({ rpc: mocks.rpc, from: mocks.query }) }))
-vi.mock('./library-previews.js', async () => ({ librarySummaries: async (rows: any[]) => rows.map((await import('./core')).summary) }))
+vi.mock('./library-previews.js', async () => ({
+  librarySummaries: async (rows: any[]) => rows.map((await import('./core')).summary),
+}))
 import { attachRecording, createRecording, listRecordings, readRecording, updateRecording } from './lifecycle'
 import { allPages, canonical, checked, digest, initialShare, limit, owned, parse, RecordError, summary } from './core'
 import { uuid } from './contracts'
 
-const actor = randomUUID(), id = randomUUID(), clientKey = randomUUID()
-const input = { clientKey, title: 'Review', source: 'tab', consent: { hostedTranscription: false, policyVersion: 'record-v1', provider: 'deepgram', language: 'multi' } }
-const row = { id, client_key: clientKey, title: 'Review', source: 'tab', state: 'recording', project_key: null, duration_ms: null, failure: null, created_at: '2026-01-01', updated_at: '2026-01-01', revision: 0 }
+const actor = randomUUID(),
+  id = randomUUID(),
+  clientKey = randomUUID()
+const input = {
+  clientKey,
+  title: 'Review',
+  source: 'tab',
+  consent: { hostedTranscription: false, policyVersion: 'record-v1', provider: 'deepgram', language: 'multi' },
+}
+const row = {
+  id,
+  client_key: clientKey,
+  title: 'Review',
+  source: 'tab',
+  state: 'recording',
+  project_key: null,
+  duration_ms: null,
+  failure: null,
+  created_at: '2026-01-01',
+  updated_at: '2026-01-01',
+  revision: 0,
+}
 function result(data: unknown, error: unknown = null) {
   const query: any = { then: (resolve: any) => Promise.resolve({ data, error }).then(resolve) }
   for (const name of ['select', 'eq', 'is', 'order', 'limit', 'or', 'maybeSingle']) query[name] = vi.fn(() => query)
   mocks.query.mockReturnValue(query)
   return query
 }
-afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks() })
+afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.clearAllMocks()
+})
 describe('Record lifecycle', () => {
   it('creates and retries the same personal recording without a project', async () => {
     vi.stubEnv('SHARE_TOKEN_SECRET', 'test-secret-with-more-than-24-characters')
-    mocks.rpc.mockImplementation(async (_name, args) => ({ data: { ...row, share_hash: digest(initialShare(id, clientKey)) }, error: null }))
+    mocks.rpc.mockImplementation(async (_name, args) => ({
+      data: { ...row, share_hash: digest(initialShare(id, clientKey)) },
+      error: null,
+    }))
     const created = await createRecording(actor, input)
     expect(created.shareId).toBe(initialShare(id, clientKey))
     expect(created.recording.projectKey).toBeNull()
@@ -73,8 +100,21 @@ describe('Record lifecycle', () => {
     expect(parse(uuid, id)).toBe(id)
     expect(parse(uuid, id.toUpperCase())).toBe(id)
     expect(checked({ data: 1, error: null })).toBe(1)
-    for (const [code, status] of Object.entries({ record_not_found: 404, record_forbidden: 403, forbidden: 403, record_conflict: 409, record_quota: 429, record_upload_incomplete: 409, record_invalid: 400, 'database details': 503 })) {
-      try { checked({ data: null, error: { message: code } }) } catch (error) { expect(error).toMatchObject({ status }) }
+    for (const [code, status] of Object.entries({
+      record_not_found: 404,
+      record_forbidden: 403,
+      forbidden: 403,
+      record_conflict: 409,
+      record_quota: 429,
+      record_upload_incomplete: 409,
+      record_invalid: 400,
+      'database details': 503,
+    })) {
+      try {
+        checked({ data: null, error: { message: code } })
+      } catch (error) {
+        expect(error).toMatchObject({ status })
+      }
     }
     expect(limit('RECORD_TEST_LIMIT', 12)).toBe(12)
     vi.stubEnv('RECORD_TEST_LIMIT', '4')

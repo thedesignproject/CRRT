@@ -4,7 +4,11 @@ const secretKey = /(?:authorization|api.?key|capability|secret|token)/i
 const secretText = /(Bearer\s+)[^\s]+|\b(?:sk|vck|vercel)_[A-Za-z0-9_-]+/gi
 
 function sanitizeText(value: string) {
-  return value.slice(0, 500).replace(secretText, (_match, bearerPrefix: string | undefined) => bearerPrefix ? `${bearerPrefix}[REDACTED]` : '[REDACTED]')
+  return value
+    .slice(0, 500)
+    .replace(secretText, (_match, bearerPrefix: string | undefined) =>
+      bearerPrefix ? `${bearerPrefix}[REDACTED]` : '[REDACTED]',
+    )
 }
 
 function sanitizeValue(value: unknown, key?: string): unknown {
@@ -12,7 +16,9 @@ function sanitizeValue(value: unknown, key?: string): unknown {
   if (typeof value === 'string') return sanitizeText(value)
   if (Array.isArray(value)) return value.slice(0, 20).map((item) => sanitizeValue(item))
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [entryKey, sanitizeValue(entryValue, entryKey)]))
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [entryKey, sanitizeValue(entryValue, entryKey)]),
+    )
   }
   return value
 }

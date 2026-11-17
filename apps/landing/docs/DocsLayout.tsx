@@ -156,7 +156,9 @@ export function DocsLayout({ pathname, onNavigate, children, title, description,
           <main className="docs-main">
             <div style={{ marginBottom: 'clamp(28px, 5vw, 48px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-                <span className="section-marker" style={{ whiteSpace: 'nowrap' }}>/ docs / {marker}</span>
+                <span className="section-marker" style={{ whiteSpace: 'nowrap' }}>
+                  / docs / {marker}
+                </span>
                 <span style={{ flex: 1, height: 1, background: 'var(--crrt-rule-dark)' }} />
               </div>
               <h1

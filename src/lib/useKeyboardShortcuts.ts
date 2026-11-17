@@ -7,8 +7,11 @@ const pagePreferences = new Map<Surface, boolean>()
 export const shortcutPreferenceKey = (surface: Surface) => `crrt:keyboard-shortcuts:${surface}`
 
 function read(surface: Surface) {
-  try { return pagePreferences.get(surface) ?? (localStorage.getItem(shortcutPreferenceKey(surface)) !== 'disabled') }
-  catch { return true }
+  try {
+    return pagePreferences.get(surface) ?? localStorage.getItem(shortcutPreferenceKey(surface)) !== 'disabled'
+  } catch {
+    return true
+  }
 }
 
 /** Personal browser preference, shared across instances on this origin. */
@@ -38,8 +41,9 @@ export function useKeyboardShortcuts(surface: Surface) {
     try {
       localStorage.setItem(shortcutPreferenceKey(surface), value ? 'enabled' : 'disabled')
       pagePreferences.delete(surface)
+    } catch {
+      /* Keep the preference for this page when storage is unavailable. */
     }
-    catch { /* Keep the preference for this page when storage is unavailable. */ }
     window.dispatchEvent(new CustomEvent(eventName, { detail: { surface, enabled: value } }))
   }
   return [enabled, update] as const

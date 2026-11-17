@@ -45,30 +45,36 @@ export function useProjects(apiBase: string, accessToken: string): UseProjectsRe
     refresh()
   }, [refresh])
 
-  const checkAvailability = useCallback(async (key: string): Promise<ProjectKeyAvailability> => {
-    if (mocksEnabled) {
-      return { key, available: true, suggestion: key }
-    }
-    return apiCheckAvailability(apiBase, accessToken, key)
-  }, [apiBase, accessToken])
-
-  const claimProject = useCallback(async (projectKey: string, name: string) => {
-    if (mocksEnabled) {
-      const project: Project = {
-        publicKey: projectKey,
-        slug: slugify(name) || projectKey,
-        name,
-        allowedOrigins: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+  const checkAvailability = useCallback(
+    async (key: string): Promise<ProjectKeyAvailability> => {
+      if (mocksEnabled) {
+        return { key, available: true, suggestion: key }
       }
+      return apiCheckAvailability(apiBase, accessToken, key)
+    },
+    [apiBase, accessToken],
+  )
+
+  const claimProject = useCallback(
+    async (projectKey: string, name: string) => {
+      if (mocksEnabled) {
+        const project: Project = {
+          publicKey: projectKey,
+          slug: slugify(name) || projectKey,
+          name,
+          allowedOrigins: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }
+        setProjects((prev) => [...prev, project])
+        return project
+      }
+      const project = await apiClaimProject(apiBase, accessToken, projectKey, name)
       setProjects((prev) => [...prev, project])
       return project
-    }
-    const project = await apiClaimProject(apiBase, accessToken, projectKey, name)
-    setProjects((prev) => [...prev, project])
-    return project
-  }, [apiBase, accessToken])
+    },
+    [apiBase, accessToken],
+  )
 
   return { projects, loading, error, refresh, claimProject, checkAvailability }
 }

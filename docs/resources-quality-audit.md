@@ -4,30 +4,30 @@ Source: **Measured**, local production build, Lighthouse 13.6.0. All **22 resour
 
 ## Results
 
-| Resource | Mobile performance | Desktop performance | Accessibility | Best practices | SEO | Health |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `/resources` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/design-tokens-for-ai-prototypes` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/document-components-for-coding-agents` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/visual-feedback-for-coding-agents` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/ui-review-checklist-ai-generated-apps` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/lovable-prototype-review-workflow` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/v0-prototyping-with-your-design-system` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/report-responsive-ui-issues` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/focused-prototype-review` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/compare-design-to-browser` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/review-light-and-dark-themes` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/minimum-viable-design-system` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/design-decisions-for-coding-agents` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/scope-a-visual-fix` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/review-ai-generated-forms` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/storybook-design-review` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/verify-a-ui-fix` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/client-prototype-review` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/visual-feedback-vs-visual-regression` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/text-contrast-checker` | 96 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/px-to-rem-converter` | 100 | 100 | 100 | 100 | 100 | Healthy |
-| `/resources/visual-feedback-brief-builder` | 96 | 100 | 100 | 100 | 100 | Healthy |
+| Resource                                            | Mobile performance | Desktop performance | Accessibility | Best practices | SEO | Health  |
+| --------------------------------------------------- | -----------------: | ------------------: | ------------: | -------------: | --: | ------- |
+| `/resources`                                        |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/design-tokens-for-ai-prototypes`        |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/document-components-for-coding-agents`  |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/visual-feedback-for-coding-agents`      |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/ui-review-checklist-ai-generated-apps`  |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/lovable-prototype-review-workflow`      |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/v0-prototyping-with-your-design-system` |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/report-responsive-ui-issues`            |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/focused-prototype-review`               |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/compare-design-to-browser`              |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/review-light-and-dark-themes`           |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/minimum-viable-design-system`           |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/design-decisions-for-coding-agents`     |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/scope-a-visual-fix`                     |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/review-ai-generated-forms`              |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/storybook-design-review`                |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/verify-a-ui-fix`                        |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/client-prototype-review`                |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/visual-feedback-vs-visual-regression`   |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/text-contrast-checker`                  |                 96 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/px-to-rem-converter`                    |                100 |                 100 |           100 |            100 | 100 | Healthy |
+| `/resources/visual-feedback-brief-builder`          |                 96 |                 100 |           100 |            100 | 100 | Healthy |
 
 Mobile LCP: **1202–2284 ms**. Mobile TBT: **0–0 ms**. Maximum mobile CLS: **0.026596**. Every score, metric, script-size, and stylesheet-size budget passed.
 
@@ -35,15 +35,15 @@ The resource hub downloads 395,646 bytes of scripts in the uncompressed preview,
 
 ## AI and search checks
 
-| Item | Evidence / score | Health | Next action |
-| --- | --- | --- | --- |
-| Crawlable content | All 22 resource pages have substantive prerendered HTML, route CSS, Markdown copies, and discoverable links; covered by build tests | Healthy | Retest when adding guides |
-| Metadata and schema | Lighthouse SEO 100/100 on every URL; build tests validate canonical links, document identity, Article/Breadcrumb data, sitemap entries, and visible content | Healthy | Validate the live deployment after publishing |
-| Agentic browsing | Applicable binary checks pass on all runs; CLS passes its independent budget | Healthy | Monitor the experimental audit as standards change |
-| Optional agent protocols | WebMCP and ARD audits report not applicable; these integrations are not advertised by the resource library | N/A | Add only for a concrete product need |
-| Crawler policy | Existing robots policy allows public content and excludes dashboard, API, audit, and private-share paths | Healthy locally | Verify production CDN access after deployment |
-| Search index coverage and AI citations | No connected Search Console / citation analytics evidence for these unpublished URLs | N/A | Measure after publication |
-| Real-user Core Web Vitals | Local Lighthouse lab measurements only; field INP and CrUX data are unavailable | N/A | Monitor LCP, CLS, and INP in production |
+| Item                                   | Evidence / score                                                                                                                                            | Health          | Next action                                        |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------------------------------------------------- |
+| Crawlable content                      | All 22 resource pages have substantive prerendered HTML, route CSS, Markdown copies, and discoverable links; covered by build tests                         | Healthy         | Retest when adding guides                          |
+| Metadata and schema                    | Lighthouse SEO 100/100 on every URL; build tests validate canonical links, document identity, Article/Breadcrumb data, sitemap entries, and visible content | Healthy         | Validate the live deployment after publishing      |
+| Agentic browsing                       | Applicable binary checks pass on all runs; CLS passes its independent budget                                                                                | Healthy         | Monitor the experimental audit as standards change |
+| Optional agent protocols               | WebMCP and ARD audits report not applicable; these integrations are not advertised by the resource library                                                  | N/A             | Add only for a concrete product need               |
+| Crawler policy                         | Existing robots policy allows public content and excludes dashboard, API, audit, and private-share paths                                                    | Healthy locally | Verify production CDN access after deployment      |
+| Search index coverage and AI citations | No connected Search Console / citation analytics evidence for these unpublished URLs                                                                        | N/A             | Measure after publication                          |
+| Real-user Core Web Vitals              | Local Lighthouse lab measurements only; field INP and CrUX data are unavailable                                                                             | N/A             | Monitor LCP, CLS, and INP in production            |
 
 ## Changes made
 

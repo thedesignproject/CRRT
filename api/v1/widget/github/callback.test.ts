@@ -55,11 +55,24 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    send(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    send(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -68,18 +81,26 @@ const call = (req: unknown, res: unknown) =>
 beforeEach(() => {
   vi.mocked(completeMcpGithubFlow).mockReset().mockResolvedValue(undefined)
   vi.mocked(assertGitHubUserInstallationAccess).mockReset().mockResolvedValue({
-    id: '7', login: 'acme', type: 'Organization',
+    id: '7',
+    login: 'acme',
+    type: 'Organization',
   })
   vi.mocked(createGitHubAppInstallationToken).mockClear()
-  vi.mocked(listUserInstallationRepositories).mockReset().mockResolvedValue([{ fullName: 'acme/widgets' }] as never)
+  vi.mocked(listUserInstallationRepositories)
+    .mockReset()
+    .mockResolvedValue([{ fullName: 'acme/widgets' }] as never)
   vi.mocked(verifyGitHubAppReuseAuthState).mockReset().mockReturnValue(null)
   vi.mocked(verifyGitHubAppSetupAuthState).mockReset().mockReturnValue(null)
   vi.mocked(deleteGitHubUserInstallation).mockReset()
   vi.mocked(getGithubConnectionVersion).mockReset().mockResolvedValue(0)
   vi.mocked(getGitHubUserInstallation).mockReset()
-  vi.mocked(getProjectMember).mockReset().mockResolvedValue({ role: 'admin' } as never)
+  vi.mocked(getProjectMember)
+    .mockReset()
+    .mockResolvedValue({ role: 'admin' } as never)
   vi.mocked(getRepoConfig).mockReset()
-  vi.mocked(upsertGitHubUserInstallation).mockReset().mockResolvedValue({ id: 'opaque-ref' } as never)
+  vi.mocked(upsertGitHubUserInstallation)
+    .mockReset()
+    .mockResolvedValue({ id: 'opaque-ref' } as never)
   vi.mocked(assertGitHubRepoAccess).mockReset()
   vi.mocked(createWidgetAuthToken).mockClear()
   vi.mocked(exchangeGitHubCode).mockReset().mockResolvedValue('gh-token')
@@ -244,7 +265,7 @@ describe('api/v1/widget/github/callback', () => {
     consoleError.mockRestore()
   })
 
-  it('re-verifies and reuses only the initiating user\'s opaque installation mapping', async () => {
+  it("re-verifies and reuses only the initiating user's opaque installation mapping", async () => {
     vi.mocked(verifyGitHubAppReuseAuthState).mockReturnValue({
       type: 'github_app_reuse_auth_state',
       projectKey: 'second-project',
@@ -256,7 +277,8 @@ describe('api/v1/widget/github/callback', () => {
       exp: 2,
     })
     vi.mocked(getGitHubUserInstallation).mockResolvedValue({
-      id: 'opaque-ref', installationId: '99',
+      id: 'opaque-ref',
+      installationId: '99',
     } as never)
     vi.mocked(getGithubConnectionVersion).mockResolvedValue(3)
 
@@ -334,17 +356,34 @@ describe('api/v1/widget/github/callback', () => {
 })
 
 it('persists verified repository choices for a terminal-launched browser without posting credentials to an opener', async () => {
-  vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValueOnce({projectKey:'p',userId:'u',origin:'https://app.example',installationId:'123',mcpFlow:{connectionId:'connection',requestKey:'flow'}} as never)
-  const res=mockRes();await call({method:'GET',query:{code:'code',state:'state'},headers:{}},res)
-  expect(completeMcpGithubFlow).toHaveBeenCalledWith({connectionId:'connection',requestKey:'flow'},'u','p',{installationToken:'installation-token',repositories:[{fullName:'acme/widgets'}]})
+  vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValueOnce({
+    projectKey: 'p',
+    userId: 'u',
+    origin: 'https://app.example',
+    installationId: '123',
+    mcpFlow: { connectionId: 'connection', requestKey: 'flow' },
+  } as never)
+  const res = mockRes()
+  await call({ method: 'GET', query: { code: 'code', state: 'state' }, headers: {} }, res)
+  expect(completeMcpGithubFlow).toHaveBeenCalledWith({ connectionId: 'connection', requestKey: 'flow' }, 'u', 'p', {
+    installationToken: 'installation-token',
+    repositories: [{ fullName: 'acme/widgets' }],
+  })
   expect(String(res.body)).toContain('Return to your agent')
   expect(String(res.body)).not.toContain('installation-token')
 })
 
 it('shows a useful terminal-flow failure without relying on a browser opener', async () => {
-  vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValueOnce({projectKey:'p',userId:'u',origin:'https://app.example',installationId:'123',mcpFlow:{connectionId:'connection',requestKey:'flow'}} as never)
+  vi.mocked(verifyGitHubAppSetupAuthState).mockReturnValueOnce({
+    projectKey: 'p',
+    userId: 'u',
+    origin: 'https://app.example',
+    installationId: '123',
+    mcpFlow: { connectionId: 'connection', requestKey: 'flow' },
+  } as never)
   vi.mocked(completeMcpGithubFlow).mockRejectedValueOnce(new Error('unavailable'))
-  const res=mockRes();await call({method:'GET',query:{code:'code',state:'state'},headers:{}},res)
+  const res = mockRes()
+  await call({ method: 'GET', query: { code: 'code', state: 'state' }, headers: {} }, res)
   expect(String(res.body)).toContain('could not finish')
   expect(String(res.body)).not.toContain('installation-token')
 })

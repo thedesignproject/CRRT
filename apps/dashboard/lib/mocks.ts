@@ -260,7 +260,14 @@ function page<T>(items: T[], cursor?: string | null, limit = 50): AdminPage<T> {
 
 export function getMockAdminStats(): AdminStats {
   return mocksEmpty
-    ? { accounts: 0, projects: 0, comments: 0, shares: 0, activeAgentPresence: 0, signups: { last24Hours: 0, last7Days: 0, last30Days: 0 } }
+    ? {
+        accounts: 0,
+        projects: 0,
+        comments: 0,
+        shares: 0,
+        activeAgentPresence: 0,
+        signups: { last24Hours: 0, last7Days: 0, last30Days: 0 },
+      }
     : MOCK_ADMIN_STATS
 }
 
@@ -268,20 +275,20 @@ export function getMockAdminUsersPage(opts: { cursor?: string | null; limit?: nu
   return page(mocksEmpty ? [] : MOCK_ADMIN_USERS, opts.cursor, opts.limit)
 }
 
-export function getMockAdminProjectsPage(opts: {
-  cursor?: string | null
-  limit?: number
-  sort?: AdminProjectSort
-  direction?: 'asc' | 'desc'
-} = {}) {
+export function getMockAdminProjectsPage(
+  opts: {
+    cursor?: string | null
+    limit?: number
+    sort?: AdminProjectSort
+    direction?: 'asc' | 'desc'
+  } = {},
+) {
   const sort = opts.sort ?? 'lastCommentAt'
   const direction = opts.direction ?? 'desc'
   const sorted = [...(mocksEmpty ? [] : MOCK_ADMIN_PROJECTS)].sort((a, b) => {
     const av = a[sort]
     const bv = b[sort]
-    const cmp = typeof av === 'number' && typeof bv === 'number'
-      ? av - bv
-      : String(av).localeCompare(String(bv))
+    const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
     return direction === 'asc' ? cmp : -cmp
   })
   return page(sorted, opts.cursor, opts.limit)

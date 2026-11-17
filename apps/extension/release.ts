@@ -37,7 +37,10 @@ function jsonRecord(value: unknown, name: string): JsonRecord {
 }
 
 function stringArray(value: unknown, name: string): string[] {
-  requireValue(Array.isArray(value) && value.every((item) => typeof item === 'string'), `${name} must be a string array`)
+  requireValue(
+    Array.isArray(value) && value.every((item) => typeof item === 'string'),
+    `${name} must be a string array`,
+  )
   return value
 }
 
@@ -62,19 +65,30 @@ function jwtRole(payload: string): unknown {
 export function validatePublicSupabaseKey(key: string): void {
   if (/^sb_publishable_[A-Za-z0-9_-]+$/.test(key)) return
   const jwt = /^[A-Za-z0-9_-]+\.([A-Za-z0-9_-]+)\.[A-Za-z0-9_-]+$/.exec(key)
-  requireValue(jwt && jwtRole(jwt[1]!) === 'anon', 'WXT_SUPABASE_ANON_KEY must be a publishable key or an anon-role JWT')
+  requireValue(
+    jwt && jwtRole(jwt[1]!) === 'anon',
+    'WXT_SUPABASE_ANON_KEY must be a publishable key or an anon-role JWT',
+  )
 }
 
-export function readExtensionVersion(packageJson: string | URL = resolve(process.cwd(), 'apps/extension/package.json')): string {
+export function readExtensionVersion(
+  packageJson: string | URL = resolve(process.cwd(), 'apps/extension/package.json'),
+): string {
   const parsed = jsonRecord(JSON.parse(readFileSync(packageJson, 'utf8')), 'Extension package')
   const version = parsed.version
-  requireValue(typeof version === 'string' && /^\d+\.\d+\.\d+(?:\.\d+)?$/.test(version), 'Extension version must use Chrome numeric format')
+  requireValue(
+    typeof version === 'string' && /^\d+\.\d+\.\d+(?:\.\d+)?$/.test(version),
+    'Extension version must use Chrome numeric format',
+  )
   return version
 }
 
 export function pngDimensions(bytes: Uint8Array): { width: number; height: number } {
   const signature = [137, 80, 78, 71, 13, 10, 26, 10]
-  requireValue(bytes.length >= 24 && signature.every((byte, index) => bytes[index] === byte), 'Extension icon must be a PNG')
+  requireValue(
+    bytes.length >= 24 && signature.every((byte, index) => bytes[index] === byte),
+    'Extension icon must be a PNG',
+  )
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
   return { width: view.getUint32(16), height: view.getUint32(20) }
 }
@@ -83,12 +97,32 @@ export function collectReleaseFiles(root: string, paths: string[]): Map<string, 
   return new Map(paths.map((path) => [path.split(sep).join('/'), readFileSync(resolve(root, path))]))
 }
 
-function validateManifest(manifest: JsonRecord, version: string, apiOrigin: string, supabaseOrigin: string, storageOrigin?: string): void {
+function validateManifest(
+  manifest: JsonRecord,
+  version: string,
+  apiOrigin: string,
+  supabaseOrigin: string,
+  storageOrigin?: string,
+): void {
   requireValue(manifest.manifest_version === 3, 'Release must use Manifest V3')
   requireValue(manifest.version === version, 'Manifest version must match the extension package')
-  requireValue(sameStrings(stringArray(manifest.permissions, 'Manifest permissions'), STORE_PERMISSIONS), 'Manifest permissions exceed the reviewed set')
-  requireValue(sameStrings(stringArray(manifest.host_permissions, 'Manifest host permissions'), [...new Set([`${apiOrigin}/*`, `${supabaseOrigin}/*`, ...(storageOrigin ? [`${storageOrigin}/*`] : [])])]), 'Manifest host permissions exceed CRRT services')
-  requireValue(sameStrings(stringArray(manifest.optional_host_permissions, 'Manifest optional host permissions'), STORE_OPTIONAL_HOST_PERMISSIONS), 'Manifest optional host permissions exceed recording pages')
+  requireValue(
+    sameStrings(stringArray(manifest.permissions, 'Manifest permissions'), STORE_PERMISSIONS),
+    'Manifest permissions exceed the reviewed set',
+  )
+  requireValue(
+    sameStrings(stringArray(manifest.host_permissions, 'Manifest host permissions'), [
+      ...new Set([`${apiOrigin}/*`, `${supabaseOrigin}/*`, ...(storageOrigin ? [`${storageOrigin}/*`] : [])]),
+    ]),
+    'Manifest host permissions exceed CRRT services',
+  )
+  requireValue(
+    sameStrings(
+      stringArray(manifest.optional_host_permissions, 'Manifest optional host permissions'),
+      STORE_OPTIONAL_HOST_PERMISSIONS,
+    ),
+    'Manifest optional host permissions exceed recording pages',
+  )
   requireValue(manifest.content_scripts === undefined, 'Persistent content scripts are not allowed')
   const csp = jsonRecord(manifest.content_security_policy, 'Manifest CSP')
   requireValue(csp.extension_pages === STORE_CSP, 'Manifest CSP must allow packaged code only')
@@ -97,13 +131,22 @@ function validateManifest(manifest: JsonRecord, version: string, apiOrigin: stri
   const actionIcons = jsonRecord(action.default_icon, 'Manifest action icons')
   for (const size of STORE_ICON_SIZES) {
     const path = `icons/icon-${size}.png`
-    requireValue(icons[String(size)] === path && actionIcons[String(size)] === path, `Manifest must declare the ${size}px icon`)
+    requireValue(
+      icons[String(size)] === path && actionIcons[String(size)] === path,
+      `Manifest must declare the ${size}px icon`,
+    )
   }
   const resources = manifest.web_accessible_resources
   requireValue(Array.isArray(resources) && resources.length === 1, 'Only the private frame may be web-accessible')
   const resource = jsonRecord(resources[0], 'Web-accessible resource')
-  requireValue(sameStrings(stringArray(resource.resources, 'Web-accessible files'), ['private.html', 'record-controls.html']), 'Only private recording frames may be web-accessible')
-  requireValue(sameStrings(stringArray(resource.matches, 'Web-accessible matches'), ['http://*/*', 'https://*/*']), 'Private frame matches must be explicit HTTP(S) pages')
+  requireValue(
+    sameStrings(stringArray(resource.resources, 'Web-accessible files'), ['private.html', 'record-controls.html']),
+    'Only private recording frames may be web-accessible',
+  )
+  requireValue(
+    sameStrings(stringArray(resource.matches, 'Web-accessible matches'), ['http://*/*', 'https://*/*']),
+    'Private frame matches must be explicit HTTP(S) pages',
+  )
 }
 
 function validateBundleText(path: string, bytes: Uint8Array): void {
@@ -128,21 +171,43 @@ function validateBundleText(path: string, bytes: Uint8Array): void {
 
 export function validateReleaseFiles(
   files: ReleaseFiles,
-  { version, apiBase, supabaseUrl, storageOrigin }: { version: string; apiBase: string; supabaseUrl: string; storageOrigin?: string },
+  {
+    version,
+    apiBase,
+    supabaseUrl,
+    storageOrigin,
+  }: { version: string; apiBase: string; supabaseUrl: string; storageOrigin?: string },
 ): ReleaseValidation {
   const names = [...files.keys()].sort()
-  for (const required of ['manifest.json', 'background.js', 'comment.js', 'offscreen.html', 'popup.html', 'private.html', 'record-controls.html']) {
+  for (const required of [
+    'manifest.json',
+    'background.js',
+    'comment.js',
+    'offscreen.html',
+    'popup.html',
+    'private.html',
+    'record-controls.html',
+  ]) {
     requireValue(files.has(required), `Release is missing ${required}`)
   }
-  requireValue(!names.some((path) => path.endsWith('.map') || path.includes('/.env') || path.startsWith('.env')), 'Release must not contain source maps or environment files')
-  requireValue(names.every((path) => /\.(?:css|html|js|json|png)$/.test(path)), 'Release contains an unexpected file type')
+  requireValue(
+    !names.some((path) => path.endsWith('.map') || path.includes('/.env') || path.startsWith('.env')),
+    'Release must not contain source maps or environment files',
+  )
+  requireValue(
+    names.every((path) => /\.(?:css|html|js|json|png)$/.test(path)),
+    'Release contains an unexpected file type',
+  )
   const manifestBytes = files.get('manifest.json')!
   const manifest = jsonRecord(JSON.parse(new TextDecoder().decode(manifestBytes)), 'Manifest')
   const apiOrigin = new URL(apiBase).origin
   const supabaseOrigin = new URL(supabaseUrl).origin
   if (storageOrigin) {
     const url = new URL(storageOrigin)
-    requireValue(url.protocol === 'https:' && url.origin === storageOrigin, 'Recording storage must be an exact HTTPS origin')
+    requireValue(
+      url.protocol === 'https:' && url.origin === storageOrigin,
+      'Recording storage must be an exact HTTPS origin',
+    )
   }
   validateManifest(manifest, version, apiOrigin, supabaseOrigin, storageOrigin)
   for (const size of STORE_ICON_SIZES) {
@@ -160,7 +225,10 @@ export function validateReleaseFiles(
 
 export function releaseMetadata(input: ReleaseMetadataInput) {
   requireValue(/^[a-f0-9]{40}$/i.test(input.commit), 'Release commit must be a full Git SHA')
-  requireValue(Number.isInteger(input.sourceDateEpoch) && input.sourceDateEpoch > 0, 'SOURCE_DATE_EPOCH must be a positive integer')
+  requireValue(
+    Number.isInteger(input.sourceDateEpoch) && input.sourceDateEpoch > 0,
+    'SOURCE_DATE_EPOCH must be a positive integer',
+  )
   return {
     schemaVersion: 1,
     extension: 'CRRT',

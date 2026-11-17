@@ -66,21 +66,25 @@ describe('rotateShareToken', () => {
     const supabase = buildSupabase({ data: null, error: null })
     vi.mocked(getServiceSupabase).mockReturnValue(supabase.client as never)
 
-    await expect(rotateShareToken(
-      'share-1',
-      { accessTokenHash: 'old-hash', accessTokenCiphertext: 'old-cipher' },
-      { accessTokenHash: 'new-hash', accessTokenCiphertext: 'new-cipher' },
-    )).resolves.toBeNull()
+    await expect(
+      rotateShareToken(
+        'share-1',
+        { accessTokenHash: 'old-hash', accessTokenCiphertext: 'old-cipher' },
+        { accessTokenHash: 'new-hash', accessTokenCiphertext: 'new-cipher' },
+      ),
+    ).resolves.toBeNull()
   })
 
   it('throws when the update fails', async () => {
     const supabase = buildSupabase({ data: null, error: { message: 'update failed' } })
     vi.mocked(getServiceSupabase).mockReturnValue(supabase.client as never)
 
-    await expect(rotateShareToken(
-      'share-1',
-      { accessTokenHash: 'old-h', accessTokenCiphertext: 'old-c' },
-      { accessTokenHash: 'h', accessTokenCiphertext: 'c' },
-    )).rejects.toThrow('update failed')
+    await expect(
+      rotateShareToken(
+        'share-1',
+        { accessTokenHash: 'old-h', accessTokenCiphertext: 'old-c' },
+        { accessTokenHash: 'h', accessTokenCiphertext: 'c' },
+      ),
+    ).rejects.toThrow('update failed')
   })
 })

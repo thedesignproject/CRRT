@@ -70,7 +70,9 @@ export function useProjectSettings(
     setRepoConfigError(null)
     if (mocksEnabled) {
       if (!isCurrent()) return
-      setMembers([{ userId: currentUserId, email: 'you@example.com', role: 'owner', createdAt: new Date().toISOString() }])
+      setMembers([
+        { userId: currentUserId, email: 'you@example.com', role: 'owner', createdAt: new Date().toISOString() },
+      ])
       setInvites([])
       setRepoConfig(null)
       setLoadedProjectKey(projectKey)
@@ -114,50 +116,73 @@ export function useProjectSettings(
     }
   }, [apiBase, accessToken, projectKey, currentUserId])
 
-  useEffect(() => { refresh() }, [refresh])
+  useEffect(() => {
+    refresh()
+  }, [refresh])
 
-  const rename = useCallback(async (name: string) => {
-    const project = await apiRename(apiBase, accessToken, projectKey, name)
-    onProjectUpdated?.()
-    return project
-  }, [apiBase, accessToken, projectKey, onProjectUpdated])
+  const rename = useCallback(
+    async (name: string) => {
+      const project = await apiRename(apiBase, accessToken, projectKey, name)
+      onProjectUpdated?.()
+      return project
+    },
+    [apiBase, accessToken, projectKey, onProjectUpdated],
+  )
 
-  const updateAllowedOrigins = useCallback(async (domains: string[]) => {
-    const project = await apiUpdateAllowedOrigins(apiBase, accessToken, projectKey, domains)
-    onProjectUpdated?.()
-    return project
-  }, [apiBase, accessToken, projectKey, onProjectUpdated])
+  const updateAllowedOrigins = useCallback(
+    async (domains: string[]) => {
+      const project = await apiUpdateAllowedOrigins(apiBase, accessToken, projectKey, domains)
+      onProjectUpdated?.()
+      return project
+    },
+    [apiBase, accessToken, projectKey, onProjectUpdated],
+  )
 
-  const saveAgentInstructions = useCallback(async (value: string) => {
-    // '' clears the field server-side; the response is the fresh config.
-    const config = await updateProjectRepoConfig(apiBase, accessToken, projectKey, { agentInstructions: value })
-    if (currentProjectKey.current === projectKey) {
-      setRepoConfig(config)
-      setRepoConfigError(null)
-      setLoadedProjectKey(projectKey)
-    }
-    return config
-  }, [apiBase, accessToken, projectKey])
+  const saveAgentInstructions = useCallback(
+    async (value: string) => {
+      // '' clears the field server-side; the response is the fresh config.
+      const config = await updateProjectRepoConfig(apiBase, accessToken, projectKey, { agentInstructions: value })
+      if (currentProjectKey.current === projectKey) {
+        setRepoConfig(config)
+        setRepoConfigError(null)
+        setLoadedProjectKey(projectKey)
+      }
+      return config
+    },
+    [apiBase, accessToken, projectKey],
+  )
 
-  const invite = useCallback(async (email: string, role: 'admin' | 'member' | 'guest' = 'member') => {
-    await apiInvite(apiBase, accessToken, projectKey, email, role)
-    await refresh()
-  }, [apiBase, accessToken, projectKey, refresh])
+  const invite = useCallback(
+    async (email: string, role: 'admin' | 'member' | 'guest' = 'member') => {
+      await apiInvite(apiBase, accessToken, projectKey, email, role)
+      await refresh()
+    },
+    [apiBase, accessToken, projectKey, refresh],
+  )
 
-  const removeMember = useCallback(async (userId: string) => {
-    await apiRemoveMember(apiBase, accessToken, projectKey, userId)
-    await refresh()
-  }, [apiBase, accessToken, projectKey, refresh])
+  const removeMember = useCallback(
+    async (userId: string) => {
+      await apiRemoveMember(apiBase, accessToken, projectKey, userId)
+      await refresh()
+    },
+    [apiBase, accessToken, projectKey, refresh],
+  )
 
-  const changeRole = useCallback(async (userId: string, role: ProjectMemberRole) => {
-    await apiChangeRole(apiBase, accessToken, projectKey, userId, role)
-    await refresh()
-  }, [apiBase, accessToken, projectKey, refresh])
+  const changeRole = useCallback(
+    async (userId: string, role: ProjectMemberRole) => {
+      await apiChangeRole(apiBase, accessToken, projectKey, userId, role)
+      await refresh()
+    },
+    [apiBase, accessToken, projectKey, refresh],
+  )
 
-  const cancelInvite = useCallback(async (email: string) => {
-    await apiCancelInvite(apiBase, accessToken, projectKey, email)
-    await refresh()
-  }, [apiBase, accessToken, projectKey, refresh])
+  const cancelInvite = useCallback(
+    async (email: string) => {
+      await apiCancelInvite(apiBase, accessToken, projectKey, email)
+      await refresh()
+    },
+    [apiBase, accessToken, projectKey, refresh],
+  )
 
   const hasCurrentProject = loadedProjectKey === projectKey
   const currentMembers = hasCurrentProject ? members : []

@@ -10,15 +10,15 @@ Extend CRRT's existing widget login, project permissions, and Agent entitlement 
 
 The starting checkout is `f6f1c40a`, after the Cloud billing and access changes. The working branch is `feat/tdp-5793-storybook-auth`.
 
-| Responsibility | Existing implementation to reuse |
-| --- | --- |
-| Dashboard login and continuation | `apps/dashboard/components/LoginPage.tsx`, `WidgetAuthPage.tsx`, and `lib/widget-auth.ts` |
-| Project and origin scoped session | `api/_lib/widget-session.ts` and `src/lib/widgetAuthContract.ts` |
-| Hashed codes, random proofs, PKCE | `api/_lib/extension-auth-contracts.ts` |
-| Durable widget session storage | `widgetAuthSessions` in `db/schema.ts` |
-| Membership and feedback permissions | `api/_lib/auth.ts` and `api/_lib/project-capabilities.ts` |
-| Agent entitlement and role states | `api/_lib/billing/agent-entitlement.ts` |
-| Feedback creation and notification behavior | `api/v1/public/comments.ts` and `api/_lib/store.ts` |
+| Responsibility                              | Existing implementation to reuse                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Dashboard login and continuation            | `apps/dashboard/components/LoginPage.tsx`, `WidgetAuthPage.tsx`, and `lib/widget-auth.ts` |
+| Project and origin scoped session           | `api/_lib/widget-session.ts` and `src/lib/widgetAuthContract.ts`                          |
+| Hashed codes, random proofs, PKCE           | `api/_lib/extension-auth-contracts.ts`                                                    |
+| Durable widget session storage              | `widgetAuthSessions` in `db/schema.ts`                                                    |
+| Membership and feedback permissions         | `api/_lib/auth.ts` and `api/_lib/project-capabilities.ts`                                 |
+| Agent entitlement and role states           | `api/_lib/billing/agent-entitlement.ts`                                                   |
+| Feedback creation and notification behavior | `api/v1/public/comments.ts` and `api/_lib/store.ts`                                       |
 
 There are no Storybook pairing or connection endpoints in this checkout.
 
@@ -38,13 +38,13 @@ If cookie transport is retained instead, specify cookie issuance, scope, expiry,
 
 ## Pairing and connection contract
 
-| Endpoint | Request | Success |
-| --- | --- | --- |
-| Proposed `POST /v1/storybook/pairings` for the CRRT setup card | Authenticated owner, selected project | Short-lived code and expiry; exact setup-card response to coordinate with TDP-5795 |
-| `POST /v1/storybook/pairings/validate` | `{ code }` | `{ valid: true, expiresAt }` |
-| `POST /v1/storybook/pairings/claim` | `{ code, storybookVersion, addonVersion, packageManager }` | `{ connectionId, projectKey, apiBase, dashboardUrl }` |
-| `GET /v1/storybook/connections/:connectionId/eligibility` | Scoped browser session and request origin | `{ state, message?, actionUrl? }` |
-| `POST /v1/storybook/connections/:connectionId/comments` | Scoped browser session and existing comment payload | `201` with comment `id` |
+| Endpoint                                                       | Request                                                    | Success                                                                            |
+| -------------------------------------------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Proposed `POST /v1/storybook/pairings` for the CRRT setup card | Authenticated owner, selected project                      | Short-lived code and expiry; exact setup-card response to coordinate with TDP-5795 |
+| `POST /v1/storybook/pairings/validate`                         | `{ code }`                                                 | `{ valid: true, expiresAt }`                                                       |
+| `POST /v1/storybook/pairings/claim`                            | `{ code, storybookVersion, addonVersion, packageManager }` | `{ connectionId, projectKey, apiBase, dashboardUrl }`                              |
+| `GET /v1/storybook/connections/:connectionId/eligibility`      | Scoped browser session and request origin                  | `{ state, message?, actionUrl? }`                                                  |
+| `POST /v1/storybook/connections/:connectionId/comments`        | Scoped browser session and existing comment payload        | `201` with comment `id`                                                            |
 
 Only the creation endpoint is a proposed addition to the published CLI/panel contract. TDP-5795 also needs a connection-status read path for its waiting/connected state; define that with the setup-card implementation.
 
@@ -65,15 +65,15 @@ Resolve the project from the stored connection. If the payload supplies `project
 
 Use `resolveWidgetAgentAccess` for Agent eligibility. Preserve its distinctions and map them at the Storybook boundary:
 
-| Existing result | Addon response |
-| --- | --- |
-| No scoped session | `authentication_required` |
-| Expired scoped session | `session_expired` |
-| `project_access_denied` or `forbidden` | `access_denied` |
-| `upgrade_required` | `upgrade_required` |
-| `owner_upgrade_required` | Stable `code` alias with explanatory message; the addon maps it to `upgrade_required` on non-success responses |
-| `seat_limit_reached` | `seat_limit_reached` |
-| `ready` | `ready` |
+| Existing result                        | Addon response                                                                                                 |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| No scoped session                      | `authentication_required`                                                                                      |
+| Expired scoped session                 | `session_expired`                                                                                              |
+| `project_access_denied` or `forbidden` | `access_denied`                                                                                                |
+| `upgrade_required`                     | `upgrade_required`                                                                                             |
+| `owner_upgrade_required`               | Stable `code` alias with explanatory message; the addon maps it to `upgrade_required` on non-success responses |
+| `seat_limit_reached`                   | `seat_limit_reached`                                                                                           |
+| `ready`                                | `ready`                                                                                                        |
 
 The current resolver does not return `seat_limit_reached` for existing members: its policy permits existing membership after a downgrade and limits additions. Preserve that policy; cover the state at boundaries where seat admission can reject an operation. Do not invent a separate Storybook seat count.
 

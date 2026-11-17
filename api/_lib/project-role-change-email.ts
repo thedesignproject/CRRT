@@ -14,11 +14,7 @@ export type ProjectRoleChangeEmailInput = {
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 function sanitizeEmailHeader(value: string) {
@@ -45,7 +41,9 @@ export function buildProjectRoleChangeEmail(input: ProjectRoleChangeEmailInput) 
   const subject = isOwnershipTransfer
     ? `You now own ${subjectProjectName} on CRRT`
     : `Your role changed on ${subjectProjectName}`
-  const headline = isOwnershipTransfer ? 'You’re the owner.' : `You’re now ${input.role === 'admin' ? 'an admin' : input.role === 'guest' ? 'a guest' : 'a member'}.`
+  const headline = isOwnershipTransfer
+    ? 'You’re the owner.'
+    : `You’re now ${input.role === 'admin' ? 'an admin' : input.role === 'guest' ? 'a guest' : 'a member'}.`
   const textActorEmail = sanitizeEmailHeader(input.actorEmail)
   const textProjectName = sanitizeEmailHeader(input.projectName)
   const textPreviousRole = sanitizeEmailHeader(input.previousRole)

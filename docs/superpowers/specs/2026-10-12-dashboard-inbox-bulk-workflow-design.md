@@ -47,9 +47,7 @@ Use the familiar Gmail two-step pattern:
 The selection descriptor is one of:
 
 ```ts
-type BulkSelection =
-  | { mode: 'ids'; ids: string[] }
-  | { mode: 'all'; excludedIds: string[] }
+type BulkSelection = { mode: 'ids'; ids: string[] } | { mode: 'all'; excludedIds: string[] }
 ```
 
 The server resolves `mode: all` against the authenticated user's current Inbox at execution time. It never trusts a client-provided total or user id.

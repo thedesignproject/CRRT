@@ -17,7 +17,10 @@ export function widgetAuthRecoveryDestination(search: string, origin: string): s
   if (!continuation) return null
   try {
     const url = new URL(continuation, origin)
-    if (url.origin !== origin || url.pathname !== route('/widget-auth') || !widgetAuthContinuation(url.search)) return null
+    if (url.origin !== origin || url.pathname !== route('/widget-auth') || !widgetAuthContinuation(url.search))
+      return null
     return `${url.pathname}${url.search}`
-  } catch { return null }
+  } catch {
+    return null
+  }
 }

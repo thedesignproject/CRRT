@@ -35,7 +35,8 @@ export function selectionMode(changes: Change[]): { mode: Mode; reasons: string[
   for (const { status, path } of changes) {
     if (status !== 'A' && status !== 'M') reasons.push(`${path}: ${status} (deleted, renamed or copied)`)
     else if (!MODULE.test(path)) reasons.push(`${path}: not a JS/TS module, so tests may read it with fs`)
-    else if (SUBPROCESS_ROOTS.some((root) => path.startsWith(root))) reasons.push(`${path}: tests run scripts as subprocesses`)
+    else if (SUBPROCESS_ROOTS.some((root) => path.startsWith(root)))
+      reasons.push(`${path}: tests run scripts as subprocesses`)
     else if (SUITE_WIDE.has(path)) reasons.push(`${path}: test setup or config`)
   }
   if (changes.length === 0) reasons.push('no changes against the base')

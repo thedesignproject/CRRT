@@ -78,7 +78,11 @@ export default function App() {
           Connect your product or Storybook. Feedback from either source lands here with its context attached.
         </p>
 
-        <div role="tablist" aria-label="Feedback source" className="mb-5 inline-flex rounded-lg border border-border bg-card p-1">
+        <div
+          role="tablist"
+          aria-label="Feedback source"
+          className="mb-5 inline-flex rounded-lg border border-border bg-card p-1"
+        >
           <button
             id={`${tabsId}-app-tab`}
             type="button"

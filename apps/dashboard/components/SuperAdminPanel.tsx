@@ -33,17 +33,24 @@ function potentialScore(project: AdminProject) {
   const recency = Math.max(0, 20 - daysSince(project.lastCommentAt))
   return Math.round(
     project.commentCount * 1.4 +
-    project.feedbackShareCount * 8 +
-    project.commentedUrlCount * 3 +
-    memberCount(project) * 6 +
-    project.commentStatusCounts.accepted * 2 +
-    project.implementationStatusCounts.done * 1.5 +
-    recency -
-    project.commentStatusCounts.rejected,
+      project.feedbackShareCount * 8 +
+      project.commentedUrlCount * 3 +
+      memberCount(project) * 6 +
+      project.commentStatusCounts.accepted * 2 +
+      project.implementationStatusCounts.done * 1.5 +
+      recency -
+      project.commentStatusCounts.rejected,
   )
 }
 
-function StatTile({ label, value, view, activeView, tone, onClick }: {
+function StatTile({
+  label,
+  value,
+  view,
+  activeView,
+  tone,
+  onClick,
+}: {
   label: string
   value: ReactNode
   view: AdminView
@@ -64,30 +71,81 @@ function StatTile({ label, value, view, activeView, tone, onClick }: {
       aria-pressed={active}
     >
       <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground truncate">{label}</div>
-      <div className={cn(
-        'mt-1 font-mono text-lg tabular-nums text-foreground truncate',
-        tone === 'hot' && active && 'text-primary',
-        tone === 'live' && active && 'text-agent-active',
-      )}>
+      <div
+        className={cn(
+          'mt-1 font-mono text-lg tabular-nums text-foreground truncate',
+          tone === 'hot' && active && 'text-primary',
+          tone === 'live' && active && 'text-agent-active',
+        )}
+      >
         {value}
       </div>
     </button>
   )
 }
 
-function StatsStrip({ stats, activeView, onViewChange }: { stats: AdminStats | null; activeView: AdminView; onViewChange: (view: AdminView) => void }) {
+function StatsStrip({
+  stats,
+  activeView,
+  onViewChange,
+}: {
+  stats: AdminStats | null
+  activeView: AdminView
+  onViewChange: (view: AdminView) => void
+}) {
   return (
     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 border-b border-border bg-card">
-      <StatTile label="Overview" view="overview" activeView={activeView} onClick={onViewChange} value="View" tone="hot" />
-      <StatTile label="Accounts" view="accounts" activeView={activeView} onClick={onViewChange} value={count(stats?.accounts)} />
-      <StatTile label="Projects" view="projects" activeView={activeView} onClick={onViewChange} value={count(stats?.projects)} />
-      <StatTile label="Comments" view="comments" activeView={activeView} onClick={onViewChange} value={count(stats?.comments)} />
-      <StatTile label="Shares" view="shares" activeView={activeView} onClick={onViewChange} value={count(stats?.shares)} />
+      <StatTile
+        label="Overview"
+        view="overview"
+        activeView={activeView}
+        onClick={onViewChange}
+        value="View"
+        tone="hot"
+      />
+      <StatTile
+        label="Accounts"
+        view="accounts"
+        activeView={activeView}
+        onClick={onViewChange}
+        value={count(stats?.accounts)}
+      />
+      <StatTile
+        label="Projects"
+        view="projects"
+        activeView={activeView}
+        onClick={onViewChange}
+        value={count(stats?.projects)}
+      />
+      <StatTile
+        label="Comments"
+        view="comments"
+        activeView={activeView}
+        onClick={onViewChange}
+        value={count(stats?.comments)}
+      />
+      <StatTile
+        label="Shares"
+        view="shares"
+        activeView={activeView}
+        onClick={onViewChange}
+        value={count(stats?.shares)}
+      />
     </div>
   )
 }
 
-function PanelState({ loading, error, empty, emptyLabel }: { loading: boolean; error: string | null; empty: boolean; emptyLabel: string }) {
+function PanelState({
+  loading,
+  error,
+  empty,
+  emptyLabel,
+}: {
+  loading: boolean
+  error: string | null
+  empty: boolean
+  emptyLabel: string
+}) {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
@@ -114,7 +172,17 @@ function PanelState({ loading, error, empty, emptyLabel }: { loading: boolean; e
   return null
 }
 
-function LoadMore({ visible, busy, onClick, label }: { visible: boolean; busy: boolean; onClick: () => void; label: string }) {
+function LoadMore({
+  visible,
+  busy,
+  onClick,
+  label,
+}: {
+  visible: boolean
+  busy: boolean
+  onClick: () => void
+  label: string
+}) {
   if (!visible) return null
   return (
     <div className="p-3">
@@ -132,10 +200,12 @@ function LoadMore({ visible, busy, onClick, label }: { visible: boolean; busy: b
 
 function RoleBadge({ children, active }: { children: ReactNode; active?: boolean }) {
   return (
-    <span className={cn(
-      'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
-      active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
-    )}>
+    <span
+      className={cn(
+        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide',
+        active ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
+      )}
+    >
       {children}
     </span>
   )
@@ -161,13 +231,21 @@ function UserRow({ user, active, onClick }: { user: AdminUser; active: boolean; 
       <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
         <span>{adminCount} admin</span>
         <span>{memberCount} member</span>
-        <span className="ml-auto shrink-0">{user.lastSignInAt ? `seen ${timeAgo(user.lastSignInAt)}` : 'never seen'}</span>
+        <span className="ml-auto shrink-0">
+          {user.lastSignInAt ? `seen ${timeAgo(user.lastSignInAt)}` : 'never seen'}
+        </span>
       </div>
     </button>
   )
 }
 
-function SortButton({ sort, active, direction, onClick, children }: {
+function SortButton({
+  sort,
+  active,
+  direction,
+  onClick,
+  children,
+}: {
   sort: AdminProjectSort
   active: boolean
   direction: 'asc' | 'desc'
@@ -195,16 +273,26 @@ function SortButton({ sort, active, direction, onClick, children }: {
   )
 }
 
-function TinyMetric({ label, value, tone }: { label: string; value: number; tone?: 'ready' | 'done' | 'reject' | 'agent' }) {
+function TinyMetric({
+  label,
+  value,
+  tone,
+}: {
+  label: string
+  value: number
+  tone?: 'ready' | 'done' | 'reject' | 'agent'
+}) {
   return (
-    <span className={cn(
-      'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
-      tone === 'ready' && 'bg-status-accepted-bg text-status-accepted',
-      tone === 'done' && 'bg-status-done-bg text-status-done',
-      tone === 'reject' && 'bg-status-rejected-bg text-status-rejected',
-      tone === 'agent' && 'bg-agent-active/10 text-agent-active',
-      !tone && 'bg-muted text-muted-foreground',
-    )}>
+    <span
+      className={cn(
+        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums',
+        tone === 'ready' && 'bg-status-accepted-bg text-status-accepted',
+        tone === 'done' && 'bg-status-done-bg text-status-done',
+        tone === 'reject' && 'bg-status-rejected-bg text-status-rejected',
+        tone === 'agent' && 'bg-agent-active/10 text-agent-active',
+        !tone && 'bg-muted text-muted-foreground',
+      )}
+    >
       <span>{label}</span>
       <span>{count(value)}</span>
     </span>
@@ -232,7 +320,9 @@ function buildIntelligence(projects: AdminProject[]): IntelligenceSummary {
   const shareLoops = projects.reduce((sum, project) => sum + project.feedbackShareCount, 0)
   const activeProjects = projects.filter((project) => daysSince(project.lastCommentAt) <= 7).length
   const teamProjects = projects.filter((project) => memberCount(project) > 1).length
-  const attentionProjects = projects.filter((project) => project.commentStatusCounts.pending >= 10 || project.commentStatusCounts.rejected >= 5).length
+  const attentionProjects = projects.filter(
+    (project) => project.commentStatusCounts.pending >= 10 || project.commentStatusCounts.rejected >= 5,
+  ).length
   const topProjects = [...projects].sort((a, b) => potentialScore(b) - potentialScore(a)).slice(0, 6)
   return {
     loadedComments,
@@ -250,14 +340,16 @@ function buildIntelligence(projects: AdminProject[]): IntelligenceSummary {
 
 function SignalChip({ children, tone }: { children: ReactNode; tone?: 'hot' | 'live' | 'risk' | 'done' }) {
   return (
-    <span className={cn(
-      'inline-flex border-l pl-2 text-[10px] font-semibold',
-      tone === 'hot' && 'border-primary text-primary',
-      tone === 'live' && 'border-agent-active text-agent-active',
-      tone === 'risk' && 'border-status-rejected text-status-rejected',
-      tone === 'done' && 'border-status-done text-status-done',
-      !tone && 'border-border text-muted-foreground',
-    )}>
+    <span
+      className={cn(
+        'inline-flex border-l pl-2 text-[10px] font-semibold',
+        tone === 'hot' && 'border-primary text-primary',
+        tone === 'live' && 'border-agent-active text-agent-active',
+        tone === 'risk' && 'border-status-rejected text-status-rejected',
+        tone === 'done' && 'border-status-done text-status-done',
+        !tone && 'border-border text-muted-foreground',
+      )}
+    >
       {children}
     </span>
   )
@@ -273,7 +365,9 @@ function ProjectSignals({ project }: { project: AdminProject }) {
   return (
     <div className="mt-2 flex flex-wrap gap-1.5">
       {chips.slice(0, 4).map((chip) => (
-        <SignalChip key={chip.label} tone={chip.tone}>{chip.label}</SignalChip>
+        <SignalChip key={chip.label} tone={chip.tone}>
+          {chip.label}
+        </SignalChip>
       ))}
     </div>
   )
@@ -297,23 +391,40 @@ function OverviewView({ summary, stats }: { summary: IntelligenceSummary; stats:
       <div className="mt-6 grid max-w-4xl grid-cols-2 gap-x-8 gap-y-4 lg:grid-cols-4">
         <QuietMetric label="Active projects" value={summary.activeProjects} detail="last 7d" tone="live" />
         <QuietMetric label="Team use" value={summary.teamProjects} detail="2+ members" />
-        <QuietMetric label="Review load" value={summary.pendingComments} detail="pending" tone={summary.pendingComments > summary.readyComments ? 'risk' : undefined} />
+        <QuietMetric
+          label="Review load"
+          value={summary.pendingComments}
+          detail="pending"
+          tone={summary.pendingComments > summary.readyComments ? 'risk' : undefined}
+        />
         <QuietMetric label="Signup pull" value={stats?.signups.last7Days ?? 0} detail="last 7d" tone="hot" />
       </div>
     </div>
   )
 }
 
-function QuietMetric({ label, value, detail, tone }: { label: string; value: number; detail: string; tone?: 'hot' | 'live' | 'risk' }) {
+function QuietMetric({
+  label,
+  value,
+  detail,
+  tone,
+}: {
+  label: string
+  value: number
+  detail: string
+  tone?: 'hot' | 'live' | 'risk'
+}) {
   return (
     <div className="min-w-0">
       <div className="text-[10px] uppercase tracking-[0.08em] text-muted-foreground truncate">{label}</div>
-      <div className={cn(
-        'mt-1 font-mono text-xl tabular-nums text-foreground',
-        tone === 'hot' && 'text-primary',
-        tone === 'live' && 'text-agent-active',
-        tone === 'risk' && 'text-status-rejected',
-      )}>
+      <div
+        className={cn(
+          'mt-1 font-mono text-xl tabular-nums text-foreground',
+          tone === 'hot' && 'text-primary',
+          tone === 'live' && 'text-agent-active',
+          tone === 'risk' && 'text-status-rejected',
+        )}
+      >
         {count(value)}
       </div>
       <div className="mt-0.5 text-[11px] text-muted-foreground truncate">{detail}</div>
@@ -343,16 +454,15 @@ function ProjectListView({
         <p className="text-[11px] text-muted-foreground">{subtitle}</p>
       </div>
       <div className="divide-y divide-border/60 border-y border-border/60">
-        {projects.length === 0 && (
-          <div className="px-1 py-6 text-[12px] text-muted-foreground">No projects.</div>
-        )}
+        {projects.length === 0 && <div className="px-1 py-6 text-[12px] text-muted-foreground">No projects.</div>}
         {projects.map((project, index) => (
           <div key={project.publicKey} className="grid grid-cols-[36px_1fr_auto] items-center gap-3 px-1 py-3">
             <div className="font-mono text-[11px] text-muted-foreground">#{index + 1}</div>
             <div className="min-w-0">
               <div className="truncate text-[13px] font-bold text-foreground">{project.name}</div>
               <div className="mt-1 truncate text-[11px] text-muted-foreground">
-                {count(project.commentCount)} comments · {count(project.feedbackShareCount)} shares · {timeAgo(project.lastCommentAt)}
+                {count(project.commentCount)} comments · {count(project.feedbackShareCount)} shares ·{' '}
+                {timeAgo(project.lastCommentAt)}
               </div>
               <ProjectSignals project={project} />
             </div>
@@ -371,20 +481,42 @@ function ProjectTable({ projects }: { projects: AdminProject[] }) {
     <table className="w-full min-w-[1040px] border-separate border-spacing-0 text-left">
       <thead className="sticky top-0 z-10 bg-background/95 backdrop-blur">
         <tr className="border-b border-border text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-          <th scope="col" className="border-b border-border px-4 py-2.5 font-semibold">Project</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 font-semibold">Last</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Comments</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Pending</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Ready</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Rejected</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Testing</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Done</th>
-          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">Shares</th>
-          <th scope="col" className="border-b border-border px-4 py-2.5 text-right font-semibold">URLs</th>
+          <th scope="col" className="border-b border-border px-4 py-2.5 font-semibold">
+            Project
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 font-semibold">
+            Last
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Comments
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Pending
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Ready
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Rejected
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Testing
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Done
+          </th>
+          <th scope="col" className="border-b border-border px-3 py-2.5 text-right font-semibold">
+            Shares
+          </th>
+          <th scope="col" className="border-b border-border px-4 py-2.5 text-right font-semibold">
+            URLs
+          </th>
         </tr>
       </thead>
       <tbody>
-        {projects.map((project) => <ProjectTableRow key={project.publicKey} project={project} />)}
+        {projects.map((project) => (
+          <ProjectTableRow key={project.publicKey} project={project} />
+        ))}
       </tbody>
     </table>
   )
@@ -398,46 +530,66 @@ function ProjectTableRow({ project }: { project: AdminProject }) {
         <div className="min-w-0 max-w-[440px]">
           <div className="flex min-w-0 items-center gap-2">
             <span className="truncate text-[13px] font-bold text-foreground">{project.name}</span>
-            <span className={cn(
-              'rounded px-1.5 py-0.5 text-[10px] font-semibold shrink-0',
-              project.claimed ? 'bg-status-accepted-bg text-status-accepted' : 'bg-muted text-muted-foreground',
-            )}>
+            <span
+              className={cn(
+                'rounded px-1.5 py-0.5 text-[10px] font-semibold shrink-0',
+                project.claimed ? 'bg-status-accepted-bg text-status-accepted' : 'bg-muted text-muted-foreground',
+              )}
+            >
               {project.claimed ? 'Claimed' : 'Unclaimed'}
             </span>
           </div>
           <div className="mt-1 flex min-w-0 items-center gap-3 text-[11px] text-muted-foreground">
-            <span className="max-w-[160px] truncate font-mono" translate="no">{project.publicKey}</span>
+            <span className="max-w-[160px] truncate font-mono" translate="no">
+              {project.publicKey}
+            </span>
             {owners.length > 0 && <span className="truncate">owner {owners[0]}</span>}
           </div>
         </div>
       </td>
-      <td className="border-b border-border/50 px-3 py-3 text-[12px] text-muted-foreground tabular-nums">{timeAgo(project.lastCommentAt)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-foreground tabular-nums">{count(project.commentCount)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-muted-foreground tabular-nums">{count(project.commentStatusCounts.pending)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-accepted tabular-nums">{count(project.commentStatusCounts.accepted)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-rejected tabular-nums">{count(project.commentStatusCounts.rejected)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-ready-for-testing tabular-nums">{count(project.implementationStatusCounts.readyForTesting)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-done tabular-nums">{count(project.implementationStatusCounts.done)}</td>
-      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-agent-active tabular-nums">{count(project.feedbackShareCount)}</td>
-      <td className="border-b border-border/50 px-4 py-3 text-right text-[12px] text-muted-foreground tabular-nums">{count(project.commentedUrlCount)}</td>
+      <td className="border-b border-border/50 px-3 py-3 text-[12px] text-muted-foreground tabular-nums">
+        {timeAgo(project.lastCommentAt)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-foreground tabular-nums">
+        {count(project.commentCount)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-muted-foreground tabular-nums">
+        {count(project.commentStatusCounts.pending)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-accepted tabular-nums">
+        {count(project.commentStatusCounts.accepted)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-rejected tabular-nums">
+        {count(project.commentStatusCounts.rejected)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-ready-for-testing tabular-nums">
+        {count(project.implementationStatusCounts.readyForTesting)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-status-done tabular-nums">
+        {count(project.implementationStatusCounts.done)}
+      </td>
+      <td className="border-b border-border/50 px-3 py-3 text-right text-[12px] text-agent-active tabular-nums">
+        {count(project.feedbackShareCount)}
+      </td>
+      <td className="border-b border-border/50 px-4 py-3 text-right text-[12px] text-muted-foreground tabular-nums">
+        {count(project.commentedUrlCount)}
+      </td>
     </tr>
   )
 }
 
 function UserDetail({ user }: { user: AdminUser | null }) {
   if (!user) {
-    return (
-      <div className="border-t border-border px-4 py-4 text-[11px] text-muted-foreground">
-        Select user.
-      </div>
-    )
+    return <div className="border-t border-border px-4 py-4 text-[11px] text-muted-foreground">Select user.</div>
   }
   return (
     <div className="border-t border-border px-4 py-4">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-[13px] font-bold text-foreground">{user.email ?? user.id}</div>
-          <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate" translate="no">{user.id}</div>
+          <div className="mt-1 font-mono text-[10px] text-muted-foreground truncate" translate="no">
+            {user.id}
+          </div>
         </div>
         {user.superAdmin && <RoleBadge active>super</RoleBadge>}
       </div>
@@ -503,7 +655,12 @@ function UsersView({
           />
         </div>
         <div>
-          <PanelState loading={false} error={null} empty={filteredUsers.length === 0} emptyLabel={users.length === 0 ? 'No users yet.' : 'No users match.'} />
+          <PanelState
+            loading={false}
+            error={null}
+            empty={filteredUsers.length === 0}
+            emptyLabel={users.length === 0 ? 'No users yet.' : 'No users match.'}
+          />
           {filteredUsers.map((user) => (
             <UserRow
               key={user.id}
@@ -548,10 +705,7 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
   const [projectFilter, setProjectFilter] = useState<ProjectFilter>('all')
   const [activeView, setActiveView] = useState<AdminView>('overview')
 
-  const selectedUser = useMemo(
-    () => users.find((u) => u.id === selectedUserId) ?? null,
-    [users, selectedUserId],
-  )
+  const selectedUser = useMemo(() => users.find((u) => u.id === selectedUserId) ?? null, [users, selectedUserId])
   const filteredUsers = useMemo(() => {
     const q = userQuery.trim().toLowerCase()
     if (!q) return users
@@ -571,19 +725,27 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
     })
   }, [projects, projectFilter, projectQuery])
   const intelligence = useMemo(() => buildIntelligence(projects), [projects])
-  const topProjects = useMemo(() => [...projects].sort((a, b) => potentialScore(b) - potentialScore(a)).slice(0, 10), [projects])
-  const attentionProjects = useMemo(() => (
-    [...projects]
-      .filter((project) => project.commentStatusCounts.pending >= 10 || project.commentStatusCounts.rejected >= 5)
-      .sort((a, b) => (
-        (b.commentStatusCounts.pending + b.commentStatusCounts.rejected) -
-        (a.commentStatusCounts.pending + a.commentStatusCounts.rejected)
-      ))
-      .slice(0, 8)
-  ), [projects])
-  const shareProjects = useMemo(() => (
-    [...projects].sort((a, b) => b.feedbackShareCount - a.feedbackShareCount).slice(0, 8)
-  ), [projects])
+  const topProjects = useMemo(
+    () => [...projects].sort((a, b) => potentialScore(b) - potentialScore(a)).slice(0, 10),
+    [projects],
+  )
+  const attentionProjects = useMemo(
+    () =>
+      [...projects]
+        .filter((project) => project.commentStatusCounts.pending >= 10 || project.commentStatusCounts.rejected >= 5)
+        .sort(
+          (a, b) =>
+            b.commentStatusCounts.pending +
+            b.commentStatusCounts.rejected -
+            (a.commentStatusCounts.pending + a.commentStatusCounts.rejected),
+        )
+        .slice(0, 8),
+    [projects],
+  )
+  const shareProjects = useMemo(
+    () => [...projects].sort((a, b) => b.feedbackShareCount - a.feedbackShareCount).slice(0, 8),
+    [projects],
+  )
 
   return (
     <section className="flex flex-col flex-1 overflow-hidden" aria-label="Super admin">
@@ -614,7 +776,12 @@ export function SuperAdminPanel({ apiBase, accessToken }: SuperAdminPanelProps) 
       <StatsStrip stats={stats} activeView={activeView} onViewChange={setActiveView} />
 
       <div className="flex-1 overflow-y-auto bg-background">
-        <PanelState loading={loading} error={error} empty={projects.length === 0 && activeView !== 'accounts'} emptyLabel="No projects have comments yet." />
+        <PanelState
+          loading={loading}
+          error={error}
+          empty={projects.length === 0 && activeView !== 'accounts'}
+          emptyLabel="No projects have comments yet."
+        />
         {!loading && !error && activeView === 'overview' && <OverviewView summary={intelligence} stats={stats} />}
         {!loading && !error && activeView === 'accounts' && (
           <UsersView

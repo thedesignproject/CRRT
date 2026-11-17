@@ -20,7 +20,9 @@ export function DocsApp({ initialPath }: { initialPath: string }) {
     return () => window.removeEventListener('popstate', onPop)
   }, [])
 
-  useEffect(() => { updatePublicMetadata(pathname) }, [pathname])
+  useEffect(() => {
+    updatePublicMetadata(pathname)
+  }, [pathname])
 
   function navigate(path: string) {
     // Hash links (e.g. "/#install") fall through to a real navigation so the

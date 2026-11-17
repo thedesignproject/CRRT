@@ -31,21 +31,40 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
-const SHARE = { id: 's', projectId: 'p', slug: 'sl', scopePageUrl: null, accessTokenHash: 'h', accessTokenCiphertext: 'c' }
+const SHARE = {
+  id: 's',
+  projectId: 'p',
+  slug: 'sl',
+  scopePageUrl: null,
+  accessTokenHash: 'h',
+  accessTokenCiphertext: 'c',
+}
 
 beforeEach(() => {
   process.env.APP_URL = 'https://app.example'
   vi.mocked(requireUser).mockReset()
   vi.mocked(requireProjectCapability).mockReset()
-  vi.mocked(getShareById).mockReset().mockResolvedValue(SHARE as never)
+  vi.mocked(getShareById)
+    .mockReset()
+    .mockResolvedValue(SHARE as never)
   vi.mocked(getProject).mockReset()
   vi.mocked(getRepoConfig).mockReset()
   vi.mocked(rotateShareToken).mockReset()
@@ -122,7 +141,10 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Prompt could not be generated — please retry.' })
-    expect(errorSpy).toHaveBeenCalledWith('[feedback-shares/prompt] prompt generation failed', expect.objectContaining({ shareId: 's' }))
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[feedback-shares/prompt] prompt generation failed',
+      expect.objectContaining({ shareId: 's' }),
+    )
     errorSpy.mockRestore()
   })
 
@@ -150,10 +172,10 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
       'u',
     )
     expect(vi.mocked(buildPrompt)).toHaveBeenCalledWith('generic', expect.objectContaining({ token: 'fresh-token' }))
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[feedback-shares/prompt] rotated undecryptable share token',
-      { shareId: 's', projectKey: 'p' },
-    )
+    expect(warnSpy).toHaveBeenCalledWith('[feedback-shares/prompt] rotated undecryptable share token', {
+      shareId: 's',
+      projectKey: 'p',
+    })
     warnSpy.mockRestore()
   })
 
@@ -168,7 +190,9 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     vi.mocked(getProject).mockResolvedValueOnce({ publicKey: 'p', name: 'P' } as never)
     vi.mocked(getRepoConfig).mockResolvedValueOnce(null)
     vi.mocked(decryptToken)
-      .mockImplementationOnce(() => { throw new Error('legacy ciphertext') })
+      .mockImplementationOnce(() => {
+        throw new Error('legacy ciphertext')
+      })
       .mockReturnValueOnce('winning-token')
     vi.mocked(rotateShareToken).mockResolvedValueOnce(null)
 
@@ -176,10 +200,7 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
     await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
 
     expect(res.statusCode).toBe(200)
-    expect(vi.mocked(buildPrompt)).toHaveBeenCalledWith(
-      'generic',
-      expect.objectContaining({ token: 'winning-token' }),
-    )
+    expect(vi.mocked(buildPrompt)).toHaveBeenCalledWith('generic', expect.objectContaining({ token: 'winning-token' }))
     expect(decryptToken).toHaveBeenLastCalledWith('winning-ciphertext')
   })
 
@@ -206,33 +227,53 @@ describe('api/v1/feedback-shares/[shareId]/prompt', () => {
 })
 
 it('does not release or rotate a credential after membership is revoked during prompt preparation', async () => {
-  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
-  vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
-  vi.mocked(getProject).mockResolvedValue({publicKey:'p',name:'P'} as never)
-  vi.mocked(getRepoConfig).mockImplementationOnce(async()=>{vi.mocked(getShareById).mockRejectedValueOnce(new Error('forbidden'));return null})
-  const res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res)
-  expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('tokenUrl')
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(getProject).mockResolvedValue({ publicKey: 'p', name: 'P' } as never)
+  vi.mocked(getRepoConfig).mockImplementationOnce(async () => {
+    vi.mocked(getShareById).mockRejectedValueOnce(new Error('forbidden'))
+    return null
+  })
+  const res = mockRes()
+  await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
+  expect(res.statusCode).toBe(403)
+  expect(res.body).not.toHaveProperty('tokenUrl')
   expect(rotateShareToken).not.toHaveBeenCalled()
 })
-it('does not rotate a legacy token after concurrent membership revocation', async()=>{
-  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
-  vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
-  vi.mocked(getProject).mockResolvedValue({publicKey:'p',name:'P'} as never)
+it('does not rotate a legacy token after concurrent membership revocation', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(getProject).mockResolvedValue({ publicKey: 'p', name: 'P' } as never)
   vi.mocked(getRepoConfig).mockResolvedValue(null)
-  vi.mocked(decryptToken).mockImplementationOnce(()=>{throw new Error('old key')})
+  vi.mocked(decryptToken).mockImplementationOnce(() => {
+    throw new Error('old key')
+  })
   vi.mocked(rotateShareToken).mockRejectedValueOnce(new Error('forbidden'))
-  const res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res)
-  expect(res.statusCode).toBe(403);expect(res.body).not.toHaveProperty('tokenUrl')
+  const res = mockRes()
+  await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
+  expect(res.statusCode).toBe(403)
+  expect(res.body).not.toHaveProperty('tokenUrl')
 })
-it('handles a share that expires or disappears during preparation and rotation', async()=>{
-  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
-  vi.mocked(requireProjectCapability).mockResolvedValue({role:'member'})
-  vi.mocked(getProject).mockResolvedValue({publicKey:'p',name:'P'} as never)
+it('handles a share that expires or disappears during preparation and rotation', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(getProject).mockResolvedValue({ publicKey: 'p', name: 'P' } as never)
   vi.mocked(getRepoConfig).mockResolvedValue(null)
-  vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never).mockResolvedValueOnce(null)
-  let res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res);expect(res.statusCode).toBe(410)
-  vi.mocked(getShareById).mockResolvedValueOnce(SHARE as never).mockResolvedValueOnce(SHARE as never).mockResolvedValueOnce(null)
-  vi.mocked(decryptToken).mockImplementationOnce(()=>{throw new Error('old key')})
+  vi.mocked(getShareById)
+    .mockResolvedValueOnce(SHARE as never)
+    .mockResolvedValueOnce(null)
+  let res = mockRes()
+  await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
+  expect(res.statusCode).toBe(410)
+  vi.mocked(getShareById)
+    .mockResolvedValueOnce(SHARE as never)
+    .mockResolvedValueOnce(SHARE as never)
+    .mockResolvedValueOnce(null)
+  vi.mocked(decryptToken).mockImplementationOnce(() => {
+    throw new Error('old key')
+  })
   vi.mocked(rotateShareToken).mockResolvedValueOnce(null)
-  res=mockRes();await call({method:'GET',query:{shareId:'s'},headers:{}},res);expect(res.statusCode).toBe(410)
+  res = mockRes()
+  await call({ method: 'GET', query: { shareId: 's' }, headers: {} }, res)
+  expect(res.statusCode).toBe(410)
 })

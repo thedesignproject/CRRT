@@ -1,62 +1,52 @@
-import { dashboardHome } from "../auth";
-import React, { useCallback, useEffect, useRef, useState } from "react";
-import { useChannel } from "storybook/manager-api";
-import { STORY_RENDERED } from "storybook/internal/core-events";
-import { composeComplianceBody, sendFeedback } from "../api";
-import { CRRT_ORANGE, DEFAULT_DASHBOARD_URL } from "../constants";
-import {
-  CHECK_META,
-  runStoryChecks,
-  type CheckResult,
-  type ChecksOutcome,
-} from "../checks";
-import type { CrrtRule, CrrtRuleStatus, StoryContext } from "../types";
-import { tryCaptureStoryScreenshot } from "../screenshot";
+import { dashboardHome } from '../auth'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useChannel } from 'storybook/manager-api'
+import { STORY_RENDERED } from 'storybook/internal/core-events'
+import { composeComplianceBody, sendFeedback } from '../api'
+import { CRRT_ORANGE, DEFAULT_DASHBOARD_URL } from '../constants'
+import { CHECK_META, runStoryChecks, type CheckResult, type ChecksOutcome } from '../checks'
+import type { CrrtRule, CrrtRuleStatus, StoryContext } from '../types'
+import { tryCaptureStoryScreenshot } from '../screenshot'
 
-const STATUS_BADGE: Record<
-  CrrtRuleStatus,
-  { label: string; color: string; bg: string }
-> = {
-  info: { label: "governs", color: "#8a6d1d", bg: "rgba(242,169,0,0.12)" },
-  pass: { label: "pass", color: "#1d7a3e", bg: "rgba(46,164,79,0.12)" },
-  warn: { label: "warn", color: "#8a6d1d", bg: "rgba(242,169,0,0.12)" },
-  fail: { label: "fail", color: "#b42318", bg: "rgba(212,44,30,0.12)" },
-};
+const STATUS_BADGE: Record<CrrtRuleStatus, { label: string; color: string; bg: string }> = {
+  info: { label: 'governs', color: '#8a6d1d', bg: 'rgba(242,169,0,0.12)' },
+  pass: { label: 'pass', color: '#1d7a3e', bg: 'rgba(46,164,79,0.12)' },
+  warn: { label: 'warn', color: '#8a6d1d', bg: 'rgba(242,169,0,0.12)' },
+  fail: { label: 'fail', color: '#b42318', bg: 'rgba(212,44,30,0.12)' },
+}
 
-const CHECK_ICON: Record<string, string> = { pass: "✓", fail: "✕", na: "–" };
+const CHECK_ICON: Record<string, string> = { pass: '✓', fail: '✕', na: '–' }
 // Mid-grey stays readable on both the light and dark Storybook themes;
 // pure-black rgba turns invisible on the dark panel background.
 const CHECK_COLOR: Record<string, string> = {
-  pass: "#1d7a3e",
-  fail: "#b42318",
-  na: "rgba(128,128,128,0.9)",
-};
+  pass: '#1d7a3e',
+  fail: '#b42318',
+  na: 'rgba(128,128,128,0.9)',
+}
 
 /**
  * Failed checks already dispatched this session (manager page lifetime),
  * keyed by `${storyId}:${checkId}` — survives switching stories so the same
  * issue isn't sent twice.
  */
-const dispatchedThisSession = new Set<string>();
+const dispatchedThisSession = new Set<string>()
 
-type DispatchState = "capturing" | "sending" | "sent" | "error";
+type DispatchState = 'capturing' | 'sending' | 'sent' | 'error'
 
 /** A check maps to a declared rule only when the relationship is real. */
 function matchRule(rules: CrrtRule[], checkId: string): CrrtRule | undefined {
-  const keywords = CHECK_META[checkId]?.ruleKeywords ?? [];
-  return rules.find((r) =>
-    keywords.some((k) => r.id.toLowerCase().includes(k)),
-  );
+  const keywords = CHECK_META[checkId]?.ruleKeywords ?? []
+  return rules.find((r) => keywords.some((k) => r.id.toLowerCase().includes(k)))
 }
 
 interface ComplianceSectionProps {
-  story: StoryContext;
-  rules: CrrtRule[];
-  checksEnabled: boolean;
-  projectId?: string;
-  connectionId?: string;
-  apiBase?: string;
-  dashboardUrl?: string;
+  story: StoryContext
+  rules: CrrtRule[]
+  checksEnabled: boolean
+  projectId?: string
+  connectionId?: string
+  apiBase?: string
+  dashboardUrl?: string
 }
 
 /**
@@ -74,54 +64,49 @@ export const ComplianceSection = ({
   apiBase,
   dashboardUrl = DEFAULT_DASHBOARD_URL,
 }: ComplianceSectionProps) => {
-  const [checks, setChecks] = useState<ChecksOutcome | null>(null);
-  const [dispatch, setDispatch] = useState<Record<string, DispatchState>>({});
-  const scheduledFrames = useRef<number[]>([]);
+  const [checks, setChecks] = useState<ChecksOutcome | null>(null)
+  const [dispatch, setDispatch] = useState<Record<string, DispatchState>>({})
+  const scheduledFrames = useRef<number[]>([])
 
   const refresh = useCallback(() => {
-    if (checksEnabled) setChecks(runStoryChecks());
-  }, [checksEnabled]);
+    if (checksEnabled) setChecks(runStoryChecks())
+  }, [checksEnabled])
 
   const cancelScheduledRefresh = useCallback(() => {
-    scheduledFrames.current.forEach((frame) => cancelAnimationFrame(frame));
-    scheduledFrames.current = [];
-  }, []);
+    scheduledFrames.current.forEach((frame) => cancelAnimationFrame(frame))
+    scheduledFrames.current = []
+  }, [])
 
   // STORY_RENDERED can fire before the iframe has completed layout. Waiting
   // for two frames keeps real elements from being misreported as “not in story”.
   const refreshAfterLayout = useCallback(() => {
-    cancelScheduledRefresh();
-    if (!checksEnabled) return;
-    setChecks(null);
+    cancelScheduledRefresh()
+    if (!checksEnabled) return
+    setChecks(null)
     const first = requestAnimationFrame(() => {
       const second = requestAnimationFrame(() => {
-        scheduledFrames.current = [];
-        refresh();
-      });
-      scheduledFrames.current.push(second);
-    });
-    scheduledFrames.current.push(first);
-  }, [cancelScheduledRefresh, checksEnabled, refresh]);
+        scheduledFrames.current = []
+        refresh()
+      })
+      scheduledFrames.current.push(second)
+    })
+    scheduledFrames.current.push(first)
+  }, [cancelScheduledRefresh, checksEnabled, refresh])
 
-  useChannel({ [STORY_RENDERED]: refreshAfterLayout });
+  useChannel({ [STORY_RENDERED]: refreshAfterLayout })
   useEffect(() => {
-    setDispatch({});
-    refreshAfterLayout();
-    return cancelScheduledRefresh;
-  }, [cancelScheduledRefresh, refreshAfterLayout, story.storyId]);
+    setDispatch({})
+    refreshAfterLayout()
+    return cancelScheduledRefresh
+  }, [cancelScheduledRefresh, refreshAfterLayout, story.storyId])
 
   const dispatchIssue = async (check: CheckResult) => {
-    const meta = CHECK_META[check.id];
-    if (
-      !projectId ||
-      !meta ||
-      dispatch[check.id] === "capturing" ||
-      dispatch[check.id] === "sending"
-    ) return;
+    const meta = CHECK_META[check.id]
+    if (!projectId || !meta || dispatch[check.id] === 'capturing' || dispatch[check.id] === 'sending') return
     try {
-      setDispatch((s) => ({ ...s, [check.id]: "capturing" }));
-      const screenshot = await tryCaptureStoryScreenshot();
-      setDispatch((s) => ({ ...s, [check.id]: "sending" }));
+      setDispatch((s) => ({ ...s, [check.id]: 'capturing' }))
+      const screenshot = await tryCaptureStoryScreenshot()
+      setDispatch((s) => ({ ...s, [check.id]: 'sending' }))
       const result = await sendFeedback({
         projectId,
         connectionId,
@@ -136,56 +121,56 @@ export const ComplianceSection = ({
         }),
         screenshot,
         story,
-      });
-      if (result.ok) dispatchedThisSession.add(`${story.storyId}:${check.id}`);
-      setDispatch((s) => ({ ...s, [check.id]: result.ok ? "sent" : "error" }));
+      })
+      if (result.ok) dispatchedThisSession.add(`${story.storyId}:${check.id}`)
+      setDispatch((s) => ({ ...s, [check.id]: result.ok ? 'sent' : 'error' }))
     } catch {
-      setDispatch((s) => ({ ...s, [check.id]: "error" }));
+      setDispatch((s) => ({ ...s, [check.id]: 'error' }))
     }
-  };
+  }
 
   const renderAction = (check: CheckResult) => {
-    if (check.status !== "fail" || !projectId) return null;
-    const state = dispatch[check.id];
-    if (state === "sent") {
+    if (check.status !== 'fail' || !projectId) return null
+    const state = dispatch[check.id]
+    if (state === 'sent') {
       return (
         <span style={styles.sentInline}>
-          Sent ✓ —{" "}
+          Sent ✓ —{' '}
           <a href={dashboardHome(dashboardUrl)} target="_blank" rel="noreferrer" style={styles.sentLink}>
             view in dashboard
           </a>
         </span>
-      );
+      )
     }
     if (dispatchedThisSession.has(`${story.storyId}:${check.id}`)) {
       return (
         <button disabled style={{ ...styles.dispatch, ...styles.dispatchDisabled }}>
           Already sent
         </button>
-      );
+      )
     }
     return (
       <>
-        {state === "error" && <span style={styles.errorInline}>failed —</span>}
+        {state === 'error' && <span style={styles.errorInline}>failed —</span>}
         <button
           onClick={() => dispatchIssue(check)}
-          disabled={state === "capturing" || state === "sending"}
+          disabled={state === 'capturing' || state === 'sending'}
           style={{
             ...styles.dispatch,
-            opacity: state === "capturing" || state === "sending" ? 0.6 : 1,
+            opacity: state === 'capturing' || state === 'sending' ? 0.6 : 1,
           }}
         >
-          {state === "capturing"
-            ? "Capturing…"
-            : state === "sending"
-              ? "Sending…"
-              : state === "error"
-                ? "Retry"
-                : "Send to CRRT"}
+          {state === 'capturing'
+            ? 'Capturing…'
+            : state === 'sending'
+              ? 'Sending…'
+              : state === 'error'
+                ? 'Retry'
+                : 'Send to CRRT'}
         </button>
       </>
-    );
-  };
+    )
+  }
 
   return (
     <section>
@@ -193,13 +178,13 @@ export const ComplianceSection = ({
 
       {rules.length === 0 ? (
         <div style={styles.muted}>
-          No governance rules declared for this story. Add them via{" "}
+          No governance rules declared for this story. Add them via{' '}
           <code style={styles.code}>parameters.crrt.rules</code>.
         </div>
       ) : (
         <div style={styles.cards}>
           {rules.map((rule) => {
-            const badge = STATUS_BADGE[rule.status ?? "info"];
+            const badge = STATUS_BADGE[rule.status ?? 'info']
             return (
               <div key={rule.id} style={styles.card}>
                 <div style={styles.cardHead}>
@@ -222,7 +207,7 @@ export const ComplianceSection = ({
                 </div>
                 <div>{rule.essence}</div>
               </div>
-            );
+            )
           })}
         </div>
       )}
@@ -243,22 +228,17 @@ export const ComplianceSection = ({
             <ul style={styles.checkList}>
               {checks.results.map((c) => (
                 <li key={c.id} style={styles.checkItem}>
-                  <span
-                    style={{ ...styles.checkIcon, color: CHECK_COLOR[c.status] }}
-                    aria-hidden
-                  >
+                  <span style={{ ...styles.checkIcon, color: CHECK_COLOR[c.status] }} aria-hidden>
                     {CHECK_ICON[c.status]}
                   </span>
                   <span
                     style={{
                       ...styles.checkLabel,
-                      ...(c.status === "na" ? styles.mutedInline : null),
+                      ...(c.status === 'na' ? styles.mutedInline : null),
                     }}
                   >
                     {CHECK_META[c.id]?.label ?? c.id}
-                    {c.details && (
-                      <span style={styles.details}> — {c.details}</span>
-                    )}
+                    {c.details && <span style={styles.details}> — {c.details}</span>}
                   </span>
                   {renderAction(c)}
                 </li>
@@ -268,107 +248,107 @@ export const ComplianceSection = ({
         </div>
       )}
     </section>
-  );
-};
+  )
+}
 
 const styles: Record<string, React.CSSProperties> = {
   heading: {
     fontSize: 12,
     fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.05em",
+    textTransform: 'uppercase',
+    letterSpacing: '0.05em',
     opacity: 0.6,
-    margin: "0 0 8px",
+    margin: '0 0 8px',
   },
   subheading: { fontWeight: 600, fontSize: 12, opacity: 0.75 },
   muted: { opacity: 0.6 },
   mutedInline: { opacity: 0.55 },
   code: {
-    background: "rgba(0,0,0,0.06)",
-    padding: "1px 4px",
+    background: 'rgba(0,0,0,0.06)',
+    padding: '1px 4px',
     borderRadius: 3,
     fontSize: 12,
   },
-  cards: { display: "flex", flexDirection: "column", gap: 6 },
+  cards: { display: 'flex', flexDirection: 'column', gap: 6 },
   card: {
-    border: "1px solid rgba(0,0,0,0.1)",
+    border: '1px solid rgba(0,0,0,0.1)',
     borderRadius: 6,
-    padding: "8px 10px",
-    background: "rgba(0,0,0,0.02)",
+    padding: '8px 10px',
+    background: 'rgba(0,0,0,0.02)',
   },
   cardHead: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "baseline",
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
     gap: 8,
     marginBottom: 2,
   },
   ruleId: {
-    fontFamily: "ui-monospace, monospace",
+    fontFamily: 'ui-monospace, monospace',
     fontSize: 12,
     fontWeight: 600,
-    color: "inherit",
+    color: 'inherit',
   },
   badge: {
     fontSize: 10,
     fontWeight: 700,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    padding: "1px 6px",
+    textTransform: 'uppercase',
+    letterSpacing: '0.04em',
+    padding: '1px 6px',
     borderRadius: 999,
-    whiteSpace: "nowrap",
+    whiteSpace: 'nowrap',
   },
   checksHead: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 4,
   },
   rerun: {
-    border: "1px solid rgba(0,0,0,0.15)",
-    background: "transparent",
+    border: '1px solid rgba(0,0,0,0.15)',
+    background: 'transparent',
     borderRadius: 4,
-    padding: "1px 8px",
+    padding: '1px 8px',
     fontSize: 11,
-    cursor: "pointer",
-    color: "inherit",
+    cursor: 'pointer',
+    color: 'inherit',
   },
-  checkList: { listStyle: "none", margin: 0, padding: 0 },
+  checkList: { listStyle: 'none', margin: 0, padding: 0 },
   checkItem: {
-    display: "flex",
+    display: 'flex',
     gap: 6,
-    padding: "3px 0",
-    alignItems: "baseline",
+    padding: '3px 0',
+    alignItems: 'baseline',
   },
   checkIcon: { fontWeight: 700, width: 12, flexShrink: 0 },
   checkLabel: { flex: 1, minWidth: 0 },
   details: { opacity: 0.6, fontSize: 12 },
   dispatch: {
-    border: "none",
+    border: 'none',
     background: CRRT_ORANGE,
-    color: "white",
+    color: 'white',
     borderRadius: 4,
-    padding: "2px 10px",
+    padding: '2px 10px',
     fontSize: 11,
     fontWeight: 600,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
     flexShrink: 0,
   },
   dispatchDisabled: {
-    background: "rgba(128,128,128,0.18)",
-    border: "1px solid rgba(128,128,128,0.35)",
-    color: "inherit",
+    background: 'rgba(128,128,128,0.18)',
+    border: '1px solid rgba(128,128,128,0.35)',
+    color: 'inherit',
     opacity: 0.8,
-    cursor: "default",
+    cursor: 'default',
   },
   sentInline: {
     fontSize: 12,
-    color: "#1d7a3e",
+    color: '#1d7a3e',
     fontWeight: 600,
-    whiteSpace: "nowrap",
+    whiteSpace: 'nowrap',
     flexShrink: 0,
   },
   sentLink: { color: CRRT_ORANGE, fontWeight: 600 },
-  errorInline: { color: "#b42318", fontSize: 11, whiteSpace: "nowrap" },
-};
+  errorInline: { color: '#b42318', fontSize: 11, whiteSpace: 'nowrap' },
+}

@@ -3,9 +3,9 @@
 Community is the complete self-hosted product with no commercial quotas. Cloud has no permanent free plan. The browser extension's local mode is an evaluation mode, not a Cloud plan.
 
 | Cloud plan | Monthly USD | Projects | Unique internal users | New comments/window | Product Audits/window |
-| --- | --- | --- | --- | --- | --- |
-| Pro | 18 | 10 | 10 | 2,000 | 5 |
-| Studio | 54 | 50 | 25 | 10,000 | 30 |
+| ---------- | ----------- | -------- | --------------------- | ------------------- | --------------------- |
+| Pro        | 18          | 10       | 10                    | 2,000               | 5                     |
+| Studio     | 54          | 50       | 25                    | 10,000              | 30                    |
 
 Both include unlimited guests, the dashboard, npm widget, extension sync, integrations and Agent handoff. Each owner can use one 14-day trial with a payment method; starting another Checkout after cancellation does not renew trial eligibility. Taxes are additional when applicable.
 

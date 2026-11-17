@@ -25,10 +25,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -50,7 +60,10 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
       return null
     })
     const res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(401)
   })
 
@@ -62,17 +75,26 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
     expect(res.statusCode).toBe(400)
 
     res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'bogus' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'bogus' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(400)
 
     vi.mocked(getComment).mockResolvedValueOnce(null)
     res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(404)
 
     vi.mocked(getComment).mockResolvedValueOnce({ id: 'c', projectId: null } as never)
     res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(404)
 
     vi.mocked(getComment).mockResolvedValueOnce({ id: 'c', projectId: 'p' } as never)
@@ -81,7 +103,10 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
       return null
     })
     res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(403)
   })
 
@@ -93,33 +118,50 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
     vi.mocked(findActiveSharesForComment).mockResolvedValueOnce([{ id: 's1' }] as never)
 
     let res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'ready_for_testing' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'ready_for_testing' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(200)
     expect(mutateProjectFeedback).toHaveBeenCalledWith('p', 'u', 'c', { implementationStatus: 'ready_for_testing' })
-    expect(createFeedbackEvent).toHaveBeenCalledWith(expect.objectContaining({
-      eventType: 'comment.implementation_changed',
-      payload: { implementationStatus: 'ready_for_testing' },
-    }))
+    expect(createFeedbackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'comment.implementation_changed',
+        payload: { implementationStatus: 'ready_for_testing' },
+      }),
+    )
 
     vi.mocked(mutateProjectFeedback).mockRejectedValueOnce(new Error('boom'))
     res = mockRes()
-    await call({ method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} }, res)
+    await call(
+      { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'claimed' }, headers: {} },
+      res,
+    )
     expect(res.statusCode).toBe(500)
   })
 
   it('clears the previous agent claim when a reviewer reopens an item', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getComment).mockResolvedValue({
-      id: 'c', projectId: 'p', implementationStatus: 'done', claimedByAgentId: 'old-agent',
+      id: 'c',
+      projectId: 'p',
+      implementationStatus: 'done',
+      claimedByAgentId: 'old-agent',
     } as never)
     vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
     vi.mocked(mutateProjectFeedback).mockResolvedValue({ id: 'c' } as never)
     vi.mocked(findActiveSharesForComment).mockResolvedValue([])
     const res = mockRes()
 
-    await call({
-      method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'unassigned' }, headers: {},
-    }, res)
+    await call(
+      {
+        method: 'PATCH',
+        query: { commentId: 'c' },
+        body: { implementationStatus: 'unassigned' },
+        headers: {},
+      },
+      res,
+    )
 
     expect(res.statusCode).toBe(200)
     expect(mutateProjectFeedback).toHaveBeenCalledWith('p', 'u', 'c', {
@@ -129,29 +171,42 @@ describe('api/v1/comments/[commentId]/implementation-status', () => {
   })
 })
 
-it('rejects a human mutation when access is revoked after the initial precheck',async()=>{
-  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
-  vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'member'})
-  vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+it('rejects a human mutation when access is revoked after the initial precheck', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(getComment).mockResolvedValue({ id: 'c', projectId: 'p' } as never)
   vi.mocked(mutateProjectFeedback).mockRejectedValueOnce(new Error('forbidden'))
-  const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{implementationStatus:'blocked'},headers:{}},res)
+  const res = mockRes()
+  await call(
+    { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'blocked' }, headers: {} },
+    res,
+  )
   expect(res.statusCode).toBe(403)
   expect(res.body).not.toHaveProperty('body')
 })
 
-it('returns 404 if the comment is removed before the atomic mutation',async()=>{
-  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
-  vi.mocked(requireProjectCommentCapability).mockResolvedValue({role:'member'})
-  vi.mocked(getComment).mockResolvedValue({id:'c',projectId:'p'} as never)
+it('returns 404 if the comment is removed before the atomic mutation', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(requireProjectCommentCapability).mockResolvedValue({ role: 'member' })
+  vi.mocked(getComment).mockResolvedValue({ id: 'c', projectId: 'p' } as never)
   vi.mocked(mutateProjectFeedback).mockResolvedValueOnce(null)
   vi.mocked(findActiveSharesForComment).mockResolvedValue([])
-  const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{implementationStatus:'blocked'},headers:{}},res)
+  const res = mockRes()
+  await call(
+    { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'blocked' }, headers: {} },
+    res,
+  )
   expect(res.statusCode).toBe(404)
 })
 
-it('handles a non-Error storage failure without exposing the thrown value',async()=>{
- vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'u@test'})
- vi.mocked(getComment).mockRejectedValueOnce('opaque failure')
- const res=mockRes();await call({method:'PATCH',query:{commentId:'c'},body:{implementationStatus:'blocked'},headers:{}},res)
- expect(res.statusCode).toBe(500);expect(res.body).toEqual({error:'Unexpected error'})
+it('handles a non-Error storage failure without exposing the thrown value', async () => {
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'u@test' })
+  vi.mocked(getComment).mockRejectedValueOnce('opaque failure')
+  const res = mockRes()
+  await call(
+    { method: 'PATCH', query: { commentId: 'c' }, body: { implementationStatus: 'blocked' }, headers: {} },
+    res,
+  )
+  expect(res.statusCode).toBe(500)
+  expect(res.body).toEqual({ error: 'Unexpected error' })
 })

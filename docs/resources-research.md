@@ -12,14 +12,14 @@ This research uses public documentation and the repository. It does not include 
 
 ## Initial content choices
 
-| Search intent | Reader's task | Initial guide | Connection to CRRT |
-| --- | --- | --- | --- |
-| Design tokens for AI prototypes | Stop screens drifting as a prototype expands | Start with one approved screen and a semantic token file | Capture a specific inconsistency and request reuse of the approved rule |
-| Document components for coding agents | Help a builder reuse existing components | A component brief with states and runnable examples | Attach feedback to an actual instance and verify the shared implementation |
-| Visual feedback for coding agents | Explain a UI correction clearly | Target, observation, outcome, boundaries, and verification template | Directly supports the accepted-feedback handoff |
-| UI review checklist for AI-generated apps | Decide whether a flow is ready to ship | Journey, responsive layout, states, accessibility, and fix verification | Review and prioritize issues before handing accepted work to an agent |
-| Prototype with Lovable | Test one useful interaction | Small brief, incremental build, focused corrections, and explicit simulated behavior | Continue visual review on a supported project surface; no assumed native editor integration |
-| Prototype in v0 with a design system | Preserve an existing product's patterns | Supply real components, tokens, and setup context; inspect code reuse | Connect accepted corrections to the repository's coding-agent workflow |
+| Search intent                             | Reader's task                                | Initial guide                                                                        | Connection to CRRT                                                                          |
+| ----------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Design tokens for AI prototypes           | Stop screens drifting as a prototype expands | Start with one approved screen and a semantic token file                             | Capture a specific inconsistency and request reuse of the approved rule                     |
+| Document components for coding agents     | Help a builder reuse existing components     | A component brief with states and runnable examples                                  | Attach feedback to an actual instance and verify the shared implementation                  |
+| Visual feedback for coding agents         | Explain a UI correction clearly              | Target, observation, outcome, boundaries, and verification template                  | Directly supports the accepted-feedback handoff                                             |
+| UI review checklist for AI-generated apps | Decide whether a flow is ready to ship       | Journey, responsive layout, states, accessibility, and fix verification              | Review and prioritize issues before handing accepted work to an agent                       |
+| Prototype with Lovable                    | Test one useful interaction                  | Small brief, incremental build, focused corrections, and explicit simulated behavior | Continue visual review on a supported project surface; no assumed native editor integration |
+| Prototype in v0 with a design system      | Preserve an existing product's patterns      | Supply real components, tokens, and setup context; inspect code reuse                | Connect accepted corrections to the repository's coding-agent workflow                      |
 
 Launch with useful task-level guides instead of a large glossary or generic AI news library. Each article includes a direct answer, original sample task or template, review criteria, common questions, primary-source references, and related guides. Templates are recommendations, not claims of measured performance or customer results.
 

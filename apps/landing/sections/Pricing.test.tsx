@@ -1,15 +1,22 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 vi.mock('../lib/billing', async (importOriginal) => ({
-  ...await importOriginal<typeof import('../lib/billing')>(),
+  ...(await importOriginal<typeof import('../lib/billing')>()),
   startCloudCheckout: vi.fn(),
 }))
 import { startCloudCheckout } from '../lib/billing'
 import { Pricing } from './Pricing'
 import { renderToString } from 'react-dom/server'
 
-beforeEach(() => { vi.clearAllMocks(); vi.stubEnv('SSR', false) })
-afterEach(() => { cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubEnv('SSR', false)
+})
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+})
 
 it('presents the catalog and preserves signed-out plan and cycle selections', () => {
   render(<Pricing apiBase="https://crrt.ai/api" />)
@@ -22,25 +29,37 @@ it('presents the catalog and preserves signed-out plan and cycle selections', ()
   expect(price(community)).toBe('$0Free foreverRuns on your infrastructure')
   expect(price(pro)).toBe('$18Per monthBilled monthly')
   expect(price(studio)).toBe('$54Per monthBilled monthly')
-  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly')
+  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute(
+    'href',
+    'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly',
+  )
   fireEvent.click(screen.getByRole('button', { name: /Yearly/ }))
   expect(price(pro)).toBe('$16Per monthBilled yearly at $192')
   expect(price(studio)).toBe('$41Per monthBilled yearly at $492')
   expect(within(pro).getByText('Recommended')).toBeInTheDocument()
-  expect(within(community).getByRole('link', { name: 'Read self-host guide' })).toHaveAttribute('href', '/docs/self-host')
+  expect(within(community).getByRole('link', { name: 'Read self-host guide' })).toHaveAttribute(
+    'href',
+    '/docs/self-host',
+  )
   expect(within(pro).getByText(/Storybook review/)).toBeInTheDocument()
   expect(within(pro).getByText(/Private projects/)).toBeInTheDocument()
   expect(within(pro).getByText('MCP connection and agent handoff')).toBeInTheDocument()
   expect(within(pro).getByText(/GitHub, Linear, and Jira/)).toBeInTheDocument()
   expect(within(pro).getByText('Record agent handoff · private preview')).toBeInTheDocument()
   expect(within(studio).getByText('Everything in Pro')).toBeInTheDocument()
-  expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=pro&cycle=yearly')
+  expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute(
+    'href',
+    'https://crrt.ai/api/v1/billing?start=pro&cycle=yearly',
+  )
   expect(within(pro).getByRole('link', { name: /Start 14-day trial/ })).toHaveClass('ds-button-primary')
   expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveClass('ds-button-secondary')
   fireEvent.click(screen.getByRole('button', { name: 'Monthly' }))
   expect(price(pro)).toBe('$18Per monthBilled monthly')
   expect(price(community)).toBe('$0Free foreverRuns on your infrastructure')
-  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute('href', 'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly')
+  expect(within(studio).getByRole('link', { name: /Start 14-day trial/ })).toHaveAttribute(
+    'href',
+    'https://crrt.ai/api/v1/billing?start=studio&cycle=monthly',
+  )
 })
 
 it('takes an authenticated customer directly to one safe Checkout session', async () => {
@@ -71,29 +90,51 @@ it('keeps checkout failures visible and retryable without navigating', async () 
   expect(assign).not.toHaveBeenCalled()
 })
 
-it.each(['signout', 'account', 'api', 'unmount'] as const)('ignores a stale checkout success after %s', async (change) => {
-  let resolve!: (url: string) => void
-  vi.mocked(startCloudCheckout).mockReturnValueOnce(new Promise((done) => { resolve = done }))
-  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
-  const view = render(<Pricing authenticated accessToken="account-a" apiBase="/api" />)
-  fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
-  if (change === 'unmount') view.unmount()
-  else view.rerender(<Pricing authenticated={change !== 'signout'} accessToken={change === 'account' ? 'account-b' : 'account-a'} apiBase={change === 'api' ? '/new-api' : '/api'} />)
-  await act(async () => resolve('https://checkout.stripe.com/c/old-account'))
-  expect(assign).not.toHaveBeenCalled()
-  if (change === 'account') {
-    vi.mocked(startCloudCheckout).mockResolvedValueOnce('https://checkout.stripe.com/c/new-account')
+it.each(['signout', 'account', 'api', 'unmount'] as const)(
+  'ignores a stale checkout success after %s',
+  async (change) => {
+    let resolve!: (url: string) => void
+    vi.mocked(startCloudCheckout).mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
+    const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+    const view = render(<Pricing authenticated accessToken="account-a" apiBase="/api" />)
     fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
-    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/new-account'))
-  }
-})
+    if (change === 'unmount') view.unmount()
+    else
+      view.rerender(
+        <Pricing
+          authenticated={change !== 'signout'}
+          accessToken={change === 'account' ? 'account-b' : 'account-a'}
+          apiBase={change === 'api' ? '/new-api' : '/api'}
+        />,
+      )
+    await act(async () => resolve('https://checkout.stripe.com/c/old-account'))
+    expect(assign).not.toHaveBeenCalled()
+    if (change === 'account') {
+      vi.mocked(startCloudCheckout).mockResolvedValueOnce('https://checkout.stripe.com/c/new-account')
+      fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])
+      await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/new-account'))
+    }
+  },
+)
 
 it('ignores a stale failure without unlocking the new account checkout', async () => {
   let reject!: (error: Error) => void
   let resolve!: (url: string) => void
   vi.mocked(startCloudCheckout)
-    .mockReturnValueOnce(new Promise((_, fail) => { reject = fail }))
-    .mockReturnValueOnce(new Promise((done) => { resolve = done }))
+    .mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail
+      }),
+    )
+    .mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done
+      }),
+    )
   const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
   const view = render(<Pricing authenticated accessToken="account-a" />)
   fireEvent.click(screen.getAllByRole('button', { name: /Start 14-day trial/ })[0])

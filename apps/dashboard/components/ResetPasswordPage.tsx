@@ -25,12 +25,13 @@ export function ResetPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
 
-  const recoveryDestination = extensionAuthRecoveryDestination(window.location.search, window.location.origin)
-    ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin)
+  const recoveryDestination =
+    extensionAuthRecoveryDestination(window.location.search, window.location.origin) ??
+    widgetAuthRecoveryDestination(window.location.search, window.location.origin)
   const recoverySearch = new URLSearchParams(dashboardAuthSearch(window.location.search))
   if (recoveryDestination) recoverySearch.set('continue', recoveryDestination)
   const forgotUrl = route('/forgot-password') + (recoverySearch.size ? `?${recoverySearch}` : '')
-  const signInUrl = recoveryDestination ?? (route('/login') + dashboardAuthSearch(window.location.search))
+  const signInUrl = recoveryDestination ?? route('/login') + dashboardAuthSearch(window.location.search)
   const invalidLink = !ready && error !== null
 
   useEffect(() => {
@@ -48,13 +49,15 @@ export function ResetPasswordPage() {
     async function checkRecovery() {
       try {
         const urlError = new URLSearchParams(window.location.search + '&' + window.location.hash.slice(1))
-        if (['error', 'error_code', 'error_description'].some(key => urlError.has(key))) throw new Error(RECOVERY_ERROR)
+        if (['error', 'error_code', 'error_description'].some((key) => urlError.has(key)))
+          throw new Error(RECOVERY_ERROR)
         const { error: initializationError } = await supabase.auth.initialize()
         if (initializationError) throw initializationError
         // Successful exchanges remove their URL credentials. Leftover callback
         // parameters indicate an unsupported or incomplete link, even if a
         // different account already has a session in this browser.
-        if (new URLSearchParams(window.location.search).has('code') || window.location.hash) throw new Error(RECOVERY_ERROR)
+        if (new URLSearchParams(window.location.search).has('code') || window.location.hash)
+          throw new Error(RECOVERY_ERROR)
         const { data, error: sessionError } = await supabase.auth.getSession()
         if (sessionError) throw sessionError
         if (!data.session) throw new Error(RECOVERY_ERROR)
@@ -102,7 +105,10 @@ export function ResetPasswordPage() {
       // password active.
       await supabase.auth.signOut()
       window.setTimeout(() => {
-        window.location.href = extensionAuthRecoveryDestination(window.location.search, window.location.origin) ?? widgetAuthRecoveryDestination(window.location.search, window.location.origin) ?? (route('/login') + dashboardAuthSearch(window.location.search))
+        window.location.href =
+          extensionAuthRecoveryDestination(window.location.search, window.location.origin) ??
+          widgetAuthRecoveryDestination(window.location.search, window.location.origin) ??
+          route('/login') + dashboardAuthSearch(window.location.search)
       }, 1400)
     } catch (err) {
       if (isAuthSessionMissingError(err)) {
@@ -145,7 +151,9 @@ export function ResetPasswordPage() {
           width: '100%',
         }}
       >
-        <span className="crrt-section-marker" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>/ 00 reset</span>
+        <span className="crrt-section-marker" style={{ fontSize: 13, whiteSpace: 'nowrap' }}>
+          / 00 reset
+        </span>
         <span style={{ flex: 1, height: 1, background: 'var(--border)', minWidth: 12 }} />
         <span
           style={{
@@ -224,110 +232,124 @@ export function ResetPasswordPage() {
           textWrap: 'pretty',
         }}
       >
-        {invalidLink ? 'request a new link to reset your password.' : ready ? 'choose something you can remember. at least 6 characters.' : 'checking your reset link…'}
+        {invalidLink
+          ? 'request a new link to reset your password.'
+          : ready
+            ? 'choose something you can remember. at least 6 characters.'
+            : 'checking your reset link…'}
       </p>
 
-      {!invalidLink && (<form
-        onSubmit={handleSubmit}
-        style={{
-          width: '100%',
-          maxWidth: 420,
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 10,
-          opacity: ready ? 1 : 0.6,
-          transition: 'opacity 240ms ease',
-        }}
-      >
-        <FieldLabel htmlFor="reset-password">new password</FieldLabel>
-        <AuthInput
-          id="reset-password"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={6}
-          spellCheck={false}
-          placeholder="••••••••"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          disabled={busy || !ready}
-        />
-        <FieldLabel htmlFor="reset-confirm">confirm</FieldLabel>
-        <AuthInput
-          id="reset-confirm"
-          type="password"
-          autoComplete="new-password"
-          required
-          minLength={6}
-          spellCheck={false}
-          placeholder="••••••••"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          disabled={busy || !ready}
-        />
-
-        {error && (
-          <p
-            role="alert"
-            aria-live="polite"
-            style={{
-              margin: '6px 0 0',
-              fontFamily: 'var(--crrt-font-body)',
-              fontSize: 13,
-              color: 'var(--status-rejected)',
-            }}
-          >
-            ✗ {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={busy || !ready}
+      {!invalidLink && (
+        <form
+          onSubmit={handleSubmit}
           style={{
-            marginTop: 16,
-            height: 46,
-            padding: '0 20px',
-            background: busy || !ready ? 'var(--muted)' : 'var(--crrt-carrot)',
-            color: busy || !ready ? 'var(--muted-foreground)' : 'var(--crrt-white)',
-            border: 'none',
-            borderRadius: 999,
-            fontFamily: 'var(--crrt-font-mono)',
-            fontSize: 15,
-            fontWeight: 700,
-            letterSpacing: '0.02em',
-            cursor: busy || !ready ? 'not-allowed' : 'pointer',
+            width: '100%',
+            maxWidth: 420,
             display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 8,
-            transition: 'transform 80ms ease',
+            flexDirection: 'column',
+            gap: 10,
+            opacity: ready ? 1 : 0.6,
+            transition: 'opacity 240ms ease',
           }}
-          onMouseDown={(e) => !busy && (e.currentTarget.style.transform = 'scale(0.985)')}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         >
-          {busy ? (
-            <>
-              <Spinner size={14} strokeWidth={3} className="text-current" />
-              updating…
-            </>
-          ) : (
-            <>▸ update password</>
+          <FieldLabel htmlFor="reset-password">new password</FieldLabel>
+          <AuthInput
+            id="reset-password"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={6}
+            spellCheck={false}
+            placeholder="••••••••"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            disabled={busy || !ready}
+          />
+          <FieldLabel htmlFor="reset-confirm">confirm</FieldLabel>
+          <AuthInput
+            id="reset-confirm"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={6}
+            spellCheck={false}
+            placeholder="••••••••"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            disabled={busy || !ready}
+          />
+
+          {error && (
+            <p
+              role="alert"
+              aria-live="polite"
+              style={{
+                margin: '6px 0 0',
+                fontFamily: 'var(--crrt-font-body)',
+                fontSize: 13,
+                color: 'var(--status-rejected)',
+              }}
+            >
+              ✗ {error}
+            </p>
           )}
-        </button>
-      </form>)}
+
+          <button
+            type="submit"
+            disabled={busy || !ready}
+            style={{
+              marginTop: 16,
+              height: 46,
+              padding: '0 20px',
+              background: busy || !ready ? 'var(--muted)' : 'var(--crrt-carrot)',
+              color: busy || !ready ? 'var(--muted-foreground)' : 'var(--crrt-white)',
+              border: 'none',
+              borderRadius: 999,
+              fontFamily: 'var(--crrt-font-mono)',
+              fontSize: 15,
+              fontWeight: 700,
+              letterSpacing: '0.02em',
+              cursor: busy || !ready ? 'not-allowed' : 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              transition: 'transform 80ms ease',
+            }}
+            onMouseDown={(e) => !busy && (e.currentTarget.style.transform = 'scale(0.985)')}
+            onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            {busy ? (
+              <>
+                <Spinner size={14} strokeWidth={3} className="text-current" />
+                updating…
+              </>
+            ) : (
+              <>▸ update password</>
+            )}
+          </button>
+        </form>
+      )}
 
       {invalidLink ? (
-        <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 'var(--crrt-space-4)' }}>
+        <div
+          style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 'var(--crrt-space-4)' }}
+        >
           <a
             href={forgotUrl}
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               padding: 'var(--crrt-space-4) var(--crrt-space-6)',
               borderRadius: 'var(--crrt-radius-pill)',
-              background: 'var(--crrt-carrot)', color: 'var(--crrt-white)',
-              fontFamily: 'var(--crrt-font-body)', fontSize: 15, fontWeight: 700, textDecoration: 'none',
+              background: 'var(--crrt-carrot)',
+              color: 'var(--crrt-white)',
+              fontFamily: 'var(--crrt-font-body)',
+              fontSize: 15,
+              fontWeight: 700,
+              textDecoration: 'none',
             }}
           >
             request a new link →
@@ -335,17 +357,25 @@ export function ResetPasswordPage() {
           <a
             href={signInUrl}
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
               padding: 'var(--crrt-space-4) var(--crrt-space-6)',
-              borderRadius: 'var(--crrt-radius-pill)', border: '1px solid var(--border)',
-              color: 'var(--foreground)', fontFamily: 'var(--crrt-font-body)', fontSize: 15, textDecoration: 'none',
+              borderRadius: 'var(--crrt-radius-pill)',
+              border: '1px solid var(--border)',
+              color: 'var(--foreground)',
+              fontFamily: 'var(--crrt-font-body)',
+              fontSize: 15,
+              textDecoration: 'none',
             }}
           >
             back to sign in
           </a>
         </div>
       ) : (
-        <p style={{ marginTop: 28, fontFamily: 'var(--crrt-font-body)', fontSize: 14, color: 'var(--muted-foreground)' }}>
+        <p
+          style={{ marginTop: 28, fontFamily: 'var(--crrt-font-body)', fontSize: 14, color: 'var(--muted-foreground)' }}
+        >
           remembered it?{' '}
           <a href={signInUrl} style={{ color: 'var(--crrt-carrot)', textDecoration: 'none' }}>
             back to sign in →
@@ -373,13 +403,7 @@ function SuccessScreen() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 36 }}>
-        <img
-          src={asset('crrt-isologo.png')}
-          alt=""
-          width={40}
-          height={40}
-          style={{ imageRendering: 'pixelated' }}
-        />
+        <img src={asset('crrt-isologo.png')} alt="" width={40} height={40} style={{ imageRendering: 'pixelated' }} />
         <span
           style={{
             fontFamily: 'var(--crrt-font-crt)',

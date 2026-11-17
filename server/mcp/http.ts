@@ -8,11 +8,13 @@ import { securityAudit } from './security-audit.js'
 
 export function metadataPath(path: string) {
   if (path === '/.well-known/oauth-authorization-server') return '/api/mcp/oauth/metadata'
-  if (['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/api/mcp/v1'].includes(path)) return '/api/mcp/oauth/resource'
+  if (['/.well-known/oauth-protected-resource', '/.well-known/oauth-protected-resource/api/mcp/v1'].includes(path))
+    return '/api/mcp/oauth/resource'
   return path
 }
 export async function mcpHttp(request: Request) {
-  const requestId = randomUUID(), started = Date.now()
+  const requestId = randomUUID(),
+    started = Date.now()
   let response: Response
   let allowedBrowserOrigin: string | null = null
   try {
@@ -26,7 +28,12 @@ export async function mcpHttp(request: Request) {
       const url = new URL(request.url)
       const path = metadataPath(url.pathname)
       const forwarded = new Request(new URL(path + url.search, origin), request)
-      response = path === '/api/mcp/document-unlock' ? await documentUnlockHttp(forwarded) : path.startsWith('/api/mcp/oauth/') ? await oauth(forwarded, requestId) : await mcpHandler(tools)(forwarded)
+      response =
+        path === '/api/mcp/document-unlock'
+          ? await documentUnlockHttp(forwarded)
+          : path.startsWith('/api/mcp/oauth/')
+            ? await oauth(forwarded, requestId)
+            : await mcpHandler(tools)(forwarded)
     }
   } catch (error) {
     response = authFailure(error)
@@ -35,8 +42,14 @@ export async function mcpHttp(request: Request) {
   if (allowedBrowserOrigin) response.headers.set('Access-Control-Allow-Origin', allowedBrowserOrigin)
   response.headers.set('Vary', 'Origin')
   response.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, MCP-Protocol-Version, MCP-Session-Id')
-  response.headers.set('Access-Control-Expose-Headers', 'WWW-Authenticate, MCP-Protocol-Version, X-Request-Id, Retry-After')
+  response.headers.set(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, MCP-Protocol-Version, MCP-Session-Id',
+  )
+  response.headers.set(
+    'Access-Control-Expose-Headers',
+    'WWW-Authenticate, MCP-Protocol-Version, X-Request-Id, Retry-After',
+  )
   if (!response.headers.has('X-Request-Id')) response.headers.set('X-Request-Id', requestId)
   response.headers.set('Cache-Control', 'no-store')
   response.headers.set('X-Content-Type-Options', 'nosniff')
@@ -45,14 +58,21 @@ export async function mcpHttp(request: Request) {
 export async function nodeMcp(req: VercelRequest, res: VercelResponse, path: string) {
   try {
     const headers = new Headers()
-    for (const [name, value] of Object.entries(req.headers)) if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)
+    for (const [name, value] of Object.entries(req.headers))
+      if (value !== undefined) headers.set(name, Array.isArray(value) ? value.join(', ') : value)
     const method = req.method ?? 'GET'
-    const body = method === 'GET' || method === 'OPTIONS' ? undefined : typeof req.body === 'string' ? req.body : JSON.stringify(req.body)
+    const body =
+      method === 'GET' || method === 'OPTIONS'
+        ? undefined
+        : typeof req.body === 'string'
+          ? req.body
+          : JSON.stringify(req.body)
     // Vercel parses JSON and form bodies into objects. Keep the reconstructed
     // content type consistent so OAuth does not parse JSON as form text.
     if (body !== undefined && typeof req.body !== 'string') headers.set('Content-Type', 'application/json')
     const url = new URL(path, config().origin)
-    for (const [name, value] of Object.entries(req.query)) if (typeof value === 'string' && name !== 'action') url.searchParams.set(name, value)
+    for (const [name, value] of Object.entries(req.query))
+      if (typeof value === 'string' && name !== 'action') url.searchParams.set(name, value)
     const response = await mcpHttp(new Request(url, { method, headers, body }))
     response.headers.forEach((value, name) => res.setHeader(name, value))
     res.status(response.status).send(await response.text())

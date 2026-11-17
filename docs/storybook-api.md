@@ -105,20 +105,20 @@ Role and seat limit follow the existing Agent resolver. No separate Storybook en
 
 Failures return a stable `code` and `message`; access failures also include `state`:
 
-| HTTP status | Code | Meaning |
-| --- | --- | --- |
-| 400 | `invalid_request` | Malformed request or story context |
-| 400 | `invalid_pairing` | Pairing code unavailable; generate another |
-| 401 | `authentication_required` | Scoped token absent, invalid, or unavailable |
-| 419 | `session_expired` | Recognized connection/origin-bound token has expired |
-| 403 | `access_denied` | Connection, origin, project, or feedback membership denied |
-| 403 | `project_access_denied` or `forbidden` | Existing Agent resolver denies access |
-| 402 | `upgrade_required` | Owner needs an eligible plan |
-| 402 | `owner_upgrade_required` | Member must ask the owner to upgrade |
-| 409 | `seat_limit_reached` | Existing entitlement boundary reports a seat failure |
-| 402 or 409 | `plan_limit` | Existing Cloud subscription or usage limit; response includes resource, usage, limit, resetAt, and action |
-| 405 | `method_not_allowed` | Unsupported HTTP method |
-| 500 | `error` | Backend or entitlement lookup failed; private access fails closed |
+| HTTP status | Code                                   | Meaning                                                                                                   |
+| ----------- | -------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| 400         | `invalid_request`                      | Malformed request or story context                                                                        |
+| 400         | `invalid_pairing`                      | Pairing code unavailable; generate another                                                                |
+| 401         | `authentication_required`              | Scoped token absent, invalid, or unavailable                                                              |
+| 419         | `session_expired`                      | Recognized connection/origin-bound token has expired                                                      |
+| 403         | `access_denied`                        | Connection, origin, project, or feedback membership denied                                                |
+| 403         | `project_access_denied` or `forbidden` | Existing Agent resolver denies access                                                                     |
+| 402         | `upgrade_required`                     | Owner needs an eligible plan                                                                              |
+| 402         | `owner_upgrade_required`               | Member must ask the owner to upgrade                                                                      |
+| 409         | `seat_limit_reached`                   | Existing entitlement boundary reports a seat failure                                                      |
+| 402 or 409  | `plan_limit`                           | Existing Cloud subscription or usage limit; response includes resource, usage, limit, resetAt, and action |
+| 405         | `method_not_allowed`                   | Unsupported HTTP method                                                                                   |
+| 500         | `error`                                | Backend or entitlement lookup failed; private access fails closed                                         |
 
 The current addon accepts the Agent error aliases on non-success responses. It does not accept `owner_upgrade_required` as a successful `state`, so that condition remains an HTTP `402` error with the alias in `code`.
 

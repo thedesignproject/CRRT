@@ -6,12 +6,25 @@ export async function buildPublicFunction(root: string, output: string) {
   await mkdir(directory, { recursive: true })
   const result = await Bun.build({
     entrypoints: [join(root, 'server/public-site-entry.ts')],
-    target: 'node', format: 'esm', outdir: directory, naming: 'index.mjs',
+    target: 'node',
+    format: 'esm',
+    outdir: directory,
+    naming: 'index.mjs',
   })
   if (!result.success) throw new AggregateError(result.logs, 'Public page function build failed')
   await cp(join(root, 'apps/landing/dist/public-pages.json'), join(directory, 'public-pages.json'))
-  await writeFile(join(directory, '.vc-config.json'), JSON.stringify({
-    runtime: 'nodejs24.x', handler: 'index.mjs', launcherType: 'Nodejs',
-    memory: 128, maxDuration: 10,
-  }, null, 2))
+  await writeFile(
+    join(directory, '.vc-config.json'),
+    JSON.stringify(
+      {
+        runtime: 'nodejs24.x',
+        handler: 'index.mjs',
+        launcherType: 'Nodejs',
+        memory: 128,
+        maxDuration: 10,
+      },
+      null,
+      2,
+    ),
+  )
 }

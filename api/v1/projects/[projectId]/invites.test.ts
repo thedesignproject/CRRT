@@ -40,10 +40,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -51,7 +61,9 @@ const call = (req: unknown, res: unknown) =>
 
 function deferred<T>() {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => { resolve = res })
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
   return { promise, resolve }
 }
 
@@ -61,7 +73,9 @@ beforeEach(() => {
   vi.mocked(createInvite).mockReset()
   vi.mocked(findUserIdByEmail).mockReset()
   vi.mocked(createNotification).mockReset()
-  vi.mocked(getProject).mockReset().mockResolvedValue({ name: 'Demo project' } as never)
+  vi.mocked(getProject)
+    .mockReset()
+    .mockResolvedValue({ name: 'Demo project' } as never)
   vi.mocked(sendProjectInviteEmail).mockReset().mockResolvedValue({ skipped: false })
   vi.mocked(getProjectInviteDashboardUrl).mockClear()
   vi.mocked(waitUntil).mockReset()
@@ -84,7 +98,8 @@ describe('api/v1/projects/[projectId]/invites', () => {
 
     // unauthenticated
     vi.mocked(requireUser).mockImplementationOnce(async (_q, r) => {
-      r.status(401).json({ error: 'Unauthorized' }); return null
+      r.status(401).json({ error: 'Unauthorized' })
+      return null
     })
     res = mockRes()
     await call({ method: 'POST', query: { projectId: 'p' }, body: {}, headers: {} }, res)
@@ -182,9 +197,12 @@ describe('api/v1/projects/[projectId]/invites', () => {
     res = mockRes()
     await call({ method: 'POST', query: { projectId: 'p' }, body: { email: 'x@y.z', role: 'admin' }, headers: {} }, res)
     expect(res.statusCode).toBe(201)
-    expect(createNotification).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 'invitee-1', kind: 'invite.received',
-    }))
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 'invitee-1',
+        kind: 'invite.received',
+      }),
+    )
     expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise))
     const latestEmail = vi.mocked(waitUntil).mock.calls[vi.mocked(waitUntil).mock.calls.length - 1]?.[0]
     await latestEmail
@@ -203,25 +221,34 @@ describe('api/v1/projects/[projectId]/invites', () => {
     vi.mocked(createInvite).mockResolvedValueOnce({ projectKey: 'p', email: 'guest@y.z', role: 'guest' } as never)
     vi.mocked(findUserIdByEmail).mockResolvedValueOnce(null)
     res = mockRes()
-    await call({
-      method: 'POST',
-      query: { projectId: 'p' },
-      body: { email: 'guest@y.z', role: 'guest' },
-      headers: {},
-    }, res)
+    await call(
+      {
+        method: 'POST',
+        query: { projectId: 'p' },
+        body: { email: 'guest@y.z', role: 'guest' },
+        headers: {},
+      },
+      res,
+    )
     expect(res.statusCode).toBe(201)
     expect(createInvite).toHaveBeenLastCalledWith({
-      projectKey: 'p', email: 'guest@y.z', role: 'guest', invitedBy: 'u',
+      projectKey: 'p',
+      email: 'guest@y.z',
+      role: 'guest',
+      invitedBy: 'u',
     })
 
     // Unknown roles are rejected instead of silently escalating or falling back.
     res = mockRes()
-    await call({
-      method: 'POST',
-      query: { projectId: 'p' },
-      body: { email: 'x@y.z', role: 'viewer' },
-      headers: {},
-    }, res)
+    await call(
+      {
+        method: 'POST',
+        query: { projectId: 'p' },
+        body: { email: 'x@y.z', role: 'viewer' },
+        headers: {},
+      },
+      res,
+    )
     expect(res.statusCode).toBe(400)
 
     // happy path: invitee has no account → notification skipped
@@ -251,7 +278,9 @@ describe('api/v1/projects/[projectId]/invites', () => {
     expect(res.statusCode).toBe(500)
 
     // non-Error throw → 500
-    vi.mocked(createInvite).mockImplementationOnce(() => { throw 'string-not-error' })
+    vi.mocked(createInvite).mockImplementationOnce(() => {
+      throw 'string-not-error'
+    })
     res = mockRes()
     await call({ method: 'POST', query: { projectId: 'p' }, body: { email: 'x@y.z' }, headers: {} }, res)
     expect(res.statusCode).toBe(500)
@@ -266,9 +295,15 @@ describe('api/v1/projects/[projectId]/invites', () => {
     vi.mocked(findUserIdByEmail).mockReturnValue(lookup.promise)
 
     const res = mockRes()
-    const response = call({
-      method: 'POST', query: { projectId: 'p' }, body: { email: 'x@y.z' }, headers: {},
-    }, res)
+    const response = call(
+      {
+        method: 'POST',
+        query: { projectId: 'p' },
+        body: { email: 'x@y.z' },
+        headers: {},
+      },
+      res,
+    )
 
     await vi.waitFor(() => expect(waitUntil).toHaveBeenCalledWith(expect.any(Promise)))
     expect(res.statusCode).toBe(200)
@@ -282,7 +317,9 @@ describe('api/v1/projects/[projectId]/invites', () => {
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' })
     vi.mocked(createInvite).mockResolvedValue({ projectKey: 'p', email: 'x@y.z' } as never)
     vi.mocked(findUserIdByEmail).mockResolvedValue(null)
-    vi.mocked(waitUntil).mockImplementationOnce(() => { throw new Error('runtime unavailable') })
+    vi.mocked(waitUntil).mockImplementationOnce(() => {
+      throw new Error('runtime unavailable')
+    })
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const res = mockRes()
@@ -303,19 +340,24 @@ describe('api/v1/projects/[projectId]/invites', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const res = mockRes()
-    await call({
-      method: 'POST',
-      query: { projectId: 'p' },
-      body: { email: 'x@y.z' },
-      headers: { host: 'attacker.example', 'x-forwarded-proto': 'http' },
-    }, res)
+    await call(
+      {
+        method: 'POST',
+        query: { projectId: 'p' },
+        body: { email: 'x@y.z' },
+        headers: { host: 'attacker.example', 'x-forwarded-proto': 'http' },
+      },
+      res,
+    )
 
     expect(res.statusCode).toBe(201)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]
-    expect(sendProjectInviteEmail).toHaveBeenCalledWith(expect.objectContaining({
-      projectName: 'p',
-      dashboardUrl: 'https://app.example/dashboard',
-    }))
+    expect(sendProjectInviteEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectName: 'p',
+        dashboardUrl: 'https://app.example/dashboard',
+      }),
+    )
     expect(warnSpy).toHaveBeenCalledWith('Project invite email failed', expect.any(Error))
     warnSpy.mockRestore()
   })
@@ -329,12 +371,15 @@ describe('api/v1/projects/[projectId]/invites', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     const res = mockRes()
-    await call({
-      method: 'POST',
-      query: { projectId: 'p' },
-      body: { email: 'x@y.z' },
-      headers: {},
-    }, res)
+    await call(
+      {
+        method: 'POST',
+        query: { projectId: 'p' },
+        body: { email: 'x@y.z' },
+        headers: {},
+      },
+      res,
+    )
 
     expect(res.statusCode).toBe(201)
     await vi.mocked(waitUntil).mock.calls[0]?.[0]

@@ -31,7 +31,10 @@ function byPath(a: string, b: string): number {
 
 /** Deterministic LPT partition. Unknown files cost the median known duration. */
 export function partition(files: string[], durations: Durations, count: number): string[][] {
-  const known = files.map((file) => durations[file]).filter((cost) => cost !== undefined).sort((a, b) => a - b)
+  const known = files
+    .map((file) => durations[file])
+    .filter((cost) => cost !== undefined)
+    .sort((a, b) => a - b)
   const fallback = known.length > 0 ? known[Math.floor(known.length / 2)] : 1
   const weighted = files
     .map((file) => ({ file, cost: durations[file] ?? fallback }))

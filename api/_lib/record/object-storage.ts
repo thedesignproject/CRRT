@@ -13,7 +13,8 @@ export function newRecordingStorage() {
   return { storageProvider: provider, storageBucket: bucket }
 }
 export function recordObjectStorage(recording?: Pick<RecordingRow, 'storage_provider' | 'storage_bucket'>) {
-  if (recording?.storage_provider && !['supabase', 'r2'].includes(recording.storage_provider)) throw new RecordError('record_configuration', 503)
+  if (recording?.storage_provider && !['supabase', 'r2'].includes(recording.storage_provider))
+    throw new RecordError('record_configuration', 503)
   if (recording?.storage_provider === 'r2') return r2Storage(recording.storage_bucket!)
   const bucket = database().storage.from(recording?.storage_bucket || RECORD_BUCKET)
   return {
@@ -26,9 +27,13 @@ export function recordObjectStorage(recording?: Pick<RecordingRow, 'storage_prov
   }
 }
 export function resumableAuthorization(path: string, mime: string, signature: string) {
-  return { protocol: 'tus',
+  return {
+    protocol: 'tus',
     endpoint: new URL('/storage/v1/upload/resumable/sign', process.env.SUPABASE_URL).href,
     headers: { 'x-signature': signature },
     metadata: { bucketName: RECORD_BUCKET, objectName: path, contentType: mime },
-    chunkSize: 6 * 1024 * 1024, expiresInSeconds: 7200, upsert: false }
+    chunkSize: 6 * 1024 * 1024,
+    expiresInSeconds: 7200,
+    upsert: false,
+  }
 }

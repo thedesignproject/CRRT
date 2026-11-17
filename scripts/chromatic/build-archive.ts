@@ -11,11 +11,24 @@ if (existsSync(errorFile) && Object.keys(JSON.parse(readFileSync(errorFile, 'utf
 }
 const adapterRoot = dirname(require.resolve('@chromatic-com/playwright/package.json'))
 const adapter = JSON.parse(readFileSync(join(adapterRoot, 'package.json'), 'utf8'))
-if (adapter.version !== '1.0.0') throw new Error('Reverify the archive presentation adapter before upgrading @chromatic-com/playwright')
+if (adapter.version !== '1.0.0')
+  throw new Error('Reverify the archive presentation adapter before upgrading @chromatic-com/playwright')
 // Reuse the pinned official CLI's viewport preparation, then extend its renderer.
 const { t: addViewports } = await import(pathToFileURL(join(adapterRoot, 'dist/set-viewports-Df8HU77_.mjs')).href)
 await addViewports()
 const storybookPackage = require.resolve('storybook/package.json', { paths: [adapterRoot] })
 const storybook = JSON.parse(readFileSync(storybookPackage, 'utf8'))
-const result = spawnSync('node', [join(dirname(storybookPackage), storybook.bin), 'build', '-c', 'tests/visual/archive', '--output-dir', 'artifacts/chromatic-simple/storybook', '--disable-telemetry'], { stdio: 'inherit', env: process.env })
+const result = spawnSync(
+  'node',
+  [
+    join(dirname(storybookPackage), storybook.bin),
+    'build',
+    '-c',
+    'tests/visual/archive',
+    '--output-dir',
+    'artifacts/chromatic-simple/storybook',
+    '--disable-telemetry',
+  ],
+  { stdio: 'inherit', env: process.env },
+)
 process.exitCode = result.status ?? 1

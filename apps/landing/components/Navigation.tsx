@@ -11,16 +11,32 @@ export function Navigation({ authenticated }: { authenticated: boolean }) {
   // These fixed semantic classes need no runtime Tailwind conflict resolution.
   return (
     <nav className="landing-navigation" aria-label="Main navigation">
-      <a href="/#product" aria-label="CRRT home" className="landing-navigation-brand"><Wordmark level="nav" /></a>
+      <a href="/#product" aria-label="CRRT home" className="landing-navigation-brand">
+        <Wordmark level="nav" />
+      </a>
       <div className="landing-navigation-links">
-        <a className="ds-nav-link" href="/#how-it-works">How it works</a>
-        <a className="ds-nav-link" href="/#pricing">Pricing</a>
+        <a className="ds-nav-link" href="/#how-it-works">
+          How it works
+        </a>
+        <a className="ds-nav-link" href="/#pricing">
+          Pricing
+        </a>
         <ResourcesMenu />
-        <a className="ds-nav-link" href="/docs">Docs</a>
-        <a className="ds-nav-link" href="https://github.com/thedesignproject/CRRT">GitHub</a>
+        <a className="ds-nav-link" href="/docs">
+          Docs
+        </a>
+        <a className="ds-nav-link" href="https://github.com/thedesignproject/CRRT">
+          GitHub
+        </a>
       </div>
       <div className="landing-navigation-actions">
-        <button className="ds-icon-button" type="button" aria-label={`Switch to ${next} mode`} title={`Switch to ${next} mode`} onClick={toggleTheme}>
+        <button
+          className="ds-icon-button"
+          type="button"
+          aria-label={`Switch to ${next} mode`}
+          title={`Switch to ${next} mode`}
+          onClick={toggleTheme}
+        >
           {theme === 'light' ? <Moon aria-hidden="true" size={17} /> : <Sun aria-hidden="true" size={17} />}
         </button>
         <a className="ds-button ds-button-primary ds-button-sm" href={DASHBOARD_HREF}>

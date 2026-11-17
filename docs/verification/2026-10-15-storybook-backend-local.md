@@ -16,21 +16,21 @@ All 13 verification groups passed through real HTTP API routes, Supabase Auth, a
 
 ## Passed checks
 
-| Group | Verified behavior |
-| --- | --- |
-| Supabase authentication | Admin-created temporary accounts could authenticate through the real Auth service. |
-| Pairing | Only owners could create codes; stored codes were hashed and expired after five minutes; CLI validation worked without Origin; eight concurrent claims returned one connection. |
-| CORS and signed-out access | Preflight returned the exact origin without cookie credentials; malformed Origin was denied; signed-out eligibility returned `401`. |
-| PKCE and replay | Authenticated handoff succeeded; wrong verifiers failed; six concurrent exchanges produced one credential; replay failed; ordinary widget exchange rejected a Storybook handoff. |
-| Private submission context | Real PostgREST insertion preserved story ID, component and variant footer, deep-link URL, and trusted account author identity. |
-| Activity notifications | All three permitted project members received the existing activity notification, including aggregated subsequent activity. |
-| Request scope and validation | Empty comments, mismatched story selector, wrong project, wrong exact origin/port, and a changed project allowlist failed closed. |
-| Existing permissions | Guests could leave permitted feedback while Agent eligibility remained denied; admin-only private settings blocked member feedback. |
-| Public compatibility | Anonymous public Storybook feedback succeeded; anonymous private feedback stayed denied. |
-| Session expiry and membership revocation | A known expired token returned `419`; removing membership immediately denied eligibility and submission. |
-| Cloud eligibility | The owner received `upgrade_required`, the member received `owner_upgrade_required`, and an active Pro account returned `ready` with the current nine-collaborator limit. |
-| Connection lifecycle | Expired pairing validation/claim failed; owner status omitted hashes; owner revocation denied further eligibility and submission. |
-| Database access boundary | The real anon key could not read pairing records or execute the privileged claim RPC. |
+| Group                                    | Verified behavior                                                                                                                                                                |
+| ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Supabase authentication                  | Admin-created temporary accounts could authenticate through the real Auth service.                                                                                               |
+| Pairing                                  | Only owners could create codes; stored codes were hashed and expired after five minutes; CLI validation worked without Origin; eight concurrent claims returned one connection.  |
+| CORS and signed-out access               | Preflight returned the exact origin without cookie credentials; malformed Origin was denied; signed-out eligibility returned `401`.                                              |
+| PKCE and replay                          | Authenticated handoff succeeded; wrong verifiers failed; six concurrent exchanges produced one credential; replay failed; ordinary widget exchange rejected a Storybook handoff. |
+| Private submission context               | Real PostgREST insertion preserved story ID, component and variant footer, deep-link URL, and trusted account author identity.                                                   |
+| Activity notifications                   | All three permitted project members received the existing activity notification, including aggregated subsequent activity.                                                       |
+| Request scope and validation             | Empty comments, mismatched story selector, wrong project, wrong exact origin/port, and a changed project allowlist failed closed.                                                |
+| Existing permissions                     | Guests could leave permitted feedback while Agent eligibility remained denied; admin-only private settings blocked member feedback.                                              |
+| Public compatibility                     | Anonymous public Storybook feedback succeeded; anonymous private feedback stayed denied.                                                                                         |
+| Session expiry and membership revocation | A known expired token returned `419`; removing membership immediately denied eligibility and submission.                                                                         |
+| Cloud eligibility                        | The owner received `upgrade_required`, the member received `owner_upgrade_required`, and an active Pro account returned `ready` with the current nine-collaborator limit.        |
+| Connection lifecycle                     | Expired pairing validation/claim failed; owner status omitted hashes; owner revocation denied further eligibility and submission.                                                |
+| Database access boundary                 | The real anon key could not read pairing records or execute the privileged claim RPC.                                                                                            |
 
 ## Review fixes and concurrency regressions
 

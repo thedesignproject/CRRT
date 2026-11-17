@@ -8,7 +8,10 @@ import { getStringQuery, jsonError, methodNotAllowed } from '../../../_lib/http.
 function html(res: VercelResponse, body: string) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8')
   res.setHeader('Cache-Control', 'no-store')
-  res.setHeader('Content-Security-Policy', "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'")
+  res.setHeader(
+    'Content-Security-Policy',
+    "default-src 'none'; script-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'",
+  )
   res.setHeader('Referrer-Policy', 'no-referrer')
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
@@ -41,12 +44,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       containerName: `${first.projectKey} · ${first.projectName}`,
       createdBy: verified.userId,
     })
-    return html(res, widgetCallbackHtml(verified.origin, {
-      type: 'crrt:jira-connect', ok: true, projectKey: verified.projectKey,
-    }))
+    return html(
+      res,
+      widgetCallbackHtml(verified.origin, {
+        type: 'crrt:jira-connect',
+        ok: true,
+        projectKey: verified.projectKey,
+      }),
+    )
   } catch {
-    return html(res, widgetCallbackHtml(verified.origin, {
-      type: 'crrt:jira-connect', ok: false, error: 'jira_oauth_failed',
-    }))
+    return html(
+      res,
+      widgetCallbackHtml(verified.origin, {
+        type: 'crrt:jira-connect',
+        ok: false,
+        error: 'jira_oauth_failed',
+      }),
+    )
   }
 }

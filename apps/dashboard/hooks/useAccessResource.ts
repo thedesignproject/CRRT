@@ -15,7 +15,8 @@ export function useAccessResource<T>(load: () => Promise<T>) {
       const result = await load()
       if (scope.active && sequence === scope.sequence) setData(result)
     } catch (err) {
-      if (scope.active && sequence === scope.sequence) setError(err instanceof Error ? err.message : 'Unable to load project access')
+      if (scope.active && sequence === scope.sequence)
+        setError(err instanceof Error ? err.message : 'Unable to load project access')
     } finally {
       if (scope.active && sequence === scope.sequence) setLoading(false)
     }
@@ -25,9 +26,14 @@ export function useAccessResource<T>(load: () => Promise<T>) {
     setData(null)
     setBusy(false)
     void refresh()
-    const onFocus = () => { void refresh() }
+    const onFocus = () => {
+      void refresh()
+    }
     window.addEventListener('focus', onFocus)
-    return () => { scope.active = false; window.removeEventListener('focus', onFocus) }
+    return () => {
+      scope.active = false
+      window.removeEventListener('focus', onFocus)
+    }
   }, [refresh, scope])
   const run = async (action: () => Promise<unknown>) => {
     if (scope.busy) return false

@@ -1,20 +1,53 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('./supabase.js', () => ({ getServiceSupabase: vi.fn() }))
 import { getServiceSupabase } from './supabase.js'
-import { getProject, getProjectMember, updateProject, listProjectsForUser, listProjectMembers, listProjectMemberIds, listComments, listAcceptedCommentsForPage, listAcceptedCommentsByIds, listAcceptedCommentsForProject, listCommentsForShare, listNotificationsForUser } from './store.js'
+import {
+  getProject,
+  getProjectMember,
+  updateProject,
+  listProjectsForUser,
+  listProjectMembers,
+  listProjectMemberIds,
+  listComments,
+  listAcceptedCommentsForPage,
+  listAcceptedCommentsByIds,
+  listAcceptedCommentsForProject,
+  listCommentsForShare,
+  listNotificationsForUser,
+} from './store.js'
 import { projectFeedbackAllowed } from './project-capabilities.js'
-const project = { public_key: 'p', name: 'P', slug: 'p', widget_private: true, feedback_access: 'admins', created_at: '', updated_at: '' }
+const project = {
+  public_key: 'p',
+  name: 'P',
+  slug: 'p',
+  widget_private: true,
+  feedback_access: 'admins',
+  created_at: '',
+  updated_at: '',
+}
 const member = { project_key: 'p', user_id: 'u', role: 'member', is_owner: false, projects: project }
 let rows: Record<string, any>, update: any
 beforeEach(() => {
   rows = { projects: [project], project_members: [member], comments: null, feedback_share_items: [{ comment_id: 'c' }] }
   update = vi.fn()
   vi.mocked(getServiceSupabase).mockReturnValue({
-    rpc: (name: string, args: any) => { update(args.p_patch); const result = { data: name === 'update_project_settings' ? rows.projects : rows.comments, error: null }; return { select: () => ({ ...result, order: async () => result, then: (yes: any) => Promise.resolve(result).then(yes) }) } },
+    rpc: (name: string, args: any) => {
+      update(args.p_patch)
+      const result = { data: name === 'update_project_settings' ? rows.projects : rows.comments, error: null }
+      return {
+        select: () => ({ ...result, order: async () => result, then: (yes: any) => Promise.resolve(result).then(yes) }),
+      }
+    },
     from: (table: string) => {
-      const q: any = { then: (yes: any) => Promise.resolve({ data: rows[table], error: null }).then(yes), maybeSingle: async () => ({ data: rows[table]?.[0], error: null }) }
+      const q: any = {
+        then: (yes: any) => Promise.resolve({ data: rows[table], error: null }).then(yes),
+        maybeSingle: async () => ({ data: rows[table]?.[0], error: null }),
+      }
       for (const method of ['select', 'eq', 'in', 'order', 'limit']) q[method] = () => q
-      q.update = (value: any) => { update(value); return q }
+      q.update = (value: any) => {
+        update(value)
+        return q
+      }
       return q
     },
   } as never)
@@ -52,7 +85,9 @@ it('handles null comment result sets across widget and agent read paths', async 
   expect(await listAcceptedCommentsForPage('p', 'url')).toEqual([])
   expect(await listAcceptedCommentsByIds('p', ['c'])).toEqual([])
   expect(await listAcceptedCommentsForProject('p')).toEqual([])
-  expect(await listCommentsForShare({ id: 's', projectId: 'p', scopeType: 'selection', scopePageUrl: null },'hash')).toEqual([])
+  expect(
+    await listCommentsForShare({ id: 's', projectId: 'p', scopeType: 'selection', scopePageUrl: null }, 'hash'),
+  ).toEqual([])
 })
 it('allows public/team projects and restricts private admin-only projects to owner/admin', () => {
   expect(projectFeedbackAllowed('member')).toBe(true)
@@ -62,6 +97,7 @@ it('allows public/team projects and restricts private admin-only projects to own
   expect(projectFeedbackAllowed('admin', true, 'admins')).toBe(true)
 })
 
-it.each(['unexpected', '', 'ADMIN'])('denies invalid private access setting %j for all roles', setting => {
-  for (const role of ['member', 'guest', 'admin', 'owner'] as const) expect(projectFeedbackAllowed(role, true, setting)).toBe(false)
+it.each(['unexpected', '', 'ADMIN'])('denies invalid private access setting %j for all roles', (setting) => {
+  for (const role of ['member', 'guest', 'admin', 'owner'] as const)
+    expect(projectFeedbackAllowed(role, true, setting)).toBe(false)
 })

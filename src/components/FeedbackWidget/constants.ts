@@ -6,8 +6,7 @@ export const CRRT_CARROT_LOGO_URL = crrtCarrotLogoUrl
 
 /* CRRT carrot gradient — replaces the blue dot.
  * Bright highlight at top, carrot body, deeper carrot shadow at the edge. */
-export const PIN_GRADIENT =
-  'radial-gradient(circle at 50% 35%, #FFD9B5 0%, #F4A661 22%, #E8853D 55%, #B85F1F 100%)'
+export const PIN_GRADIENT = 'radial-gradient(circle at 50% 35%, #FFD9B5 0%, #F4A661 22%, #E8853D 55%, #B85F1F 100%)'
 
 export const NOISE_OVERLAY_BG =
   "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='100' height='100'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)' opacity='0.45'/></svg>\")"

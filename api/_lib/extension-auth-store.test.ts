@@ -27,9 +27,18 @@ const handoff = {
 class Query {
   calls: Array<[string, ...unknown[]]> = []
   constructor(private response: unknown) {}
-  insert(value: unknown) { this.calls.push(['insert', value]); return this }
-  delete() { this.calls.push(['delete']); return this }
-  or(value: string) { this.calls.push(['or', value]); return this }
+  insert(value: unknown) {
+    this.calls.push(['insert', value])
+    return this
+  }
+  delete() {
+    this.calls.push(['delete'])
+    return this
+  }
+  or(value: string) {
+    this.calls.push(['or', value])
+    return this
+  }
   then(resolve: (value: unknown) => unknown, reject: (reason: unknown) => unknown) {
     return Promise.resolve(this.response).then(resolve, reject)
   }
@@ -57,15 +66,18 @@ describe('extension auth handoff store', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(fake.client as never)
     await createExtensionAuthHandoff(handoff)
     expect(fake.from).toHaveBeenCalledWith('extension_auth_handoffs')
-    expect(fake.queries[0]?.calls).toContainEqual(['insert', {
-      code_hash: handoff.codeHash,
-      state_hash: handoff.stateHash,
-      pkce_challenge: handoff.codeChallenge,
-      user_id: handoff.userId,
-      extension_id: handoff.extensionId,
-      redirect_uri: handoff.redirectUri,
-      expires_at: handoff.expiresAt.toISOString(),
-    }])
+    expect(fake.queries[0]?.calls).toContainEqual([
+      'insert',
+      {
+        code_hash: handoff.codeHash,
+        state_hash: handoff.stateHash,
+        pkce_challenge: handoff.codeChallenge,
+        user_id: handoff.userId,
+        extension_id: handoff.extensionId,
+        redirect_uri: handoff.redirectUri,
+        expires_at: handoff.expiresAt.toISOString(),
+      },
+    ])
     expect(JSON.stringify(fake.queries[0]?.calls)).not.toContain('accessToken')
   })
 
@@ -85,7 +97,9 @@ describe('extension auth handoff store', () => {
       { data: 'invalid', error: null },
     ])
     vi.mocked(getServiceSupabase).mockReturnValue(fake.client as never)
-    const input = { ...handoff }; delete (input as Partial<typeof handoff>).userId; delete (input as Partial<typeof handoff>).expiresAt
+    const input = { ...handoff }
+    delete (input as Partial<typeof handoff>).userId
+    delete (input as Partial<typeof handoff>).expiresAt
     await expect(consumeExtensionAuthHandoff(input)).resolves.toBe('user-1')
     await expect(consumeExtensionAuthHandoff(input)).resolves.toBe('user-2')
     await expect(consumeExtensionAuthHandoff(input)).resolves.toBeNull()
@@ -113,10 +127,7 @@ describe('extension auth handoff store', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(fake.client as never)
     await cleanupExtensionAuthHandoffs(now)
     await cleanupExtensionAuthHandoffs()
-    expect(fake.queries[0]?.calls).toEqual([
-      ['delete'],
-      ['or', `expires_at.lt.${cutoff},consumed_at.lt.${cutoff}`],
-    ])
+    expect(fake.queries[0]?.calls).toEqual([['delete'], ['or', `expires_at.lt.${cutoff},consumed_at.lt.${cutoff}`]])
     expect(fake.queries[1]?.calls[1]?.[1]).toMatch(/^expires_at\.lt\..+,consumed_at\.lt\..+$/)
   })
 
@@ -153,12 +164,16 @@ function authClients(options: {
 describe('isolated extension sessions', () => {
   it('mints and verifies a distinct session without returning the generated email token', async () => {
     const session = {
-      access_token: 'extension-access', refresh_token: 'extension-refresh', expires_at: 123,
+      access_token: 'extension-access',
+      refresh_token: 'extension-refresh',
+      expires_at: 123,
       user: { id: 'user-1', email: 'user@example.com' },
     }
     const clients = authClients({ email: 'user@example.com', tokenHash: 'server-only-token', session })
     await expect(mintExtensionSession('user-1')).resolves.toEqual({
-      accessToken: 'extension-access', refreshToken: 'extension-refresh', expiresAt: 123,
+      accessToken: 'extension-access',
+      refreshToken: 'extension-refresh',
+      expiresAt: 123,
       user: { id: 'user-1', email: 'user@example.com' },
     })
     expect(clients.getUserById).toHaveBeenCalledWith('user-1')
@@ -168,9 +183,15 @@ describe('isolated extension sessions', () => {
   })
 
   it('returns a nullable expiry when Supabase omits it', async () => {
-    authClients({ email: 'user@example.com', tokenHash: 'token', session: {
-      access_token: 'a', refresh_token: 'r', user: { id: 'user-1', email: 'user@example.com' },
-    } })
+    authClients({
+      email: 'user@example.com',
+      tokenHash: 'token',
+      session: {
+        access_token: 'a',
+        refresh_token: 'r',
+        user: { id: 'user-1', email: 'user@example.com' },
+      },
+    })
     await expect(mintExtensionSession('user-1')).resolves.toMatchObject({ expiresAt: null })
   })
 
@@ -180,10 +201,38 @@ describe('isolated extension sessions', () => {
     [{ email: 'user@example.com', linkError: new Error('down'), tokenHash: 'token' }, 'link failure'],
     [{ email: 'user@example.com' }, 'missing generated token'],
     [{ email: 'user@example.com', tokenHash: 'token', verificationError: new Error('down') }, 'verification failure'],
-    [{ email: 'user@example.com', tokenHash: 'token', session: { refresh_token: 'r', user: { id: 'user-1', email: 'user@example.com' } } }, 'missing access token'],
-    [{ email: 'user@example.com', tokenHash: 'token', session: { access_token: 'a', user: { id: 'user-1', email: 'user@example.com' } } }, 'missing refresh token'],
-    [{ email: 'user@example.com', tokenHash: 'token', session: { access_token: 'a', refresh_token: 'r', user: { id: 'other', email: 'user@example.com' } } }, 'wrong user'],
-    [{ email: 'user@example.com', tokenHash: 'token', session: { access_token: 'a', refresh_token: 'r', user: { id: 'user-1', email: 'other@example.com' } } }, 'wrong email'],
+    [
+      {
+        email: 'user@example.com',
+        tokenHash: 'token',
+        session: { refresh_token: 'r', user: { id: 'user-1', email: 'user@example.com' } },
+      },
+      'missing access token',
+    ],
+    [
+      {
+        email: 'user@example.com',
+        tokenHash: 'token',
+        session: { access_token: 'a', user: { id: 'user-1', email: 'user@example.com' } },
+      },
+      'missing refresh token',
+    ],
+    [
+      {
+        email: 'user@example.com',
+        tokenHash: 'token',
+        session: { access_token: 'a', refresh_token: 'r', user: { id: 'other', email: 'user@example.com' } },
+      },
+      'wrong user',
+    ],
+    [
+      {
+        email: 'user@example.com',
+        tokenHash: 'token',
+        session: { access_token: 'a', refresh_token: 'r', user: { id: 'user-1', email: 'other@example.com' } },
+      },
+      'wrong email',
+    ],
   ] as const)('fails closed for %s', async (options, _label) => {
     authClients(options)
     await expect(mintExtensionSession('user-1')).rejects.toThrow('Extension authentication session creation failed')

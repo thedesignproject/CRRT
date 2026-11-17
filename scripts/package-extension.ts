@@ -1,7 +1,14 @@
 import { copyFileSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import { collectReleaseFiles, readExtensionVersion, relativeReleasePath, releaseMetadata, validatePublicSupabaseKey, validateReleaseFiles } from '../apps/extension/release'
+import {
+  collectReleaseFiles,
+  readExtensionVersion,
+  relativeReleasePath,
+  releaseMetadata,
+  validatePublicSupabaseKey,
+  validateReleaseFiles,
+} from '../apps/extension/release'
 
 const root = process.cwd()
 const extensionRoot = resolve(root, 'apps/extension')
@@ -40,8 +47,12 @@ const sourceZip = readdirSync(outputRoot)
   .find((file) => statSync(file).isFile())
 if (!sourceZip) throw new Error('WXT did not produce the expected Chrome ZIP')
 
-const commit = process.env.GITHUB_SHA ?? spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim()
-const commitEpoch = spawnSync('git', ['show', '-s', '--format=%ct', commit], { cwd: root, encoding: 'utf8' }).stdout.trim()
+const commit =
+  process.env.GITHUB_SHA ?? spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).stdout.trim()
+const commitEpoch = spawnSync('git', ['show', '-s', '--format=%ct', commit], {
+  cwd: root,
+  encoding: 'utf8',
+}).stdout.trim()
 const sourceDateEpoch = Number(process.env.SOURCE_DATE_EPOCH ?? commitEpoch)
 const zip = readFileSync(sourceZip)
 const apiOrigin = new URL(process.env.WXT_API_BASE!).origin

@@ -1,9 +1,22 @@
-import type { AuditCandidate, AuditEvidence, AuditMode, AuditSourceCoverage } from '../../../shared/product-audit/contracts.js'
+import type {
+  AuditCandidate,
+  AuditEvidence,
+  AuditMode,
+  AuditSourceCoverage,
+} from '../../../shared/product-audit/contracts.js'
 import { admitAuditFindings, type VerificationDecision } from './admission.js'
 import { auditBudgets, auditLocalExecution, auditModelInterStageDelay } from './config.js'
 import { DockerAuditExplorer, FixtureAuditExplorer, SandboxAuditExplorer, type AuditExplorer } from './explorer.js'
 import { auditErrorLogFields, auditServerLog } from './log.js'
-import { AuditModelError, AuditModelRateLimitError, FakeAuditModel, OpenAiCompatibleAuditModel, runCritic, runVerifier, type AuditModel } from './model.js'
+import {
+  AuditModelError,
+  AuditModelRateLimitError,
+  FakeAuditModel,
+  OpenAiCompatibleAuditModel,
+  runCritic,
+  runVerifier,
+  type AuditModel,
+} from './model.js'
 import * as store from './store.js'
 import { validateAuditUrl } from './url-safety.js'
 
@@ -11,7 +24,10 @@ export type PipelineStage = 'explorer' | 'critic' | 'verifier'
 export type AuditStageResult = { status: string; count?: number }
 
 export class AuditStageBusyError extends Error {
-  constructor(message: string, public readonly retryAfterMs = 1_000) {
+  constructor(
+    message: string,
+    public readonly retryAfterMs = 1_000,
+  ) {
     super(message)
   }
 }
@@ -21,9 +37,18 @@ export class AuditStageRateLimitedError extends Error {
   }
 }
 
-export type PipelineStore = Pick<typeof store,
-  'acquireAuditStage' | 'renewAuditStage' | 'completeAuditStage' | 'finalizeAudit' | 'finishAuditPartial'
-  | 'loadAuditPipelineState' | 'deferAuditStageRetry' | 'finishAuditModelRateLimited' | 'markAuditFailed'>
+export type PipelineStore = Pick<
+  typeof store,
+  | 'acquireAuditStage'
+  | 'renewAuditStage'
+  | 'completeAuditStage'
+  | 'finalizeAudit'
+  | 'finishAuditPartial'
+  | 'loadAuditPipelineState'
+  | 'deferAuditStageRetry'
+  | 'finishAuditModelRateLimited'
+  | 'markAuditFailed'
+>
 
 export type PipelineDependencies = {
   store: PipelineStore
@@ -37,19 +62,35 @@ export type PipelineDependencies = {
 
 function fixtureModel(evidence: AuditEvidence[]) {
   const clean = evidence.every((item) => item.id === 'clean-navigation')
-  const candidates: AuditCandidate[] = clean ? [] : [
-    {
-      id: 'trial-promise-conflict', kind: 'problem', title: 'Trial promise conflicts with the signup gate',
-      summary: 'The pricing promise says no card is required while signup requires one.', impact: 'high', confidence: 0.99,
-      evidenceIds: ['pricing-promise', 'signup-card-field'], recommendation: 'Align the trial promise and the actual signup requirements.',
-    },
-    {
-      id: 'destructive-form-error', kind: 'problem', title: 'A validation error destroys completed form work',
-      summary: 'An invalid promo code clears fields that the user already completed.', impact: 'high', confidence: 0.97,
-      evidenceIds: ['form-reset'], recommendation: 'Preserve unrelated form state when validation fails.',
-    },
-  ]
-  const decisions: VerificationDecision[] = candidates.map((candidate) => ({ candidateId: candidate.id, admitted: true, contradictions: [] }))
+  const candidates: AuditCandidate[] = clean
+    ? []
+    : [
+        {
+          id: 'trial-promise-conflict',
+          kind: 'problem',
+          title: 'Trial promise conflicts with the signup gate',
+          summary: 'The pricing promise says no card is required while signup requires one.',
+          impact: 'high',
+          confidence: 0.99,
+          evidenceIds: ['pricing-promise', 'signup-card-field'],
+          recommendation: 'Align the trial promise and the actual signup requirements.',
+        },
+        {
+          id: 'destructive-form-error',
+          kind: 'problem',
+          title: 'A validation error destroys completed form work',
+          summary: 'An invalid promo code clears fields that the user already completed.',
+          impact: 'high',
+          confidence: 0.97,
+          evidenceIds: ['form-reset'],
+          recommendation: 'Preserve unrelated form state when validation fails.',
+        },
+      ]
+  const decisions: VerificationDecision[] = candidates.map((candidate) => ({
+    candidateId: candidate.id,
+    admitted: true,
+    contradictions: [],
+  }))
   return new FakeAuditModel({ critic: { candidates }, verifier: { decisions } })
 }
 
@@ -57,7 +98,11 @@ export function defaultPipelineDependencies(mode: AuditMode, evidence: AuditEvid
   const fixture = mode === 'local-fixture'
   return {
     store,
-    explorer: fixture ? new FixtureAuditExplorer() : auditLocalExecution() ? new DockerAuditExplorer() : new SandboxAuditExplorer(),
+    explorer: fixture
+      ? new FixtureAuditExplorer()
+      : auditLocalExecution()
+        ? new DockerAuditExplorer()
+        : new SandboxAuditExplorer(),
     model: fixture ? fixtureModel(evidence) : new OpenAiCompatibleAuditModel(),
     validateTarget: validateAuditUrl,
     wait: (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)),
@@ -103,12 +148,17 @@ async function withLeaseHeartbeat<T>(
   let renewalFailure: unknown
   const renew = () => {
     if (renewal) return
-    renewal = resolved.store.renewAuditStage(auditId, stage, leaseToken, stageLeaseSeconds)
+    renewal = resolved.store
+      .renewAuditStage(auditId, stage, leaseToken, stageLeaseSeconds)
       .then((result) => {
         if (result.status !== 'renewed') throw new AuditStageBusyError(`audit_stage_lease_${result.status}`)
       })
-      .catch((error) => { renewalFailure = error })
-      .finally(() => { renewal = null })
+      .catch((error) => {
+        renewalFailure = error
+      })
+      .finally(() => {
+        renewal = null
+      })
   }
   const timer = setInterval(renew, stageLeaseHeartbeatMs)
   try {
@@ -135,7 +185,12 @@ async function finishModelBudgetPartial(
     ? 'The model stage reached the audit time budget.'
     : 'The collected evidence exceeded the safe model input budget.'
   const result = await resolved.store.finishAuditPartial(
-    auditId, stage, leaseToken, { ...coverage, partialReason: reason }, code, reason,
+    auditId,
+    stage,
+    leaseToken,
+    { ...coverage, partialReason: reason },
+    code,
+    reason,
   )
   const status = result.status === 'unchanged' ? 'terminal' : persisted(result.status, ['partial'])
   resolved.log('warn', 'run.partial', { auditId, stage, reason: code, persistenceStatus: status })
@@ -165,13 +220,21 @@ async function deferRateLimitedStage(
   const retryAt = deferred.retryAt ? new Date(deferred.retryAt).getTime() : Date.now() + error.retryAfterMs
   if (retryAt >= deadlineMs) {
     const finished = await resolved.store.finishAuditModelRateLimited(auditId)
-    log('warn', 'run.partial', { auditId, reason: 'model_rate_limit_budget_exhausted', persistenceStatus: finished.status })
+    log('warn', 'run.partial', {
+      auditId,
+      reason: 'model_rate_limit_budget_exhausted',
+      persistenceStatus: finished.status,
+    })
     return { status: finished.status === 'unchanged' ? 'terminal' : persisted(finished.status, ['partial']) }
   }
   throw new AuditStageRateLimitedError(Math.max(1_000, retryAt - Date.now()))
 }
 
-export async function executeAuditStage(auditId: string, stage: PipelineStage, deps?: PipelineDependencies): Promise<AuditStageResult> {
+export async function executeAuditStage(
+  auditId: string,
+  stage: PipelineStage,
+  deps?: PipelineDependencies,
+): Promise<AuditStageResult> {
   const state = await (deps?.store || store).loadAuditPipelineState(auditId)
   const resolved = deps || defaultPipelineDependencies(state.run.mode as AuditMode, state.evidence)
   const budgets = state.run.budgets || auditBudgets()
@@ -195,16 +258,24 @@ export async function executeAuditStage(auditId: string, stage: PipelineStage, d
   if (stage === 'explorer') {
     let result
     try {
-      result = remainingMs > 0
-        ? await withLeaseHeartbeat(resolved, auditId, stage, lease.leaseToken, async () => {
-            const target = await resolved.validateTarget(state.run.normalized_url)
-            return resolved.explorer.explore(target, { ...budgets, wallClockMs: remainingMs })
-          })
-        : { evidence: [], coverage: partialCoverage(state.run.coverage as AuditSourceCoverage) }
+      result =
+        remainingMs > 0
+          ? await withLeaseHeartbeat(resolved, auditId, stage, lease.leaseToken, async () => {
+              const target = await resolved.validateTarget(state.run.normalized_url)
+              return resolved.explorer.explore(target, { ...budgets, wallClockMs: remainingMs })
+            })
+          : { evidence: [], coverage: partialCoverage(state.run.coverage as AuditSourceCoverage) }
     } catch (error) {
       if (error instanceof AuditStageBusyError) throw error
       log('warn', 'explorer.failed', { auditId, stage, ...auditErrorLogFields(error) })
-      result = { evidence: [], coverage: { ...partialCoverage(state.run.coverage as AuditSourceCoverage), routesAttempted: 0, routesEvaluated: 0 } }
+      result = {
+        evidence: [],
+        coverage: {
+          ...partialCoverage(state.run.coverage as AuditSourceCoverage),
+          routesAttempted: 0,
+          routesEvaluated: 0,
+        },
+      }
     }
     const completion = await resolved.store.completeAuditStage(auditId, stage, lease.leaseToken, result)
     const status = persisted(completion.status, ['completed'])
@@ -222,13 +293,24 @@ export async function executeAuditStage(auditId: string, stage: PipelineStage, d
   if (stage === 'critic') {
     let candidates: AuditCandidate[]
     try {
-      candidates = remainingMs > 0
-        ? await withLeaseHeartbeat(resolved, auditId, stage, lease.leaseToken, () => runCritic(resolved.model, state.evidence, Math.floor(budgets.modelTokens / 2), deadlineMs, auditId))
-        : []
+      candidates =
+        remainingMs > 0
+          ? await withLeaseHeartbeat(resolved, auditId, stage, lease.leaseToken, () =>
+              runCritic(resolved.model, state.evidence, Math.floor(budgets.modelTokens / 2), deadlineMs, auditId),
+            )
+          : []
     } catch (error) {
-      if (error instanceof AuditModelRateLimitError) return deferRateLimitedStage(resolved, auditId, stage, lease.leaseToken, error, deadlineMs)
+      if (error instanceof AuditModelRateLimitError)
+        return deferRateLimitedStage(resolved, auditId, stage, lease.leaseToken, error, deadlineMs)
       if (error instanceof AuditModelError && (error.code === 'budget' || error.code === 'timeout')) {
-        return finishModelBudgetPartial(resolved, auditId, stage, lease.leaseToken, state.run.coverage as AuditSourceCoverage, error)
+        return finishModelBudgetPartial(
+          resolved,
+          auditId,
+          stage,
+          lease.leaseToken,
+          state.run.coverage as AuditSourceCoverage,
+          error,
+        )
       }
       log('error', 'stage.failed', { auditId, stage, ...auditErrorLogFields(error) })
       throw error
@@ -244,20 +326,46 @@ export async function executeAuditStage(auditId: string, stage: PipelineStage, d
   try {
     decisions = exhausted
       ? []
-      : await withLeaseHeartbeat(resolved, auditId, stage, lease.leaseToken, () => runVerifier(resolved.model, state.candidates, state.evidence, Math.floor(budgets.modelTokens / 2), deadlineMs, auditId))
+      : await withLeaseHeartbeat(resolved, auditId, stage, lease.leaseToken, () =>
+          runVerifier(
+            resolved.model,
+            state.candidates,
+            state.evidence,
+            Math.floor(budgets.modelTokens / 2),
+            deadlineMs,
+            auditId,
+          ),
+        )
   } catch (error) {
-    if (error instanceof AuditModelRateLimitError) return deferRateLimitedStage(resolved, auditId, stage, lease.leaseToken, error, deadlineMs)
+    if (error instanceof AuditModelRateLimitError)
+      return deferRateLimitedStage(resolved, auditId, stage, lease.leaseToken, error, deadlineMs)
     if (error instanceof AuditModelError && (error.code === 'budget' || error.code === 'timeout')) {
-      return finishModelBudgetPartial(resolved, auditId, stage, lease.leaseToken, state.run.coverage as AuditSourceCoverage, error)
+      return finishModelBudgetPartial(
+        resolved,
+        auditId,
+        stage,
+        lease.leaseToken,
+        state.run.coverage as AuditSourceCoverage,
+        error,
+      )
     }
     log('error', 'stage.failed', { auditId, stage, ...auditErrorLogFields(error) })
     throw error
   }
   const findings = admitAuditFindings(state.candidates, state.evidence, decisions)
-  const coverage = exhausted ? partialCoverage(state.run.coverage as AuditSourceCoverage) : state.run.coverage as AuditSourceCoverage
+  const coverage = exhausted
+    ? partialCoverage(state.run.coverage as AuditSourceCoverage)
+    : (state.run.coverage as AuditSourceCoverage)
   const finalization = await resolved.store.finalizeAudit(auditId, lease.leaseToken, findings, coverage)
-  const status = finalization.status === 'unchanged' ? 'terminal' : persisted(finalization.status, ['completed', 'partial'])
-  log('info', 'stage.completed', { auditId, stage, persistenceStatus: status, decisionCount: decisions.length, findingCount: findings.length })
+  const status =
+    finalization.status === 'unchanged' ? 'terminal' : persisted(finalization.status, ['completed', 'partial'])
+  log('info', 'stage.completed', {
+    auditId,
+    stage,
+    persistenceStatus: status,
+    decisionCount: decisions.length,
+    findingCount: findings.length,
+  })
   return { status, count: findings.length }
 }
 
@@ -280,16 +388,26 @@ export async function executeAuditPipeline(auditId: string, dependencies?: Pipel
           if (!(error instanceof AuditStageRateLimitedError)) throw error
           if (rateLimitRetries >= 3) {
             const finished = await resolvedStore.finishAuditModelRateLimited(auditId)
-            log('warn', 'run.partial', { auditId, stage, reason: 'model_rate_limit_retries_exhausted', persistenceStatus: finished.status })
+            log('warn', 'run.partial', {
+              auditId,
+              stage,
+              reason: 'model_rate_limit_retries_exhausted',
+              persistenceStatus: finished.status,
+            })
             return
           }
           rateLimitRetries += 1
-          await (dependencies?.wait || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))))(error.retryAfterMs)
+          await (dependencies?.wait || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))))(
+            error.retryAfterMs,
+          )
         }
       }
       if (stage === 'critic') {
         const delay = dependencies?.interStageDelayMs ?? auditModelInterStageDelay()
-        if (delay > 0) await (dependencies?.wait || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))))(delay)
+        if (delay > 0)
+          await (dependencies?.wait || ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds))))(
+            delay,
+          )
       }
     }
     log('info', 'run.completed', { auditId })

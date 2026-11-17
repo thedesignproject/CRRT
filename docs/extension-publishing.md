@@ -18,12 +18,12 @@ extension `kckiejblkmbmdappaofepmbnpbejomon`.
    Rotate the key in Google Cloud and replace this secret when needed.
 3. Configure these repository Actions variables:
 
-   | Variable | Value |
-   | --- | --- |
-   | `CWS_PUBLISHER_ID` | `ca1d74b5-f59b-4c6a-8a37-af60ce24d29f` |
-   | `CWS_EXTENSION_ID` | `kckiejblkmbmdappaofepmbnpbejomon` |
+   | Variable              | Value                                              |
+   | --------------------- | -------------------------------------------------- |
+   | `CWS_PUBLISHER_ID`    | `ca1d74b5-f59b-4c6a-8a37-af60ce24d29f`             |
+   | `CWS_EXTENSION_ID`    | `kckiejblkmbmdappaofepmbnpbejomon`                 |
    | `CWS_SERVICE_ACCOUNT` | `crrt-service@crrt-512315.iam.gserviceaccount.com` |
-   | `CRRT_SUPABASE_URL` | Production Supabase project origin |
+   | `CRRT_SUPABASE_URL`   | Production Supabase project origin                 |
 
 4. Set Actions secret `CRRT_SUPABASE_ANON_KEY` to the production Supabase
    **publishable or anon key**. It is bundled into the extension; never use a

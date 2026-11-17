@@ -30,15 +30,24 @@ async function transaction<T>(mode: IDBTransactionMode, operation: (store: IDBOb
     const request = operation(tx.objectStore(STORE))
     /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB requests */
     request.onerror = () => reject(request.error ?? new Error('Local recording storage failed.'))
-    tx.oncomplete = () => { db.close(); resolve(request.result) }
-    tx.onabort = () => { db.close(); reject(new Error('Local recording storage was interrupted.')) }
+    tx.oncomplete = () => {
+      db.close()
+      resolve(request.result)
+    }
+    tx.onabort = () => {
+      db.close()
+      reject(new Error('Local recording storage was interrupted.'))
+    }
     /* v8 ignore next -- browsers attach the underlying DOMException to failed IDB transactions */
     tx.onerror = () => reject(tx.error ?? new Error('Local recording storage failed.'))
   })
 }
 
 export function saveLocalRecording(recording: LocalRecording) {
-  if (!hasIndexedDb()) { memory.set(recording.id, recording); return Promise.resolve(recording.id) }
+  if (!hasIndexedDb()) {
+    memory.set(recording.id, recording)
+    return Promise.resolve(recording.id)
+  }
   return transaction('readwrite', (store) => store.put(recording))
 }
 
@@ -55,6 +64,9 @@ export async function listLocalRecordings() {
 }
 
 export function deleteLocalRecording(id: string) {
-  if (!hasIndexedDb()) { memory.delete(id); return Promise.resolve(undefined) }
+  if (!hasIndexedDb()) {
+    memory.delete(id)
+    return Promise.resolve(undefined)
+  }
   return transaction('readwrite', (store) => store.delete(id))
 }

@@ -25,7 +25,14 @@ export type AuditModelFailureContext = {
 }
 
 export interface AuditModel {
-  generate<T>(stage: AuditModelStage, input: unknown, schema: ZodType<T>, tokenBudget?: number, deadlineMs?: number, runContext?: AuditModelRunContext): Promise<T>
+  generate<T>(
+    stage: AuditModelStage,
+    input: unknown,
+    schema: ZodType<T>,
+    tokenBudget?: number,
+    deadlineMs?: number,
+    runContext?: AuditModelRunContext,
+  ): Promise<T>
 }
 
 export class AuditModelError extends Error {
@@ -39,7 +46,10 @@ export class AuditModelError extends Error {
 }
 
 export class AuditModelRateLimitError extends AuditModelError {
-  constructor(public readonly retryAfterMs: number, context?: AuditModelFailureContext) {
+  constructor(
+    public readonly retryAfterMs: number,
+    context?: AuditModelFailureContext,
+  ) {
     super('rate_limit', context)
     this.name = 'AuditModelRateLimitError'
   }
@@ -63,32 +73,48 @@ const criticCandidateSchema = auditCandidateSchema.superRefine((candidate, conte
   }
 })
 
-const criticOutputSchema = z.object({
-  candidates: z.array(criticCandidateSchema).max(12),
-}).strict().superRefine((output, context) => {
-  if (!uniqueValues(output.candidates.map((candidate) => candidate.id))) {
-    context.addIssue({ code: 'custom', path: ['candidates'], message: 'Candidate IDs must be unique.' })
-  }
-})
+const criticOutputSchema = z
+  .object({
+    candidates: z.array(criticCandidateSchema).max(12),
+  })
+  .strict()
+  .superRefine((output, context) => {
+    if (!uniqueValues(output.candidates.map((candidate) => candidate.id))) {
+      context.addIssue({ code: 'custom', path: ['candidates'], message: 'Candidate IDs must be unique.' })
+    }
+  })
 
-const verifierOutputSchema = z.object({
-  decisions: z.array(z.object({
-    candidateId: z.string().min(1),
-    admitted: z.boolean(),
-    contradictions: z.array(z.string().min(1)).max(10),
-  }).strict()).max(12),
-}).strict().superRefine((output, context) => {
-  if (!uniqueValues(output.decisions.map((decision) => decision.candidateId))) {
-    context.addIssue({ code: 'custom', path: ['decisions'], message: 'Candidate decisions must be unique.' })
-  }
-})
+const verifierOutputSchema = z
+  .object({
+    decisions: z
+      .array(
+        z
+          .object({
+            candidateId: z.string().min(1),
+            admitted: z.boolean(),
+            contradictions: z.array(z.string().min(1)).max(10),
+          })
+          .strict(),
+      )
+      .max(12),
+  })
+  .strict()
+  .superRefine((output, context) => {
+    if (!uniqueValues(output.decisions.map((decision) => decision.candidateId))) {
+      context.addIssue({ code: 'custom', path: ['decisions'], message: 'Candidate decisions must be unique.' })
+    }
+  })
 
 function verifierSchemaFor(candidates: AuditCandidate[]) {
   return verifierOutputSchema.superRefine((output, context) => {
     const expected = candidates.map((candidate) => candidate.id)
     const actual = output.decisions.map((decision) => decision.candidateId)
     if (actual.length !== expected.length || actual.some((id, index) => id !== expected[index])) {
-      context.addIssue({ code: 'custom', path: ['decisions'], message: 'Decisions must match candidate IDs exactly and in order.' })
+      context.addIssue({
+        code: 'custom',
+        path: ['decisions'],
+        message: 'Decisions must match candidate IDs exactly and in order.',
+      })
     }
   })
 }
@@ -96,16 +122,18 @@ function verifierSchemaFor(candidates: AuditCandidate[]) {
 const outputExamples = {
   critic: {
     populated: criticOutputSchema.parse({
-      candidates: [{
-        id: 'candidate-example-1',
-        kind: 'problem',
-        title: 'Primary action lacks an accessible name',
-        summary: 'The observable button has no accessible name.',
-        impact: 'high',
-        confidence: 0.96,
-        evidenceIds: ['evidence-example-1'],
-        recommendation: 'Give the button a persistent accessible name.',
-      }],
+      candidates: [
+        {
+          id: 'candidate-example-1',
+          kind: 'problem',
+          title: 'Primary action lacks an accessible name',
+          summary: 'The observable button has no accessible name.',
+          impact: 'high',
+          confidence: 0.96,
+          evidenceIds: ['evidence-example-1'],
+          recommendation: 'Give the button a persistent accessible name.',
+        },
+      ],
     }),
     empty: criticOutputSchema.parse({ candidates: [] }),
   },
@@ -166,18 +194,24 @@ function outputContract<T>(stage: AuditModelStage, schema: ZodType<T>) {
 }
 
 function requestId(response: Response) {
-  return response.headers.get('x-ai-gateway-request-id')
-    || response.headers.get('x-request-id')
-    || response.headers.get('x-vercel-id')
-    || response.headers.get('cf-ray')
-    || undefined
+  return (
+    response.headers.get('x-ai-gateway-request-id') ||
+    response.headers.get('x-request-id') ||
+    response.headers.get('x-vercel-id') ||
+    response.headers.get('cf-ray') ||
+    undefined
+  )
 }
 
 async function providerFailureContext(response: Response, context: AuditModelFailureContext) {
   let providerCode: string | undefined
   let providerMessage: string | undefined
   try {
-    const body = await response.json() as { code?: unknown; message?: unknown; error?: { code?: unknown; message?: unknown } }
+    const body = (await response.json()) as {
+      code?: unknown
+      message?: unknown
+      error?: { code?: unknown; message?: unknown }
+    }
     const code = body.error?.code ?? body.code
     const message = body.error?.message ?? body.message
     providerCode = typeof code === 'string' ? code : undefined
@@ -204,23 +238,44 @@ function reportModelFailure(runContext: AuditModelRunContext | undefined, error:
 }
 
 export class OpenAiCompatibleAuditModel implements AuditModel {
-  async generate<T>(stage: AuditModelStage, input: unknown, schema: ZodType<T>, tokenBudget?: number, deadlineMs?: number, runContext?: AuditModelRunContext): Promise<T> {
+  async generate<T>(
+    stage: AuditModelStage,
+    input: unknown,
+    schema: ZodType<T>,
+    tokenBudget?: number,
+    deadlineMs?: number,
+    runContext?: AuditModelRunContext,
+  ): Promise<T> {
     let config
     try {
       config = auditModelConfig(process.env, stage)
     } catch {
-      const error = new AuditModelError('configuration', { auditId: runContext?.auditId, stage, reason: 'invalid_configuration' })
+      const error = new AuditModelError('configuration', {
+        auditId: runContext?.auditId,
+        stage,
+        reason: 'invalid_configuration',
+      })
       reportModelFailure(runContext, error)
       throw error
     }
     const inputJson = JSON.stringify(input)
     if (inputJson.length > 32_000) {
-      const error = new AuditModelError('budget', { auditId: runContext?.auditId, stage, model: config.model, reason: 'input_too_large' })
+      const error = new AuditModelError('budget', {
+        auditId: runContext?.auditId,
+        stage,
+        model: config.model,
+        reason: 'input_too_large',
+      })
       reportModelFailure(runContext, error)
       throw error
     }
     const contract = outputContract(stage, schema)
-    let lastError = new AuditModelError('provider', { auditId: runContext?.auditId, stage, model: config.model, reason: 'no_attempt' })
+    let lastError = new AuditModelError('provider', {
+      auditId: runContext?.auditId,
+      stage,
+      model: config.model,
+      reason: 'no_attempt',
+    })
     let remainingTokens = Math.max(config.attempts, Math.min(tokenBudget ?? config.maxTokens, config.maxTokens))
     for (let attempt = 0; attempt < config.attempts; attempt += 1) {
       const remainingMs = deadlineMs === undefined ? config.timeoutMs : deadlineMs - Date.now()
@@ -254,7 +309,9 @@ export class OpenAiCompatibleAuditModel implements AuditModel {
             },
             messages: [
               { role: 'system', content: contract.systemPrompt },
-              ...(attempt ? [{ role: 'system', content: 'The prior response was invalid. Follow the schema exactly.' }] : []),
+              ...(attempt
+                ? [{ role: 'system', content: 'The prior response was invalid. Follow the schema exactly.' }]
+                : []),
               { role: 'user', content: inputJson },
             ],
             max_completion_tokens: attemptTokens,
@@ -272,10 +329,14 @@ export class OpenAiCompatibleAuditModel implements AuditModel {
           reportModelFailure(runContext, lastError)
           continue
         }
-        const body = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> }
+        const body = (await response.json()) as { choices?: Array<{ message?: { content?: unknown } }> }
         const content = body.choices?.[0]?.message?.content
         if (typeof content !== 'string') {
-          lastError = new AuditModelError('invalid_output', { ...attemptContext, reason: 'missing_content', ...(requestId(response) ? { requestId: requestId(response) } : {}) })
+          lastError = new AuditModelError('invalid_output', {
+            ...attemptContext,
+            reason: 'missing_content',
+            ...(requestId(response) ? { requestId: requestId(response) } : {}),
+          })
           reportModelFailure(runContext, lastError)
           continue
         }
@@ -283,19 +344,31 @@ export class OpenAiCompatibleAuditModel implements AuditModel {
         try {
           decoded = JSON.parse(content)
         } catch {
-          lastError = new AuditModelError('invalid_output', { ...attemptContext, reason: 'invalid_json', ...(requestId(response) ? { requestId: requestId(response) } : {}) })
+          lastError = new AuditModelError('invalid_output', {
+            ...attemptContext,
+            reason: 'invalid_json',
+            ...(requestId(response) ? { requestId: requestId(response) } : {}),
+          })
           reportModelFailure(runContext, lastError)
           continue
         }
         const parsed = schema.safeParse(decoded)
         if (parsed.success) {
-          if (runContext) auditServerLog('info', 'model.completed', { auditId: runContext.auditId, stage, attempt: attempt + 1, model: config.model })
+          if (runContext)
+            auditServerLog('info', 'model.completed', {
+              auditId: runContext.auditId,
+              stage,
+              attempt: attempt + 1,
+              model: config.model,
+            })
           return parsed.data
         }
         const validationContext: AuditModelFailureContext = {
           ...attemptContext,
           reason: 'schema_validation',
-          validationIssues: parsed.error.issues.slice(0, 10).map((issue) => `${issue.path.join('.') || '$'}:${issue.code}`),
+          validationIssues: parsed.error.issues
+            .slice(0, 10)
+            .map((issue) => `${issue.path.join('.') || '$'}:${issue.code}`),
         }
         const validationRequestId = requestId(response)
         if (validationRequestId) validationContext.requestId = validationRequestId
@@ -303,13 +376,14 @@ export class OpenAiCompatibleAuditModel implements AuditModel {
         reportModelFailure(runContext, lastError)
       } catch (error) {
         if (error instanceof AuditModelRateLimitError) throw error
-        lastError = error instanceof DOMException && error.name === 'TimeoutError'
-          ? new AuditModelError('timeout', { ...attemptContext, reason: 'request_timeout' })
-          : new AuditModelError('provider', {
-              ...attemptContext,
-              reason: 'network_error',
-              ...(error instanceof Error ? { providerMessage: error.message } : {}),
-            })
+        lastError =
+          error instanceof DOMException && error.name === 'TimeoutError'
+            ? new AuditModelError('timeout', { ...attemptContext, reason: 'request_timeout' })
+            : new AuditModelError('provider', {
+                ...attemptContext,
+                reason: 'network_error',
+                ...(error instanceof Error ? { providerMessage: error.message } : {}),
+              })
         reportModelFailure(runContext, lastError)
       }
     }
@@ -320,18 +394,21 @@ export class OpenAiCompatibleAuditModel implements AuditModel {
 const modelInputTargetChars = 30_000
 
 function compactEvidenceItem(item: AuditEvidence) {
-  const provenance = item.provenance && Object.fromEntries(Object.entries(item.provenance).filter(([key]) => key !== 'target'))
+  const provenance =
+    item.provenance && Object.fromEntries(Object.entries(item.provenance).filter(([key]) => key !== 'target'))
   return {
     ...item,
     ...(provenance ? { provenance } : {}),
-    ...(item.capture ? {
-      capture: {
-        ...item.capture,
-        ...(typeof item.capture.textExcerpt === 'string'
-          ? { textExcerpt: item.capture.textExcerpt.slice(0, 2_000) }
-          : {}),
-      },
-    } : {}),
+    ...(item.capture
+      ? {
+          capture: {
+            ...item.capture,
+            ...(typeof item.capture.textExcerpt === 'string'
+              ? { textExcerpt: item.capture.textExcerpt.slice(0, 2_000) }
+              : {}),
+          },
+        }
+      : {}),
   }
 }
 
@@ -360,12 +437,20 @@ function selectEvidenceForModel(
   return { evidence: selected, omittedRequiredIds: [...requiredIds].filter((id) => !includedIds.has(id)) }
 }
 
-export async function runCritic(model: AuditModel, evidence: AuditEvidence[], tokenBudget?: number, deadlineMs?: number, auditId?: string): Promise<AuditCandidate[]> {
+export async function runCritic(
+  model: AuditModel,
+  evidence: AuditEvidence[],
+  tokenBudget?: number,
+  deadlineMs?: number,
+  auditId?: string,
+): Promise<AuditCandidate[]> {
   const input = selectEvidenceForModel(evidence, {})
   const payload = { evidence: input.evidence }
-  return (await (auditId
-    ? model.generate('critic', payload, criticOutputSchema, tokenBudget, deadlineMs, { auditId })
-    : model.generate('critic', payload, criticOutputSchema, tokenBudget, deadlineMs))).candidates
+  return (
+    await (auditId
+      ? model.generate('critic', payload, criticOutputSchema, tokenBudget, deadlineMs, { auditId })
+      : model.generate('critic', payload, criticOutputSchema, tokenBudget, deadlineMs))
+  ).candidates
 }
 
 export async function runVerifier(
@@ -380,21 +465,31 @@ export async function runVerifier(
   const selected = selectEvidenceForModel(evidence, { candidates }, requiredIds)
   if (selected.omittedRequiredIds.length) {
     throw new AuditModelError('budget', {
-      auditId, stage: 'verifier', reason: 'required_evidence_exceeds_input_limit',
+      auditId,
+      stage: 'verifier',
+      reason: 'required_evidence_exceeds_input_limit',
       validationIssues: selected.omittedRequiredIds.slice(0, 10),
     })
   }
   const input = { candidates, evidence: selected.evidence }
   const schema = verifierSchemaFor(candidates)
-  return (await (auditId
-    ? model.generate('verifier', input, schema, tokenBudget, deadlineMs, { auditId })
-    : model.generate('verifier', input, schema, tokenBudget, deadlineMs))).decisions
+  return (
+    await (auditId
+      ? model.generate('verifier', input, schema, tokenBudget, deadlineMs, { auditId })
+      : model.generate('verifier', input, schema, tokenBudget, deadlineMs))
+  ).decisions
 }
 
 export class FakeAuditModel implements AuditModel {
   constructor(private readonly outputs: { critic: unknown; verifier: unknown }) {}
 
-  async generate<T>(stage: AuditModelStage, _input: unknown, schema: ZodType<T>, _tokenBudget?: number, _deadlineMs?: number) {
+  async generate<T>(
+    stage: AuditModelStage,
+    _input: unknown,
+    schema: ZodType<T>,
+    _tokenBudget?: number,
+    _deadlineMs?: number,
+  ) {
     return schema.parse(this.outputs[stage])
   }
 }

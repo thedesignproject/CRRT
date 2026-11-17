@@ -27,11 +27,7 @@ export function PinMarker({
 
   const resolvedShadow = '0 0 0 1.5px #6B6560, 0 1px 3px rgba(10, 10, 10, 0.2)'
 
-  const boxShadow = resolved
-    ? resolvedShadow
-    : expanded
-      ? expandedShadow
-      : undefined  // animation keyframe owns box-shadow at rest
+  const boxShadow = resolved ? resolvedShadow : expanded ? expandedShadow : undefined // animation keyframe owns box-shadow at rest
 
   const dotSize = expanded ? 22 : 12
   const numberColor = resolved ? '#6B6560' : '#FFFFFF'
@@ -85,7 +81,8 @@ export function PinMarker({
           color: numberColor,
           textShadow: resolved || !expanded ? 'none' : '0 1px 1px rgba(10, 10, 10, 0.35)',
           animation: animatedAtRest ? 'crrt-pin-seed-bounce 2400ms ease-in-out infinite' : undefined,
-          transition: 'width 220ms cubic-bezier(0.16, 1, 0.3, 1), height 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), background 220ms ease',
+          transition:
+            'width 220ms cubic-bezier(0.16, 1, 0.3, 1), height 220ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1), background 220ms ease',
         }}
       >
         {expanded && typeof number === 'number' && number > 0 ? number : ''}

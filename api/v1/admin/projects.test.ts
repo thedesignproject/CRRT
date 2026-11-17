@@ -2,9 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../_lib/auth.js', () => ({ requireSuperAdmin: vi.fn() }))
 vi.mock('../../_lib/store.js', () => ({
-  ADMIN_PROJECT_SORTS: [
-    'lastCommentAt', 'createdAt', 'commentCount', 'feedbackShareCount', 'commentedUrlCount',
-  ],
+  ADMIN_PROJECT_SORTS: ['lastCommentAt', 'createdAt', 'commentCount', 'feedbackShareCount', 'commentedUrlCount'],
   listProjectsWithComments: vi.fn(),
 }))
 
@@ -17,10 +15,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -65,7 +73,10 @@ describe('api/v1/admin/projects', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body).toEqual(page)
     expect(listProjectsWithComments).toHaveBeenCalledWith({
-      limit: 50, cursor: undefined, sort: 'lastCommentAt', direction: 'desc',
+      limit: 50,
+      cursor: undefined,
+      sort: 'lastCommentAt',
+      direction: 'desc',
     })
 
     vi.mocked(listProjectsWithComments).mockRejectedValueOnce(new Error('boom'))
@@ -77,7 +88,10 @@ describe('api/v1/admin/projects', () => {
   it('validates pagination and sorting parameters', async () => {
     vi.mocked(requireSuperAdmin).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     for (const query of [
-      { limit: '101' }, { cursor: ['x'] }, { sort: 'nope' }, { sort: ['createdAt'] },
+      { limit: '101' },
+      { cursor: ['x'] },
+      { sort: 'nope' },
+      { sort: ['createdAt'] },
       { direction: 'sideways' },
     ]) {
       const res = mockRes()

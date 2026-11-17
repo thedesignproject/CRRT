@@ -3,7 +3,21 @@ import type { DocumentResult, DocumentView } from '../../../shared/documents'
 import { documentRequest, documentMessage } from './client'
 import { Spinner } from '../components/primitives'
 
-export function DocumentHistory({ document, apiBase, session, disabled, onRestore, onError }: { document: DocumentView; apiBase: string; session: string; disabled: boolean; onRestore: (revision: number) => void; onError?: (error: unknown) => void }) {
+export function DocumentHistory({
+  document,
+  apiBase,
+  session,
+  disabled,
+  onRestore,
+  onError,
+}: {
+  document: DocumentView
+  apiBase: string
+  session: string
+  disabled: boolean
+  onRestore: (revision: number) => void
+  onError?: (error: unknown) => void
+}) {
   const [data, setData] = useState<DocumentResult>(),
     [comparison, setComparison] = useState<DocumentResult['comparison']>(),
     [error, setError] = useState(''),
@@ -64,9 +78,14 @@ export function DocumentHistory({ document, apiBase, session, disabled, onRestor
           <Spinner />
         </div>
       )}
-      {data?.revisions?.length === 0 && <p className="text-sm text-muted-foreground">Publish the first revision to start this document’s history.</p>}
+      {data?.revisions?.length === 0 && (
+        <p className="text-sm text-muted-foreground">Publish the first revision to start this document’s history.</p>
+      )}
       {data?.revisions?.map((revision) => (
-        <div key={revision.number} className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-4">
+        <div
+          key={revision.number}
+          className="flex flex-wrap items-center justify-between gap-4 border-b border-border py-4"
+        >
           <div className="min-w-0">
             <p className="text-sm font-medium">
               Revision {revision.number} · {revision.summary}
@@ -77,11 +96,21 @@ export function DocumentHistory({ document, apiBase, session, disabled, onRestor
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="button" className="dashboard-bulk-secondary" disabled={busy} onClick={() => void load('compare', { from: revision.number })}>
+            <button
+              type="button"
+              className="dashboard-bulk-secondary"
+              disabled={busy}
+              onClick={() => void load('compare', { from: revision.number })}
+            >
               Compare with draft
             </button>
             {document.canEdit && !document.archived && (
-              <button type="button" className="dashboard-bulk-secondary" disabled={disabled || busy} onClick={() => onRestore(revision.number)}>
+              <button
+                type="button"
+                className="dashboard-bulk-secondary"
+                disabled={disabled || busy}
+                onClick={() => onRestore(revision.number)}
+              >
                 Restore to draft
               </button>
             )}
@@ -89,7 +118,12 @@ export function DocumentHistory({ document, apiBase, session, disabled, onRestor
         </div>
       ))}
       {data?.nextOffset != null && (
-        <button type="button" className="dashboard-bulk-secondary" disabled={busy} onClick={() => void load('history', { offset: data.nextOffset })}>
+        <button
+          type="button"
+          className="dashboard-bulk-secondary"
+          disabled={busy}
+          onClick={() => void load('history', { offset: data.nextOffset })}
+        >
           Load older revisions
         </button>
       )}

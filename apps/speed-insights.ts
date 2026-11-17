@@ -6,6 +6,6 @@ if (import.meta.env.PROD && !import.meta.env.SSR && location.hostname === 'crrt.
   injectSpeedInsights({
     framework: 'react',
     // Match our analytics privacy policy: omit invite tokens, queries and hashes.
-    beforeSend: event => ({ ...event, url: event.url.split(/[?#]/, 1)[0] }),
+    beforeSend: (event) => ({ ...event, url: event.url.split(/[?#]/, 1)[0] }),
   })
 }

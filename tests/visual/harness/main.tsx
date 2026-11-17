@@ -32,8 +32,12 @@ if (path.startsWith('/widget-agent')) {
 } else {
   if (path.startsWith('/resources/')) {
     const { resources } = await import('../../../apps/landing/resources/content')
-    const resource = resources.find(r => `/resources/${r.slug}` === path)
-    const data = document.createElement('script'); data.id = 'resource-page-data'; data.type = 'application/json'; data.textContent = JSON.stringify(resource); document.head.append(data)
+    const resource = resources.find((r) => `/resources/${r.slug}` === path)
+    const data = document.createElement('script')
+    data.id = 'resource-page-data'
+    data.type = 'application/json'
+    data.textContent = JSON.stringify(resource)
+    document.head.append(data)
   }
   const { App } = await import('../../../apps/landing/App')
   createRoot(document.getElementById('root')!).render(<App />)

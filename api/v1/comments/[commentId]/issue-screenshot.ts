@@ -16,10 +16,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!id || !token) return jsonError(req, res, 404, 'Screenshot not found')
   try {
     const db = getServiceSupabase()
-    const { data, error } = await db.from('comments').select('id,project_id,screenshot_storage_path,github_issue_url,comment_external_work(state,external_url)').eq('id', id).maybeSingle()
+    const { data, error } = await db
+      .from('comments')
+      .select('id,project_id,screenshot_storage_path,github_issue_url,comment_external_work(state,external_url)')
+      .eq('id', id)
+      .maybeSingle()
     if (error) throw new Error('Screenshot lookup failed')
-    const linked = data?.github_issue_url || data?.comment_external_work?.some((work) => work.state === 'created' && work.external_url)
-    if (!data?.screenshot_storage_path || !linked || !verifyIssueScreenshotToken(token, data.project_id, data.id, data.screenshot_storage_path)) return jsonError(req, res, 404, 'Screenshot not found')
+    const linked =
+      data?.github_issue_url ||
+      data?.comment_external_work?.some((work) => work.state === 'created' && work.external_url)
+    if (
+      !data?.screenshot_storage_path ||
+      !linked ||
+      !verifyIssueScreenshotToken(token, data.project_id, data.id, data.screenshot_storage_path)
+    )
+      return jsonError(req, res, 404, 'Screenshot not found')
     const signed = await db.storage.from('extension-feedback-images').createSignedUrl(data.screenshot_storage_path, 300)
     if (signed.error) throw new Error('Screenshot signing failed')
     res.setHeader('Location', signed.data.signedUrl)

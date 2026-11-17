@@ -9,12 +9,20 @@ export function Closing() {
     <section className="landing-closing">
       <div>
         <p>Keep the comment attached to the outcome.</p>
-        <h2>Your next fix<br />starts with a comment.</h2>
+        <h2>
+          Your next fix
+          <br />
+          starts with a comment.
+        </h2>
       </div>
       <div>
         <CTAGroup>
-          <a className="ds-button ds-button-primary ds-button-lg" href={DASHBOARD_HREF}>Get started</a>
-          <a className="ds-button ds-button-secondary ds-button-lg" href={CHROME_HREF}><ChromeLogo size={20} /> Add to Chrome</a>
+          <a className="ds-button ds-button-primary ds-button-lg" href={DASHBOARD_HREF}>
+            Get started
+          </a>
+          <a className="ds-button ds-button-secondary ds-button-lg" href={CHROME_HREF}>
+            <ChromeLogo size={20} /> Add to Chrome
+          </a>
         </CTAGroup>
         <small>14-day Cloud trial. Card required.</small>
       </div>

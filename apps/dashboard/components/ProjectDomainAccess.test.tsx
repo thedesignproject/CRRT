@@ -11,8 +11,11 @@ const props = { apiBase: '/api', accessToken: 'token', projectKey: 'p', onMember
 beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(domainAccessApi).mockReturnValue(api as never)
-  api.domains.mockResolvedValue([]); api.requests.mockResolvedValue([])
-  api.addDomain.mockResolvedValue({}); api.removeDomain.mockResolvedValue({}); api.review.mockResolvedValue({})
+  api.domains.mockResolvedValue([])
+  api.requests.mockResolvedValue([])
+  api.addDomain.mockResolvedValue({})
+  api.removeDomain.mockResolvedValue({})
+  api.review.mockResolvedValue({})
 })
 it('loads empty states and adds/removes domains using keyboard-accessible controls', async () => {
   const user = userEvent.setup()
@@ -36,7 +39,7 @@ it('defaults to member, allows selecting guest/admin and reviews the displayed a
   render(<ProjectDomainAccess {...props} />)
   const role = await screen.findByLabelText('Access role for person@company.com')
   expect(role).toHaveValue('member')
-  expect(Array.from((role as HTMLSelectElement).options).map(o => o.value)).toEqual(['member', 'guest', 'admin'])
+  expect(Array.from((role as HTMLSelectElement).options).map((o) => o.value)).toEqual(['member', 'guest', 'admin'])
   fireEvent.change(role, { target: { value: 'guest' } })
   fireEvent.click(screen.getByRole('button', { name: 'Accept person@company.com' }))
   await waitFor(() => expect(api.review).toHaveBeenCalledWith('p', 'r', 'approved', 'guest', 2))
@@ -65,7 +68,11 @@ it('retains invalid domain input, shows stale review errors and allows refresh',
 it('disables all mutations while an action is pending and isolates project switching', async () => {
   let resolve!: (value: object) => void
   api.requests.mockResolvedValue([request])
-  api.review.mockReturnValue(new Promise(r => { resolve = r }))
+  api.review.mockReturnValue(
+    new Promise((r) => {
+      resolve = r
+    }),
+  )
   const view = render(<ProjectDomainAccess key="p" {...props} />)
   await screen.findByText(request.email)
   fireEvent.click(screen.getByRole('button', { name: 'Deny person@company.com' }))
@@ -74,7 +81,9 @@ it('disables all mutations while an action is pending and isolates project switc
   api.requests.mockResolvedValue([])
   view.rerender(<ProjectDomainAccess key="next" {...props} projectKey="next" />)
   await screen.findByText('No pending access requests.')
-  await act(async () => { resolve({}) })
+  await act(async () => {
+    resolve({})
+  })
   expect(changed).not.toHaveBeenCalled()
   expect(api.domains).toHaveBeenLastCalledWith('next')
 })

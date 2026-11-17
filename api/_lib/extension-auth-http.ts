@@ -1,5 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { ExtensionAuthContractError, extensionIdFromOrigin, requireAllowedExtension } from './extension-auth-contracts.js'
+import {
+  ExtensionAuthContractError,
+  extensionIdFromOrigin,
+  requireAllowedExtension,
+} from './extension-auth-contracts.js'
 import { firstHeaderValue } from './http.js'
 
 export function setExtensionNoStore(res: VercelResponse) {

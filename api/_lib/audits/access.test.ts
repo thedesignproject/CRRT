@@ -10,7 +10,21 @@ import { getAuditAccessRow } from './store.js'
 import { hashAuditCapability } from './tokens.js'
 
 function response() {
-  return { statusCode: 200, body: undefined as unknown, status(code: number) { this.statusCode = code; return this }, json(value: unknown) { this.body = value; return this }, setHeader() { return this } }
+  return {
+    statusCode: 200,
+    body: undefined as unknown,
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(value: unknown) {
+      this.body = value
+      return this
+    },
+    setHeader() {
+      return this
+    },
+  }
 }
 
 beforeEach(() => {
@@ -21,7 +35,9 @@ beforeEach(() => {
   vi.mocked(hashAuditCapability).mockReturnValue('hash')
 })
 
-afterEach(() => { delete process.env.AUDIT_LOCAL_ACCESS_BYPASS })
+afterEach(() => {
+  delete process.env.AUDIT_LOCAL_ACCESS_BYPASS
+})
 
 describe('audit capability access', () => {
   it('returns 404 for unknown runs', async () => {
@@ -39,30 +55,50 @@ describe('audit capability access', () => {
     expect(res.statusCode).toBe(401)
     vi.mocked(requireUser).mockResolvedValueOnce(null)
     res = response()
-    expect(await requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id')).toBeNull()
+    expect(
+      await requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id'),
+    ).toBeNull()
     vi.mocked(requireProjectCapability).mockResolvedValueOnce(null)
     res = response()
-    expect(await requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id')).toBeNull()
+    expect(
+      await requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id'),
+    ).toBeNull()
     res = response()
-    await expect(requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id')).resolves.toEqual(row)
+    await expect(
+      requireAuditAccess({ headers: { authorization: 'Bearer token' } } as never, res as never, 'id'),
+    ).resolves.toEqual(row)
   })
 
   it('requires an unexpired anonymous capability header', async () => {
-    vi.mocked(getAuditAccessRow).mockResolvedValue({ owner_kind: 'anonymous', expires_at: new Date(Date.now() - 1).toISOString(), capability_token_hash: 'hash' })
+    vi.mocked(getAuditAccessRow).mockResolvedValue({
+      owner_kind: 'anonymous',
+      expires_at: new Date(Date.now() - 1).toISOString(),
+      capability_token_hash: 'hash',
+    })
     let res = response()
     expect(await requireAuditAccess({ headers: {} } as never, res as never, 'id')).toBeNull()
     expect(res.statusCode).toBe(410)
-    vi.mocked(getAuditAccessRow).mockResolvedValue({ owner_kind: 'anonymous', expires_at: new Date(Date.now() + 10_000).toISOString(), capability_token_hash: 'hash' })
+    vi.mocked(getAuditAccessRow).mockResolvedValue({
+      owner_kind: 'anonymous',
+      expires_at: new Date(Date.now() + 10_000).toISOString(),
+      capability_token_hash: 'hash',
+    })
     vi.mocked(hashAuditCapability).mockReturnValueOnce('wrong')
     res = response()
     expect(await requireAuditAccess({ headers: { 'x-audit-token': ['bad'] } } as never, res as never, 'id')).toBeNull()
     expect(res.statusCode).toBe(401)
     res = response()
-    await expect(requireAuditAccess({ headers: { 'x-audit-token': 'good' } } as never, res as never, 'id')).resolves.toMatchObject({ owner_kind: 'anonymous' })
+    await expect(
+      requireAuditAccess({ headers: { 'x-audit-token': 'good' } } as never, res as never, 'id'),
+    ).resolves.toMatchObject({ owner_kind: 'anonymous' })
   })
 
   it('allows unexpired anonymous reads only in explicitly enabled local development', async () => {
-    const row = { owner_kind: 'anonymous', expires_at: new Date(Date.now() + 10_000).toISOString(), capability_token_hash: 'hash' }
+    const row = {
+      owner_kind: 'anonymous',
+      expires_at: new Date(Date.now() + 10_000).toISOString(),
+      capability_token_hash: 'hash',
+    }
     vi.mocked(getAuditAccessRow).mockResolvedValue(row)
     process.env.AUDIT_LOCAL_ACCESS_BYPASS = 'true'
     await expect(requireAuditAccess({ headers: {} } as never, response() as never, 'id')).resolves.toEqual(row)

@@ -20,7 +20,11 @@ import { trustedUser } from '../../../../_lib/trusted-user.js'
 import { startMcpGithubFlow } from '../../../../_lib/mcp-github-flow.js'
 import handler from './install.js'
 import { requireUser } from '../../../../_lib/auth.js'
-import { buildGitHubAppInstallUrl, createGitHubAppInstallState, createGitHubAppReuseAuthState } from '../../../../_lib/github-app.js'
+import {
+  buildGitHubAppInstallUrl,
+  createGitHubAppInstallState,
+  createGitHubAppReuseAuthState,
+} from '../../../../_lib/github-app.js'
 import { getProjectMember, listGitHubUserInstallations } from '../../../../_lib/store.js'
 import { buildGitHubAuthorizeUrl } from '../../../../_lib/widget-github-auth.js'
 
@@ -29,17 +33,28 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 beforeEach(() => {
-  vi.mocked(trustedUser).mockReset(); vi.mocked(startMcpGithubFlow).mockReset()
+  vi.mocked(trustedUser).mockReset()
+  vi.mocked(startMcpGithubFlow).mockReset()
   vi.mocked(requireUser).mockReset()
   vi.mocked(buildGitHubAppInstallUrl).mockClear()
   vi.mocked(createGitHubAppInstallState).mockClear()
@@ -125,12 +140,14 @@ describe('api/v1/projects/[projectId]/github/install', () => {
   it('returns user-scoped existing installations with fresh project-bound OAuth URLs', async () => {
     vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
     vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' } as never)
-    vi.mocked(listGitHubUserInstallations).mockResolvedValue([{
-      id: 'opaque-ref',
-      githubAccountLogin: 'acme',
-      githubAccountType: 'Organization',
-      lastVerifiedAt: '2026-01-01T00:00:00.000Z',
-    }])
+    vi.mocked(listGitHubUserInstallations).mockResolvedValue([
+      {
+        id: 'opaque-ref',
+        githubAccountLogin: 'acme',
+        githubAccountType: 'Organization',
+        lastVerifiedAt: '2026-01-01T00:00:00.000Z',
+      },
+    ])
 
     const res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: { origin: 'https://app.example' } }, res)
@@ -143,11 +160,13 @@ describe('api/v1/projects/[projectId]/github/install', () => {
     })
     expect(buildGitHubAuthorizeUrl).toHaveBeenCalledWith('reuse-opaque-ref')
     expect(res.body).toMatchObject({
-      installations: [{
-        id: 'opaque-ref',
-        githubAccountLogin: 'acme',
-        authorizeUrl: 'https://github.com/login/oauth/authorize?state=reuse-opaque-ref',
-      }],
+      installations: [
+        {
+          id: 'opaque-ref',
+          githubAccountLogin: 'acme',
+          authorizeUrl: 'https://github.com/login/oauth/authorize?state=reuse-opaque-ref',
+        },
+      ],
     })
     expect(JSON.stringify(res.body)).not.toContain('installationId')
     expect(res.headers['Cache-Control']).toBe('no-store')
@@ -155,13 +174,18 @@ describe('api/v1/projects/[projectId]/github/install', () => {
 })
 
 it('binds installation and reuse browser states to a retrievable MCP flow', async () => {
-  vi.mocked(requireUser).mockResolvedValue({userId:'u',email:'a@b.c'})
-  vi.mocked(getProjectMember).mockResolvedValue({role:'admin'} as never)
-  vi.mocked(listGitHubUserInstallations).mockResolvedValue([{id:'installation'}] as never)
-  vi.mocked(trustedUser).mockReturnValue({userId:'u',email:'a@b.c',mcpConnectionId:'connection'})
-  vi.mocked(startMcpGithubFlow).mockResolvedValue({flowId:'flow',expiresAt:'later'})
-  const res=mockRes();await call({method:'GET',query:{projectId:'p'},headers:{}},res)
-  expect(res.body).toMatchObject({flowId:'flow',expiresAt:'later'})
-  expect(createGitHubAppInstallState).toHaveBeenCalledWith(expect.objectContaining({mcpFlow:{connectionId:'connection',requestKey:'flow'}}))
-  expect(createGitHubAppReuseAuthState).toHaveBeenCalledWith(expect.objectContaining({mcpFlow:{connectionId:'connection',requestKey:'flow'}}))
+  vi.mocked(requireUser).mockResolvedValue({ userId: 'u', email: 'a@b.c' })
+  vi.mocked(getProjectMember).mockResolvedValue({ role: 'admin' } as never)
+  vi.mocked(listGitHubUserInstallations).mockResolvedValue([{ id: 'installation' }] as never)
+  vi.mocked(trustedUser).mockReturnValue({ userId: 'u', email: 'a@b.c', mcpConnectionId: 'connection' })
+  vi.mocked(startMcpGithubFlow).mockResolvedValue({ flowId: 'flow', expiresAt: 'later' })
+  const res = mockRes()
+  await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
+  expect(res.body).toMatchObject({ flowId: 'flow', expiresAt: 'later' })
+  expect(createGitHubAppInstallState).toHaveBeenCalledWith(
+    expect.objectContaining({ mcpFlow: { connectionId: 'connection', requestKey: 'flow' } }),
+  )
+  expect(createGitHubAppReuseAuthState).toHaveBeenCalledWith(
+    expect.objectContaining({ mcpFlow: { connectionId: 'connection', requestKey: 'flow' } }),
+  )
 })

@@ -58,12 +58,12 @@ of the dashboard alone does not revoke a separately authorized MCP connection.
 
 ## Tools and limits
 
-| Tool | Inputs | Result |
-|---|---|---|
-| `list_projects` | Optional exact `name`, `limit`, `cursor` | Membership projects, feedback-read capability, next cursor |
-| `list_feedback` | `project: {id}` or `{name}`, optional review/implementation status, exact page URL, pagination | Authorized feedback summaries |
-| `get_feedback` | `projectId`, `feedbackId` | Text, attribution, target/anchor, statuses, timestamps, safe screenshot reference |
-| `get_handoff_context` | `projectId`, 1–20 distinct `feedbackIds` | Compact explicit selection grouped by page; no share creation |
+| Tool                  | Inputs                                                                                         | Result                                                                            |
+| --------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `list_projects`       | Optional exact `name`, `limit`, `cursor`                                                       | Membership projects, feedback-read capability, next cursor                        |
+| `list_feedback`       | `project: {id}` or `{name}`, optional review/implementation status, exact page URL, pagination | Authorized feedback summaries                                                     |
+| `get_feedback`        | `projectId`, `feedbackId`                                                                      | Text, attribution, target/anchor, statuses, timestamps, safe screenshot reference |
+| `get_handoff_context` | `projectId`, 1–20 distinct `feedbackIds`                                                       | Compact explicit selection grouped by page; no share creation                     |
 
 Lists default to 20 results, maximum 50. Cursors are bound to the user and
 filters. Status enums match CRRT; use `readyForAgent:true` for “Ready for Agent”, which excludes testing and completed work.
@@ -110,15 +110,15 @@ and component tests cover error paths and consent UI behavior.
 
 ## Stack and future deployment
 
-| Branch | PR base |
-|---|---|
-| `feat/mcp-schema` | `trunk` |
-| `feat/mcp-auth` | `feat/mcp-schema` |
-| `feat/mcp-connection` | `feat/mcp-auth` |
-| `feat/mcp-feedback-tools` | `feat/mcp-connection` |
-| `feat/mcp-context-tools` | `feat/mcp-feedback-tools` |
-| `feat/mcp-feedback-actions` | `feat/mcp-context-tools` |
-| `test/mcp-verification` | `feat/mcp-feedback-actions` |
+| Branch                      | PR base                     |
+| --------------------------- | --------------------------- |
+| `feat/mcp-schema`           | `trunk`                     |
+| `feat/mcp-auth`             | `feat/mcp-schema`           |
+| `feat/mcp-connection`       | `feat/mcp-auth`             |
+| `feat/mcp-feedback-tools`   | `feat/mcp-connection`       |
+| `feat/mcp-context-tools`    | `feat/mcp-feedback-tools`   |
+| `feat/mcp-feedback-actions` | `feat/mcp-context-tools`    |
+| `test/mcp-verification`     | `feat/mcp-feedback-actions` |
 
 Run the repo-local diff-coverage skill on every layer against its immediate base;
 both changed-line and changed-branch coverage must be 100%. Count all additions
@@ -353,7 +353,6 @@ The packaged smoke verifies metadata, the authentication challenge, OAuth,
 tool discovery, and an authenticated dashboard write through the built Node
 function using disposable local fixtures. It never targets production.
 
-
 For GitHub repository setup, `repository.installations` returns `flowId` and
 browser URLs bound to the current MCP connection, user and project. Open one URL
 in the system browser, then read `repository.completion` with `projectId` and
@@ -361,7 +360,6 @@ in the system browser, then read `repository.completion` with `projectId` and
 and short-lived installation proof needed by `repository.update`. No dashboard
 opener, copied credentials or popup message is required. The flow expires after
 ten minutes and results are encrypted at rest; another connection cannot read it.
-
 
 Cached recovery enforces the same Record enablement guard as fresh API reads,
 including before image renewal and before returning recovered context. Disabled

@@ -11,7 +11,7 @@ export function documentHtml(source: string) {
   return DOMPurify.sanitize(marked.parse(source, { async: false }), {
     USE_PROFILES: { html: true },
     FORBID_TAGS: ['img', 'style', 'form', 'input', 'button', 'video', 'audio'],
-    FORBID_ATTR: ['style', 'id', 'name', 'background']
+    FORBID_ATTR: ['style', 'id', 'name', 'background'],
   })
 }
 export function quoteMatches(source: string, anchor: DocumentQuote) {
@@ -21,7 +21,11 @@ export function quoteMatches(source: string, anchor: DocumentQuote) {
   const text = root.textContent!
   let matches = 0
   for (let index = text.indexOf(anchor.quote); index >= 0; index = text.indexOf(anchor.quote, index + 1)) {
-    if (text.slice(0, index).endsWith(anchor.prefix) && text.slice(index + anchor.quote.length).startsWith(anchor.suffix)) matches++
+    if (
+      text.slice(0, index).endsWith(anchor.prefix) &&
+      text.slice(index + anchor.quote.length).startsWith(anchor.suffix)
+    )
+      matches++
   }
   return matches === 1
 }
@@ -36,13 +40,36 @@ export function captureDocumentSelection(range: Range): DocumentSelection | unde
   before.setEnd(range.startContainer, range.startOffset)
   const start = before.toString().length,
     text = root.textContent!
-  const built = buildTextRangeAnchor(range, { getSelector: element => conversationSelector(element, '.document-prose'), url: window.location.href })!
+  const built = buildTextRangeAnchor(range, {
+    getSelector: (element) => conversationSelector(element, '.document-prose'),
+    url: window.location.href,
+  })!
   const point = {
-    x: (built.midpointClient.x + window.scrollX) / Math.max(document.documentElement.scrollWidth, window.innerWidth) * 100,
-    y: (built.midpointClient.y + window.scrollY) / Math.max(document.documentElement.scrollHeight, window.innerHeight) * 100,
+    x:
+      ((built.midpointClient.x + window.scrollX) / Math.max(document.documentElement.scrollWidth, window.innerWidth)) *
+      100,
+    y:
+      ((built.midpointClient.y + window.scrollY) /
+        Math.max(document.documentElement.scrollHeight, window.innerHeight)) *
+      100,
   }
-  const target = positionAt({ ...point, selector: built.anchor.containerSelector, url: window.location.href, targetType: 'text_range', anchor: built.anchor }, built.midpointClient.x, built.midpointClient.y)
-  return { quote, prefix: text.slice(Math.max(0, start - 64), start), suffix: text.slice(start + quote.length, start + quote.length + 64), selectionTarget: target }
+  const target = positionAt(
+    {
+      ...point,
+      selector: built.anchor.containerSelector,
+      url: window.location.href,
+      targetType: 'text_range',
+      anchor: built.anchor,
+    },
+    built.midpointClient.x,
+    built.midpointClient.y,
+  )
+  return {
+    quote,
+    prefix: text.slice(Math.max(0, start - 64), start),
+    suffix: text.slice(start + quote.length, start + quote.length + 64),
+    selectionTarget: target,
+  }
 }
 
 export function DocumentBody({ source }: { source: string }) {

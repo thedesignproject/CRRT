@@ -9,12 +9,16 @@ export function verifyShards(manifests: ShardManifest[]): string[] {
   const [first] = manifests
   const errors: string[] = []
   const indexes = new Set(manifests.map((m) => m.index))
-  for (let i = 1; i <= first.count; i += 1) if (!indexes.has(i)) errors.push(`missing manifest for shard ${i}/${first.count}`)
+  for (let i = 1; i <= first.count; i += 1)
+    if (!indexes.has(i)) errors.push(`missing manifest for shard ${i}/${first.count}`)
   const expected = JSON.stringify(first.all)
   for (const m of manifests) {
-    if (m.count !== first.count) errors.push(`shard ${m.index} saw ${m.count} shards, shard ${first.index} saw ${first.count}`)
-    if (m.mode !== first.mode) errors.push(`shard ${m.index} ran the ${m.mode} suite, shard ${first.index} ran the ${first.mode} suite`)
-    if (JSON.stringify(m.all) !== expected) errors.push(`shard ${m.index} saw a different test file list than shard ${first.index}`)
+    if (m.count !== first.count)
+      errors.push(`shard ${m.index} saw ${m.count} shards, shard ${first.index} saw ${first.count}`)
+    if (m.mode !== first.mode)
+      errors.push(`shard ${m.index} ran the ${m.mode} suite, shard ${first.index} ran the ${first.mode} suite`)
+    if (JSON.stringify(m.all) !== expected)
+      errors.push(`shard ${m.index} saw a different test file list than shard ${first.index}`)
   }
   const owner = new Map<string, number>()
   for (const m of manifests) {

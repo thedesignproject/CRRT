@@ -30,29 +30,55 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
   (handler as unknown as (req: unknown, res: unknown) => Promise<unknown>)(req, res)
 
 const integration = {
-  id: 'integration', projectKey: 'p', provider: 'jira' as const,
-  accessTokenCiphertext: 'ciphertext', refreshTokenCiphertext: 'refresh', tokenExpiresAt: null,
-  workspaceId: 'cloud', workspaceName: 'Acme Jira', containerId: '100', containerName: 'WEB · Website',
-  createdBy: 'u', createdAt: new Date(), updatedAt: new Date(),
+  id: 'integration',
+  projectKey: 'p',
+  provider: 'jira' as const,
+  accessTokenCiphertext: 'ciphertext',
+  refreshTokenCiphertext: 'refresh',
+  tokenExpiresAt: null,
+  workspaceId: 'cloud',
+  workspaceName: 'Acme Jira',
+  containerId: '100',
+  containerName: 'WEB · Website',
+  createdBy: 'u',
+  createdAt: new Date(),
+  updatedAt: new Date(),
 }
 const destination = {
-  id: 'cloud:100', cloudId: 'cloud', siteName: 'Acme Jira', siteUrl: 'https://acme.atlassian.net',
-  projectId: '100', projectKey: 'WEB', projectName: 'Website',
+  id: 'cloud:100',
+  cloudId: 'cloud',
+  siteName: 'Acme Jira',
+  siteUrl: 'https://acme.atlassian.net',
+  projectId: '100',
+  projectKey: 'WEB',
+  projectName: 'Website',
 }
 
 beforeEach(() => {
   vi.mocked(requireUser).mockReset().mockResolvedValue({ userId: 'u', email: 'u@example.com' })
-  vi.mocked(getProjectMember).mockReset().mockResolvedValue({ role: 'admin' } as never)
+  vi.mocked(getProjectMember)
+    .mockReset()
+    .mockResolvedValue({ role: 'admin' } as never)
   vi.mocked(getProjectIntegration).mockReset()
   vi.mocked(getJiraAccessToken).mockReset().mockResolvedValue('access')
   vi.mocked(getJiraDestinations).mockReset().mockResolvedValue([destination])
@@ -70,14 +96,22 @@ describe('Jira project integration API', () => {
 
     vi.mocked(getProjectMember).mockResolvedValueOnce({ role: 'admin' } as never)
     res = mockRes()
-    await call({
-      method: 'GET', query: { projectId: 'p', action: 'authorize' },
-      headers: { origin: 'https://app.crrt.test', host: 'api.crrt.test' },
-    }, res)
+    await call(
+      {
+        method: 'GET',
+        query: { projectId: 'p', action: 'authorize' },
+        headers: { origin: 'https://app.crrt.test', host: 'api.crrt.test' },
+      },
+      res,
+    )
     expect(res.body).toEqual({ authorizeUrl: 'https://auth.atlassian.com/authorize?state=signed' })
-    expect(createJiraOAuthState).toHaveBeenCalledWith(expect.objectContaining({
-      projectKey: 'p', userId: 'u', origin: 'https://app.crrt.test',
-    }))
+    expect(createJiraOAuthState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectKey: 'p',
+        userId: 'u',
+        origin: 'https://app.crrt.test',
+      }),
+    )
   })
 
   it('returns authorized projects and persists a validated selection', async () => {
@@ -85,7 +119,9 @@ describe('Jira project integration API', () => {
     let res = mockRes()
     await call({ method: 'GET', query: { projectId: 'p' }, headers: {} }, res)
     expect(res.body).toMatchObject({
-      connected: true, workspace: 'Acme Jira', selectedDestinationId: 'cloud:100',
+      connected: true,
+      workspace: 'Acme Jira',
+      selectedDestinationId: 'cloud:100',
       destinations: [{ id: 'cloud:100', name: 'Acme Jira · WEB · Website' }],
     })
 
@@ -98,8 +134,12 @@ describe('Jira project integration API', () => {
     await call({ method: 'PATCH', query: { projectId: 'p' }, body: { containerId: 'cloud:100' }, headers: {} }, res)
     expect(res.statusCode).toBe(200)
     expect(updateProjectIntegrationWorkspaceDestination).toHaveBeenCalledWith({
-      projectKey: 'p', provider: 'jira', workspaceId: 'cloud', workspaceName: 'Acme Jira',
-      containerId: '100', containerName: 'WEB · Website',
+      projectKey: 'p',
+      provider: 'jira',
+      workspaceId: 'cloud',
+      workspaceName: 'Acme Jira',
+      containerId: '100',
+      containerName: 'WEB · Website',
     })
   })
 
@@ -135,13 +175,30 @@ describe('Jira project integration API', () => {
   it('uses configured and request-derived callback URLs with safe origin fallbacks', async () => {
     vi.stubEnv('JIRA_REDIRECT_URI', 'https://configured.test/callback')
     let res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', action: 'authorize' }, headers: { origin: 'not a url', host: 'api.crrt.test' } }, res)
-    expect(createJiraOAuthState).toHaveBeenLastCalledWith(expect.objectContaining({ origin: 'https://api.crrt.test', redirectUri: 'https://configured.test/callback' }))
+    await call(
+      {
+        method: 'GET',
+        query: { projectId: 'p', action: 'authorize' },
+        headers: { origin: 'not a url', host: 'api.crrt.test' },
+      },
+      res,
+    )
+    expect(createJiraOAuthState).toHaveBeenLastCalledWith(
+      expect.objectContaining({ origin: 'https://api.crrt.test', redirectUri: 'https://configured.test/callback' }),
+    )
 
     vi.stubEnv('JIRA_REDIRECT_URI', '')
     res = mockRes()
-    await call({ method: 'GET', query: { projectId: 'p', action: 'authorize' }, headers: { host: 'api.crrt.test' } }, res)
-    expect(createJiraOAuthState).toHaveBeenLastCalledWith(expect.objectContaining({ origin: 'https://api.crrt.test', redirectUri: 'https://api.crrt.test/v1/integrations/jira/callback' }))
+    await call(
+      { method: 'GET', query: { projectId: 'p', action: 'authorize' }, headers: { host: 'api.crrt.test' } },
+      res,
+    )
+    expect(createJiraOAuthState).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        origin: 'https://api.crrt.test',
+        redirectUri: 'https://api.crrt.test/v1/integrations/jira/callback',
+      }),
+    )
   })
 
   it('handles nullable current state and malformed PATCH bodies', async () => {
@@ -150,9 +207,15 @@ describe('Jira project integration API', () => {
     await call({ method: 'PATCH', query: { projectId: 'p' }, body: {}, headers: {} }, res)
     expect(res.statusCode).toBe(400)
 
-    vi.mocked(getProjectIntegration).mockResolvedValueOnce(integration as never).mockResolvedValueOnce({ ...integration, containerId: null } as never)
+    vi.mocked(getProjectIntegration)
+      .mockResolvedValueOnce(integration as never)
+      .mockResolvedValueOnce({ ...integration, containerId: null } as never)
     const values: unknown[] = ['cloud:100', 'cloud:100', null]
-    const body = { get containerId() { return values.shift() } }
+    const body = {
+      get containerId() {
+        return values.shift()
+      },
+    }
     res = mockRes()
     await call({ method: 'PATCH', query: { projectId: 'p' }, body, headers: {} }, res)
     expect(res.body).toMatchObject({ connected: false, workspace: 'Acme Jira', selectedDestinationId: null })

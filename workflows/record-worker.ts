@@ -1,5 +1,10 @@
 import { sleep } from 'workflow'
-import { launchRecordWorker, recordWorkerStatus, stopRecordWorker, type WorkerSession } from '../api/_lib/record/worker-sandbox.js'
+import {
+  launchRecordWorker,
+  recordWorkerStatus,
+  stopRecordWorker,
+  type WorkerSession,
+} from '../api/_lib/record/worker-sandbox.js'
 
 async function launchStep() {
   'use step'

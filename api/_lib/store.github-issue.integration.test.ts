@@ -48,12 +48,7 @@ describeDatabase('comment GitHub issue database fencing', () => {
     await sql.end()
   })
 
-  async function claim(
-    commentId: string,
-    token: string,
-    recovery = false,
-    scopedProject = projectKey,
-  ) {
+  async function claim(commentId: string, token: string, recovery = false, scopedProject = projectKey) {
     return sql`
       select id
       from claim_comment_github_issue(
@@ -69,15 +64,11 @@ describeDatabase('comment GitHub issue database fencing', () => {
   it('allows exactly one concurrent claimant and rejects cross-project claims', async () => {
     const firstToken = randomUUID()
     const secondToken = randomUUID()
-    const [first, second] = await Promise.all([
-      claim(commentIds[0], firstToken),
-      claim(commentIds[0], secondToken),
-    ])
+    const [first, second] = await Promise.all([claim(commentIds[0], firstToken), claim(commentIds[0], secondToken)])
 
     expect(first.length + second.length).toBe(1)
     const winner = first.length ? firstToken : secondToken
-    await expect(claim(commentIds[0], randomUUID(), false, 'another-project'))
-      .resolves.toHaveLength(0)
+    await expect(claim(commentIds[0], randomUUID(), false, 'another-project')).resolves.toHaveLength(0)
 
     const released = await sql`
       select release_comment_github_issue(

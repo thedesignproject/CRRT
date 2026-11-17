@@ -8,10 +8,12 @@ afterEach(() => vi.useRealTimers())
 
 it('expires once at five minutes of active recording, excluding countdown and pauses', () => {
   vi.useFakeTimers()
-  const limit = vi.fn(), deadline = recordingDeadline(limit)
+  const limit = vi.fn(),
+    deadline = recordingDeadline(limit)
   vi.advanceTimersByTime(10_000)
   deadline.pause()
-  deadline.resume(); deadline.resume()
+  deadline.resume()
+  deadline.resume()
   vi.advanceTimersByTime(120_000)
   deadline.pause()
   vi.advanceTimersByTime(600_000)
@@ -28,8 +30,10 @@ it('expires once at five minutes of active recording, excluding countdown and pa
 
 it('cancels the deadline when capture stops early', () => {
   vi.useFakeTimers()
-  const limit = vi.fn(), deadline = recordingDeadline(limit)
-  deadline.resume(); deadline.pause()
+  const limit = vi.fn(),
+    deadline = recordingDeadline(limit)
+  deadline.resume()
+  deadline.pause()
   vi.advanceTimersByTime(MAX_RECORDING_DURATION_MS)
   expect(limit).not.toHaveBeenCalled()
 })
@@ -39,15 +43,23 @@ it('keeps the final timeline inside the upload limit even if a timer callback is
   state = recorderReducer(state, { type: 'recording.started', now: 0 })
   state = recorderReducer(state, { type: 'recording.finished', now: MAX_RECORDING_DURATION_MS + 123 })
   expect(state.durationMs).toBe(300_000)
-  const manifest = { version: 'record.v1', durationMs: state.durationMs, artifacts: [{ id: crypto.randomUUID(), kind: 'screen', mime: 'video/webm', bytes: 1, sha256: 'a'.repeat(64), offsetMs: 0 }], events: [] }
+  const manifest = {
+    version: 'record.v1',
+    durationMs: state.durationMs,
+    artifacts: [
+      { id: crypto.randomUUID(), kind: 'screen', mime: 'video/webm', bytes: 1, sha256: 'a'.repeat(64), offsetMs: 0 },
+    ],
+    events: [],
+  }
   expect(manifestSchema.safeParse(manifest).success).toBe(true)
   expect(manifestSchema.safeParse({ ...manifest, durationMs: 300_001 }).success).toBe(false)
 })
 
-it.each(['pause', 'resume'] as const)('expires when %s discovers the limit before a delayed timer fires', action => {
+it.each(['pause', 'resume'] as const)('expires when %s discovers the limit before a delayed timer fires', (action) => {
   vi.useFakeTimers()
   const now = vi.spyOn(performance, 'now').mockReturnValue(0)
-  const limit = vi.fn(), deadline = recordingDeadline(limit)
+  const limit = vi.fn(),
+    deadline = recordingDeadline(limit)
   expect(deadline.resume()).toBe(true)
   now.mockReturnValue(MAX_RECORDING_DURATION_MS + 1)
   deadline[action]()
@@ -62,7 +74,8 @@ it.each(['pause', 'resume'] as const)('expires when %s discovers the limit befor
 
 it('stops without invoking limit recovery and cannot restart after stopping', () => {
   vi.useFakeTimers()
-  const limit = vi.fn(), deadline = recordingDeadline(limit)
+  const limit = vi.fn(),
+    deadline = recordingDeadline(limit)
   deadline.resume()
   deadline.stop()
   expect(deadline.resume()).toBe(false)

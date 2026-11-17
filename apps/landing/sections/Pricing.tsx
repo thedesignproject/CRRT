@@ -7,23 +7,55 @@ import './pricing.css'
 
 const plans = [
   {
-    key: 'community', name: 'Self-hosted', monthly: 0, yearly: 0,
+    key: 'community',
+    name: 'Self-hosted',
+    monthly: 0,
+    yearly: 0,
     description: 'Your infrastructure. Your data.',
     features: ['Unlimited projects and users', 'Unlimited comments and audits', 'Your infrastructure and data'],
   },
   {
-    key: 'pro', name: 'Pro', monthly: 18, yearly: 192, recommended: true,
+    key: 'pro',
+    name: 'Pro',
+    monthly: 18,
+    yearly: 192,
+    recommended: true,
     description: 'For teams turning feedback into fixes.',
-    features: ['Private projects · 10 internal collaborators', 'Storybook review and component context', 'MCP connection and agent handoff', 'GitHub, Linear, and Jira integrations', 'Record agent handoff · private preview', '2,000 comments · 5 Product Audits / month', 'Unlimited guests'],
+    features: [
+      'Private projects · 10 internal collaborators',
+      'Storybook review and component context',
+      'MCP connection and agent handoff',
+      'GitHub, Linear, and Jira integrations',
+      'Record agent handoff · private preview',
+      '2,000 comments · 5 Product Audits / month',
+      'Unlimited guests',
+    ],
   },
   {
-    key: 'studio', name: 'Studio', monthly: 54, yearly: 492, includes: 'Pro',
+    key: 'studio',
+    name: 'Studio',
+    monthly: 54,
+    yearly: 492,
+    includes: 'Pro',
     description: 'For agencies managing multiple client projects.',
-    features: ['50 projects · 25 internal collaborators', '10,000 comments / month', '30 Product Audits / month', 'Unlimited guests'],
+    features: [
+      '50 projects · 25 internal collaborators',
+      '10,000 comments / month',
+      '30 Product Audits / month',
+      'Unlimited guests',
+    ],
   },
 ] as const
 
-export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }: { authenticated?: boolean; accessToken?: string; apiBase?: string }) {
+export function Pricing({
+  authenticated = false,
+  accessToken,
+  apiBase = '/api',
+}: {
+  authenticated?: boolean
+  accessToken?: string
+  apiBase?: string
+}) {
   const [cycle, setCycle] = useState<BillingCycle>('monthly')
   const [busyPlan, setBusyPlan] = useState<CloudPlanKey | null>(null)
   const [error, setError] = useState('')
@@ -35,7 +67,9 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
     checkoutRef.current = false
     setBusyPlan(null)
     setError('')
-    return () => { lifetime.current += 1 }
+    return () => {
+      lifetime.current += 1
+    }
   }, [authenticated, accessToken, apiBase])
 
   async function checkout(plan: CloudPlanKey, token: string) {
@@ -61,8 +95,19 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
     <section id="pricing" className="landing-section landing-pricing">
       <header className="plan-intro">
         <h2>Choose how CRRT runs.</h2>
-        <p>Self-host CRRT for free, or choose Cloud when you want it managed and ready for your team. Cloud plans start with a 14-day trial.</p>
-        <SegmentedControl label="Billing cycle" value={cycle} onChange={setCycle} options={[{ value: 'monthly', label: 'Monthly' }, { value: 'yearly', label: 'Yearly', note: 'Save with yearly' }]} />
+        <p>
+          Self-host CRRT for free, or choose Cloud when you want it managed and ready for your team. Cloud plans start
+          with a 14-day trial.
+        </p>
+        <SegmentedControl
+          label="Billing cycle"
+          value={cycle}
+          onChange={setCycle}
+          options={[
+            { value: 'monthly', label: 'Monthly' },
+            { value: 'yearly', label: 'Yearly', note: 'Save with yearly' },
+          ]}
+        />
       </header>
       <div className="plan-grid">
         {plans.map((plan) => {
@@ -75,29 +120,79 @@ export function Pricing({ authenticated = false, accessToken, apiBase = '/api' }
               <h3>{plan.name}</h3>
               <p className="plan-description">{plan.description}</p>
               <div className="plan-price">
-                <strong><sup>$</sup>{price}</strong>
-                <span>{community ? <>Free forever<small>Runs on your infrastructure</small></> : <>Per month<small>{annual ? `Billed yearly at $${plan.yearly}` : 'Billed monthly'}</small></>}</span>
+                <strong>
+                  <sup>$</sup>
+                  {price}
+                </strong>
+                <span>
+                  {community ? (
+                    <>
+                      Free forever<small>Runs on your infrastructure</small>
+                    </>
+                  ) : (
+                    <>
+                      Per month<small>{annual ? `Billed yearly at $${plan.yearly}` : 'Billed monthly'}</small>
+                    </>
+                  )}
+                </span>
               </div>
               {community ? (
-                <a className="ds-button ds-button-secondary ds-button-md plan-button" href="/docs/self-host">Read self-host guide</a>
+                <a className="ds-button ds-button-secondary ds-button-md plan-button" href="/docs/self-host">
+                  Read self-host guide
+                </a>
               ) : authenticated && accessToken ? (
-                <Button tone={recommended ? 'primary' : 'secondary'} className="plan-button" disabled={busyPlan !== null} onClick={() => { void checkout(plan.key, accessToken) }}>
+                <Button
+                  tone={recommended ? 'primary' : 'secondary'}
+                  className="plan-button"
+                  disabled={busyPlan !== null}
+                  onClick={() => {
+                    void checkout(plan.key, accessToken)
+                  }}
+                >
                   {busyPlan === plan.key ? 'Opening secure checkout…' : 'Start 14-day trial'}
                 </Button>
               ) : (
-                <a className={`ds-button ${recommended ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md plan-button`} href={cloudPlanStartUrl(apiBase, plan.key, cycle)}>Start 14-day trial</a>
+                <a
+                  className={`ds-button ${recommended ? 'ds-button-primary' : 'ds-button-secondary'} ds-button-md plan-button`}
+                  href={cloudPlanStartUrl(apiBase, plan.key, cycle)}
+                >
+                  Start 14-day trial
+                </a>
               )}
-              <small className="plan-fine-print">{community ? 'Free forever. Your infrastructure.' : 'Card required · cancel anytime'}</small>
+              <small className="plan-fine-print">
+                {community ? 'Free forever. Your infrastructure.' : 'Card required · cancel anytime'}
+              </small>
               <ul className="plan-features">
-                {'includes' in plan ? <li className="plan-includes"><CheckCheck size={18} aria-hidden="true" />Everything in {plan.includes}</li> : null}
-                {plan.features.map((feature) => <li key={feature}><Check size={16} aria-hidden="true" />{feature}</li>)}
+                {'includes' in plan ? (
+                  <li className="plan-includes">
+                    <CheckCheck size={18} aria-hidden="true" />
+                    Everything in {plan.includes}
+                  </li>
+                ) : null}
+                {plan.features.map((feature) => (
+                  <li key={feature}>
+                    <Check size={16} aria-hidden="true" />
+                    {feature}
+                  </li>
+                ))}
               </ul>
-              {!community && <small className="plan-fine-print plan-record-note">Record preview: capture & transcription free; agent access requires sign-in.</small>}
+              {!community && (
+                <small className="plan-fine-print plan-record-note">
+                  Record preview: capture & transcription free; agent access requires sign-in.
+                </small>
+              )}
             </article>
           )
         })}
       </div>
-      {error ? <p className="plan-error" role="alert" aria-live="polite">{error} <button type="button" onClick={() => setError('')}>Dismiss</button></p> : null}
+      {error ? (
+        <p className="plan-error" role="alert" aria-live="polite">
+          {error}{' '}
+          <button type="button" onClick={() => setError('')}>
+            Dismiss
+          </button>
+        </p>
+      ) : null}
     </section>
   )
 }

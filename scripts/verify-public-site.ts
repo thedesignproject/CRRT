@@ -17,25 +17,34 @@ for (const page of publicPages) {
     checks++
   }
   const head = await fetch(new URL(page.path, base), { method: 'HEAD', headers: { Accept: 'text/markdown' } })
-  assert.equal(head.status, 200); assert.equal(await head.text(), ''); checks++
+  assert.equal(head.status, 200)
+  assert.equal(await head.text(), '')
+  checks++
   const unsupported = await fetch(new URL(page.path, base), { headers: { Accept: 'application/json' } })
-  assert.equal(unsupported.status, 406); checks++
+  assert.equal(unsupported.status, 406)
+  checks++
 }
 for (const [path, type] of [
-  ['/llms.txt', 'text/plain'], ['/robots.txt', 'text/plain'], ['/sitemap.xml', 'xml'],
-  ['/openapi.json', 'application/json'], ['/skill.md', 'text/markdown'], ['/index.md', 'text/markdown'],
-  ...publicPages.filter(page => page.path !== '/').map(page => [`${page.path}.md`, 'text/markdown']),
+  ['/llms.txt', 'text/plain'],
+  ['/robots.txt', 'text/plain'],
+  ['/sitemap.xml', 'xml'],
+  ['/openapi.json', 'application/json'],
+  ['/skill.md', 'text/markdown'],
+  ['/index.md', 'text/markdown'],
+  ...publicPages.filter((page) => page.path !== '/').map((page) => [`${page.path}.md`, 'text/markdown']),
 ]) {
   const response = await fetch(new URL(path, base))
   assert.equal(response.status, 200, path)
   assert.ok(response.headers.get('content-type')?.includes(type), `${path}: content type`)
-  assert.ok((await response.text()).length > 20); checks++
+  assert.ok((await response.text()).length > 20)
+  checks++
 }
 for (const path of ['/readiness-does-not-exist', '/docs/readiness-does-not-exist']) {
   for (const accept of ['text/html', 'text/markdown']) {
     const response = await fetch(new URL(path, base), { headers: { Accept: accept } })
     assert.equal(response.status, 404)
-    assert.match(await response.text(), /sitemap/); checks++
+    assert.match(await response.text(), /sitemap/)
+    checks++
   }
 }
 for (const [accept, expected] of [
@@ -44,6 +53,7 @@ for (const [accept, expected] of [
   ['*/*', 'text/html'],
 ]) {
   const response = await fetch(base, { headers: { Accept: accept } })
-  assert.ok(response.headers.get('content-type')!.includes(expected)); checks++
+  assert.ok(response.headers.get('content-type')!.includes(expected))
+  checks++
 }
 console.log(`${checks} HTTP checks passed at ${base}`)

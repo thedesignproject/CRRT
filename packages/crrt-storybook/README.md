@@ -21,7 +21,7 @@ No selectors, no clicking on elements, no floating widget: the story IS the cont
   - Form fields have a label
   - Interactive targets are ≥ 24×24px (WCAG 2.2 minimum)
 
-  Honesty contract: a check only reports pass/fail when it actually inspected matching elements — no matching elements shows as *n/a* with the reason, and an unreachable preview reports itself instead of pretending. No fake green checkmarks.
+  Honesty contract: a check only reports pass/fail when it actually inspected matching elements — no matching elements shows as _n/a_ with the reason, and an unreachable preview reports itself instead of pretending. No fake green checkmarks.
 
   **Failed checks are dispatchable.** Every ✕ row gets its own small **Send to CRRT** button. One click auto-composes a structured issue — no typing — and posts it through the same client as regular feedback:
 
@@ -34,7 +34,7 @@ No selectors, no clicking on elements, no floating widget: the story IS the cont
   Suggested: needs an accessible name — aria-label or visible text
   ```
 
-  The `Governed by` line appears only when the check genuinely maps to one of the story's declared rules (matched by rule id — no forced mappings), and the suggestion is derived from the check's nature, not speculation. After sending, the row shows an inline *Sent ✓ — view in dashboard*; each failed check dispatches independently, and a check already sent for the same story this session is disabled (*Already sent*) to avoid duplicates. Passed and n/a checks get no button — only failures are actionable.
+  The `Governed by` line appears only when the check genuinely maps to one of the story's declared rules (matched by rule id — no forced mappings), and the suggestion is derived from the check's nature, not speculation. After sending, the row shows an inline _Sent ✓ — view in dashboard_; each failed check dispatches independently, and a check already sent for the same story this session is disabled (_Already sent_) to avoid duplicates. Passed and n/a checks get no button — only failures are actionable.
 
   ![A failed check dispatched to CRRT from its own row](docs/dispatch-sent.png)
 
@@ -88,9 +88,9 @@ contributors can still register the package manually:
 
 ```ts
 const config: StorybookConfig = {
-  addons: ["@thedesignproject/crrt-storybook"],
+  addons: ['@thedesignproject/crrt-storybook'],
   // ...
-};
+}
 ```
 
 ## Configure governance rules
@@ -103,37 +103,37 @@ project key in `.storybook/preview.ts`:
 const preview: Preview = {
   parameters: {
     crrt: {
-      projectId: "your-public-crrt-project-key", // manual development only
+      projectId: 'your-public-crrt-project-key', // manual development only
       // apiBase: "https://crrt.ai/api",  // default
       // dashboardUrl: "https://crrt.ai", // where the sent-state link points
       // checks: false,                   // disable the built-in DOM checks
     },
   },
-};
+}
 ```
 
 Rules are usually declared per component, in the story file's meta — mirroring the design system's `*.meta.yaml` (rule id + one-line essence):
 
 ```ts
 const meta = {
-  title: "Components/Button",
+  title: 'Components/Button',
   component: Button,
   parameters: {
     crrt: {
       rules: [
         {
-          id: "design/one-primary-button",
-          essence: "Only one primary button per view/section.",
-          href: "https://github.com/your-org/your-ds/blob/main/brain/design/components/button.md",
+          id: 'design/one-primary-button',
+          essence: 'Only one primary button per view/section.',
+          href: 'https://github.com/your-org/your-ds/blob/main/brain/design/components/button.md',
         },
         {
-          id: "business/auth-access",
-          essence: "Failed login shows one generic message.",
+          id: 'business/auth-access',
+          essence: 'Failed login shows one generic message.',
         },
       ],
     },
   },
-} satisfies Meta<typeof Button>;
+} satisfies Meta<typeof Button>
 ```
 
 Parameters merge the Storybook way: global → component → story, so a single story can override or extend its component's rules.
@@ -148,22 +148,22 @@ The manual parameter-only development mode continues to use
 `POST {apiBase}/v1/public/comments`. In both modes, story metadata uses the
 existing feedback fields:
 
-| CRRT field | What the addon puts there |
-|---|---|
-| `projectKey` | `parameters.crrt.projectId` |
-| `pageUrl` | Deep link back to the story (`…/?path=/story/<storyId>`) |
-| `selector` | `storybook://<storyId>` — machine-parseable story identity |
-| `body` | The feedback text + a footer: `— via Storybook · component: Components/Button · story: Primary · id: components-button--primary` |
-| `x`, `y` | `50, 50` (required by the API; a panel has no click point) |
-| `authorName` | The optional name field (persisted in localStorage) |
-| `imageBase64`, `imageMimeType` | PNG capture of the active story viewport (the Storybook manager UI is excluded) |
+| CRRT field                     | What the addon puts there                                                                                                        |
+| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------- |
+| `projectKey`                   | `parameters.crrt.projectId`                                                                                                      |
+| `pageUrl`                      | Deep link back to the story (`…/?path=/story/<storyId>`)                                                                         |
+| `selector`                     | `storybook://<storyId>` — machine-parseable story identity                                                                       |
+| `body`                         | The feedback text + a footer: `— via Storybook · component: Components/Button · story: Primary · id: components-button--primary` |
+| `x`, `y`                       | `50, 50` (required by the API; a panel has no click point)                                                                       |
+| `authorName`                   | The optional name field (persisted in localStorage)                                                                              |
+| `imageBase64`, `imageMimeType` | PNG capture of the active story viewport (the Storybook manager UI is excluded)                                                  |
 
 ## The flow (GIF-able)
 
 1. A stakeholder opens the **Button → Primary** story and clicks the **CRRT 🥕** tab.
-2. Before typing anything, they see the Compliance section: *"design/one-primary-button — Only one primary button per view/section"*, plus live checks on the rendered story.
-3. They type *"Make the primary button a bit more prominent…"* and hit the orange **Send to CRRT**.
-4. The panel flips to *Sent to CRRT ✓* with a link to the dashboard — where the comment arrives already tagged with the component, story and variant.
+2. Before typing anything, they see the Compliance section: _"design/one-primary-button — Only one primary button per view/section"_, plus live checks on the rendered story.
+3. They type _"Make the primary button a bit more prominent…"_ and hit the orange **Send to CRRT**.
+4. The panel flips to _Sent to CRRT ✓_ with a link to the dashboard — where the comment arrives already tagged with the component, story and variant.
 5. They switch to **Icon Only Broken**: the accessible-name check shows a red ✕ — one click on the row's **Send to CRRT** and the structured issue (element, governing rule, suggested direction) is dispatched too.
 
 ![Sent state with honest checks](docs/panel-sent.png)

@@ -9,13 +9,23 @@ function response() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    setHeader(key: string, value: string) { this.headers[key] = value },
-    status(code: number) { this.statusCode = code; return this },
-    json(body: unknown) { this.body = body; return this },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(body: unknown) {
+      this.body = body
+      return this
+    },
   }
 }
 
-beforeEach(() => { process.env.EXTENSION_ALLOWED_IDS = extensionId })
+beforeEach(() => {
+  process.env.EXTENSION_ALLOWED_IDS = extensionId
+})
 afterEach(() => {
   if (originalAllowed === undefined) delete process.env.EXTENSION_ALLOWED_IDS
   else process.env.EXTENSION_ALLOWED_IDS = originalAllowed
@@ -24,7 +34,12 @@ afterEach(() => {
 describe('extension auth HTTP boundary', () => {
   it('returns CORS only to the exact allowlisted Chrome extension origin', () => {
     const res = response()
-    expect(setExtensionCors({ headers: { origin: `chrome-extension://${extensionId}` } } as never, res as never, ['POST', 'OPTIONS'])).toBe(extensionId)
+    expect(
+      setExtensionCors({ headers: { origin: `chrome-extension://${extensionId}` } } as never, res as never, [
+        'POST',
+        'OPTIONS',
+      ]),
+    ).toBe(extensionId)
     expect(res.headers).toMatchObject({
       'Access-Control-Allow-Origin': `chrome-extension://${extensionId}`,
       'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -33,10 +48,16 @@ describe('extension auth HTTP boundary', () => {
       Vary: 'Origin',
     })
     for (const origin of [undefined, 'https://example.com', `chrome-extension://${extensionId}/`]) {
-      expect(() => setExtensionCors({ headers: { origin } } as never, response() as never, ['POST'])).toThrow('Extension origin is not allowed')
+      expect(() => setExtensionCors({ headers: { origin } } as never, response() as never, ['POST'])).toThrow(
+        'Extension origin is not allowed',
+      )
     }
     process.env.EXTENSION_ALLOWED_IDS = 'ponmlkjihgfedcbaponmlkjihgfedcba'
-    expect(() => setExtensionCors({ headers: { origin: `chrome-extension://${extensionId}` } } as never, response() as never, ['POST'])).toThrow('Extension is not allowed')
+    expect(() =>
+      setExtensionCors({ headers: { origin: `chrome-extension://${extensionId}` } } as never, response() as never, [
+        'POST',
+      ]),
+    ).toThrow('Extension is not allowed')
   })
 
   it('sets no-store security headers on success and errors', () => {

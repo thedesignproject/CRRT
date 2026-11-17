@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('./supabase.js', async (importOriginal) => ({
-  ...await importOriginal<typeof import('./supabase.js')>(),
+  ...(await importOriginal<typeof import('./supabase.js')>()),
   getServiceSupabase: vi.fn(),
 }))
 
@@ -69,16 +69,12 @@ function buildSupabase(opts: BuildOpts) {
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
-              maybeSingle: vi.fn(() =>
-                Promise.resolve(maybeSingleQueue.shift() ?? { data: null, error: null }),
-              ),
+              maybeSingle: vi.fn(() => Promise.resolve(maybeSingleQueue.shift() ?? { data: null, error: null })),
             })),
           })),
           insert: vi.fn(() => ({
             select: vi.fn(() => ({
-              single: vi.fn(() =>
-                Promise.resolve(opts.insertSingleResult ?? { data: null, error: null }),
-              ),
+              single: vi.fn(() => Promise.resolve(opts.insertSingleResult ?? { data: null, error: null })),
             })),
           })),
         }
@@ -246,9 +242,7 @@ describe('reserveCommentActivityEmail', () => {
     const single = vi.fn().mockResolvedValue({ data: null, error: null })
     vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => ({ single }) } as never)
 
-    await expect(reserveCommentActivityEmail('pk', 5)).rejects.toThrow(
-      'reserve_comment_activity_email returned no row',
-    )
+    await expect(reserveCommentActivityEmail('pk', 5)).rejects.toThrow('reserve_comment_activity_email returned no row')
   })
 })
 
@@ -283,8 +277,14 @@ describe('releaseCommentActivityEmailReservation', () => {
 })
 
 type MembershipMocks = {
-  memberSingle?: { data: { role: 'admin' | 'member' | 'guest'; is_owner: boolean } | null; error: { message: string } | null }
-  memberList?: { data: Array<{ project_key: string; role: 'admin' | 'member' | 'guest'; is_owner: boolean }> | null; error: { message: string } | null }
+  memberSingle?: {
+    data: { role: 'admin' | 'member' | 'guest'; is_owner: boolean } | null
+    error: { message: string } | null
+  }
+  memberList?: {
+    data: Array<{ project_key: string; role: 'admin' | 'member' | 'guest'; is_owner: boolean }> | null
+    error: { message: string } | null
+  }
   projectsIn?: { data: ProjectRow[] | null; error: { message: string } | null }
   projectsSingle?: { data: ProjectRow | null; error: { message: string } | null }
   claimRpc?: { data: unknown; error: { message: string } | null }
@@ -301,7 +301,8 @@ function membershipSupabase(m: MembershipMocks = {}) {
                 eq: vi.fn(() => ({
                   maybeSingle: vi.fn(() => Promise.resolve(m.memberSingle ?? { data: null, error: null })),
                 })),
-                then: (r: (v: unknown) => unknown) => Promise.resolve(m.memberList ?? { data: [], error: null }).then(r),
+                then: (r: (v: unknown) => unknown) =>
+                  Promise.resolve(m.memberList ?? { data: [], error: null }).then(r),
               }
               return second
             }),
@@ -311,7 +312,9 @@ function membershipSupabase(m: MembershipMocks = {}) {
       return {
         select: vi.fn(() => ({
           in: vi.fn(() => ({ order: vi.fn(() => Promise.resolve(m.projectsIn ?? { data: [], error: null })) })),
-          eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(m.projectsSingle ?? { data: null, error: null })) })),
+          eq: vi.fn(() => ({
+            maybeSingle: vi.fn(() => Promise.resolve(m.projectsSingle ?? { data: null, error: null })),
+          })),
         })),
       }
     }),
@@ -321,53 +324,73 @@ function membershipSupabase(m: MembershipMocks = {}) {
 
 describe('membership helpers + claim', () => {
   it('getProjectMember + isProjectMember cover hit / miss / error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberSingle: { data: { role: 'admin', is_owner: true }, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberSingle: { data: { role: 'admin', is_owner: true }, error: null },
+      }) as never,
+    )
     expect(await getProjectMember('u', 'p')).toEqual({ role: 'admin', isOwner: true, feedbackAllowed: true })
     expect(await isProjectMember('u', 'p')).toBe(true)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberSingle: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberSingle: { data: null, error: null },
+      }) as never,
+    )
     expect(await getProjectMember('u', 'p')).toBeNull()
     expect(await isProjectMember('u', 'p')).toBe(false)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberSingle: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberSingle: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(getProjectMember('u', 'p')).rejects.toThrow('boom')
   })
 
   it('listProjectsForUser returns empty / member-error / joined rows / projects-error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({ memberList: { data: [], error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({ memberList: { data: [], error: null } }) as never,
+    )
     expect(await listProjectsForUser('u')).toEqual([])
 
     // defensive `data || []` fallback when supabase returns data:null, error:null
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({ memberList: { data: null, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({ memberList: { data: null, error: null } }) as never,
+    )
     expect(await listProjectsForUser('u')).toEqual([])
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberList: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'pk', role: 'guest', is_owner: false }], error: null },
-      projectsIn: { data: [PROJECT_ROW], error: null },
-    }) as never)
-    expect(await listProjectsForUser('u')).toEqual([expect.objectContaining({ publicKey: 'pk', role: 'guest', capabilities: ['feedback:read', 'feedback:create'] })])
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberList: { data: [{ project_key: 'pk', role: 'guest', is_owner: false }], error: null },
+        projectsIn: { data: [PROJECT_ROW], error: null },
+      }) as never,
+    )
+    expect(await listProjectsForUser('u')).toEqual([
+      expect.objectContaining({ publicKey: 'pk', role: 'guest', capabilities: ['feedback:read', 'feedback:create'] }),
+    ])
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
-      projectsIn: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
+        projectsIn: { data: null, error: null },
+      }) as never,
+    )
     expect(await listProjectsForUser('u')).toEqual([])
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
-      projectsIn: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        memberList: { data: [{ project_key: 'pk', role: 'member', is_owner: false }], error: null },
+        projectsIn: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(listProjectsForUser('u')).rejects.toThrow('boom')
   })
 
@@ -380,7 +403,9 @@ describe('membership helpers + claim', () => {
 
     expect((await claimProject('u', 'pk', 'Acme')).publicKey).toBe('pk')
     expect(db.rpc).toHaveBeenCalledWith('claim_project', {
-      p_user_id: 'u', p_project_key: 'pk', p_name: 'Acme',
+      p_user_id: 'u',
+      p_project_key: 'pk',
+      p_name: 'Acme',
     })
 
     const existingDb = membershipSupabase({
@@ -389,14 +414,18 @@ describe('membership helpers + claim', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(existingDb as never)
     await expect(claimProject('u', 'pk')).resolves.toMatchObject({ allowedOrigins: [] })
     expect(existingDb.rpc).toHaveBeenCalledWith('claim_project', {
-      p_user_id: 'u', p_project_key: 'pk', p_name: null,
+      p_user_id: 'u',
+      p_project_key: 'pk',
+      p_name: null,
     })
   })
 
   it.each(['not_found', 'already_claimed'])('claimProject maps %s', async (status) => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      claimRpc: { data: { status }, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        claimRpc: { data: { status }, error: null },
+      }) as never,
+    )
     await expect(claimProject('u', 'pk')).rejects.toThrow(status)
   })
 
@@ -412,25 +441,33 @@ describe('membership helpers + claim', () => {
       { ...PROJECT_ROW, allowed_origins: [], updated_at: null },
     ]
     for (const project of malformedProjects) {
-      vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-        claimRpc: { data: { status: 'claimed', project }, error: null },
-      }) as never)
+      vi.mocked(getServiceSupabase).mockReturnValue(
+        membershipSupabase({
+          claimRpc: { data: { status: 'claimed', project }, error: null },
+        }) as never,
+      )
       await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
     }
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      claimRpc: { data: { status: 'invalid_input' }, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        claimRpc: { data: { status: 'invalid_input' }, error: null },
+      }) as never,
+    )
     await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      claimRpc: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        claimRpc: { data: null, error: null },
+      }) as never,
+    )
     await expect(claimProject('u', 'pk')).rejects.toThrow('invalid_claim_result')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      claimRpc: { data: null, error: { message: 'db boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        claimRpc: { data: null, error: { message: 'db boom' } },
+      }) as never,
+    )
     await expect(claimProject('u', 'pk')).rejects.toThrow('db boom')
   })
 })
@@ -452,27 +489,34 @@ describe('project key helpers', () => {
   })
 
   it('isProjectKeyAvailable reflects whether a row exists', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsSingle: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        projectsSingle: { data: null, error: null },
+      }) as never,
+    )
     expect(await isProjectKeyAvailable('free')).toBe(true)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsSingle: { data: PROJECT_ROW, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        projectsSingle: { data: PROJECT_ROW, error: null },
+      }) as never,
+    )
     expect(await isProjectKeyAvailable('taken')).toBe(false)
   })
 
   it('suggestAvailableProjectKey returns the base when free', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsSingle: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        projectsSingle: { data: null, error: null },
+      }) as never,
+    )
     expect(await suggestAvailableProjectKey('acme')).toBe('acme')
   })
 
   it('suggestAvailableProjectKey appends a suffix when the base is taken', async () => {
     // base lookup hits a row → taken; first suffixed candidate lookup finds nothing → free
-    const single = vi.fn()
+    const single = vi
+      .fn()
       .mockResolvedValueOnce({ data: PROJECT_ROW, error: null })
       .mockResolvedValue({ data: null, error: null })
     vi.mocked(getServiceSupabase).mockReturnValue({
@@ -485,9 +529,11 @@ describe('project key helpers', () => {
   })
 
   it('suggestAvailableProjectKey throws when no free key is found', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(membershipSupabase({
-      projectsSingle: { data: PROJECT_ROW, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      membershipSupabase({
+        projectsSingle: { data: PROJECT_ROW, error: null },
+      }) as never,
+    )
     await expect(suggestAvailableProjectKey('acme')).rejects.toThrow('no_available_key')
   })
 })
@@ -513,8 +559,7 @@ function notifSupabase(m: NotifMocks = {}) {
           order: vi.fn(() => chain),
           limit: vi.fn(() => chain),
           is: vi.fn(() => chain),
-          then: (r: (v: unknown) => unknown) =>
-            Promise.resolve(m.notifList ?? { data: [], error: null }).then(r),
+          then: (r: (v: unknown) => unknown) => Promise.resolve(m.notifList ?? { data: [], error: null }).then(r),
         }
         return chain
       }),
@@ -523,8 +568,7 @@ function notifSupabase(m: NotifMocks = {}) {
           eq: vi.fn(() => chain),
           is: vi.fn(() => chain),
           select: vi.fn(() => Promise.resolve(m.notifUpdate ?? { data: [], error: null })),
-          then: (r: (v: unknown) => unknown) =>
-            Promise.resolve({ error: m.notifUpdateAllError ?? null }).then(r),
+          then: (r: (v: unknown) => unknown) => Promise.resolve({ error: m.notifUpdateAllError ?? null }).then(r),
         }
         return chain
       }),
@@ -570,13 +614,15 @@ describe('notifications helpers', () => {
     vi.mocked(getServiceSupabase).mockReturnValue({
       rpc: vi.fn(() => ({ single: vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } }) })),
     } as never)
-    await expect(createOrIncrementCommentActivityNotification({
-      userId: 'u',
-      projectKey: 'p',
-      projectName: 'Project',
-      commentId: 'c',
-      pageUrl: 'https://example.com',
-    })).rejects.toThrow('boom')
+    await expect(
+      createOrIncrementCommentActivityNotification({
+        userId: 'u',
+        projectKey: 'p',
+        projectName: 'Project',
+        commentId: 'c',
+        pageUrl: 'https://example.com',
+      }),
+    ).rejects.toThrow('boom')
   })
 
   it('notifyProjectMembersOfCommentActivity increments every project member notification', async () => {
@@ -596,13 +642,12 @@ describe('notifications helpers', () => {
       rpc,
       from: vi.fn(() => ({
         select: vi.fn(() => ({
-          eq: vi.fn(() => Promise.resolve({
-            data: [
-              { user_id: 'u1' },
-              { user_id: 'u2' },
-            ],
-            error: null,
-          })),
+          eq: vi.fn(() =>
+            Promise.resolve({
+              data: [{ user_id: 'u1' }, { user_id: 'u2' }],
+              error: null,
+            }),
+          ),
         })),
       })),
     } as never)
@@ -615,9 +660,12 @@ describe('notifications helpers', () => {
     })
 
     expect(rpc).toHaveBeenCalledTimes(2)
-    expect(rpc).toHaveBeenCalledWith('create_or_increment_comment_activity_notification', expect.objectContaining({
-      p_author_name: null,
-    }))
+    expect(rpc).toHaveBeenCalledWith(
+      'create_or_increment_comment_activity_notification',
+      expect.objectContaining({
+        p_author_name: null,
+      }),
+    )
   })
 
   it('removes derived activity metadata from guest notifications when feedback becomes internal', async () => {
@@ -631,9 +679,11 @@ describe('notifications helpers', () => {
     const memberRoleEq = vi.fn().mockResolvedValue({ data: [{ user_id: 'guest-1' }], error: null })
     const memberProjectEq = vi.fn(() => ({ eq: memberRoleEq }))
     vi.mocked(getServiceSupabase).mockReturnValue({
-      from: vi.fn((table: string) => table === 'project_members'
-        ? { select: vi.fn(() => ({ eq: memberProjectEq })) }
-        : { delete: vi.fn(() => deleteChain) }),
+      from: vi.fn((table: string) =>
+        table === 'project_members'
+          ? { select: vi.fn(() => ({ eq: memberProjectEq })) }
+          : { delete: vi.fn(() => deleteChain) },
+      ),
     } as never)
 
     await removeGuestCommentActivityNotifications('p', 'c')
@@ -659,14 +709,23 @@ describe('notifications helpers', () => {
     await expect(removeGuestCommentActivityNotifications('p', 'c')).rejects.toThrow('members down')
 
     const deleteChain = {
-      in: vi.fn(), eq: vi.fn(),
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ error: { message: 'cleanup down' } }).then(resolve),
+      in: vi.fn(),
+      eq: vi.fn(),
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ error: { message: 'cleanup down' } }).then(resolve),
     }
-    deleteChain.in.mockReturnValue(deleteChain); deleteChain.eq.mockReturnValue(deleteChain)
+    deleteChain.in.mockReturnValue(deleteChain)
+    deleteChain.eq.mockReturnValue(deleteChain)
     vi.mocked(getServiceSupabase).mockReturnValue({
-      from: vi.fn((table: string) => table === 'project_members'
-        ? { select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [{ user_id: 'guest' }], error: null }) })) })) }
-        : { delete: vi.fn(() => deleteChain) }),
+      from: vi.fn((table: string) =>
+        table === 'project_members'
+          ? {
+              select: vi.fn(() => ({
+                eq: vi.fn(() => ({ eq: vi.fn().mockResolvedValue({ data: [{ user_id: 'guest' }], error: null }) })),
+              })),
+            }
+          : { delete: vi.fn(() => deleteChain) },
+      ),
     } as never)
     await expect(removeGuestCommentActivityNotifications('p', 'c')).rejects.toThrow('cleanup down')
   })
@@ -677,10 +736,12 @@ describe('notifications helpers', () => {
     vi.mocked(getServiceSupabase).mockReturnValue({
       from: vi.fn(() => ({
         select: vi.fn(() => ({
-          eq: vi.fn(() => Promise.resolve({
-            data: [{ user_id: 'u1' }, { user_id: 'u2' }],
-            error: null,
-          })),
+          eq: vi.fn(() =>
+            Promise.resolve({
+              data: [{ user_id: 'u1' }, { user_id: 'u2' }],
+              error: null,
+            }),
+          ),
         })),
       })),
     } as never)
@@ -713,51 +774,73 @@ describe('notifications helpers', () => {
   })
 
   it('createNotification: success / error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifSingle: { data: { id: 'n', user_id: 'u', kind: 'invite.received', payload: { x: 1 }, read_at: null, created_at: 't' }, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifSingle: {
+          data: { id: 'n', user_id: 'u', kind: 'invite.received', payload: { x: 1 }, read_at: null, created_at: 't' },
+          error: null,
+        },
+      }) as never,
+    )
     const n = await createNotification({ userId: 'u', kind: 'invite.received', payload: { x: 1 } })
     expect(n.id).toBe('n')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifSingle: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifSingle: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(createNotification({ userId: 'u', kind: 'invite.received' })).rejects.toThrow('boom')
   })
 
   it('listNotificationsForUser: respects unreadOnly + default options + null fallback + error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifList: { data: [{ id: 'n1', user_id: 'u', kind: 'invite.received', payload: null, read_at: null, created_at: 't' }], error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifList: {
+          data: [{ id: 'n1', user_id: 'u', kind: 'invite.received', payload: null, read_at: null, created_at: 't' }],
+          error: null,
+        },
+      }) as never,
+    )
     expect((await listNotificationsForUser('u', { unreadOnly: true, limit: 10 })).length).toBe(1)
     expect((await listNotificationsForUser('u')).length).toBe(1)
 
     // defensive `data || []` fallback
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifList: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifList: { data: null, error: null },
+      }) as never,
+    )
     expect(await listNotificationsForUser('u')).toEqual([])
 
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifList: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifList: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(listNotificationsForUser('u')).rejects.toThrow('boom')
   })
 
   it('markNotificationRead: hit / miss / error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifUpdate: { data: [{ id: 'n' }], error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifUpdate: { data: [{ id: 'n' }], error: null },
+      }) as never,
+    )
     expect(await markNotificationRead('n', 'u')).toBe(true)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifUpdate: { data: [], error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifUpdate: { data: [], error: null },
+      }) as never,
+    )
     expect(await markNotificationRead('n', 'u')).toBe(false)
 
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifUpdate: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifUpdate: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(markNotificationRead('n', 'u')).rejects.toThrow('boom')
   })
 
@@ -765,9 +848,11 @@ describe('notifications helpers', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({}) as never)
     await markAllNotificationsRead('u')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(notifSupabase({
-      notifUpdateAllError: { message: 'boom' },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      notifSupabase({
+        notifUpdateAllError: { message: 'boom' },
+      }) as never,
+    )
     await expect(markAllNotificationsRead('u')).rejects.toThrow('boom')
   })
 })
@@ -798,11 +883,10 @@ function inviteSupabase(m: InviteMocks = {}) {
       select: vi.fn(() => ({
         single: vi.fn(() => Promise.resolve(m.inviteInsertResult ?? { data: null, error: null })),
       })),
-      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) => (
+      then: (resolve: (value: unknown) => unknown, reject?: (reason: unknown) => unknown) =>
         m.inviteRestoreRejection === undefined
           ? Promise.resolve({ error: m.inviteRestoreError ?? null }).then(resolve)
-          : Promise.reject(m.inviteRestoreRejection).then(resolve, reject)
-      ),
+          : Promise.reject(m.inviteRestoreRejection).then(resolve, reject),
     }
     return chain
   })
@@ -810,11 +894,14 @@ function inviteSupabase(m: InviteMocks = {}) {
     const chain = {
       eq: vi.fn(() => chain),
       select: vi.fn(() => chain),
-      maybeSingle: vi.fn(() => Promise.resolve({
-        ...(m.inviteSingle ?? { data: null, error: null }),
-        error: m.inviteDeleteError ?? m.inviteSingle?.error ?? null,
-      })),
-      then: (resolve: (value: unknown) => unknown) => Promise.resolve({ data: [], error: m.inviteDeleteError ?? null }).then(resolve),
+      maybeSingle: vi.fn(() =>
+        Promise.resolve({
+          ...(m.inviteSingle ?? { data: null, error: null }),
+          error: m.inviteDeleteError ?? m.inviteSingle?.error ?? null,
+        }),
+      ),
+      then: (resolve: (value: unknown) => unknown) =>
+        Promise.resolve({ data: [], error: m.inviteDeleteError ?? null }).then(resolve),
     }
     return chain
   })
@@ -831,8 +918,7 @@ function inviteSupabase(m: InviteMocks = {}) {
               eq: vi.fn(() => chain),
               order: vi.fn(() => chain),
               maybeSingle: vi.fn(() => Promise.resolve(m.inviteSingle ?? { data: null, error: null })),
-              then: (r: (v: unknown) => unknown) =>
-                Promise.resolve(m.inviteList ?? { data: [], error: null }).then(r),
+              then: (r: (v: unknown) => unknown) => Promise.resolve(m.inviteList ?? { data: [], error: null }).then(r),
             }
             return chain
           }),
@@ -842,7 +928,13 @@ function inviteSupabase(m: InviteMocks = {}) {
       if (table === 'project_members') {
         return {
           insert: vi.fn(() => Promise.resolve({ error: m.memberInsertError ?? null })),
-          select: vi.fn(() => ({ eq: vi.fn(() => ({ eq: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(m.memberSingle ?? { data: null, error: null })) })) })) })),
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                maybeSingle: vi.fn(() => Promise.resolve(m.memberSingle ?? { data: null, error: null })),
+              })),
+            })),
+          })),
         }
       }
       throw new Error(`Unmocked table ${table}`)
@@ -851,45 +943,73 @@ function inviteSupabase(m: InviteMocks = {}) {
 }
 
 describe('invite helpers', () => {
-  const INVITE: InviteRow = { project_key: 'p', email: 'x@y.z', role: 'member', invited_by: 'inviter-1', created_at: 't' }
+  const INVITE: InviteRow = {
+    project_key: 'p',
+    email: 'x@y.z',
+    role: 'member',
+    invited_by: 'inviter-1',
+    created_at: 't',
+  }
 
   it('createInvite: success / already_invited / other error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteInsertResult: { data: INVITE, error: null },
-    }) as never)
-    expect((await createInvite({ projectKey: 'p', email: 'X@Y.Z', role: 'member', invitedBy: 'inviter-1' })).email).toBe('x@y.z')
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteInsertResult: { data: INVITE, error: null },
+      }) as never,
+    )
+    expect(
+      (await createInvite({ projectKey: 'p', email: 'X@Y.Z', role: 'member', invitedBy: 'inviter-1' })).email,
+    ).toBe('x@y.z')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteInsertResult: { data: null, error: { code: '23505', message: 'dup' } },
-    }) as never)
-    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('already_invited')
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteInsertResult: { data: null, error: { code: '23505', message: 'dup' } },
+      }) as never,
+    )
+    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow(
+      'already_invited',
+    )
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteInsertResult: { data: null, error: { code: '50000', message: 'boom' } },
-    }) as never)
-    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('boom')
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteInsertResult: { data: null, error: { code: '50000', message: 'boom' } },
+      }) as never,
+    )
+    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow(
+      'boom',
+    )
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteInsertResult: { data: null, error: { code: 'P0001', message: 'agent_seat_limit_reached' } },
-    }) as never)
-    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow('agent_seat_limit_reached')
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteInsertResult: { data: null, error: { code: 'P0001', message: 'agent_seat_limit_reached' } },
+      }) as never,
+    )
+    await expect(createInvite({ projectKey: 'p', email: 'x@y.z', role: 'member', invitedBy: 'i' })).rejects.toThrow(
+      'agent_seat_limit_reached',
+    )
   })
 
   it('listInvitesForEmail: success / null fallback / error', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteList: { data: [INVITE], error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteList: { data: [INVITE], error: null },
+      }) as never,
+    )
     expect((await listInvitesForEmail('X@Y.Z')).map((i) => i.projectKey)).toEqual(['p'])
 
     // defensive `data || []` fallback
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteList: { data: null, error: null },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteList: { data: null, error: null },
+      }) as never,
+    )
     expect(await listInvitesForEmail('x@y.z')).toEqual([])
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({
-      inviteList: { data: null, error: { message: 'boom' } },
-    }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({
+        inviteList: { data: null, error: { message: 'boom' } },
+      }) as never,
+    )
     await expect(listInvitesForEmail('x@y.z')).rejects.toThrow('boom')
   })
 
@@ -898,18 +1018,26 @@ describe('invite helpers', () => {
     vi.mocked(getServiceSupabase).mockReturnValue(client as never)
     await expect(acceptInvite('u', ' X@Y.Z ', 'p')).resolves.toBe('inviter-1')
     expect(client.rpc).toHaveBeenCalledWith('accept_project_invite_with_seat', {
-      p_user: 'u', p_email: 'x@y.z', p_project: 'p',
+      p_user: 'u',
+      p_email: 'x@y.z',
+      p_project: 'p',
     })
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ acceptResult: { data: null, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({ acceptResult: { data: null, error: null } }) as never,
+    )
     await expect(acceptInvite('u', 'x@y.z', 'p')).resolves.toBeNull()
   })
 
   it('declineInvite: not_found / happy', async () => {
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: null, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({ inviteSingle: { data: null, error: null } }) as never,
+    )
     await expect(declineInvite('x@y.z', 'p')).rejects.toThrow('not_found')
 
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({ inviteSingle: { data: INVITE, error: null } }) as never,
+    )
     expect(await declineInvite('x@y.z', 'p')).toBe('inviter-1')
   })
 
@@ -918,7 +1046,9 @@ describe('invite helpers', () => {
     ['database denies the sixth seat', 'agent_seat_limit_reached detail', 'agent_seat_limit_reached'],
     ['unknown database error', 'boom', 'boom'],
   ])('acceptInvite maps %s', async (_label, message, expected) => {
-    vi.mocked(getServiceSupabase).mockReturnValue(inviteSupabase({ acceptResult: { data: null, error: { message } } }) as never)
+    vi.mocked(getServiceSupabase).mockReturnValue(
+      inviteSupabase({ acceptResult: { data: null, error: { message } } }) as never,
+    )
     await expect(acceptInvite('u', 'x@y.z', 'p')).rejects.toThrow(expected)
   })
 })
@@ -948,14 +1078,23 @@ describe('findUserIdByEmail', () => {
     vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', '')
     process.env.SUPABASE_SECRET_KEY = ''
     process.env.SUPABASE_SERVICE_ROLE_KEY = 'header.payload.signature'
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
-      users: [{ id: 'u-legacy', email: 'x@y.z' }],
-    }), { status: 200 })) as never
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            users: [{ id: 'u-legacy', email: 'x@y.z' }],
+          }),
+          { status: 200 },
+        ),
+    ) as never
 
     expect(await findUserIdByEmail('x@y.z')).toBe('u-legacy')
-    expect(fetch).toHaveBeenCalledWith(expect.any(String), { headers: {
-      apikey: 'header.payload.signature', Authorization: 'Bearer header.payload.signature',
-    } })
+    expect(fetch).toHaveBeenCalledWith(expect.any(String), {
+      headers: {
+        apikey: 'header.payload.signature',
+        Authorization: 'Bearer header.payload.signature',
+      },
+    })
   })
 
   it('returns null when SUPABASE_URL is missing', async () => {
@@ -969,26 +1108,37 @@ describe('findUserIdByEmail', () => {
   })
 
   it('returns the matching user id when found', async () => {
-    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
-      users: [{ id: 'u-1', email: 'X@Y.Z' }],
-    }), { status: 200, headers: { 'content-type': 'application/json' } })) as never
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            users: [{ id: 'u-1', email: 'X@Y.Z' }],
+          }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        ),
+    ) as never
     globalThis.fetch = fetchMock
     expect(await findUserIdByEmail('x@y.z')).toBe('u-1')
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://supa.example/auth/v1/admin/users?email=x%40y.z',
-      { headers: { apikey: 'sb_secret_test' } },
-    )
+    expect(fetchMock).toHaveBeenCalledWith('https://supa.example/auth/v1/admin/users?email=x%40y.z', {
+      headers: { apikey: 'sb_secret_test' },
+    })
   })
 
   it('returns null when fetch throws', async () => {
-    globalThis.fetch = vi.fn(async () => { throw new Error('net') }) as never
+    globalThis.fetch = vi.fn(async () => {
+      throw new Error('net')
+    }) as never
     expect(await findUserIdByEmail('x@y.z')).toBeNull()
   })
 
   it('returns null when response shape is unexpected', async () => {
-    globalThis.fetch = vi.fn(async () => new Response('{}', {
-      status: 200, headers: { 'content-type': 'application/json' },
-    })) as never
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response('{}', {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as never
     expect(await findUserIdByEmail('x@y.z')).toBeNull()
   })
 })
@@ -1022,11 +1172,13 @@ describe('comment functions', () => {
     anchor: null,
   }
 
-  function buildCommentsSupabase(opts: {
-    result?: QueryResult
-    shareItems?: Array<{ comment_id: string }>
-    signedResult?: { data: { signedUrl: string } | null; error: { message: string } | null }
-  } = {}) {
+  function buildCommentsSupabase(
+    opts: {
+      result?: QueryResult
+      shareItems?: Array<{ comment_id: string }>
+      signedResult?: { data: { signedUrl: string } | null; error: { message: string } | null }
+    } = {},
+  ) {
     const result = opts.result ?? { data: null, error: null }
     const selects: string[] = []
     const inserts: unknown[] = []
@@ -1049,7 +1201,9 @@ describe('comment functions', () => {
       maybeSingle: vi.fn(() => Promise.resolve(result)),
     }
 
-    const createSignedUrl = vi.fn().mockResolvedValue(opts.signedResult ?? { data: { signedUrl: 'https://signed/private' }, error: null })
+    const createSignedUrl = vi
+      .fn()
+      .mockResolvedValue(opts.signedResult ?? { data: { signedUrl: 'https://signed/private' }, error: null })
     const supabase = {
       rpc: vi.fn(() => chain),
       from: vi.fn((table: string) => {
@@ -1119,14 +1273,16 @@ describe('comment functions', () => {
   it('createPublicComment propagates insert errors', async () => {
     buildCommentsSupabase({ result: { data: null, error: { message: 'comment boom' } } })
 
-    await expect(createPublicComment({
-      projectKey: 'pk',
-      pageUrl: 'https://example.com/pricing',
-      x: 10,
-      y: 20,
-      selector: 'body',
-      body: 'Hi',
-    })).rejects.toThrow('comment boom')
+    await expect(
+      createPublicComment({
+        projectKey: 'pk',
+        pageUrl: 'https://example.com/pricing',
+        x: 10,
+        y: 20,
+        selector: 'body',
+        body: 'Hi',
+      }),
+    ).rejects.toThrow('comment boom')
   })
 
   it('listComments maps legacy rows to element_point and selects target metadata', async () => {
@@ -1157,9 +1313,7 @@ describe('comment functions', () => {
       result: { data: [extensionRow], error: null },
       signedResult: { data: null, error: { message: 'Object not found' } },
     })
-    await expect(listProjectComments('pk')).resolves.toEqual([
-      expect.objectContaining({ imageUrl: null }),
-    ])
+    await expect(listProjectComments('pk')).resolves.toEqual([expect.objectContaining({ imageUrl: null })])
 
     buildCommentsSupabase({
       result: { data: [extensionRow], error: null },
@@ -1193,7 +1347,9 @@ describe('comment functions', () => {
 
   it('updates comment visibility and handles missing rows or database errors', async () => {
     buildCommentsSupabase({ result: { data: { ...TEXT_RANGE_ROW, visibility: 'internal' }, error: null } })
-    await expect(updateCommentVisibility('pk', 'comment-1', 'internal')).resolves.toMatchObject({ visibility: 'internal' })
+    await expect(updateCommentVisibility('pk', 'comment-1', 'internal')).resolves.toMatchObject({
+      visibility: 'internal',
+    })
 
     buildCommentsSupabase({ result: { data: null, error: null } })
     await expect(updateCommentVisibility('pk', 'missing', 'shared')).resolves.toBeNull()
@@ -1212,7 +1368,8 @@ describe('comment functions', () => {
   })
 
   it('maps atomic agent operation results and propagates RPC failures', async () => {
-    const single = vi.fn()
+    const single = vi
+      .fn()
       .mockResolvedValueOnce({
         data: { outcome: 'applied', event_id: 91, comment_row: TEXT_RANGE_ROW },
         error: null,
@@ -1225,47 +1382,61 @@ describe('comment functions', () => {
     const rpc = vi.fn(() => ({ single }))
     vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
 
-    await expect(applyAgentFeedbackOperation({
-      shareId: 'share-1',
-      tokenHash: 'hash',
-      commentId: 'comment-1',
-      agentId: 'agent-1',
-      idempotencyKey: 'key-1',
-      operation: 'comment.complete',
-      eventType: 'comment.ready_for_testing',
-      payload: { idempotencyKey: 'key-1' },
-      implementationStatus: 'ready_for_testing',
-    })).resolves.toMatchObject({
-      outcome: 'applied', feedbackEventId: 91, comment: { targetType: 'text_range' },
+    await expect(
+      applyAgentFeedbackOperation({
+        shareId: 'share-1',
+        tokenHash: 'hash',
+        commentId: 'comment-1',
+        agentId: 'agent-1',
+        idempotencyKey: 'key-1',
+        operation: 'comment.complete',
+        eventType: 'comment.ready_for_testing',
+        payload: { idempotencyKey: 'key-1' },
+        implementationStatus: 'ready_for_testing',
+      }),
+    ).resolves.toMatchObject({
+      outcome: 'applied',
+      feedbackEventId: 91,
+      comment: { targetType: 'text_range' },
     })
-    expect(rpc).toHaveBeenCalledWith('apply_agent_feedback_operation', expect.objectContaining({
-      p_implementation_status: 'ready_for_testing',
-    }))
+    expect(rpc).toHaveBeenCalledWith(
+      'apply_agent_feedback_operation',
+      expect.objectContaining({
+        p_implementation_status: 'ready_for_testing',
+      }),
+    )
 
-    await expect(applyAgentFeedbackOperation({
-      shareId: 'share-1',
-      tokenHash: 'hash',
-      commentId: 'comment-1',
-      agentId: 'agent-1',
-      idempotencyKey: 'key-2',
-      operation: 'comment.note',
-      eventType: 'comment.noted',
-      payload: {},
-    })).resolves.toEqual({ outcome: 'duplicate', feedbackEventId: 91, comment: null })
-    expect(rpc).toHaveBeenLastCalledWith('apply_agent_feedback_operation', expect.objectContaining({
-      p_implementation_status: null,
-    }))
+    await expect(
+      applyAgentFeedbackOperation({
+        shareId: 'share-1',
+        tokenHash: 'hash',
+        commentId: 'comment-1',
+        agentId: 'agent-1',
+        idempotencyKey: 'key-2',
+        operation: 'comment.note',
+        eventType: 'comment.noted',
+        payload: {},
+      }),
+    ).resolves.toEqual({ outcome: 'duplicate', feedbackEventId: 91, comment: null })
+    expect(rpc).toHaveBeenLastCalledWith(
+      'apply_agent_feedback_operation',
+      expect.objectContaining({
+        p_implementation_status: null,
+      }),
+    )
 
-    await expect(applyAgentFeedbackOperation({
-      shareId: 'share-1',
-      tokenHash: 'hash',
-      commentId: 'comment-1',
-      agentId: 'agent-1',
-      idempotencyKey: 'key-3',
-      operation: 'comment.start',
-      eventType: 'comment.started',
-      payload: {},
-    })).rejects.toThrow('operation failed')
+    await expect(
+      applyAgentFeedbackOperation({
+        shareId: 'share-1',
+        tokenHash: 'hash',
+        commentId: 'comment-1',
+        agentId: 'agent-1',
+        idempotencyKey: 'key-3',
+        operation: 'comment.start',
+        eventType: 'comment.started',
+        payload: {},
+      }),
+    ).rejects.toThrow('operation failed')
   })
 
   it('accepted-comment queries select target metadata', async () => {
@@ -1287,12 +1458,15 @@ describe('comment functions', () => {
       shareItems: [{ comment_id: 'comment-1' }],
     })
 
-    const comments = await listCommentsForShare({
-      id: 'share-1',
-      projectId: 'pk',
-      scopeType: 'selection',
-      scopePageUrl: null,
-    },'hash')
+    const comments = await listCommentsForShare(
+      {
+        id: 'share-1',
+        projectId: 'pk',
+        scopeType: 'selection',
+        scopePageUrl: null,
+      },
+      'hash',
+    )
 
     expect(selects[0]).toContain('target_type, anchor')
     expect(comments[0].anchor).toEqual({ kind: 'text_range', selectedText: 'términos y condiciones' })
@@ -1300,17 +1474,25 @@ describe('comment functions', () => {
 })
 
 it('authorizes the acting user inside the project feedback read RPC', async () => {
-  const rpc = vi.fn(() => { const q: any = { select: () => q, eq: () => q, order: async () => ({ data: [], error: null }) }; return q })
+  const rpc = vi.fn(() => {
+    const q: any = { select: () => q, eq: () => q, order: async () => ({ data: [], error: null }) }
+    return q
+  })
   vi.mocked(getServiceSupabase).mockReturnValue({ rpc } as never)
   expect(await listProjectComments('pk', { actorUserId: 'u' })).toEqual([])
   expect(rpc).toHaveBeenCalledWith('read_project_feedback', { p_project: 'pk', p_actor: 'u' })
 })
 it('fails a share read on an atomic access rejection and handles missing rows', async () => {
   const share = { id: 's', projectId: 'p', scopeType: 'project' as const, scopePageUrl: null }
-  for (const result of [{ data: null, error: { message: 'share_unavailable' } }, { data: null, error: null }]) {
-    vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => ({ select: () => ({ order: async () => result }) }) } as never)
-    if (result.error) await expect(listCommentsForShare(share,'hash')).rejects.toThrow('share_unavailable')
-    else expect(await listCommentsForShare(share,'hash')).toEqual([])
+  for (const result of [
+    { data: null, error: { message: 'share_unavailable' } },
+    { data: null, error: null },
+  ]) {
+    vi.mocked(getServiceSupabase).mockReturnValue({
+      rpc: () => ({ select: () => ({ order: async () => result }) }),
+    } as never)
+    if (result.error) await expect(listCommentsForShare(share, 'hash')).rejects.toThrow('share_unavailable')
+    else expect(await listCommentsForShare(share, 'hash')).toEqual([])
   }
 })
 
@@ -1318,7 +1500,11 @@ it('paginates project memberships before fetching projects and forwards exact na
   const calls: unknown[] = []
   const result = { data: [], error: null }
   const query: Record<string, unknown> = { then: (done: (value: unknown) => void) => done(result) }
-  for (const method of ['select', 'eq', 'gt', 'order', 'limit']) query[method] = (...args: unknown[]) => { calls.push([method, ...args]); return query }
+  for (const method of ['select', 'eq', 'gt', 'order', 'limit'])
+    query[method] = (...args: unknown[]) => {
+      calls.push([method, ...args])
+      return query
+    }
   vi.mocked(getServiceSupabase).mockReturnValue({ from: () => query } as never)
   expect(await listProjectsForUser('user', { after: 'a', name: 'Acme', limit: 21 })).toEqual([])
   expect(calls).toContainEqual(['gt', 'project_key', 'a'])
@@ -1328,13 +1514,31 @@ it('paginates project memberships before fetching projects and forwards exact na
 it('applies feedback keyset pagination and explicit selection at the database boundary', async () => {
   const calls: unknown[] = []
   const query: Record<string, unknown> = { then: (done: (value: unknown) => void) => done({ data: [], error: null }) }
-  for (const method of ['select', 'eq', 'in', 'or', 'order', 'limit']) query[method] = (...args: unknown[]) => { calls.push([method, ...args]); return query }
+  for (const method of ['select', 'eq', 'in', 'or', 'order', 'limit'])
+    query[method] = (...args: unknown[]) => {
+      calls.push([method, ...args])
+      return query
+    }
   vi.mocked(getServiceSupabase).mockReturnValue({ rpc: () => query } as never)
-  expect(await listProjectComments('project', { actorUserId: 'user', readyForAgent: true, ids: ['id'], cursor: { createdAt: '2026-01-01T00:00:00Z', id: 'id' }, limit: 21 })).toEqual([])
+  expect(
+    await listProjectComments('project', {
+      actorUserId: 'user',
+      readyForAgent: true,
+      ids: ['id'],
+      cursor: { createdAt: '2026-01-01T00:00:00Z', id: 'id' },
+      limit: 21,
+    }),
+  ).toEqual([])
   expect(calls).toContainEqual(['eq', 'status', 'approved'])
-  expect(calls).toContainEqual(['or', 'implementation_status.is.null,implementation_status.not.in.(ready_for_testing,done)'])
+  expect(calls).toContainEqual([
+    'or',
+    'implementation_status.is.null,implementation_status.not.in.(ready_for_testing,done)',
+  ])
   expect(calls).toContainEqual(['in', 'id', ['id']])
-  expect(calls).toContainEqual(['or', 'created_at.lt.2026-01-01T00:00:00Z,and(created_at.eq.2026-01-01T00:00:00Z,id.lt.id)'])
+  expect(calls).toContainEqual([
+    'or',
+    'created_at.lt.2026-01-01T00:00:00Z,and(created_at.eq.2026-01-01T00:00:00Z,id.lt.id)',
+  ])
   expect(calls).toContainEqual(['order', 'id', { ascending: false }])
   expect(calls).toContainEqual(['limit', 21])
 })

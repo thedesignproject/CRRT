@@ -111,10 +111,14 @@ describe('getPrivilegedFetch', () => {
 describe('getServiceSupabase', () => {
   it('builds a secret-key client with persistSession disabled', () => {
     getServiceSupabase()
-    expect(createClient).toHaveBeenCalledWith('https://supa.example', 'sb_secret_test', expect.objectContaining({
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: expect.any(Function) },
-    }))
+    expect(createClient).toHaveBeenCalledWith(
+      'https://supa.example',
+      'sb_secret_test',
+      expect.objectContaining({
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { fetch: expect.any(Function) },
+      }),
+    )
   })
 
   it('falls back to the legacy service-role variable during cutover', () => {
@@ -123,11 +127,9 @@ describe('getServiceSupabase', () => {
 
     getServiceSupabase()
 
-    expect(createClient).toHaveBeenCalledWith(
-      'https://supa.example',
-      'header.payload.signature',
-      { auth: { persistSession: false, autoRefreshToken: false } },
-    )
+    expect(createClient).toHaveBeenCalledWith('https://supa.example', 'header.payload.signature', {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
   })
 
   it('uses the legacy key when the new variable is empty, and prefers a configured new key', () => {
@@ -156,11 +158,9 @@ describe('getServiceSupabase', () => {
 describe('getNonPersistentSupabase', () => {
   it('builds an isolated anon-key auth client', () => {
     getNonPersistentSupabase()
-    expect(createClient).toHaveBeenCalledWith(
-      'https://supa.example',
-      'anon-key',
-      { auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false } },
-    )
+    expect(createClient).toHaveBeenCalledWith('https://supa.example', 'anon-key', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    })
   })
 
   it('requires both public Supabase settings', () => {

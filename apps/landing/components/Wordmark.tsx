@@ -21,16 +21,17 @@ export function Wordmark({ level = 'nav' }: { level?: 'nav' | 'display' }) {
       <span style={{ color: 'var(--foreground, var(--crrt-white))', fontSize: s.mark, fontWeight: s.weight }}>
         CRRT
       </span>
-      <span style={{ color: 'var(--muted-foreground, var(--crrt-ink-mute))', fontSize: s.prompt, fontWeight: s.weight }}>
+      <span
+        style={{ color: 'var(--muted-foreground, var(--crrt-ink-mute))', fontSize: s.prompt, fontWeight: s.weight }}
+      >
         .
       </span>
-      <span style={{ color: 'var(--muted-foreground, var(--crrt-ink-mute))', fontSize: s.prompt, fontWeight: s.weight }}>
+      <span
+        style={{ color: 'var(--muted-foreground, var(--crrt-ink-mute))', fontSize: s.prompt, fontWeight: s.weight }}
+      >
         {'>'}
       </span>
-      <span
-        className="cursor-blink"
-        style={{ color: 'var(--crrt-carrot)', fontSize: s.prompt, fontWeight: s.weight }}
-      >
+      <span className="cursor-blink" style={{ color: 'var(--crrt-carrot)', fontSize: s.prompt, fontWeight: s.weight }}>
         _
       </span>
     </span>

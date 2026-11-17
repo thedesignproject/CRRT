@@ -3,10 +3,14 @@ import { expect, it, vi } from 'vitest'
 import { RecordingTranscript, recordingTime } from './RecordingTranscript'
 import type { RecordingPlayback } from '../../../shared/record/client'
 
-const playback = { recording: { state: 'ready' }, stages: [], transcript: [
-  { id: 'one', start_ms: 1000, end_ms: 3000, text: 'Open the checkout page.' },
-  { id: 'two', start_ms: 4000, end_ms: 6000, text: 'Make the button easier to find.' },
-] } as unknown as RecordingPlayback
+const playback = {
+  recording: { state: 'ready' },
+  stages: [],
+  transcript: [
+    { id: 'one', start_ms: 1000, end_ms: 3000, text: 'Open the checkout page.' },
+    { id: 'two', start_ms: 4000, end_ms: 6000, text: 'Make the button easier to find.' },
+  ],
+} as unknown as RecordingPlayback
 
 it('searches timestamped passages, highlights playback, seeks and clears search', () => {
   const seek = vi.fn()
@@ -34,7 +38,12 @@ it.each([
   ['processing', [{ stage: 'transcription', state: 'done', failure: null }], 'No transcript available'],
   ['ready', [{ stage: 'transcription', state: 'failed', failure: null }], 'Transcription interrupted'],
 ])('explains an empty transcript for %s recordings', (state, stages, title) => {
-  const value = { ...playback, recording: { ...playback.recording, state }, transcript: [], stages } as RecordingPlayback
+  const value = {
+    ...playback,
+    recording: { ...playback.recording, state },
+    transcript: [],
+    stages,
+  } as RecordingPlayback
   render(<RecordingTranscript playback={value} atMs={0} seek={vi.fn()} />)
   expect(screen.getByRole('heading', { name: title })).toBeInTheDocument()
   expect(screen.queryByRole('searchbox')).toBeNull()

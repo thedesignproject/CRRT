@@ -15,12 +15,12 @@ const CARROT_COUNT = 36
 
 type Drop = {
   id: number
-  left: number       // viewport % horizontal
-  delay: number      // ms before this carrot starts falling
-  duration: number   // ms total fall time
-  size: number       // px width/height
-  drift: number      // px horizontal sway target
-  spin: number       // degrees of total rotation
+  left: number // viewport % horizontal
+  delay: number // ms before this carrot starts falling
+  duration: number // ms total fall time
+  size: number // px width/height
+  drift: number // px horizontal sway target
+  spin: number // degrees of total rotation
 }
 
 function generateDrops(): Drop[] {
@@ -44,7 +44,8 @@ export function EasterEgg() {
     let timer = 0
     function onKey(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable) return
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target as HTMLElement)?.isContentEditable)
+        return
       if (e.key.length !== 1) return
       buffer = (buffer + e.key.toLowerCase()).slice(-TRIGGER.length)
       if (buffer === TRIGGER) {

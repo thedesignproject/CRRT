@@ -23,10 +23,20 @@ function mockRes() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    status(code: number) { this.statusCode = code; return this },
-    json(data: unknown) { this.body = data; return this },
-    end() { return this },
-    setHeader(key: string, value: string) { this.headers[key] = value },
+    status(code: number) {
+      this.statusCode = code
+      return this
+    },
+    json(data: unknown) {
+      this.body = data
+      return this
+    },
+    end() {
+      return this
+    },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
   }
 }
 const call = (req: unknown, res: unknown) =>
@@ -103,10 +113,10 @@ describe('api/v1/public/project', () => {
       { accessTokenHash: 'legacy-hash', accessTokenCiphertext: 'legacy-ciphertext' },
       { accessTokenHash: 'hashed', accessTokenCiphertext: 'ciphertext' },
     )
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[public/project] rotated undecryptable share token',
-      { shareId: 'share-1', projectKey: 'proj' },
-    )
+    expect(warnSpy).toHaveBeenCalledWith('[public/project] rotated undecryptable share token', {
+      shareId: 'share-1',
+      projectKey: 'proj',
+    })
   })
 
   it('uses the winning token when another request rotates first', async () => {
@@ -116,7 +126,9 @@ describe('api/v1/public/project', () => {
       .mockResolvedValueOnce(SHARE as never)
       .mockResolvedValueOnce(winningShare as never)
     vi.mocked(decryptToken)
-      .mockImplementationOnce(() => { throw new Error('legacy ciphertext') })
+      .mockImplementationOnce(() => {
+        throw new Error('legacy ciphertext')
+      })
       .mockReturnValueOnce('winning-token')
     vi.mocked(rotateShareToken).mockResolvedValueOnce(null)
 
@@ -126,7 +138,9 @@ describe('api/v1/public/project', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ doc: { token: 'winning-token', slug: 'sl' } })
     expect(decryptToken).toHaveBeenLastCalledWith('winning-ciphertext')
-    expect(warnSpy).toHaveBeenCalledWith('[public/project] deprecated legacy widget Agent session requested', { projectKey: 'proj' })
+    expect(warnSpy).toHaveBeenCalledWith('[public/project] deprecated legacy widget Agent session requested', {
+      projectKey: 'proj',
+    })
     expect(warnSpy).not.toHaveBeenCalledWith('[public/project] rotated undecryptable share token', expect.anything())
   })
 
@@ -140,11 +154,13 @@ describe('api/v1/public/project', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body).toMatchObject({ doc: { token: 'fresh-token', slug: 'new-slug' } })
-    expect(createSystemShare).toHaveBeenCalledWith(expect.objectContaining({
-      projectKey: 'proj',
-      accessTokenHash: 'hashed',
-      accessTokenCiphertext: 'ciphertext',
-    }))
+    expect(createSystemShare).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectKey: 'proj',
+        accessTokenHash: 'hashed',
+        accessTokenCiphertext: 'ciphertext',
+      }),
+    )
   })
 
   it('returns a friendly 500 without leaking the internal error', async () => {
@@ -156,7 +172,10 @@ describe('api/v1/public/project', () => {
 
     expect(res.statusCode).toBe(500)
     expect(res.body).toEqual({ error: 'Session could not be started — please retry.' })
-    expect(errorSpy).toHaveBeenCalledWith('[public/project] session start failed', expect.objectContaining({ projectKey: 'proj' }))
+    expect(errorSpy).toHaveBeenCalledWith(
+      '[public/project] session start failed',
+      expect.objectContaining({ projectKey: 'proj' }),
+    )
   })
 })
 

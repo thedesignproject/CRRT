@@ -50,7 +50,10 @@ type PersonalBulkControls = {
   clearSelection: () => void
 }
 
-type PersonalListProps = Pick<CommentListProps, 'filteredComments' | 'counts' | 'commentsLoading' | 'commentsError' | 'selectedCommentId' | 'setSelectedCommentId'> & {
+type PersonalListProps = Pick<
+  CommentListProps,
+  'filteredComments' | 'counts' | 'commentsLoading' | 'commentsError' | 'selectedCommentId' | 'setSelectedCommentId'
+> & {
   personal: true
   footer?: ReactNode
   bulkControls?: PersonalBulkControls
@@ -65,62 +68,76 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   const selectionAnchor = useRef<string | null>(null)
   function selectItem(id: string, extend: boolean, toggle: (id: string, range?: string[]) => void) {
-    const start = filteredComments.findIndex(c => c.id === selectionAnchor.current)
-    const end = filteredComments.findIndex(c => c.id === id)
-    const range = extend && start >= 0
-      ? filteredComments.slice(Math.min(start, end), Math.max(start, end) + 1).map(c => c.id)
-      : undefined
+    const start = filteredComments.findIndex((c) => c.id === selectionAnchor.current)
+    const end = filteredComments.findIndex((c) => c.id === id)
+    const range =
+      extend && start >= 0
+        ? filteredComments.slice(Math.min(start, end), Math.max(start, end) + 1).map((c) => c.id)
+        : undefined
     selectionAnchor.current = id
     toggle(id, range)
   }
   return (
-    <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
+    <div
+      className={cn(
+        'dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card',
+        props.personal && 'h-[38vh] md:h-auto',
+      )}
+    >
       <div className="px-4 pt-4 pb-2.5 border-b border-border">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-base font-medium text-foreground tracking-tight">
             {counts.all} {props.personal ? 'Inbox Items' : 'Feedback Items'}
           </h2>
-          {(controls || personalBulk) && <button
-            type="button"
-            aria-pressed={bulkMode}
-            onClick={() => bulkMode
-              ? (controls?.exitBulkMode ?? personalBulk?.exitBulkMode)?.()
-              : (controls?.enterBulkMode ?? personalBulk?.enterBulkMode)?.()}
-            className={cn(
-              'text-[11px] font-medium transition-colors flex items-center gap-1',
-              bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
-          </button>}
+          {(controls || personalBulk) && (
+            <button
+              type="button"
+              aria-pressed={bulkMode}
+              onClick={() =>
+                bulkMode
+                  ? (controls?.exitBulkMode ?? personalBulk?.exitBulkMode)?.()
+                  : (controls?.enterBulkMode ?? personalBulk?.enterBulkMode)?.()
+              }
+              className={cn(
+                'text-[11px] font-medium transition-colors flex items-center gap-1',
+                bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
+            </button>
+          )}
         </div>
-        {controls && <div className="grid grid-cols-5 gap-1 pb-1">
-          {(['all', 'open', 'ready', 'ready_for_testing', 'done'] as StatusFilter[]).map((f) => {
-            const count = counts[f as keyof Counts] ?? 0
-            return (
-              <button
-                type="button"
-                key={f}
-                aria-pressed={controls.statusFilter === f}
-                onClick={() => controls.selectFilter(f)}
-                className={cn(
-                  'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
-                  controls.statusFilter === f
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                )}
-              >
-                {FILTER_LABELS[f]}
-                <span className={cn(
-                  'ml-1.5 text-[10px] font-medium min-w-[18px] text-center py-0.5 px-1 rounded-full',
-                  controls.statusFilter === f
-                    ? 'bg-muted text-foreground'
-                    : 'bg-muted text-muted-foreground'
-                )}>{count}</span>
-              </button>
-            )
-          })}
-        </div>}
+        {controls && (
+          <div className="grid grid-cols-5 gap-1 pb-1">
+            {(['all', 'open', 'ready', 'ready_for_testing', 'done'] as StatusFilter[]).map((f) => {
+              const count = counts[f as keyof Counts] ?? 0
+              return (
+                <button
+                  type="button"
+                  key={f}
+                  aria-pressed={controls.statusFilter === f}
+                  onClick={() => controls.selectFilter(f)}
+                  className={cn(
+                    'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
+                    controls.statusFilter === f
+                      ? 'bg-accent text-foreground'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+                  )}
+                >
+                  {FILTER_LABELS[f]}
+                  <span
+                    className={cn(
+                      'ml-1.5 text-[10px] font-medium min-w-[18px] text-center py-0.5 px-1 rounded-full',
+                      controls.statusFilter === f ? 'bg-muted text-foreground' : 'bg-muted text-muted-foreground',
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {controls && (
@@ -130,18 +147,21 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
             onClick={controls.toggleSelectAllVisible}
             className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
           >
-            {filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id)) ? 'Deselect all' : 'Select all'}
+            {filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id))
+              ? 'Deselect all'
+              : 'Select all'}
           </button>
-          <span className="text-[11px] text-muted-foreground">
-            {bulkSelectedIds.size} selected
-          </span>
+          <span className="text-[11px] text-muted-foreground">{bulkSelectedIds.size} selected</span>
         </div>
       )}
 
       {personalBulk && (
         <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
-          <button type="button" onClick={personalBulk.toggleSelectAllVisible}
-            className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground">
+          <button
+            type="button"
+            onClick={personalBulk.toggleSelectAllVisible}
+            className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground"
+          >
             {personalBulk.allVisibleSelected ? 'Deselect page' : 'Select page'}
           </button>
           <span className="text-[11px] text-muted-foreground">{personalBulk.selectedCount} selected</span>
@@ -149,11 +169,30 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
       )}
 
       {personalBulk && (personalBulk.canSelectAllMatching || personalBulk.allMatchingSelected) && (
-        <div className="border-b border-border bg-muted/35 px-4 py-2 text-center text-[11px] text-muted-foreground" role="status">
-          {personalBulk.allMatchingSelected ? <>
-            All {counts.all} Inbox items are selected.{' '}
-            <button type="button" onClick={personalBulk.clearSelection} className="font-semibold text-foreground hover:underline">Clear selection</button>
-          </> : <button type="button" onClick={personalBulk.selectAllMatching} className="font-semibold text-foreground hover:underline">Select all {counts.all} in Inbox</button>}
+        <div
+          className="border-b border-border bg-muted/35 px-4 py-2 text-center text-[11px] text-muted-foreground"
+          role="status"
+        >
+          {personalBulk.allMatchingSelected ? (
+            <>
+              All {counts.all} Inbox items are selected.{' '}
+              <button
+                type="button"
+                onClick={personalBulk.clearSelection}
+                className="font-semibold text-foreground hover:underline"
+              >
+                Clear selection
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={personalBulk.selectAllMatching}
+              className="font-semibold text-foreground hover:underline"
+            >
+              Select all {counts.all} in Inbox
+            </button>
+          )}
         </div>
       )}
 
@@ -174,7 +213,9 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               <ChatIcon className="text-muted-foreground" />
             </div>
             <p className="text-sm font-semibold text-foreground mb-1">No comments</p>
-            <p className="text-xs text-muted-foreground">{props.personal ? 'Your Inbox is empty.' : 'Nothing here yet for this filter.'}</p>
+            <p className="text-xs text-muted-foreground">
+              {props.personal ? 'Your Inbox is empty.' : 'Nothing here yet for this filter.'}
+            </p>
           </div>
         ) : (
           <div className="animate-stagger">
@@ -185,79 +226,100 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
 
               return (
                 <div key={comment.id} className="relative flex items-start">
-                  {(controls || personalBulk) && <input
-                    type="checkbox"
-                    aria-label={`Select feedback: ${comment.body}`}
-                    title="Shift-click to select a range"
-                    checked={isChecked}
-                    onChange={event => selectItem(comment.id, (event.nativeEvent as MouseEvent).shiftKey, (controls ?? personalBulk)!.toggleBulkSelect)}
-                    className="mt-4 ml-4 shrink-0 accent-foreground"
-                  />}
-                <button
-                  type="button"
-                  aria-pressed={bulkMode ? isChecked : isActive}
-                  onClick={() => bulkMode
-                    ? (controls?.toggleBulkSelect ?? personalBulk?.toggleBulkSelect)?.(comment.id)
-                    : setSelectedCommentId(comment.id)}
-                  className={cn(
-                    'relative w-full text-left px-4 py-3 border-b border-border/50 card-hover transition-colors',
-                    isActive && !bulkMode && 'bg-accent',
-                    bulkMode && isChecked ? 'bg-muted' : !isActive && 'hover:bg-accent/70',
-                    inactive && !isChecked && 'bg-muted/30'
+                  {(controls || personalBulk) && (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select feedback: ${comment.body}`}
+                      title="Shift-click to select a range"
+                      checked={isChecked}
+                      onChange={(event) =>
+                        selectItem(
+                          comment.id,
+                          (event.nativeEvent as MouseEvent).shiftKey,
+                          (controls ?? personalBulk)!.toggleBulkSelect,
+                        )
+                      }
+                      className="mt-4 ml-4 shrink-0 accent-foreground"
+                    />
                   )}
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
-                        style={{ background: comment.authorColor }} aria-hidden="true"
-                      >{comment.authorInitial}</div>
-                      <span className="text-[13px] font-medium text-foreground">{comment.author}</span>
+                  <button
+                    type="button"
+                    aria-pressed={bulkMode ? isChecked : isActive}
+                    onClick={() =>
+                      bulkMode
+                        ? (controls?.toggleBulkSelect ?? personalBulk?.toggleBulkSelect)?.(comment.id)
+                        : setSelectedCommentId(comment.id)
+                    }
+                    className={cn(
+                      'relative w-full text-left px-4 py-3 border-b border-border/50 card-hover transition-colors',
+                      isActive && !bulkMode && 'bg-accent',
+                      bulkMode && isChecked ? 'bg-muted' : !isActive && 'hover:bg-accent/70',
+                      inactive && !isChecked && 'bg-muted/30',
+                    )}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
+                          style={{ background: comment.authorColor }}
+                          aria-hidden="true"
+                        >
+                          {comment.authorInitial}
+                        </div>
+                        <span className="text-[13px] font-medium text-foreground">{comment.author}</span>
+                      </div>
+                      <span className="text-[10px] text-muted-foreground">{timeAgo(comment.createdAt)}</span>
                     </div>
-                    <span className="text-[10px] text-muted-foreground">{timeAgo(comment.createdAt)}</span>
-                  </div>
 
-                  <p className={cn(
-                    'text-sm leading-relaxed mb-2 line-clamp-2 pl-[26px] break-words',
-                    inactive
-                      ? 'text-muted-foreground'
-                      : isActive && !bulkMode
-                        ? 'text-foreground/85'
-                        : 'text-muted-foreground'
-                  )}>
-                    {comment.body}
-                  </p>
+                    <p
+                      className={cn(
+                        'text-sm leading-relaxed mb-2 line-clamp-2 pl-[26px] break-words',
+                        inactive
+                          ? 'text-muted-foreground'
+                          : isActive && !bulkMode
+                            ? 'text-foreground/85'
+                            : 'text-muted-foreground',
+                      )}
+                    >
+                      {comment.body}
+                    </p>
 
-                  <div className="flex items-center gap-1.5 pl-[26px] flex-wrap">
-                    {!props.personal && <StatusBadge comment={comment} />}
-                    {!props.personal && (
-                      <span className={cn(
-                        'rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide',
-                        comment.visibility === 'internal'
-                          ? 'bg-muted text-muted-foreground'
-                          : 'bg-muted text-muted-foreground',
-                      )}>
-                        {comment.visibility ?? 'shared'}
-                      </span>
-                    )}
-                    {props.personal && <span className="text-[10px] text-muted-foreground truncate" title={comment.pageUrl ?? ''}>{comment.pageUrl}</span>}
-                    {comment.claimedByAgentId && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-in-progress">
-                        <span className="w-1.5 h-1.5 rounded-full bg-status-in-progress animate-pulse-dot" />
-                        {comment.claimedByAgentId}
-                      </span>
-                    )}
-                    {comment.targetType === 'text_range' && comment.anchor ? (
-                      <span className="text-[10px] text-muted-foreground italic ml-auto truncate max-w-[140px]">
-                        &ldquo;{comment.anchor.selectedText}&rdquo;
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground font-mono ml-auto truncate max-w-[140px]">
-                        {comment.selector?.split(' > ').pop() || 'No page context'}
-                      </span>
-                    )}
-                  </div>
-                </button>
+                    <div className="flex items-center gap-1.5 pl-[26px] flex-wrap">
+                      {!props.personal && <StatusBadge comment={comment} />}
+                      {!props.personal && (
+                        <span
+                          className={cn(
+                            'rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide',
+                            comment.visibility === 'internal'
+                              ? 'bg-muted text-muted-foreground'
+                              : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {comment.visibility ?? 'shared'}
+                        </span>
+                      )}
+                      {props.personal && (
+                        <span className="text-[10px] text-muted-foreground truncate" title={comment.pageUrl ?? ''}>
+                          {comment.pageUrl}
+                        </span>
+                      )}
+                      {comment.claimedByAgentId && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-in-progress">
+                          <span className="w-1.5 h-1.5 rounded-full bg-status-in-progress animate-pulse-dot" />
+                          {comment.claimedByAgentId}
+                        </span>
+                      )}
+                      {comment.targetType === 'text_range' && comment.anchor ? (
+                        <span className="text-[10px] text-muted-foreground italic ml-auto truncate max-w-[140px]">
+                          &ldquo;{comment.anchor.selectedText}&rdquo;
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-muted-foreground font-mono ml-auto truncate max-w-[140px]">
+                          {comment.selector?.split(' > ').pop() || 'No page context'}
+                        </span>
+                      )}
+                    </div>
+                  </button>
                 </div>
               )
             })}

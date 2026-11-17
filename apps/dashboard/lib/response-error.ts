@@ -1,4 +1,7 @@
-export function responseError(body: string, status: number): Error & { status: number; resource?: string; code?: string } {
+export function responseError(
+  body: string,
+  status: number,
+): Error & { status: number; resource?: string; code?: string } {
   let message = body || `Request failed with ${status}`
   let resource: string | undefined
   let code: string | undefined
@@ -8,6 +11,8 @@ export function responseError(body: string, status: number): Error & { status: n
     else message = `Request failed with ${status}`
     if (typeof parsed?.code === 'string') code = parsed.code
     if (typeof parsed?.resource === 'string') resource = parsed.resource
-  } catch { /* Plain-text errors from proxies remain readable. */ }
+  } catch {
+    /* Plain-text errors from proxies remain readable. */
+  }
   return Object.assign(new Error(message), { status, resource, code })
 }

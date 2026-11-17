@@ -36,12 +36,18 @@ async function createRun(session: string, ip: string, key: string) {
 }
 
 async function completeStage(auditId: string, stage: 'explorer' | 'critic', leaseSeconds = 60) {
-  const [lease] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, ${stage}, ${leaseSeconds}) as result`
+  const [lease] =
+    await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, ${stage}, ${leaseSeconds}) as result`
   expect(lease.result.status).toBe('acquired')
-  const payload = stage === 'explorer'
-    ? { evidence: [], coverage: { evaluatedSources: ['url'], unavailableSources: [], routesAttempted: 1, routesEvaluated: 1 } }
-    : { candidates: [] }
-  const [completed] = await sql!`select public.complete_audit_stage(${auditId}::uuid, ${stage}, ${lease.result.leaseToken}, ${sql!.json(payload)}) as result`
+  const payload =
+    stage === 'explorer'
+      ? {
+          evidence: [],
+          coverage: { evaluatedSources: ['url'], unavailableSources: [], routesAttempted: 1, routesEvaluated: 1 },
+        }
+      : { candidates: [] }
+  const [completed] =
+    await sql!`select public.complete_audit_stage(${auditId}::uuid, ${stage}, ${lease.result.leaseToken}, ${sql!.json(payload)}) as result`
   expect(completed.result.status).toBe('completed')
 }
 
@@ -57,16 +63,15 @@ afterAll(async () => {
 
 integration('audit schema against local Postgres', () => {
   it('denies direct anonymous reads and enforces concurrent quota plus truthful replay', async () => {
-    await expect(sql!.begin(async (transaction) => {
-      await transaction`set local role anon`
-      await transaction`select id from public.audit_runs limit 1`
-    })).rejects.toThrow()
+    await expect(
+      sql!.begin(async (transaction) => {
+        await transaction`set local role anon`
+        await transaction`select id from public.audit_runs limit 1`
+      }),
+    ).rejects.toThrow()
 
     const { session, ip } = identity()
-    const results = await Promise.all([
-      createRun(session, ip, 'concurrent-a'),
-      createRun(session, ip, 'concurrent-b'),
-    ])
+    const results = await Promise.all([createRun(session, ip, 'concurrent-a'), createRun(session, ip, 'concurrent-b')])
     expect(results.map((result) => result.status).sort()).toEqual(['created', 'rate_limited'])
     const created = results.find((result) => result.status === 'created')!
     const replay = await createRun(session, ip, created === results[0] ? 'concurrent-a' : 'concurrent-b')
@@ -98,7 +103,8 @@ integration('audit schema against local Postgres', () => {
       where audit_runs.id = ${auditId}::uuid group by audit_runs.status`
     expect(failure).toMatchObject({ status: 'failed', failures: 1 })
     await sql!`delete from public.audit_runs where id = ${auditId}::uuid`
-    const [remaining] = await sql!`select count(*)::int as count from public.audit_evidence where audit_id = ${auditId}::uuid`
+    const [remaining] =
+      await sql!`select count(*)::int as count from public.audit_evidence where audit_id = ${auditId}::uuid`
     expect(remaining.count).toBe(0)
   })
 
@@ -110,18 +116,26 @@ integration('audit schema against local Postgres', () => {
     await sql!`select public.complete_audit_stage(${auditId}::uuid, 'explorer', ${explorer.result.leaseToken}, ${sql!.json({ evidence: [], coverage: { evaluatedSources: ['url'], unavailableSources: [] } })})`
     const [critic] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, 'critic', 60) as result`
     const requested = new Date(Date.now() + 1_000)
-    const [deferred] = await sql!`select public.defer_audit_stage_retry(${auditId}::uuid, 'critic', ${critic.result.leaseToken}, ${requested}) as result`
+    const [deferred] =
+      await sql!`select public.defer_audit_stage_retry(${auditId}::uuid, 'critic', ${critic.result.leaseToken}, ${requested}) as result`
     expect(deferred.result).toMatchObject({ status: 'deferred' })
     expect(new Date(deferred.result.retryAt).getTime()).toBeGreaterThanOrEqual(Date.now() + 59_000)
-    const [released] = await sql!`select stage_lease_token, stage_lease_expires_at, retry_not_before from public.audit_runs where id = ${auditId}::uuid`
+    const [released] =
+      await sql!`select stage_lease_token, stage_lease_expires_at, retry_not_before from public.audit_runs where id = ${auditId}::uuid`
     expect(released).toMatchObject({ stage_lease_token: null, stage_lease_expires_at: null })
     expect(released.retry_not_before.getTime()).toBe(new Date(deferred.result.retryAt).getTime())
     const [premature] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, 'critic', 60) as result`
     expect(premature.result).toMatchObject({ status: 'deferred', retryAt: deferred.result.retryAt })
     const [finished] = await sql!`select public.finish_audit_model_rate_limited(${auditId}::uuid) as result`
     expect(finished.result).toMatchObject({ status: 'partial', findingCount: 0 })
-    const [run] = await sql!`select status, current_stage, error_code, coverage->>'partialReason' as reason from public.audit_runs where id = ${auditId}::uuid`
-    expect(run).toMatchObject({ status: 'partial', current_stage: 'completed', error_code: 'model_rate_limited', reason: expect.any(String) })
+    const [run] =
+      await sql!`select status, current_stage, error_code, coverage->>'partialReason' as reason from public.audit_runs where id = ${auditId}::uuid`
+    expect(run).toMatchObject({
+      status: 'partial',
+      current_stage: 'completed',
+      error_code: 'model_rate_limited',
+      reason: expect.any(String),
+    })
 
     const { session: otherSession, ip: otherIp } = identity()
     const other = await createRun(otherSession, otherIp, 'unguarded-rate-limit')
@@ -139,9 +153,11 @@ integration('audit schema against local Postgres', () => {
     const [verifier] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, 'verifier', 60) as result`
     expect(verifier.result.status).toBe('acquired')
 
-    const [generic] = await sql!`select public.complete_audit_stage(${auditId}::uuid, 'verifier', ${verifier.result.leaseToken}, ${sql!.json({})}) as result`
+    const [generic] =
+      await sql!`select public.complete_audit_stage(${auditId}::uuid, 'verifier', ${verifier.result.leaseToken}, ${sql!.json({})}) as result`
     expect(generic.result.status).toBe('invalid_input')
-    const [renewed] = await sql!`select public.renew_audit_stage_lease(${auditId}::uuid, 'verifier', ${verifier.result.leaseToken}, 60) as result`
+    const [renewed] =
+      await sql!`select public.renew_audit_stage_lease(${auditId}::uuid, 'verifier', ${verifier.result.leaseToken}, 60) as result`
     expect(renewed.result.status).toBe('renewed')
     const [finalized] = await sql!`select public.finalize_audit_verification(
       ${auditId}::uuid, ${verifier.result.leaseToken}, ${sql!.json([])},
@@ -156,7 +172,8 @@ integration('audit schema against local Postgres', () => {
     const auditId = created.auditId!
     const [lease] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, 'explorer', 1) as result`
     expect(lease.result.status).toBe('acquired')
-    const [renewed] = await sql!`select public.renew_audit_stage_lease(${auditId}::uuid, 'explorer', ${lease.result.leaseToken}, 2) as result`
+    const [renewed] =
+      await sql!`select public.renew_audit_stage_lease(${auditId}::uuid, 'explorer', ${lease.result.leaseToken}, 2) as result`
     expect(renewed.result.status).toBe('renewed')
 
     await sql!`select pg_sleep(1.1)`
@@ -168,30 +185,41 @@ integration('audit schema against local Postgres', () => {
     expect(recovered.result.leaseToken).not.toBe(lease.result.leaseToken)
   })
 
-  it.each(['critic', 'verifier'] as const)('atomically finishes a fenced %s budget exhaustion as partial', async (stage) => {
-    const { session, ip } = identity()
-    const created = await createRun(session, ip, `partial-${stage}`)
-    const auditId = created.auditId!
-    await completeStage(auditId, 'explorer')
-    if (stage === 'verifier') await completeStage(auditId, 'critic')
-    const [lease] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, ${stage}, 60) as result`
-    expect(lease.result.status).toBe('acquired')
+  it.each(['critic', 'verifier'] as const)(
+    'atomically finishes a fenced %s budget exhaustion as partial',
+    async (stage) => {
+      const { session, ip } = identity()
+      const created = await createRun(session, ip, `partial-${stage}`)
+      const auditId = created.auditId!
+      await completeStage(auditId, 'explorer')
+      if (stage === 'verifier') await completeStage(auditId, 'critic')
+      const [lease] = await sql!`select public.acquire_audit_stage_lease(${auditId}::uuid, ${stage}, 60) as result`
+      expect(lease.result.status).toBe('acquired')
 
-    const [wrongLease] = await sql!`select public.finish_audit_partial(
+      const [wrongLease] = await sql!`select public.finish_audit_partial(
       ${auditId}::uuid, ${stage}, ${randomUUID()}::uuid,
       ${sql!.json({ evaluatedSources: ['url'], unavailableSources: [], partialReason: 'Budget reached' })},
       'model_timeout', 'Budget reached'
     ) as result`
-    expect(wrongLease.result.status).toBe('lease_mismatch')
-    const [finished] = await sql!`select public.finish_audit_partial(
+      expect(wrongLease.result.status).toBe('lease_mismatch')
+      const [finished] = await sql!`select public.finish_audit_partial(
       ${auditId}::uuid, ${stage}, ${lease.result.leaseToken},
       ${sql!.json({ evaluatedSources: ['url'], unavailableSources: [], partialReason: 'Budget reached' })},
       'model_timeout', 'Budget reached'
     ) as result`
-    expect(finished.result).toMatchObject({ status: 'partial', findingCount: 0 })
-    const [run] = await sql!`select status, current_stage, error_code, stage_lease_token, retry_not_before from public.audit_runs where id = ${auditId}::uuid`
-    expect(run).toMatchObject({ status: 'partial', current_stage: 'completed', error_code: 'model_timeout', stage_lease_token: null, retry_not_before: null })
-    const [events] = await sql!`select count(*)::int as count from public.audit_events where audit_id = ${auditId}::uuid and event_type = 'audit.coverage.partial'`
-    expect(events.count).toBe(1)
-  })
+      expect(finished.result).toMatchObject({ status: 'partial', findingCount: 0 })
+      const [run] =
+        await sql!`select status, current_stage, error_code, stage_lease_token, retry_not_before from public.audit_runs where id = ${auditId}::uuid`
+      expect(run).toMatchObject({
+        status: 'partial',
+        current_stage: 'completed',
+        error_code: 'model_timeout',
+        stage_lease_token: null,
+        retry_not_before: null,
+      })
+      const [events] =
+        await sql!`select count(*)::int as count from public.audit_events where audit_id = ${auditId}::uuid and event_type = 'audit.coverage.partial'`
+      expect(events.count).toBe(1)
+    },
+  )
 })

@@ -15,11 +15,7 @@ export type CommentActivityEmailInput = {
 }
 
 function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 export function getCommentActivityCooldownSeconds(env = process.env) {
@@ -42,11 +38,7 @@ export function canSendCommentActivityEmail(recipients: string[], env = process.
 }
 
 export function hasCommentActivityEmailConfig(env = process.env) {
-  return Boolean(
-    env.RESEND_API_KEY
-      && env.SUPABASE_URL
-      && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY),
-  )
+  return Boolean(env.RESEND_API_KEY && env.SUPABASE_URL && (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY))
 }
 
 export function buildCommentActivityEmail(input: CommentActivityEmailInput) {
@@ -101,9 +93,15 @@ export async function sendCommentActivityEmail(input: CommentActivityEmailInput,
   const message = buildCommentActivityEmail(input)
   const bodies: string[] = []
   for (let offset = 0; offset < recipients.length; offset += MAX_BATCH_SIZE) {
-    bodies.push(JSON.stringify(recipients.slice(offset, offset + MAX_BATCH_SIZE).map((recipient) => ({
-      from, to: [recipient], ...message,
-    }))))
+    bodies.push(
+      JSON.stringify(
+        recipients.slice(offset, offset + MAX_BATCH_SIZE).map((recipient) => ({
+          from,
+          to: [recipient],
+          ...message,
+        })),
+      ),
+    )
   }
   await enqueueCommentEmail(deliveryId, bodies)
   // Delivery now belongs to the durable queue. A transient worker failure must

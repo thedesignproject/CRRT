@@ -12,12 +12,16 @@ describe('updateCommentVisibility', () => {
     })
     vi.stubGlobal('fetch', fetch)
 
-    await expect(updateCommentVisibility('/api', 'session', 'c/1', 'internal'))
-      .resolves.toMatchObject({ visibility: 'internal' })
-    expect(fetch).toHaveBeenCalledWith('/api/v1/comments/c%2F1/visibility', expect.objectContaining({
-      method: 'PATCH',
-      body: JSON.stringify({ visibility: 'internal' }),
-      headers: expect.objectContaining({ Authorization: 'Bearer session' }),
-    }))
+    await expect(updateCommentVisibility('/api', 'session', 'c/1', 'internal')).resolves.toMatchObject({
+      visibility: 'internal',
+    })
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/comments/c%2F1/visibility',
+      expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ visibility: 'internal' }),
+        headers: expect.objectContaining({ Authorization: 'Bearer session' }),
+      }),
+    )
   })
 })

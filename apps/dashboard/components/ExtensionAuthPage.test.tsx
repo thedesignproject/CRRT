@@ -4,7 +4,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const createExtensionAuthHandoff = vi.hoisted(() => vi.fn())
 vi.mock('../api', () => ({ createExtensionAuthHandoff }))
-vi.mock('./LoginPage', () => ({ LoginPage: (props: unknown) => <div data-testid="login">{JSON.stringify(props)}</div> }))
+vi.mock('./LoginPage', () => ({
+  LoginPage: (props: unknown) => <div data-testid="login">{JSON.stringify(props)}</div>,
+}))
 
 import { ExtensionAuthPage } from './ExtensionAuthPage'
 
@@ -42,12 +44,22 @@ describe('ExtensionAuthPage', () => {
 
   it('creates one handoff under strict rendering and returns to Chrome', async () => {
     const replace = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
-    createExtensionAuthHandoff.mockResolvedValue({ redirectUrl: `${redirectUri}?code=${'c'.repeat(43)}&state=${'a'.repeat(43)}` })
-    render(<StrictMode><ExtensionAuthPage apiBase="https://crrt.ai/api" accessToken="access" /></StrictMode>)
+    createExtensionAuthHandoff.mockResolvedValue({
+      redirectUrl: `${redirectUri}?code=${'c'.repeat(43)}&state=${'a'.repeat(43)}`,
+    })
+    render(
+      <StrictMode>
+        <ExtensionAuthPage apiBase="https://crrt.ai/api" accessToken="access" />
+      </StrictMode>,
+    )
     expect(screen.getByLabelText('Connecting')).toBeInTheDocument()
     await waitFor(() => expect(replace).toHaveBeenCalledOnce())
     expect(createExtensionAuthHandoff).toHaveBeenCalledOnce()
-    expect(createExtensionAuthHandoff).toHaveBeenCalledWith('https://crrt.ai/api', 'access', expect.objectContaining({ redirectUri }))
+    expect(createExtensionAuthHandoff).toHaveBeenCalledWith(
+      'https://crrt.ai/api',
+      'access',
+      expect.objectContaining({ redirectUri }),
+    )
   })
 
   it('shows specific and fallback handoff failures', async () => {
@@ -73,7 +85,11 @@ describe('ExtensionAuthPage', () => {
 
     window.history.replaceState({}, '', `/dashboard/extension-auth${search('g')}`)
     let reject!: (cause: unknown) => void
-    createExtensionAuthHandoff.mockReturnValueOnce(new Promise((_, fail) => { reject = fail }))
+    createExtensionAuthHandoff.mockReturnValueOnce(
+      new Promise((_, fail) => {
+        reject = fail
+      }),
+    )
     view = render(<ExtensionAuthPage apiBase="https://crrt.ai/api" accessToken="access" />)
     view.unmount()
     reject(new Error('late failure'))

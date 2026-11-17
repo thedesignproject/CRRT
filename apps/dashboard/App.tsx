@@ -7,7 +7,15 @@ import { SuggestedProjects } from './components/SuggestedProjects'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { InboxMoveUndo } from './components/InboxMoveUndo'
 import type { InboxUndoItem } from './api'
-import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
+import {
+  acceptInvite as apiAcceptInvite,
+  beginBillingCheckout,
+  createShare,
+  getPrompt,
+  updateCommentVisibility as apiUpdateVisibility,
+  updateImplementationStatus as apiUpdateImpl,
+  updateReviewStatus as apiUpdateReview,
+} from './api'
 import { useProjects } from './hooks/useProjects'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
@@ -66,7 +74,11 @@ function markOnboarded() {
 }
 
 export function App() {
-  return <DocumentRecoveryProvider><AppRoutes /></DocumentRecoveryProvider>
+  return (
+    <DocumentRecoveryProvider>
+      <AppRoutes />
+    </DocumentRecoveryProvider>
+  )
 }
 
 function AppRoutes() {
@@ -88,7 +100,13 @@ function AppRoutes() {
   // Recovery can fail while another session is still signed in. Let the user
   // request a fresh link without being routed into the dashboard.
   if (pathname === '/forgot-password') return <LoginPage />
-  const sharedDocument = documentRoute(pathname, API_BASE, session?.access_token ?? null, user?.id ?? null, user?.email ?? '')
+  const sharedDocument = documentRoute(
+    pathname,
+    API_BASE,
+    session?.access_token ?? null,
+    user?.id ?? null,
+    user?.email ?? '',
+  )
   if (sharedDocument) return sharedDocument
 
   if (pathname === '/recording' && !window.location.search) return <RecordingSharePage apiBase={API_BASE} />
@@ -101,46 +119,98 @@ function AppRoutes() {
     )
   }
 
-  if (pathname === '/document-unlock') return <DocumentUnlockPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
+  if (pathname === '/document-unlock')
+    return <DocumentUnlockPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
   if (pathname === '/mcp-auth') return <McpAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
-  if (pathname === '/widget-auth') return <WidgetAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
+  if (pathname === '/widget-auth')
+    return <WidgetAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
 
   if (pathname === '/extension-auth') {
     return <ExtensionAuthPage apiBase={API_BASE} accessToken={session?.access_token ?? null} />
   }
 
-  if (!session || !user) return <LoginPage continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined} />
-  if (pathname === '/documents') return <DocumentsPage key={user.id} userId={user.id} apiBase={API_BASE} session={session.access_token} author={user.email ?? 'Project member'} />
+  if (!session || !user)
+    return (
+      <LoginPage
+        continuationPath={pathname === '/documents' ? route('/documents') + window.location.search : undefined}
+      />
+    )
+  if (pathname === '/documents')
+    return (
+      <DocumentsPage
+        key={user.id}
+        userId={user.id}
+        apiBase={API_BASE}
+        session={session.access_token}
+        author={user.email ?? 'Project member'}
+      />
+    )
 
   const checkoutState = new URLSearchParams(window.location.search).get('billingState') ?? undefined
   const initialPlan = billingPlanSelection(window.location.search)
-  if (pathname === '/billing' || checkoutState || initialPlan) return <BillingPage apiBase={API_BASE} accessToken={session.access_token} email={user.email} checkoutState={checkoutState} initialPlan={initialPlan} />
+  if (pathname === '/billing' || checkoutState || initialPlan)
+    return (
+      <BillingPage
+        apiBase={API_BASE}
+        accessToken={session.access_token}
+        email={user.email}
+        checkoutState={checkoutState}
+        initialPlan={initialPlan}
+      />
+    )
 
   const auditMatch = pathname.match(/^\/audits\/([^/]+)$/)
-  if (auditMatch) return <ProductAuditPage apiBase={API_BASE} accessToken={session.access_token} auditId={decodeURIComponent(auditMatch[1])} />
+  if (auditMatch)
+    return (
+      <ProductAuditPage
+        apiBase={API_BASE}
+        accessToken={session.access_token}
+        auditId={decodeURIComponent(auditMatch[1])}
+      />
+    )
   return <AuthenticatedApp accessToken={session.access_token} user={user} onSignOut={signOut} />
 }
 
-function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: string; user: import('@supabase/supabase-js').User; onSignOut: () => void }) {
+function AuthenticatedApp({
+  accessToken,
+  user,
+  onSignOut,
+}: {
+  accessToken: string
+  user: import('@supabase/supabase-js').User
+  onSignOut: () => void
+}) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
-  const { projects, loading: projectsLoading, error: projectsError, claimProject, checkAvailability, refresh: refreshProjects } = useProjects(API_BASE, accessToken)
+  const {
+    projects,
+    loading: projectsLoading,
+    error: projectsError,
+    claimProject,
+    checkAvailability,
+    refresh: refreshProjects,
+  } = useProjects(API_BASE, accessToken)
   useEffect(() => {
-    const onFocus = () => { void refreshProjects() }
+    const onFocus = () => {
+      void refreshProjects()
+    }
     window.addEventListener('focus', onFocus)
     return () => window.removeEventListener('focus', onFocus)
   }, [refreshProjects])
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording'>(() => {
+  const [view, setView] = useState<
+    'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording'
+  >(() => {
     if (relPath(window.location.pathname) === '/recording') return 'recording'
     const requested = new URLSearchParams(window.location.search).get('view')
     return requested === 'extension-comments' || requested === 'recordings' ? requested : 'feedback'
   })
   useEffect(() => {
     if (view === 'recording' || relPath(window.location.pathname) !== '/recording') return
-    const query = view === 'recordings' ? '?view=recordings' : view === 'extension-comments' ? '?view=extension-comments' : ''
+    const query =
+      view === 'recordings' ? '?view=recordings' : view === 'extension-comments' ? '?view=extension-comments' : ''
     window.history.replaceState(null, '', `${route('/')}${query}`)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, [view])
@@ -149,21 +219,37 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setView('settings')
   }, [])
   const accessReviewError = useAccessReviewLink(projects, projectsLoading, projectsError, openAccessReview)
-  const accessReviewNotice = accessReviewError && <p role="alert" className="p-4 text-sm">{accessReviewError}</p>
+  const accessReviewNotice = accessReviewError && (
+    <p role="alert" className="p-4 text-sm">
+      {accessReviewError}
+    </p>
+  )
   const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite'))
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
-  const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
-  const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
+  const [pendingCommentSelection, setPendingCommentSelection] = useState<{
+    projectKey: string
+    commentId: string
+  } | null>(null)
+  const {
+    comments: serverComments,
+    commentsProjectId,
+    loading: commentsLoading,
+    error: commentsError,
+    refresh: refreshComments,
+  } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const feedbackScopeKey = JSON.stringify([accessToken, selectedProject, view])
   const feedbackWrites = useRef({ key: feedbackScopeKey, version: 0, pending: new Set<Promise<unknown>>() })
   if (feedbackWrites.current.key !== feedbackScopeKey) {
     feedbackWrites.current = { key: feedbackScopeKey, version: 0, pending: new Set() }
   }
-  useEffect(() => () => {
-    feedbackWrites.current = { ...feedbackWrites.current, pending: new Set() }
-  }, [])
+  useEffect(
+    () => () => {
+      feedbackWrites.current = { ...feedbackWrites.current, pending: new Set() }
+    },
+    [],
+  )
   const trackFeedbackWrite = useCallback(async <T,>(operation: Promise<T>) => {
     const scope = feedbackWrites.current
     scope.version++
@@ -174,16 +260,19 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       scope.pending.delete(operation)
     }
   }, [])
-  const reconcileFeedback = useCallback(async (scope: typeof feedbackWrites.current) => {
-    while (feedbackWrites.current === scope) {
-      while (scope.pending.size) await Promise.allSettled([...scope.pending])
-      if (feedbackWrites.current !== scope) return
-      const version = scope.version
-      await refreshComments(() => feedbackWrites.current === scope && scope.version === version)
-      // A write during the fetch invalidates its data; reconcile again once idle.
-      if (scope.version === version) return
-    }
-  }, [refreshComments])
+  const reconcileFeedback = useCallback(
+    async (scope: typeof feedbackWrites.current) => {
+      while (feedbackWrites.current === scope) {
+        while (scope.pending.size) await Promise.allSettled([...scope.pending])
+        if (feedbackWrites.current !== scope) return
+        const version = scope.version
+        await refreshComments(() => feedbackWrites.current === scope && scope.version === version)
+        // A write during the fetch invalidates its data; reconcile again once idle.
+        if (scope.version === version) return
+      }
+    },
+    [refreshComments],
+  )
   const reviewRequests = useRef(new Map<string, symbol>())
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
@@ -196,28 +285,36 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   // Fail closed while project access is loading. The fallback only keeps
   // backwards compatibility for project fixtures/API responses that predate
   // explicit capabilities.
-  const canManageFeedback = !mutation.blocked && activeProject
-    ? activeProject.capabilities?.includes('feedback:manage') ?? true
-    : false
-  const canOperateAgent = !mutation.blocked && activeProject
-    ? activeProject.capabilities?.includes('agent:operate') ?? true
-    : false
+  const canManageFeedback =
+    !mutation.blocked && activeProject ? (activeProject.capabilities?.includes('feedback:manage') ?? true) : false
+  const canOperateAgent =
+    !mutation.blocked && activeProject ? (activeProject.capabilities?.includes('agent:operate') ?? true) : false
   const canOpenAgentPanel = view === 'feedback' && Boolean(selectedProject) && activeProject !== null && canOperateAgent
-  const agentUnavailableReason = view !== 'feedback'
-    ? 'Open project feedback to use Agents.'
-    : !selectedProject || activeProject === null
-      ? 'Select a project to use Agents.'
-      : 'Agents are unavailable for your project role.'
-  const canManageProject = activeProject
-    ? activeProject.capabilities?.includes('project:manage') ?? true
-    : false
+  const agentUnavailableReason =
+    view !== 'feedback'
+      ? 'Open project feedback to use Agents.'
+      : !selectedProject || activeProject === null
+        ? 'Select a project to use Agents.'
+        : 'Agents are unavailable for your project role.'
+  const canManageProject = activeProject ? (activeProject.capabilities?.includes('project:manage') ?? true) : false
   const readyAgentCommentIds = useMemo(
-    () => commentsProjectId === selectedProject
-      ? comments.filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared').map((comment) => comment.id)
-      : [],
+    () =>
+      commentsProjectId === selectedProject
+        ? comments
+            .filter((comment) => getDisplayStatus(comment) === 'ready' && comment.visibility === 'shared')
+            .map((comment) => comment.id)
+        : [],
     [comments, commentsProjectId, selectedProject],
   )
-  const { session: agentSession, shareState: agentShareState, events: agentEvents, error: agentError, errorCode: agentErrorCode, copyPrompt, adoptSession } = useAgentSession(
+  const {
+    session: agentSession,
+    shareState: agentShareState,
+    events: agentEvents,
+    error: agentError,
+    errorCode: agentErrorCode,
+    copyPrompt,
+    adoptSession,
+  } = useAgentSession(
     API_BASE,
     accessToken,
     canOpenAgentPanel && selectedProject ? selectedProject : null,
@@ -225,12 +322,15 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     sidebarOpen,
     user.id,
   )
-  const activeAgentShare = agentShareState
-    && agentShareState.share.id === agentSession?.shareId
-    && agentShareState.project.publicKey === selectedProject
-    ? agentShareState : null
+  const activeAgentShare =
+    agentShareState &&
+    agentShareState.share.id === agentSession?.shareId &&
+    agentShareState.project.publicKey === selectedProject
+      ? agentShareState
+      : null
   const agentConnected = (activeAgentShare?.presence?.length ?? 0) > 0
-  const agentQueueComments = (activeAgentShare?.comments ?? []).map(mapServerComment)
+  const agentQueueComments = (activeAgentShare?.comments ?? [])
+    .map(mapServerComment)
     .filter((comment) => comment.visibility === 'shared')
   const selectedAgentMeta = AGENTS.find((a) => a.id === selectedAgent) ?? AGENTS[0]
   const [bulkMode, setBulkMode] = useState(false)
@@ -249,11 +349,22 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionBusy(false)
     clearReadyUndo()
   }, [selectedProject, view, accessToken, clearReadyUndo])
-  const [inboxUndo,setInboxUndo]=useState<{actor:string;projectId:string;items:InboxUndoItem[]}|null>(null)
-  const [readyUndo, setReadyUndo] = useState<Array<Comment & { undoVersion: string; undoImplementation?: ImplStatus; undoToken?: string; undoAction?: 'reopen' | 'reject' }>>([])
+  const [inboxUndo, setInboxUndo] = useState<{ actor: string; projectId: string; items: InboxUndoItem[] } | null>(null)
+  const [readyUndo, setReadyUndo] = useState<
+    Array<
+      Comment & {
+        undoVersion: string
+        undoImplementation?: ImplStatus
+        undoToken?: string
+        undoAction?: 'reopen' | 'reject'
+      }
+    >
+  >([])
   const [bulkActionBusy, setBulkActionBusy] = useState(false)
   const [bulkActionError, setBulkActionError] = useState('')
-  const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
+  const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(
+    null,
+  )
   const [bulkTransitionNotice, setBulkTransitionNotice] = useState('')
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
   const [addProjectBusy, setAddProjectBusy] = useState(false)
@@ -278,11 +389,14 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       .finally(() => {
         if (!current) return
         const url = new URL(window.location.href)
-        url.searchParams.delete('invite'); url.searchParams.delete('email')
+        url.searchParams.delete('invite')
+        url.searchParams.delete('email')
         window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`)
         setPendingInvite(null)
       })
-    return () => { current = false }
+    return () => {
+      current = false
+    }
   }, [accessToken, pendingInvite, refreshProjects])
 
   useEffect(() => {
@@ -295,8 +409,14 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   useEffect(() => {
-    if (view !== 'extension-comments' && view !== 'recordings' && view !== 'recording' && !selectedProject && projects.length > 0) {
-      setSelectedProject(current => current || projects[0].publicKey)
+    if (
+      view !== 'extension-comments' &&
+      view !== 'recordings' &&
+      view !== 'recording' &&
+      !selectedProject &&
+      projects.length > 0
+    ) {
+      setSelectedProject((current) => current || projects[0].publicKey)
     }
   }, [projects, selectedProject, view])
 
@@ -322,7 +442,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       ) {
         return next.some((c) => c.id === pendingCommentSelection.commentId)
           ? pendingCommentSelection.commentId
-          : current && next.some((c) => c.id === current) ? current : ''
+          : current && next.some((c) => c.id === current)
+            ? current
+            : ''
       }
       return current && next.some((c) => c.id === current) ? current : ''
     })
@@ -348,132 +470,164 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const allSelectedReady = selectedBulkComments.length > 0 && selectedReadyCount === selectedBulkComments.length
 
   const filteredComments = useMemo(() => {
-    const filtered = statusFilter === 'all'
-      ? projectComments
-      : projectComments.filter((c) => getDisplayStatus(c) === statusFilter)
+    const filtered =
+      statusFilter === 'all' ? projectComments : projectComments.filter((c) => getDisplayStatus(c) === statusFilter)
 
     return [...filtered].sort((a, b) => Number(isInactive(a)) - Number(isInactive(b)))
   }, [projectComments, statusFilter])
 
   const selectedComment = comments.find((c) => c.id === selectedCommentId) ?? null
 
-  const counts = useMemo(() => projectComments.reduce(
-    (acc, c) => {
-      acc.all++
-      const ds = getDisplayStatus(c)
-      acc[ds]++
-      return acc
+  const counts = useMemo(
+    () =>
+      projectComments.reduce(
+        (acc, c) => {
+          acc.all++
+          const ds = getDisplayStatus(c)
+          acc[ds]++
+          return acc
+        },
+        { all: 0, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 },
+      ),
+    [projectComments],
+  )
+
+  const handleReviewStatus = useCallback(
+    async (id: string, status: ReviewStatus) => {
+      clearReadyUndo()
+      const request = Symbol(id)
+      reviewRequests.current.set(id, request)
+      setComments((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c)),
+      )
+      try {
+        await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status))
+        posthog.capture('feedback_review_status_changed', { review_status: status })
+        if (reviewRequests.current.get(id) === request) await refreshComments()
+      } catch (err) {
+        console.error('Failed to update review status:', err)
+        if (reviewRequests.current.get(id) === request) mutation.report(err)
+        if (reviewRequests.current.get(id) === request) await refreshComments()
+      } finally {
+        if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
+      }
     },
-    { all: 0, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 },
-  ), [projectComments])
+    [accessToken, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite],
+  )
 
-  const handleReviewStatus = useCallback(async (id: string, status: ReviewStatus) => {
-    clearReadyUndo()
-    const request = Symbol(id)
-    reviewRequests.current.set(id, request)
-    setComments((prev) => prev.map((c) => c.id === id ? { ...c, reviewStatus: status, updatedAt: new Date().toISOString() } : c))
-    try {
-      await trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, status))
-      posthog.capture('feedback_review_status_changed', { review_status: status })
-      if (reviewRequests.current.get(id) === request) await refreshComments()
-    } catch (err) {
-      console.error('Failed to update review status:', err)
-      if (reviewRequests.current.get(id) === request) mutation.report(err)
-      if (reviewRequests.current.get(id) === request) await refreshComments()
-    } finally {
-      if (reviewRequests.current.get(id) === request) reviewRequests.current.delete(id)
-    }
-  }, [accessToken, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
-
-  const handleToggleDone = useCallback(async (id: string) => {
-    clearReadyUndo()
-    const current = comments.find((c) => c.id === id)
-    if (!current) return
-    const scope = feedbackWrites.current
-    const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
-    setComments((prev) => prev.map((c) => c.id === id
-      ? {
-          ...c,
-          implementationStatus: nextStatus,
-          claimedByAgentId: nextStatus === 'unassigned' ? null : c.claimedByAgentId,
-          updatedAt: new Date().toISOString(),
+  const handleToggleDone = useCallback(
+    async (id: string) => {
+      clearReadyUndo()
+      const current = comments.find((c) => c.id === id)
+      if (!current) return
+      const scope = feedbackWrites.current
+      const nextStatus: ImplStatus = current.implementationStatus === 'done' ? 'unassigned' : 'done'
+      setComments((prev) =>
+        prev.map((c) =>
+          c.id === id
+            ? {
+                ...c,
+                implementationStatus: nextStatus,
+                claimedByAgentId: nextStatus === 'unassigned' ? null : c.claimedByAgentId,
+                updatedAt: new Date().toISOString(),
+              }
+            : c,
+        ),
+      )
+      try {
+        const operation = trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
+        const version = scope.version
+        const updated = await operation
+        if (nextStatus === 'done') posthog.capture('feedback_marked_done')
+        if (feedbackWrites.current === scope && scope.version === version) {
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    reviewStatus: updated.reviewStatus,
+                    implementationStatus: updated.implementationStatus,
+                    claimedByAgentId: updated.claimedByAgentId,
+                    visibility: updated.visibility,
+                    updatedAt: updated.updatedAt,
+                  }
+                : c,
+            ),
+          )
+        } else {
+          await reconcileFeedback(scope)
         }
-      : c))
-    try {
-      const operation = trackFeedbackWrite(apiUpdateImpl(API_BASE, accessToken, id, nextStatus))
-      const version = scope.version
-      const updated = await operation
-      if (nextStatus === 'done') posthog.capture('feedback_marked_done')
-      if (feedbackWrites.current === scope && scope.version === version) {
-        setComments((prev) => prev.map((c) => c.id === id ? {
-          ...c,
-          reviewStatus: updated.reviewStatus,
-          implementationStatus: updated.implementationStatus,
-          claimedByAgentId: updated.claimedByAgentId,
-          visibility: updated.visibility,
-          updatedAt: updated.updatedAt,
-        } : c))
-      } else {
-        await reconcileFeedback(scope)
+      } catch (err) {
+        console.error('Failed to update implementation status:', err)
+        mutation.report(err)
+        refreshComments()
       }
-    } catch (err) {
-      console.error('Failed to update implementation status:', err)
-      mutation.report(err)
-      refreshComments()
-    }
-  }, [accessToken, comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite, reconcileFeedback])
+    },
+    [accessToken, comments, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite, reconcileFeedback],
+  )
 
-  const toggleReview = useCallback((c: Comment, target: 'accepted' | 'rejected') => {
-    handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
-  }, [handleReviewStatus])
+  const toggleReview = useCallback(
+    (c: Comment, target: 'accepted' | 'rejected') => {
+      handleReviewStatus(c.id, c.reviewStatus === target ? 'open' : target)
+    },
+    [handleReviewStatus],
+  )
 
-  const handleVisibilityChange = useCallback(async (id: string, visibility: 'shared' | 'internal') => {
-    const scope = feedbackWrites.current
-    const previous = comments.find((comment) => comment.id === id)?.visibility
-    setComments((current) => current.map((comment) => comment.id === id
-      ? { ...comment, visibility }
-      : comment))
-    try {
-      const operation = trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
-      const version = scope.version
-      const updated = await operation
-      if (feedbackWrites.current === scope && scope.version === version) {
-        setComments((current) => current.map((comment) => comment.id === id
-          ? {
-              ...comment,
-              reviewStatus: updated.reviewStatus,
-              implementationStatus: updated.implementationStatus,
-              claimedByAgentId: updated.claimedByAgentId,
-              visibility: updated.visibility,
-              updatedAt: updated.updatedAt,
-            }
-          : comment))
-      } else {
-        await reconcileFeedback(scope)
+  const handleVisibilityChange = useCallback(
+    async (id: string, visibility: 'shared' | 'internal') => {
+      const scope = feedbackWrites.current
+      const previous = comments.find((comment) => comment.id === id)?.visibility
+      setComments((current) => current.map((comment) => (comment.id === id ? { ...comment, visibility } : comment)))
+      try {
+        const operation = trackFeedbackWrite(apiUpdateVisibility(API_BASE, accessToken, id, visibility))
+        const version = scope.version
+        const updated = await operation
+        if (feedbackWrites.current === scope && scope.version === version) {
+          setComments((current) =>
+            current.map((comment) =>
+              comment.id === id
+                ? {
+                    ...comment,
+                    reviewStatus: updated.reviewStatus,
+                    implementationStatus: updated.implementationStatus,
+                    claimedByAgentId: updated.claimedByAgentId,
+                    visibility: updated.visibility,
+                    updatedAt: updated.updatedAt,
+                  }
+                : comment,
+            ),
+          )
+        } else {
+          await reconcileFeedback(scope)
+        }
+      } catch (error) {
+        if (previous) {
+          setComments((current) =>
+            current.map((comment) => (comment.id === id ? { ...comment, visibility: previous } : comment)),
+          )
+        }
+        console.error('Failed to update feedback audience:', error)
+        mutation.report(error)
       }
-    } catch (error) {
-      if (previous) {
-        setComments((current) => current.map((comment) => comment.id === id
-          ? { ...comment, visibility: previous }
-          : comment))
-      }
-      console.error('Failed to update feedback audience:', error)
-      mutation.report(error)
-    }
-  }, [accessToken, comments, mutation.report, trackFeedbackWrite, reconcileFeedback])
+    },
+    [accessToken, comments, mutation.report, trackFeedbackWrite, reconcileFeedback],
+  )
 
-  const toggleBulkSelect = useCallback((id: string, range: string[] = [id]) => {
-    if (bulkActionBusy) return
-    const next = new Set(bulkSelectedIds)
-    for (const item of range) bulkSelectedIds.has(id) ? next.delete(item) : next.add(item)
-    if (next.size > 500) {
-      setBulkActionError('Select up to 500 comments at a time.')
-      return
-    }
-    setBulkMode(true)
-    setBulkActionError('')
-    setBulkSelectedIds(next)
-  }, [bulkActionBusy, bulkSelectedIds])
+  const toggleBulkSelect = useCallback(
+    (id: string, range: string[] = [id]) => {
+      if (bulkActionBusy) return
+      const next = new Set(bulkSelectedIds)
+      for (const item of range) bulkSelectedIds.has(id) ? next.delete(item) : next.add(item)
+      if (next.size > 500) {
+        setBulkActionError('Select up to 500 comments at a time.')
+        return
+      }
+      setBulkMode(true)
+      setBulkActionError('')
+      setBulkSelectedIds(next)
+    },
+    [bulkActionBusy, bulkSelectedIds],
+  )
 
   const exitBulkMode = useCallback(() => {
     bulkGeneration.current++
@@ -485,67 +639,138 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkActionError('')
   }, [])
 
-  const applyBulkAction = useCallback(async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
-    const ids = Array.from(bulkSelectedIds)
-    const previous = comments.filter(c => bulkSelectedIds.has(c.id) && (action === 'reopen' || action === 'reject' || c.reviewStatus !== 'accepted' || (action === 'done' && c.implementationStatus !== 'done')))
-    clearReadyUndo()
-    const generation = bulkGeneration.current
-    setBulkActionBusy(true)
-    setBulkActionError('')
-    const idSet = new Set(ids)
-    const requests = new Map(ids.map((id) => {
-      const request = Symbol(id)
-      reviewRequests.current.set(id, request)
-      return [id, request] as const
-    }))
+  const applyBulkAction = useCallback(
+    async (action: 'ready' | 'done' | 'reject' | 'reopen') => {
+      const ids = Array.from(bulkSelectedIds)
+      const previous = comments.filter(
+        (c) =>
+          bulkSelectedIds.has(c.id) &&
+          (action === 'reopen' ||
+            action === 'reject' ||
+            c.reviewStatus !== 'accepted' ||
+            (action === 'done' && c.implementationStatus !== 'done')),
+      )
+      clearReadyUndo()
+      const generation = bulkGeneration.current
+      setBulkActionBusy(true)
+      setBulkActionError('')
+      const idSet = new Set(ids)
+      const requests = new Map(
+        ids.map((id) => {
+          const request = Symbol(id)
+          reviewRequests.current.set(id, request)
+          return [id, request] as const
+        }),
+      )
 
-    setComments((prev) => prev.map((c) => {
-      if (!idSet.has(c.id)) return c
-      const ts = new Date().toISOString()
-      if (action === 'reopen') return { ...c, reviewStatus: 'open' as ReviewStatus, implementationStatus: 'unassigned' as ImplStatus, claimedByAgentId: null, updatedAt: ts }
-      if (action === 'ready') return { ...c, reviewStatus: 'accepted' as ReviewStatus, updatedAt: ts }
-      if (action === 'done') return { ...c, reviewStatus: 'accepted' as ReviewStatus, implementationStatus: 'done' as ImplStatus, updatedAt: ts }
-      return { ...c, reviewStatus: 'rejected' as ReviewStatus, updatedAt: ts }
-    }))
-    const calls = ids.map(async (id) => {
-      if (action === 'ready') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted'))
-      if (action === 'done') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted', comments.find(c => c.id === id)?.updatedAt, 'done'))
-      return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id,
-        action === 'reject' ? 'rejected' : 'open', comments.find(c => c.id === id)?.updatedAt,
-        action === 'reopen' ? 'unassigned' : undefined, { captureUndo: true, preserveExternalWork: true }))
+      setComments((prev) =>
+        prev.map((c) => {
+          if (!idSet.has(c.id)) return c
+          const ts = new Date().toISOString()
+          if (action === 'reopen')
+            return {
+              ...c,
+              reviewStatus: 'open' as ReviewStatus,
+              implementationStatus: 'unassigned' as ImplStatus,
+              claimedByAgentId: null,
+              updatedAt: ts,
+            }
+          if (action === 'ready') return { ...c, reviewStatus: 'accepted' as ReviewStatus, updatedAt: ts }
+          if (action === 'done')
+            return {
+              ...c,
+              reviewStatus: 'accepted' as ReviewStatus,
+              implementationStatus: 'done' as ImplStatus,
+              updatedAt: ts,
+            }
+          return { ...c, reviewStatus: 'rejected' as ReviewStatus, updatedAt: ts }
+        }),
+      )
+      const calls = ids.map(async (id) => {
+        if (action === 'ready') return trackFeedbackWrite(apiUpdateReview(API_BASE, accessToken, id, 'accepted'))
+        if (action === 'done')
+          return trackFeedbackWrite(
+            apiUpdateReview(
+              API_BASE,
+              accessToken,
+              id,
+              'accepted',
+              comments.find((c) => c.id === id)?.updatedAt,
+              'done',
+            ),
+          )
+        return trackFeedbackWrite(
+          apiUpdateReview(
+            API_BASE,
+            accessToken,
+            id,
+            action === 'reject' ? 'rejected' : 'open',
+            comments.find((c) => c.id === id)?.updatedAt,
+            action === 'reopen' ? 'unassigned' : undefined,
+            { captureUndo: true, preserveExternalWork: true },
+          ),
+        )
+      })
 
-    })
-
-    const results = await Promise.allSettled(calls)
-    const failedIds = results.flatMap((result, index) => result.status === 'rejected' ? [ids[index]!] : [])
-    const failed = results.filter((result) => result.status === 'rejected')
-    const stillCurrent = generation === bulkGeneration.current && ids.some((id) => reviewRequests.current.get(id) === requests.get(id))
-    if (failed.length > 0) {
-      console.error(`Bulk ${action}: ${failed.length}/${calls.length} calls failed`, failed)
-      if (stillCurrent) { mutation.report((failed[0] as PromiseRejectedResult).reason); await refreshComments() }
-    } else if (stillCurrent) {
-      await refreshComments()
-    }
-    for (const id of ids) {
-      if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
-    }
-    if (stillCurrent && generation === bulkGeneration.current) {
-      setReadyUndo(previous.flatMap<typeof readyUndo[number]>(c => {
-        const result = results[ids.indexOf(c.id)]
-        if (result.status !== 'fulfilled' || !result.value?.updatedAt) return []
-        if (action === 'reject' || action === 'reopen') return result.value.undoToken ? [{ ...c, undoVersion: result.value.updatedAt, undoToken: result.value.undoToken, undoAction: action }] : []
-        return [{ ...c, undoVersion: result.value.updatedAt, ...(action === 'done' ? { undoImplementation: c.implementationStatus } : {}) }]
-      }))
-      if (failedIds.length > 0) {
-        setBulkMode(true)
-        setBulkSelectedIds(action === 'ready' ? new Set(ids) : new Set(failedIds))
-        setBulkActionError(`${failedIds.length} item${failedIds.length === 1 ? '' : 's'} could not be updated and remain selected.`)
-      } else if (action !== 'ready') {
-        exitBulkMode()
+      const results = await Promise.allSettled(calls)
+      const failedIds = results.flatMap((result, index) => (result.status === 'rejected' ? [ids[index]!] : []))
+      const failed = results.filter((result) => result.status === 'rejected')
+      const stillCurrent =
+        generation === bulkGeneration.current && ids.some((id) => reviewRequests.current.get(id) === requests.get(id))
+      if (failed.length > 0) {
+        console.error(`Bulk ${action}: ${failed.length}/${calls.length} calls failed`, failed)
+        if (stillCurrent) {
+          mutation.report((failed[0] as PromiseRejectedResult).reason)
+          await refreshComments()
+        }
+      } else if (stillCurrent) {
+        await refreshComments()
       }
-    }
-    if (generation === bulkGeneration.current) setBulkActionBusy(false)
-  }, [accessToken, comments, bulkActionBusy, bulkSelectedIds, exitBulkMode, refreshComments, mutation.report, clearReadyUndo, trackFeedbackWrite])
+      for (const id of ids) {
+        if (reviewRequests.current.get(id) === requests.get(id)) reviewRequests.current.delete(id)
+      }
+      if (stillCurrent && generation === bulkGeneration.current) {
+        setReadyUndo(
+          previous.flatMap<(typeof readyUndo)[number]>((c) => {
+            const result = results[ids.indexOf(c.id)]
+            if (result.status !== 'fulfilled' || !result.value?.updatedAt) return []
+            if (action === 'reject' || action === 'reopen')
+              return result.value.undoToken
+                ? [{ ...c, undoVersion: result.value.updatedAt, undoToken: result.value.undoToken, undoAction: action }]
+                : []
+            return [
+              {
+                ...c,
+                undoVersion: result.value.updatedAt,
+                ...(action === 'done' ? { undoImplementation: c.implementationStatus } : {}),
+              },
+            ]
+          }),
+        )
+        if (failedIds.length > 0) {
+          setBulkMode(true)
+          setBulkSelectedIds(action === 'ready' ? new Set(ids) : new Set(failedIds))
+          setBulkActionError(
+            `${failedIds.length} item${failedIds.length === 1 ? '' : 's'} could not be updated and remain selected.`,
+          )
+        } else if (action !== 'ready') {
+          exitBulkMode()
+        }
+      }
+      if (generation === bulkGeneration.current) setBulkActionBusy(false)
+    },
+    [
+      accessToken,
+      comments,
+      bulkActionBusy,
+      bulkSelectedIds,
+      exitBulkMode,
+      refreshComments,
+      mutation.report,
+      clearReadyUndo,
+      trackFeedbackWrite,
+    ],
+  )
 
   const undoReady = async () => {
     const generation = bulkGeneration.current
@@ -554,14 +779,49 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     readyUndoRequest.current = request
     setBulkActionBusy(true)
     setBulkActionError('')
-    const results = await Promise.allSettled(readyUndo.map(async (before) => {
-      const current = comments.find(c => c.id === before.id)
-      if (!before.undoToken && (!current || current.reviewStatus !== 'accepted' || current.implementationStatus !== (before.undoImplementation === undefined ? before.implementationStatus : 'done') || current.claimedByAgentId !== before.claimedByAgentId)) throw new Error('Feedback changed. Refresh and review it before undoing.')
-      await trackFeedbackWrite(before.undoToken
-        ? apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, undefined, undefined, { undoToken: before.undoToken })
-        : apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, before.undoVersion, before.undoImplementation))
-      if (generation === bulkGeneration.current && readyUndoRequest.current === request) setComments(prev => prev.map(c => c.id === before.id ? { ...c, reviewStatus: before.reviewStatus, implementationStatus: before.undoToken ? before.implementationStatus : before.undoImplementation ?? c.implementationStatus, claimedByAgentId: before.undoToken ? before.claimedByAgentId : c.claimedByAgentId } : c))
-    }))
+    const results = await Promise.allSettled(
+      readyUndo.map(async (before) => {
+        const current = comments.find((c) => c.id === before.id)
+        if (
+          !before.undoToken &&
+          (!current ||
+            current.reviewStatus !== 'accepted' ||
+            current.implementationStatus !==
+              (before.undoImplementation === undefined ? before.implementationStatus : 'done') ||
+            current.claimedByAgentId !== before.claimedByAgentId)
+        )
+          throw new Error('Feedback changed. Refresh and review it before undoing.')
+        await trackFeedbackWrite(
+          before.undoToken
+            ? apiUpdateReview(API_BASE, accessToken, before.id, before.reviewStatus, undefined, undefined, {
+                undoToken: before.undoToken,
+              })
+            : apiUpdateReview(
+                API_BASE,
+                accessToken,
+                before.id,
+                before.reviewStatus,
+                before.undoVersion,
+                before.undoImplementation,
+              ),
+        )
+        if (generation === bulkGeneration.current && readyUndoRequest.current === request)
+          setComments((prev) =>
+            prev.map((c) =>
+              c.id === before.id
+                ? {
+                    ...c,
+                    reviewStatus: before.reviewStatus,
+                    implementationStatus: before.undoToken
+                      ? before.implementationStatus
+                      : (before.undoImplementation ?? c.implementationStatus),
+                    claimedByAgentId: before.undoToken ? before.claimedByAgentId : c.claimedByAgentId,
+                  }
+                : c,
+            ),
+          )
+      }),
+    )
     if (generation !== bulkGeneration.current || readyUndoRequest.current !== request) {
       if (readyUndoRequest.current === request) clearReadyUndo()
       await reconcileFeedback(scope)
@@ -571,13 +831,23 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     for (const result of results) {
       if (result.status === 'rejected') mutation.report(result.reason)
     }
-    const conflicts = new Set(results.flatMap((result, i) => result.status === 'rejected' && result.reason?.status === 409 ? [i] : []))
-    const unavailable = new Set(results.flatMap((result, i) => result.status === 'rejected' && readyUndo[i].undoToken && result.reason?.status === 400 ? [i] : []))
-    const remaining = readyUndo.filter((_, i) => results[i].status === 'rejected' && !conflicts.has(i) && !unavailable.has(i))
+    const conflicts = new Set(
+      results.flatMap((result, i) => (result.status === 'rejected' && result.reason?.status === 409 ? [i] : [])),
+    )
+    const unavailable = new Set(
+      results.flatMap((result, i) =>
+        result.status === 'rejected' && readyUndo[i].undoToken && result.reason?.status === 400 ? [i] : [],
+      ),
+    )
+    const remaining = readyUndo.filter(
+      (_, i) => results[i].status === 'rejected' && !conflicts.has(i) && !unavailable.has(i),
+    )
     setReadyUndo(remaining)
     setBulkActionBusy(false)
-    if (unavailable.size) setBulkActionError('Undo expired or is no longer valid for some items. Refresh to review them.')
-    else if (conflicts.size) setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
+    if (unavailable.size)
+      setBulkActionError('Undo expired or is no longer valid for some items. Refresh to review them.')
+    else if (conflicts.size)
+      setBulkActionError('Feedback changed after this action and was not undone. Refresh to review it.')
     else if (remaining.length) setBulkActionError('Some items could not be restored. Undo retries only those items.')
     else setBulkTransitionNotice('Previous statuses restored.')
     await refreshComments()
@@ -611,7 +881,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       return
     }
     if (selectedBulkComments.some((comment) => comment.visibility !== 'shared')) {
-      setBulkActionError('Only shared feedback can be sent to Agent. Update the audience or remove internal items from the selection.')
+      setBulkActionError(
+        'Only shared feedback can be sent to Agent. Update the audience or remove internal items from the selection.',
+      )
       return
     }
     const generation = bulkGeneration.current
@@ -632,7 +904,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (generation !== bulkGeneration.current) return
       adoptSession({ shareId: share.shareId, slug: share.slug, token: share.token, docUrl: share.tokenUrl }, commentIds)
       setSidebarOpen(true)
-      setBulkTransitionNotice(`${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} copied for ${selectedAgentMeta.name}.`)
+      setBulkTransitionNotice(
+        `${commentIds.length} selected item${commentIds.length === 1 ? '' : 's'} copied for ${selectedAgentMeta.name}.`,
+      )
     } catch (error) {
       if (generation !== bulkGeneration.current) return
       const requestError = error as Error & { code?: string }
@@ -644,7 +918,20 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     } finally {
       if (generation === bulkGeneration.current) setBulkActionBusy(false)
     }
-  }, [accessToken, allSelectedReady, applyBulkAction, bulkActionBusy, openAgentUpgrade, selectedAgentMeta, selectedBulkComments, bulkSelectedIds, commentsProjectId, selectedProject, adoptSession, clearReadyUndo])
+  }, [
+    accessToken,
+    allSelectedReady,
+    applyBulkAction,
+    bulkActionBusy,
+    openAgentUpgrade,
+    selectedAgentMeta,
+    selectedBulkComments,
+    bulkSelectedIds,
+    commentsProjectId,
+    selectedProject,
+    adoptSession,
+    clearReadyUndo,
+  ])
 
   const toggleSelectAllVisible = useCallback(() => {
     if (bulkActionBusy) return
@@ -698,9 +985,18 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
       if (cmdOpen) return
 
-      if (e.key === 'j' || e.key === 'ArrowDown') { e.preventDefault(); goNext() }
-      if (e.key === 'k' || e.key === 'ArrowUp') { e.preventDefault(); goPrev() }
-      if (e.key === ' ') { e.preventDefault(); goNext() }
+      if (e.key === 'j' || e.key === 'ArrowDown') {
+        e.preventDefault()
+        goNext()
+      }
+      if (e.key === 'k' || e.key === 'ArrowUp') {
+        e.preventDefault()
+        goPrev()
+      }
+      if (e.key === ' ') {
+        e.preventDefault()
+        goNext()
+      }
 
       if (selectedComment && canManageFeedback) {
         if (e.key === 'a') toggleReview(selectedComment, 'accepted')
@@ -713,7 +1009,20 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [shortcutsEnabled, goNext, goPrev, selectedComment, toggleReview, handleToggleDone, cmdOpen, bulkMode, exitBulkMode, view, canManageFeedback, canOpenAgentPanel])
+  }, [
+    shortcutsEnabled,
+    goNext,
+    goPrev,
+    selectedComment,
+    toggleReview,
+    handleToggleDone,
+    cmdOpen,
+    bulkMode,
+    exitBulkMode,
+    view,
+    canManageFeedback,
+    canOpenAgentPanel,
+  ])
 
   const handleCmdSelect = useCallback((commentId: string) => {
     setSelectedCommentId(commentId)
@@ -725,18 +1034,21 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setSelectedCommentId('')
   }, [])
 
-  const handleCmdAction = useCallback((action: string) => {
-    if (action === 'toggle-sidebar' && canOpenAgentPanel) setSidebarOpen((v) => !v)
-    if (action === 'filter-all') selectFilter('all')
-    if (action === 'filter-open') selectFilter('open')
-    if (action === 'filter-ready') selectFilter('ready')
-    if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
-    if (action === 'filter-done') selectFilter('done')
-    if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
-    if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
-    if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
-    setCmdOpen(false)
-  }, [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel])
+  const handleCmdAction = useCallback(
+    (action: string) => {
+      if (action === 'toggle-sidebar' && canOpenAgentPanel) setSidebarOpen((v) => !v)
+      if (action === 'filter-all') selectFilter('all')
+      if (action === 'filter-open') selectFilter('open')
+      if (action === 'filter-ready') selectFilter('ready')
+      if (action === 'filter-ready-for-testing') selectFilter('ready_for_testing')
+      if (action === 'filter-done') selectFilter('done')
+      if (selectedComment && canManageFeedback && action === 'accept') toggleReview(selectedComment, 'accepted')
+      if (selectedComment && canManageFeedback && action === 'reject') toggleReview(selectedComment, 'rejected')
+      if (selectedComment && canManageFeedback && action === 'done') handleToggleDone(selectedComment.id)
+      setCmdOpen(false)
+    },
+    [selectedComment, toggleReview, handleToggleDone, selectFilter, canManageFeedback, canOpenAgentPanel],
+  )
 
   const handleCopySessionLink = useCallback(async () => {
     if (!agentSession) return
@@ -755,13 +1067,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   // Selecting a project always returns to the feedback view; settings is a
   // per-project overlay that shouldn't persist across project switches.
-  const selectProject = useCallback((key: string) => {
-    exitBulkMode()
-    setPendingBulkSelection(null)
-    setBulkTransitionNotice('')
-    setSelectedProject(key)
-    setView('feedback')
-  }, [exitBulkMode])
+  const selectProject = useCallback(
+    (key: string) => {
+      exitBulkMode()
+      setPendingBulkSelection(null)
+      setBulkTransitionNotice('')
+      setSelectedProject(key)
+      setView('feedback')
+    },
+    [exitBulkMode],
+  )
 
   const openExtensionComments = useCallback(() => {
     setView('extension-comments')
@@ -784,62 +1099,83 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
-  const continueMovedInboxSelection = useCallback((projectKey: string, commentIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => {
-    setSelectedProject(projectKey)
-    setView('feedback')
-    setStatusFilter('open')
-    setSelectedCommentId('')
-    setInboxUndo(undoItems?.length ? {actor:user.id,projectId:projectKey,items:undoItems} : null)
-    setPendingBulkSelection({ projectKey, commentIds })
-    setBulkSelectedIds(new Set(commentIds))
-    setBulkMode(true)
-    setBulkTransitionNotice(`${commentIds.length} Inbox item${commentIds.length === 1 ? '' : 's'} moved${skippedCount ? `; ${skippedCount} skipped` : ''}.`)
-  }, [user.id])
-
-  const handleAddProject = useCallback(async (projectKey: string, name: string) => {
-    setAddProjectError(null)
-    setAddProjectBusy(true)
-    try {
-      const project = await claimProject(projectKey, name)
-      posthog.capture('project_created')
-      setSelectedProject(project.publicKey)
+  const continueMovedInboxSelection = useCallback(
+    (projectKey: string, commentIds: string[], skippedCount: number, undoItems?: InboxUndoItem[]) => {
+      setSelectedProject(projectKey)
       setView('feedback')
       setStatusFilter('open')
       setSelectedCommentId('')
-      setAddProjectOpen(false)
-    } catch (err) {
-      setAddProjectError(err instanceof Error ? err.message : 'Failed to create project')
-    } finally {
-      setAddProjectBusy(false)
-    }
-  }, [claimProject])
+      setInboxUndo(undoItems?.length ? { actor: user.id, projectId: projectKey, items: undoItems } : null)
+      setPendingBulkSelection({ projectKey, commentIds })
+      setBulkSelectedIds(new Set(commentIds))
+      setBulkMode(true)
+      setBulkTransitionNotice(
+        `${commentIds.length} Inbox item${commentIds.length === 1 ? '' : 's'} moved${skippedCount ? `; ${skippedCount} skipped` : ''}.`,
+      )
+    },
+    [user.id],
+  )
 
-  const handleOpenCommentActivity = useCallback((payload: { projectKey: string; latestCommentId?: string }) => {
-    setSelectedProject(payload.projectKey)
-    setView('feedback')
-    setStatusFilter('open')
-    if (payload.latestCommentId) {
-      setPendingCommentSelection({ projectKey: payload.projectKey, commentId: payload.latestCommentId })
-      void refreshComments()
-    } else {
-      setSelectedCommentId('')
-    }
-  }, [refreshComments])
+  const handleAddProject = useCallback(
+    async (projectKey: string, name: string) => {
+      setAddProjectError(null)
+      setAddProjectBusy(true)
+      try {
+        const project = await claimProject(projectKey, name)
+        posthog.capture('project_created')
+        setSelectedProject(project.publicKey)
+        setView('feedback')
+        setStatusFilter('open')
+        setSelectedCommentId('')
+        setAddProjectOpen(false)
+      } catch (err) {
+        setAddProjectError(err instanceof Error ? err.message : 'Failed to create project')
+      } finally {
+        setAddProjectBusy(false)
+      }
+    },
+    [claimProject],
+  )
+
+  const handleOpenCommentActivity = useCallback(
+    (payload: { projectKey: string; latestCommentId?: string }) => {
+      setSelectedProject(payload.projectKey)
+      setView('feedback')
+      setStatusFilter('open')
+      if (payload.latestCommentId) {
+        setPendingCommentSelection({ projectKey: payload.projectKey, commentId: payload.latestCommentId })
+        void refreshComments()
+      } else {
+        setSelectedCommentId('')
+      }
+    },
+    [refreshComments],
+  )
 
   // Onboarding gate: show the welcome screen when this account has no
   // projects and hasn't been onboarded before. Once they click the CTA we
   // mark the flag so the welcome doesn't reappear if they cancel out of
   // the create-project modal.
   const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
-  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments' && view !== 'recordings' && view !== 'recording'
+  const showWelcome =
+    !projectsLoading &&
+    projects.length === 0 &&
+    !onboarded &&
+    view !== 'extension-comments' &&
+    view !== 'recordings' &&
+    view !== 'recording'
 
   if (showWelcome) {
     return (
       <>
         {accessReviewNotice}
-        <div className="absolute top-4 right-5 z-50"><UserMenu user={user} onSignOut={onSignOut} apiBase={API_BASE} accessToken={accessToken} /></div>
+        <div className="absolute top-4 right-5 z-50">
+          <UserMenu user={user} onSignOut={onSignOut} apiBase={API_BASE} accessToken={accessToken} />
+        </div>
         <WelcomeScreen
-          suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
+          suggestedProjects={
+            <SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />
+          }
           onOpenExtensionComments={openExtensionComments}
           onCreateProject={() => {
             markOnboarded()
@@ -849,7 +1185,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         />
         {addProjectOpen && (
           <AddProjectPopover
-            suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
+            suggestedProjects={
+              <SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />
+            }
             onAdd={handleAddProject}
             onClose={() => setAddProjectOpen(false)}
             checkAvailability={checkAvailability}
@@ -864,9 +1202,22 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   return (
     <div className="dashboard-shell">
       <Header
-        agentAction={canOpenAgentPanel
-          ? <AgentLauncher readyCount={readyAgentCommentIds.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />
-          : <AgentLauncher readyCount={readyAgentCommentIds.length} open={false} disabled unavailableReason={agentUnavailableReason} />}
+        agentAction={
+          canOpenAgentPanel ? (
+            <AgentLauncher
+              readyCount={readyAgentCommentIds.length}
+              open={sidebarOpen}
+              onOpen={() => setSidebarOpen(true)}
+            />
+          ) : (
+            <AgentLauncher
+              readyCount={readyAgentCommentIds.length}
+              open={false}
+              disabled
+              unavailableReason={agentUnavailableReason}
+            />
+          )
+        }
         projects={projects}
         projectsLoading={projectsLoading}
         projectsError={projectsError}
@@ -895,7 +1246,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onProjectsChanged={refreshProjects}
         onOpenCommentActivity={handleOpenCommentActivity}
         theme={theme}
-        toggleTheme={() => setTheme((t) => t === 'light' ? 'dark' : 'light')}
+        toggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
         user={user}
         onSignOut={onSignOut}
         superadmin={superadmin}
@@ -904,124 +1255,218 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       />
 
       <main className="dashboard-main">
-      {accessReviewNotice}
-      {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
-      {view === 'recording' ? (
-        <div className="min-h-0 flex-1 overflow-y-auto"><RecordingSharePage apiBase={API_BASE} ownerToken={accessToken} /></div>
-      ) : view === 'extension-comments' ? (
-        <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
-      ) : view === 'recordings' ? (
-        <RecordingsPage apiBase={API_BASE} accessToken={accessToken} />
-      ) : view === 'super-admin' && superadmin ? (
-        <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
-      ) : view === 'settings' && activeProject ? (
-        <ProjectSettings
-          key={activeProject.publicKey}
-          project={activeProject}
-          apiBase={API_BASE}
-          accessToken={accessToken}
-          currentUserId={user.id}
-          onBack={() => setView('feedback')}
-          onProjectsChanged={refreshProjects}
-        />
-      ) : (
-      <>
-        <div className="flex shrink-0 flex-col gap-2">
-        {(bulkActionError || bulkTransitionNotice) && <div role={bulkActionError ? 'alert' : 'status'} className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm">{bulkActionError || bulkTransitionNotice}</div>}
-        {inboxUndo && inboxUndo.actor === user.id && inboxUndo.projectId === selectedProject && canManageFeedback && <InboxMoveUndo key={`${user.id}:${inboxUndo.items[0].updatedAt}`} apiBase={API_BASE} accessToken={accessToken} projectId={inboxUndo.projectId} items={inboxUndo.items} onProgress={()=>{void reconcileFeedback(feedbackWrites.current);void refreshProjects()}} onRestored={()=>{setInboxUndo(null);openExtensionComments()}} />}
-        {readyUndo.length > 0 && canManageFeedback && <div role="status" className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm">
-          <span>{readyUndo.length} {readyUndo[0].undoAction === 'reject' ? 'rejected. Linked issues unchanged' : readyUndo[0].undoAction === 'reopen' ? 'reopened' : `marked ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}.</span>
-          <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void undoReady() }}>Undo {readyUndo[0].undoAction ?? `mark ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}</button>
-        </div>}
-        </div>
-      <div className="dashboard-feedback">
-        <CommentList
-          readOnly={!canManageFeedback}
-          filteredComments={filteredComments}
-          counts={counts}
-          statusFilter={statusFilter}
-          selectFilter={selectFilter}
-          bulkMode={bulkMode}
-          enterBulkMode={() => setBulkMode(true)}
-          exitBulkMode={exitBulkMode}
-          bulkSelectedIds={bulkSelectedIds}
-          toggleSelectAllVisible={toggleSelectAllVisible}
-          toggleBulkSelect={toggleBulkSelect}
-          commentsLoading={commentsLoading}
-          commentsError={commentsError}
-          selectedCommentId={selectedCommentId}
-          setSelectedCommentId={setSelectedCommentId}
-        />
-
-        <CommentDetail
-          readOnly={!canManageFeedback}
-          canManageStorybook={activeProject?.role === 'owner'}
-          selectedComment={selectedComment}
-          selectedProject={selectedProject}
-          commentsLoading={commentsLoading}
-          commentsError={commentsError}
-          projectComments={projectComments}
-          filteredComments={filteredComments}
-          selectedIdx={selectedIdx}
-          goPrev={goPrev}
-          goNext={goNext}
-          toggleReview={toggleReview}
-          handleToggleDone={handleToggleDone}
-          onVisibilityChange={handleVisibilityChange}
-          apiBase={API_BASE}
-          accessToken={accessToken}
-        />
-
-        {sidebarOpen && canOpenAgentPanel && (
-          <AgentSidebar
-            selectedProject={selectedProject}
-            projectComments={agentQueueComments}
-            readyCount={readyAgentCommentIds.length}
-            filtered={statusFilter === 'ready'}
-            selectedCommentId={selectedCommentId}
-            onSelectComment={setSelectedCommentId}
-            agentSession={agentSession}
-            agentEvents={agentEvents}
-            agentError={agentError}
-            agentErrorCode={agentErrorCode}
-            agentConnected={agentConnected}
-            selectedAgent={selectedAgent}
-            setSelectedAgent={setSelectedAgent}
-            selectedAgentMeta={selectedAgentMeta}
-            agentDropdownOpen={agentDropdownOpen}
-            setAgentDropdownOpen={setAgentDropdownOpen}
-            copyStatus={copyStatus}
-            onCopySessionLink={handleCopySessionLink}
-            onUpgrade={openAgentUpgrade}
-            onClose={() => setSidebarOpen(false)}
+        {accessReviewNotice}
+        {mutation.error && (
+          <p role="alert" className="border-b border-border bg-card p-4 text-sm">
+            {mutation.error}
+          </p>
+        )}
+        {view === 'recording' ? (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <RecordingSharePage apiBase={API_BASE} ownerToken={accessToken} />
+          </div>
+        ) : view === 'extension-comments' ? (
+          <ExtensionCommentsPage
+            apiBase={API_BASE}
+            accessToken={accessToken}
+            projects={projects}
+            onMovedToProject={continueMovedInboxSelection}
           />
-        )}
+        ) : view === 'recordings' ? (
+          <RecordingsPage apiBase={API_BASE} accessToken={accessToken} />
+        ) : view === 'super-admin' && superadmin ? (
+          <SuperAdminPanel apiBase={API_BASE} accessToken={accessToken} />
+        ) : view === 'settings' && activeProject ? (
+          <ProjectSettings
+            key={activeProject.publicKey}
+            project={activeProject}
+            apiBase={API_BASE}
+            accessToken={accessToken}
+            currentUserId={user.id}
+            onBack={() => setView('feedback')}
+            onProjectsChanged={refreshProjects}
+          />
+        ) : (
+          <>
+            <div className="flex shrink-0 flex-col gap-2">
+              {(bulkActionError || bulkTransitionNotice) && (
+                <div
+                  role={bulkActionError ? 'alert' : 'status'}
+                  className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground shadow-sm"
+                >
+                  {bulkActionError || bulkTransitionNotice}
+                </div>
+              )}
+              {inboxUndo &&
+                inboxUndo.actor === user.id &&
+                inboxUndo.projectId === selectedProject &&
+                canManageFeedback && (
+                  <InboxMoveUndo
+                    key={`${user.id}:${inboxUndo.items[0].updatedAt}`}
+                    apiBase={API_BASE}
+                    accessToken={accessToken}
+                    projectId={inboxUndo.projectId}
+                    items={inboxUndo.items}
+                    onProgress={() => {
+                      void reconcileFeedback(feedbackWrites.current)
+                      void refreshProjects()
+                    }}
+                    onRestored={() => {
+                      setInboxUndo(null)
+                      openExtensionComments()
+                    }}
+                  />
+                )}
+              {readyUndo.length > 0 && canManageFeedback && (
+                <div
+                  role="status"
+                  className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-3 text-sm shadow-sm"
+                >
+                  <span>
+                    {readyUndo.length}{' '}
+                    {readyUndo[0].undoAction === 'reject'
+                      ? 'rejected. Linked issues unchanged'
+                      : readyUndo[0].undoAction === 'reopen'
+                        ? 'reopened'
+                        : `marked ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}
+                    .
+                  </span>
+                  <button
+                    type="button"
+                    className="dashboard-bulk-secondary"
+                    disabled={bulkActionBusy}
+                    onClick={() => {
+                      void undoReady()
+                    }}
+                  >
+                    Undo{' '}
+                    {readyUndo[0].undoAction ??
+                      `mark ${readyUndo[0].undoImplementation === undefined ? 'ready' : 'done'}`}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="dashboard-feedback">
+              <CommentList
+                readOnly={!canManageFeedback}
+                filteredComments={filteredComments}
+                counts={counts}
+                statusFilter={statusFilter}
+                selectFilter={selectFilter}
+                bulkMode={bulkMode}
+                enterBulkMode={() => setBulkMode(true)}
+                exitBulkMode={exitBulkMode}
+                bulkSelectedIds={bulkSelectedIds}
+                toggleSelectAllVisible={toggleSelectAllVisible}
+                toggleBulkSelect={toggleBulkSelect}
+                commentsLoading={commentsLoading}
+                commentsError={commentsError}
+                selectedCommentId={selectedCommentId}
+                setSelectedCommentId={setSelectedCommentId}
+              />
 
-        {bulkMode && canManageFeedback && (
-          <BulkActionBar selectedCount={bulkSelectedIds.size} busy={bulkActionBusy} onClose={exitBulkMode}>
-            {!allSelectedReady && (
-              <span className="dashboard-bulk-readiness" aria-live="polite">
-                {selectedReadyCount} of {selectedBulkComments.length} ready
-              </span>
-            )}
-            <button
-              type="button"
-              className="dashboard-bulk-primary"
-              disabled={bulkActionBusy}
-              onClick={() => { void handoffSelectedToAgent() }}
-            >
-              {bulkActionBusy ? 'Working…' : allSelectedReady ? `Send to ${selectedAgentMeta.name}` : 'Mark ready'}
-            </button>
-            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('done') }}>Mark done</button>
-            <button type="button" className="dashboard-bulk-secondary" disabled={bulkActionBusy} onClick={() => { void applyBulkAction('reopen') }}>Reopen</button>
-            <button type="button" className="dashboard-bulk-secondary dashboard-bulk-danger" disabled={bulkActionBusy} title="Reject feedback only; linked issues stay unchanged" onClick={() => { void applyBulkAction('reject') }}>Reject</button>
-            <span className="text-xs text-muted-foreground">Reject keeps linked issues unchanged.</span>
-          </BulkActionBar>
-        )}
-      </div>
-      </>
-      )}
+              <CommentDetail
+                readOnly={!canManageFeedback}
+                canManageStorybook={activeProject?.role === 'owner'}
+                selectedComment={selectedComment}
+                selectedProject={selectedProject}
+                commentsLoading={commentsLoading}
+                commentsError={commentsError}
+                projectComments={projectComments}
+                filteredComments={filteredComments}
+                selectedIdx={selectedIdx}
+                goPrev={goPrev}
+                goNext={goNext}
+                toggleReview={toggleReview}
+                handleToggleDone={handleToggleDone}
+                onVisibilityChange={handleVisibilityChange}
+                apiBase={API_BASE}
+                accessToken={accessToken}
+              />
 
+              {sidebarOpen && canOpenAgentPanel && (
+                <AgentSidebar
+                  selectedProject={selectedProject}
+                  projectComments={agentQueueComments}
+                  readyCount={readyAgentCommentIds.length}
+                  filtered={statusFilter === 'ready'}
+                  selectedCommentId={selectedCommentId}
+                  onSelectComment={setSelectedCommentId}
+                  agentSession={agentSession}
+                  agentEvents={agentEvents}
+                  agentError={agentError}
+                  agentErrorCode={agentErrorCode}
+                  agentConnected={agentConnected}
+                  selectedAgent={selectedAgent}
+                  setSelectedAgent={setSelectedAgent}
+                  selectedAgentMeta={selectedAgentMeta}
+                  agentDropdownOpen={agentDropdownOpen}
+                  setAgentDropdownOpen={setAgentDropdownOpen}
+                  copyStatus={copyStatus}
+                  onCopySessionLink={handleCopySessionLink}
+                  onUpgrade={openAgentUpgrade}
+                  onClose={() => setSidebarOpen(false)}
+                />
+              )}
+
+              {bulkMode && canManageFeedback && (
+                <BulkActionBar selectedCount={bulkSelectedIds.size} busy={bulkActionBusy} onClose={exitBulkMode}>
+                  {!allSelectedReady && (
+                    <span className="dashboard-bulk-readiness" aria-live="polite">
+                      {selectedReadyCount} of {selectedBulkComments.length} ready
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    className="dashboard-bulk-primary"
+                    disabled={bulkActionBusy}
+                    onClick={() => {
+                      void handoffSelectedToAgent()
+                    }}
+                  >
+                    {bulkActionBusy
+                      ? 'Working…'
+                      : allSelectedReady
+                        ? `Send to ${selectedAgentMeta.name}`
+                        : 'Mark ready'}
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-bulk-secondary"
+                    disabled={bulkActionBusy}
+                    onClick={() => {
+                      void applyBulkAction('done')
+                    }}
+                  >
+                    Mark done
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-bulk-secondary"
+                    disabled={bulkActionBusy}
+                    onClick={() => {
+                      void applyBulkAction('reopen')
+                    }}
+                  >
+                    Reopen
+                  </button>
+                  <button
+                    type="button"
+                    className="dashboard-bulk-secondary dashboard-bulk-danger"
+                    disabled={bulkActionBusy}
+                    title="Reject feedback only; linked issues stay unchanged"
+                    onClick={() => {
+                      void applyBulkAction('reject')
+                    }}
+                  >
+                    Reject
+                  </button>
+                  <span className="text-xs text-muted-foreground">Reject keeps linked issues unchanged.</span>
+                </BulkActionBar>
+              )}
+            </div>
+          </>
+        )}
       </main>
       <StatusBar personal={view === 'extension-comments'} agentAvailable={canOpenAgentPanel} />
 

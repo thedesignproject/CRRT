@@ -47,13 +47,14 @@ export function callbackValues(callbackUrl: string, attempt: AuthAttempt) {
   const expected = new URL(attempt.redirectUri)
   const keys = [...actual.searchParams.keys()]
   if (
-    actual.origin !== expected.origin
-    || actual.pathname !== expected.pathname
-    || actual.hash
-    || keys.length !== 2
-    || !keys.includes('code')
-    || !keys.includes('state')
-  ) throw new Error('Invalid extension sign-in callback')
+    actual.origin !== expected.origin ||
+    actual.pathname !== expected.pathname ||
+    actual.hash ||
+    keys.length !== 2 ||
+    !keys.includes('code') ||
+    !keys.includes('state')
+  )
+    throw new Error('Invalid extension sign-in callback')
   const code = actual.searchParams.get('code')!
   const state = actual.searchParams.get('state')!
   if (!PROOF_256.test(code) || state !== attempt.state) throw new Error('Invalid extension sign-in callback')
@@ -64,27 +65,39 @@ export async function exchange(attempt: AuthAttempt, callbackUrl: string): Promi
   const response = await fetch(`${import.meta.env.WXT_API_BASE.replace(/\/$/, '')}/v1/extension/auth/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...callbackValues(callbackUrl, attempt), verifier: attempt.verifier, redirectUri: attempt.redirectUri }),
+    body: JSON.stringify({
+      ...callbackValues(callbackUrl, attempt),
+      verifier: attempt.verifier,
+      redirectUri: attempt.redirectUri,
+    }),
   })
-  const body = await response.json().catch(() => null) as ExchangeResponse | { error?: string } | null
-  if (!response.ok) throw new Error(body && 'error' in body && body.error ? body.error : 'Could not complete CRRT sign-in')
+  const body = (await response.json().catch(() => null)) as ExchangeResponse | { error?: string } | null
+  if (!response.ok)
+    throw new Error(body && 'error' in body && body.error ? body.error : 'Could not complete CRRT sign-in')
   if (
-    !body
-    || !('accessToken' in body)
-    || typeof body.accessToken !== 'string'
-    || typeof body.refreshToken !== 'string'
-    || !body.user
-    || typeof body.user.id !== 'string'
-    || typeof body.user.email !== 'string'
-  ) throw new Error('CRRT returned an invalid extension session')
+    !body ||
+    !('accessToken' in body) ||
+    typeof body.accessToken !== 'string' ||
+    typeof body.refreshToken !== 'string' ||
+    !body.user ||
+    typeof body.user.id !== 'string' ||
+    typeof body.user.email !== 'string'
+  )
+    throw new Error('CRRT returned an invalid extension session')
   return body
 }
 
-export async function startHostedSignIn(client: SupabaseClient, intent: HostedAuthMessage['intent']): Promise<SessionSummary> {
+export async function startHostedSignIn(
+  client: SupabaseClient,
+  intent: HostedAuthMessage['intent'],
+): Promise<SessionSummary> {
   return withExclusiveAuth(client, () => completeHostedSignIn(client, intent))
 }
 
-async function completeHostedSignIn(client: SupabaseClient, intent: HostedAuthMessage['intent']): Promise<SessionSummary> {
+async function completeHostedSignIn(
+  client: SupabaseClient,
+  intent: HostedAuthMessage['intent'],
+): Promise<SessionSummary> {
   const attempt: AuthAttempt = {
     state: randomProof(),
     verifier: randomProof(),
@@ -98,7 +111,10 @@ async function completeHostedSignIn(client: SupabaseClient, intent: HostedAuthMe
     if (!callbackUrl) throw new Error('CRRT sign-in was cancelled')
     const result = await exchange(attempt, callbackUrl)
     try {
-      const { data, error } = await client.auth.setSession({ access_token: result.accessToken, refresh_token: result.refreshToken })
+      const { data, error } = await client.auth.setSession({
+        access_token: result.accessToken,
+        refresh_token: result.refreshToken,
+      })
       if (error || data.session?.user.id !== result.user.id || data.session.user.email !== result.user.email) {
         throw error ?? new Error('CRRT returned a different account')
       }

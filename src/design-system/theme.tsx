@@ -15,7 +15,9 @@ const ThemeContext = createContext<ThemeContextValue | null>(null)
 export function preferredTheme(storageKey = STORAGE_KEY, defaultTheme?: Theme): Theme {
   if (typeof window === 'undefined') return 'light'
   try {
-    const saved = localStorage.getItem(storageKey) ?? (storageKey === STORAGE_KEY ? localStorage.getItem(LEGACY_DASHBOARD_KEY) : null)
+    const saved =
+      localStorage.getItem(storageKey) ??
+      (storageKey === STORAGE_KEY ? localStorage.getItem(LEGACY_DASHBOARD_KEY) : null)
     if (saved === 'light' || saved === 'dark') return saved
   } catch {
     // Storage is optional; system preference remains a safe fallback.
@@ -30,10 +32,20 @@ export function applyTheme(theme: Theme) {
   meta?.setAttribute('content', theme === 'dark' ? '#0a0a0a' : '#ffffff')
 }
 
-export function ThemeProvider({ children, storageKey = STORAGE_KEY, defaultTheme, hydrate = false }: { children: ReactNode; storageKey?: string; defaultTheme?: Theme; hydrate?: boolean }) {
+export function ThemeProvider({
+  children,
+  storageKey = STORAGE_KEY,
+  defaultTheme,
+  hydrate = false,
+}: {
+  children: ReactNode
+  storageKey?: string
+  defaultTheme?: Theme
+  hydrate?: boolean
+}) {
   // The first hydrated render must match the light server markup. Resolve the
   // saved preference before persisting anything, so dark preferences survive.
-  const [theme, setThemeState] = useState<Theme>(() => hydrate ? 'light' : preferredTheme(storageKey, defaultTheme))
+  const [theme, setThemeState] = useState<Theme>(() => (hydrate ? 'light' : preferredTheme(storageKey, defaultTheme)))
   const [ready, setReady] = useState(!hydrate)
 
   useEffect(() => {
@@ -51,11 +63,14 @@ export function ThemeProvider({ children, storageKey = STORAGE_KEY, defaultTheme
     }
   }, [theme, storageKey, ready, defaultTheme])
 
-  const value = useMemo<ThemeContextValue>(() => ({
-    theme,
-    setTheme: setThemeState,
-    toggleTheme: () => setThemeState((current) => current === 'light' ? 'dark' : 'light'),
-  }), [theme])
+  const value = useMemo<ThemeContextValue>(
+    () => ({
+      theme,
+      setTheme: setThemeState,
+      toggleTheme: () => setThemeState((current) => (current === 'light' ? 'dark' : 'light')),
+    }),
+    [theme],
+  )
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
 }

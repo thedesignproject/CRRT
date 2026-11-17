@@ -24,10 +24,7 @@ export function PillButton({
 }: Props) {
   const iconSize = size === 'sm' ? 20 : size === 'lg' ? 30 : 24
   return (
-    <button
-      className={`pill pill-${variant} pill-${size} ${className}`.trim()}
-      {...rest}
-    >
+    <button className={`pill pill-${variant} pill-${size} ${className}`.trim()} {...rest}>
       {withCarrot && (
         <span className="carrot-chip">
           <CarrotIcon size={iconSize} />

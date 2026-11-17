@@ -28,8 +28,8 @@ export function formatDocUrl(url: string) {
 
 export function describeEvent(ev: FeedbackEvent): { kind: 'done' | 'claim' | 'file' | 'other'; text: string } {
   const actor = ev.actorId || 'agent'
-  const summary = typeof ev.payload?.summary === 'string' ? ev.payload.summary as string : null
-  const note = typeof ev.payload?.note === 'string' ? ev.payload.note as string : null
+  const summary = typeof ev.payload?.summary === 'string' ? (ev.payload.summary as string) : null
+  const note = typeof ev.payload?.note === 'string' ? (ev.payload.note as string) : null
   switch (ev.eventType) {
     case 'comment.claimed':
       return { kind: 'claim', text: `${actor} claimed comment` }
@@ -50,7 +50,10 @@ export function describeEvent(ev: FeedbackEvent): { kind: 'done' | 'claim' | 'fi
     case 'comment.implementation_changed':
       return { kind: 'other', text: `Status → ${ev.payload?.implementationStatus ?? 'updated'}` }
     case 'presence.updated':
-      return { kind: 'other', text: `${actor} ${typeof ev.payload?.status === 'string' ? ev.payload.status as string : 'present'}${summary ? ` · ${summary}` : ''}` }
+      return {
+        kind: 'other',
+        text: `${actor} ${typeof ev.payload?.status === 'string' ? (ev.payload.status as string) : 'present'}${summary ? ` · ${summary}` : ''}`,
+      }
     case 'share.created':
       return { kind: 'other', text: `Session opened` }
     default:

@@ -10,23 +10,23 @@ The topics below address the brief's potential audiences through concrete review
 
 ## Content map
 
-| Brief ID | Resource | Distinct job |
-| --- | --- | --- |
-| 8 | Report responsive UI issues precisely | Preserve viewport, content, state, and reproduction evidence |
-| 11 | Run a focused 15-minute prototype review | Organize one task and end with owned decisions |
-| 22 | Compare a design frame with a browser screenshot | Match capture conditions before interpreting visual differences |
-| 33 | Review light and dark themes together | Compare semantic roles and states across a paired review |
-| 41 | Minimum viable design system | Bound the first system around one real flow and prove reuse |
-| 60 | Record design decisions for coding agents | Preserve the reason and scope behind an approved rule |
-| 63 | Scope one visual fix for a coding agent | Establish accepted implementation boundaries and review evidence |
-| 75 | Find missing states in generated forms | Test validation, pending, failure, recovery, and success |
-| 81 | Organize a Storybook design review | Review stories and connect shared changes to product consumers |
-| 91 | Verify a UI fix before resolving feedback | Tie resolution to the original state and actual checks |
-| 101 | Onboard a client to a prototype review | Explain the task, maturity, boundaries, feedback format, and owner |
-| 120 | Visual feedback vs visual regression testing | Distinguish design judgment from baseline comparisons |
-| 32, 33 | Text contrast checker | Calculate an opaque sRGB pair against the selected AA text criterion |
-| 36 | px/rem converter | Convert against an explicit root-size assumption |
-| 1, 2, 61 | Visual feedback brief builder | Assemble and copy a draft without submitting feedback |
+| Brief ID | Resource                                         | Distinct job                                                         |
+| -------- | ------------------------------------------------ | -------------------------------------------------------------------- |
+| 8        | Report responsive UI issues precisely            | Preserve viewport, content, state, and reproduction evidence         |
+| 11       | Run a focused 15-minute prototype review         | Organize one task and end with owned decisions                       |
+| 22       | Compare a design frame with a browser screenshot | Match capture conditions before interpreting visual differences      |
+| 33       | Review light and dark themes together            | Compare semantic roles and states across a paired review             |
+| 41       | Minimum viable design system                     | Bound the first system around one real flow and prove reuse          |
+| 60       | Record design decisions for coding agents        | Preserve the reason and scope behind an approved rule                |
+| 63       | Scope one visual fix for a coding agent          | Establish accepted implementation boundaries and review evidence     |
+| 75       | Find missing states in generated forms           | Test validation, pending, failure, recovery, and success             |
+| 81       | Organize a Storybook design review               | Review stories and connect shared changes to product consumers       |
+| 91       | Verify a UI fix before resolving feedback        | Tie resolution to the original state and actual checks               |
+| 101      | Onboard a client to a prototype review           | Explain the task, maturity, boundaries, feedback format, and owner   |
+| 120      | Visual feedback vs visual regression testing     | Distinguish design judgment from baseline comparisons                |
+| 32, 33   | Text contrast checker                            | Calculate an opaque sRGB pair against the selected AA text criterion |
+| 36       | px/rem converter                                 | Convert against an explicit root-size assumption                     |
+| 1, 2, 61 | Visual feedback brief builder                    | Assemble and copy a draft without submitting feedback                |
 
 ## Editorial and technical boundaries
 

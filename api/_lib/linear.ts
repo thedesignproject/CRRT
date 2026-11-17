@@ -62,15 +62,16 @@ export function verifyLinearOAuthState(token: string, nowSeconds = Math.floor(Da
   try {
     const value = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as Partial<LinearOAuthState>
     if (
-      value.type !== 'linear-oauth'
-      || typeof value.projectKey !== 'string'
-      || typeof value.userId !== 'string'
-      || typeof value.origin !== 'string'
-      || typeof value.redirectUri !== 'string'
-      || typeof value.nonce !== 'string'
-      || typeof value.exp !== 'number'
-      || value.exp < nowSeconds
-    ) return null
+      value.type !== 'linear-oauth' ||
+      typeof value.projectKey !== 'string' ||
+      typeof value.userId !== 'string' ||
+      typeof value.origin !== 'string' ||
+      typeof value.redirectUri !== 'string' ||
+      typeof value.nonce !== 'string' ||
+      typeof value.exp !== 'number' ||
+      value.exp < nowSeconds
+    )
+      return null
     return value as LinearOAuthState
   } catch {
     return null
@@ -108,37 +109,46 @@ async function tokenRequest(params: URLSearchParams) {
     redirect: 'error',
     signal: AbortSignal.timeout(10_000),
   })
-  const body = await response.json() as Record<string, unknown>
+  const body = (await response.json()) as Record<string, unknown>
   if (!response.ok) throw new Error('linear_token_exchange_failed')
   return parseTokens(body)
 }
 
 export function exchangeLinearCode(code: string, redirectUri: string) {
   const { clientId, clientSecret } = credentials()
-  return tokenRequest(new URLSearchParams({
-    code,
-    redirect_uri: redirectUri,
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: 'authorization_code',
-  }))
+  return tokenRequest(
+    new URLSearchParams({
+      code,
+      redirect_uri: redirectUri,
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'authorization_code',
+    }),
+  )
 }
 
 export function refreshLinearToken(refreshToken: string) {
   const { clientId, clientSecret } = credentials()
-  return tokenRequest(new URLSearchParams({
-    refresh_token: refreshToken,
-    client_id: clientId,
-    client_secret: clientSecret,
-    grant_type: 'refresh_token',
-  }))
+  return tokenRequest(
+    new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: clientId,
+      client_secret: clientSecret,
+      grant_type: 'refresh_token',
+    }),
+  )
 }
 
 export function hasLinearWriteScope(grantedScopes: string | null | undefined) {
   return Boolean(grantedScopes?.split(/[ ,]+/).includes('write'))
 }
 
-async function linearGraphql<T>(accessToken: string, query: string, variables?: Record<string, unknown>, signal?: AbortSignal) {
+async function linearGraphql<T>(
+  accessToken: string,
+  query: string,
+  variables?: Record<string, unknown>,
+  signal?: AbortSignal,
+) {
   signal?.throwIfAborted()
   let response: Response
   try {
@@ -154,7 +164,7 @@ async function linearGraphql<T>(accessToken: string, query: string, variables?: 
   }
   let body: { data?: T; errors?: unknown[] }
   try {
-    body = await response.json() as { data?: T; errors?: unknown[] }
+    body = (await response.json()) as { data?: T; errors?: unknown[] }
   } catch {
     throw new Error('linear_result_indeterminate')
   }
@@ -170,17 +180,30 @@ export async function getLinearWorkspace(accessToken: string) {
   const organization = data.viewer?.organization
   const teams = data.teams?.nodes
   if (!organization?.id || !organization.name || !Array.isArray(teams)) throw new Error('linear_workspace_invalid')
-  return { id: organization.id, name: organization.name, teams: teams.filter((team) => team.id && team.name && team.key) }
+  return {
+    id: organization.id,
+    name: organization.name,
+    teams: teams.filter((team) => team.id && team.name && team.key),
+  }
 }
 
-export async function createLinearIssue(accessToken: string, input: { teamId: string; title: string; description: string; signal?: AbortSignal }) {
+export async function createLinearIssue(
+  accessToken: string,
+  input: { teamId: string; title: string; description: string; signal?: AbortSignal },
+) {
   const data = await linearGraphql<{
     issueCreate: { success: boolean; issue: { id: string; identifier: string; url: string } | null }
-  }>(accessToken, 'mutation CRRTIssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }', {
-    input: { teamId: input.teamId, title: input.title, description: input.description },
-  }, input.signal)
+  }>(
+    accessToken,
+    'mutation CRRTIssueCreate($input: IssueCreateInput!) { issueCreate(input: $input) { success issue { id identifier url } } }',
+    {
+      input: { teamId: input.teamId, title: input.title, description: input.description },
+    },
+    input.signal,
+  )
   const issue = data.issueCreate?.issue
-  if (!data.issueCreate?.success || !issue?.id || !issue.identifier || !issue.url) throw new Error('linear_issue_create_failed')
+  if (!data.issueCreate?.success || !issue?.id || !issue.identifier || !issue.url)
+    throw new Error('linear_issue_create_failed')
   let externalUrl: string
   try {
     const url = new URL(issue.url)
@@ -192,12 +215,15 @@ export async function createLinearIssue(accessToken: string, input: { teamId: st
   return { externalId: issue.id, externalKey: issue.identifier, externalUrl }
 }
 
-export async function closeLinearIssue(accessToken: string, input: {
-  issueId: string
-  comment: string
-  marker: string
-  beforeClose?: () => Promise<boolean>
-}) {
+export async function closeLinearIssue(
+  accessToken: string,
+  input: {
+    issueId: string
+    comment: string
+    marker: string
+    beforeClose?: () => Promise<boolean>
+  },
+) {
   const context = await linearGraphql<{
     issue: {
       state: { type: string } | null
@@ -207,33 +233,41 @@ export async function closeLinearIssue(accessToken: string, input: {
         pageInfo: { hasNextPage: boolean; endCursor: string | null }
       }
     } | null
-  }>(accessToken, `query CRRTIssueCloseContext($issueId: String!, $after: String) {
+  }>(
+    accessToken,
+    `query CRRTIssueCloseContext($issueId: String!, $after: String) {
     issue(id: $issueId) {
       state { type }
       team { states(filter: { type: { eq: "canceled" } }) { nodes { id name position } } }
       comments(first: 100, after: $after) { nodes { body } pageInfo { hasNextPage endCursor } }
     }
-  }`, { issueId: input.issueId, after: null })
+  }`,
+    { issueId: input.issueId, after: null },
+  )
   const issue = context.issue
   if (!issue) throw new Error('linear_issue_not_found')
-  if (
-    !Array.isArray(issue.comments?.nodes)
-    || typeof issue.comments.pageInfo?.hasNextPage !== 'boolean'
-  ) throw new Error('linear_request_failed')
+  if (!Array.isArray(issue.comments?.nodes) || typeof issue.comments.pageInfo?.hasNextPage !== 'boolean')
+    throw new Error('linear_request_failed')
   let hasMarker = issue.comments.nodes.some((comment) => comment.body.includes(input.marker))
   let pageInfo = issue.comments.pageInfo
   while (!hasMarker && pageInfo.hasNextPage) {
     if (!pageInfo.endCursor) throw new Error('linear_request_failed')
     const page = await linearGraphql<{
-      issue: { comments: {
-        nodes: Array<{ body: string }>
-        pageInfo: { hasNextPage: boolean; endCursor: string | null }
-      } } | null
-    }>(accessToken, `query CRRTIssueCloseComments($issueId: String!, $after: String!) {
+      issue: {
+        comments: {
+          nodes: Array<{ body: string }>
+          pageInfo: { hasNextPage: boolean; endCursor: string | null }
+        }
+      } | null
+    }>(
+      accessToken,
+      `query CRRTIssueCloseComments($issueId: String!, $after: String!) {
       issue(id: $issueId) {
         comments(first: 100, after: $after) { nodes { body } pageInfo { hasNextPage endCursor } }
       }
-    }`, { issueId: input.issueId, after: pageInfo.endCursor })
+    }`,
+      { issueId: input.issueId, after: pageInfo.endCursor },
+    )
     if (!page.issue) throw new Error('linear_issue_not_found')
     hasMarker = page.issue.comments.nodes.some((comment) => comment.body.includes(input.marker))
     pageInfo = page.issue.comments.pageInfo

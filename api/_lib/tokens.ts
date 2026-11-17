@@ -55,9 +55,7 @@ export function encryptToken(token: string) {
 }
 
 export function decryptToken(value: string) {
-  const payload = value.startsWith(TOKEN_VERSION_PREFIX)
-    ? value.slice(TOKEN_VERSION_PREFIX.length)
-    : value // legacy unprefixed payload
+  const payload = value.startsWith(TOKEN_VERSION_PREFIX) ? value.slice(TOKEN_VERSION_PREFIX.length) : value // legacy unprefixed payload
 
   const [ivPart, tagPart, ciphertextPart] = payload.split('.')
   if (!ivPart || !tagPart || !ciphertextPart) {

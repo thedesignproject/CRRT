@@ -9,7 +9,9 @@ const WORKFLOW = { workflowId: PRODUCT_AUDIT_WORKFLOW_ID }
 export async function startAuditExecution(auditId: string, mode: AuditMode) {
   if (auditLocalExecution()) {
     const runId = `local-${mode}-${auditId}`
-    queueMicrotask(() => { void executeAuditPipeline(auditId).catch(() => undefined) })
+    queueMicrotask(() => {
+      void executeAuditPipeline(auditId).catch(() => undefined)
+    })
     return runId
   }
   const run = await start(WORKFLOW, [auditId])

@@ -9,7 +9,15 @@ import { getProjectMember, listGitHubUserInstallations } from '../../../../_lib/
 import { trustedUser } from '../../../../_lib/trusted-user.js'
 import { startMcpGithubFlow } from '../../../../_lib/mcp-github-flow.js'
 import { buildGitHubAuthorizeUrl } from '../../../../_lib/widget-github-auth.js'
-import { firstHeaderValue, getAppUrl, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
+import {
+  firstHeaderValue,
+  getAppUrl,
+  getStringQuery,
+  handleOptions,
+  jsonError,
+  methodNotAllowed,
+  setCors,
+} from '../../../../_lib/http.js'
 
 function callbackOrigin(req: VercelRequest) {
   const requestedOrigin = firstHeaderValue(req.headers.origin)
@@ -49,13 +57,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     const installations = (await listGitHubUserInstallations(user.userId)).map((installation) => ({
       ...installation,
-      authorizeUrl: buildGitHubAuthorizeUrl(createGitHubAppReuseAuthState({
-        projectKey,
-        userId: user.userId,
-        origin,
-        installationRef: installation.id,
-        ...mcpFlow,
-      })),
+      authorizeUrl: buildGitHubAuthorizeUrl(
+        createGitHubAppReuseAuthState({
+          projectKey,
+          userId: user.userId,
+          origin,
+          installationRef: installation.id,
+          ...mcpFlow,
+        }),
+      ),
     }))
     setCors(req, res, ['GET', 'OPTIONS'])
     res.setHeader('Cache-Control', 'no-store')

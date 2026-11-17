@@ -2,14 +2,27 @@ import { fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, expect, vi } from 'vitest'
 
 beforeEach(() => {
-  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
 })
 
-export const waitForPublication = () => waitFor(() => expect(screen.queryByLabelText('Loading published document')).not.toBeInTheDocument())
+export const waitForPublication = () =>
+  waitFor(() => expect(screen.queryByLabelText('Loading published document')).not.toBeInTheDocument())
 
 /** Drive the real widget menu rather than assuming an always-open document form. */
 export function openNote() {
-  if (screen.queryByLabelText('Leave feedback') || screen.queryByLabelText('Reply') || screen.queryByRole('dialog', { name: 'Your feedback identity' })) return
+  if (
+    screen.queryByLabelText('Leave feedback') ||
+    screen.queryByLabelText('Reply') ||
+    screen.queryByRole('dialog', { name: 'Your feedback identity' })
+  )
+    return
   fireEvent.keyDown(document, { key: 'Escape' })
   const launcher = screen.queryByRole('button', { name: 'Open CRRT menu' })
   if (launcher) fireEvent.click(launcher)

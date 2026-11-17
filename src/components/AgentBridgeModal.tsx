@@ -4,7 +4,11 @@ import type { WidgetLoginSession } from '../lib/widgetLogin'
 import { PremiumAgentBridge } from './PremiumAgentBridge'
 
 function pagePath(url: string): string {
-  try { return new URL(url).pathname || '/' } catch { return url }
+  try {
+    return new URL(url).pathname || '/'
+  } catch {
+    return url
+  }
 }
 
 type Target = 'claude-code' | 'codex' | 'generic'
@@ -136,7 +140,7 @@ type Action =
   | { type: 'error'; message: string }
   | { type: 'tick' }
 
-const EMPTY_PROMPTS: Record<Target, string> = { 'claude-code': '', 'codex': '', 'generic': '' }
+const EMPTY_PROMPTS: Record<Target, string> = { 'claude-code': '', codex: '', generic: '' }
 
 function reducer(state: State, action: Action): State {
   switch (action.type) {
@@ -172,7 +176,9 @@ function initState(initialSession: Session | null): State {
 const containerStyle: CSSProperties = { fontFamily: FONT, color: 'var(--fw-foreground)' }
 
 const overlayStyle: CSSProperties = {
-  position: 'fixed', inset: 0, zIndex: Z_OVERLAY,
+  position: 'fixed',
+  inset: 0,
+  zIndex: Z_OVERLAY,
   background: 'rgba(0, 0, 0, 0.56)',
   backdropFilter: 'blur(10px)',
   WebkitBackdropFilter: 'blur(10px)',
@@ -182,12 +188,14 @@ const overlayStyle: CSSProperties = {
 
 const modalStyle: CSSProperties = {
   position: 'fixed',
-  top: '50%', left: '50%',
+  top: '50%',
+  left: '50%',
   transform: 'translate(-50%, -50%)',
   zIndex: Z_MODAL,
   width: 'min(600px, calc(100vw - 32px))',
   maxHeight: 'calc(100vh - 48px)',
-  display: 'flex', flexDirection: 'column',
+  display: 'flex',
+  flexDirection: 'column',
   background: 'var(--fw-surface-deep)',
   border: '1px solid rgba(232, 133, 61, 0.20)',
   borderRadius: 18,
@@ -197,9 +205,17 @@ const modalStyle: CSSProperties = {
 }
 
 const closeButtonStyle: CSSProperties = {
-  marginLeft: 'auto', width: 34, height: 34, borderRadius: 9999,
-  border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-contrast-03)', cursor: 'pointer',
-  color: 'var(--fw-foreground-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+  marginLeft: 'auto',
+  width: 34,
+  height: 34,
+  borderRadius: 9999,
+  border: '1px solid var(--fw-contrast-08)',
+  background: 'var(--fw-contrast-03)',
+  cursor: 'pointer',
+  color: 'var(--fw-foreground-muted)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
   flexShrink: 0,
 }
 
@@ -223,9 +239,14 @@ const presenceCardStyle: CSSProperties = {
 }
 
 const statusPillBaseStyle: CSSProperties = {
-  display: 'inline-block', padding: '2px 8px', borderRadius: 9999,
-  fontSize: 12, fontWeight: 600,
-  whiteSpace: 'nowrap', flexShrink: 0, marginTop: 1,
+  display: 'inline-block',
+  padding: '2px 8px',
+  borderRadius: 9999,
+  fontSize: 12,
+  fontWeight: 600,
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+  marginTop: 1,
 }
 
 // ─── Component ──────────────────────────────────────────────────────────────
@@ -245,17 +266,19 @@ interface AgentBridgeModalProps {
 
 export function AgentBridgeModal(props: AgentBridgeModalProps) {
   if (props.pageUrl && props.onLogin) {
-    return <PremiumAgentBridge
-      apiBase={props.apiBase}
-      projectId={props.projectId}
-      pageUrl={props.pageUrl}
-      widgetSession={props.widgetSession ?? null}
-      loginBusy={props.loginBusy}
-      loginError={props.loginError}
-      onLogin={props.onLogin}
-      onClose={props.onClose}
-      onFeedbackChanged={props.onFeedbackChanged}
-    />
+    return (
+      <PremiumAgentBridge
+        apiBase={props.apiBase}
+        projectId={props.projectId}
+        pageUrl={props.pageUrl}
+        widgetSession={props.widgetSession ?? null}
+        loginBusy={props.loginBusy}
+        loginError={props.loginError}
+        onLogin={props.onLogin}
+        onClose={props.onClose}
+        onFeedbackChanged={props.onFeedbackChanged}
+      />
+    )
   }
   return <LegacyAgentBridgeModal {...props} />
 }
@@ -304,7 +327,8 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
         if (!cancelled) dispatch({ type: 'session-resolved', session: next })
       })
       .catch((err) => {
-        if (!cancelled) dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Could not start a session.' })
+        if (!cancelled)
+          dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Could not start a session.' })
       })
     return () => {
       cancelled = true
@@ -320,7 +344,8 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
         if (!cancelled) dispatch({ type: 'prompts-loaded', prompts: next })
       })
       .catch((err) => {
-        if (!cancelled) dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Could not load session.' })
+        if (!cancelled)
+          dispatch({ type: 'error', message: err instanceof Error ? err.message : 'Could not load session.' })
       })
     return () => {
       cancelled = true
@@ -357,7 +382,7 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
   const seenIdsRef = useRef<Set<string>>(new Set())
   const actionableIds = actionableComments.map((c) => c.id).join(',')
   useEffect(() => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set<string>()
       for (const c of actionableComments) {
         // Previously seen → preserve user's explicit choice. New → default selected.
@@ -373,57 +398,74 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [actionableIds])
   const toggleSelected = useCallback((id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id); else next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
   }, [])
 
-  const buildPrompt = useCallback((target: Target) => {
-    const original = prompts[target]
-    if (!original) return ''
-    const selected = actionableComments.filter((c) => selectedIds.has(c.id))
-    const allAcceptedCommentsAreActionable = actionableComments.length === acceptedComments.length
-    if (selected.length === 0 || (selected.length === actionableComments.length && allAcceptedCommentsAreActionable)) return original
-    const list = selected.map((c, i) => `${i + 1}. "${c.body}" — ${pagePath(c.pageUrl)}`).join('\n')
-    return `ACT ONLY ON THESE FEEDBACK ITEMS (the rest of the prompt may list more — ignore those):\n${list}\n\n---\n\n${original}`
-  }, [prompts, acceptedComments.length, actionableComments, selectedIds])
+  const buildPrompt = useCallback(
+    (target: Target) => {
+      const original = prompts[target]
+      if (!original) return ''
+      const selected = actionableComments.filter((c) => selectedIds.has(c.id))
+      const allAcceptedCommentsAreActionable = actionableComments.length === acceptedComments.length
+      if (selected.length === 0 || (selected.length === actionableComments.length && allAcceptedCommentsAreActionable))
+        return original
+      const list = selected.map((c, i) => `${i + 1}. "${c.body}" — ${pagePath(c.pageUrl)}`).join('\n')
+      return `ACT ONLY ON THESE FEEDBACK ITEMS (the rest of the prompt may list more — ignore those):\n${list}\n\n---\n\n${original}`
+    },
+    [prompts, acceptedComments.length, actionableComments, selectedIds],
+  )
 
-  const handleCopy = useCallback(async (target: Target) => {
-    const text = buildPrompt(target)
-    if (!text) return
-    if (onBeforeCopy) {
-      const canCopy = await onBeforeCopy()
-      if (!canCopy) return
-    }
-    try {
-      await navigator.clipboard.writeText(text)
-      dispatch({ type: 'copied', target })
-      window.setTimeout(() => dispatch({ type: 'copied', target: null }), 1600)
-    } catch {
-      dispatch({ type: 'error', message: 'Copy failed — select the prompt manually and copy.' })
-    }
-  }, [buildPrompt, onBeforeCopy])
+  const handleCopy = useCallback(
+    async (target: Target) => {
+      const text = buildPrompt(target)
+      if (!text) return
+      if (onBeforeCopy) {
+        const canCopy = await onBeforeCopy()
+        if (!canCopy) return
+      }
+      try {
+        await navigator.clipboard.writeText(text)
+        dispatch({ type: 'copied', target })
+        window.setTimeout(() => dispatch({ type: 'copied', target: null }), 1600)
+      } catch {
+        dispatch({ type: 'error', message: 'Copy failed — select the prompt manually and copy.' })
+      }
+    },
+    [buildPrompt, onBeforeCopy],
+  )
   const openCount = shareState?.comments.filter((c) => c.reviewStatus === 'open').length ?? 0
   const promptsReady = TARGETS.every(({ id }) => Boolean(prompts[id]))
 
   return (
     <div {...{ [WIDGET_ATTR]: '' }} style={containerStyle}>
       <div aria-hidden="true" style={overlayStyle} />
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Connect agent"
-        style={modalStyle}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', padding: '18px 20px', borderBottom: '1px solid var(--fw-contrast-06)' }}>
+      <div ref={modalRef} role="dialog" aria-modal="true" aria-label="Connect agent" style={modalStyle}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '18px 20px',
+            borderBottom: '1px solid var(--fw-contrast-06)',
+          }}
+        >
           <div>
             <div style={{ fontSize: 18, fontWeight: 750, letterSpacing: 0, color: 'var(--fw-foreground)' }}>
               {shareState?.project.name ?? 'Connect an agent'}
             </div>
-            <div style={{ fontSize: 13, color: 'var(--fw-foreground-muted)', marginTop: 5, lineHeight: 1.4, maxWidth: 440 }}>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--fw-foreground-muted)',
+                marginTop: 5,
+                lineHeight: 1.4,
+                maxWidth: 440,
+              }}
+            >
               Paste one of these prompts into your agent — it joins this session and starts on the feedback ready below.
             </div>
           </div>
@@ -432,8 +474,14 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
             onClick={onClose}
             aria-label="Close"
             style={closeButtonStyle}
-            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-06)'; e.currentTarget.style.color = 'var(--fw-foreground)' }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'var(--fw-contrast-03)'; e.currentTarget.style.color = 'var(--fw-foreground-muted)' }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--fw-contrast-06)'
+              e.currentTarget.style.color = 'var(--fw-foreground)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--fw-contrast-03)'
+              e.currentTarget.style.color = 'var(--fw-foreground-muted)'
+            }}
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <line x1="4" y1="4" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -459,7 +507,17 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
           </div>
 
           {error && (
-            <div style={{ marginBottom: 16, padding: 10, borderRadius: 8, background: 'rgba(239, 68, 68, 0.10)', border: '1px solid rgba(239, 68, 68, 0.24)', color: 'var(--fw-danger-label)', fontSize: 12 }}>
+            <div
+              style={{
+                marginBottom: 16,
+                padding: 10,
+                borderRadius: 8,
+                background: 'rgba(239, 68, 68, 0.10)',
+                border: '1px solid rgba(239, 68, 68, 0.24)',
+                color: 'var(--fw-danger-label)',
+                fontSize: 12,
+              }}
+            >
               {error}
             </div>
           )}
@@ -478,7 +536,9 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
                     <span style={{ fontWeight: 700, color: 'var(--fw-foreground)' }}>{p.agentId}</span>
                     <span style={{ color: 'var(--fw-foreground-muted)' }}>{p.status}</span>
                     {p.summary && <span style={{ color: 'var(--fw-foreground-faint)' }}>· {p.summary}</span>}
-                    <span style={{ color: 'var(--fw-foreground-faint)', marginLeft: 'auto', fontSize: 12 }}>{timeAgo(p.lastSeenAt)}</span>
+                    <span style={{ color: 'var(--fw-foreground-faint)', marginLeft: 'auto', fontSize: 12 }}>
+                      {timeAgo(p.lastSeenAt)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -486,11 +546,25 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
           )}
 
           {shareState && (
-            <Section label={selectedIds.size === actionableComments.length
-              ? `Ready for agent (${actionableComments.length})`
-              : `Ready for agent (${selectedIds.size}/${actionableComments.length} selected)`}>
+            <Section
+              label={
+                selectedIds.size === actionableComments.length
+                  ? `Ready for agent (${actionableComments.length})`
+                  : `Ready for agent (${selectedIds.size}/${actionableComments.length} selected)`
+              }
+            >
               {actionableComments.length === 0 ? (
-                <div style={{ background: 'var(--fw-contrast-03)', border: '1px dashed var(--fw-contrast-10)', borderRadius: 10, padding: 16, textAlign: 'center', color: 'var(--fw-foreground-muted)', fontSize: 13 }}>
+                <div
+                  style={{
+                    background: 'var(--fw-contrast-03)',
+                    border: '1px dashed var(--fw-contrast-10)',
+                    borderRadius: 10,
+                    padding: 16,
+                    textAlign: 'center',
+                    color: 'var(--fw-foreground-muted)',
+                    fontSize: 13,
+                  }}
+                >
                   No feedback is ready for an agent.
                 </div>
               ) : (
@@ -504,32 +578,75 @@ function LegacyAgentBridgeModal({ apiBase, projectId, onClose, onBeforeCopy }: A
                         key={comment.id}
                         onClick={() => toggleSelected(comment.id)}
                         style={{
-                          display: 'block', textAlign: 'left', width: '100%',
+                          display: 'block',
+                          textAlign: 'left',
+                          width: '100%',
                           background: isSelected ? 'rgba(232, 133, 61, 0.08)' : 'var(--fw-contrast-03)',
                           border: `1px solid ${isSelected ? 'rgba(232, 133, 61, 0.28)' : 'var(--fw-contrast-07)'}`,
-                          borderRadius: 10, padding: 12, cursor: 'pointer',
+                          borderRadius: 10,
+                          padding: 12,
+                          cursor: 'pointer',
                           fontFamily: 'inherit',
                           opacity: isSelected ? 1 : 0.55,
                           transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
                         }}
                       >
                         <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-                          <div style={{
-                            width: 18, height: 18, borderRadius: 4, flexShrink: 0,
-                            border: `1.5px solid ${isSelected ? '#E8853D' : 'var(--fw-contrast-18)'}`,
-                            background: isSelected ? '#E8853D' : 'transparent',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: '#080808', marginTop: 1,
-                            transition: 'all 0.15s',
-                          }}>
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: 4,
+                              flexShrink: 0,
+                              border: `1.5px solid ${isSelected ? '#E8853D' : 'var(--fw-contrast-18)'}`,
+                              background: isSelected ? '#E8853D' : 'transparent',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: '#080808',
+                              marginTop: 1,
+                              transition: 'all 0.15s',
+                            }}
+                          >
                             {isSelected && (
-                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
+                              <svg
+                                width="11"
+                                height="11"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M20 6L9 17l-5-5" />
+                              </svg>
                             )}
                           </div>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: 'var(--fw-foreground-soft)', lineHeight: 1.5, marginBottom: 6 }}>{comment.body}</div>
-                            <div style={{ fontSize: 12, color: 'var(--fw-foreground-faint)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                              {author && <span style={{ fontWeight: 600, color: 'var(--fw-foreground-muted)' }}>{author}</span>}
+                            <div
+                              style={{
+                                fontSize: 13,
+                                color: 'var(--fw-foreground-soft)',
+                                lineHeight: 1.5,
+                                marginBottom: 6,
+                              }}
+                            >
+                              {comment.body}
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 12,
+                                color: 'var(--fw-foreground-faint)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 6,
+                                flexWrap: 'wrap',
+                              }}
+                            >
+                              {author && (
+                                <span style={{ fontWeight: 600, color: 'var(--fw-foreground-muted)' }}>{author}</span>
+                              )}
                               {author && <span aria-hidden="true">·</span>}
                               <span>{timeAgo(comment.createdAt)}</span>
                               <span aria-hidden="true">·</span>
@@ -607,20 +724,43 @@ function TargetButton({ target, label, hint, ready, copied, selected, onCopy }: 
       style={style}
     >
       {isSelected && (
-        <div style={{
-          position: 'absolute', top: 8, right: 8,
-          width: 16, height: 16, borderRadius: '50%',
-          background: '#E8853D', color: '#080808',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 12, fontWeight: 700,
-        }}>
+        <div
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 16,
+            height: 16,
+            borderRadius: '50%',
+            background: '#E8853D',
+            color: '#080808',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            fontWeight: 700,
+          }}
+        >
           ✓
         </div>
       )}
-      <div style={{ fontSize: 13, fontWeight: 750, marginBottom: 4, color: isCopied ? 'var(--fw-active-label)' : 'var(--fw-foreground)' }}>
+      <div
+        style={{
+          fontSize: 13,
+          fontWeight: 750,
+          marginBottom: 4,
+          color: isCopied ? 'var(--fw-active-label)' : 'var(--fw-foreground)',
+        }}
+      >
         {isCopied ? 'Copied ✓' : ready ? `Copy ${label}` : label}
       </div>
-      <div style={{ fontSize: 12, color: isCopied ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-muted)', lineHeight: 1.3 }}>
+      <div
+        style={{
+          fontSize: 12,
+          color: isCopied ? 'var(--fw-active-label-soft)' : 'var(--fw-foreground-muted)',
+          lineHeight: 1.3,
+        }}
+      >
         {ready ? hint : 'Loading…'}
       </div>
     </button>
@@ -630,7 +770,16 @@ function TargetButton({ target, label, hint, ready, copied, selected, onCopy }: 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--fw-foreground-meta)', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 8 }}>
+      <div
+        style={{
+          fontSize: 11,
+          fontWeight: 700,
+          color: 'var(--fw-foreground-meta)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.12em',
+          marginBottom: 8,
+        }}
+      >
         {label}
       </div>
       {children}
@@ -648,9 +797,5 @@ const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> =
 
 function StatusPill({ status }: { status: string }) {
   const palette = STATUS_COLORS[status] ?? STATUS_COLORS.unassigned
-  return (
-    <span style={{ ...statusPillBaseStyle, background: palette.bg, color: palette.fg }}>
-      {palette.label}
-    </span>
-  )
+  return <span style={{ ...statusPillBaseStyle, background: palette.bg, color: palette.fg }}>{palette.label}</span>
 }

@@ -3,14 +3,18 @@
   "version": "0.2.0",
   "description": "CRRT 🥕 inside Storybook — a panel that shows the rules governing a component and sends stakeholder feedback to CRRT.",
   "keywords": [
-    "storybook-addon",
-    "storybook-addons",
     "crrt",
-    "feedback",
     "design-systems",
+    "feedback",
     "governance",
-    "panel"
+    "panel",
+    "storybook-addon",
+    "storybook-addons"
   ],
+  "homepage": "https://crrt.ai",
+  "bugs": {
+    "url": "https://github.com/thedesignproject/CRRT/issues"
+  },
   "license": "MIT",
   "author": "The Design Project",
   "repository": {
@@ -18,14 +22,17 @@
     "url": "git+https://github.com/thedesignproject/CRRT.git",
     "directory": "packages/crrt-storybook"
   },
-  "bugs": {
-    "url": "https://github.com/thedesignproject/CRRT/issues"
-  },
-  "homepage": "https://crrt.ai",
-  "type": "module",
   "bin": {
     "crrt-storybook": "dist/cli.js"
   },
+  "files": [
+    "dist",
+    "preset.js",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -37,13 +44,9 @@
     "./preset": "./dist/preset.js",
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "preset.js",
-    "README.md",
-    "LICENSE",
-    "THIRD_PARTY_NOTICES.md"
-  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "prebuild": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsup",
@@ -56,9 +59,6 @@
     "storybook": "storybook dev -p 6007",
     "prebuild-storybook": "npm run build",
     "build-storybook": "storybook build"
-  },
-  "peerDependencies": {
-    "storybook": "^10.0.0"
   },
   "devDependencies": {
     "@storybook/react-vite": "^10.4.6",
@@ -77,8 +77,8 @@
     "vite": "^8.1.3",
     "vitest": "4.1.12"
   },
-  "publishConfig": {
-    "access": "public"
+  "peerDependencies": {
+    "storybook": "^10.0.0"
   },
   "engines": {
     "node": ">=20.19.0"

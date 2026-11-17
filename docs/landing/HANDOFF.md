@@ -10,6 +10,7 @@ Review order for Pranav: [#351](https://github.com/thedesignproject/CRRT/pull/35
 Both layers include trunk 6bb4cb32, including MCP and the shared agent onboarding guide (#362). The stack is for code and product review; merging or launching remains a separate decision.
 
 Related work is deliberately not included:
+
 - **#363** changes dashboard MCP onboarding only. Its setup prompt matches the landing prompt, and Git's merge simulation reports no conflicts with this stack. It can be reviewed independently.
 - **#350** implements CRRT Record. The landing labels Record as private preview and does not imply general availability.
 - **#346** contains Storybook work; this landing uses the existing install destination.
@@ -31,14 +32,14 @@ Related work is deliberately not included:
 
 ## Product consistency
 
-| Surface | Current behavior |
-| --- | --- |
+| Surface   | Current behavior                                                                                                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Live demo | Real selection, screenshots, comments, editing, and deletion; comments stay in this tab with session storage and an in-memory fallback. No shared project writes or account required. |
-| MCP | Account consent and project permissions remain enforced by the existing backend. The landing copies the same onboarding instructions as dashboard, using production URLs. |
-| Record | Private preview. Recording/transcription are distinct from authenticated agent access. |
-| Pricing | Default monthly: Pro $19 and Studio $49. Annual totals remain $192 and $492. These match api/_lib/billing/plans.ts; no Stripe amount or entitlement change. |
-| Checkout | Existing duplicate-request guard, stale-session handling, and authenticated checkout destinations are retained. |
-| Themes | Landing and dashboard preferences remain scoped separately. |
+| MCP       | Account consent and project permissions remain enforced by the existing backend. The landing copies the same onboarding instructions as dashboard, using production URLs.             |
+| Record    | Private preview. Recording/transcription are distinct from authenticated agent access.                                                                                                |
+| Pricing   | Default monthly: Pro $19 and Studio $49. Annual totals remain $192 and $492. These match api/_lib/billing/plans.ts; no Stripe amount or entitlement change.                           |
+| Checkout  | Existing duplicate-request guard, stale-session handling, and authenticated checkout destinations are retained.                                                                       |
+| Themes    | Landing and dashboard preferences remain scoped separately.                                                                                                                           |
 
 ## Review notes before launch
 
@@ -70,6 +71,7 @@ Visit http://127.0.0.1:5401/?stay=1. The query keeps signed-in users on the mark
 Run typecheck, landing build/prerender, and the full coverage suite. Locally, NODE_OPTIONS=--no-experimental-webstorage avoids Node 26 storage conflicts with the test DOM. Validate 100% line and branch diff coverage independently: #351 against trunk, #352 against #351.
 
 Manual review at 1440, 1100, and 390 px:
+
 1. Try it live → select an element → send a comment → edit/delete it; reload to verify per-tab persistence.
 2. Connect your agent → copy prompt; reject clipboard access to inspect fallback.
 3. Scroll forward and backward through all four journey modules and capture clips; verify the last clip holds.

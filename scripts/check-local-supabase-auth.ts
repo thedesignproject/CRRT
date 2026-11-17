@@ -5,7 +5,8 @@ import { findUserIdByEmail, getUserEmailsByIds } from '../api/_lib/store.js'
 
 // Capture CLI output so credentials never appear in logs or a checked-in fixture.
 const result = Bun.spawnSync(['bunx', 'supabase', 'status', '-o', 'json'], {
-  stdout: 'pipe', stderr: 'pipe',
+  stdout: 'pipe',
+  stderr: 'pipe',
 })
 assert.equal(result.exitCode, 0, 'Local Supabase must be running')
 const status = JSON.parse(result.stdout.toString()) as Record<string, string>
@@ -24,9 +25,15 @@ let userId: string | undefined
 let bucketCreated = false
 let projectCreated = false
 try {
-  assert.ifError((await client.from('projects').insert({
-    public_key: bucket, slug: bucket, name: 'Local secret-key probe',
-  })).error)
+  assert.ifError(
+    (
+      await client.from('projects').insert({
+        public_key: bucket,
+        slug: bucket,
+        name: 'Local secret-key probe',
+      })
+    ).error,
+  )
   projectCreated = true
   const project = await client.from('projects').select('name').eq('public_key', bucket).single()
   assert.ifError(project.error)
@@ -47,7 +54,9 @@ try {
   const download = await storage.download('probe.txt')
   assert.ifError(download.error)
   assert.equal(await download.data!.text(), 'local secret-key probe')
-  console.log('PASS: local sb_secret key — database insert/read/update, Auth Admin create/lookup, storage create/upload/download')
+  console.log(
+    'PASS: local sb_secret key — database insert/read/update, Auth Admin create/lookup, storage create/upload/download',
+  )
 
   // Verify older deployments remain compatible with a JWT in the legacy variable.
   delete process.env.SUPABASE_SECRET_KEY

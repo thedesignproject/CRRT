@@ -5,7 +5,8 @@ export default async function capture() {
   if (state === 'screenshot-pending') return new Promise<never>(() => {})
   if (state === 'screenshot-failed') throw new Error('Synthetic screenshot failure')
   const canvas = document.createElement('canvas')
-  canvas.width = 400; canvas.height = 240
+  canvas.width = 400
+  canvas.height = 240
   // Keep the synthetic preview identical on macOS and Linux; system-font canvas
   // text otherwise changes pixels even when the widget itself is unchanged.
   const image = new Image()

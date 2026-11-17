@@ -26,17 +26,25 @@ function workflowRules(mcp: boolean) {
     '- Only work on comments whose reviewStatus is "accepted".',
     '- Claim a comment before editing: POST /ops with op:"comment.claim" and Idempotency-Key.',
     '- Report comment.start / comment.complete / comment.block as you work. comment.complete means your fix is ready for human testing; only the reviewer marks it Done.',
-    '- Keep presence fresh — POST /presence whenever your status changes (idle → working → blocked → idle). The reviewer UI shows your last message verbatim, so stale summaries look like you\'re stuck.',
+    "- Keep presence fresh — POST /presence whenever your status changes (idle → working → blocked → idle). The reviewer UI shows your last message verbatim, so stale summaries look like you're stuck.",
     '- Never change reviewStatus. Do not resume or reopen items whose implementationStatus is "ready_for_testing" or "done" — those states belong to the human reviewer.',
     '- Comments with targetType "text_range" anchor to selected text: anchor.selectedText is the exact quote being discussed, with anchor.prefix/suffix context and anchor.containerSelector locating it. Treat the quote, not the pin coordinates, as the target.',
     '- Refresh /state before starting the next item.',
   ]
   if (!mcp) return rules
-  return rules.map(rule => rule
-    .replace('POST /ops with op:"comment.claim" and Idempotency-Key', 'update_feedback_progress with action:"claim", your agentId, and a unique idempotencyKey')
-    .replace('POST /presence', 'report_agent_presence')
-    .replace('Refresh /state', 'Refresh get_feedback')
-    .replace('Never change reviewStatus.', 'Never change reviewStatus while implementing. Only use set_feedback_status when the user explicitly requests a reviewer change, with userRequested:true and the latest expectedUpdatedAt.'))
+  return rules.map((rule) =>
+    rule
+      .replace(
+        'POST /ops with op:"comment.claim" and Idempotency-Key',
+        'update_feedback_progress with action:"claim", your agentId, and a unique idempotencyKey',
+      )
+      .replace('POST /presence', 'report_agent_presence')
+      .replace('Refresh /state', 'Refresh get_feedback')
+      .replace(
+        'Never change reviewStatus.',
+        'Never change reviewStatus while implementing. Only use set_feedback_status when the user explicitly requests a reviewer change, with userRequested:true and the latest expectedUpdatedAt.',
+      ),
+  )
 }
 
 function mcpBootstrap(input: PromptInput) {
@@ -44,7 +52,9 @@ function mcpBootstrap(input: PromptInput) {
     'This is the full CRRT implementation workflow. Use the authenticated MCP tools; no share token is needed or provided.',
     `Project: ${input.projectName} (${input.projectKey})`,
     `Selected feedback IDs: ${input.mcp!.feedbackIds.join(', ')}`,
-    input.mcp!.workId ? `Work session ID: ${input.mcp!.workId}` : 'Use the workId supplied with this prompt. If no workId is supplied, call prepare_feedback_work for this explicit selection before editing, then use its returned workId and full prompt.',
+    input.mcp!.workId
+      ? `Work session ID: ${input.mcp!.workId}`
+      : 'Use the workId supplied with this prompt. If no workId is supplied, call prepare_feedback_work for this explicit selection before editing, then use its returned workId and full prompt.',
     'Every delegated subagent must receive this complete implementationPrompt verbatim, the work session ID, project ID, its assigned feedback IDs, and a unique stable agentId. Never replace this prompt with a summary.',
     'If CRRT progress tools are unavailable or authorization fails, stop before editing and ask the user to reconnect with implementation permissions. Do not silently implement without reporting.',
     '1. After preparing the work session, call report_agent_presence with status:"reading" and a short summary.',
@@ -95,33 +105,35 @@ function buildBody(input: PromptInput) {
   return [
     'CRRT 🥕 is a visual feedback system: humans drop comments pinned to real pixels on live pages, and you implement the accepted ones.',
     '',
-    ...(input.mcp ? mcpBootstrap(input) : [
-    'Join this session immediately so the human can see your presence:',
-    docUrl,
-    '',
-    '1. Announce your presence. Read token from the URL above.',
-    `   POST ${bridge}/presence`,
-    '   Authorization: Bearer <token>   (or X-Share-Token: <token>, or ?token=<token>)',
-    '   X-Agent-Id: <stable-agent-id>',
-    '   Body: {"status":"reading","summary":"Connecting"}',
-    '',
-    '2. Read state.',
-    `   GET ${bridge}/state`,
-    '',
-    '3. Flip presence to idle so the reviewer sees you finished connecting, then reply: Connected to CRRT and ready. Once connected, immediately continue any existing user-requested task that needed CRRT. If there is no existing task, wait for the user\'s instructions; connecting alone does not authorize new work.',
-    `   POST ${bridge}/presence`,
-    '   Body: {"status":"idle","summary":"Connected — ready to start"}',
-    '',
-    '4. For deeper interaction, fetch:',
-    `   Skill: ${skillUrl}`,
-    `   Docs:  ${docsUrl}`,
-    '   Read the Skill before UI changes; it is the CRRT design and workflow contract for agents.',
-    '',
-    '5. If the API fails in a surprising way:',
-    `   POST ${bugUrl}`,
-    '   Include a short summary, raw request/response, and any request IDs.',
-    '',
-    ]),
+    ...(input.mcp
+      ? mcpBootstrap(input)
+      : [
+          'Join this session immediately so the human can see your presence:',
+          docUrl,
+          '',
+          '1. Announce your presence. Read token from the URL above.',
+          `   POST ${bridge}/presence`,
+          '   Authorization: Bearer <token>   (or X-Share-Token: <token>, or ?token=<token>)',
+          '   X-Agent-Id: <stable-agent-id>',
+          '   Body: {"status":"reading","summary":"Connecting"}',
+          '',
+          '2. Read state.',
+          `   GET ${bridge}/state`,
+          '',
+          "3. Flip presence to idle so the reviewer sees you finished connecting, then reply: Connected to CRRT and ready. Once connected, immediately continue any existing user-requested task that needed CRRT. If there is no existing task, wait for the user's instructions; connecting alone does not authorize new work.",
+          `   POST ${bridge}/presence`,
+          '   Body: {"status":"idle","summary":"Connected — ready to start"}',
+          '',
+          '4. For deeper interaction, fetch:',
+          `   Skill: ${skillUrl}`,
+          `   Docs:  ${docsUrl}`,
+          '   Read the Skill before UI changes; it is the CRRT design and workflow contract for agents.',
+          '',
+          '5. If the API fails in a surprising way:',
+          `   POST ${bugUrl}`,
+          '   Include a short summary, raw request/response, and any request IDs.',
+          '',
+        ]),
     '',
     'Working rules:',
     ...workflowRules(input.mcp !== undefined),
@@ -145,6 +157,19 @@ export function buildPrompt(target: string, input: PromptInput) {
   return `You are a coding agent working on a CRRT session.\n\n${body}`
 }
 
-export function buildMcpPrompt(input: { appUrl: string; projectKey: string; projectName: string; feedbackIds: string[]; workId?: string; repoConfig: RepoConfig | null }) {
-  return buildPrompt('generic', { ...input, slug: '', token: '', pageUrl: null, mcp: { feedbackIds: input.feedbackIds, workId: input.workId } })
+export function buildMcpPrompt(input: {
+  appUrl: string
+  projectKey: string
+  projectName: string
+  feedbackIds: string[]
+  workId?: string
+  repoConfig: RepoConfig | null
+}) {
+  return buildPrompt('generic', {
+    ...input,
+    slug: '',
+    token: '',
+    pageUrl: null,
+    mcp: { feedbackIds: input.feedbackIds, workId: input.workId },
+  })
 }

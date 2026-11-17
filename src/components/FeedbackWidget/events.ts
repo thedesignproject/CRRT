@@ -1,7 +1,10 @@
 // A closed shadow root retargets events to its host outside the root. Listen
 // inside it for the real input/menu target, and ignore that event's outer copy.
 export function listenForWidgetEvent<K extends 'keydown' | 'pointerdown'>(
-  element: HTMLElement, type: K, listener: (event: WindowEventMap[K]) => void, capture = false,
+  element: HTMLElement,
+  type: K,
+  listener: (event: WindowEventMap[K]) => void,
+  capture = false,
 ) {
   const root = element.getRootNode()
   const shadow = root instanceof ShadowRoot ? root : null

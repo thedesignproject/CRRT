@@ -15,11 +15,15 @@ it('publishes the implemented extension data inventory and verified contact', ()
   expect(document.title).toBe('Privacy at CRRT — CRRT')
   expect(screen.getByText(/email address, account identifier, authentication session/)).toBeInTheDocument()
   expect(screen.getByText(/does not collect your browsing history in the background/)).toBeInTheDocument()
-  expect(screen.getByText(/Page content and screenshots are captured only after your explicit feedback action/)).toBeInTheDocument()
+  expect(
+    screen.getByText(/Page content and screenshots are captured only after your explicit feedback action/),
+  ).toBeInTheDocument()
   expect(screen.getByText(/Chrome or its speech service may process the audio/)).toBeInTheDocument()
   expect(screen.getByText(/Private feedback is available only to its creator/)).toBeInTheDocument()
   expect(screen.getByText(/configured model provider to propose editable issue copy/)).toBeInTheDocument()
-  expect(screen.getByText(/GitHub, Linear, or Jira receives the fields shown in that draft only after/)).toBeInTheDocument()
+  expect(
+    screen.getByText(/GitHub, Linear, or Jira receives the fields shown in that draft only after/),
+  ).toBeInTheDocument()
   expect(screen.getByText('Supabase').closest('li')).toHaveTextContent(
     'Supabase for authentication, database records, and protected screenshot storage.',
   )
@@ -42,12 +46,27 @@ it.each([
 ])('keeps required claims in the %s', (_name, document) => {
   const normalized = document.toLowerCase()
   for (const required of [
-    'account email', 'current http(s) url', 'feedback text', 'optional screenshot',
-    'speech', 'model provider', 'github', 'linear', 'jira', 'supabase', 'vercel',
-    'resend', 'five minutes', '24 hours', 'delete', 'hello@designproject.io',
-    'does not collect browsing history in the background', 'sell user data',
+    'account email',
+    'current http(s) url',
+    'feedback text',
+    'optional screenshot',
+    'speech',
+    'model provider',
+    'github',
+    'linear',
+    'jira',
+    'supabase',
+    'vercel',
+    'resend',
+    'five minutes',
+    '24 hours',
+    'delete',
+    'hello@designproject.io',
+    'does not collect browsing history in the background',
+    'sell user data',
     'remote code',
-  ]) expect(normalized).toContain(required)
+  ])
+    expect(normalized).toContain(required)
 
   expect(document).not.toMatch(/\b(?:TODO|TBD|placeholder|coming soon)\b/i)
 })

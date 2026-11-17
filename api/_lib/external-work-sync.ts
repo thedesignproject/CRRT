@@ -50,16 +50,14 @@ async function githubWork(projectId: string, commentId: string) {
 
 async function rejectionIsCurrent(projectId: string, commentId: string, expectedUpdatedAt?: string) {
   const comment = await getComment(commentId)
-  return comment?.projectId === projectId
-    && comment.reviewStatus === 'rejected'
-    && (!expectedUpdatedAt || comment.updatedAt === expectedUpdatedAt)
+  return (
+    comment?.projectId === projectId &&
+    comment.reviewStatus === 'rejected' &&
+    (!expectedUpdatedAt || comment.updatedAt === expectedUpdatedAt)
+  )
 }
 
-export async function closeLinkedGithubIssue(
-  projectId: string,
-  commentId: string,
-  expectedUpdatedAt?: string,
-) {
+export async function closeLinkedGithubIssue(projectId: string, commentId: string, expectedUpdatedAt?: string) {
   if (!(await rejectionIsCurrent(projectId, commentId, expectedUpdatedAt))) return
   const work = await githubWork(projectId, commentId)
   if (!work || work.lifecycleStatus === 'closed') return
@@ -99,11 +97,7 @@ export async function closeLinkedGithubIssue(
   }
 }
 
-export async function closeLinkedLinearIssue(
-  projectId: string,
-  commentId: string,
-  expectedUpdatedAt?: string,
-) {
+export async function closeLinkedLinearIssue(projectId: string, commentId: string, expectedUpdatedAt?: string) {
   if (!(await rejectionIsCurrent(projectId, commentId, expectedUpdatedAt))) return
   const work = await getCommentExternalWork(commentId, 'linear')
   if (!work || work.lifecycleStatus === 'closed') return
@@ -139,16 +133,16 @@ export async function closeLinkedLinearIssue(
       await cancelExternalWorkClose(claimed.id, leaseToken)
       return
     }
-    const blocked = ['linear_issue_not_found', 'linear_canceled_state_unavailable', 'linear_reauthorization_required'].includes(code)
+    const blocked = [
+      'linear_issue_not_found',
+      'linear_canceled_state_unavailable',
+      'linear_reauthorization_required',
+    ].includes(code)
     await failExternalWorkClose(claimed.id, leaseToken, code, blocked)
   }
 }
 
-export async function closeLinkedJiraIssue(
-  projectId: string,
-  commentId: string,
-  expectedUpdatedAt?: string,
-) {
+export async function closeLinkedJiraIssue(projectId: string, commentId: string, expectedUpdatedAt?: string) {
   if (!(await rejectionIsCurrent(projectId, commentId, expectedUpdatedAt))) return
   const work = await getCommentExternalWork(commentId, 'jira')
   if (!work || work.lifecycleStatus === 'closed') return

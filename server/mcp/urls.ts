@@ -9,5 +9,7 @@ export function safeUrl(raw: string | null): string | null {
     url.search = ''
     url.hash = ''
     return url.href
-  } catch { return null }
+  } catch {
+    return null
+  }
 }

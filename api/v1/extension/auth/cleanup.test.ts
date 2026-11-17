@@ -12,13 +12,24 @@ function response() {
     statusCode: 200,
     body: null as unknown,
     headers: {} as Record<string, string>,
-    setHeader(key: string, value: string) { this.headers[key] = value },
-    status(value: number) { this.statusCode = value; return this },
-    json(value: unknown) { this.body = value; return this },
-    end() { return this },
+    setHeader(key: string, value: string) {
+      this.headers[key] = value
+    },
+    status(value: number) {
+      this.statusCode = value
+      return this
+    },
+    json(value: unknown) {
+      this.body = value
+      return this
+    },
+    end() {
+      return this
+    },
   }
 }
-const call = (request: unknown, res: unknown) => (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(request, res)
+const call = (request: unknown, res: unknown) =>
+  (handler as unknown as (a: unknown, b: unknown) => Promise<unknown>)(request, res)
 
 beforeEach(() => {
   process.env.CRON_SECRET = 'cron-secret'

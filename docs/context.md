@@ -12,13 +12,14 @@ You see something wrong on any web product → drop a pin → an AI agent (Claud
 
 ## Positioning statement
 
-> *For people with taste who don't always have engineering bandwidth, [PRODUCT] is the visual feedback widget where every comment becomes a working code change. Unlike Pastel or Marker.io, the feedback doesn't go to a human queue — it goes straight to an AI agent that implements it.*
+> _For people with taste who don't always have engineering bandwidth, [PRODUCT] is the visual feedback widget where every comment becomes a working code change. Unlike Pastel or Marker.io, the feedback doesn't go to a human queue — it goes straight to an AI agent that implements it._
 
 ## The job to be done (JTBD)
 
 The user already has the taste. What they don't have is a frictionless way to act on it.
 
-Today the path from *"this is off"* to *"it's fixed"* looks like:
+Today the path from _"this is off"_ to _"it's fixed"_ looks like:
+
 1. Notice the issue
 2. Open Slack/Linear/Jira
 3. Write a description
@@ -31,7 +32,7 @@ Today the path from *"this is off"* to *"it's fixed"* looks like:
 
 90% of issues never make it to step 9. Their taste evaporates in tickets.
 
-**The JTBD this product hires for**: *let me change a product without writing a ticket, chasing a dev, or context-switching.*
+**The JTBD this product hires for**: _let me change a product without writing a ticket, chasing a dev, or context-switching._
 
 The outcome we sell is **shipped fixes**, not "feedback collection." Every piece of marketing collapses to that.
 
@@ -43,11 +44,12 @@ The outcome we sell is **shipped fixes**, not "feedback collection." Every piece
 - **Devs** who want a faster signal channel from non-technical teammates
 - **Indie creators & entrepreneurs** shipping solo with AI tools who need to maintain product taste at scale
 
-**The unifier**: anyone with taste, any role. We're not segmenting by job title — we're segmenting by *behavior* (people who notice things and want them fixed).
+**The unifier**: anyone with taste, any role. We're not segmenting by job title — we're segmenting by _behavior_ (people who notice things and want them fixed).
 
 ## Why now
 
 Two shifts converged:
+
 1. **AI agents crossed the reliability threshold** for actually implementing specific UI/code changes from natural-language descriptions (Claude Code, Codex, etc).
 2. **The friction is now the human handoff**, not the implementation. The bottleneck moved upstream.
 
@@ -71,13 +73,13 @@ Everything in onboarding optimizes for this moment. If we don't deliver it insid
 
 ## What makes it different
 
-| Tool | Job | What's missing |
-|---|---|---|
-| Pastel / Marker.io / BugHerd | Send feedback to a human dev | Still requires a human in the loop |
-| Loom / video feedback | Async demo of an issue | High effort + still requires implementer |
-| GitHub Issues | Track bugs | Designed for engineers, not taste-makers |
-| Notion / Linear comments | Discuss work | Not anchored to live product |
-| **This product** | Visual feedback that an AI agent acts on directly | — |
+| Tool                         | Job                                               | What's missing                           |
+| ---------------------------- | ------------------------------------------------- | ---------------------------------------- |
+| Pastel / Marker.io / BugHerd | Send feedback to a human dev                      | Still requires a human in the loop       |
+| Loom / video feedback        | Async demo of an issue                            | High effort + still requires implementer |
+| GitHub Issues                | Track bugs                                        | Designed for engineers, not taste-makers |
+| Notion / Linear comments     | Discuss work                                      | Not anchored to live product             |
+| **This product**             | Visual feedback that an AI agent acts on directly | —                                        |
 
 The differentiator is the **handoff**. The widget isn't feedback — it's the bridge between human eye and agent hand.
 
@@ -93,6 +95,7 @@ The user already feels competent. The tone should reflect that — speak to them
 - ❌ "Empower your team to..."
 
 **Voice rules:**
+
 - Active voice always
 - Specific over general (one verb, not three)
 - Never "AI-powered" — show, don't label
@@ -113,9 +116,10 @@ Saying no to these keeps the surface narrow and the message sharp.
 
 **Fixes shipped per active user per week.**
 
-Not pins dropped, not comments left, not seats sold — *fixes that actually merged into a product*. That's the value we deliver. Every product decision should ladder to this number.
+Not pins dropped, not comments left, not seats sold — _fixes that actually merged into a product_. That's the value we deliver. Every product decision should ladder to this number.
 
 Secondary metrics:
+
 - Time from pin → merged fix (P50, P95)
 - Activation: % of new users who reach a shipped fix in their first session
 - Retention: % of users still active week 4
@@ -131,19 +135,20 @@ Secondary metrics:
 Pattern: short wordmark + longer URL + 2-letter mark — same shape as Linear→linear.app, Notion→notion.so, Posthog→posthog.com.
 
 Known collisions accepted in this decision:
+
 - Serif (Europe) Ltd / Affinity suite (Canva-owned) — design-tooling space.
 - TheSerif typeface by Lucas de Groot (LucasFonts, 1994) — typography reference designers will recognize.
 
 Other names previously evaluated (parked, not eliminated):
 
-| Name | Oblique meaning | Vibe |
-|---|---|---|
-| **Lume** | the light you cast on what to fix | Linear-tech premium |
-| **Iris** | mythological messenger between humans and gods | refined classical |
-| **Aria** | the solo voice that gets played | premium-warm operatic |
-| **Ember** | small spark that ignites change | warm-organic |
-| **Verve** | the energy/style applied to a product | confident-cool |
-| **Redline** | editor's mark on what needs to change | editorial-direct |
+| Name        | Oblique meaning                                | Vibe                  |
+| ----------- | ---------------------------------------------- | --------------------- |
+| **Lume**    | the light you cast on what to fix              | Linear-tech premium   |
+| **Iris**    | mythological messenger between humans and gods | refined classical     |
+| **Aria**    | the solo voice that gets played                | premium-warm operatic |
+| **Ember**   | small spark that ignites change                | warm-organic          |
+| **Verve**   | the energy/style applied to a product          | confident-cool        |
+| **Redline** | editor's mark on what needs to change          | editorial-direct      |
 
 All optimize for: 2 syllables, premium, English-first, real-or-coined, brandable, oblique (not literal).
 
@@ -151,22 +156,22 @@ All optimize for: 2 syllables, premium, English-first, real-or-coined, brandable
 
 We're not naming this for SEO or Google Ads. We're naming and positioning for the **mental model the user already has**. These are the psychological principles guiding choices:
 
-- **Jobs to Be Done**: We sell *fixes shipped*, not "a pin widget." Every page, ad, email frames in JTBD.
-- **Loss aversion**: The painful state is the *current* one — taste lost in tickets, ideas evaporating. Don't lead with future gain; lead with present loss.
+- **Jobs to Be Done**: We sell _fixes shipped_, not "a pin widget." Every page, ad, email frames in JTBD.
+- **Loss aversion**: The painful state is the _current_ one — taste lost in tickets, ideas evaporating. Don't lead with future gain; lead with present loss.
 - **Activation energy** (BJ Fogg model): The first fix has to take < 60 seconds. Activation is the whole onboarding goal.
 - **Endowment effect**: Generous free tier. Once the widget is in their flow, removing it is a loss.
 - **Mere exposure + mimetic desire**: Seed the brand among visible taste-makers (well-known founders, designers). Their visible adoption signals quality.
 - **Authority bias**: Position alongside Claude / Codex / OpenAI. Their authority transfers when we name them as upstream collaborators.
 - **Reciprocity**: Free product wins (actual fixes, not just demos) before any upgrade ask.
-- **Peak-end rule**: Engineer the *peak* (the magic moment of the first fix shipping) and the *end* (an emotionally satisfying "shipped" notification). The middle is utility; the peaks are brand.
-- **Anti-status-quo bias**: People accept feedback evaporating because they're conditioned to. Our job is to make the *new* state feel safer than the old one — testimonials and case studies do the heavy lifting here.
+- **Peak-end rule**: Engineer the _peak_ (the magic moment of the first fix shipping) and the _end_ (an emotionally satisfying "shipped" notification). The middle is utility; the peaks are brand.
+- **Anti-status-quo bias**: People accept feedback evaporating because they're conditioned to. Our job is to make the _new_ state feel safer than the old one — testimonials and case studies do the heavy lifting here.
 - **Pratfall effect**: Be honest about limits ("AI agents draft fixes — you review before merging"). Admitting limits builds more trust than overpromising.
 - **Default effect** (in product): Sensible defaults everywhere — agent target, prompt format, project ID. Defaults guide users toward best behavior without restricting them.
 - **Curse of knowledge**: We can't assume users understand "agent" or "prompt." Explain in their language until proven otherwise.
 
 ## Anti-patterns to avoid
 
-- **Don't sell "AI features"**. AI is the engine; *taste shipped* is the product. We don't say "AI-powered feedback" — we show the receipts.
+- **Don't sell "AI features"**. AI is the engine; _taste shipped_ is the product. We don't say "AI-powered feedback" — we show the receipts.
 - **Don't compete horizontally** with Notion / Linear / Asana on overlapping space. Stay vertical: feedback → action.
 - **Don't gamify**. No badges, no streaks. The job is serious; the tone is calm-pro.
 - **Don't add user research / surveys / polls in v1**. Narrow surface = sharp message.
@@ -179,8 +184,8 @@ We're not naming this for SEO or Google Ads. We're naming and positioning for th
 - [ ] Pricing model (per-seat vs. per-fix vs. hybrid)
 - [ ] Free tier shape (limit by fixes, by projects, by users?)
 - [ ] First channel for distribution (PH launch? founder networks? content?)
-- [ ] How do we onboard the *reviewer* role separately from the commenter?
+- [ ] How do we onboard the _reviewer_ role separately from the commenter?
 
 ---
 
-*Last updated: 2026-04-26*
+_Last updated: 2026-04-26_

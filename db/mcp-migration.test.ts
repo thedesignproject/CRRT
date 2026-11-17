@@ -9,13 +9,15 @@ it('ships the schema-sourced MCP routines and deny-all workflow storage in one m
   expect(migration).toContain('ALTER TABLE "mcp_workflows" ENABLE ROW LEVEL SECURITY')
   expect(migration).not.toMatch(/CREATE POLICY.*mcp_/)
   const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-  expect(journal.entries.filter((row: { idx: number }) => row.idx === 46).map((row: { tag: string }) => row.tag)).toEqual(['0046_mcp_scoped'])
+  expect(
+    journal.entries.filter((row: { idx: number }) => row.idx === 46).map((row: { tag: string }) => row.tag),
+  ).toEqual(['0046_mcp_scoped'])
 })
 
 it('serializes conflicting retries before reading the request hash or comment', () => {
   const routine = mcpWorkflowSql.slice(mcpWorkflowSql.indexOf('CREATE FUNCTION public.mcp_work_operation'))
-  expect(routine.indexOf("crrt-mcp-op:")).toBeLessThan(routine.indexOf('SELECT * INTO feedback'))
-  expect(routine.indexOf("crrt-mcp-op:")).toBeLessThan(routine.indexOf("mcpRequestHash"))
+  expect(routine.indexOf('crrt-mcp-op:')).toBeLessThan(routine.indexOf('SELECT * INTO feedback'))
+  expect(routine.indexOf('crrt-mcp-op:')).toBeLessThan(routine.indexOf('mcpRequestHash'))
 })
 
 it('ships additive dashboard upgrade and retry tables with schema-sourced privileged routines', async () => {
@@ -27,13 +29,16 @@ it('ships additive dashboard upgrade and retry tables with schema-sourced privil
   expect(upgrade).toContain(mcpDashboardReceiptsSql.trim())
   expect(upgrade).toContain('CREATE TABLE "mcp_dashboard_operations"')
   const journal = JSON.parse(readFileSync('db/migrations/meta/_journal.json', 'utf8'))
-  expect(journal.entries.filter((row: { idx: number }) => row.idx === 51).map((row: { tag: string }) => row.tag)).toEqual(['0051_mcp_dashboard'])
+  expect(
+    journal.entries.filter((row: { idx: number }) => row.idx === 51).map((row: { tag: string }) => row.tag),
+  ).toEqual(['0051_mcp_dashboard'])
 })
 
 it('adds documents without changing the existing dashboard permission schema', () => {
   const before = JSON.parse(readFileSync('db/migrations/meta/0051_snapshot.json', 'utf8'))
   const after = JSON.parse(readFileSync('db/migrations/meta/0052_snapshot.json', 'utf8'))
-  for (const table of ['public.mcp_codes', 'public.mcp_connections']) expect(after.tables[table]).toEqual(before.tables[table])
+  for (const table of ['public.mcp_codes', 'public.mcp_connections'])
+    expect(after.tables[table]).toEqual(before.tables[table])
   const migration = readFileSync('db/migrations/0052_hosted_documents.sql', 'utf8')
   expect(migration).not.toContain('ALTER TABLE "mcp_')
   expect(migration).not.toContain('crrt:documents:')

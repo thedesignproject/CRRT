@@ -29,4 +29,3 @@ Source: `db/DRIZZLE-GUIDE.md:42`; `AGENTS.md:9`.
 
 - Do not put `DATABASE_URL` behind a `VITE_` prefix; it must never reach the browser bundle.
 - Keep runtime API queries on `@supabase/supabase-js`; Drizzle is for schema and migrations only.
-

@@ -34,11 +34,13 @@ afterEach(() => {
 
 describe('project invite email', () => {
   it('builds branded member and admin messages with escaped HTML', () => {
-    const member = buildProjectInviteEmail(input({
-      projectName: '<Demo & Co>',
-      inviterEmail: 'owner+<tag>@example.com',
-      dashboardUrl: 'https://crrt.ai/dashboard?a=<b>',
-    }))
+    const member = buildProjectInviteEmail(
+      input({
+        projectName: '<Demo & Co>',
+        inviterEmail: 'owner+<tag>@example.com',
+        dashboardUrl: 'https://crrt.ai/dashboard?a=<b>',
+      }),
+    )
     expect(member.subject).toBe("You're invited to <Demo & Co> on CRRT")
     expect(member.text).toContain('owner+<tag>@example.com invited you to join <Demo & Co> as member')
     expect(member.html).toContain('CRRT<span')
@@ -75,12 +77,15 @@ describe('project invite email', () => {
 
   it('builds dashboard links from trusted configuration', () => {
     expect(getProjectInviteDashboardUrl(undefined, undefined, {})).toBe('https://crrt.ai/dashboard')
-    expect(getProjectInviteDashboardUrl(undefined, undefined, { APP_URL: 'https://app.example/' }))
-      .toBe('https://app.example/dashboard')
-    expect(getProjectInviteDashboardUrl('project/a', undefined, { APP_URL: 'https://app.example/' }))
-      .toBe('https://app.example/dashboard/login?invite=project%2Fa')
-    expect(getProjectInviteDashboardUrl('project/a', 'Guest@Example.com', { APP_URL: 'https://app.example/' }))
-      .toBe('https://app.example/dashboard/login?invite=project%2Fa&email=guest%40example.com')
+    expect(getProjectInviteDashboardUrl(undefined, undefined, { APP_URL: 'https://app.example/' })).toBe(
+      'https://app.example/dashboard',
+    )
+    expect(getProjectInviteDashboardUrl('project/a', undefined, { APP_URL: 'https://app.example/' })).toBe(
+      'https://app.example/dashboard/login?invite=project%2Fa',
+    )
+    expect(getProjectInviteDashboardUrl('project/a', 'Guest@Example.com', { APP_URL: 'https://app.example/' })).toBe(
+      'https://app.example/dashboard/login?invite=project%2Fa&email=guest%40example.com',
+    )
   })
 
   it('skips without configuration or a recipient', async () => {
@@ -94,8 +99,9 @@ describe('project invite email', () => {
     process.env.RESEND_API_KEY = 'key'
     process.env.COMMENT_ACTIVITY_EMAIL_FROM = 'CRRT <invites@mail.crrt.ai>'
 
-    await expect(sendProjectInviteEmail(input({ recipient: ' invitee@example.com ' })))
-      .resolves.toEqual({ skipped: false })
+    await expect(sendProjectInviteEmail(input({ recipient: ' invitee@example.com ' }))).resolves.toEqual({
+      skipped: false,
+    })
 
     const [url, init] = vi.mocked(fetch).mock.calls[0] as [string, RequestInit]
     expect(url).toBe('https://api.resend.com/emails')
@@ -126,10 +132,13 @@ describe('project invite email', () => {
     vi.useFakeTimers()
     process.env.RESEND_API_KEY = 'key'
     process.env.COMMENT_ACTIVITY_EMAIL_TIMEOUT_MS = '10'
-    vi.mocked(fetch).mockImplementationOnce((_url, init) => new Promise((_resolve, reject) => {
-      const signal = init?.signal as AbortSignal | undefined
-      signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
-    }))
+    vi.mocked(fetch).mockImplementationOnce(
+      (_url, init) =>
+        new Promise((_resolve, reject) => {
+          const signal = init?.signal as AbortSignal | undefined
+          signal?.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')))
+        }),
+    )
 
     const send = sendProjectInviteEmail(input())
     const expectation = expect(send).rejects.toThrow('Aborted')

@@ -3,7 +3,11 @@ import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
 import { DISPLAY_STATUS_LABELS, type Comment } from '../lib/types'
 
-export function Spinner({ size = 20, strokeWidth = 2.5, className = 'text-muted-foreground' }: {
+export function Spinner({
+  size = 20,
+  strokeWidth = 2.5,
+  className = 'text-muted-foreground',
+}: {
   size?: number
   strokeWidth?: number
   className?: string
@@ -27,20 +31,29 @@ export function Kbd({ children }: { children: React.ReactNode }) {
 export function StatusBadge({ comment }: { comment: Comment }) {
   const ds = getDisplayStatus(comment)
   return (
-    <span className={cn(
-      'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold',
-      ds === 'ready' && 'bg-status-accepted-bg text-status-accepted',
-      ds === 'ready_for_testing' && 'bg-status-ready-for-testing-bg text-status-ready-for-testing',
-      ds === 'rejected' && 'bg-status-rejected-bg text-status-rejected',
-      ds === 'open' && 'bg-status-open-bg text-status-open',
-      ds === 'done' && 'bg-status-done-bg text-status-done',
-    )}>
+    <span
+      className={cn(
+        'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold',
+        ds === 'ready' && 'bg-status-accepted-bg text-status-accepted',
+        ds === 'ready_for_testing' && 'bg-status-ready-for-testing-bg text-status-ready-for-testing',
+        ds === 'rejected' && 'bg-status-rejected-bg text-status-rejected',
+        ds === 'open' && 'bg-status-open-bg text-status-open',
+        ds === 'done' && 'bg-status-done-bg text-status-done',
+      )}
+    >
       {DISPLAY_STATUS_LABELS[ds]}
     </span>
   )
 }
 
-export function ActionBtn({ children, variant, active, onClick, shortcut, disabled }: {
+export function ActionBtn({
+  children,
+  variant,
+  active,
+  onClick,
+  shortcut,
+  disabled,
+}: {
   children: React.ReactNode
   variant: 'accept' | 'reject' | 'neutral' | 'done'
   active?: boolean
@@ -58,18 +71,18 @@ export function ActionBtn({ children, variant, active, onClick, shortcut, disabl
       className={cn(
         'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
         'disabled:opacity-40 disabled:pointer-events-none btn-press',
-        variant === 'accept' && (active
-          ? 'bg-status-accepted-bg text-status-accepted border border-status-accepted/30'
-          : 'border border-border bg-card text-foreground hover:bg-status-accepted-bg hover:text-status-accepted hover:border-status-accepted/30'
-        ),
-        variant === 'reject' && (active
-          ? 'bg-status-rejected-bg text-status-rejected border border-status-rejected/30'
-          : 'border border-border bg-card text-foreground hover:bg-status-rejected-bg hover:text-status-rejected hover:border-status-rejected/30'
-        ),
-        variant === 'done' && (active
-          ? 'bg-status-done-bg text-status-done border border-status-done/30'
-          : 'border border-border bg-card text-foreground hover:bg-status-done-bg hover:text-status-done hover:border-status-done/30'
-        ),
+        variant === 'accept' &&
+          (active
+            ? 'bg-status-accepted-bg text-status-accepted border border-status-accepted/30'
+            : 'border border-border bg-card text-foreground hover:bg-status-accepted-bg hover:text-status-accepted hover:border-status-accepted/30'),
+        variant === 'reject' &&
+          (active
+            ? 'bg-status-rejected-bg text-status-rejected border border-status-rejected/30'
+            : 'border border-border bg-card text-foreground hover:bg-status-rejected-bg hover:text-status-rejected hover:border-status-rejected/30'),
+        variant === 'done' &&
+          (active
+            ? 'bg-status-done-bg text-status-done border border-status-done/30'
+            : 'border border-border bg-card text-foreground hover:bg-status-done-bg hover:text-status-done hover:border-status-done/30'),
         variant === 'neutral' && 'border border-border bg-card text-foreground hover:bg-accent',
       )}
     >

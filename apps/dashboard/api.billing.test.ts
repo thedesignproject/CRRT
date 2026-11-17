@@ -4,7 +4,10 @@ import { beginBillingCheckout, getBillingAvailability, getBillingSummary, runBil
 const fetchMock = vi.fn()
 const response = (body: unknown, ok = true) => ({ ok, status: ok ? 200 : 503, text: async () => JSON.stringify(body) })
 
-beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal('fetch', fetchMock) })
+beforeEach(() => {
+  fetchMock.mockReset()
+  vi.stubGlobal('fetch', fetchMock)
+})
 afterEach(() => vi.unstubAllGlobals())
 
 it('loads availability and final summaries with authenticated no-store requests', async () => {
@@ -13,19 +16,51 @@ it('loads availability and final summaries with authenticated no-store requests'
   await getBillingAvailability('/api', 'token', controller.signal)
   await getBillingSummary('/api', 'token')
   await getBillingSummary('/api', 'token', true, controller.signal)
-  expect(fetchMock.mock.calls[0]).toEqual(['/api/v1/billing?availability=1', { signal: controller.signal, headers: { Authorization: 'Bearer token' } }])
-  expect(fetchMock.mock.calls[1]).toEqual(['/api/v1/billing', { signal: undefined, cache: 'no-store', headers: { Authorization: 'Bearer token' } }])
+  expect(fetchMock.mock.calls[0]).toEqual([
+    '/api/v1/billing?availability=1',
+    { signal: controller.signal, headers: { Authorization: 'Bearer token' } },
+  ])
+  expect(fetchMock.mock.calls[1]).toEqual([
+    '/api/v1/billing',
+    { signal: undefined, cache: 'no-store', headers: { Authorization: 'Bearer token' } },
+  ])
   expect(fetchMock.mock.calls[2]?.[0]).toBe('/api/v1/billing?reconcile=1')
 })
 
 it('normalizes the current trunk summary without enabling unsupported actions', async () => {
-  fetchMock.mockResolvedValue(response({
-    enabled: true, testMode: true, canManage: true, cancelAtPeriodEnd: false, periodEnd: '2026-11-01T00:00:00Z',
-    plans: [{ id: 'pro', name: 'Cloud Pro', monthlyUsd: 19, projects: 10, internal_users: 10, comments: 2000, product_audits: 5, amount: '$19', interval: 'month' }],
-    entitlements: { plan: 'pro', status: 'active', resetAt: '2026-11-01T00:00:00Z', usage: { projects: 2, internal_users: 3, comments: 40, product_audits: 1 }, limits: { projects: 10, internal_users: 10, comments: 2000, product_audits: 5 } },
-  }))
+  fetchMock.mockResolvedValue(
+    response({
+      enabled: true,
+      testMode: true,
+      canManage: true,
+      cancelAtPeriodEnd: false,
+      periodEnd: '2026-11-01T00:00:00Z',
+      plans: [
+        {
+          id: 'pro',
+          name: 'Cloud Pro',
+          monthlyUsd: 19,
+          projects: 10,
+          internal_users: 10,
+          comments: 2000,
+          product_audits: 5,
+          amount: '$19',
+          interval: 'month',
+        },
+      ],
+      entitlements: {
+        plan: 'pro',
+        status: 'active',
+        resetAt: '2026-11-01T00:00:00Z',
+        usage: { projects: 2, internal_users: 3, comments: 40, product_audits: 1 },
+        limits: { projects: 10, internal_users: 10, comments: 2000, product_audits: 5 },
+      },
+    }),
+  )
   await expect(getBillingSummary('/api', 'token')).resolves.toMatchObject({
-    plan: 'pro', lifecycle: 'active', actions: { checkoutState: false, changePlan: false },
+    plan: 'pro',
+    lifecycle: 'active',
+    actions: { checkoutState: false, changePlan: false },
     plans: [{ key: 'pro', name: 'Pro', limits: { internalUsers: 10 } }],
     usage: { comments: { used: 40, limit: 2000, resetAt: '2026-11-01T00:00:00Z' } },
   })
@@ -38,10 +73,19 @@ it.each([
   ['canceled', 'pro', 'none'],
   ['none', null, 'none'],
 ] as const)('maps legacy %s lifecycle safely', async (status, plan, lifecycle) => {
-  fetchMock.mockResolvedValue(response({
-    enabled: true,
-    entitlements: { isLegacy: status === 'legacy', plan, status, resetAt: null, usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 }, limits: { projects: null, internal_users: null, comments: null, product_audits: null } },
-  }))
+  fetchMock.mockResolvedValue(
+    response({
+      enabled: true,
+      entitlements: {
+        isLegacy: status === 'legacy',
+        plan,
+        status,
+        resetAt: null,
+        usage: { projects: 0, internal_users: 0, comments: 0, product_audits: 0 },
+        limits: { projects: null, internal_users: null, comments: null, product_audits: null },
+      },
+    }),
+  )
   expect(await getBillingSummary('/api', 'token')).toMatchObject({ lifecycle, isLegacy: status === 'legacy' })
 })
 
@@ -67,13 +111,19 @@ it('surfaces billing API and invalid JSON failures through the shared contract',
 })
 
 it('retains annual billing prices and signed-handoff capabilities from the backend', async () => {
-  fetchMock.mockResolvedValue(response({
-    enabled: true, billingCycle: 'yearly', actions: { checkoutState: true, changePlan: false },
-    plans: [{ id: 'pro', name: 'Cloud Pro', monthlyUsd: 19, amount: '$192', interval: 'year' }],
-    entitlements: { plan: 'pro', status: 'active', resetAt: '2026-11-01', usage: {}, limits: {} },
-  }))
+  fetchMock.mockResolvedValue(
+    response({
+      enabled: true,
+      billingCycle: 'yearly',
+      actions: { checkoutState: true, changePlan: false },
+      plans: [{ id: 'pro', name: 'Cloud Pro', monthlyUsd: 19, amount: '$192', interval: 'year' }],
+      entitlements: { plan: 'pro', status: 'active', resetAt: '2026-11-01', usage: {}, limits: {} },
+    }),
+  )
   expect(await getBillingSummary('/api', 'token')).toMatchObject({
-    billingCycle: 'yearly', actions: { checkoutState: true, changePlan: false }, planPrices: { pro: { amount: '$192', interval: 'year' } },
+    billingCycle: 'yearly',
+    actions: { checkoutState: true, changePlan: false },
+    planPrices: { pro: { amount: '$192', interval: 'year' } },
   })
   await runBillingAction('/api', 'token', 'checkout', 'pro', undefined, 'yearly')
   expect(JSON.parse(fetchMock.mock.lastCall![1].body)).toEqual({ action: 'checkout', plan: 'pro', cycle: 'yearly' })

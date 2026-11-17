@@ -57,7 +57,10 @@ export function AgentSidebar({
   onClose,
 }: AgentSidebarProps) {
   return (
-    <aside id="agent-sidebar" className="w-[300px] shrink-0 flex flex-col border-l border-border bg-sidebar overflow-y-auto animate-slide-in">
+    <aside
+      id="agent-sidebar"
+      className="w-[300px] shrink-0 flex flex-col border-l border-border bg-sidebar overflow-y-auto animate-slide-in"
+    >
       <div className="px-4 py-4 border-b border-sidebar-border flex items-center justify-between">
         <h2 className="text-base font-bold text-foreground tracking-tight">Agent handoff</h2>
         <button
@@ -121,25 +124,29 @@ function EmptyNoReady() {
       </div>
       <p className="text-[13px] text-muted-foreground/80 mb-4">crrts ready for handoff</p>
       <p className="text-[11px] text-muted-foreground/60 leading-relaxed max-w-[230px]">
-        <span aria-hidden="true" className="text-foreground/40 mr-1">←</span>
-        Mark crrts <span className="text-status-accepted font-semibold">Ready for Agent</span> in the list and they queue here.
+        <span aria-hidden="true" className="text-foreground/40 mr-1">
+          ←
+        </span>
+        Mark crrts <span className="text-status-accepted font-semibold">Ready for Agent</span> in the list and they
+        queue here.
       </p>
     </div>
   )
 }
 
 function ErrorState({ message, code, onUpgrade }: { message: string; code: string | null; onUpgrade: () => void }) {
-  const friendly = code === 'upgrade_required'
-    ? 'Upgrade the project plan to use Agent.'
-    : code === 'owner_upgrade_required'
-      ? 'Ask the project owner to upgrade the plan.'
-      : code === 'seat_limit_reached'
-        ? 'No Agent seats are available for this project.'
-        : message.toLowerCase().includes('project not found')
-    ? "Couldn't open a session for this project."
-    : message.toLowerCase().includes('lost connection')
-      ? 'Lost connection to the agent session.'
-      : "Couldn't open a session."
+  const friendly =
+    code === 'upgrade_required'
+      ? 'Upgrade the project plan to use Agent.'
+      : code === 'owner_upgrade_required'
+        ? 'Ask the project owner to upgrade the plan.'
+        : code === 'seat_limit_reached'
+          ? 'No Agent seats are available for this project.'
+          : message.toLowerCase().includes('project not found')
+            ? "Couldn't open a session for this project."
+            : message.toLowerCase().includes('lost connection')
+              ? 'Lost connection to the agent session.'
+              : "Couldn't open a session."
   return (
     <div className="flex-1 flex flex-col items-center justify-center px-6 text-center" role="alert" aria-live="polite">
       <div className="w-10 h-10 rounded-full bg-status-rejected/10 flex items-center justify-center mb-3 text-status-rejected">
@@ -147,7 +154,13 @@ function ErrorState({ message, code, onUpgrade }: { message: string; code: strin
       </div>
       <p className="text-[13px] text-foreground/90 mb-2">{friendly}</p>
       {code === 'upgrade_required' ? (
-        <button type="button" onClick={onUpgrade} className="mt-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground">Upgrade plan</button>
+        <button
+          type="button"
+          onClick={onUpgrade}
+          className="mt-2 rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground"
+        >
+          Upgrade plan
+        </button>
       ) : code ? null : (
         <p className="text-[11px] text-muted-foreground/70 leading-relaxed max-w-[220px]">
           Switch projects and come back to retry, or check the API server.
@@ -397,9 +410,7 @@ function HandoffCTA({
                 }}
                 className={cn(
                   'w-full flex items-center justify-between px-3 py-2 text-left transition-colors',
-                  selectedAgent === agent.id
-                    ? 'bg-accent/20 text-foreground'
-                    : 'text-foreground/80 hover:bg-accent/10',
+                  selectedAgent === agent.id ? 'bg-accent/20 text-foreground' : 'text-foreground/80 hover:bg-accent/10',
                 )}
               >
                 <span className="flex items-center gap-2 text-xs font-semibold">
@@ -509,15 +520,10 @@ function LiveQueue({ projectComments, events, selectedCommentId, onSelectComment
                 aria-current={isActive ? 'true' : undefined}
                 className={cn(
                   'w-full text-left rounded-md border px-2.5 py-2 flex gap-2.5 transition-colors',
-                  isActive
-                    ? 'border-border bg-accent'
-                    : 'border-border/60 bg-card/60 hover:bg-accent/70',
+                  isActive ? 'border-border bg-accent' : 'border-border/60 bg-card/60 hover:bg-accent/70',
                 )}
               >
-                <span
-                  aria-hidden="true"
-                  className={cn('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', stageDotClass(c))}
-                />
+                <span aria-hidden="true" className={cn('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', stageDotClass(c))} />
                 <div className="flex-1 min-w-0">
                   <p
                     className={cn(

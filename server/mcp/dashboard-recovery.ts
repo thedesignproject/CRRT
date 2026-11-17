@@ -7,22 +7,52 @@ import type { DashboardResult } from './dashboard-adapter.js'
 import type { DashboardOperation } from './dashboard-operations.js'
 
 type Read = (name: string, query: Record<string, string>) => Promise<DashboardResult>
-async function recoverReceipt(operation: DashboardOperation, query: Record<string, string>, body: Record<string, unknown>, actor: McpIdentity, receipt: DashboardResult, read: Read): Promise<DashboardResult> {
-  if (receipt.ok && ['storybook.pair', 'shares.create', 'audits.create', 'billing.action', 'recordings.agent_payload'].includes(operation.name)) {
+async function recoverReceipt(
+  operation: DashboardOperation,
+  query: Record<string, string>,
+  body: Record<string, unknown>,
+  actor: McpIdentity,
+  receipt: DashboardResult,
+  read: Read,
+): Promise<DashboardResult> {
+  if (
+    receipt.ok &&
+    ['storybook.pair', 'shares.create', 'audits.create', 'billing.action', 'recordings.agent_payload'].includes(
+      operation.name,
+    )
+  ) {
     const data = z.record(z.string(), z.unknown()).parse(receipt.data)
     if (operation.name === 'storybook.pair') {
       const { ownerAccess } = await import('../../api/_lib/storybook.js')
       await ownerAccess(z.string().parse(body.projectKey), actor.user_id)
-      const connection = await checked(await getServiceSupabase().from('storybook_connections').select('revoked_at,claimed_at,expires_at')
-        .eq('id', z.string().parse(data.connectionId)).eq('project_key', body.projectKey).eq('created_by', actor.user_id).maybeSingle())
-      ensure(connection && !connection.revoked_at && !connection.claimed_at && Date.parse(connection.expires_at) > Date.now(), 410, 'pairing_unavailable')
+      const connection = await checked(
+        await getServiceSupabase()
+          .from('storybook_connections')
+          .select('revoked_at,claimed_at,expires_at')
+          .eq('id', z.string().parse(data.connectionId))
+          .eq('project_key', body.projectKey)
+          .eq('created_by', actor.user_id)
+          .maybeSingle(),
+      )
+      ensure(
+        connection &&
+          !connection.revoked_at &&
+          !connection.claimed_at &&
+          Date.parse(connection.expires_at) > Date.now(),
+        410,
+        'pairing_unavailable',
+      )
       return { ...receipt, code: 'operation_recovered' }
     }
     if (operation.name === 'shares.create') {
       const current = await read('shares.prompt', { shareId: z.string().parse(data.shareId), target: 'generic' })
       if (!current.ok) return current
       const tokenUrl = z.object({ tokenUrl: z.url() }).parse(current.data).tokenUrl
-      return { ...receipt, code: 'operation_recovered', data: { ...data, tokenUrl, token: new URL(tokenUrl).searchParams.get('token') } }
+      return {
+        ...receipt,
+        code: 'operation_recovered',
+        data: { ...data, tokenUrl, token: new URL(tokenUrl).searchParams.get('token') },
+      }
     }
     if (operation.name === 'audits.create') {
       const current = await read('audits.read', { auditId: z.string().parse(data.auditId) })
@@ -38,12 +68,20 @@ async function recoverReceipt(operation: DashboardOperation, query: Record<strin
     assertRecordEnabled()
     const { owned } = await import('../../api/_lib/record/core.js')
     const { recordAccess, agentArtifactAccess } = await import('../../api/_lib/record/agent.js')
-    const payload = z.object({ recording: z.object({ revision: z.number() }), project: z.object({ key: z.string() }).nullable() }).parse(data.payload)
+    const payload = z
+      .object({ recording: z.object({ revision: z.number() }), project: z.object({ key: z.string() }).nullable() })
+      .parse(data.payload)
     const revalidate = async () => {
       assertRecordEnabled()
       const current = await owned(actor.user_id, query.id)
       await recordAccess(actor.user_id, current)
-      ensure(current.revision === payload.recording.revision && current.project_key === (payload.project?.key ?? null) && current.state === 'ready', 409, 'record_conflict')
+      ensure(
+        current.revision === payload.recording.revision &&
+          current.project_key === (payload.project?.key ?? null) &&
+          current.state === 'ready',
+        409,
+        'record_conflict',
+      )
       return current
     }
     const current = await revalidate()
@@ -54,17 +92,30 @@ async function recoverReceipt(operation: DashboardOperation, query: Record<strin
   }
   // Other writes can be inspected using ordinary resource reads. Do not expose
   // historical project data after membership/ownership has changed.
-  return { ok: receipt.ok, status: receipt.status, data: null, code: 'operation_already_recorded', retryable: false,
-    action: 'This operation was already recorded and was not executed again. Read the affected resource to obtain its current authorized state.' }
+  return {
+    ok: receipt.ok,
+    status: receipt.status,
+    data: null,
+    code: 'operation_already_recorded',
+    retryable: false,
+    action:
+      'This operation was already recorded and was not executed again. Read the affected resource to obtain its current authorized state.',
+  }
 }
 
-
 export async function recoverDashboardReceipt(...args: Parameters<typeof recoverReceipt>): Promise<DashboardResult> {
-  try { return await recoverReceipt(...args) }
-  catch (error) {
+  try {
+    return await recoverReceipt(...args)
+  } catch (error) {
     if (!(error instanceof RecordError || error instanceof StorybookError)) throw error
-    return { ok: false, status: error.status, data: null, code: error.code,
+    return {
+      ok: false,
+      status: error.status,
+      data: null,
+      code: error.code,
       retryable: error instanceof RecordError ? error.retryable : false,
-      action: 'Resolve the reported access, plan, feature availability or resource condition before retrying the same request. Do not reinstall MCP.' }
+      action:
+        'Resolve the reported access, plan, feature availability or resource condition before retrying the same request. Do not reinstall MCP.',
+    }
   }
 }

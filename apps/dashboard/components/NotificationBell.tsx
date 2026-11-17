@@ -18,20 +18,31 @@ function describe(n: Notification): string {
   const p = n.payload as { projectKey?: string; projectName?: string; email?: string; count?: number }
   const project = p.projectKey ?? 'a project'
   switch (n.kind) {
-    case 'invite.received': return `You were invited to ${project}`
-    case 'invite.accepted': return `${p.email ?? 'Someone'} joined ${project}`
-    case 'invite.declined': return `${p.email ?? 'Someone'} declined your invite to ${project}`
-    case 'project.access_requested': return `${p.email ?? 'Someone'} requested access to ${p.projectName ?? project}`
+    case 'invite.received':
+      return `You were invited to ${project}`
+    case 'invite.accepted':
+      return `${p.email ?? 'Someone'} joined ${project}`
+    case 'invite.declined':
+      return `${p.email ?? 'Someone'} declined your invite to ${project}`
+    case 'project.access_requested':
+      return `${p.email ?? 'Someone'} requested access to ${p.projectName ?? project}`
     case 'comment.activity': {
       const name = p.projectName ?? project
       const count = typeof p.count === 'number' && p.count > 0 ? p.count : 1
       return count === 1 ? `1 new CRRT on ${name}` : `${count} new CRRTs on ${name}`
     }
-    default: return 'Notification'
+    default:
+      return 'Notification'
   }
 }
 
-export function NotificationBell({ apiBase, accessToken, userId, onProjectsChanged, onOpenCommentActivity }: NotificationBellProps) {
+export function NotificationBell({
+  apiBase,
+  accessToken,
+  userId,
+  onProjectsChanged,
+  onOpenCommentActivity,
+}: NotificationBellProps) {
   const { notifications, invites, unreadCount, loading, refresh, markRead, markAllRead, accept, decline } =
     useNotifications(apiBase, accessToken, userId, onProjectsChanged)
   const [open, setOpen] = useState(false)
@@ -49,7 +60,11 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
 
   async function runInvite(action: () => Promise<void>, key: string) {
     setPendingKey(key)
-    try { await action() } finally { setPendingKey(null) }
+    try {
+      await action()
+    } finally {
+      setPendingKey(null)
+    }
   }
 
   async function openNotification(n: Notification) {
@@ -75,7 +90,10 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
   return (
     <div ref={ref} className="relative">
       <button
-        onClick={() => { if (!open) void refresh(); setOpen((v) => !v) }}
+        onClick={() => {
+          if (!open) void refresh()
+          setOpen((v) => !v)
+        }}
         title="Notifications"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         className={cn(
@@ -96,7 +114,10 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
           <div className="flex items-center justify-between px-3 py-2 border-b border-border">
             <span className="text-xs font-semibold text-foreground">Notifications</span>
             {unreadCount > 0 && (
-              <button onClick={markAllRead} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                onClick={markAllRead}
+                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+              >
                 Mark all read
               </button>
             )}
@@ -133,17 +154,26 @@ export function NotificationBell({ apiBase, accessToken, userId, onProjectsChang
             )}
 
             {loading ? (
-              <div className="flex items-center justify-center py-8"><Spinner size={16} /></div>
+              <div className="flex items-center justify-center py-8">
+                <Spinner size={16} />
+              </div>
             ) : notifications.length === 0 && invites.length === 0 ? (
               <p className="px-3 py-8 text-center text-[12px] text-muted-foreground">You're all caught up.</p>
             ) : (
               notifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => { void openNotification(n) }}
+                  onClick={() => {
+                    void openNotification(n)
+                  }}
                   className="w-full text-left flex items-start gap-2 px-3 py-2.5 hover:bg-accent transition-colors border-b border-border/50 last:border-0"
                 >
-                  <span className={cn('mt-1.5 w-1.5 h-1.5 rounded-full shrink-0', n.readAt ? 'bg-transparent' : 'bg-primary')} />
+                  <span
+                    className={cn(
+                      'mt-1.5 w-1.5 h-1.5 rounded-full shrink-0',
+                      n.readAt ? 'bg-transparent' : 'bg-primary',
+                    )}
+                  />
                   <span className="flex-1 min-w-0">
                     <span className="block break-words text-[12px] text-foreground">{describe(n)}</span>
                     <span className="block text-[10px] text-muted-foreground mt-0.5">

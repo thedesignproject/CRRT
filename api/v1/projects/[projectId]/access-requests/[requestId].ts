@@ -11,12 +11,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!user) return
   const project = getStringQuery(req.query.projectId)
   const requestId = getStringQuery(req.query.requestId)
-  if (!project || !requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) return jsonError(req, res, 400, 'Invalid project or request')
+  if (!project || !requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId))
+    return jsonError(req, res, 400, 'Invalid project or request')
   const attempt = req.body?.attempt
   if (!Number.isSafeInteger(attempt) || attempt < 1) return jsonError(req, res, 400, 'Invalid request attempt')
   const decision = req.body?.decision
   const role = req.body?.role ?? 'member'
-  if ((decision !== 'approved' && decision !== 'declined') || !['member', 'admin', 'guest'].includes(role)) return jsonError(req, res, 400, 'Invalid decision or role')
+  if ((decision !== 'approved' && decision !== 'declined') || !['member', 'admin', 'guest'].includes(role))
+    return jsonError(req, res, 400, 'Invalid decision or role')
   try {
     // The RPC checks current project:manage permission inside the same transaction.
     const result = await reviewAccessRequest(project, requestId, user.userId, attempt, decision, role)

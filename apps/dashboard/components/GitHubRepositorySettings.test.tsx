@@ -43,7 +43,8 @@ afterEach(() => {
 
 describe('<GitHubRepositorySettings />', () => {
   it('shows a connected repository and confirms before disconnecting', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(json(repoConfig('connected')))
       .mockResolvedValueOnce(json(repoConfig('disconnected')))
     vi.stubGlobal('fetch', fetchMock)
@@ -76,13 +77,15 @@ describe('<GitHubRepositorySettings />', () => {
       if (url.endsWith('/repo-config')) return json(null)
       return json({
         installUrl: 'https://github.com/apps/crrt/installations/new?state=fresh',
-        installations: [{
-          id: 'safe-reference',
-          githubAccountLogin: 'acme',
-          githubAccountType: 'Organization',
-          lastVerifiedAt: '2026-07-20T00:00:00.000Z',
-          authorizeUrl: 'https://github.com/login/oauth/authorize?state=reuse',
-        }],
+        installations: [
+          {
+            id: 'safe-reference',
+            githubAccountLogin: 'acme',
+            githubAccountType: 'Organization',
+            lastVerifiedAt: '2026-07-20T00:00:00.000Z',
+            authorizeUrl: 'https://github.com/login/oauth/authorize?state=reuse',
+          },
+        ],
       })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -92,28 +95,41 @@ describe('<GitHubRepositorySettings />', () => {
     render(<GitHubRepositorySettings {...props} apiBase="http://127.0.0.1:3001/api" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Connect GitHub' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Use organization @acme' }))
-    expect(open).toHaveBeenCalledWith(
-      'https://github.com/login/oauth/authorize?state=reuse',
-      'crrt-github-connect',
-    )
+    expect(open).toHaveBeenCalledWith('https://github.com/login/oauth/authorize?state=reuse', 'crrt-github-connect')
 
     act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: 'https://attacker.example', source: popup, data: installMessage(),
-      }))
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: 'http://127.0.0.1:3001', source: window, data: installMessage(),
-      }))
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: 'http://127.0.0.1:3001', source: popup, data: installMessage({ projectKey: 'other-project' }),
-      }))
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'https://attacker.example',
+          source: popup,
+          data: installMessage(),
+        }),
+      )
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'http://127.0.0.1:3001',
+          source: window,
+          data: installMessage(),
+        }),
+      )
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'http://127.0.0.1:3001',
+          source: popup,
+          data: installMessage({ projectKey: 'other-project' }),
+        }),
+      )
     })
     expect(screen.queryByLabelText(/Repository/)).not.toBeInTheDocument()
 
     act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: 'http://127.0.0.1:3001', source: popup, data: installMessage(),
-      }))
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: 'http://127.0.0.1:3001',
+          source: popup,
+          data: installMessage(),
+        }),
+      )
     })
     const select = await screen.findByLabelText('Repository · @PyPranav')
     fireEvent.change(select, { target: { value: 'https://github.com/PyPranav/Tower_of_Hanoi' } })
@@ -147,20 +163,24 @@ describe('<GitHubRepositorySettings />', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Install the CRRT GitHub App' }))
     act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: new URL(API).origin,
-        source: popup,
-        data: installMessage({ repositories: [{ owner: 'x', name: 'y', repoUrl: 'javascript:alert(1)' }] }),
-      }))
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: new URL(API).origin,
+          source: popup,
+          data: installMessage({ repositories: [{ owner: 'x', name: 'y', repoUrl: 'javascript:alert(1)' }] }),
+        }),
+      )
     })
     expect(screen.queryByLabelText(/Repository/)).not.toBeInTheDocument()
 
     act(() => {
-      window.dispatchEvent(new MessageEvent('message', {
-        origin: new URL(API).origin,
-        source: popup,
-        data: { type: 'crrt:github-app-install', ok: false, error: 'secret-upstream-detail' },
-      }))
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          origin: new URL(API).origin,
+          source: popup,
+          data: { type: 'crrt:github-app-install', ok: false, error: 'secret-upstream-detail' },
+        }),
+      )
     })
     expect(await screen.findByRole('alert')).toHaveTextContent('GitHub authorization could not be completed')
     expect(screen.getByRole('alert')).not.toHaveTextContent('secret-upstream-detail')
@@ -168,7 +188,8 @@ describe('<GitHubRepositorySettings />', () => {
   })
 
   it('offers retry after a configuration load failure', async () => {
-    const fetchMock = vi.fn()
+    const fetchMock = vi
+      .fn()
       .mockResolvedValueOnce(new Response('database unavailable', { status: 500 }))
       .mockResolvedValueOnce(json(null))
     vi.stubGlobal('fetch', fetchMock)

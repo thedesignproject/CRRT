@@ -1,13 +1,25 @@
 import { requireWidgetSession, assertWidgetPage, WidgetSessionError } from '../../_lib/widget-session.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
-import { getProject, createPublicComment, deleteCommentById, deleteCommentsForProject, ensurePublicProject, getComment, listPublicComments, updatePublicReviewStatus } from '../../_lib/store.js'
+import {
+  getProject,
+  createPublicComment,
+  deleteCommentById,
+  deleteCommentsForProject,
+  ensurePublicProject,
+  getComment,
+  listPublicComments,
+  updatePublicReviewStatus,
+} from '../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../_lib/http.js'
 import { getRequestHostname, isHostnameAllowed } from '../../_lib/origins.js'
 import { parseCommentTarget } from '../../_lib/anchor.js'
 import type { ReviewStatus } from '../../_lib/status.js'
 import { getServiceSupabase } from '../../_lib/supabase.js'
-import { notifyProjectMembersOfCommentActivityInBackground, sendCommentActivityEmailInBackground } from '../../_lib/comment-activity.js'
+import {
+  notifyProjectMembersOfCommentActivityInBackground,
+  sendCommentActivityEmailInBackground,
+} from '../../_lib/comment-activity.js'
 
 const METHODS = ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS']
 const VALID_STATUSES = new Set(['open', 'accepted', 'approved', 'rejected', 'pending'])
@@ -21,8 +33,10 @@ function normalizePatchStatus(value: unknown): ReviewStatus | null {
 
 function publicRequestError(req: VercelRequest, res: VercelResponse, error: unknown) {
   const message = error instanceof Error ? error.message : 'Unexpected error'
-  if (message === 'private_feedback_login_required') return jsonError(req, res, 401, 'Log in to access private feedback')
-  if (message === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry shortly.')
+  if (message === 'private_feedback_login_required')
+    return jsonError(req, res, 401, 'Log in to access private feedback')
+  if (message === 'feedback_delivery_in_progress')
+    return jsonError(req, res, 409, 'An activity email is being delivered. Retry shortly.')
   return jsonError(req, res, 500, message)
 }
 
@@ -60,7 +74,8 @@ async function handleDeleteOne(req: VercelRequest, res: VercelResponse, commentI
     const projectKey = getStringQuery(req.query.projectKey) ?? getStringQuery(req.query.projectId)
     if (!projectKey) return jsonError(req, res, 400, 'Missing projectKey')
 
-    if ((await getProject(projectKey))?.widgetPrivate) return jsonError(req, res, 401, 'Log in to leave or change private feedback')
+    if ((await getProject(projectKey))?.widgetPrivate)
+      return jsonError(req, res, 401, 'Log in to leave or change private feedback')
     const deleted = await deleteCommentById(commentId, projectKey)
     if (!deleted) return jsonError(req, res, 404, 'Comment not found in project')
 
@@ -164,18 +179,19 @@ async function uploadImage(projectKey: string, mimeType: string, base64Data: str
 
 async function handlePost(req: VercelRequest, res: VercelResponse) {
   try {
-    const { projectKey, projectId, pageUrl, selector, x, y, body, imageBase64, imageMimeType, authorName } = req.body ?? {}
+    const { projectKey, projectId, pageUrl, selector, x, y, body, imageBase64, imageMimeType, authorName } =
+      req.body ?? {}
     const resolvedProjectKey = typeof projectKey === 'string' ? projectKey : projectId
 
     if (
-      typeof resolvedProjectKey !== 'string'
-      || !resolvedProjectKey
-      || typeof pageUrl !== 'string'
-      || !pageUrl
-      || typeof selector !== 'string'
-      || !selector
-      || typeof body !== 'string'
-      || !body
+      typeof resolvedProjectKey !== 'string' ||
+      !resolvedProjectKey ||
+      typeof pageUrl !== 'string' ||
+      !pageUrl ||
+      typeof selector !== 'string' ||
+      !selector ||
+      typeof body !== 'string' ||
+      !body
     ) {
       return jsonError(req, res, 400, 'Missing required fields: projectKey, pageUrl, selector, body')
     }
@@ -228,7 +244,7 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
     if (project.widgetPrivate && !session) return jsonError(req, res, 401, 'Log in to leave private feedback')
 
     if (!isHostnameAllowed(getRequestHostname(req), project.allowedOrigins)) {
-      return jsonError(req, res, 403, 'Origin is not in this project\'s domain allowlist')
+      return jsonError(req, res, 403, "Origin is not in this project's domain allowlist")
     }
 
     let imageUrl: string | null = null
@@ -250,26 +266,37 @@ async function handlePost(req: VercelRequest, res: VercelResponse) {
       anchor: parsedTarget.anchor,
     })
 
-    waitUntil(notifyProjectMembersOfCommentActivityInBackground({
-      projectKey: resolvedProjectKey,
-      projectName: project.name,
-      commentId: comment.id,
-      authorName: comment.authorName,
-      pageUrl,
-    }))
+    waitUntil(
+      notifyProjectMembersOfCommentActivityInBackground({
+        projectKey: resolvedProjectKey,
+        projectName: project.name,
+        commentId: comment.id,
+        authorName: comment.authorName,
+        pageUrl,
+      }),
+    )
 
-    waitUntil(sendCommentActivityEmailInBackground({
-      commentId: comment.id,
-      projectKey: resolvedProjectKey,
-      projectName: project.name,
-      pageUrl,
-      authorName: comment.authorName,
-    }))
+    waitUntil(
+      sendCommentActivityEmailInBackground({
+        commentId: comment.id,
+        projectKey: resolvedProjectKey,
+        projectName: project.name,
+        pageUrl,
+        authorName: comment.authorName,
+      }),
+    )
 
     setCors(req, res, METHODS)
     return res.status(201).json(comment)
   } catch (error) {
-    if (error instanceof Error && error.message === 'private_feedback_login_required') return jsonError(req, res, 401, 'Log in to leave private feedback', error)
-    return jsonError(req, res, error instanceof WidgetSessionError ? error.status : 500, error instanceof Error ? error.message : 'Unexpected error', error)
+    if (error instanceof Error && error.message === 'private_feedback_login_required')
+      return jsonError(req, res, 401, 'Log in to leave private feedback', error)
+    return jsonError(
+      req,
+      res,
+      error instanceof WidgetSessionError ? error.status : 500,
+      error instanceof Error ? error.message : 'Unexpected error',
+      error,
+    )
   }
 }

@@ -7,16 +7,32 @@ import { FeedbackWidgetStyles } from '../components/FeedbackWidget/styles'
 type FrameCallback = FrameRequestCallback
 let frameId = 0
 let frames = new Map<number, FrameCallback>()
-let observers: Array<{ callback: ResizeObserverCallback; observe: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }>
+let observers: Array<{
+  callback: ResizeObserverCallback
+  observe: ReturnType<typeof vi.fn>
+  disconnect: ReturnType<typeof vi.fn>
+}>
 
 async function flushFrame(time = 16) {
   const pending = [...frames.entries()]
   frames.clear()
-  await act(async () => { for (const [, callback] of pending) callback(time) })
+  await act(async () => {
+    for (const [, callback] of pending) callback(time)
+  })
 }
 
 function rect(left: number, top: number, width: number, height: number): DOMRect {
-  return { left, top, width, height, right: left + width, bottom: top + height, x: left, y: top, toJSON: () => ({}) } as DOMRect
+  return {
+    left,
+    top,
+    width,
+    height,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  } as DOMRect
 }
 
 function addTarget(bounds: DOMRect) {
@@ -30,21 +46,32 @@ beforeEach(() => {
   frameId = 0
   frames = new Map()
   observers = []
-  vi.stubGlobal('requestAnimationFrame', vi.fn((callback: FrameCallback) => {
-    const id = ++frameId
-    frames.set(id, callback)
-    return id
-  }))
-  vi.stubGlobal('cancelAnimationFrame', vi.fn((id: number) => { frames.delete(id) }))
-  vi.stubGlobal('ResizeObserver', class {
-    callback: ResizeObserverCallback
-    observe = vi.fn()
-    disconnect = vi.fn()
-    constructor(callback: ResizeObserverCallback) {
-      this.callback = callback
-      observers.push(this)
-    }
-  })
+  vi.stubGlobal(
+    'requestAnimationFrame',
+    vi.fn((callback: FrameCallback) => {
+      const id = ++frameId
+      frames.set(id, callback)
+      return id
+    }),
+  )
+  vi.stubGlobal(
+    'cancelAnimationFrame',
+    vi.fn((id: number) => {
+      frames.delete(id)
+    }),
+  )
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      callback: ResizeObserverCallback
+      observe = vi.fn()
+      disconnect = vi.fn()
+      constructor(callback: ResizeObserverCallback) {
+        this.callback = callback
+        observers.push(this)
+      }
+    },
+  )
 })
 
 afterEach(() => {
@@ -82,7 +109,16 @@ describe('<SelectorFrame />', () => {
   it('does not commit unchanged candidate geometry', async () => {
     const target = addTarget(rect(10, 20, 100, 40))
     let commits = 0
-    const view = render(<Profiler id="selector" onRender={() => { commits++ }}><SelectorFrame active onTextHover={() => {}} /></Profiler>)
+    const view = render(
+      <Profiler
+        id="selector"
+        onRender={() => {
+          commits++
+        }}
+      >
+        <SelectorFrame active onTextHover={() => {}} />
+      </Profiler>,
+    )
     fireEvent.mouseMove(target.element, { clientX: 20, clientY: 30 })
     await flushFrame()
     const afterVisible = commits
@@ -92,7 +128,16 @@ describe('<SelectorFrame />', () => {
     expect(target.getBoundingClientRect).toHaveBeenCalledTimes(2)
     expect(commits).toBe(afterVisible)
 
-    view.rerender(<Profiler id="selector" onRender={() => { commits++ }}><SelectorFrame active={false} onTextHover={() => {}} /></Profiler>)
+    view.rerender(
+      <Profiler
+        id="selector"
+        onRender={() => {
+          commits++
+        }}
+      >
+        <SelectorFrame active={false} onTextHover={() => {}} />
+      </Profiler>,
+    )
     expect(document.querySelector<HTMLElement>('[data-fw-selector-frame]')?.style.opacity).toBe('0')
   })
 
@@ -112,13 +157,17 @@ describe('<SelectorFrame />', () => {
     expect(frame.style.transition).toBe('opacity var(--crrt-selector-opacity-duration) ease')
 
     target.getBoundingClientRect.mockReturnValue(rect(70, 40, 260, 80))
-    act(() => { observers[0].callback([], observers[0] as never) })
+    act(() => {
+      observers[0].callback([], observers[0] as never)
+    })
     await flushFrame()
     expect(frame.style.width).toBe('264px')
     expect(frame.style.height).toBe('84px')
 
     target.getBoundingClientRect.mockReturnValue(rect(70, 40, 0, 0))
-    act(() => { observers[0].callback([], observers[0] as never) })
+    act(() => {
+      observers[0].callback([], observers[0] as never)
+    })
     await flushFrame()
     expect(frame.style.opacity).toBe('0')
 
@@ -165,7 +214,9 @@ describe('<SelectorFrame />', () => {
     expect(css).toContain('--crrt-selector-motion-duration: 250ms')
     expect(css).toContain('--crrt-selector-motion-easing: cubic-bezier(0.22, 1.18, 0.36, 1)')
     expect(css).toContain('--crrt-selector-opacity-duration: 120ms')
-    expect(css).toMatch(/prefers-reduced-motion:\s*reduce[\s\S]*\.fw-selector-frame\s*\{[\s\S]*transition:\s*none !important/)
+    expect(css).toMatch(
+      /prefers-reduced-motion:\s*reduce[\s\S]*\.fw-selector-frame\s*\{[\s\S]*transition:\s*none !important/,
+    )
   })
 })
 
@@ -186,31 +237,33 @@ it('follows transforms and position-only layout changes without pointer or resiz
   view.unmount()
 })
 
-
-it.each(['hidden', 'collapse', 'ancestor'] as const)('hides a preserved-layout target when its visibility becomes %s', async (visibility) => {
-  const target = addTarget(rect(10, 20, 100, 40))
-  const parent = document.createElement('section')
-  document.body.appendChild(parent)
-  parent.appendChild(target.element)
-  const onTextHover = vi.fn()
-  const view = render(<SelectorFrame active onTextHover={onTextHover} />)
-  fireEvent.mouseMove(target.element, { clientX: 20, clientY: 30 })
-  await flushFrame()
-  const frame = document.querySelector<HTMLElement>('[data-fw-selector-frame]')!
-  expect(frame.style.opacity).toBe('1')
-  if (visibility === 'ancestor') parent.style.visibility = 'hidden'
-  else target.element.style.visibility = visibility
-  // Visibility preserves the box and does not emit pointer or resize events.
-  expect(target.element.getBoundingClientRect().width).toBe(100)
-  await flushFrame()
-  expect(frame.style.opacity).toBe('0')
-  expect(onTextHover).toHaveBeenLastCalledWith(false)
-  expect(frames.size).toBe(0)
-  target.element.style.visibility = 'visible'
-  parent.style.visibility = 'visible'
-  fireEvent.mouseMove(target.element, { clientX: 20, clientY: 30 })
-  await flushFrame()
-  expect(frame.style.opacity).toBe('1')
-  view.unmount()
-  expect(frames.size).toBe(0)
-})
+it.each(['hidden', 'collapse', 'ancestor'] as const)(
+  'hides a preserved-layout target when its visibility becomes %s',
+  async (visibility) => {
+    const target = addTarget(rect(10, 20, 100, 40))
+    const parent = document.createElement('section')
+    document.body.appendChild(parent)
+    parent.appendChild(target.element)
+    const onTextHover = vi.fn()
+    const view = render(<SelectorFrame active onTextHover={onTextHover} />)
+    fireEvent.mouseMove(target.element, { clientX: 20, clientY: 30 })
+    await flushFrame()
+    const frame = document.querySelector<HTMLElement>('[data-fw-selector-frame]')!
+    expect(frame.style.opacity).toBe('1')
+    if (visibility === 'ancestor') parent.style.visibility = 'hidden'
+    else target.element.style.visibility = visibility
+    // Visibility preserves the box and does not emit pointer or resize events.
+    expect(target.element.getBoundingClientRect().width).toBe(100)
+    await flushFrame()
+    expect(frame.style.opacity).toBe('0')
+    expect(onTextHover).toHaveBeenLastCalledWith(false)
+    expect(frames.size).toBe(0)
+    target.element.style.visibility = 'visible'
+    parent.style.visibility = 'visible'
+    fireEvent.mouseMove(target.element, { clientX: 20, clientY: 30 })
+    await flushFrame()
+    expect(frame.style.opacity).toBe('1')
+    view.unmount()
+    expect(frames.size).toBe(0)
+  },
+)

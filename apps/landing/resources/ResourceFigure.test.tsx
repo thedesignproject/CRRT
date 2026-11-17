@@ -13,7 +13,10 @@ vi.mock('@lucasmarkes/hairline', () => {
 })
 import { ResourceFigure } from './ResourceFigure'
 
-afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks() })
+afterEach(() => {
+  vi.unstubAllGlobals()
+  vi.clearAllMocks()
+})
 
 it('uses the requested Hairline artwork without idle animation or decorative tab stops', async () => {
   const view = render(<ResourceFigure track="design-systems" />)

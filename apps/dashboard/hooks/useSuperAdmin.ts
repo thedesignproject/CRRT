@@ -20,10 +20,18 @@ export function useSuperAdmin(apiBase: string, accessToken: string): UseSuperAdm
     if (mocksEnabled) return
     let cancelled = false
     getSuperAdminStatus(apiBase, accessToken)
-      .then((res) => { if (!cancelled) setSuperadmin(res.isSuperAdmin) })
-      .catch(() => { if (!cancelled) setSuperadmin(false) })
-      .finally(() => { if (!cancelled) setLoading(false) })
-    return () => { cancelled = true }
+      .then((res) => {
+        if (!cancelled) setSuperadmin(res.isSuperAdmin)
+      })
+      .catch(() => {
+        if (!cancelled) setSuperadmin(false)
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [apiBase, accessToken])
 
   return { superadmin, loading }

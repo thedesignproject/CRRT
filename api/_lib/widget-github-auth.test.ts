@@ -22,7 +22,12 @@ function signedBody(body: string) {
 }
 
 beforeEach(() => {
-  process.env = { ...env, WIDGET_AUTH_SECRET: 'secret', GITHUB_APP_CLIENT_ID: 'client', GITHUB_APP_CLIENT_SECRET: 'client-secret' }
+  process.env = {
+    ...env,
+    WIDGET_AUTH_SECRET: 'secret',
+    GITHUB_APP_CLIENT_ID: 'client',
+    GITHUB_APP_CLIENT_SECRET: 'client-secret',
+  }
 })
 
 afterEach(() => {
@@ -105,16 +110,22 @@ describe('github api helpers', () => {
   })
 
   it('exchanges a code and rejects bad exchange responses', async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ access_token: 'ghu_1' }), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })) as never
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ access_token: 'ghu_1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as never
     await expect(exchangeGitHubCode('code')).resolves.toBe('ghu_1')
 
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ error: 'bad' }), {
-      status: 400,
-      headers: { 'content-type': 'application/json' },
-    })) as never
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: 'bad' }), {
+          status: 400,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as never
     await expect(exchangeGitHubCode('code')).rejects.toThrow('github_code_exchange_failed')
 
     delete process.env.GITHUB_APP_CLIENT_SECRET
@@ -140,10 +151,13 @@ describe('github api helpers', () => {
     globalThis.fetch = vi.fn(async () => new Response('{}', { status: 500 })) as never
     await expect(assertGitHubRepoAccess('tok', 'acme', 'widgets')).rejects.toThrow('github_repo_lookup_failed')
 
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({}), {
-      status: 200,
-      headers: { 'content-type': 'application/json' },
-    })) as never
+    globalThis.fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({}), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+    ) as never
     await expect(getGitHubUser('tok')).rejects.toThrow('github_user_lookup_failed')
   })
 

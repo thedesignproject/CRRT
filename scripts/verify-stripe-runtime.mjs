@@ -8,19 +8,32 @@ import { readFile } from 'node:fs/promises'
 import Stripe from 'stripe'
 
 const fixtureEnv = {
-  CRRT_DEPLOYMENT_MODE: 'cloud', STRIPE_MODE: 'test',
-  STRIPE_PRO_PRICE_ID: 'price_pro_fixture', STRIPE_STUDIO_PRICE_ID: 'price_studio_fixture',
-  STRIPE_ENABLED: 'true', STRIPE_SECRET_KEY: 'sk_test_runtime_fixture',
-  STRIPE_WEBHOOK_SECRET: 'whsec_runtime_fixture', STRIPE_PRICE_ID: 'price_fixture',
+  CRRT_DEPLOYMENT_MODE: 'cloud',
+  STRIPE_MODE: 'test',
+  STRIPE_PRO_PRICE_ID: 'price_pro_fixture',
+  STRIPE_STUDIO_PRICE_ID: 'price_studio_fixture',
+  STRIPE_ENABLED: 'true',
+  STRIPE_SECRET_KEY: 'sk_test_runtime_fixture',
+  STRIPE_WEBHOOK_SECRET: 'whsec_runtime_fixture',
+  STRIPE_PRICE_ID: 'price_fixture',
   STRIPE_RETURN_URL: 'http://127.0.0.1:5173/dashboard/',
 }
-const payload = '{\n  "id": "evt_runtime", "type": "payment_intent.created", "livemode": false, "data": {"object": {}}\n}'
+const payload =
+  '{\n  "id": "evt_runtime", "type": "payment_intent.created", "livemode": false, "data": {"object": {}}\n}'
 const stripe = new Stripe(fixtureEnv.STRIPE_SECRET_KEY)
 const signature = stripe.webhooks.generateTestHeaderString({ payload, secret: fixtureEnv.STRIPE_WEBHOOK_SECRET })
 async function verify(url) {
-  let result = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Stripe-Signature': signature }, body: payload })
+  let result = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Stripe-Signature': signature },
+    body: payload,
+  })
   assert.equal(result.status, 200, await result.text())
-  result = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Stripe-Signature': signature }, body: payload + ' ' })
+  result = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Stripe-Signature': signature },
+    body: payload + ' ',
+  })
   assert.equal(result.status, 400)
   assert.equal((await fetch(url)).status, 405)
 }
@@ -28,10 +41,17 @@ const probe = createServer().listen(0, '127.0.0.1')
 await once(probe, 'listening')
 const port = probe.address().port
 await new Promise((resolve) => probe.close(resolve))
-const local = spawn('bun', ['scripts/local-api.ts'], { env: { ...process.env, ...fixtureEnv, LOCAL_API_PORT: String(port) }, stdio: ['ignore', 'pipe', 'pipe'] })
+const local = spawn('bun', ['scripts/local-api.ts'], {
+  env: { ...process.env, ...fixtureEnv, LOCAL_API_PORT: String(port) },
+  stdio: ['ignore', 'pipe', 'pipe'],
+})
 let output = ''
-local.stdout.on('data', (chunk) => { output += chunk })
-local.stderr.on('data', (chunk) => { output += chunk })
+local.stdout.on('data', (chunk) => {
+  output += chunk
+})
+local.stderr.on('data', (chunk) => {
+  output += chunk
+})
 try {
   for (let attempt = 0; !output.includes('local API ready'); attempt++) {
     if (attempt > 100 || local.exitCode !== null) throw new Error(`Local API did not start: ${output}`)
@@ -53,7 +73,9 @@ const apiRoute = routes.findIndex((route) => route.dest === '/api-router?__audit
 assert.ok(webhookRoute >= 0 && webhookRoute < apiRoute)
 Object.assign(process.env, fixtureEnv)
 const { default: handler } = await import(new URL(config.handler, functionRoot))
-const server = createServer((req, res) => { void handler(req, res) }).listen(0, '127.0.0.1')
+const server = createServer((req, res) => {
+  void handler(req, res)
+}).listen(0, '127.0.0.1')
 await once(server, 'listening')
 try {
   const url = `http://127.0.0.1:${server.address().port}/api/v1/billing/webhook`

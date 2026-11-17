@@ -18,7 +18,8 @@ export function ownerEndpoint(actions: Record<string, Action>, withId = true) {
       const user = await requireUser(req, res)
       if (!user) return
       if (withId) req.query.id = parse(uuid, req.query.id)
-      if (req.body !== undefined && Buffer.byteLength(JSON.stringify(req.body)) > 1_048_576) throw new RecordError('record_payload_too_large', 413)
+      if (req.body !== undefined && Buffer.byteLength(JSON.stringify(req.body)) > 1_048_576)
+        throw new RecordError('record_payload_too_large', 413)
       const result = await action(user.userId, req)
       return res.status(req.method === 'POST' && !withId ? 201 : 200).json(result)
     } catch (error) {

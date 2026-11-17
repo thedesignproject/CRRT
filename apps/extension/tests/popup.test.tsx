@@ -1,7 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../lib/local-workspace-panel',()=>({LocalWorkspacePanel:({billingUrl}:{billingUrl:string})=><a href={billingUrl}>Local billing</a>}))
+vi.mock('../lib/local-workspace-panel', () => ({
+  LocalWorkspacePanel: ({ billingUrl }: { billingUrl: string }) => <a href={billingUrl}>Local billing</a>,
+}))
 const sendMessage = vi.fn()
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage } } }))
 const listExtensionProjects = vi.hoisted(() => vi.fn())
@@ -11,7 +13,13 @@ const setActiveProject = vi.hoisted(() => vi.fn())
 const setProjectForPage = vi.hoisted(() => vi.fn())
 const matchingProjects = vi.hoisted(() => vi.fn())
 vi.mock('../lib/comments-api', () => ({ listExtensionProjects }))
-vi.mock('../lib/project-context', () => ({ getCurrentTabUrl, matchingProjects, resolveProjectForPage, setActiveProject, setProjectForPage }))
+vi.mock('../lib/project-context', () => ({
+  getCurrentTabUrl,
+  matchingProjects,
+  resolveProjectForPage,
+  setActiveProject,
+  setProjectForPage,
+}))
 const acceptDisclosure = vi.hoisted(() => vi.fn())
 const hasAcceptedDisclosure = vi.hoisted(() => vi.fn())
 vi.mock('../lib/disclosure', () => ({
@@ -36,7 +44,10 @@ beforeEach(() => {
   document.body.innerHTML = ''
   vi.stubEnv('WXT_DASHBOARD_URL', 'http://127.0.0.1:5173/dashboard/')
 })
-afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs() })
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllEnvs()
+})
 
 describe('extension popup', () => {
   it('requires versioned disclosure before reading auth or page context', async () => {
@@ -78,7 +89,10 @@ describe('extension popup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' }))
     await screen.findByText('Signed in as u@example.com')
     expect(sendMessage).toHaveBeenCalledWith({ type: 'auth:hosted-sign-in', intent: 'signin' })
-    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('href', 'http://127.0.0.1:5173/dashboard/?view=extension-comments')
+    expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute(
+      'href',
+      'http://127.0.0.1:5173/dashboard/?view=extension-comments',
+    )
     expect(screen.getByRole('link', { name: 'Dashboard' })).toHaveAttribute('rel', 'noopener noreferrer')
 
     const close = vi.spyOn(window, 'close').mockImplementation(() => {})
@@ -95,35 +109,55 @@ describe('extension popup', () => {
   it('shows load and action errors including malformed background responses', async () => {
     sendMessage.mockRejectedValueOnce(new Error('load failed'))
     let view = render(<Popup />)
-    await screen.findByRole('alert'); expect(screen.getByText('load failed')).toBeInTheDocument(); view.unmount()
+    await screen.findByRole('alert')
+    expect(screen.getByText('load failed')).toBeInTheDocument()
+    view.unmount()
 
     sendMessage.mockRejectedValueOnce('load failed')
     view = render(<Popup />)
-    await screen.findByRole('alert'); expect(screen.getByText('Could not load CRRT')).toBeInTheDocument(); view.unmount()
+    await screen.findByRole('alert')
+    expect(screen.getByText('Could not load CRRT')).toBeInTheDocument()
+    view.unmount()
 
     sendMessage.mockResolvedValueOnce({ ok: true, data: null })
-    view = render(<Popup />); await screen.findByText('Sign in to CRRT')
+    view = render(<Popup />)
+    await screen.findByText('Sign in to CRRT')
     sendMessage.mockResolvedValueOnce({ ok: false, error: 'wrong password' })
-    fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' })); await screen.findByText('wrong password')
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in with CRRT' }))
+    await screen.findByText('wrong password')
     sendMessage.mockRejectedValueOnce('bad')
-    fireEvent.click(screen.getByRole('button', { name: 'Create account' })); await screen.findByText('Could not open CRRT sign-in'); view.unmount()
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }))
+    await screen.findByText('Could not open CRRT sign-in')
+    view.unmount()
 
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
-    view = render(<Popup />); await screen.findByText('Signed in as u@example.com')
+    view = render(<Popup />)
+    await screen.findByText('Signed in as u@example.com')
     sendMessage.mockResolvedValueOnce(undefined)
-    fireEvent.click(screen.getByRole('button', { name: 'Start commenting' })); await screen.findByText('Extension background is unavailable')
+    fireEvent.click(screen.getByRole('button', { name: 'Start commenting' }))
+    await screen.findByText('Extension background is unavailable')
     sendMessage.mockRejectedValueOnce('bad')
-    fireEvent.click(screen.getByRole('button', { name: 'Start commenting' })); await screen.findByText('Could not start commenting')
+    fireEvent.click(screen.getByRole('button', { name: 'Start commenting' }))
+    await screen.findByText('Could not start commenting')
     sendMessage.mockRejectedValueOnce(new Error('logout down'))
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); await screen.findByText('logout down')
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await screen.findByText('logout down')
     sendMessage.mockRejectedValueOnce('bad')
-    fireEvent.click(screen.getByRole('button', { name: 'Sign out' })); await screen.findByText('Sign out failed'); view.unmount()
+    fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+    await screen.findByText('Sign out failed')
+    view.unmount()
   })
 
   it('selects a project or private feedback destination', async () => {
     const projects = [
       { publicKey: 'p1', name: 'Storefront', allowedOrigins: ['store.example.com'] },
-      { publicKey: 'p2', name: 'Dashboard', allowedOrigins: [], role: 'guest' as const, capabilities: ['feedback:read', 'feedback:create'] },
+      {
+        publicKey: 'p2',
+        name: 'Dashboard',
+        allowedOrigins: [],
+        role: 'guest' as const,
+        capabilities: ['feedback:read', 'feedback:create'],
+      },
     ]
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
     listExtensionProjects.mockResolvedValueOnce(projects)
@@ -136,9 +170,14 @@ describe('extension popup', () => {
     expect(resolveProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', projects)
 
     fireEvent.change(destination, { target: { value: 'p2' } })
-    await waitFor(() => expect(setProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', {
-      publicKey: 'p2', name: 'Dashboard', role: 'guest', capabilities: ['feedback:read', 'feedback:create'],
-    }))
+    await waitFor(() =>
+      expect(setProjectForPage).toHaveBeenCalledWith('https://store.example.com/products', {
+        publicKey: 'p2',
+        name: 'Dashboard',
+        role: 'guest',
+        capabilities: ['feedback:read', 'feedback:create'],
+      }),
+    )
     expect(destination).toHaveValue('p2')
 
     fireEvent.change(destination, { target: { value: '' } })
@@ -204,48 +243,56 @@ describe('extension popup', () => {
     ])
     matchingProjects.mockReturnValueOnce([{ publicKey: 'one' }, { publicKey: 'two' }])
     view = render(<Popup />)
-    expect(await screen.findByText('More than one project matches this page. Choose the destination.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('More than one project matches this page. Choose the destination.'),
+    ).toBeInTheDocument()
     expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toHaveValue('')
     view.unmount()
   })
 })
 
-it('starts the local widget without signing in',async()=>{
- sendMessage.mockResolvedValue({ok:true,data:null})
- render(<Popup />)
- const button=await screen.findByRole('button',{name:'Try local feedback'})
- await waitFor(()=>expect(button).not.toBeDisabled())
- fireEvent.click(button)
- await waitFor(()=>expect(sendMessage).toHaveBeenCalledWith({type:'comment:activate'}))
+it('starts the local widget without signing in', async () => {
+  sendMessage.mockResolvedValue({ ok: true, data: null })
+  render(<Popup />)
+  const button = await screen.findByRole('button', { name: 'Try local feedback' })
+  await waitFor(() => expect(button).not.toBeDisabled())
+  fireEvent.click(button)
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith({ type: 'comment:activate' }))
 })
 
-it('opens CRRT Record without requiring sign-in',async()=>{
- sendMessage.mockResolvedValue({ok:true,data:null})
- const close=vi.spyOn(window,'close').mockImplementation(()=>{})
- render(<Popup />)
- const button=await screen.findByRole('button',{name:/Try CRRT Record/})
- fireEvent.click(button)
- await waitFor(()=>expect(sendMessage).toHaveBeenCalledWith({type:'record:open'}))
- expect(close).toHaveBeenCalled()
+it('opens CRRT Record without requiring sign-in', async () => {
+  sendMessage.mockResolvedValue({ ok: true, data: null })
+  const close = vi.spyOn(window, 'close').mockImplementation(() => {})
+  render(<Popup />)
+  const button = await screen.findByRole('button', { name: /Try CRRT Record/ })
+  fireEvent.click(button)
+  await waitFor(() => expect(sendMessage).toHaveBeenCalledWith({ type: 'record:open' }))
+  expect(close).toHaveBeenCalled()
 })
 
-it('reports CRRT Record launch failures',async()=>{
- sendMessage.mockResolvedValueOnce({ok:true,data:null}).mockRejectedValueOnce(new Error('Recorder unavailable'))
- render(<Popup />)
- const record=await screen.findByRole('button',{name:/Try CRRT Record/})
- fireEvent.click(record)
- expect(await screen.findByRole('alert')).toHaveTextContent('Recorder unavailable')
- await waitFor(()=>expect(record).not.toBeDisabled())
- sendMessage.mockRejectedValueOnce('offline')
- fireEvent.click(screen.getByRole('button',{name:/Try CRRT Record/}))
- await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Could not open CRRT Record'))
+it('reports CRRT Record launch failures', async () => {
+  sendMessage.mockResolvedValueOnce({ ok: true, data: null }).mockRejectedValueOnce(new Error('Recorder unavailable'))
+  render(<Popup />)
+  const record = await screen.findByRole('button', { name: /Try CRRT Record/ })
+  fireEvent.click(record)
+  expect(await screen.findByRole('alert')).toHaveTextContent('Recorder unavailable')
+  await waitFor(() => expect(record).not.toBeDisabled())
+  sendMessage.mockRejectedValueOnce('offline')
+  fireEvent.click(screen.getByRole('button', { name: /Try CRRT Record/ }))
+  await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Could not open CRRT Record'))
 })
 
-it.each(['https://crrt.ai/dashboard','https://crrt.ai/dashboard/'])('resolves billing beneath the configured dashboard base %s',async base=>{
- vi.stubEnv('WXT_DASHBOARD_URL',base)
- sendMessage.mockResolvedValue({ok:true,data:null})
- const view=render(<Popup />)
- await screen.findByText('Sign in to CRRT')
- expect(screen.getByRole('link',{name:'Local billing'})).toHaveAttribute('href','https://crrt.ai/dashboard/billing')
- view.unmount()
-})
+it.each(['https://crrt.ai/dashboard', 'https://crrt.ai/dashboard/'])(
+  'resolves billing beneath the configured dashboard base %s',
+  async (base) => {
+    vi.stubEnv('WXT_DASHBOARD_URL', base)
+    sendMessage.mockResolvedValue({ ok: true, data: null })
+    const view = render(<Popup />)
+    await screen.findByText('Sign in to CRRT')
+    expect(screen.getByRole('link', { name: 'Local billing' })).toHaveAttribute(
+      'href',
+      'https://crrt.ai/dashboard/billing',
+    )
+    view.unmount()
+  },
+)

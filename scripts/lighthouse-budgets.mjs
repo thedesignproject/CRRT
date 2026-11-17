@@ -41,27 +41,33 @@ export function summarizeReports(reports) {
   }
   const scores = {}
   for (const [id, minimum] of Object.entries(lighthouseBudgets)) {
-    const values = reports.map(report => report.categories?.[id]?.score)
-    if (values.some(value => !Number.isFinite(value))) {
-      failures.push(`${id}: missing category score`); continue
+    const values = reports.map((report) => report.categories?.[id]?.score)
+    if (values.some((value) => !Number.isFinite(value))) {
+      failures.push(`${id}: missing category score`)
+      continue
     }
     scores[id] = median(values)
     if (scores[id] < minimum) failures.push(`${id}: ${Math.round(scores[id] * 100)} < ${minimum * 100}`)
   }
   const metrics = {}
   for (const [id, maximum] of Object.entries(metricBudgets)) {
-    const values = reports.map(report => report.audits?.[id]?.numericValue)
-    if (values.some(value => !Number.isFinite(value))) {
-      failures.push(`${id}: missing metric`); continue
+    const values = reports.map((report) => report.audits?.[id]?.numericValue)
+    if (values.some((value) => !Number.isFinite(value))) {
+      failures.push(`${id}: missing metric`)
+      continue
     }
     metrics[id] = median(values)
     if (metrics[id] > maximum) failures.push(`${id}: ${metrics[id]} > ${maximum}`)
   }
   const transfers = {}
   for (const [type, maximum] of Object.entries(transferBudgets)) {
-    const values = reports.map(report => report.audits?.['resource-summary']?.details?.items?.find(item => item.resourceType === type)?.transferSize)
-    if (values.some(value => !Number.isFinite(value))) {
-      failures.push(`${type}: missing transfer size`); continue
+    const values = reports.map(
+      (report) =>
+        report.audits?.['resource-summary']?.details?.items?.find((item) => item.resourceType === type)?.transferSize,
+    )
+    if (values.some((value) => !Number.isFinite(value))) {
+      failures.push(`${type}: missing transfer size`)
+      continue
     }
     transfers[type] = median(values)
     if (transfers[type] > maximum) failures.push(`${type}: ${transfers[type]} bytes > ${maximum}`)

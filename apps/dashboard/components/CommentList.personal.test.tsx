@@ -4,36 +4,87 @@ import { CommentList } from './CommentList'
 import { StatusBar } from './StatusBar'
 import type { Comment } from '../lib/types'
 
-const comment: Comment = { id: 'c1', projectId: 'p1', pageUrl: null, selector: '#target', x: 1, y: 2, body: 'Project feedback', reviewStatus: 'open', implementationStatus: 'unassigned', claimedByAgentId: null, createdAt: '', updatedAt: '', author: 'You', authorInitial: 'Y', authorColor: '#000', screenshotUrl: null, targetType: 'element_point', anchor: null, githubIssue: null }
+const comment: Comment = {
+  id: 'c1',
+  projectId: 'p1',
+  pageUrl: null,
+  selector: '#target',
+  x: 1,
+  y: 2,
+  body: 'Project feedback',
+  reviewStatus: 'open',
+  implementationStatus: 'unassigned',
+  claimedByAgentId: null,
+  createdAt: '',
+  updatedAt: '',
+  author: 'You',
+  authorInitial: 'Y',
+  authorColor: '#000',
+  screenshotUrl: null,
+  targetType: 'element_point',
+  anchor: null,
+  githubIssue: null,
+}
 const counts = { all: 1, open: 1, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }
 
 describe('shared feedback controls', () => {
   it('preserves project filters and a quiet bulk selection row', () => {
-    const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
+    const props = {
+      filteredComments: [comment],
+      counts,
+      statusFilter: 'all' as const,
+      selectFilter: vi.fn(),
+      bulkMode: false,
+      enterBulkMode: vi.fn(),
+      exitBulkMode: vi.fn(),
+      bulkSelectedIds: new Set<string>(),
+      toggleSelectAllVisible: vi.fn(),
+      toggleBulkSelect: vi.fn(),
+      commentsLoading: false,
+      commentsError: null,
+      selectedCommentId: '',
+      setSelectedCommentId: vi.fn(),
+    }
     const view = render(<CommentList {...props} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }))
+    expect(props.enterBulkMode).toHaveBeenCalledOnce()
     expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).toHaveClass('grid', 'grid-cols-5')
     expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).not.toHaveClass('overflow-x-auto')
     expect(screen.getByRole('button', { name: 'Agent 0' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Open 1' })); expect(props.selectFilter).toHaveBeenCalledWith('open')
-    fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.setSelectedCommentId).toHaveBeenCalledWith('c1')
+    fireEvent.click(screen.getByRole('button', { name: 'Open 1' }))
+    expect(props.selectFilter).toHaveBeenCalledWith('open')
+    fireEvent.click(screen.getByRole('button', { name: /Project feedback/ }))
+    expect(props.setSelectedCommentId).toHaveBeenCalledWith('c1')
     view.rerender(<CommentList {...props} filteredComments={[{ ...comment, visibility: 'internal' }]} />)
     expect(screen.getByText('internal')).toHaveClass('bg-muted')
     view.rerender(<CommentList {...props} bulkMode />)
-    fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.toggleBulkSelect).toHaveBeenCalledWith('c1')
-    fireEvent.click(screen.getByRole('button', { name: 'Select all' })); expect(props.toggleSelectAllVisible).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: /Project feedback/ }))
+    expect(props.toggleBulkSelect).toHaveBeenCalledWith('c1')
+    fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(props.toggleSelectAllVisible).toHaveBeenCalledOnce()
     view.rerender(<CommentList {...props} bulkMode bulkSelectedIds={new Set(['c1'])} />)
     expect(screen.getByRole('button', { name: 'Deselect all' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ready' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Done' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Reject' })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' })); expect(props.exitBulkMode).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(props.exitBulkMode).toHaveBeenCalledOnce()
     view.rerender(<CommentList {...props} bulkMode filteredComments={[]} />)
     expect(screen.getByRole('button', { name: 'Select all' })).toBeInTheDocument()
   })
 
   it('has no status controls in personal mode, including missing page context', () => {
-    render(<CommentList personal filteredComments={[comment]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()} />)
+    render(
+      <CommentList
+        personal
+        filteredComments={[comment]}
+        counts={counts}
+        commentsLoading={false}
+        commentsError={null}
+        selectedCommentId=""
+        setSelectedCommentId={vi.fn()}
+      />,
+    )
     expect(screen.getByText('1 Inbox Items')).toBeInTheDocument()
     expect(screen.queryByText('Open')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull()
@@ -46,22 +97,24 @@ describe('shared feedback controls', () => {
       implementationStatus: 'ready_for_testing' as const,
     }
     const selectFilter = vi.fn()
-    render(<CommentList
-      filteredComments={[testing]}
-      counts={{ ...counts, open: 0, ready_for_testing: 1 }}
-      statusFilter="ready_for_testing"
-      selectFilter={selectFilter}
-      bulkMode={false}
-      enterBulkMode={vi.fn()}
-      exitBulkMode={vi.fn()}
-      bulkSelectedIds={new Set()}
-      toggleSelectAllVisible={vi.fn()}
-      toggleBulkSelect={vi.fn()}
-      commentsLoading={false}
-      commentsError={null}
-      selectedCommentId=""
-      setSelectedCommentId={vi.fn()}
-    />)
+    render(
+      <CommentList
+        filteredComments={[testing]}
+        counts={{ ...counts, open: 0, ready_for_testing: 1 }}
+        statusFilter="ready_for_testing"
+        selectFilter={selectFilter}
+        bulkMode={false}
+        enterBulkMode={vi.fn()}
+        exitBulkMode={vi.fn()}
+        bulkSelectedIds={new Set()}
+        toggleSelectAllVisible={vi.fn()}
+        toggleBulkSelect={vi.fn()}
+        commentsLoading={false}
+        commentsError={null}
+        selectedCommentId=""
+        setSelectedCommentId={vi.fn()}
+      />,
+    )
 
     expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
     fireEvent.click(screen.getByRole('button', { name: 'Testing 1' }))
@@ -85,8 +138,31 @@ describe('shared feedback controls', () => {
 
 it('uses Inbox selection callbacks when its checkbox is clicked', () => {
   const toggleBulkSelect = vi.fn()
-  render(<CommentList personal filteredComments={[comment]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()}
-    bulkControls={{bulkMode:false,selectedCount:0,allVisibleSelected:false,allMatchingSelected:false,canSelectAllMatching:true,isSelected:()=>false,enterBulkMode:vi.fn(),exitBulkMode:vi.fn(),toggleBulkSelect,toggleSelectAllVisible:vi.fn(),selectAllMatching:vi.fn(),clearSelection:vi.fn()}} />)
-  fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: Project feedback'}))
+  render(
+    <CommentList
+      personal
+      filteredComments={[comment]}
+      counts={counts}
+      commentsLoading={false}
+      commentsError={null}
+      selectedCommentId=""
+      setSelectedCommentId={vi.fn()}
+      bulkControls={{
+        bulkMode: false,
+        selectedCount: 0,
+        allVisibleSelected: false,
+        allMatchingSelected: false,
+        canSelectAllMatching: true,
+        isSelected: () => false,
+        enterBulkMode: vi.fn(),
+        exitBulkMode: vi.fn(),
+        toggleBulkSelect,
+        toggleSelectAllVisible: vi.fn(),
+        selectAllMatching: vi.fn(),
+        clearSelection: vi.fn(),
+      }}
+    />,
+  )
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Select feedback: Project feedback' }))
   expect(toggleBulkSelect).toHaveBeenCalledWith('c1', undefined)
 })

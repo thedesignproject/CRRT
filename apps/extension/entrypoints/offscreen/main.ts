@@ -1,8 +1,18 @@
 import { browser } from 'wxt/browser'
 import { startRecordingCapture, type RecordingCapture } from '../../lib/recording-capture'
-import { captureRecordingTitle, initialRecorderState, recorderReducer, type LocalRecording, type RecorderState } from '../../lib/recording'
+import {
+  captureRecordingTitle,
+  initialRecorderState,
+  recorderReducer,
+  type LocalRecording,
+  type RecorderState,
+} from '../../lib/recording'
 import { saveLocalRecording } from '../../lib/recording-store'
-import { sessionSnapshot, type RecordingSessionSnapshot, type RecordingSurfaceCommand } from '../../lib/recording-session'
+import {
+  sessionSnapshot,
+  type RecordingSessionSnapshot,
+  type RecordingSurfaceCommand,
+} from '../../lib/recording-session'
 import { hasRecordingPermissions } from '../../lib/recording-permissions'
 
 type Active = {
@@ -44,7 +54,8 @@ async function begin(message: any) {
     tabStreamId: message.tabStreamId,
     deferRecording: true,
     onLimitReached: () => {
-      if (active && active.sessionId === message.sessionId) void finish(active).catch(error => fail(message.sessionId, error))
+      if (active && active.sessionId === message.sessionId)
+        void finish(active).catch((error) => fail(message.sessionId, error))
     },
   })
   if (generation !== startingGeneration) {
@@ -55,11 +66,17 @@ async function begin(message: any) {
   let state = recorderReducer(initial, { type: 'countdown.started' })
   active = { sessionId: message.sessionId, pageUrl: message.pageUrl, pageTitle: message.pageTitle, state, capture }
   const session = active
-  for (const track of capture.screenStream.getVideoTracks()) track.addEventListener('ended', () => {
-    if (active !== session) return
-    if (session.state.status === 'countdown') void fail(session.sessionId, new Error('Screen sharing ended before recording started.'))
-    else void finish(session).catch((error) => fail(session.sessionId, error))
-  }, { once: true })
+  for (const track of capture.screenStream.getVideoTracks())
+    track.addEventListener(
+      'ended',
+      () => {
+        if (active !== session) return
+        if (session.state.status === 'countdown')
+          void fail(session.sessionId, new Error('Screen sharing ended before recording started.'))
+        else void finish(session).catch((error) => fail(session.sessionId, error))
+      },
+      { once: true },
+    )
   await emit(active.sessionId, sessionSnapshot(state))
   active.timer = window.setInterval(() => {
     /* v8 ignore next -- stale timer callbacks are ignored after disposal */
@@ -67,8 +84,12 @@ async function begin(message: any) {
     active.state = recorderReducer(active.state, { type: 'countdown.ticked' })
     if (active.state.countdown === 0) {
       clearTimer(active)
-      try { capture.resume() }
-      catch (error) { void fail(message.sessionId, error); return }
+      try {
+        capture.resume()
+      } catch (error) {
+        void fail(message.sessionId, error)
+        return
+      }
       active.state = recorderReducer(active.state, { type: 'recording.started', now: performance.now() })
       active.timer = window.setInterval(() => {
         /* v8 ignore next -- stale timer callbacks are ignored after disposal */
@@ -97,7 +118,7 @@ async function fail(sessionId: string, error: unknown) {
 }
 
 function finish(session: Active) {
-  return session.finishing ??= saveFinishedRecording(session)
+  return (session.finishing ??= saveFinishedRecording(session))
 }
 
 async function saveFinishedRecording(session: Active) {
@@ -126,7 +147,12 @@ async function saveFinishedRecording(session: Active) {
   }
   await saveLocalRecording(recording)
   if (active === session) active = null
-  await browser.runtime.sendMessage({ type: 'record:offscreen-finished', target: 'background', sessionId: session.sessionId, recordingId: recording.id })
+  await browser.runtime.sendMessage({
+    type: 'record:offscreen-finished',
+    target: 'background',
+    sessionId: session.sessionId,
+    recordingId: recording.id,
+  })
 }
 
 async function applyCommand(command: RecordingSurfaceCommand) {
@@ -134,25 +160,43 @@ async function applyCommand(command: RecordingSurfaceCommand) {
   const session = active
   /* v8 ignore next -- commands arriving after disposal are intentionally ignored */
   if (!session) return
-  if (command.kind === 'cancel') { await discard(session); return }
-  if (command.kind === 'finish') { await finish(session); return }
+  if (command.kind === 'cancel') {
+    await discard(session)
+    return
+  }
+  if (command.kind === 'finish') {
+    await finish(session)
+    return
+  }
   if (command.kind === 'restart') {
     const restart = { ...session, state: recorderReducer(session.state, { type: 'recording.restarted' }) }
     await discard(session)
-    await browser.runtime.sendMessage({ type: 'record:offscreen-restart', target: 'background', sessionId: restart.sessionId })
+    await browser.runtime.sendMessage({
+      type: 'record:offscreen-restart',
+      target: 'background',
+      sessionId: restart.sessionId,
+    })
     return
   }
   if (command.kind === 'pause.toggle') {
-    if (session.state.status === 'recording') { session.capture.pause(); session.state = recorderReducer(session.state, { type: 'recording.paused', now: performance.now() }) }
-    else {
+    if (session.state.status === 'recording') {
+      session.capture.pause()
+      session.state = recorderReducer(session.state, { type: 'recording.paused', now: performance.now() })
+    } else {
       /* v8 ignore else -- the toolbar only sends pause-toggle in recording or paused states */
-      if (session.state.status === 'paused') { session.capture.resume(); session.state = recorderReducer(session.state, { type: 'recording.resumed', now: performance.now() }) }
+      if (session.state.status === 'paused') {
+        session.capture.resume()
+        session.state = recorderReducer(session.state, { type: 'recording.resumed', now: performance.now() })
+      }
     }
   } else if (command.kind === 'camera.toggled') {
     const enabled = !session.state.cameraEnabled
-    if (session.capture.setCameraEnabled(enabled)) session.state = recorderReducer(session.state, { type: 'camera.toggled' })
-  } else if (command.kind === 'tool.changed') session.state = recorderReducer(session.state, { type: 'tool.changed', tool: command.tool })
-  else if (command.kind === 'mark.added') session.state = recorderReducer(session.state, { type: 'mark.added', mark: command.mark })
+    if (session.capture.setCameraEnabled(enabled))
+      session.state = recorderReducer(session.state, { type: 'camera.toggled' })
+  } else if (command.kind === 'tool.changed')
+    session.state = recorderReducer(session.state, { type: 'tool.changed', tool: command.tool })
+  else if (command.kind === 'mark.added')
+    session.state = recorderReducer(session.state, { type: 'mark.added', mark: command.mark })
   else if (command.kind === 'mark.undone') session.state = recorderReducer(session.state, { type: 'mark.undone' })
   else session.state = recorderReducer(session.state, { type: 'marks.cleared' })
   await emit(session.sessionId, sessionSnapshot(session.state))
@@ -161,17 +205,31 @@ async function applyCommand(command: RecordingSurfaceCommand) {
 browser.runtime.onMessage.addListener((message: any, _sender, respond) => {
   if (message?.target !== 'offscreen') return
   if (message.type === 'record:permissions-check') {
-    void hasRecordingPermissions(message.devices).then((granted) => respond({ granted }), () => respond({ granted: false }))
+    void hasRecordingPermissions(message.devices).then(
+      (granted) => respond({ granted }),
+      () => respond({ granted: false }),
+    )
     return true
   }
   if (message.type === 'record:offscreen-start') {
-    void begin(message).then((started) => respond(started ? { ok: true } : { ok: false, error: 'Recording setup was cancelled or another recording is already active.' }), async (error) => {
-      respond(await fail(message.sessionId, error))
-    })
+    void begin(message).then(
+      (started) =>
+        respond(
+          started
+            ? { ok: true }
+            : { ok: false, error: 'Recording setup was cancelled or another recording is already active.' },
+        ),
+      async (error) => {
+        respond(await fail(message.sessionId, error))
+      },
+    )
     return true
   }
   if (message.type === 'record:offscreen-command') {
-    void applyCommand(message.command).then(() => respond({ ok: true }), async (error) => respond(await fail(message.sessionId, error)))
+    void applyCommand(message.command).then(
+      () => respond({ ok: true }),
+      async (error) => respond(await fail(message.sessionId, error)),
+    )
     return true
   }
 })

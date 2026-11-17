@@ -9,6 +9,7 @@
 ## 1. Why component-level meta?
 
 Without meta, an agent looking at `DropCarrotButton.tsx` sees:
+
 - the function signature
 - the JSX
 - whatever the imports happen to expose
@@ -62,43 +63,43 @@ The canonical TypeScript definition lives in [`crrt/lib/meta.ts`](./crrt/lib/met
 
 ### 3.1 Identity
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `name` | `string` | yes | PascalCase. Must match the exported component identifier. |
-| `displayName` | `string` | yes | Human-readable label. Spaces allowed. |
-| `description` | `string` | yes | **One sentence.** What the component is for. |
-| `category` | `'action' \| 'display' \| 'navigation' \| 'feedback' \| 'layout' \| 'overlay'` | yes | Coarse taxonomy for filtering. |
-| `status` | `'stable' \| 'beta' \| 'experimental' \| 'deprecated'` | yes | Lifecycle marker. Agents should not auto-pick `experimental` or `deprecated`. |
-| `version` | `string` | yes | Semver of the component itself, not the package. |
+| Field         | Type                                                                           | Required | Notes                                                                         |
+| ------------- | ------------------------------------------------------------------------------ | -------- | ----------------------------------------------------------------------------- |
+| `name`        | `string`                                                                       | yes      | PascalCase. Must match the exported component identifier.                     |
+| `displayName` | `string`                                                                       | yes      | Human-readable label. Spaces allowed.                                         |
+| `description` | `string`                                                                       | yes      | **One sentence.** What the component is for.                                  |
+| `category`    | `'action' \| 'display' \| 'navigation' \| 'feedback' \| 'layout' \| 'overlay'` | yes      | Coarse taxonomy for filtering.                                                |
+| `status`      | `'stable' \| 'beta' \| 'experimental' \| 'deprecated'`                         | yes      | Lifecycle marker. Agents should not auto-pick `experimental` or `deprecated`. |
+| `version`     | `string`                                                                       | yes      | Semver of the component itself, not the package.                              |
 
 ### 3.2 Usage guidance — the agent's decision input
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `whenToUse` | `string[]` | yes | Imperative bullets. "Use this when…". Minimum 2 items. |
-| `whenNotToUse` | `string[]` | yes | Imperative bullets. "Do NOT use when…". Minimum 1 item — at least the most likely confusable alternative. |
-| `semanticTags` | `string[]` | yes | Discovery keywords. Includes synonyms, related concepts, brand terms (e.g. `'fab', 'feedback', 'trigger', 'crrt'`). |
+| Field          | Type       | Required | Notes                                                                                                               |
+| -------------- | ---------- | -------- | ------------------------------------------------------------------------------------------------------------------- |
+| `whenToUse`    | `string[]` | yes      | Imperative bullets. "Use this when…". Minimum 2 items.                                                              |
+| `whenNotToUse` | `string[]` | yes      | Imperative bullets. "Do NOT use when…". Minimum 1 item — at least the most likely confusable alternative.           |
+| `semanticTags` | `string[]` | yes      | Discovery keywords. Includes synonyms, related concepts, brand terms (e.g. `'fab', 'feedback', 'trigger', 'crrt'`). |
 
 These three fields are what an agent reads first. They are the **search index**.
 
 ### 3.3 API
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `props` | `PropMeta[]` | yes | Every prop exposed by the component, in the order the user is most likely to set them. |
-| `events` | `EventMeta[]` | no | Required only for interactive components. |
-| `slots` | `SlotMeta[]` | no | Required only when the component accepts named children. |
+| Field    | Type          | Required | Notes                                                                                  |
+| -------- | ------------- | -------- | -------------------------------------------------------------------------------------- |
+| `props`  | `PropMeta[]`  | yes      | Every prop exposed by the component, in the order the user is most likely to set them. |
+| `events` | `EventMeta[]` | no       | Required only for interactive components.                                              |
+| `slots`  | `SlotMeta[]`  | no       | Required only when the component accepts named children.                               |
 
 **`PropMeta`:**
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `name` | `string` | yes | |
-| `type` | `string` | yes | The TS type as a literal string (e.g. `"'sm' \| 'md' \| 'lg'"`). Agents parse this to type-check generated code. |
-| `required` | `boolean` | yes | |
-| `default` | `string` | no | TS literal as a string (e.g. `"'md'"`, `"false"`, `"() => {}"`). |
-| `description` | `string` | yes | What setting this prop does. One sentence. |
-| `enum` | `string[]` | no | If the type is a string union, list the literal values here for fast lookup. |
+| Field         | Type       | Required | Notes                                                                                                            |
+| ------------- | ---------- | -------- | ---------------------------------------------------------------------------------------------------------------- |
+| `name`        | `string`   | yes      |                                                                                                                  |
+| `type`        | `string`   | yes      | The TS type as a literal string (e.g. `"'sm' \| 'md' \| 'lg'"`). Agents parse this to type-check generated code. |
+| `required`    | `boolean`  | yes      |                                                                                                                  |
+| `default`     | `string`   | no       | TS literal as a string (e.g. `"'md'"`, `"false"`, `"() => {}"`).                                                 |
+| `description` | `string`   | yes      | What setting this prop does. One sentence.                                                                       |
+| `enum`        | `string[]` | no       | If the type is a string union, list the literal values here for fast lookup.                                     |
 
 **`EventMeta`:** `{ name, payload, description }` — payload is the TS type of the handler argument.
 
@@ -106,10 +107,10 @@ These three fields are what an agent reads first. They are the **search index**.
 
 ### 3.4 Design references
 
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `tokens` | `string[]` | yes | Every CSS variable the component reads. Agents use this to predict theme impact. |
-| `figma` | `{ fileKey, nodeId, variants? }` | no | Where the canonical design lives. `variants` is a `Record<variantName, nodeId>` for state/tone variations. |
+| Field    | Type                             | Required | Notes                                                                                                      |
+| -------- | -------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| `tokens` | `string[]`                       | yes      | Every CSS variable the component reads. Agents use this to predict theme impact.                           |
+| `figma`  | `{ fileKey, nodeId, variants? }` | no       | Where the canonical design lives. `variants` is a `Record<variantName, nodeId>` for state/tone variations. |
 
 ### 3.5 Composition
 
@@ -195,16 +196,16 @@ A correctly authored meta produces deterministic agent behavior. A vague or unde
 
 ## 6. Quality bar — what reviewers (or lints) check
 
-| Check | What it means |
-|---|---|
-| Schema validity | Meta passes `ComponentMeta` typecheck. |
-| Name parity | `meta.name` matches the exported component identifier. |
-| Props parity | Every `props[].name` exists on the component; every component prop appears in `props`. |
-| Tokens parity | Every `tokens[]` entry is referenced in the component's stylesheet (CSS, Tailwind arbitrary values, or inline style). |
-| Examples compile | Each `examples[].code` snippet parses and resolves against the actual API. |
-| Min content | `whenToUse.length >= 2`, `whenNotToUse.length >= 1`, `semanticTags.length >= 3`, `examples.length >= 1`. |
-| One-sentence description | Reject if `description` contains `.` followed by content (rough heuristic). |
-| No default export | Reject any default-exported meta. |
+| Check                    | What it means                                                                                                         |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| Schema validity          | Meta passes `ComponentMeta` typecheck.                                                                                |
+| Name parity              | `meta.name` matches the exported component identifier.                                                                |
+| Props parity             | Every `props[].name` exists on the component; every component prop appears in `props`.                                |
+| Tokens parity            | Every `tokens[]` entry is referenced in the component's stylesheet (CSS, Tailwind arbitrary values, or inline style). |
+| Examples compile         | Each `examples[].code` snippet parses and resolves against the actual API.                                            |
+| Min content              | `whenToUse.length >= 2`, `whenNotToUse.length >= 1`, `semanticTags.length >= 3`, `examples.length >= 1`.              |
+| One-sentence description | Reject if `description` contains `.` followed by content (rough heuristic).                                           |
+| No default export        | Reject any default-exported meta.                                                                                     |
 
 ---
 
@@ -230,7 +231,7 @@ export const meta: ComponentMeta = {
     'You are composing the expanded state of FeedbackPanel.',
   ],
   whenNotToUse: [
-    'You need a generic-purpose button — use the project\'s standard Button instead.',
+    "You need a generic-purpose button — use the project's standard Button instead.",
     'You need a circular trigger; use FeedbackBadge.',
     'You need a destructive action — DropCarrotButton is never destructive.',
   ],
@@ -243,7 +244,8 @@ export const meta: ComponentMeta = {
       required: false,
       default: "'dark'",
       enum: ['dark', 'carrot', 'phosphor'],
-      description: 'Color treatment. Dark is canonical inside the widget; carrot and phosphor are for marketing surfaces.',
+      description:
+        'Color treatment. Dark is canonical inside the widget; carrot and phosphor are for marketing surfaces.',
     },
     // …more
   ],
@@ -277,7 +279,8 @@ export const meta: ComponentMeta = {
 ```ts
 export default {
   name: 'DropCarrotButton',
-  description: 'A button for dropping carrots. Has multiple variants and supports various states including loading, disabled, and three different visual tones. Use anywhere you need a CTA.',
+  description:
+    'A button for dropping carrots. Has multiple variants and supports various states including loading, disabled, and three different visual tones. Use anywhere you need a CTA.',
   // ❌ default export
   // ❌ description is multiple sentences
   // ❌ semanticTags missing
@@ -299,13 +302,13 @@ export default {
 
 ## 8. Roadmap
 
-| | Status |
-|---|---|
-| Hand-authored meta | **Now** — current state. Author writes meta alongside component. |
-| TS-derived props | Future — generate `props[]` from the component's TS prop interface via `ts-morph`. |
-| Token lint | Future — fail CI when `tokens` lists a variable the component does not actually reference. |
-| Registry endpoint | Future — serve all meta as JSON at `/registry.json` for live agent consumption. |
-| MCP server | Future — expose a `find_component(intent)` tool over MCP so agents can query without globbing. |
+|                    | Status                                                                                         |
+| ------------------ | ---------------------------------------------------------------------------------------------- |
+| Hand-authored meta | **Now** — current state. Author writes meta alongside component.                               |
+| TS-derived props   | Future — generate `props[]` from the component's TS prop interface via `ts-morph`.             |
+| Token lint         | Future — fail CI when `tokens` lists a variable the component does not actually reference.     |
+| Registry endpoint  | Future — serve all meta as JSON at `/registry.json` for live agent consumption.                |
+| MCP server         | Future — expose a `find_component(intent)` tool over MCP so agents can query without globbing. |
 
 ---
 

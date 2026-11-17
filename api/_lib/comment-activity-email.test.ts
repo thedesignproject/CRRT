@@ -95,8 +95,11 @@ describe('comment activity email helpers', () => {
 
   const input = {
     recipients: ['a@example.com', 'a@example.com', ' b@example.com '],
-    projectName: 'Demo', pageUrl: 'https://example.com', authorName: null,
-    activityCount: 1, dashboardUrl: 'https://crrt.ai/dashboard',
+    projectName: 'Demo',
+    pageUrl: 'https://example.com',
+    authorName: null,
+    activityCount: 1,
+    dashboardUrl: 'https://crrt.ai/dashboard',
   }
 
   it('does not queue without a key or nonempty recipients', async () => {
@@ -123,7 +126,9 @@ describe('comment activity email helpers', () => {
       expect(message).not.toHaveProperty('bcc')
       expect(message).not.toHaveProperty('cc')
     }
-    expect(vi.mocked(enqueueCommentEmail).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(processCommentEmailQueue).mock.invocationCallOrder[0])
+    expect(vi.mocked(enqueueCommentEmail).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(processCommentEmailQueue).mock.invocationCallOrder[0],
+    )
     expect(fetch).not.toHaveBeenCalled()
   })
 

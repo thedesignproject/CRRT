@@ -20,10 +20,18 @@ describe('mapServerComment', () => {
       authorName: null,
       createdAt: '2026-07-23T12:00:00Z',
       updatedAt: '2026-07-23T12:00:00Z',
-      externalWork: [{
-        provider: 'linear', externalId: 'issue', externalKey: 'WEB-7', externalUrl: 'https://linear.app/issue/WEB-7',
-        lifecycleStatus: 'active', closedAt: null, createdAt: '2026-07-23T12:00:00Z', updatedAt: '2026-07-23T12:00:00Z',
-      }],
+      externalWork: [
+        {
+          provider: 'linear',
+          externalId: 'issue',
+          externalKey: 'WEB-7',
+          externalUrl: 'https://linear.app/issue/WEB-7',
+          lifecycleStatus: 'active',
+          closedAt: null,
+          createdAt: '2026-07-23T12:00:00Z',
+          updatedAt: '2026-07-23T12:00:00Z',
+        },
+      ],
     }
     expect(mapServerComment(record)).toMatchObject({
       pageUrl: null,

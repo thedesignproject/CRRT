@@ -60,7 +60,13 @@ export interface FeedbackConversationProps {
   /** Validate and capture host quote context only during explicit feedback selection. */
   onTextSelection?(range: Range): boolean
   onClearSelection(): void
-  onComment(input: { body: string; author: string; parentId?: string; version?: number; target?: FeedbackPosition }): Promise<void>
+  onComment(input: {
+    body: string
+    author: string
+    parentId?: string
+    version?: number
+    target?: FeedbackPosition
+  }): Promise<void>
   onReview?(comment: ConversationComment, status: 'accepted' | 'rejected', done?: boolean): void
   authorName?: string
   onPendingChange?(pending: boolean): void
@@ -109,8 +115,15 @@ export interface PersonalComments {
   /** Manual external-tracker handoff for authorized project members. */
   externalWork?: {
     providers: Array<'github' | 'linear' | 'jira'>
-    prepare(provider: 'github' | 'linear' | 'jira', commentId: string): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
-    send(provider: 'github' | 'linear' | 'jira', commentId: string, draft: { title: string; body: string }): Promise<{ issueUrl: string }>
+    prepare(
+      provider: 'github' | 'linear' | 'jira',
+      commentId: string,
+    ): Promise<{ destination: string; title: string; body: string; existingUrl?: string }>
+    send(
+      provider: 'github' | 'linear' | 'jira',
+      commentId: string,
+      draft: { title: string; body: string },
+    ): Promise<{ issueUrl: string }>
   }
   /** Return false when the extension opens sign-in instead of the launcher. */
   beforeOpen?(): Promise<boolean>

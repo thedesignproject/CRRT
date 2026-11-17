@@ -10,7 +10,12 @@ describe('ProductAudit landing section', () => {
 
   it('starts any public URL through the supplied live launcher and prevents double submission', async () => {
     let release = () => {}
-    const onStartAudit = vi.fn(() => new Promise<void>((resolve) => { release = resolve }))
+    const onStartAudit = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        }),
+    )
     render(<ProductAudit onStartAudit={onStartAudit} />)
     const input = screen.getByLabelText(/product url/i)
     expect(input).toHaveAttribute('name', 'audit-url')
@@ -36,7 +41,11 @@ describe('ProductAudit landing section', () => {
   })
 
   it('shows validated creation failures and capability-controlled availability', async () => {
-    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({ enabled: true, anonymousEnabled: true, authenticatedEnabled: true })
+    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({
+      enabled: true,
+      anonymousEnabled: true,
+      authenticatedEnabled: true,
+    })
     vi.mocked(createAudit).mockRejectedValueOnce(new Error('Anonymous audit quota exceeded'))
     render(<ProductAudit apiBase="https://api.example/api" />)
     await waitFor(() => expect(getAuditCapabilities).toHaveBeenCalled())
@@ -45,7 +54,11 @@ describe('ProductAudit landing section', () => {
   })
 
   it('uses a safe fallback message for non-Error creation failures', async () => {
-    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({ enabled: true, anonymousEnabled: true, authenticatedEnabled: true })
+    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({
+      enabled: true,
+      anonymousEnabled: true,
+      authenticatedEnabled: true,
+    })
     vi.mocked(createAudit).mockRejectedValueOnce('offline')
     render(<ProductAudit apiBase="https://api.example/api" />)
     await waitFor(() => expect(screen.getByRole('button', { name: /run product audit/i })).not.toBeDisabled())
@@ -54,7 +67,11 @@ describe('ProductAudit landing section', () => {
   })
 
   it('creates an anonymous audit before navigating to its workspace', async () => {
-    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({ enabled: true, anonymousEnabled: true, authenticatedEnabled: true })
+    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({
+      enabled: true,
+      anonymousEnabled: true,
+      authenticatedEnabled: true,
+    })
     vi.mocked(createAudit).mockResolvedValueOnce({ auditId: '11111111-1111-4111-8111-111111111111', status: 'queued' })
     render(<ProductAudit apiBase="https://api.example/api" />)
     await waitFor(() => expect(screen.getByRole('button', { name: /run product audit/i })).not.toBeDisabled())
@@ -71,7 +88,11 @@ describe('ProductAudit landing section', () => {
   })
 
   it('disables creation when anonymous audits are not enabled', async () => {
-    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({ enabled: true, anonymousEnabled: false, authenticatedEnabled: true })
+    vi.mocked(getAuditCapabilities).mockResolvedValueOnce({
+      enabled: true,
+      anonymousEnabled: false,
+      authenticatedEnabled: true,
+    })
     render(<ProductAudit apiBase="https://api.example/api" />)
     expect(await screen.findByRole('button', { name: /audits unavailable/i })).toBeDisabled()
   })

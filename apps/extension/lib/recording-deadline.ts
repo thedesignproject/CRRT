@@ -24,7 +24,10 @@ export function recordingDeadline(onLimit: () => void) {
       pause()
       if (remaining === 0) return false
       startedAt = performance.now()
-      timer = setTimeout(() => { pause(); expire() }, remaining)
+      timer = setTimeout(() => {
+        pause()
+        expire()
+      }, remaining)
       return true
     },
     stop() {

@@ -1,9 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { waitUntil } from '@vercel/functions'
 import { requireUser } from '../../../../_lib/auth.js'
-import { changeProjectMemberRole, getProject, getProjectMember, getUserEmailsByIds, removeProjectMember, type ProjectMemberRole, type ProjectMemberRoleChange } from '../../../../_lib/store.js'
+import {
+  changeProjectMemberRole,
+  getProject,
+  getProjectMember,
+  getUserEmailsByIds,
+  removeProjectMember,
+  type ProjectMemberRole,
+  type ProjectMemberRoleChange,
+} from '../../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
-import { getProjectRoleChangeDashboardUrl, sendProjectRoleChangeEmail } from '../../../../_lib/project-role-change-email.js'
+import {
+  getProjectRoleChangeDashboardUrl,
+  sendProjectRoleChangeEmail,
+} from '../../../../_lib/project-role-change-email.js'
 
 const METHODS = ['PATCH', 'DELETE', 'OPTIONS']
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -58,10 +69,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (req.method === 'PATCH') {
       const requestedRole = (req.body as { role?: unknown } | undefined)?.role
       if (
-        requestedRole !== 'owner'
-        && requestedRole !== 'admin'
-        && requestedRole !== 'member'
-        && requestedRole !== 'guest'
+        requestedRole !== 'owner' &&
+        requestedRole !== 'admin' &&
+        requestedRole !== 'member' &&
+        requestedRole !== 'guest'
       ) {
         return jsonError(req, res, 400, 'Invalid role')
       }
@@ -73,11 +84,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
       if (changed.changed && changed.userId !== user.userId) {
         try {
-          waitUntil(sendRoleChangeEmailInBackground({
-            change: changed,
-            actorEmail: user.email,
-            dashboardUrl: getProjectRoleChangeDashboardUrl(),
-          }))
+          waitUntil(
+            sendRoleChangeEmailInBackground({
+              change: changed,
+              actorEmail: user.email,
+              dashboardUrl: getProjectRoleChangeDashboardUrl(),
+            }),
+          )
         } catch (scheduleError) {
           console.warn('Project role change email scheduling failed', scheduleError)
         }
@@ -93,13 +106,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ projectKey, userId: targetUserId })
   } catch (error) {
     const msg = error instanceof Error ? error.message : undefined
-    if (msg === 'tracker_dispatch_in_progress') return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before changing membership.', error)
-    if (msg === 'feedback_delivery_in_progress') return jsonError(req, res, 409, 'An activity email is being delivered. Retry changing membership shortly.', error)
+    if (msg === 'tracker_dispatch_in_progress')
+      return jsonError(req, res, 409, 'A tracker export is pending. Resolve it before changing membership.', error)
+    if (msg === 'feedback_delivery_in_progress')
+      return jsonError(req, res, 409, 'An activity email is being delivered. Retry changing membership shortly.', error)
     if (msg === 'not_found') return jsonError(req, res, 404, 'Member not found', error)
     if (msg === 'forbidden') return jsonError(req, res, 403, 'Admin role required', error)
     if (msg === 'owner_required') return jsonError(req, res, 403, 'Only the owner can transfer ownership', error)
-    if (msg === 'owner_protected') return jsonError(req, res, 409, 'Transfer ownership before changing the owner', error)
-    if (msg?.includes('agent_seat_limit_reached')) return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available', error)
+    if (msg === 'owner_protected')
+      return jsonError(req, res, 409, 'Transfer ownership before changing the owner', error)
+    if (msg?.includes('agent_seat_limit_reached'))
+      return jsonError(req, res, 409, 'The project owner has no Agent collaborator seats available', error)
     console.error(error)
     return jsonError(req, res, 500, 'Internal server error', error)
   }

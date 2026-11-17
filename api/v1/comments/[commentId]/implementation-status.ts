@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireProjectCommentCapability, requireUser } from '../../../_lib/auth.js'
-import { createFeedbackEvent, findActiveSharesForComment, getComment, mutateProjectFeedback } from '../../../_lib/store.js'
+import {
+  createFeedbackEvent,
+  findActiveSharesForComment,
+  getComment,
+  mutateProjectFeedback,
+} from '../../../_lib/store.js'
 import { getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../_lib/http.js'
 import { IMPLEMENTATION_STATUSES, type ImplementationStatus } from '../../../_lib/status.js'
 
@@ -25,22 +30,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!existing || !existing.projectId) return jsonError(req, res, 404, 'Comment not found')
     if (!(await requireProjectCommentCapability(req, res, user, existing, 'feedback:manage'))) return
 
-    const patch = implementationStatus === 'unassigned'
-      ? { implementationStatus, claimedByAgentId: null }
-      : { implementationStatus }
+    const patch =
+      implementationStatus === 'unassigned'
+        ? { implementationStatus, claimedByAgentId: null }
+        : { implementationStatus }
     const [comment, activeShares] = await Promise.all([
       mutateProjectFeedback(existing.projectId, user.userId, commentId, patch),
       findActiveSharesForComment(commentId),
     ])
     if (!comment) return jsonError(req, res, 404, 'Comment not found')
-    await Promise.all(activeShares.map((share) => createFeedbackEvent({
-      shareId: share.id,
-      commentId,
-      actorType: 'reviewer',
-      actorId: 'reviewer',
-      eventType: 'comment.implementation_changed',
-      payload: { implementationStatus },
-    })))
+    await Promise.all(
+      activeShares.map((share) =>
+        createFeedbackEvent({
+          shareId: share.id,
+          commentId,
+          actorType: 'reviewer',
+          actorId: 'reviewer',
+          eventType: 'comment.implementation_changed',
+          payload: { implementationStatus },
+        }),
+      ),
+    )
 
     setCors(req, res, ['PATCH', 'OPTIONS'])
     return res.status(200).json(comment)

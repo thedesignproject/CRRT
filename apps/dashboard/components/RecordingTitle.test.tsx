@@ -22,7 +22,12 @@ it('allows owners to cancel editing and rejects an empty title without saving', 
 })
 it('preserves the draft on API failure and prevents cancellation while saving', async () => {
   let reject!: (error: Error) => void
-  const rename = vi.fn(() => new Promise<void>((_resolve, fail) => { reject = fail }))
+  const rename = vi.fn(
+    () =>
+      new Promise<void>((_resolve, fail) => {
+        reject = fail
+      }),
+  )
   render(<RecordingTitle title="Capture" rename={rename} />)
   fireEvent.click(screen.getByRole('button', { name: 'Rename' }))
   fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Revised title' } })
@@ -30,7 +35,9 @@ it('preserves the draft on API failure and prevents cancellation while saving', 
   expect(screen.getByRole('button', { name: 'Saving…' })).toBeDisabled()
   expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' })
-  await act(async () => { reject(new Error('Connection lost')) })
+  await act(async () => {
+    reject(new Error('Connection lost'))
+  })
   expect(screen.getByRole('alert')).toHaveTextContent('Connection lost')
   expect(screen.getByRole('textbox')).toHaveValue('Revised title')
   rename.mockResolvedValueOnce(undefined)

@@ -1,6 +1,13 @@
 import { hashToken } from '../../../../_lib/tokens.js'
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAgentId, getStringQuery, handleOptions, jsonError, methodNotAllowed, setCors } from '../../../../_lib/http.js'
+import {
+  getAgentId,
+  getStringQuery,
+  handleOptions,
+  jsonError,
+  methodNotAllowed,
+  setCors,
+} from '../../../../_lib/http.js'
 import { writeAgentPresence } from '../../../../_lib/store.js'
 import { requireAgentShare } from '../../../../_lib/shares.js'
 
@@ -29,8 +36,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     setCors(req, res, ['POST', 'OPTIONS'])
     return res.status(200).json({ success: true })
   } catch (error) {
-    if (error instanceof Error && error.message === 'share_unavailable') return jsonError(req, res, 410, 'Share unavailable')
+    if (error instanceof Error && error.message === 'share_unavailable')
+      return jsonError(req, res, 410, 'Share unavailable')
     return jsonError(req, res, 500, error instanceof Error ? error.message : 'Unexpected error')
   }
 }
-

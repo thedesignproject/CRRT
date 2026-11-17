@@ -1,14 +1,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-const migration = readFileSync(
-  'db/migrations/0023_damp_black_tarantula.sql',
-  'utf8',
-)
-const hardeningMigration = readFileSync(
-  'db/migrations/0024_silly_kulan_gath.sql',
-  'utf8',
-)
+const migration = readFileSync('db/migrations/0023_damp_black_tarantula.sql', 'utf8')
+const hardeningMigration = readFileSync('db/migrations/0024_silly_kulan_gath.sql', 'utf8')
 
 describe('extension authentication handoff migration', () => {
   it('stores hashes and bounded metadata without storing browser secrets', () => {
@@ -34,7 +28,9 @@ describe('extension authentication handoff migration', () => {
     expect(hardeningMigration).toContain('CREATE TABLE "extension_auth_clients"')
     expect(hardeningMigration).toContain('"extension_auth_clients" ENABLE ROW LEVEL SECURITY')
     expect(hardeningMigration).not.toContain('CREATE POLICY')
-    expect(hardeningMigration).toContain('REFERENCES "public"."extension_auth_clients"("extension_id") ON DELETE cascade')
+    expect(hardeningMigration).toContain(
+      'REFERENCES "public"."extension_auth_clients"("extension_id") ON DELETE cascade',
+    )
     expect(hardeningMigration).toContain('"extension_auth_handoffs_max_lifetime_check"')
     expect(hardeningMigration).toContain("interval '5 minutes'")
   })
@@ -46,7 +42,11 @@ describe('extension authentication handoff migration', () => {
     expect(migration).toContain('handoff.consumed_at IS NULL')
     expect(migration).toContain('RETURNING handoff.user_id')
     expect(migration).toContain("SECURITY DEFINER\nSET search_path = ''")
-    expect(migration).toContain('REVOKE ALL ON FUNCTION public.consume_extension_auth_handoff(text, text, text, text, text) FROM PUBLIC')
-    expect(migration).toContain('GRANT EXECUTE ON FUNCTION public.consume_extension_auth_handoff(text, text, text, text, text) TO service_role')
+    expect(migration).toContain(
+      'REVOKE ALL ON FUNCTION public.consume_extension_auth_handoff(text, text, text, text, text) FROM PUBLIC',
+    )
+    expect(migration).toContain(
+      'GRANT EXECUTE ON FUNCTION public.consume_extension_auth_handoff(text, text, text, text, text) TO service_role',
+    )
   })
 })

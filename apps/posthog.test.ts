@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-const sdk = vi.hoisted(() => ({ init: vi.fn(), capture: vi.fn(), identify: vi.fn(), reset: vi.fn(), logger: { info: vi.fn() } }))
+const sdk = vi.hoisted(() => ({
+  init: vi.fn(),
+  capture: vi.fn(),
+  identify: vi.fn(),
+  reset: vi.fn(),
+  logger: { info: vi.fn() },
+}))
 const init = sdk.init
 
 afterEach(() => {
@@ -26,7 +32,9 @@ describe('PostHog browser initialization', () => {
     const beforeSend = init.mock.calls[0][1].before_send
     const timestamp = new Date('2026-11-03T00:00:00Z')
     const event = {
-      event: '$identify', uuid: 'event-id', timestamp,
+      event: '$identify',
+      uuid: 'event-id',
+      timestamp,
       properties: { distinct_id: 'user-1', $current_url: 'https://crrt.ai/dashboard?invite=project#secret' },
       $set: { email: 'user@example.com', $referrer: 'https://crrt.ai/?email=guest@example.com' },
       $set_once: {
@@ -35,7 +43,9 @@ describe('PostHog browser initialization', () => {
       },
     }
     expect(beforeSend(event)).toEqual({
-      event: '$identify', uuid: 'event-id', timestamp,
+      event: '$identify',
+      uuid: 'event-id',
+      timestamp,
       properties: { distinct_id: 'user-1', $current_url: 'https://crrt.ai/dashboard' },
       $set: { email: 'user@example.com', $referrer: 'https://crrt.ai/' },
       $set_once: {
@@ -48,25 +58,32 @@ describe('PostHog browser initialization', () => {
   it('redacts query strings and fragments from page, referrer, identity and nested link URLs', async () => {
     await load()
     const beforeSend = init.mock.calls[0][1].before_send
-    const event = { properties: {
-      $current_url: 'https://crrt.ai/dashboard/login?invite=project&email=guest@example.com#secret',
-      $referrer: 'https://crrt.ai/?email=guest@example.com',
-      $set_once: { $initial_current_url: 'https://crrt.ai/#access_token=secret' },
-      $elements: [{ attr__href: '/dashboard/?invite=project#secret' }],
-      $elements_chain: 'a[href="https://storage.example/screenshot?token=secret"]',
-      $el_text: 'Private feedback body',
-      $pathname: '/dashboard/login',
-      count: 1,
-      empty: null,
-      url_count: 2,
-    } }
-    expect(beforeSend(event)).toEqual({ properties: {
-      $current_url: 'https://crrt.ai/dashboard/login',
-      $referrer: 'https://crrt.ai/',
-      $set_once: { $initial_current_url: 'https://crrt.ai/' },
-      $elements: [{ attr__href: '/dashboard/' }],
-      $pathname: '/dashboard/login', count: 1, empty: null, url_count: 2,
-    } })
+    const event = {
+      properties: {
+        $current_url: 'https://crrt.ai/dashboard/login?invite=project&email=guest@example.com#secret',
+        $referrer: 'https://crrt.ai/?email=guest@example.com',
+        $set_once: { $initial_current_url: 'https://crrt.ai/#access_token=secret' },
+        $elements: [{ attr__href: '/dashboard/?invite=project#secret' }],
+        $elements_chain: 'a[href="https://storage.example/screenshot?token=secret"]',
+        $el_text: 'Private feedback body',
+        $pathname: '/dashboard/login',
+        count: 1,
+        empty: null,
+        url_count: 2,
+      },
+    }
+    expect(beforeSend(event)).toEqual({
+      properties: {
+        $current_url: 'https://crrt.ai/dashboard/login',
+        $referrer: 'https://crrt.ai/',
+        $set_once: { $initial_current_url: 'https://crrt.ai/' },
+        $elements: [{ attr__href: '/dashboard/' }],
+        $pathname: '/dashboard/login',
+        count: 1,
+        empty: null,
+        url_count: 2,
+      },
+    })
     expect(beforeSend(null)).toBeNull()
     expect(beforeSend({ event: '$autocapture', properties: { $el_text: 'Private feedback' } })).toBeNull()
   })
@@ -75,11 +92,18 @@ describe('PostHog browser initialization', () => {
     await import('./posthog')
     expect(init).toHaveBeenCalledTimes(1)
     expect(init.mock.calls[0][1]).not.toHaveProperty('logs')
-    expect(init).toHaveBeenCalledWith('test-public-key', expect.objectContaining({
-      api_host: 'https://us.i.posthog.com',
-      autocapture: false,
-      capture_exceptions: { capture_unhandled_errors: true, capture_unhandled_rejections: true, capture_console_errors: false },
-    }))
+    expect(init).toHaveBeenCalledWith(
+      'test-public-key',
+      expect.objectContaining({
+        api_host: 'https://us.i.posthog.com',
+        autocapture: false,
+        capture_exceptions: {
+          capture_unhandled_errors: true,
+          capture_unhandled_rejections: true,
+          capture_console_errors: false,
+        },
+      }),
+    )
   })
   it.each([
     ['test', false, 'key', 'https://us.i.posthog.com'],
@@ -95,7 +119,9 @@ describe('PostHog browser initialization', () => {
 
 it('keeps product actions working when analytics fails', async () => {
   const { default: analytics } = await load()
-  sdk.capture.mockImplementationOnce(() => { throw new Error('SDK unavailable') })
+  sdk.capture.mockImplementationOnce(() => {
+    throw new Error('SDK unavailable')
+  })
   expect(() => analytics.capture('project_created')).not.toThrow()
   analytics.identify('user-1')
   analytics.reset()
@@ -116,28 +142,44 @@ it('does not send product events when disabled', async () => {
 })
 
 it('disables analytics if SDK initialization fails', async () => {
-  sdk.init.mockImplementationOnce(() => { throw new Error('init failed') })
+  sdk.init.mockImplementationOnce(() => {
+    throw new Error('init failed')
+  })
   const { default: analytics, isPostHogConfigured } = await load()
   expect(isPostHogConfigured).toBe(false)
   analytics.capture('project_created')
   expect(sdk.capture).not.toHaveBeenCalled()
 })
 
-
 it('preserves identity and event order while the SDK downloads, including failed calls', async () => {
   let release!: (module: { default: typeof sdk }) => void
   let downloading!: () => void
-  const started = new Promise<void>(resolve => { downloading = resolve })
-  vi.doMock('posthog-js', () => new Promise(resolve => { release = resolve; downloading() }))
+  const started = new Promise<void>((resolve) => {
+    downloading = resolve
+  })
+  vi.doMock(
+    'posthog-js',
+    () =>
+      new Promise((resolve) => {
+        release = resolve
+        downloading()
+      }),
+  )
   vi.stubEnv('MODE', 'production')
   vi.stubEnv('SSR', false)
   vi.stubEnv('VITE_POSTHOG_KEY', 'test-public-key')
   vi.stubEnv('VITE_POSTHOG_HOST', 'https://us.i.posthog.com')
   const module = await import('./posthog')
   const calls: string[] = []
-  sdk.identify.mockImplementationOnce(() => { calls.push('identify') })
-  sdk.capture.mockImplementationOnce(() => { throw new Error('capture failed') })
-  sdk.reset.mockImplementationOnce(() => { calls.push('reset') })
+  sdk.identify.mockImplementationOnce(() => {
+    calls.push('identify')
+  })
+  sdk.capture.mockImplementationOnce(() => {
+    throw new Error('capture failed')
+  })
+  sdk.reset.mockImplementationOnce(() => {
+    calls.push('reset')
+  })
   module.default.identify('user-1')
   module.default.capture('project_created')
   module.default.reset()
@@ -152,8 +194,17 @@ it('preserves identity and event order while the SDK downloads, including failed
 it('disables analytics and drops queued actions when downloading fails', async () => {
   let reject!: (error: Error) => void
   let downloading!: () => void
-  const started = new Promise<void>(resolve => { downloading = resolve })
-  vi.doMock('posthog-js', () => new Promise((_resolve, fail) => { reject = fail; downloading() }))
+  const started = new Promise<void>((resolve) => {
+    downloading = resolve
+  })
+  vi.doMock(
+    'posthog-js',
+    () =>
+      new Promise((_resolve, fail) => {
+        reject = fail
+        downloading()
+      }),
+  )
   vi.stubEnv('MODE', 'production')
   vi.stubEnv('SSR', false)
   vi.stubEnv('VITE_POSTHOG_KEY', 'test-public-key')

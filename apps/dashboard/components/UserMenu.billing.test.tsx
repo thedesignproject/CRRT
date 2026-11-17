@@ -5,9 +5,21 @@ import { route } from '../lib/routes'
 import type { User } from '@supabase/supabase-js'
 const fetchMock = vi.fn()
 let userSequence = 0
-const props = { apiBase: '/api', accessToken: 'session', user: { id: 'owner', email: 'owner@example.com' } as User, onSignOut: vi.fn() }
-beforeEach(() => { vi.stubGlobal('fetch', fetchMock); fetchMock.mockReset(); props.user = { ...props.user, id: `owner-${++userSequence}` } })
-afterEach(() => { cleanup(); vi.unstubAllGlobals() })
+const props = {
+  apiBase: '/api',
+  accessToken: 'session',
+  user: { id: 'owner', email: 'owner@example.com' } as User,
+  onSignOut: vi.fn(),
+}
+beforeEach(() => {
+  vi.stubGlobal('fetch', fetchMock)
+  fetchMock.mockReset()
+  props.user = { ...props.user, id: `owner-${++userSequence}` }
+})
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 it('offers account billing without any project and preserves sign out', async () => {
   fetchMock.mockResolvedValue({ ok: true, json: async () => ({ enabled: true }) })
   render(<UserMenu {...props} />)
@@ -16,20 +28,30 @@ it('offers account billing without any project and preserves sign out', async ()
   fireEvent.click(screen.getByTitle('owner@example.com'))
   expect(screen.getByRole('link', { name: 'MCP connections' })).toHaveAttribute('href', route('/mcp-auth'))
   expect(await screen.findByRole('link', { name: 'Billing' })).toHaveAttribute('href', route('/billing'))
-  expect(fetchMock).toHaveBeenCalledWith('/api/v1/billing?availability=1', { headers: { Authorization: 'Bearer session' } })
+  expect(fetchMock).toHaveBeenCalledWith('/api/v1/billing?availability=1', {
+    headers: { Authorization: 'Bearer session' },
+  })
   fireEvent.click(screen.getByText('Sign out'))
   expect(props.onSignOut).toHaveBeenCalled()
 })
 it.each(['disabled', 'invalid', 'http', 'network'])('hides billing when availability is %s', async (kind) => {
   if (kind === 'network') fetchMock.mockRejectedValue(new Error('offline'))
-  else fetchMock.mockResolvedValue({ ok: kind !== 'http', json: async () => ({ enabled: kind === 'invalid' ? 'true' : false }) })
+  else
+    fetchMock.mockResolvedValue({
+      ok: kind !== 'http',
+      json: async () => ({ enabled: kind === 'invalid' ? 'true' : false }),
+    })
   render(<UserMenu {...props} />)
   await act(async () => fireEvent.click(screen.getByTitle('owner@example.com')))
   expect(screen.queryByRole('link', { name: 'Billing' })).not.toBeInTheDocument()
 })
 it('keeps the availability result when a closed menu is opened again', async () => {
   let resolve!: (value: unknown) => void
-  fetchMock.mockReturnValue(new Promise((done) => { resolve = done }))
+  fetchMock.mockReturnValue(
+    new Promise((done) => {
+      resolve = done
+    }),
+  )
   render(<UserMenu {...props} />)
   fireEvent.click(screen.getByTitle('owner@example.com'))
   fireEvent.mouseDown(document.body)
@@ -70,12 +92,18 @@ it('retries a failed check on token refresh but not on menu opens', async () => 
   menu.rerender(<UserMenu {...props} accessToken="refreshed-session" />)
   expect(await screen.findByRole('link', { name: 'Billing' })).toBeInTheDocument()
   expect(fetchMock).toHaveBeenCalledTimes(2)
-  expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/billing?availability=1', { headers: { Authorization: 'Bearer refreshed-session' } })
+  expect(fetchMock).toHaveBeenLastCalledWith('/api/v1/billing?availability=1', {
+    headers: { Authorization: 'Bearer refreshed-session' },
+  })
 })
 
 it('ignores stale results from an unmounted menu and isolates another account or API', async () => {
   let resolve!: (value: unknown) => void
-  fetchMock.mockReturnValueOnce(new Promise(done => { resolve = done }))
+  fetchMock.mockReturnValueOnce(
+    new Promise((done) => {
+      resolve = done
+    }),
+  )
   const first = render(<UserMenu {...props} />)
   first.unmount()
   fetchMock.mockResolvedValue({ ok: true, json: async () => ({ enabled: false }) })
@@ -85,7 +113,9 @@ it('ignores stale results from an unmounted menu and isolates another account or
   expect(screen.queryByRole('link', { name: 'Billing' })).not.toBeInTheDocument()
   second.rerender(<UserMenu {...props} apiBase="/other-api" />)
   await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3))
-  expect(fetchMock).toHaveBeenLastCalledWith('/other-api/v1/billing?availability=1', { headers: { Authorization: 'Bearer session' } })
+  expect(fetchMock).toHaveBeenLastCalledWith('/other-api/v1/billing?availability=1', {
+    headers: { Authorization: 'Bearer session' },
+  })
 })
 
 it('toggles and persists the dashboard keyboard preference', async () => {

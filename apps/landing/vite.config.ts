@@ -12,17 +12,28 @@ export default defineConfig(({ mode }) => {
     root: __dirname,
     cacheDir: path.resolve(envDir, 'node_modules/.vite-landing'),
     envDir,
-    plugins: [react(), tailwindcss(), {
-      name: 'crrt-static-tokens',
-      transformIndexHtml() {
-        return [{ tag: 'style', attrs: { 'data-source': 'crrt-tokens' },
-          // The landing self-hosts these fonts; retain the canonical tokens
-          // without their optional Google Fonts fallback for other consumers.
-          children: readFileSync(path.resolve(__dirname, '../../branding/crrt/tokens.css'), 'utf8')
-            .replace(/@import\s+url\([^)]*\)\s*;/g, ''),
-          injectTo: 'head-prepend' as const }]
+    plugins: [
+      react(),
+      tailwindcss(),
+      {
+        name: 'crrt-static-tokens',
+        transformIndexHtml() {
+          return [
+            {
+              tag: 'style',
+              attrs: { 'data-source': 'crrt-tokens' },
+              // The landing self-hosts these fonts; retain the canonical tokens
+              // without their optional Google Fonts fallback for other consumers.
+              children: readFileSync(path.resolve(__dirname, '../../branding/crrt/tokens.css'), 'utf8').replace(
+                /@import\s+url\([^)]*\)\s*;/g,
+                '',
+              ),
+              injectTo: 'head-prepend' as const,
+            },
+          ]
+        },
       },
-    }],
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

@@ -28,7 +28,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (direction !== 'asc' && direction !== 'desc') throw new AdminQueryError('Invalid direction')
     const projects = await listProjectsWithComments({
-      limit, cursor, sort: sort as AdminProjectSort, direction: direction as AdminSortDirection,
+      limit,
+      cursor,
+      sort: sort as AdminProjectSort,
+      direction: direction as AdminSortDirection,
     })
     setCors(req, res, ['GET', 'OPTIONS'])
     return res.status(200).json(projects)

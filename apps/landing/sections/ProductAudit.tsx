@@ -11,7 +11,10 @@ type ProductAuditProps = {
   apiBase?: string
 }
 
-export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api' }: ProductAuditProps) {
+export function ProductAudit({
+  onStartAudit,
+  apiBase = import.meta.env.VITE_API_BASE ?? 'http://localhost:3000/api',
+}: ProductAuditProps) {
   const reveal = useReveal<HTMLDivElement>()
   const [url, setUrl] = useState(LOCAL_AUDIT_URL)
   const [error, setError] = useState('')
@@ -80,7 +83,8 @@ export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_
                 maxWidth: 720,
               }}
             >
-              You can leave the CRRTs.<br />
+              You can leave the CRRTs.
+              <br />
               <span style={{ color: 'var(--crrt-carrot)' }}>Or CRRT can find them.</span>
             </h2>
             <p
@@ -92,7 +96,8 @@ export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_
                 maxWidth: 600,
               }}
             >
-              Start with a URL. CRRT explores the product, challenges every candidate, and returns only high-impact findings it can defend.
+              Start with a URL. CRRT explores the product, challenges every candidate, and returns only high-impact
+              findings it can defend.
             </p>
 
             <form onSubmit={handleSubmit} noValidate>
@@ -138,7 +143,13 @@ export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_
                   }}
                 />
                 <PillButton type="submit" variant="carrot" size="lg" disabled={submitting || available !== true}>
-                  {submitting ? 'Starting audit…' : available === null ? 'Checking availability…' : available ? 'Run product audit →' : 'Audits unavailable'}
+                  {submitting
+                    ? 'Starting audit…'
+                    : available === null
+                      ? 'Checking availability…'
+                      : available
+                        ? 'Run product audit →'
+                        : 'Audits unavailable'}
                 </PillButton>
               </div>
               <p
@@ -167,7 +178,10 @@ export function ProductAudit({ onStartAudit, apiBase = import.meta.env.VITE_API_
                 <span className="audit-preview-index">0{index + 1}</span>
                 <div>
                   <strong>{finding.title}</strong>
-                  <span>{Math.round(finding.confidence * 100)}% confidence · {finding.evidence.length} evidence signal{finding.evidence.length === 1 ? '' : 's'}</span>
+                  <span>
+                    {Math.round(finding.confidence * 100)}% confidence · {finding.evidence.length} evidence signal
+                    {finding.evidence.length === 1 ? '' : 's'}
+                  </span>
                 </div>
               </div>
             ))}

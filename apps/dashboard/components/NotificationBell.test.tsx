@@ -5,15 +5,44 @@ import { useNotifications } from '../hooks/useNotifications'
 import type { Notification } from '../api'
 vi.mock('../hooks/useNotifications', () => ({ useNotifications: vi.fn() }))
 vi.mock('../lib/routes', () => ({ route: (path: string) => `/dashboard${path}` }))
-const markRead = vi.fn(), refresh = vi.fn()
-const request: Notification = { userId: 'owner', id: 'request', kind: 'project.access_requested', payload: { projectKey: 'project/a', projectName: 'Demo', email: 'user@company.test' }, readAt: null, createdAt: '2026-09-17T00:00:00Z' }
+const markRead = vi.fn(),
+  refresh = vi.fn()
+const request: Notification = {
+  userId: 'owner',
+  id: 'request',
+  kind: 'project.access_requested',
+  payload: { projectKey: 'project/a', projectName: 'Demo', email: 'user@company.test' },
+  readAt: null,
+  createdAt: '2026-09-17T00:00:00Z',
+}
 function view(notifications: Notification[]) {
-  vi.mocked(useNotifications).mockReturnValue({ notifications, invites: [], unreadCount: notifications.length, loading: false,
-    refresh, markRead, markAllRead: vi.fn(), accept: vi.fn(), decline: vi.fn() })
-  render(<NotificationBell apiBase="/api" accessToken="token" userId="owner" onProjectsChanged={vi.fn()} onOpenCommentActivity={vi.fn()} />)
+  vi.mocked(useNotifications).mockReturnValue({
+    notifications,
+    invites: [],
+    unreadCount: notifications.length,
+    loading: false,
+    refresh,
+    markRead,
+    markAllRead: vi.fn(),
+    accept: vi.fn(),
+    decline: vi.fn(),
+  })
+  render(
+    <NotificationBell
+      apiBase="/api"
+      accessToken="token"
+      userId="owner"
+      onProjectsChanged={vi.fn()}
+      onOpenCommentActivity={vi.fn()}
+    />,
+  )
   fireEvent.click(screen.getByRole('button', { name: /^Notifications/ }))
 }
-beforeEach(() => { vi.clearAllMocks(); markRead.mockResolvedValue(undefined); vi.spyOn(window.location, 'assign').mockImplementation(() => {}) })
+beforeEach(() => {
+  vi.clearAllMocks()
+  markRead.mockResolvedValue(undefined)
+  vi.spyOn(window.location, 'assign').mockImplementation(() => {})
+})
 afterEach(() => vi.restoreAllMocks())
 it('refreshes when opened and opens the base-aware authenticated review after marking read', async () => {
   view([request])
@@ -21,7 +50,9 @@ it('refreshes when opened and opens the base-aware authenticated review after ma
   fireEvent.click(screen.getByRole('button', { name: /user@company.test requested access to Demo/ }))
   await waitFor(() => expect(window.location.assign).toHaveBeenCalledWith('/dashboard/?accessProject=project%2Fa'))
   expect(markRead).toHaveBeenCalledWith('request')
-  expect(markRead.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(window.location.assign).mock.invocationCallOrder[0])
+  expect(markRead.mock.invocationCallOrder[0]).toBeLessThan(
+    vi.mocked(window.location.assign).mock.invocationCallOrder[0],
+  )
   fireEvent.click(screen.getByRole('button', { name: /^Notifications/ }))
   expect(refresh).toHaveBeenCalledTimes(1)
 })

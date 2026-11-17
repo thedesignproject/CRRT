@@ -1,6 +1,10 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 vi.mock('workflow', () => ({ sleep: vi.fn() }))
-vi.mock('../api/_lib/record/worker-sandbox.js', () => ({ launchRecordWorker: vi.fn(), recordWorkerStatus: vi.fn(), stopRecordWorker: vi.fn() }))
+vi.mock('../api/_lib/record/worker-sandbox.js', () => ({
+  launchRecordWorker: vi.fn(),
+  recordWorkerStatus: vi.fn(),
+  stopRecordWorker: vi.fn(),
+}))
 import { sleep } from 'workflow'
 import { launchRecordWorker, recordWorkerStatus, stopRecordWorker } from '../api/_lib/record/worker-sandbox.js'
 import { recordWorkerWorkflow } from './record-worker.js'

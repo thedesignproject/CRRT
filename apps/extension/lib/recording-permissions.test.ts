@@ -27,5 +27,7 @@ it('releases permission-check streams before the recorder takes over', async () 
   await requestRecordingPermissions({ cameraEnabled: false, microphoneEnabled: true })
   expect(getUserMedia).toHaveBeenLastCalledWith({ video: false, audio: true })
   getUserMedia.mockRejectedValueOnce(new Error('Permission dismissed'))
-  await expect(requestRecordingPermissions({ cameraEnabled: true, microphoneEnabled: false })).rejects.toThrow('Permission dismissed')
+  await expect(requestRecordingPermissions({ cameraEnabled: true, microphoneEnabled: false })).rejects.toThrow(
+    'Permission dismissed',
+  )
 })
