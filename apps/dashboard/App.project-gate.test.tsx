@@ -64,6 +64,8 @@ it.each([true, false])('routes the sidebar create action by plan (plan required=
     expect(screen.queryByRole('heading', { name: 'Create a project' })).not.toBeInTheDocument()
   } else {
     expect(await screen.findByRole('heading', { name: 'Create a project' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('heading', { name: 'Create a project' })).not.toBeInTheDocument()
     expect(assign).not.toHaveBeenCalled()
   }
 })
