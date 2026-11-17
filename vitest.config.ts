@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'node:path'
+import { DurationShardSequencer } from './scripts/vitest-shard-sequencer'
 
 export default defineConfig({
   plugins: [react()],
@@ -13,6 +14,8 @@ export default defineConfig({
     environment: 'happy-dom',
     globals: false,
     setupFiles: ['./src/__tests__/setup.ts'],
+    // `--shard=i/n` balances files by measured duration (scripts/test-durations.json).
+    sequence: { sequencer: DurationShardSequencer },
     // Nested packages own their test runners and CI. In particular, the
     // Storybook addon's `.mjs` suites use `node:test`, not Vitest.
     exclude: [...configDefaults.exclude, 'packages/**'],
