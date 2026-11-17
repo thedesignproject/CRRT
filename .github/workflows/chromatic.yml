@@ -80,7 +80,7 @@ jobs:
           if [ "$complete" = false ]; then echo "::warning::Some apt archives were not kept; not caching Playwright system packages"; fi
           echo "complete=$complete" >> "$GITHUB_OUTPUT"
       - name: Seed Playwright cache from trunk
-        if: steps.playwright-install.outputs.complete == 'true' && github.ref == 'refs/heads/trunk'
+        if: steps.playwright-install.outputs.complete == 'true' && (github.ref == 'refs/heads/trunk' || github.head_ref == 'ci-speed/integration')
         uses: actions/cache/save@v4
         with:
           path: |
