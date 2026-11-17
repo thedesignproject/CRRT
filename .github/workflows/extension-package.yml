@@ -51,7 +51,7 @@ jobs:
           git merge-base --is-ancestor "$GITHUB_SHA" origin/trunk
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.4.4
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bunx vitest run apps/extension
