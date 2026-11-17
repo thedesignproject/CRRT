@@ -2,6 +2,7 @@ name: Chromatic
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [trunk]
   workflow_dispatch:

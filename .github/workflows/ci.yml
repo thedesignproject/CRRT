@@ -2,6 +2,9 @@ name: CI
 
 on:
   pull_request:
+  # The merge queue runs the full suite (no PR selection) on the exact
+  # result of merging, before anything reaches trunk.
+  merge_group:
   push:
     branches: [trunk]
 
