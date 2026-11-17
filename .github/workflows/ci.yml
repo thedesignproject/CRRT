@@ -259,21 +259,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      # npm is the one holdout: `bun audit` has no --omit=dev flag, and we gate
-      # on advisories in shipped runtime code only — not the dev toolchain
-      # (@vercel/node pulls transitive build-tools with open advisories its
-      # own latest release hasn't yet dropped; blocking merges on that churn
-      # would be dishonest). Everything else in this repo is bun. Dev-tree
-      # hygiene is tracked via Dependabot (.github/dependabot.yml).
-      - uses: actions/setup-node@v7
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version-file: .nvmrc
-      # Pin npm because the version bundled with Node 22 currently crashes in
-      # Arborist while resolving this Bun-managed dependency tree.
-      - run: npm install --global npm@11.16.0
-      - run: npm install --package-lock-only --no-audit --no-fund
-      - name: npm audit (runtime only, high + critical)
-        run: npm audit --omit=dev --audit-level=high
+          bun-version: 1.4.4
+      # Audit bun.lock, the tree that CI and Vercel actually install. The old
+      # npm gate resolved a fresh package-lock from package.json ranges, so it
+      # audited versions we never ship and missed advisories in bun.lock.
+      # Gate on shipped runtime code only (--prod), high + critical; dev-tree
+      # hygiene is tracked via Dependabot (.github/dependabot.yml). Reads the
+      # lockfile directly, so no install is needed.
+      - name: bun audit (runtime only, high + critical)
+        run: bun audit --prod --audit-level=high
 
   secrets:
     runs-on: ubuntu-latest
