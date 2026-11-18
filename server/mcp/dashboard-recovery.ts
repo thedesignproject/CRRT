@@ -8,7 +8,7 @@ import type { DashboardOperation } from './dashboard-operations.js'
 
 type Read = (name: string, query: Record<string, string>) => Promise<DashboardResult>
 async function recoverReceipt(operation: DashboardOperation, query: Record<string, string>, body: Record<string, unknown>, actor: McpIdentity, receipt: DashboardResult, read: Read): Promise<DashboardResult> {
-  if (receipt.ok && ['storybook.pair', 'shares.create', 'audits.create', 'billing.action', 'recordings.agent_payload'].includes(operation.name)) {
+  if (receipt.ok && ['storybook.pair', 'shares.create', 'audits.create', 'recordings.agent_payload'].includes(operation.name)) {
     const data = z.record(z.string(), z.unknown()).parse(receipt.data)
     if (operation.name === 'storybook.pair') {
       const { ownerAccess } = await import('../../api/_lib/storybook.js')
@@ -27,11 +27,6 @@ async function recoverReceipt(operation: DashboardOperation, query: Record<strin
     if (operation.name === 'audits.create') {
       const current = await read('audits.read', { auditId: z.string().parse(data.auditId) })
       if (!current.ok) return current
-      return { ...receipt, code: 'operation_recovered' }
-    }
-    if (operation.name === 'billing.action') {
-      // Billing handlers always bind the customer to actor.user_id. The live
-      // connection was revalidated before reading this actor-bound receipt.
       return { ...receipt, code: 'operation_recovered' }
     }
     // The remaining recoverable operation is the quota-counted Record read.

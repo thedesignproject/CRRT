@@ -107,7 +107,9 @@ describe('MCP OAuth boundary', () => {
     fake.results.push(ok(true), ok({ id }))
     expect((await call('register', { client_name: 'Client', redirect_uris: ['https://trusted.test/cb'] })).response.status).toBe(201)
     vi.stubEnv('NODE_ENV', 'production'); vi.stubEnv('MCP_ORIGIN', 'https://crrt.test')
-    expect((await call('register', { client_name: 'Client', redirect_uris: [callback] })).response.status).toBe(400)
+    fake.results.push(ok(true), ok({ id }))
+    expect((await call('register', { client_name: 'Client', redirect_uris: [callback] })).response.status).toBe(201)
+    expect((await call('register', { client_name: 'Client', redirect_uris: ['http://localhost.crrt.test/cb'] })).response.status).toBe(400)
   })
   it('checks resource, client existence, and exact callback before sign-in', async () => {
     await expect(authorize({ ...params, resource: 'https://wrong.test' })).rejects.toThrow('invalid_target')
@@ -211,7 +213,7 @@ it('isolates grant budgets by proven credentials and never throttles revocation 
 it('accepts only literal loopback HTTP callbacks in production with exact registration and PKCE', async () => {
   vi.stubEnv('NODE_ENV', 'production'); vi.stubEnv('MCP_ORIGIN', 'https://mcp.test')
   const productionResource = 'https://mcp.test/api/mcp/v1'
-  for (const redirect of ['http://127.0.0.1:51765/callback', 'http://[::1]:51765/callback']) {
+  for (const redirect of ['http://127.0.0.1:51765/callback', 'http://[::1]:51765/callback', 'http://localhost:51765/callback']) {
     fake.results.push(ok(true), ok({ id }))
     expect((await call('register', { client_name: 'Native client', redirect_uris: [redirect] })).response.status).toBe(201)
     const registered = () => ok({ id, name: 'Native client', redirect_uris: [redirect] })
@@ -228,8 +230,8 @@ it('accepts only literal loopback HTTP callbacks in production with exact regist
     fake.results.push(registered(), ok({ hash: 'known', scope: 'crrt:read', mcp_connections: { scope: 'crrt:read' } }), ok(true), ok(id), issued())
     expect((await call('token', { ...request, grant_type: 'authorization_code', code, code_verifier: verifier })).response.status).toBe(200)
   }
-  vi.stubEnv('MCP_CALLBACK_ORIGINS', 'http://evil.test,http://localhost:51765')
-  for (const redirect of ['http://evil.test/callback', 'http://localhost:51765/callback', 'http://127.0.0.1.evil.test/callback', 'http://0.0.0.0:51765/callback', 'http://127.0.0.2:51765/callback', 'http://[::]:51765/callback', 'http://user:password@127.0.0.1:51765/callback', 'http://127.0.0.1:51765/callback#fragment']) {
+  vi.stubEnv('MCP_CALLBACK_ORIGINS', 'http://evil.test')
+  for (const redirect of ['http://evil.test/callback', 'https://localhost:51765/callback', 'http://localhost.evil.test/callback', 'http://user:password@localhost:51765/callback', 'http://localhost:51765/callback#fragment', 'http://127.0.0.1.evil.test/callback', 'http://0.0.0.0:51765/callback', 'http://127.0.0.2:51765/callback', 'http://[::]:51765/callback', 'http://user:password@127.0.0.1:51765/callback', 'http://127.0.0.1:51765/callback#fragment']) {
     expect((await call('register', { client_name: 'Bad callback', redirect_uris: [redirect] })).data.error).toBe('invalid_redirect_uri')
   }
   vi.stubEnv('MCP_ORIGIN', 'http://127.0.0.1:3001')

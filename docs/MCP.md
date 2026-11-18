@@ -277,10 +277,17 @@ typecheck and 100% changed-line/branch gates again; the local API was restarted.
 ## Dashboard suite and connection upgrades
 
 The MCP server also exposes dashboard operations through the same authenticated
-handlers used by the dashboard. `list_dashboard_operations` lists the supported
-operations; call it with `operation` to inspect that operation's query fields and
-body contract. `run_dashboard_operation` executes an allowlisted operation. It
-cannot select arbitrary URLs, methods, headers, database queries or actor IDs.
+handlers used by the dashboard. Each allowlisted operation in
+`server/mcp/dashboard-operations.ts` is its own tool (for example
+`list_dashboard_projects`, `update_project_settings`, `remove_project_member`)
+with a title, typed inputs, and explicit `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint` annotations. No tool can select arbitrary
+URLs, methods, headers, database queries or actor IDs. Changes require
+`userRequested:true` and an `idempotencyKey`; large array reads accept
+`resultPage`.
+
+Billing checkout and billing-portal URLs are not exposed. `get_billing_summary`
+reads the current plan and usage; billing changes happen in the dashboard.
 
 The `dashboard-v1` bundle adds `crrt:dashboard` alongside read, implementation and
 review scopes. New connections request the whole bundle at initial consent.

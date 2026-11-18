@@ -8,13 +8,13 @@ export function PrivacyPage() {
       title="Privacy at CRRT"
       description="A plain-language account of what CRRT handles when you capture, review, and route visual feedback."
     >
-      <P>Effective September 29, 2026. CRRT is operated by The Design Project LLC.</P>
+      <P>Effective November 17, 2026. CRRT is operated by The Design Project LLC.</P>
 
       <Section>
         <H2>What this covers</H2>
         <P>
-          This policy covers the CRRT Chrome extension and the connected CRRT dashboard services used to save,
-          review, and route feedback. A project administrator controls who belongs to a project. Project membership
+          This policy covers the CRRT Chrome extension, the connected CRRT dashboard services used to save,
+          review, and route feedback, and CRRT connections to AI assistants through the CRRT MCP server. A project administrator controls who belongs to a project. Project membership
           authorizes access; a matching website domain only helps CRRT select the right project.
         </P>
       </Section>
@@ -70,6 +70,25 @@ export function PrivacyPage() {
           not gain access to project feedback.
         </P>
 
+        <H3>AI assistant connections</H3>
+        <P>
+          When you connect an AI assistant such as ChatGPT or Claude to CRRT, you sign in to CRRT in your browser and
+          approve the requested permissions. CRRT never receives your assistant account password, and the assistant
+          never receives your CRRT password. CRRT stores only hashed connection credentials; access credentials
+          expire after 15 minutes and are refreshed while the connection remains active.
+        </P>
+        <P>
+          The assistant receives the results of the CRRT tools it calls on your behalf, limited to data your account
+          can already access. Depending on the request, results can include project names, feedback text, page URLs,
+          anchor context, short-lived screenshot links, document content, recording transcripts, and project member
+          names and email addresses. The assistant&apos;s provider processes that data under its own terms and privacy
+          policy. CRRT does not send billing or payment details through these connections.
+        </P>
+        <P>
+          For security and reliability, CRRT logs each tool call with your account identifier, the tool name, the
+          number of results, timing, and any failure category. These logs do not include tool inputs or results.
+        </P>
+
         <H3>External work</H3>
         <P>
           When an authorized internal collaborator requests a tracker draft, CRRT may send the feedback text and
@@ -90,6 +109,7 @@ export function PrivacyPage() {
           <li><Strong>Resend</Strong> for invitation and feedback-notification email.</li>
           <li><Strong>A configured model provider</Strong> for an editable tracker draft when an authorized collaborator requests one.</li>
           <li><Strong>GitHub, Linear, and Atlassian Jira</Strong> only when a project connects that provider and an authorized collaborator confirms a send.</li>
+          <li><Strong>The AI assistant you connect</Strong>, such as OpenAI ChatGPT or Anthropic Claude, which receives the tool results described above only after you connect it.</li>
         </Ul>
         <P>CRRT does not download or execute remote code inside the extension.</P>
       </Section>
@@ -102,6 +122,7 @@ export function PrivacyPage() {
           <li>Signed-out local feedback remains in extension storage until you delete it, clear browser data, or uninstall CRRT, including after a successful import unless you confirm local cleanup.</li>
           <li>Feedback and protected screenshots remain until the feedback owner deletes them or an authorized deletion request is completed.</li>
           <li>Connected-provider records remain until an authorized project administrator disconnects the integration or an authorized deletion request is completed.</li>
+          <li>AI assistant connections remain until they expire or you revoke them from the MCP connections page in your CRRT dashboard. Revoking takes effect immediately. Data an assistant already received is retained by its provider under that provider&apos;s policy.</li>
         </Ul>
         <P>
           You can delete feedback you own and disconnect project integrations from CRRT. For account-level deletion or

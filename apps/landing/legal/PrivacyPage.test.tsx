@@ -24,6 +24,10 @@ it('publishes the implemented extension data inventory and verified contact', ()
     'Supabase for authentication, database records, and protected screenshot storage.',
   )
   expect(screen.getByText(/handoff codes expire after five minutes/)).toBeInTheDocument()
+  expect(screen.getByRole('heading', { level: 3, name: 'AI assistant connections' })).toBeInTheDocument()
+  expect(screen.getByText(/CRRT stores only hashed connection credentials/)).toBeInTheDocument()
+  expect(screen.getByText(/These logs do not include tool inputs or results/)).toBeInTheDocument()
+  expect(screen.getByText(/revoke them from the MCP connections page/)).toBeInTheDocument()
   expect(screen.getByText(/short-lived signed URLs/)).toBeInTheDocument()
 
   const contacts = screen.getAllByRole('link', { name: 'hello@designproject.io' })
