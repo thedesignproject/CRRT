@@ -28,7 +28,7 @@ function lifecycleCopy(summary: BillingSummary) {
   if (lifecycle === 'active') return { label: 'Cloud active', detail: summary.cancelAtPeriodEnd ? `Access ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.` : `Renews ${date(summary.currentPeriodEnd ?? summary.periodEnd)}.` }
   if (lifecycle === 'past_due_grace') return { label: 'Payment needs attention', detail: `Update payment by ${date(summary.graceEndsAt)} to keep creating.` }
   if (lifecycle === 'read_only') return { label: 'Read-only', detail: 'Your work stays available. Restore billing to create again.' }
-  return { label: 'Cloud not active', detail: 'Choose a plan to start a 14-day trial.' }
+  return { label: 'Cloud not active', detail: summary.trialUsed ? 'Choose a plan to subscribe. Your free trial has been used.' : 'Choose a plan to start a 14-day trial.' }
 }
 
 function UsageMeter({ label, item }: { label: string; item: BillingUsageItem }) {
@@ -184,7 +184,7 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
     ? (summary.cancelAtPeriodEnd ? 'Reactivate in Stripe' : 'Restore access')
     : changingPlan
       ? canChangePlan ? `Switch to ${selectedPlanName[selectedPlan]}` : 'Manage plan in Stripe'
-      : 'Start 14-day trial'
+      : summary.trialUsed ? `Subscribe to ${selectedPlanName[selectedPlan]}` : 'Start 14-day trial'
   const mainAction: BillingAction = legacyStudioUpgrade ? 'checkout' : paymentBlocked && hasCustomer ? 'portal' : changingPlan && canChangePlan ? 'change_plan' : changingPlan ? 'portal' : 'checkout'
 
   return (

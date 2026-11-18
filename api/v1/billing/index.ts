@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { requireUser } from '../../_lib/auth.js'
 import { handleOptions, jsonError, methodNotAllowed } from '../../_lib/http.js'
 import { stripeEnabled, billingConfig } from '../../_lib/billing/config.js'
-import { billingSummary, checkout, portal } from '../../_lib/billing/service.js'
+import { billingSummary, checkout, planRequired, portal, trialAvailable } from '../../_lib/billing/service.js'
 import { cloudBillingSummary } from '../../_lib/billing/cloud-summary.js'
 import { isCloud, parseCloudPlan, parseBillingCycle, cloudPriceCatalog } from '../../_lib/billing/plans.js'
 import { BillingBusyError } from '../../_lib/billing/store.js'
@@ -39,7 +39,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!req.headers.authorization?.startsWith('Bearer ')) return jsonError(req, res, 401, 'Unauthorized')
   const user = await requireUser(req, res)
   if (!user) return
-  if (req.method === 'GET' && req.query.availability === '1') return res.status(200).json({ enabled: true })
+  if (req.method === 'GET' && req.query.availability === '1') {
+    const [trial, plan] = await Promise.all([trialAvailable(user.userId), planRequired(user.userId)])
+    return res.status(200).json({ enabled: true, trialAvailable: trial, planRequired: plan })
+  }
   try {
     billingConfig()
     if (req.method === 'GET') return res.status(200).json(await (isCloud() ? cloudBillingSummary(user.userId) : billingSummary(user.userId)))

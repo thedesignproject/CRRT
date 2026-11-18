@@ -5,6 +5,8 @@ interface WelcomeScreenProps {
   suggestedProjects?: ReactNode
   /** Called when the user clicks the "create your first project" CTA. */
   onCreateProject: () => void
+  /** CTA text; defaults to "create your first project". */
+  createLabel?: string
   onOpenExtensionComments: () => void
 }
 
@@ -14,7 +16,7 @@ interface WelcomeScreenProps {
  * no welcome tour — the rest of the introduction happens through the rich
  * empty state that follows (moment 2).
  */
-export function WelcomeScreen({ onCreateProject, onOpenExtensionComments, suggestedProjects }: WelcomeScreenProps) {
+export function WelcomeScreen({ onCreateProject, createLabel = 'create your first project', onOpenExtensionComments, suggestedProjects }: WelcomeScreenProps) {
   return (
     <div
       className="scanlines"
@@ -157,7 +159,7 @@ export function WelcomeScreen({ onCreateProject, onOpenExtensionComments, sugges
         onMouseUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
         onMouseLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
       >
-        ▸ create your first project
+        ▸ {createLabel}
       </button>
 
       <button type="button" onClick={onOpenExtensionComments} style={{ marginTop: 14, border: 'none', background: 'transparent', color: 'var(--muted-foreground)', fontFamily: 'var(--crrt-font-body)', fontSize: 13, cursor: 'pointer', textDecoration: 'underline' }}>open Inbox →</button>

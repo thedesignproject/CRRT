@@ -20,6 +20,8 @@ import { billingPlanSelection } from './lib/access-review-link'
 import { AGENTS, type Comment, type ImplStatus, type ReviewStatus, type StatusFilter } from './lib/types'
 import { BillingPage } from './components/BillingPage'
 import { UserMenu } from './components/UserMenu'
+import { TrialOffer } from './components/TrialOffer'
+import { useProjectGate } from './hooks/useProjectGate'
 import { Header } from './components/Header'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
@@ -188,6 +190,16 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  const projectGate = useProjectGate(API_BASE, user.id, accessToken)
+  // Without a plan, project creation would fail; send owners to Billing instead.
+  const requestAddProject = (value: boolean | ((open: boolean) => boolean)) => {
+    const next = typeof value === 'function' ? value(addProjectOpen) : value
+    if (next && projectGate.planRequired) {
+      window.location.assign(route('/billing'))
+      return
+    }
+    setAddProjectOpen(next)
+  }
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copying' | 'copied' | 'error'>('idle')
@@ -841,7 +853,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <WelcomeScreen
           suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
           onOpenExtensionComments={openExtensionComments}
+          createLabel={projectGate.planRequired ? (projectGate.trialAvailable ? 'start free trial to create a project' : 'choose a plan to create a project') : undefined}
           onCreateProject={() => {
+            if (projectGate.planRequired) {
+              window.location.assign(route('/billing'))
+              return
+            }
             markOnboarded()
             setOnboarded(true)
             setAddProjectOpen(true)
@@ -877,7 +894,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         setStatusFilter={setStatusFilter}
         setSelectedCommentId={setSelectedCommentId}
         addProjectOpen={addProjectOpen}
-        setAddProjectOpen={setAddProjectOpen}
+        setAddProjectOpen={requestAddProject}
         onAddProject={handleAddProject}
         onCheckAvailability={checkAvailability}
         addProjectBusy={addProjectBusy}
@@ -903,6 +920,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
       />
 
+      <TrialOffer apiBase={API_BASE} accessToken={accessToken} userId={user.id} />
       <main className="dashboard-main">
       {accessReviewNotice}
       {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
