@@ -21,13 +21,19 @@ reinstall a connection or bypass a declined grant. Refresh the client's tools
 after an approved scope change if required.
 
 For project, inbox, team, domain, access-request, repository, integration,
-external-work, notification, recording, audit, billing, or administrator workflows,
-use `list_dashboard_operations` to discover the relevant operation and its inputs,
-then `run_dashboard_operation`. Read current state first. Supply `userRequested`
-only for an action the user actually requested, preserve retry keys for identical
-retries, and reconcile conflicts or unknown outcomes before retrying mutations.
-An account-management or integration URL is a next step, not a completed action.
-Super-admin operations require the actual super-admin role.
+external-work, notification, recording, audit, or administrator workflows, use the
+matching dashboard tool (for example `list_dashboard_projects`,
+`list_project_members`, `update_project_settings`, or `list_recordings`) and read
+its input schema. Read current state first. Supply `userRequested` only for an
+action the user actually requested, preserve retry keys for identical retries, and
+reconcile conflicts or unknown outcomes before retrying changes. An integration URL
+is a next step, not a completed action. Super-admin tools require the actual
+super-admin role.
+
+Billing changes are not available through CRRT tools. `get_billing_summary` reads
+the current plan and usage. If a feature is not included in the user's plan, say so
+plainly and point them to their CRRT account to manage billing. Do not promote
+upgrades or quote prices.
 
 Use the dedicated document tools for drafts, published revisions, comparison,
 feedback, sharing, and invitations. Read the current version before writes and

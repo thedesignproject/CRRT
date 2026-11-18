@@ -1,0 +1,16 @@
+{
+  "name": "crrt",
+  "displayName": "CRRT",
+  "version": "0.2.3",
+  "description": "Work with CRRT projects, visual feedback, documents, recordings, audits, and team workflows through the CRRT MCP server.",
+  "author": {
+    "name": "The Design Project LLC",
+    "email": "hello@designproject.io",
+    "url": "https://designproject.io"
+  },
+  "homepage": "https://crrt.ai",
+  "repository": "https://github.com/thedesignproject/CRRT",
+  "license": "Apache-2.0",
+  "privacyPolicyUrl": "https://crrt.ai/privacy",
+  "keywords": ["visual-feedback", "implementation", "design", "code-review"]
+}

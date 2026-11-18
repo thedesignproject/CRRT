@@ -3,17 +3,7 @@
   "mcpServers": {
     "crrt": {
       "type": "streamable-http",
-      "url": "https://crrt.ai/api/mcp/v1",
-      "extensions": {
-        "com.openai": {
-          "auth": {
-            "type": "oauth",
-            "client": { "mode": "dcr" },
-            "baseScopes": ["crrt:read"],
-            "defaultScopes": ["crrt:read", "crrt:implement", "crrt:review", "crrt:dashboard"]
-          }
-        }
-      }
+      "url": "https://crrt.ai/api/mcp/v1"
     }
   }
 }
