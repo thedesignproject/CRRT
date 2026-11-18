@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "crrt",
-  "version": "0.2.0",
+  "version": "0.2.3",
   "description": "Work with CRRT projects, feedback, documents, recordings, audits, and team workflows through its MCP server.",
   "author": {
     "name": "The Design Project LLC",
@@ -70,8 +70,8 @@
             {
               "description": "Discover the full authorized dashboard surface",
               "prompt": "Show which CRRT project, team, integration, recording, and audit actions are available to my account, without making changes.",
-              "tools_triggered": "connection_status, list_dashboard_operations",
-              "expected_behavior": "Discover the existing MCP operation schemas and report the authorization boundaries. Do not invoke write operations or change account permissions."
+              "tools_triggered": "connection_status, list_dashboard_projects, get_billing_summary",
+              "expected_behavior": "Report the connection grant, project capabilities, and current plan using read-only tools. Do not invoke write tools or change account permissions."
             },
             {
               "description": "Read documents with full-suite consent",
@@ -103,7 +103,7 @@
         }
       },
       "publication": {
-        "release_notes": "Request the complete CRRT MCP scope bundle and support feedback review, project and team workflows, documents, recordings, audits, and integrations under existing account authorization."
+        "release_notes": "Expose each CRRT dashboard action as its own reviewed tool, remove billing checkout from MCP, and update the bundled skill to the new tool names."
       }
     }
   }
