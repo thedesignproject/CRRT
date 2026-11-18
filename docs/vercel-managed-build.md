@@ -5,12 +5,15 @@ Build Output API v3 output in `.vercel/output`. Automatic API discovery previous
 also compiled every `api/**/*.ts` route, producing 92 functions: 86 per-route API
 functions plus the six functions from our custom packager.
 
-`vercel.json` now selects one explicit `@vercel/static-build@27.0.0` builder for
+`vercel.json` now selects one explicit `@vercel/static-build@28.0.1` builder for
 `package.json`. This is Vercel's legacy `builds` configuration: it is deliberate
 here because it disables default API discovery while retaining Vercel-managed
-builds and variables. The builder's exact build-utils peer matches Vercel's
-`15.3.0` builder environment. The former `26.0.1` pin required `15.2.1` and failed
-npm peer resolution before the application build could start.
+builds and variables. The builder's exact build-utils peer must match Vercel's
+builder environment, currently `15.4.1`. Earlier pins (`26.0.1` for `15.2.1`,
+`27.0.0` for `15.3.0`) failed npm peer resolution before the application build
+could start once Vercel upgraded that environment. When a deploy fails with
+`ERESOLVE` on `@vercel/build-utils`, pin the static-build release whose peer
+matches the version in the error.
 
 The static builder calls the `vercel-build` package script and recognizes the
 generated Build Output API output. The package script uses
