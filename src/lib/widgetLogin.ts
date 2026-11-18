@@ -1,3 +1,4 @@
+import { WIDGET_SESSION_REJECTED } from './widgetSessionStorage'
 import { WIDGET_PROOF } from './widgetAuthContract'
 import type { PersonalComments } from '../components/FeedbackWidget/types'
 
@@ -10,11 +11,15 @@ export class WidgetRequestError extends Error {
 const encode = (bytes: Uint8Array) => btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
 export async function widgetRequest(apiBase: string, path: string, session: WidgetLoginSession, init: RequestInit = {}) {
-  if (Date.parse(session.expiresAt) <= Date.now()) throw new WidgetRequestError(401)
+  function expired() {
+    window.dispatchEvent(new CustomEvent(WIDGET_SESSION_REJECTED, { detail: { apiBase, token: session.accessToken } }))
+  }
+  if (Date.parse(session.expiresAt) <= Date.now()) { expired(); throw new WidgetRequestError(401) }
   const response = await fetch(`${apiBase}${path}`, {
     ...init, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.accessToken}` },
   })
   if (!response.ok) {
+    if (response.status === 401) expired()
     const failure = await response.clone().json().catch(() => null) as { code?: unknown; error?: unknown } | null
     throw new WidgetRequestError(
       response.status,
