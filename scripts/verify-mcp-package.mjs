@@ -7,6 +7,7 @@ const { createClient } = require('@supabase/supabase-js')
 const { Client, StreamableHTTPClientTransport } = await import(pathToFileURL(require.resolve('@modelcontextprotocol/client')))
 const entry = require(`${root}/.vercel/output/functions/api-router.func/api/__vercel-router.js`)
 const handler = entry.default
+const { dashboardOperations } = require(`${root}/.vercel/output/functions/api-router.func/server/mcp/dashboard-operations.js`)
 const origin = 'http://127.0.0.1:3001', resource = `${origin}/api/mcp/v1`
 process.env.MCP_ORIGIN = origin
 if (!['127.0.0.1','localhost'].includes(new URL(process.env.SUPABASE_URL).hostname)) throw new Error('Local targets only')
@@ -51,26 +52,29 @@ try {
   const expectedTools = [
     'list_projects', 'list_feedback', 'get_feedback', 'get_handoff_context',
     'prepare_feedback_work', 'report_agent_presence', 'update_feedback_progress', 'set_feedback_status',
-    'connection_status', 'request_dashboard_access', 'list_dashboard_operations',
-    'run_dashboard_operation', 'manage_mcp_connections',
+    'connection_status', 'request_dashboard_access', 'manage_mcp_connections',
     'list_documents', 'get_document', 'get_document_history', 'get_document_revision',
     'compare_document_revisions', 'create_document', 'update_document', 'publish_document',
     'restore_document_revision', 'assign_document_project', 'set_document_invitation',
     'set_document_sharing', 'archive_document', 'delete_document', 'add_document_comment',
     'review_document_feedback', 'update_document_feedback_progress', 'unlock_document',
+    // One explicit tool per dashboard operation; super-admin tools stay hidden from this account.
+    ...dashboardOperations.filter(operation=>!operation.superAdmin).map(operation=>operation.tool),
   ]
+  if(expectedTools.some(name=>['list_dashboard_operations','run_dashboard_operation'].includes(name)))throw new Error('Generic dashboard tools returned')
   deepStrictEqual(tools.tools.map(tool=>tool.name).sort(), expectedTools.sort(), 'Packaged MCP tool discovery changed')
   const documents=await client.callTool({name:'list_documents',arguments:{}})
   if(documents.isError || !Array.isArray(documents.structuredContent?.documents))throw new Error('Packaged document discovery failed')
-  const result=await client.callTool({name:'run_dashboard_operation',arguments:{operation:'notifications.read_all',userRequested:true,idempotencyKey:randomUUID()}})
+  const result=await client.callTool({name:'mark_all_notifications_read',arguments:{userRequested:true,idempotencyKey:randomUUID()}})
   if(result.isError || result.structuredContent?.ok!==true)throw new Error(`Packaged write failed ${JSON.stringify(result)}`)
   // Exercise cached recovery in the packaged module graph, including domain
   // error class identity across its lazy-loaded Record helpers.
   const status=await client.callTool({name:'connection_status',arguments:{}})
   const connectionId=status.structuredContent.connectionId
   const retryKey=randomUUID(), recordId=randomUUID(), requestKey=randomUUID()
-  const recoveryArgs={operation:'recordings.agent_payload',query:{id:recordId},body:{requestKey},idempotencyKey:retryKey}
-  const requestHash=createHash('sha256').update(JSON.stringify([recoveryArgs.operation,recoveryArgs.query,recoveryArgs.body])).digest('hex')
+  const recoveryArgs={id:recordId,requestKey,idempotencyKey:retryKey}
+  // Receipts keep the internal operation name, so retries match receipts saved before the explicit tools.
+  const requestHash=createHash('sha256').update(JSON.stringify(['recordings.agent_payload',{id:recordId},{requestKey}])).digest('hex')
   const {encryptToken}=require(`${root}/.vercel/output/functions/api-router.func/api/_lib/tokens.js`)
   const receipt={ok:true,status:200,data:{payload:{recording:{revision:1},project:null,transcript:['private cached fixture']}}}
   const saved=await service.from('mcp_dashboard_operations').insert({connection_id:connectionId,request_key:retryKey,request_hash:requestHash,response:{ciphertext:encryptToken(JSON.stringify(receipt))}})
@@ -79,7 +83,7 @@ try {
   try {
     for(const [enabled,code,httpStatus] of [['false','record_disabled',503],['true','record_not_found',404]]){
       process.env.CRRT_RECORD_ENABLED=enabled
-      const failed=await client.callTool({name:'run_dashboard_operation',arguments:recoveryArgs})
+      const failed=await client.callTool({name:'get_recording_agent_context',arguments:recoveryArgs})
       const data=failed.structuredContent
       if(data?.ok!==false || data.code!==code || data.status!==httpStatus || data.retryable!==false || JSON.stringify(failed).includes('private cached fixture'))throw new Error('Packaged recovery did not preserve its feature/access failure')
     }
