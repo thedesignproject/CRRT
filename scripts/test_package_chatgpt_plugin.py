@@ -120,6 +120,52 @@ class PluginArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "version"):
                 package.package_plugin(source, root / "output")
 
+    def claude_fixture(self, root):
+        source = root / "plugin"
+        for name in package.CLAUDE_FILES:
+            path = source / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("fixture", encoding="utf-8")
+        (source / ".claude-plugin/plugin.json").write_text(json.dumps({"name": "crrt", "version": "0.2.3"}))
+        return source
+
+    def test_claude_archive_is_reproducible_and_excludes_chatgpt_files_and_secrets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self.claude_fixture(root)
+            (source / ".env").write_text("SECRET=private")
+            (source / "plugin.json").write_text("{}")
+            target = package.package_claude_plugin(source, root / "output")
+            self.assertEqual(target.name, "crrt-claude-0.2.3.zip")
+            self.assertEqual(package.package_claude_plugin(source, root / "output").read_bytes(), target.read_bytes())
+            with zipfile.ZipFile(target) as archive:
+                self.assertEqual(set(archive.namelist()), set(package.CLAUDE_FILES))
+                for name in package.CLAUDE_FILES:
+                    self.assertEqual(archive.read(name), (source / name).read_bytes())
+
+    def test_claude_archive_requires_every_file_and_a_safe_version(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self.claude_fixture(root)
+            (source / "README.md").unlink()
+            with self.assertRaisesRegex(ValueError, "Missing package file: README.md"):
+                package.package_claude_plugin(source, root / "output")
+            (source / "README.md").write_text("fixture")
+            (source / ".claude-plugin/plugin.json").write_text(json.dumps({"version": "../x"}))
+            with self.assertRaisesRegex(ValueError, "major.minor.patch"):
+                package.package_claude_plugin(source, root / "output")
+            self.assertFalse((root / "output").exists())
+
+    def test_symlinks_above_the_plugin_directory_are_allowed(self):
+        # macOS temp directories live under /var, which is itself a symlink.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = self.fixture(root)
+            outside = {root, *root.parents}
+            original = Path.is_symlink
+            with patch.object(Path, "is_symlink", lambda path: path in outside or original(path)):
+                self.assertTrue(package.package_plugin(source, root / "output").is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
