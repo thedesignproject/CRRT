@@ -197,7 +197,8 @@ export function RecordApp() {
         authorName: 'Tomás',
         marks,
         transcript: [],
-        transcriptionStatus: 'processing',
+        // Without consent nothing is transcribed, so never show "Transcribing voice…".
+        transcriptionStatus: hostedTranscription ? 'processing' : 'ready',
         screenBlob: blobs.screenBlob,
         cameraBlob: blobs.cameraBlob,
         audioBlob: blobs.audioBlob,
@@ -389,7 +390,7 @@ export function RecordApp() {
     } catch (error) { setRecording({ ...processing, transcriptionStatus: 'failed', transcriptionError: (error as Error).message }) }
   }, [recording])
 
-  if (recording) return <><RecordingCloud recording={recording} changed={setRecording} /><Review recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} cameraSize={cameraPreviewSize} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} /></>
+  if (recording) return <><Review cloud={<RecordingCloud recording={recording} changed={setRecording} />} recording={recording} screenUrl={screenUrl} cameraUrl={recording.source === 'tab' ? '' : cameraUrl} cameraSize={cameraPreviewSize} tab={reviewTab} setTab={setReviewTab} playbackMs={playbackMs} setPlaybackMs={setPlaybackMs} cameraRef={reviewCameraRef} copied={copied} copyShare={copyShare} retryTranscript={retryTranscript} /></>
 
   if (state.status === 'setup' || state.status === 'failed') return <Setup hostedTranscription={hostedTranscription} setHostedTranscription={setHostedTranscription} state={state} tabAvailable={tabId !== null && Boolean(pageUrl?.startsWith('http'))} start={() => { void start() }} dispatch={dispatch} />
 
@@ -457,7 +458,8 @@ function Setup({ hostedTranscription, setHostedTranscription, state, tabAvailabl
   </main>
 }
 
-function Review({ recording, screenUrl, cameraUrl, cameraSize, tab, setTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare, retryTranscript }: {
+function Review({ cloud, recording, screenUrl, cameraUrl, cameraSize, tab, setTab, playbackMs, setPlaybackMs, cameraRef, copied, copyShare, retryTranscript }: {
+  cloud?: React.ReactNode
   recording: LocalRecording; screenUrl: string; cameraUrl: string; cameraSize: CameraPreviewSize; tab: 'transcript' | 'agents'; setTab: (tab: 'transcript' | 'agents') => void; playbackMs: number; setPlaybackMs: (value: number) => void; cameraRef: { readonly current: HTMLVideoElement | null }; copied: boolean; copyShare: () => Promise<void>
   retryTranscript: () => Promise<void>
 }) {
@@ -481,7 +483,7 @@ function Review({ recording, screenUrl, cameraUrl, cameraSize, tab, setTab, play
         <div className="timeline-markers">{recording.marks.map((mark) => <button key={mark.id} style={{ left: `${mark.atMs / recording.durationMs * 100}%` }} title={`${mark.type} at ${formatRecordingTime(mark.atMs)}`} onClick={() => { player.current!.currentTime = mark.atMs / 1000 }} />)}</div>
         <h1>{recording.title}</h1>
         <p className="review-meta">{recording.authorName} · {formatRecordingTime(recording.durationMs)} · {recording.marks.length} marks · just now</p>
-        <div className="review-summary"><span>Capture ready</span><p>Your local recording is available while private upload and processing continue. Use the share link above to invite viewers.</p></div>
+        {cloud}
       </section>
       <aside className="context-panel">
         <div className="context-tabs"><button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript</button><button className={tab === 'agents' ? 'active' : ''} onClick={() => setTab('agents')}>For agents</button></div>

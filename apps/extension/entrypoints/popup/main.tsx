@@ -33,29 +33,40 @@ export function Popup() {
   const [projects, setProjects] = useState<ExtensionProject[]>([])
   const [activeProject, setActiveProjectState] = useState<ExtensionProjectSelection | null>(null)
   const [pageUrl, setPageUrl] = useState<string | null>(null)
-  const [pageState, setPageState] = useState<'matched' | 'none' | 'ambiguous' | 'restricted'>('none')
+  const [pageState, setPageState] = useState<'loading' | 'matched' | 'none' | 'ambiguous' | 'restricted'>('loading')
 
-  async function loadWorkspace(nextSession: SessionSummary | null) {
+  async function loadWorkspace(nextSession: SessionSummary | null, currentPageUrl?: string | null) {
+    // The tab URL is local and immediate; show it before waiting on the network.
+    const resolvedPageUrl = currentPageUrl === undefined ? await getCurrentTabUrl() : currentPageUrl
+    setPageUrl(resolvedPageUrl)
     setSession(nextSession)
     if (!nextSession) {
       setProjects([])
       setActiveProjectState(null)
-      setPageUrl(await getCurrentTabUrl())
       return
     }
-    const [available, currentPageUrl] = await Promise.all([listExtensionProjects(), getCurrentTabUrl()])
-    const selected = currentPageUrl ? await resolveProjectForPage(currentPageUrl, available) : null
+    setPageState(resolvedPageUrl ? 'loading' : 'restricted')
+    let available: ExtensionProject[], selected: ExtensionProjectSelection | null
+    try {
+      available = await listExtensionProjects()
+      selected = resolvedPageUrl ? await resolveProjectForPage(resolvedPageUrl, available) : null
+    } catch (error) {
+      // Keep private feedback available when the project list cannot load.
+      setPageState(resolvedPageUrl ? 'none' : 'restricted')
+      throw error
+    }
     setProjects(available)
-    setPageUrl(currentPageUrl)
     setActiveProjectState(selected)
-    setPageState(!currentPageUrl ? 'restricted' : selected ? 'matched' : matchingProjects(currentPageUrl, available).length > 1 ? 'ambiguous' : 'none')
+    setPageState(!resolvedPageUrl ? 'restricted' : selected ? 'matched' : matchingProjects(resolvedPageUrl, available).length > 1 ? 'ambiguous' : 'none')
   }
 
   useEffect(() => {
     hasAcceptedDisclosure()
       .then(async (accepted) => {
         setDisclosureAccepted(accepted)
-        if (accepted) await loadWorkspace(await send({ type: 'auth:get' }) as SessionSummary | null)
+        if (!accepted) return
+        const [nextSession, currentPageUrl] = await Promise.all([send({ type: 'auth:get' }) as Promise<SessionSummary | null>, getCurrentTabUrl()])
+        await loadWorkspace(nextSession, currentPageUrl)
       })
       .catch((e) => setError(e instanceof Error ? e.message : 'Could not load CRRT'))
       .finally(() => setBusy(false))
@@ -128,11 +139,11 @@ export function Popup() {
       <p className="muted">Signed in as {session.email}</p>
       <div className="context" aria-label="Current feedback context">
         <p><span>Page</span>{pageUrl ? new URL(pageUrl).hostname : 'Unavailable in Chrome'}</p>
-        <p><span>Audience</span>{activeProject ? 'Project collaborators' : 'Only you'}</p>
+        <p><span>Audience</span>{pageState === 'loading' ? 'Checking projects…' : activeProject ? 'Project collaborators' : 'Only you'}</p>
       </div>
       <label>Feedback destination
-        <select aria-label="Feedback destination" value={activeProject?.publicKey ?? ''} disabled={busy} onChange={(event) => { void chooseProject(event.target.value) }}>
-          <option value="">Private</option>
+        <select aria-label="Feedback destination" value={activeProject?.publicKey ?? ''} disabled={busy || pageState === 'loading'} onChange={(event) => { void chooseProject(event.target.value) }}>
+          <option value="">{pageState === 'loading' ? 'Loading projects…' : 'Private'}</option>
           {projects.map((project) => <option key={project.publicKey} value={project.publicKey}>{project.name}</option>)}
         </select>
       </label>

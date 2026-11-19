@@ -156,7 +156,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('open')
   const [selectedCommentId, setSelectedCommentId] = useState<string>('')
   const [pendingCommentSelection, setPendingCommentSelection] = useState<{ projectKey: string; commentId: string } | null>(null)
-  const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments } = useComments(API_BASE, accessToken, selectedProject || null)
+  const { comments: serverComments, commentsProjectId, loading: commentsLoading, error: commentsError, refresh: refreshComments, refreshInBackground: refreshCommentsInBackground } = useComments(API_BASE, accessToken, selectedProject || null)
   const [comments, setComments] = useState<Comment[]>([])
   const feedbackScopeKey = JSON.stringify([accessToken, selectedProject, view])
   const feedbackWrites = useRef({ key: feedbackScopeKey, version: 0, pending: new Set<Promise<unknown>>() })
@@ -986,6 +986,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           toggleReview={toggleReview}
           handleToggleDone={handleToggleDone}
           onVisibilityChange={handleVisibilityChange}
+          onScreenshotRetry={refreshCommentsInBackground}
           apiBase={API_BASE}
           accessToken={accessToken}
         />

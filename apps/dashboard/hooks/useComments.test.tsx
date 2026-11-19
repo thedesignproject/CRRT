@@ -9,7 +9,7 @@ vi.mock('../lib/mocks', () => ({
 vi.mock('../api', () => ({ listComments: vi.fn() }))
 
 import { listComments, type CommentRecord } from '../api'
-import { useComments } from './useComments'
+import { SCREENSHOT_REFRESH_MS, useComments } from './useComments'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -180,4 +180,38 @@ it.each(['success', 'failure'])('discards a reconciliation %s invalidated during
  expect(result.current.comments[0]?.body).toBe('current')
  expect(result.current.error).toBeNull()
  expect(result.current.loading).toBe(false)
+})
+
+it('renews signed screenshot links while the project stays open and visible', async () => {
+  vi.useFakeTimers()
+  try {
+    vi.mocked(listComments).mockResolvedValue([comment('fresh')])
+    const view = renderHook(({ project }) => useComments('/api', 'token', project), { initialProps: { project: 'project' as string | null } })
+    await act(async () => {})
+    expect(listComments).toHaveBeenCalledTimes(1)
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCREENSHOT_REFRESH_MS) })
+    expect(listComments).toHaveBeenCalledTimes(2)
+    expect(view.result.current.loading).toBe(false)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCREENSHOT_REFRESH_MS) })
+    expect(listComments).toHaveBeenCalledTimes(2)
+    visibility.mockRestore()
+    view.rerender({ project: null })
+    await act(async () => { await vi.advanceTimersByTimeAsync(SCREENSHOT_REFRESH_MS) })
+    expect(listComments).toHaveBeenCalledTimes(2)
+    view.unmount()
+  } finally { vi.useRealTimers() }
+})
+
+it('refreshes in the background without showing the loading state', async () => {
+  vi.mocked(listComments).mockResolvedValue([comment('first')])
+  const { result } = renderHook(() => useComments('/api', 'token', 'project'))
+  await waitFor(() => expect(result.current.loading).toBe(false))
+  let finish!: (value: CommentRecord[]) => void
+  vi.mocked(listComments).mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+  let pending!: Promise<void>
+  act(() => { pending = result.current.refreshInBackground() })
+  expect(result.current.loading).toBe(false)
+  await act(async () => { finish([comment('renewed')]); await pending })
+  expect(result.current.comments[0]?.body).toBe('renewed')
 })

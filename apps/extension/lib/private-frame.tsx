@@ -5,16 +5,27 @@ import { receiveFrameMessages, sendFrameMessage } from './frame-channel'
 const tellHost = (payload: unknown) => { void sendFrameMessage(0, payload).catch(() => {}) }
 const actions = {
   async capture() {
+    const before = document.activeElement
     try {
       const image = await sendFrameMessage<string | null>(0, { kind: 'capture' })
       return image ? (await fetch(image)).blob() : null
     } catch { return null }
+    finally { restoreComposerFocus(before) }
   },
   selecting: (value: boolean) => tellHost({ kind: 'selecting', value }),
   track: (targets: { id: string; selector: string; x: number; y: number }[]) => tellHost({ kind: 'track', targets }),
   highlight: (selector: string) => tellHost({ kind: 'highlight', selector }),
   focusEmbedded: (projectId: string) => tellHost({ kind: 'focus-embedded', projectId }),
   hide: () => tellHost({ kind: 'deactivate' }),
+}
+
+// The page hides this frame while it screenshots, which drops focus from the composer.
+// Put it back so typing reaches the comment instead of page and widget shortcuts.
+export function restoreComposerFocus(before: Element | null) {
+  if (document.activeElement && document.activeElement !== document.body) return
+  const previous = before instanceof HTMLElement && before !== document.body && before.isConnected ? before : null
+  const target = previous ?? document.querySelector<HTMLTextAreaElement>('[data-fw-crrt] textarea')
+  target?.focus({ preventScroll: true })
 }
 
 // Measure interactive surfaces; the transparent frame paints independently of these hit-test bounds.

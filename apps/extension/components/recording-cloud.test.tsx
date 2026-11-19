@@ -1,17 +1,21 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { LocalRecording } from '../lib/recording'
-const mocks = vi.hoisted(() => ({ sync: vi.fn(), playback: vi.fn(), request: vi.fn(), send: vi.fn(), save: vi.fn() }))
+const mocks = vi.hoisted(() => ({ sync: vi.fn(), playback: vi.fn(), request: vi.fn(), send: vi.fn(), save: vi.fn(), projects: vi.fn(), resolve: vi.fn(), attach: vi.fn() }))
+vi.mock('../lib/comments-api', () => ({ listExtensionProjects: mocks.projects }))
+vi.mock('../lib/project-context', () => ({ resolveProjectForPage: mocks.resolve }))
 vi.mock('wxt/browser', () => ({ browser: { runtime: { sendMessage: mocks.send } } }))
-vi.mock('../lib/recording-cloud', () => ({ isMissingCloudRecording: (error: unknown) => error instanceof Error && 'code' in error && error.code === 'record_not_found', syncRecording: mocks.sync, readRecordingPlayback: mocks.playback, ownerRecordRequest: mocks.request }))
+vi.mock('../lib/recording-cloud', () => ({ isMissingCloudRecording: (error: unknown) => error instanceof Error && 'code' in error && error.code === 'record_not_found', syncRecording: mocks.sync, readRecordingPlayback: mocks.playback, ownerRecordRequest: mocks.request, attachRecordingProject: mocks.attach }))
 vi.mock('../lib/recording-store', () => ({ saveLocalRecording: mocks.save }))
-import { RecordingAgentContext, RecordingCloud } from './recording-cloud'
+import { canAttachRecording, RecordingAgentContext, RecordingCloud } from './recording-cloud'
 const recording = (finalized?: boolean): LocalRecording => ({ id: 'local', title: 'Video', source: 'tab', authorName: 'You', createdAt: 'now', status: 'ready', transcriptionStatus: 'processing', durationMs: 1000, marks: [], transcript: [], ...(finalized === undefined ? {} : { cloud: { id: 'remote', authorId: 'owner', shareId: 'capability', manifest: { version: 'record.v1', artifacts: [], events: [], durationMs: 1000 }, uploads: {}, finalized } }) })
 const playback = (state = 'ready', stage = 'done') => ({ recording: { state, failure: null }, stages: [{ stage: 'transcription', state: stage }], transcript: [{ id: 's', text: 'Speech', start_ms: 100, end_ms: 500 }] })
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubEnv('WXT_DASHBOARD_URL', 'https://app.test/dashboard/')
   mocks.sync.mockResolvedValue(recording(true)); mocks.playback.mockResolvedValue(playback()); mocks.request.mockImplementation(async path => path.endsWith('/share') ? { shareId: 'capability' } : { payload: 'paid context' }); mocks.save.mockResolvedValue(undefined)
+  mocks.projects.mockResolvedValue([]); mocks.resolve.mockResolvedValue(null)
+  mocks.attach.mockImplementation(async (value: LocalRecording, projectKey: string | null) => ({ ...value, projectKey, cloud: value.cloud && { ...value.cloud, projectKey } }))
   Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: vi.fn().mockResolvedValue(undefined) } })
 })
 afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs() })
@@ -88,9 +92,15 @@ it('does not copy a cached capability after the owner unshares the recording', a
 it.each([['done', 'ready'], ['failed', 'failed'], ['running', 'processing'], [undefined, 'processing']])('polls authoritative transcript state %s', async (stage, expected) => {
   const result = playback('processing', stage); if (stage === undefined) result.stages = []
   mocks.playback.mockResolvedValue(result)
-  const changed = vi.fn(); render(<RecordingCloud recording={recording(true)} changed={changed} />)
+  const changed = vi.fn(); render(<RecordingCloud recording={{ ...recording(true), hostedTranscription: true }} changed={changed} />)
   expect(await screen.findByText('Recording processing')).toBeInTheDocument()
   await waitFor(() => expect(changed).toHaveBeenCalledWith(expect.objectContaining({ transcript: [{ id: 's', text: 'Speech', startMs: 100, endMs: 500 }], transcriptionStatus: expected })))
+})
+it.each(['running', 'queued', undefined])('does not report transcription while consent is off and the stage is %s', async (stage) => {
+  const result = playback('processing', stage); if (stage === undefined) result.stages = []
+  mocks.playback.mockResolvedValue(result)
+  const changed = vi.fn(); render(<RecordingCloud recording={{ ...recording(true), hostedTranscription: false }} changed={changed} />)
+  await waitFor(() => expect(changed).toHaveBeenCalledWith(expect.objectContaining({ transcriptionStatus: 'ready' })))
 })
 it('keeps polling for signed state and stops after unmount', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
@@ -189,4 +199,160 @@ it('detects cloud deletion during playback polling and clears obsolete playback'
   view.rerender(<RecordingCloud recording={deleted} changed={changed} />)
   expect(screen.getByText('Cloud recording deleted')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Copy share link' })).toBeNull()
+})
+
+const projects = [
+  { publicKey: 'store', name: 'Storefront', allowedOrigins: ['store.test'], role: 'admin' as const },
+  { publicKey: 'docs', name: 'Docs', allowedOrigins: [], role: 'member' as const },
+  { publicKey: 'guest', name: 'Guest project', allowedOrigins: [], role: 'guest' as const },
+]
+it('defaults the recording to the page destination, attaches it after upload, and lets the owner move it', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  mocks.resolve.mockResolvedValue({ publicKey: 'store', name: 'Storefront' })
+  const initial = { ...recording(), pageUrl: 'https://store.test/cart' }
+  mocks.sync.mockResolvedValue({ ...recording(true), pageUrl: 'https://store.test/cart' })
+  const changed = vi.fn()
+  const view = render(<RecordingCloud recording={initial} changed={changed} />)
+  const picker = await screen.findByRole('combobox', { name: 'Recording project' })
+  expect(screen.queryByRole('option', { name: 'Guest project' })).not.toBeInTheDocument()
+  expect(mocks.resolve).toHaveBeenCalledWith('https://store.test/cart', projects.slice(0, 2))
+  await waitFor(() => expect(picker).toHaveValue('store'))
+  // Nothing is attached before the cloud copy exists.
+  expect(mocks.attach).not.toHaveBeenCalled()
+  view.rerender(<RecordingCloud recording={{ ...recording(true), pageUrl: 'https://store.test/cart' }} changed={changed} />)
+  await waitFor(() => expect(mocks.attach).toHaveBeenCalledWith(expect.objectContaining({ id: 'local' }), 'store'))
+  await waitFor(() => expect(changed).toHaveBeenCalledWith(expect.objectContaining({ projectKey: 'store' })))
+  expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ projectKey: 'store' }))
+  const attached = { ...recording(true), projectKey: 'store', cloud: { ...recording(true).cloud!, projectKey: 'store' } }
+  view.rerender(<RecordingCloud recording={attached} changed={changed} />)
+  mocks.attach.mockClear()
+  fireEvent.change(picker, { target: { value: '' } })
+  await waitFor(() => expect(mocks.attach).toHaveBeenCalledWith(expect.objectContaining({ projectKey: 'store' }), null))
+})
+it('keeps an existing choice, skips attaching when it already matches, and reports attach failures', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  const attached = { ...recording(true), projectKey: 'docs', cloud: { ...recording(true).cloud!, projectKey: 'docs' } }
+  mocks.sync.mockResolvedValue(attached)
+  const view = render(<RecordingCloud recording={attached} changed={vi.fn()} />)
+  const picker = await screen.findByRole('combobox', { name: 'Recording project' })
+  expect(picker).toHaveValue('docs')
+  expect(mocks.resolve).not.toHaveBeenCalled()
+  await act(async () => {})
+  expect(mocks.attach).not.toHaveBeenCalled()
+  mocks.attach.mockRejectedValueOnce(new Error('record_forbidden'))
+  fireEvent.change(picker, { target: { value: 'store' } })
+  expect(await screen.findByRole('alert')).toHaveTextContent('Could not move this recording to that project')
+  // The picker returns to what the server still has, and the message survives status polling.
+  await waitFor(() => expect(picker).toHaveValue('docs'))
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
+  expect(screen.getByRole('alert')).toHaveTextContent('Could not move this recording to that project')
+  fireEvent.change(picker, { target: { value: 'store' } })
+  await waitFor(() => expect(screen.queryByText(/Could not move this recording/)).not.toBeInTheDocument())
+  view.unmount()
+})
+it('defaults recordings without a page to private and hides the picker without projects', async () => {
+  mocks.projects.mockResolvedValueOnce(projects)
+  render(<RecordingCloud recording={recording()} changed={vi.fn()} />)
+  expect(await screen.findByRole('combobox', { name: 'Recording project' })).toHaveValue('')
+  expect(mocks.resolve).not.toHaveBeenCalled()
+})
+it('hides the picker when projects cannot load', async () => {
+  mocks.projects.mockRejectedValueOnce(new Error('Sign in'))
+  render(<RecordingCloud recording={recording()} changed={vi.fn()} />)
+  await act(async () => {})
+  expect(screen.queryByRole('combobox', { name: 'Recording project' })).not.toBeInTheDocument()
+})
+it('ignores project results that arrive after the review closes', async () => {
+  let finish!: (value: unknown) => void
+  mocks.projects.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+  const view = render(<RecordingCloud recording={recording()} changed={vi.fn()} />)
+  view.unmount()
+  await act(async () => { finish(projects) })
+  let resolved!: (value: unknown) => void
+  mocks.projects.mockResolvedValueOnce(projects)
+  mocks.resolve.mockReturnValueOnce(new Promise(resolve => { resolved = resolve }))
+  const second = render(<RecordingCloud recording={{ ...recording(), pageUrl: 'https://store.test/' }} changed={vi.fn()} />)
+  await waitFor(() => expect(mocks.resolve).toHaveBeenCalled())
+  second.unmount()
+  await act(async () => { resolved({ publicKey: 'store', name: 'Storefront' }) })
+})
+it('does not report an attach that finishes after the review closes', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  let settle!: (value: LocalRecording) => void
+  mocks.attach.mockReturnValueOnce(new Promise(resolve => { settle = resolve }))
+  const changed = vi.fn()
+  const value = { ...recording(true), projectKey: 'docs' }
+  mocks.sync.mockResolvedValue(value)
+  const view = render(<RecordingCloud recording={value} changed={changed} />)
+  await waitFor(() => expect(mocks.attach).toHaveBeenCalled())
+  view.unmount()
+  changed.mockClear()
+  await act(async () => { settle({ ...value, cloud: { ...value.cloud!, projectKey: 'docs' } }) })
+  expect(changed).not.toHaveBeenCalled()
+})
+
+it('reopens an uploaded recording with the server project instead of the page default', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  mocks.resolve.mockResolvedValue({ publicKey: 'store', name: 'Storefront' })
+  mocks.request.mockImplementation(async (path: string) => path === 'recordings/remote' ? { recording: { projectKey: null } } : { shareId: 'capability' })
+  const reopened = { ...recording(true), pageUrl: 'https://store.test/cart' }
+  mocks.sync.mockResolvedValue(reopened)
+  const changed = vi.fn()
+  render(<RecordingCloud recording={reopened} changed={changed} />)
+  const picker = await screen.findByRole('combobox', { name: 'Recording project' })
+  await waitFor(() => expect(picker).toHaveValue(''))
+  expect(mocks.resolve).not.toHaveBeenCalled()
+  expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ projectKey: null, cloud: expect.objectContaining({ projectKey: null }) }))
+  await act(async () => {})
+  expect(mocks.attach).not.toHaveBeenCalled()
+})
+it('keeps the picker locked when the server project cannot be read or the cloud copy is gone', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  mocks.request.mockRejectedValue(new Error('offline'))
+  const view = render(<RecordingCloud recording={recording(true)} changed={vi.fn()} />)
+  expect(await screen.findByRole('combobox', { name: 'Recording project' })).toBeDisabled()
+  view.unmount()
+  mocks.request.mockClear()
+  const deleted = { ...recording(true), cloud: { ...recording(true).cloud!, deleted: true } }
+  mocks.sync.mockResolvedValue(deleted)
+  render(<RecordingCloud recording={deleted} changed={vi.fn()} />)
+  expect(await screen.findByRole('combobox', { name: 'Recording project' })).toBeDisabled()
+  expect(mocks.request).not.toHaveBeenCalledWith('recordings/remote')
+})
+it('drops a server project read that lands after the review closes', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  let respond!: (value: unknown) => void
+  mocks.request.mockImplementation((path: string) => path === 'recordings/remote' ? new Promise(resolve => { respond = resolve }) : Promise.resolve({}))
+  const changed = vi.fn()
+  const view = render(<RecordingCloud recording={recording(true)} changed={changed} />)
+  await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('recordings/remote'))
+  view.unmount(); changed.mockClear()
+  await act(async () => { respond({ recording: {} }) })
+  expect(changed).not.toHaveBeenCalled()
+})
+it('offers only projects the server lets this member attach recordings to', () => {
+  expect(canAttachRecording({ ...projects[0], capabilities: ['feedback:read', 'feedback:create', 'feedback:manage'] })).toBe(true)
+  // Members of admin-only private projects receive just feedback:create.
+  expect(canAttachRecording({ ...projects[1], capabilities: ['feedback:create'] })).toBe(false)
+  expect(canAttachRecording(projects[1])).toBe(true)
+  expect(canAttachRecording(projects[2])).toBe(false)
+})
+it('merges a finished attach onto the latest copy instead of a stale snapshot', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  const value = { ...recording(true), projectKey: 'docs', cloud: { ...recording(true).cloud!, projectKey: 'docs' } }
+  mocks.sync.mockResolvedValue(value)
+  const changed = vi.fn()
+  const view = render(<RecordingCloud recording={value} changed={changed} />)
+  const picker = await screen.findByRole('combobox', { name: 'Recording project' })
+  await waitFor(() => expect(mocks.sync).toHaveBeenCalled())
+  await act(async () => {})
+  let settle!: () => void
+  mocks.attach.mockReturnValueOnce(new Promise<void>(resolve => { settle = resolve }))
+  fireEvent.change(picker, { target: { value: 'store' } })
+  await waitFor(() => expect(mocks.attach).toHaveBeenCalledWith(expect.anything(), 'store'))
+  const newer = { ...value, transcript: [{ id: 'kept', startMs: 0, endMs: 1, text: 'Kept' }] }
+  view.rerender(<RecordingCloud recording={newer} changed={changed} />)
+  await act(async () => { settle() })
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ projectKey: 'store', transcript: newer.transcript, cloud: expect.objectContaining({ projectKey: 'store' }) })))
 })

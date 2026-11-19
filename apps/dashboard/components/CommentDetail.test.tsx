@@ -15,7 +15,7 @@ import type { CommentRecord } from '../api'
 import { mapServerComment } from '../lib/comment'
 import type { Comment } from '../lib/types'
 import { CommandPalette } from './CommandPalette'
-import { CommentDetail } from './CommentDetail'
+import { CommentDetail, CommentScreenshot } from './CommentDetail'
 import { CommentList } from './CommentList'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
 import { ExternalWorkProviderDialog } from './ExternalWorkProviderDialog'
@@ -973,4 +973,24 @@ it('keeps recovery available if the server reports an active export or non-admin
  fireEvent.click(screen.getByRole('button',{name:'Resolve pending export'}))
  await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('Only project admins'))
  expect(screen.getByRole('button',{name:'Resolve pending export'})).toBeEnabled()
+})
+
+describe('CommentScreenshot', () => {
+  it('replaces an expired or broken signed image with a reload action, then retries a fresh link', () => {
+    const retry = vi.fn()
+    const view = render(<CommentScreenshot url="https://signed/old" pageUrl="https://site.test/" onRetry={retry} />)
+    fireEvent.error(screen.getByRole('img', { name: 'Screenshot of https://site.test/' }))
+    expect(screen.getByRole('status')).toHaveTextContent('Screenshot didn’t load')
+    fireEvent.click(screen.getByRole('button', { name: 'Reload screenshot' }))
+    expect(retry).toHaveBeenCalledOnce()
+    view.rerender(<CommentScreenshot url="https://signed/new" pageUrl={null} onRetry={retry} />)
+    expect(screen.getByRole('img', { name: 'Feedback screenshot' })).toHaveAttribute('src', 'https://signed/new')
+  })
+
+  it('explains a failed image without a retry when no refresh is available', () => {
+    render(<CommentScreenshot url="https://signed/old" />)
+    fireEvent.error(screen.getByRole('img', { name: 'Feedback screenshot' }))
+    expect(screen.getByRole('status')).toHaveTextContent('secure link may have expired')
+    expect(screen.queryByRole('button', { name: 'Reload screenshot' })).not.toBeInTheDocument()
+  })
 })

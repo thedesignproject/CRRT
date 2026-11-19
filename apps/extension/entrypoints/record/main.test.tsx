@@ -85,7 +85,7 @@ it('automatically saves when the capture deadline fires', async () => {
   await act(async () => { await vi.advanceTimersByTimeAsync(3_200) })
   await act(async () => { mocks.startCapture.mock.calls[0]![0].onLimitReached() })
   expect(mocks.saveRecording).toHaveBeenCalled()
-  expect(await screen.findByText('Capture ready')).toBeInTheDocument()
+  expect(await screen.findByText(/marks · just now/)).toBeInTheDocument()
 })
 
 it('records, annotates, pauses, finishes, and exposes human and agent review', async () => {
@@ -144,6 +144,8 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.click(screen.getByRole('button', { name: 'No camera OFF' }))
   fireEvent.click(screen.getByRole('button', { name: 'Microphone' }))
   fireEvent.click(screen.getByRole('radio', { name: /Window/ }))
+  // Opt in, so the review honestly reports transcription in progress.
+  fireEvent.click(screen.getByRole('checkbox', { name: /Transcribe audio with Deepgram/ }))
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await waitFor(() => expect(mocks.startCapture).toHaveBeenCalled())
   await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
@@ -186,10 +188,10 @@ it('records, annotates, pauses, finishes, and exposes human and agent review', a
   fireEvent.click(screen.getByRole('button', { name: 'Resume' }))
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
 
-  await screen.findByText('Capture ready')
+  await screen.findByText(/marks · just now/)
   expect(screen.getByText(/Transcribing voice/)).toBeInTheDocument()
   expect(mocks.saveRecording).toHaveBeenCalled()
-  expect(mocks.saveRecording.mock.calls[0]?.[0]).toMatchObject({ title: 'Needs more contrast' })
+  expect(mocks.saveRecording.mock.calls[0]?.[0]).toMatchObject({ title: 'Needs more contrast', hostedTranscription: true, transcriptionStatus: 'processing' })
   const videos = document.querySelectorAll('video')
   Object.defineProperty(videos[0], 'currentTime', { configurable: true, writable: true, value: 2 })
   Object.defineProperty(videos[1], 'currentTime', { configurable: true, writable: true, value: 0 })
@@ -248,7 +250,9 @@ it('moves tab recording controls to the injected surface and accepts its command
   await deliver({ kind: 'mark.undone' })
   await deliver({ kind: 'marks.cleared' })
   await deliver({ kind: 'finish' })
-  expect(await screen.findByText('Capture ready')).toBeInTheDocument()
+  expect(await screen.findByText(/marks · just now/)).toBeInTheDocument()
+  // Without transcription consent the capture is never reported as transcribing.
+  expect(mocks.saveRecording).toHaveBeenCalledWith(expect.objectContaining({ hostedTranscription: false, transcriptionStatus: 'ready' }))
   expect(mocks.sendMessage).toHaveBeenCalledWith({ type: 'record:session-stop', sessionId: create.sessionId })
 })
 
@@ -280,7 +284,7 @@ it('finishes automatically when the shared surface ends after recording starts',
   const ended = active.screenStream.getVideoTracks()[0].addEventListener.mock.calls[0][1] as () => void
   await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
   ended()
-  expect(await screen.findByText('Capture ready')).toBeInTheDocument()
+  expect(await screen.findByText(/marks · just now/)).toBeInTheDocument()
 })
 
 it('reports target lookup, saved-recording, and finalization failures safely', async () => {
@@ -333,7 +337,7 @@ it('finishes a camera-free capture without a camera recording', async () => {
   fireEvent.click(screen.getByRole('button', { name: /Start recording/ }))
   await act(async () => { await vi.advanceTimersByTimeAsync(3_100) })
   fireEvent.click(screen.getByRole('button', { name: 'Done' }))
-  expect(await screen.findByText('Capture ready')).toBeInTheDocument()
+  expect(await screen.findByText(/marks · just now/)).toBeInTheDocument()
   expect(mocks.saveRecording.mock.calls[mocks.saveRecording.mock.calls.length - 1]?.[0].cameraBlob).toBeUndefined()
 })
 

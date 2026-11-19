@@ -4,6 +4,7 @@ import { AppWindow, CirclePlay, ExternalLink } from 'lucide-react'
 import { SectionIntro } from '../../../src/design-system'
 import { DASHBOARD_HREF } from './Hero'
 import { useScrollSteps } from '../lib/useScrollSteps'
+import { chromeExtensionHref } from '../lib/chromeExtension'
 import './capture-reel.css'
 
 
@@ -15,7 +16,7 @@ function StorybookLogo({ size }: { size: number }) {
   </svg>
 }
 
-const CHROME_HREF = import.meta.env.VITE_CHROME_EXTENSION_URL ?? '/support#extension'
+const CHROME_HREF = chromeExtensionHref()
 
 /** Each clip is the real surface, recorded on crrt.ai itself. */
 const captureModes = {

@@ -80,6 +80,8 @@ export type LocalRecording = {
   hostedTranscription?: boolean
   cloudClientKey?: string
   cloudUploadOwnerId?: string
+  /** The project chosen for this recording; null keeps it private, undefined means not chosen yet. */
+  projectKey?: string | null
   cloud?: import('./recording-cloud').CloudRecording
 }
 
