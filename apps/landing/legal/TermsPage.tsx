@@ -8,7 +8,7 @@ export function TermsPage() {
       title="CRRT terms of service"
       description="The terms for using CRRT Cloud, the CRRT browser extension, and CRRT connections to AI assistants."
     >
-      <P>Effective November 17, 2026. CRRT is operated by The Design Project LLC (&quot;we&quot;).</P>
+      <P>Effective November 19, 2026. CRRT is operated by The Design Project LLC (&quot;we&quot;).</P>
 
       <Section>
         <H2>Using CRRT</H2>
@@ -69,8 +69,10 @@ export function TermsPage() {
         <H2>Plans and billing</H2>
         <P>
           Paid CRRT Cloud plans are purchased and managed in the CRRT dashboard. Payments are processed by Stripe.
-          Plan features, limits, and renewal terms are shown when you subscribe. You can cancel renewal from the
-          dashboard; access continues until the end of the paid period.
+          Plan features, limits, and renewal terms are shown when you subscribe. Eligible accounts can start one 14-day
+          free trial of CRRT Cloud. Unless you cancel before the trial ends, the subscription you chose starts and is
+          charged automatically. You can cancel renewal from the dashboard; access continues until the end of the
+          paid period.
         </P>
       </Section>
 

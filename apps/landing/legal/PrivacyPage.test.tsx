@@ -18,10 +18,16 @@ it('publishes the implemented extension data inventory and verified contact', ()
   expect(screen.getByText(/Page content and screenshots are captured only after your explicit feedback action/)).toBeInTheDocument()
   expect(screen.getByText(/Chrome or its speech service may process the audio/)).toBeInTheDocument()
   expect(screen.getByText(/Private feedback is available only to its creator/)).toBeInTheDocument()
-  expect(screen.getByText(/configured model provider to propose editable issue copy/)).toBeInTheDocument()
+  expect(screen.getByText(/limited page context to OpenAI to propose editable issue copy/)).toBeInTheDocument()
+  expect(screen.getByText(/CRRT does not store the audio\s+of spoken comments/)).toBeInTheDocument()
+  expect(screen.getByText(/The audio is sent to Deepgram to create a transcript/)).toBeInTheDocument()
+  expect(screen.getByText(/these events are\s+linked to your account ID and email address/)).toBeInTheDocument()
+  for (const provider of ['Deepgram', 'OpenAI', 'PostHog', 'Cloudflare R2']) {
+    expect(screen.getByText(provider, { selector: 'strong' })).toBeInTheDocument()
+  }
   expect(screen.getByText(/GitHub, Linear, or Jira receives the fields shown in that draft only after/)).toBeInTheDocument()
   expect(screen.getByText('Supabase').closest('li')).toHaveTextContent(
-    'Supabase for authentication, database records, and protected screenshot storage.',
+    'Supabase for authentication, database records, and protected screenshot and recording storage.',
   )
   expect(screen.getByText(/handoff codes expire after five minutes/)).toBeInTheDocument()
   expect(screen.getByRole('heading', { level: 3, name: 'AI assistant connections' })).toBeInTheDocument()

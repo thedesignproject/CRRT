@@ -8,13 +8,14 @@ export function PrivacyPage() {
       title="Privacy at CRRT"
       description="A plain-language account of what CRRT handles when you capture, review, and route visual feedback."
     >
-      <P>Effective November 17, 2026. CRRT is operated by The Design Project LLC.</P>
+      <P>Effective November 19, 2026. CRRT is operated by The Design Project LLC.</P>
 
       <Section>
         <H2>What this covers</H2>
         <P>
-          This policy covers the CRRT Chrome extension, the connected CRRT dashboard services used to save,
-          review, and route feedback, and CRRT connections to AI assistants through the CRRT MCP server. A project administrator controls who belongs to a project. Project membership
+          This policy covers the CRRT Chrome extension, including CRRT Record screen recordings, the crrt.ai website
+          and dashboard, the CRRT services used to save, review, and route feedback, and CRRT connections to AI
+          assistants through the CRRT MCP server. A project administrator controls who belongs to a project. Project membership
           authorizes access; a matching website domain only helps CRRT select the right project.
         </P>
       </Section>
@@ -59,8 +60,40 @@ export function PrivacyPage() {
         <P>
           The microphone appears only when Chrome exposes the required speech-recognition capability and starts only
           when you press it. Chrome or its speech service may process the audio under Chrome's terms. CRRT receives
-          the resulting transcript and stores it only as part of feedback you submit; CRRT does not store microphone
-          audio.
+          the resulting transcript and stores it only as part of feedback you submit; CRRT does not store the audio
+          of spoken comments.
+        </P>
+
+        <H3>Screen recordings (CRRT Record)</H3>
+        <P>
+          Recording starts only when you choose to record. CRRT captures the tab, window, or screen you select in
+          Chrome&apos;s picker and, only if you turn them on, your camera and microphone. The recording is kept in
+          the extension first. When you are signed in, CRRT uploads the screen video, camera video, and audio to CRRT
+          storage when the recording ends. They are processed on CRRT servers to create playback
+          files and thumbnails. The audio is sent to Deepgram to create a transcript. CRRT stores the recording, its
+          transcript, title, duration, and the project it belongs to.
+        </P>
+        <P>
+          Each uploaded recording has a share link. Anyone who has the link can watch the recording until you turn
+          sharing off or delete the recording. When you ask a connected AI
+          assistant for recording context, it can receive the transcript and a playback link that expires after five
+          minutes.
+        </P>
+
+        <H3>Project audits</H3>
+        <P>
+          When an authorized collaborator starts a project audit, CRRT loads the public pages of the project&apos;s
+          website and sends their text to OpenAI to draft review findings. Audits do not use signed-in sessions or
+          private pages.
+        </P>
+
+        <H3>Website and dashboard analytics</H3>
+        <P>
+          The crrt.ai website and dashboard use PostHog for product analytics: page views and specific product
+          actions, such as creating a project or changing a feedback status. When you are signed in, these events are
+          linked to your account ID and email address. CRRT removes query strings and fragments from recorded URLs,
+          and does not collect page content, feedback text, or form input. Vercel Speed Insights measures page
+          performance on crrt.ai without query strings or fragments. The extension does not send analytics.
         </P>
 
         <H3>Projects and visibility</H3>
@@ -92,7 +125,7 @@ export function PrivacyPage() {
         <H3>External work</H3>
         <P>
           When an authorized internal collaborator requests a tracker draft, CRRT may send the feedback text and
-          limited page context to the configured model provider to propose editable issue copy. GitHub, Linear, or
+          limited page context to OpenAI to propose editable issue copy. GitHub, Linear, or
           Jira receives the fields shown in that draft only after the collaborator reviews and confirms the send.
           CRRT then stores the external work identifier, URL, destination, and synchronization status. Provider
           credentials stay on the CRRT server.
@@ -103,11 +136,14 @@ export function PrivacyPage() {
         <H2>Service providers</H2>
         <P>CRRT uses service providers only to operate these product functions:</P>
         <Ul>
-          <li><Strong>Supabase</Strong> for authentication, database records, and protected screenshot storage.</li>
-          <li><Strong>Vercel</Strong> for application hosting and server execution.</li>
+          <li><Strong>Supabase</Strong> for authentication, database records, and protected screenshot and recording storage.</li>
+          <li><Strong>Cloudflare R2</Strong> for recording storage.</li>
+          <li><Strong>Vercel</Strong> for application hosting, server execution, recording processing, and Speed Insights.</li>
           <li><Strong>Stripe</Strong> for Cloud Checkout, subscriptions, payment recovery, invoices, tax configuration, and the billing portal.</li>
           <li><Strong>Resend</Strong> for invitation and feedback-notification email.</li>
-          <li><Strong>A configured model provider</Strong> for an editable tracker draft when an authorized collaborator requests one.</li>
+          <li><Strong>Deepgram</Strong> for recording transcripts.</li>
+          <li><Strong>OpenAI</Strong> for editable tracker drafts and project audits when an authorized collaborator requests them.</li>
+          <li><Strong>PostHog</Strong> for website and dashboard product analytics.</li>
           <li><Strong>GitHub, Linear, and Atlassian Jira</Strong> only when a project connects that provider and an authorized collaborator confirms a send.</li>
           <li><Strong>The AI assistant you connect</Strong>, such as OpenAI ChatGPT or Anthropic Claude, which receives the tool results described above only after you connect it.</li>
         </Ul>
@@ -121,6 +157,7 @@ export function PrivacyPage() {
           <li>Local session and preference data remains until it expires, you sign out, change the preference, clear extension data, or uninstall CRRT.</li>
           <li>Signed-out local feedback remains in extension storage until you delete it, clear browser data, or uninstall CRRT, including after a successful import unless you confirm local cleanup.</li>
           <li>Feedback and protected screenshots remain until the feedback owner deletes them or an authorized deletion request is completed.</li>
+          <li>Recordings and their transcripts remain until the recording owner deletes them or an authorized deletion request is completed.</li>
           <li>Connected-provider records remain until an authorized project administrator disconnects the integration or an authorized deletion request is completed.</li>
           <li>AI assistant connections remain until they expire or you revoke them from the MCP connections page in your CRRT dashboard. Revoking takes effect immediately. Data an assistant already received is retained by its provider under that provider&apos;s policy.</li>
         </Ul>
@@ -139,7 +176,8 @@ export function PrivacyPage() {
           one-time handoff codes are not included in the extension bundle.
         </P>
         <P>
-          You can choose Private instead of a project, omit screenshots, avoid speech input, disconnect external
+          You can choose Private instead of a project, omit screenshots, avoid speech input, record without camera or
+          microphone, turn off recording share links, disconnect external
           providers, sign out, delete feedback you own, or uninstall the extension. These choices may limit the
           corresponding product function.
         </P>
