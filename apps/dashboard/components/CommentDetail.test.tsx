@@ -672,7 +672,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
   it('renders the no-selection state safely', () => {
     render(<CommentDetail {...props} selectedComment={null} />)
     expect(screen.getByText('Select a comment')).toBeInTheDocument()
-    expect(screen.getByText('Pick a feedback item from the list to see the full context, screenshot, and actions.')).toBeInTheDocument()
+    expect(screen.getByText('See the pinned element, what the agent did and the thread.')).toBeInTheDocument()
     expect(screen.queryByText('Select an extension comment')).toBeNull()
   })
 
