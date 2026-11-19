@@ -356,3 +356,46 @@ it('merges a finished attach onto the latest copy instead of a stale snapshot', 
   await act(async () => { settle() })
   await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ projectKey: 'store', transcript: newer.transcript, cloud: expect.objectContaining({ projectKey: 'store' }) })))
 })
+it('drops an attach result whose save finishes after the review closes', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  const value = { ...recording(true), projectKey: 'docs' }
+  mocks.sync.mockResolvedValue(value)
+  let saved!: () => void
+  mocks.save.mockImplementation(() => new Promise<void>(resolve => { saved = resolve }))
+  const changed = vi.fn()
+  const view = render(<RecordingCloud recording={value} changed={changed} />)
+  await waitFor(() => expect(mocks.save).toHaveBeenCalledWith(expect.objectContaining({ cloud: expect.objectContaining({ projectKey: 'docs' }) })))
+  view.unmount(); changed.mockClear()
+  await act(async () => { saved() })
+  expect(changed).not.toHaveBeenCalled()
+})
+it('ignores an attach failure that arrives after the review closes', async () => {
+  mocks.projects.mockResolvedValue(projects)
+  const value = { ...recording(true), projectKey: 'docs' }
+  mocks.sync.mockResolvedValue(value)
+  let fail!: (error: Error) => void
+  mocks.attach.mockImplementation(() => new Promise((_resolve, reject) => { fail = reject }))
+  const view = render(<RecordingCloud recording={value} changed={vi.fn()} />)
+  await waitFor(() => expect(mocks.attach).toHaveBeenCalled())
+  await act(async () => {})
+  view.unmount()
+  await act(async () => { fail(new Error('record_forbidden')) })
+  expect(screen.queryByText(/Could not move this recording/)).not.toBeInTheDocument()
+})
+it.each([
+  ['the local choice when the server has not confirmed one', { projectKey: 'docs' }, 'docs'],
+  ['private when nothing was ever chosen', {}, ''],
+])('falls back to %s after a failed attach', async (_label, extra, expected) => {
+  mocks.projects.mockResolvedValue(projects)
+  mocks.resolve.mockResolvedValue({ publicKey: 'store', name: 'Storefront' })
+  const value = { ...recording(true), pageUrl: 'https://store.test/', ...extra }
+  mocks.sync.mockResolvedValue(value)
+  mocks.attach.mockRejectedValue(new Error('record_forbidden'))
+  const view = render(<RecordingCloud recording={value} changed={vi.fn()} />)
+  const picker = await screen.findByRole('combobox', { name: 'Recording project' })
+  await act(async () => {})
+  fireEvent.change(picker, { target: { value: 'store' } })
+  expect(await screen.findByText(/Could not move this recording/)).toBeInTheDocument()
+  await waitFor(() => expect(picker).toHaveValue(expected))
+  view.unmount()
+})
