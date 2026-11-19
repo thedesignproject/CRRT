@@ -1,0 +1,50 @@
+name: Design system
+
+on:
+  pull_request:
+    paths:
+      - 'packages/ui/**'
+      - 'brain/design/**'
+      - '.github/workflows/ui-ci.yml'
+  push:
+    branches: [trunk]
+    paths:
+      - 'packages/ui/**'
+      - 'brain/design/**'
+      - '.github/workflows/ui-ci.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/ui
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run lint
+      - run: bun run test:coverage
+      - name: Diff coverage
+        if: github.event_name == 'pull_request'
+        run: |
+          python3 -m pip install diff-cover==10.0.0
+          bun run test:diff-coverage
+      - run: bun run build-storybook --quiet

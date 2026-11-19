@@ -1,0 +1,105 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Raw design tokens live in the theming seam (white-label). */
+@import "../tokens/tokens.css";
+
+/* Studio is dark-first: everything is "dark" unless inside [data-theme="light"]. */
+@custom-variant dark (&:not(:where([data-theme="light"], [data-theme="light"] *)));
+
+/* Map the shadcn token set to the Tailwind v4 theme so component utilities resolve. */
+@theme inline {
+  --font-sans: var(--font-body);
+  --spacing: var(--spacing-unit);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* CRRT Studio extensions (see brain/design/foundations/color.md) */
+  --font-mono: var(--font-mono);
+  --font-crt: var(--font-crt);
+
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-surface-4: var(--surface-4);
+  --color-text-strong: var(--text-strong);
+  --color-text-body: var(--text-body);
+  --color-text-subtle: var(--text-subtle);
+  --color-carrot: var(--carrot);
+  --color-carrot-glow: var(--carrot-glow);
+  --color-carrot-line: var(--carrot-line);
+  --color-pin: var(--pin);
+  --color-pin-foreground: var(--pin-foreground);
+  --color-leaf: var(--leaf);
+
+  --color-status-open-fg: var(--status-open-fg);
+  --color-status-open-bg: var(--status-open-bg);
+  --color-status-agent-fg: var(--status-agent-fg);
+  --color-status-agent-bg: var(--status-agent-bg);
+  --color-status-testing-fg: var(--status-testing-fg);
+  --color-status-testing-bg: var(--status-testing-bg);
+  --color-status-fixed-fg: var(--status-fixed-fg);
+  --color-status-fixed-bg: var(--status-fixed-bg);
+
+  --color-agent-working: var(--agent-working);
+  --color-agent-paused: var(--agent-paused);
+  --color-agent-done: var(--agent-done);
+  --color-agent-idle: var(--agent-idle);
+
+  --color-tag-copy-fg: var(--tag-copy-fg);
+  --color-tag-copy-bg: var(--tag-copy-bg);
+  --color-tag-layout-fg: var(--tag-layout-fg);
+  --color-tag-layout-bg: var(--tag-layout-bg);
+  --color-tag-behavior-fg: var(--tag-behavior-fg);
+  --color-tag-behavior-bg: var(--tag-behavior-bg);
+
+  --shadow-panel: var(--shadow-panel);
+  --shadow-primary: var(--shadow-primary);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background font-sans text-foreground;
+  }
+}
