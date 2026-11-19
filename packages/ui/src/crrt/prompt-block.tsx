@@ -11,6 +11,8 @@ type PromptBlockProps = {
   highlight?: string[];
   /** Fires on copy, e.g. to create the project the prompt points at. */
   onCopy?: () => void;
+  /** Blocks copying, e.g. while the project ID is still being checked. */
+  disabled?: boolean;
   className?: string;
 };
 
@@ -29,7 +31,7 @@ function withHighlights(text: string, values: string[]) {
 }
 
 /** "Just show me the prompt": a copyable agent prompt that replaces install snippets. */
-export function PromptBlock({ header, prompt, highlight = [], onCopy, className }: PromptBlockProps) {
+export function PromptBlock({ header, prompt, highlight = [], onCopy, disabled = false, className }: PromptBlockProps) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -50,7 +52,8 @@ export function PromptBlock({ header, prompt, highlight = [], onCopy, className 
         <button
           type="button"
           onClick={copy}
-          className="ml-auto flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-text-strong ring-1 ring-border hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          disabled={disabled}
+          className="ml-auto flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-text-strong ring-1 ring-border hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent"
         >
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
           <span aria-live="polite">{copied ? "Copied" : "Copy prompt"}</span>

@@ -44,7 +44,7 @@ async function signIn(enteredPassword = password) {
 }
 async function verifyDestination(kind: 'dashboard' | 'widget' | 'extension') {
   if (kind === 'dashboard') {
-    await waitFor(() => expect(screen.getByRole('heading', { name: /welcome to crrt/ })).toBeInTheDocument(), { timeout: 10000 })
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Create your first project' })).toBeInTheDocument(), { timeout: 10000 })
     expect(window.location.pathname).toBe('/')
     const { data } = await holder.client!.auth.getSession()
     const response = await fetch(`${api}/v1/projects`, { headers: { Authorization: `Bearer ${data.session!.access_token}` } })

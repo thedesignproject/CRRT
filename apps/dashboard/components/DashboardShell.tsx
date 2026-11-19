@@ -4,13 +4,11 @@ import { Bot, FileText, Inbox, Moon, Search, Settings, Shield, Sun, Video } from
 import { AppShell, NavList, QuotaMeter, TopBar, type NavItem } from '@crrt/ui/crrt'
 import { Kbd } from '@crrt/ui/components/kbd'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
-import type { Project, ProjectKeyAvailability } from '../api'
+import type { Project } from '../api'
 import { usePlanQuota } from '../hooks/usePlanQuota'
 import { route } from '../lib/routes'
 import type { StatusFilter } from '../lib/types'
-import { AddProjectPopover } from './AddProjectPopover'
 import { NotificationBell } from './NotificationBell'
-import { SuggestedProjects } from './SuggestedProjects'
 import { UserMenu } from './UserMenu'
 
 interface DashboardShellProps {
@@ -24,12 +22,11 @@ interface DashboardShellProps {
   setSelectedProject: (key: string) => void
   setStatusFilter: (f: StatusFilter) => void
   setSelectedCommentId: (id: string) => void
-  addProjectOpen: boolean
-  setAddProjectOpen: (open: boolean | ((v: boolean) => boolean)) => void
-  onAddProject: (projectKey: string, name: string) => void
-  onCheckAvailability: (key: string) => Promise<ProjectKeyAvailability>
-  addProjectBusy: boolean
-  addProjectError: string | null
+  /** The New project page is the current view. */
+  newProjectActive?: boolean
+  onNewProject: () => void
+  /** Closes the New project page when another destination is picked. */
+  onLeaveNewProject?: () => void
   onOpenCmd: () => void
   onOpenSettings: () => void
   canManageProject?: boolean
@@ -69,12 +66,9 @@ export function DashboardShell({
   setSelectedProject,
   setStatusFilter,
   setSelectedCommentId,
-  addProjectOpen,
-  setAddProjectOpen,
-  onAddProject,
-  onCheckAvailability,
-  addProjectBusy,
-  addProjectError,
+  newProjectActive = false,
+  onNewProject,
+  onLeaveNewProject,
   onOpenCmd,
   onOpenSettings,
   canManageProject = true,
@@ -99,34 +93,38 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
   const quota = usePlanQuota(apiBase, accessToken, user.id)
-  const project = extensionCommentsActive ? undefined : projects.find((p) => p.publicKey === selectedProject)
+  // Picking any destination leaves the New project page.
+  const leave = (go: () => void) => () => { onLeaveNewProject?.(); go() }
+  const project = extensionCommentsActive || newProjectActive ? undefined : projects.find((p) => p.publicKey === selectedProject)
 
-  const activeId = extensionCommentsActive ? 'inbox'
+  const activeId = newProjectActive ? 'new-project'
+    : extensionCommentsActive ? 'inbox'
     : recordingsActive ? 'recordings'
     : superAdminActive ? 'super-admin'
     : settingsActive ? 'settings'
     : selectedProject
 
   const nav: NavItem[] = [
-    { id: 'inbox', label: 'Inbox', icon: <Inbox />, onSelect: onOpenExtensionComments },
-    ...(onOpenRecordings ? [{ id: 'recordings', label: 'Recordings', icon: <Video />, onSelect: onOpenRecordings }] : []),
+    { id: 'inbox', label: 'Inbox', icon: <Inbox />, onSelect: leave(onOpenExtensionComments) },
+    ...(onOpenRecordings ? [{ id: 'recordings', label: 'Recordings', icon: <Video />, onSelect: leave(onOpenRecordings) }] : []),
   ]
 
   const projectItems: NavItem[] = projects.map((p) => ({
     id: p.publicKey,
     label: p.name,
     count: p.publicKey === activeId && !commentsLoading && commentCount > 0 ? commentCount : undefined,
-    onSelect: () => { setSelectedProject(p.publicKey); setStatusFilter('open'); setSelectedCommentId('') },
+    onSelect: leave(() => { setSelectedProject(p.publicKey); setStatusFilter('open'); setSelectedCommentId('') }),
   }))
 
   const admin: NavItem[] = [
     { id: 'documents', label: 'Documents', icon: <FileText />, href: route(`/documents?project=${encodeURIComponent(selectedProject)}`) },
     { id: 'mcp', label: 'MCP connections', icon: <Bot />, href: route('/mcp-auth') },
-    ...(project && canManageProject ? [{ id: 'settings', label: 'Project settings', icon: <Settings />, onSelect: onOpenSettings }] : []),
-    ...(superadmin ? [{ id: 'super-admin', label: 'Super admin', icon: <Shield />, onSelect: onOpenSuperAdmin }] : []),
+    ...(project && canManageProject ? [{ id: 'settings', label: 'Project settings', icon: <Settings />, onSelect: leave(onOpenSettings) }] : []),
+    ...(superadmin ? [{ id: 'super-admin', label: 'Super admin', icon: <Shield />, onSelect: leave(onOpenSuperAdmin) }] : []),
   ]
 
-  const crumbs = extensionCommentsActive ? ['Inbox']
+  const crumbs = newProjectActive ? ['New project']
+    : extensionCommentsActive ? ['Inbox']
     : recordingsActive ? ['Recordings']
     : superAdminActive ? ['Super admin']
     : project ? (settingsActive ? [project.name, 'Settings'] : [project.name])
@@ -139,7 +137,7 @@ export function DashboardShell({
       projects={projectItems}
       projectsEmpty={projectsLoading ? 'Loading projects…' : projectsError ? <span role="alert">{projectsError}</span> : 'No projects yet'}
       activeId={activeId}
-      onNewProject={() => setAddProjectOpen((open) => !open)}
+      onNewProject={onNewProject}
       sidebarFooter={
         <div className="flex flex-col gap-4">
           <nav aria-label="Workspace administration"><NavList items={admin} activeId={activeId} /></nav>
@@ -175,16 +173,6 @@ export function DashboardShell({
     >
       <div className="dashboard-main">{children}</div>
       {footer}
-      {addProjectOpen && (
-        <AddProjectPopover
-          suggestedProjects={<SuggestedProjects apiBase={apiBase} accessToken={accessToken} onProjectsChanged={onProjectsChanged} />}
-          onAdd={onAddProject}
-          onClose={() => setAddProjectOpen(false)}
-          checkAvailability={onCheckAvailability}
-          busy={addProjectBusy}
-          error={addProjectError}
-        />
-      )}
     </AppShell>
   )
 }

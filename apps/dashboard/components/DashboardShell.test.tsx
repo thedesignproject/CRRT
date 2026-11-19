@@ -6,15 +6,13 @@ const quota = vi.hoisted(() => ({ value: null as null | { plan: string; used: nu
 vi.mock('../hooks/usePlanQuota', () => ({ usePlanQuota: () => quota.value }))
 vi.mock('./NotificationBell', () => ({ NotificationBell: () => null }))
 vi.mock('./UserMenu', () => ({ UserMenu: () => null }))
-vi.mock('./SuggestedProjects', () => ({ SuggestedProjects: () => <div>Suggested projects slot</div> }))
-vi.mock('./AddProjectPopover', () => ({ AddProjectPopover: (props: { suggestedProjects: unknown; onClose: () => void }) => <div role="dialog" aria-label="Add project">{props.suggestedProjects as never}<button type="button" onClick={props.onClose}>Close</button></div> }))
 import { DashboardShell } from './DashboardShell'
 import { route } from '../lib/routes'
 
 const project = { publicKey: 'one', name: 'Project One', slug: 'one', allowedOrigins: [], createdAt: '', updatedAt: '' }
 const fn = vi.fn()
 type Props = ComponentProps<typeof DashboardShell>
-const props: Props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, addProjectOpen: false, setAddProjectOpen: fn, onAddProject: fn, onCheckAvailability: fn, addProjectBusy: false, addProjectError: null, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark', toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn, children: <p>View content</p> }
+const props: Props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, onNewProject: fn, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark', toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn, children: <p>View content</p> }
 const shell = (overrides: Partial<Props> = {}) => <DashboardShell {...props} {...overrides} />
 const admin = () => screen.getByRole('navigation', { name: 'Workspace administration' })
 
@@ -113,17 +111,24 @@ describe('DashboardShell', () => {
     expect(screen.getByText(text)).toBeInTheDocument()
   })
 
-  it('opens and closes the add project dialog from New project', () => {
-    const setAddProjectOpen = vi.fn()
-    const view = render(shell({ setAddProjectOpen }))
+  it('opens New project and leaves it from any destination', () => {
+    const onLeaveNewProject = vi.fn()
+    const onOpenRecordings = vi.fn()
+    const view = render(shell({ projects: [project], selectedProject: 'one', superadmin: true, onOpenRecordings }))
     fireEvent.click(screen.getByRole('button', { name: 'New project' }))
-    const toggle = setAddProjectOpen.mock.calls[0][0] as (open: boolean) => boolean
-    expect(toggle(false)).toBe(true)
-    expect(toggle(true)).toBe(false)
-    view.rerender(shell({ setAddProjectOpen, addProjectOpen: true }))
-    expect(screen.getByText('Suggested projects slot')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    expect(setAddProjectOpen).toHaveBeenLastCalledWith(false)
+    expect(props.onNewProject).toHaveBeenCalledOnce()
+    view.rerender(shell({ projects: [project], selectedProject: 'one', superadmin: true, onOpenRecordings, newProjectActive: true, onLeaveNewProject }))
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('New project')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Project One' })).not.toHaveAttribute('aria-current')
+    expect(screen.queryByRole('button', { name: 'Project settings' })).toBeNull()
+    for (const name of ['Inbox', 'Recordings', 'Project One', 'Super admin']) fireEvent.click(screen.getByRole('button', { name }))
+    expect(onLeaveNewProject).toHaveBeenCalledTimes(4)
+    expect(onOpenRecordings).toHaveBeenCalledOnce()
+    // Without a leave handler, picking a destination still works.
+    view.rerender(shell({ projects: [project], selectedProject: 'one', newProjectActive: true }))
+    fn.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'Inbox' }))
+    expect(props.onOpenExtensionComments).toHaveBeenCalledOnce()
   })
 
   it('meters the plan in comments and links billing only for managers', () => {

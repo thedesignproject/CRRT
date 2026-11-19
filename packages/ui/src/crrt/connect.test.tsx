@@ -179,6 +179,15 @@ describe("PromptBlock", () => {
     expect(screen.getByText("Copy prompt")).toBeTruthy();
   });
 
+  it("can block copying until the prompt is ready", () => {
+    const onCopy = vi.fn();
+    render(<PromptBlock header="Paste this" prompt="Wait" disabled onCopy={onCopy} />);
+    const button = screen.getByRole("button", { name: "Copy prompt" });
+    expect(button).toHaveProperty("disabled", true);
+    fireEvent.click(button);
+    expect(onCopy).not.toHaveBeenCalled();
+  });
+
   it("renders plain text without highlights and survives a blocked clipboard", async () => {
     stubClipboard(() => Promise.reject(new Error("denied")));
     render(<PromptBlock header="Plain" prompt="Hello" />);
