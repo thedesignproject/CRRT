@@ -16,3 +16,5 @@ export * from "./shortcut-bar";
 export * from "./status-chip";
 export * from "./thread";
 export * from "./prompt-block";
+export * from "./next-step-row";
+export * from "./agent-run-card";

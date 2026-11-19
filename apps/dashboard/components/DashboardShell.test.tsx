@@ -82,6 +82,27 @@ describe('DashboardShell', () => {
     expect(onOpenRecordings).toHaveBeenCalledOnce()
   })
 
+  it('adds Next steps and Agent runs for a project with Agents', () => {
+    const onOpenNextSteps = vi.fn(); const onOpenAgentRuns = vi.fn()
+    const agentNav = { readyCount: 3, live: true, active: 'next-steps' as const, onOpenNextSteps, onOpenAgentRuns }
+    const view = render(shell({ projects: [project], selectedProject: 'one', agentNav }))
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    expect(within(nav).getByText('Next steps')).toBeInTheDocument()
+    const next = screen.getByRole('button', { name: /^Next steps/ })
+    expect(next).toHaveAttribute('aria-current', 'page')
+    expect(next).toHaveTextContent('3')
+    fireEvent.click(next)
+    expect(onOpenNextSteps).toHaveBeenCalledOnce()
+    fireEvent.click(screen.getByRole('button', { name: /^Agent runs/ }))
+    expect(onOpenAgentRuns).toHaveBeenCalledOnce()
+    view.rerender(shell({ projects: [project], selectedProject: 'one', agentNav: { ...agentNav, readyCount: 0, live: false, active: 'agent-runs' } }))
+    expect(screen.getByRole('button', { name: /^Agent runs/ })).toHaveAttribute('aria-current', 'page')
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('Agent runs')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Next steps/ })).not.toHaveTextContent(/\d/)
+    view.rerender(shell({ projects: [project], selectedProject: 'one' }))
+    expect(screen.queryByRole('button', { name: /^Next steps/ })).toBeNull()
+  })
+
   it('shows project Settings in the workspace nav and super admin in the account menu', () => {
     const view = render(shell({ projects: [project], selectedProject: 'one', settingsActive: true, superadmin: true }))
     const settings = screen.getByRole('button', { name: 'Settings' })

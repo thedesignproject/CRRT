@@ -163,7 +163,7 @@ describe('dashboard shortcut hints', () => {
     />)
     const actionHints = [
       ['Toggle Send to Agent', 'A'], ['Toggle Done', 'M'],
-      ['Toggle Reject', 'D'], ['Toggle agent panel', 'S'],
+      ['Toggle Reject', 'D'], ['Open Next steps', 'S'],
     ]
     for (const [label, key] of actionHints) {
       expect(within(screen.getByRole('button', { name: label })).queryByText(key)).toBeNull()
