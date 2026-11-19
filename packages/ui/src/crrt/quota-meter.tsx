@@ -5,16 +5,20 @@ type QuotaMeterProps = {
   plan: string;
   used: number;
   limit: number;
+  /** What is metered, plural. */
+  unit?: string;
+  /** When the limit resets, as read after the count: "this week", "this month". */
+  period?: string;
   /** Shown as a link at the end; omit to hide. */
   upgradeHref?: string;
   className?: string;
 };
 
 /**
- * Agent-call quota, always visible in the top bar. CRRT charges for the agentic part only,
- * so this is the one meter that matters. The carrot "grows" along the bar.
+ * The plan's metered limit (agent calls by default), always visible. The carrot "grows"
+ * along the bar.
  */
-export function QuotaMeter({ plan, used, limit, upgradeHref, className }: QuotaMeterProps) {
+export function QuotaMeter({ plan, used, limit, unit = "agent calls", period = "this week", upgradeHref, className }: QuotaMeterProps) {
   const left = Math.max(0, limit - used);
   const pct = Math.min(100, Math.round((used / limit) * 100));
 
@@ -23,7 +27,7 @@ export function QuotaMeter({ plan, used, limit, upgradeHref, className }: QuotaM
       <span className="text-text-body">{plan}</span>
       <div
         role="meter"
-        aria-label="Agent calls used this week"
+        aria-label={`${unit} used ${period}`}
         aria-valuemin={0}
         aria-valuemax={limit}
         aria-valuenow={used}
@@ -33,7 +37,7 @@ export function QuotaMeter({ plan, used, limit, upgradeHref, className }: QuotaM
         <CarrotMark size={16} className="absolute -top-[5px] -translate-x-1/2" style={{ left: `${pct}%` }} />
       </div>
       <span className="font-mono text-xs text-text-subtle">
-        {left} of {limit} agent calls left this week
+        {left} of {limit} {unit} left {period}
       </span>
       {upgradeHref && (
         <a href={upgradeHref} className="ml-auto font-medium text-carrot hover:underline">
