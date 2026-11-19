@@ -8,7 +8,7 @@
     "deploymentEnabled": false
   },
   "builds": [
-    { "src": "package.json", "use": "@vercel/static-build@28.0.1" }
+    { "src": "package.json", "use": "@vercel/static-build@29.0.0" }
   ],
   "crons": [
     { "path": "/api/v1/internal/record-worker", "schedule": "* * * * *" },
