@@ -16,9 +16,15 @@ does not establish that the live server passes OpenAI review.
 From the repository root:
 
 ```sh
-python -m unittest discover -s scripts -p test_package_chatgpt_plugin.py
-python scripts/package-chatgpt-plugin.py
+python3 -m unittest discover -s scripts -p test_package_chatgpt_plugin.py
+bun run package:chatgpt-plugin
+bun run package:claude-plugin
 ```
+
+The packager needs Python 3.9 or later. `package:claude-plugin` writes
+`artifacts/crrt-claude-0.2.3.zip` with `.claude-plugin/plugin.json`, `.mcp.json`,
+`README.md`, the skill, and the icon; check it with
+`claude plugin validate ./plugins/crrt`.
 
 Output: `artifacts/crrt-chatgpt-0.2.3.zip`. The ZIP has `plugin.json` and `mcp.json`
 at its root, one workflow skill, and a copy of the existing CRRT favicon. The
@@ -43,7 +49,7 @@ and consent, then verify `connection_status` in a new web chat. Copy its technic
 ID from the plugin URL and build:
 
 ```sh
-python scripts/package-chatgpt-plugin.py --registered-app-id "plugin_asdk_app_YOUR_CONNECTION_ID"
+bun run package:chatgpt-plugin -- --registered-app-id "plugin_asdk_app_YOUR_CONNECTION_ID"
 ```
 
 This creates `artifacts/crrt-chatgpt-0.2.3-registered.zip`. It uses the supported
