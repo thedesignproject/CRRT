@@ -12,5 +12,9 @@
   "repository": "https://github.com/thedesignproject/CRRT",
   "license": "Apache-2.0",
   "privacyPolicyUrl": "https://crrt.ai/privacy",
+  "termsOfServiceUrl": "https://crrt.ai/terms",
+  "supportUrl": "https://crrt.ai/support",
+  "documentationUrl": "https://crrt.ai/docs",
+  "icon": "./assets/icon.png",
   "keywords": ["visual-feedback", "implementation", "design", "code-review"]
 }
