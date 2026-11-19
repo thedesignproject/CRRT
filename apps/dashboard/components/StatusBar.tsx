@@ -33,7 +33,7 @@ export function StatusBar({ agentAvailable = true, personal = false }: StatusBar
     ...(project ? [{ keys: ['A'], label: 'send to agent' }, { keys: ['M'], label: 'done' }, { keys: ['D'], label: 'reject' }] : []),
     { keys: ['Space'], label: 'next' },
     { keys: ['J', 'K'], label: 'nav' },
-    ...(project && agentAvailable ? [{ keys: ['S'], label: 'sidebar' }] : []),
+    ...(project && agentAvailable ? [{ keys: ['S'], label: 'agent' }] : []),
     ...(project ? [{ keys: ['⌘K'], label: 'search' }] : []),
     { keys: ['?'], label: 'hide' },
   ]

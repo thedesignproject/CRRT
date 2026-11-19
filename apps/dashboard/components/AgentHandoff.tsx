@@ -1,134 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { cn } from '../lib/utils'
-import { asset } from '../lib/routes'
 import type { ShareEventsResponse } from '../api'
 import { describeEvent } from '../lib/format'
 import { AGENTS, type AgentMeta, type Comment } from '../lib/types'
-import type { AgentSession } from '../hooks/useAgentSession'
 import { BotIcon, CheckIcon, ChevronDownIcon, CopyIcon, SpinnerIcon, XIcon } from './icons'
 
-type CopyStatus = 'idle' | 'copying' | 'copied' | 'error'
+/** Agent handoff pieces shared by the Next steps and Agent runs pages. */
 
-interface AgentSidebarProps {
-  selectedProject: string
-  projectComments: Comment[]
-  readyCount: number
-  filtered: boolean
-  selectedCommentId: string
-  onSelectComment: (id: string) => void
-  agentSession: AgentSession | null
-  agentEvents: ShareEventsResponse['events']
-  agentError: string | null
-  agentErrorCode: string | null
-  agentConnected: boolean
-  selectedAgent: string
-  setSelectedAgent: (id: string) => void
-  selectedAgentMeta: AgentMeta
-  agentDropdownOpen: boolean
-  setAgentDropdownOpen: (open: boolean | ((v: boolean) => boolean)) => void
-  copyStatus: CopyStatus
-  onCopySessionLink: () => void
-  onUpgrade: () => void
-  onClose: () => void
-}
+export type CopyStatus = 'idle' | 'copying' | 'copied' | 'error'
 
 const HINT_SEEN_KEY = 'crrt:dashboard:handoff-hint-seen'
 
-export function AgentSidebar({
-  selectedProject,
-  projectComments,
-  readyCount,
-  filtered,
-  selectedCommentId,
-  onSelectComment,
-  agentSession,
-  agentEvents,
-  agentError,
-  agentErrorCode,
-  agentConnected,
-  selectedAgent,
-  setSelectedAgent,
-  selectedAgentMeta,
-  agentDropdownOpen,
-  setAgentDropdownOpen,
-  copyStatus,
-  onCopySessionLink,
-  onUpgrade,
-  onClose,
-}: AgentSidebarProps) {
-  return (
-    <aside id="agent-sidebar" className="w-[300px] shrink-0 flex flex-col border-l border-border bg-sidebar overflow-y-auto animate-slide-in">
-      <div className="px-4 py-4 border-b border-sidebar-border flex items-center justify-between">
-        <h2 className="text-base font-bold text-foreground tracking-tight">Agent handoff</h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close agent panel"
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent/30 transition-colors"
-        >
-          <XIcon size={14} />
-        </button>
-      </div>
-
-      {!selectedProject ? (
-        <EmptyNoProject />
-      ) : agentError ? (
-        <ErrorState message={agentError} code={agentErrorCode} onUpgrade={onUpgrade} />
-      ) : readyCount === 0 ? (
-        <EmptyNoReady />
-      ) : (
-        <ReadyState
-          readyCount={readyCount}
-          filtered={filtered}
-          projectComments={projectComments}
-          selectedCommentId={selectedCommentId}
-          onSelectComment={onSelectComment}
-          agentSession={agentSession}
-          agentEvents={agentEvents}
-          agentConnected={agentConnected}
-          selectedAgent={selectedAgent}
-          setSelectedAgent={setSelectedAgent}
-          selectedAgentMeta={selectedAgentMeta}
-          agentDropdownOpen={agentDropdownOpen}
-          setAgentDropdownOpen={setAgentDropdownOpen}
-          copyStatus={copyStatus}
-          onCopySessionLink={onCopySessionLink}
-        />
-      )}
-    </aside>
-  )
-}
-
-function EmptyNoProject() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 text-center">
-      <p className="text-sm text-muted-foreground leading-relaxed max-w-[220px]">
-        Select a project to hand off feedback to an AI agent.
-      </p>
-    </div>
-  )
-}
-
-function EmptyNoReady() {
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center px-6 text-center animate-fade-in">
-      <div
-        className="text-foreground/30 select-none leading-none mb-3"
-        style={{ fontFamily: 'var(--crrt-font-crt)', fontSize: 88, letterSpacing: '0.04em' }}
-        aria-hidden="true"
-      >
-        0
-      </div>
-      <p className="text-[13px] text-muted-foreground/80 mb-4">crrts ready for handoff</p>
-      <p className="text-[11px] text-muted-foreground/60 leading-relaxed max-w-[230px]">
-        <span aria-hidden="true" className="text-foreground/40 mr-1">←</span>
-        Use <span className="text-status-accepted font-semibold">Send to Agent</span> on crrts in the list and they queue here.
-      </p>
-    </div>
-  )
-}
-
-function ErrorState({ message, code, onUpgrade }: { message: string; code: string | null; onUpgrade: () => void }) {
+export function AgentError({ message, code, onUpgrade }: { message: string; code: string | null; onUpgrade: () => void }) {
   const friendly = code === 'upgrade_required'
     ? 'Upgrade the project plan to use Agent.'
     : code === 'owner_upgrade_required'
@@ -157,120 +40,7 @@ function ErrorState({ message, code, onUpgrade }: { message: string; code: strin
   )
 }
 
-interface ReadyStateProps {
-  readyCount: number
-  filtered: boolean
-  projectComments: Comment[]
-  selectedCommentId: string
-  onSelectComment: (id: string) => void
-  agentSession: AgentSession | null
-  agentEvents: ShareEventsResponse['events']
-  agentConnected: boolean
-  selectedAgent: string
-  setSelectedAgent: (id: string) => void
-  selectedAgentMeta: AgentMeta
-  agentDropdownOpen: boolean
-  setAgentDropdownOpen: (open: boolean | ((v: boolean) => boolean)) => void
-  copyStatus: CopyStatus
-  onCopySessionLink: () => void
-}
-
-function ReadyState({
-  readyCount,
-  filtered,
-  projectComments,
-  selectedCommentId,
-  onSelectComment,
-  agentSession,
-  agentEvents,
-  agentConnected,
-  selectedAgent,
-  setSelectedAgent,
-  selectedAgentMeta,
-  agentDropdownOpen,
-  setAgentDropdownOpen,
-  copyStatus,
-  onCopySessionLink,
-}: ReadyStateProps) {
-  return (
-    <>
-      <HandoffHero count={readyCount} filtered={filtered} />
-      <div className="px-4 pb-4 -mt-1">
-        <HandoffCTA
-          selectedAgent={selectedAgent}
-          setSelectedAgent={setSelectedAgent}
-          selectedAgentMeta={selectedAgentMeta}
-          agentDropdownOpen={agentDropdownOpen}
-          setAgentDropdownOpen={setAgentDropdownOpen}
-          copyStatus={copyStatus}
-          onCopySessionLink={onCopySessionLink}
-          disabled={!agentSession}
-          count={readyCount}
-        />
-        <FirstTimeHint agentName={selectedAgentMeta.name} dismissed={copyStatus === 'copied'} />
-      </div>
-      {agentConnected ? (
-        <LiveQueue
-          projectComments={projectComments}
-          events={agentEvents}
-          selectedCommentId={selectedCommentId}
-          onSelectComment={onSelectComment}
-        />
-      ) : (
-        <WaitingForAgent agentName={selectedAgentMeta.name} active={copyStatus === 'copied'} />
-      )}
-    </>
-  )
-}
-
-function HandoffHero({ count, filtered }: { count: number; filtered: boolean }) {
-  const noun = count === 1 ? 'crrt' : 'crrts'
-  const caption = filtered ? `${noun} filtered` : `${noun} ready for handoff`
-  const numberSize = count >= 100 ? 64 : 84
-  const logoSize = count >= 100 ? 56 : 72
-
-  return (
-    <div className="px-4 pt-6 pb-4 flex flex-col items-center animate-fade-in">
-      <div
-        className={cn(
-          'inline-flex items-end justify-center gap-2 rounded-2xl px-4 py-1 transition-colors',
-          filtered ? 'ring-1 ring-primary/30 bg-primary/5' : '',
-        )}
-      >
-        <img
-          src={asset('crrt-isologo.png')}
-          alt=""
-          width={logoSize}
-          height={logoSize}
-          style={{
-            imageRendering: 'pixelated',
-            mixBlendMode: 'lighten',
-            marginBottom: '-6px',
-          }}
-          className="shrink-0 select-none"
-          aria-hidden="true"
-          draggable={false}
-        />
-        <div
-          className="select-none leading-none"
-          style={{
-            fontFamily: 'var(--crrt-font-crt)',
-            fontSize: numberSize,
-            letterSpacing: '0.04em',
-            color: 'var(--crrt-phosphor)',
-            textShadow: '0 0 18px rgba(255, 176, 0, 0.35)',
-          }}
-          aria-hidden="true"
-        >
-          {count}
-        </div>
-      </div>
-      <p className="mt-2 text-[12px] tracking-wide text-muted-foreground">{caption}</p>
-    </div>
-  )
-}
-
-interface HandoffCTAProps {
+export interface HandoffCTAProps {
   selectedAgent: string
   setSelectedAgent: (id: string) => void
   selectedAgentMeta: AgentMeta
@@ -282,7 +52,7 @@ interface HandoffCTAProps {
   count: number
 }
 
-function HandoffCTA({
+export function HandoffCTA({
   selectedAgent,
   setSelectedAgent,
   selectedAgentMeta,
@@ -416,7 +186,7 @@ function HandoffCTA({
   )
 }
 
-function FirstTimeHint({ agentName, dismissed }: { agentName: string; dismissed: boolean }) {
+export function FirstTimeHint({ agentName, dismissed }: { agentName: string; dismissed: boolean }) {
   const [seen, setSeen] = useState(true)
 
   useEffect(() => {
@@ -444,7 +214,7 @@ function FirstTimeHint({ agentName, dismissed }: { agentName: string; dismissed:
   )
 }
 
-function WaitingForAgent({ agentName, active }: { agentName: string; active: boolean }) {
+export function WaitingForAgent({ agentName, active }: { agentName: string; active: boolean }) {
   if (!active) return null
   return (
     <div className="px-4 py-3 border-t border-sidebar-border flex items-center gap-2 animate-fade-in">
@@ -464,7 +234,7 @@ interface LiveQueueProps {
   onSelectComment: (id: string) => void
 }
 
-function LiveQueue({ projectComments, events, selectedCommentId, onSelectComment }: LiveQueueProps) {
+export function LiveQueue({ projectComments, events, selectedCommentId, onSelectComment }: LiveQueueProps) {
   const items = useMemo(() => {
     return projectComments
       .filter((c) => c.reviewStatus === 'accepted')
