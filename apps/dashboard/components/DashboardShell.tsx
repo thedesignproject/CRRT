@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { Bot, Inbox, ListChecks, Search, Settings, Video } from 'lucide-react'
+import { Bot, Brain, Inbox, ListChecks, Search, Settings, Video } from 'lucide-react'
 import { AppShell, QuotaMeter, TopBar, type NavItem } from '@crrt/ui/crrt'
 import { Kbd } from '@crrt/ui/components/kbd'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
@@ -43,6 +43,8 @@ interface DashboardShellProps {
   extensionCommentsActive: boolean
   onOpenRecordings?: () => void
   recordingsActive?: boolean
+  onOpenBrain?: () => void
+  brainActive?: boolean
   apiBase: string
   accessToken: string
   onProjectsChanged: () => void
@@ -89,6 +91,8 @@ export function DashboardShell({
   onOpenExtensionComments,
   extensionCommentsActive,
   onOpenRecordings,
+  onOpenBrain,
+  brainActive,
   recordingsActive = false,
   apiBase,
   accessToken,
@@ -115,6 +119,7 @@ export function DashboardShell({
   const activeId = newProjectActive ? 'new-project'
     : extensionCommentsActive ? 'inbox'
     : recordingsActive ? 'recordings'
+    : brainActive ? 'brain'
     : superAdminActive ? 'super-admin'
     : settingsActive ? 'settings'
     : agentNav?.active ? agentNav.active
@@ -127,6 +132,7 @@ export function DashboardShell({
       { id: 'agent-runs', label: 'Agent runs', icon: <Bot />, live: agentNav.live, onSelect: leave(agentNav.onOpenAgentRuns) },
     ] : []),
     ...(onOpenRecordings ? [{ id: 'recordings', label: 'Recordings', icon: <Video />, onSelect: leave(onOpenRecordings) }] : []),
+    ...(onOpenBrain ? [{ id: 'brain', label: 'Brain', icon: <Brain />, onSelect: leave(onOpenBrain) }] : []),
     ...(selected && canManageProject ? [{ id: 'settings', label: 'Settings', icon: <Settings />, onSelect: leave(onOpenSettings) }] : []),
   ]
 
@@ -140,6 +146,7 @@ export function DashboardShell({
   const crumbs = newProjectActive ? ['New project']
     : extensionCommentsActive ? ['Inbox']
     : recordingsActive ? ['Recordings']
+    : brainActive ? ['Brain']
     : superAdminActive ? ['Super admin']
     : project ? (settingsActive ? [project.name, 'Settings']
       : agentNav?.active === 'next-steps' ? [project.name, 'Next steps']

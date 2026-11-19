@@ -30,6 +30,7 @@ for (const state of dashboardStates) {
       if (state === 'project-settings') { await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Settings', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible(); await expect(page.getByText('Loading company access…')).toHaveCount(0) }
       if (state === 'agent-panel') { await page.getByRole('button', { name: /^Agents,/ }).click(); await expect(page.getByRole('heading', { name: 'Next steps', exact: true })).toBeVisible() }
       if (state === 'agent-runs') { await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: /^Agent runs/ }).click(); await expect(page.getByRole('heading', { name: 'Agent runs', exact: true })).toBeVisible() }
+      if (state === 'brain') { await page.getByRole('navigation', { name: 'Workspace' }).getByRole('button', { name: 'Brain', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Brain', exact: true })).toBeVisible() }
       if (state === 'super-admin') { await page.getByRole('button', { name: 'Account menu' }).click(); await page.getByRole('button', { name: 'Super admin', exact: true }).click(); await expect(page.getByRole('region', { name: 'Super admin' })).toBeVisible() }
       if (state === 'detail') await page.getByText(/El headline está muy largo/).first().click()
       if (state === 'feedback') await expect(page.getByText(/El headline está muy largo/).first()).toBeVisible()
