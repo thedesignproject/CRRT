@@ -23,6 +23,7 @@ async function connect() {
 it('publishes every tool with a title, explicit annotations and a JSON input schema to a real SDK client', async () => {
   const client = await connect()
   try {
+    expect(client.getServerVersion()).toMatchObject({ name: 'crrt', title: 'CRRT', websiteUrl: 'http://127.0.0.1:3001', icons: [{ src: 'http://127.0.0.1:3001/favicon.png', mimeType: 'image/png' }] })
     const listed = (await client.listTools()).tools
     expect(listed.map(tool => tool.name).sort()).toEqual(tools.map(tool => tool.name).sort())
     expect(listed.map(tool => tool.name)).not.toContain('run_dashboard_operation')
