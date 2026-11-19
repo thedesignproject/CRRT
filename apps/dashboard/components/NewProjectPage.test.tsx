@@ -104,7 +104,10 @@ describe('NewProjectPage', () => {
     await settle()
     typeName('New')
     await settle()
-    await act(async () => { answers[0]({ key: 'old', available: true, suggestion: '' }); failures[0](new Error('late')) })
+    typeName('Newer')
+    await settle()
+    // A late answer for "old" and a late failure for "new" both arrive after the user moved on.
+    await act(async () => { answers[0]({ key: 'old', available: true, suggestion: '' }); failures[1](new Error('late')) })
     expect(screen.getByText(/checking…/)).toBeInTheDocument()
   })
 
