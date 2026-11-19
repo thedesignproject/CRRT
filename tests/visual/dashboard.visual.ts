@@ -25,8 +25,8 @@ for (const state of dashboardStates) {
         return
       }
       if (state === 'empty-account') { await expect(page.getByRole('heading').first()).toBeVisible(); return }
-      await expect(page.getByRole('button', { name: 'Add project', exact: true })).toBeVisible()
-      if (state === 'add-project') await page.getByRole('button', { name: 'Add project', exact: true }).click()
+      await expect(page.getByRole('button', { name: 'New project', exact: true })).toBeVisible()
+      if (state === 'add-project') await page.getByRole('button', { name: 'New project', exact: true }).click()
       if (state === 'project-settings') { await page.getByRole('button', { name: 'Project settings', exact: true }).click(); await expect(page.getByRole('heading', { name: 'Project settings' })).toBeVisible(); await expect(page.getByText('Loading company access…')).toHaveCount(0) }
       if (state === 'agent-panel') await page.getByRole('button', { name: /^Agents,/ }).click()
       if (state === 'super-admin') { await page.getByRole('button', { name: /Super admin/i }).click(); await expect(page.getByRole('region', { name: 'Super admin' })).toBeVisible() }
