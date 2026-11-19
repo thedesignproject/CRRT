@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { Bot, FileText, Inbox, Moon, Search, Settings, Shield, Sun, Video } from 'lucide-react'
-import { AppShell, NavList, QuotaMeter, TopBar, type NavItem } from '@crrt/ui/crrt'
+import { Inbox, Search, Settings, Video } from 'lucide-react'
+import { AppShell, QuotaMeter, TopBar, type NavItem } from '@crrt/ui/crrt'
 import { Kbd } from '@crrt/ui/components/kbd'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import type { Project } from '../api'
@@ -52,9 +52,13 @@ interface DashboardShellProps {
 }
 
 const toolClass = 'inline-flex h-8 items-center gap-2 rounded-md px-3 text-xs font-medium text-text-body ring-1 ring-border transition-colors hover:bg-surface-3 hover:text-text-strong disabled:cursor-not-allowed disabled:opacity-50'
-const iconToolClass = 'inline-flex size-8 items-center justify-center rounded-md text-text-subtle transition-colors hover:bg-surface-3 hover:text-text-strong [&_svg]:size-4'
 
-/** The Studio frame around every signed-in dashboard view: sidebar, top bar and keyboard legend. */
+/**
+ * The Studio frame around every signed-in dashboard view.
+ * Sidebar: workspace views, then projects. Top bar: breadcrumb, quota, search,
+ * notifications, the screen's one primary action and the account menu, which
+ * holds everything administrative.
+ */
 export function DashboardShell({
   agentAction,
   projects,
@@ -95,7 +99,9 @@ export function DashboardShell({
   const quota = usePlanQuota(apiBase, accessToken, user.id)
   // Picking any destination leaves the New project page.
   const leave = (go: () => void) => () => { onLeaveNewProject?.(); go() }
-  const project = extensionCommentsActive || newProjectActive ? undefined : projects.find((p) => p.publicKey === selectedProject)
+  const selected = projects.find((p) => p.publicKey === selectedProject)
+  // The breadcrumb names the project only on project views; Settings stays reachable while New project is open.
+  const project = extensionCommentsActive || newProjectActive ? undefined : selected
 
   const activeId = newProjectActive ? 'new-project'
     : extensionCommentsActive ? 'inbox'
@@ -107,6 +113,7 @@ export function DashboardShell({
   const nav: NavItem[] = [
     { id: 'inbox', label: 'Inbox', icon: <Inbox />, onSelect: leave(onOpenExtensionComments) },
     ...(onOpenRecordings ? [{ id: 'recordings', label: 'Recordings', icon: <Video />, onSelect: leave(onOpenRecordings) }] : []),
+    ...(selected && canManageProject ? [{ id: 'settings', label: 'Settings', icon: <Settings />, onSelect: leave(onOpenSettings) }] : []),
   ]
 
   const projectItems: NavItem[] = projects.map((p) => ({
@@ -116,19 +123,14 @@ export function DashboardShell({
     onSelect: leave(() => { setSelectedProject(p.publicKey); setStatusFilter('open'); setSelectedCommentId('') }),
   }))
 
-  const admin: NavItem[] = [
-    { id: 'documents', label: 'Documents', icon: <FileText />, href: route(`/documents?project=${encodeURIComponent(selectedProject)}`) },
-    { id: 'mcp', label: 'MCP connections', icon: <Bot />, href: route('/mcp-auth') },
-    ...(project && canManageProject ? [{ id: 'settings', label: 'Project settings', icon: <Settings />, onSelect: leave(onOpenSettings) }] : []),
-    ...(superadmin ? [{ id: 'super-admin', label: 'Super admin', icon: <Shield />, onSelect: leave(onOpenSuperAdmin) }] : []),
-  ]
-
   const crumbs = newProjectActive ? ['New project']
     : extensionCommentsActive ? ['Inbox']
     : recordingsActive ? ['Recordings']
     : superAdminActive ? ['Super admin']
     : project ? (settingsActive ? [project.name, 'Settings'] : [project.name])
     : ['Workspace']
+
+  const projectQuery = selectedProject ? `?project=${encodeURIComponent(selectedProject)}` : ''
 
   return (
     <AppShell
@@ -140,13 +142,10 @@ export function DashboardShell({
       projectsEmpty={projectsLoading ? 'Loading projects…' : projectsError ? <span role="alert">{projectsError}</span> : 'No projects yet'}
       activeId={activeId}
       onNewProject={onNewProject}
-      sidebarFooter={
-        <div className="flex flex-col gap-4">
-          {/* A group, not a second <nav>: it already sits inside the shell's Workspace nav. */}
-          <div role="group" aria-label="Workspace administration"><NavList items={admin} activeId={activeId} /></div>
+      topBar={
+        <TopBar crumbs={crumbs}>
           {quota && (
             <QuotaMeter
-              className="px-2"
               plan={quota.plan}
               used={quota.used}
               limit={quota.limit}
@@ -155,22 +154,24 @@ export function DashboardShell({
               upgradeHref={quota.canUpgrade ? route('/billing') : undefined}
             />
           )}
-        </div>
-      }
-      topBar={
-        <TopBar crumbs={crumbs}>
-          {agentAction}
-          <a href={route(`/audits/new${selectedProject ? `?project=${encodeURIComponent(selectedProject)}` : ''}`)} className={toolClass}>Run audit</a>
           <button type="button" onClick={onOpenCmd} aria-label="Search feedback" disabled={extensionCommentsActive} className={`${toolClass} sm:w-52`}>
             <Search className="size-3.5 text-text-subtle" />
             <span className="hidden flex-1 text-left sm:block">Search feedback…</span>
             {shortcutsEnabled && <Kbd className="hidden bg-surface-4 font-mono sm:inline-flex">⌘K</Kbd>}
           </button>
           <NotificationBell apiBase={apiBase} accessToken={accessToken} userId={user.id} onProjectsChanged={onProjectsChanged} onOpenCommentActivity={onOpenCommentActivity} />
-          <button type="button" onClick={toggleTheme} aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} className={iconToolClass}>
-            {theme === 'light' ? <Moon /> : <Sun />}
-          </button>
-          <UserMenu user={user} onSignOut={onSignOut} apiBase={apiBase} accessToken={accessToken} />
+          {agentAction}
+          <UserMenu
+            user={user}
+            onSignOut={onSignOut}
+            apiBase={apiBase}
+            accessToken={accessToken}
+            theme={theme}
+            toggleTheme={toggleTheme}
+            auditHref={route(`/audits/new${projectQuery}`)}
+            documentsHref={route(`/documents${projectQuery}`)}
+            onOpenSuperAdmin={superadmin ? leave(onOpenSuperAdmin) : undefined}
+          />
         </TopBar>
       }
     >

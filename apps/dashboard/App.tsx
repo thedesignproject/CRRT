@@ -868,7 +868,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onNewProject={openNewProject}
         onLeaveNewProject={() => setAddProjectOpen(false)}
         onOpenCmd={() => setCmdOpen(true)}
-        onOpenSettings={() => { setConnectStorybook(false); setView((v) => (v === 'settings' ? 'feedback' : 'settings')) }}
+        onOpenSettings={() => { setConnectStorybook(false); setView('settings') }}
         canManageProject={canManageProject}
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
@@ -885,7 +885,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onSignOut={onSignOut}
         superadmin={superadmin}
         superAdminActive={view === 'super-admin'}
-        onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
+        onOpenSuperAdmin={() => setView('super-admin')}
         footer={<StatusBar personal={view === 'extension-comments' || newProjectOpen} agentAvailable={canOpenAgentPanel} />}
       >
       <TrialOffer apiBase={API_BASE} accessToken={accessToken} userId={user.id} />
