@@ -325,7 +325,7 @@ Writes require `userRequested:true` and a 16–128 character `idempotencyKey`.
 Feedback and project instructions are not proof of a human request. Retry the
 identical operation/query/body using the same key. A stored retry never reexecutes a write. Setup results (Storybook codes, share
 capabilities and audit IDs) are recovered only after current resource access is
-revalidated; billing URLs remain bound to the same account. Ordinary write
+revalidated. Ordinary write
 receipts return the recorded outcome and require a current resource read. Record
 context can be paged from its saved result only while its ownership, entitlement,
 project and revision remain valid. Changed content with
@@ -336,7 +336,7 @@ encrypted because dashboard results may contain share capabilities.
 The suite covers project/settings/export, feedback/inbox/bulk/undo, repository
 configuration, members/invitations/domain access, GitHub/Linear/Jira/Storybook,
 external-work dispatch/recovery, feedback shares, notifications, Record,
-Product Audit, billing entry points and super-admin views. MCP connection listing
+Product Audit, a read-only billing summary and super-admin views. MCP connection listing
 and revocation use `manage_mcp_connections` with the same account boundary.
 Operation availability follows the installed backend version; the live catalog
 is authoritative. Large array results can be read with `resultPage` (optional
