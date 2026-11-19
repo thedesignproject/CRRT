@@ -2,11 +2,9 @@ import posthog from '../../posthog'
 import { type ReactNode, useEffect, useRef, useState } from 'react'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork, type ExternalWorkDraft, type ExternalWorkProvider, type ExternalWorkRecord } from '../api'
-import { cn } from '../lib/utils'
-import { getDisplayStatus } from '../lib/comment'
 import { timeAgo, truncateUrl } from '../lib/format'
 import { asset } from '../lib/routes'
-import { DISPLAY_STATUS_LABELS, type Comment } from '../lib/types'
+import type { Comment } from '../lib/types'
 import {
   BotIcon,
   ChevronLeftIcon,
@@ -14,13 +12,21 @@ import {
   DoneIcon,
   ExternalLinkIcon,
   ImageOffIcon,
-  SelectorIcon,
   XIcon,
 } from './icons'
-import { ActionBtn, Kbd } from './primitives'
+import { ActionBtn, Kbd, StatusBadge } from './primitives'
 import { ProjectEmptyState } from './ProjectEmptyState'
-import { EmptyState } from '@crrt/ui/crrt'
-import { MousePointer2 } from 'lucide-react'
+import { EmptyState, Initials, PinnedPreview } from '@crrt/ui/crrt'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@crrt/ui/components/dropdown-menu'
+import { Ellipsis, MousePointer2 } from 'lucide-react'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
 
 const providerLabel = (provider: ExternalWorkProvider) =>
@@ -84,6 +90,17 @@ function preferRememberedWork(server: ExternalWorkRecord, remembered: ExternalWo
   const rememberedTime = Date.parse(remembered.updatedAt)
   if (Number.isFinite(serverTime) && Number.isFinite(rememberedTime)) return rememberedTime > serverTime
   return remembered.lifecycleStatus !== 'active' || server.lifecycleStatus === 'active'
+}
+
+/** Only http(s) page URLs become links; anything else stays plain text. */
+function pageHref(pageUrl: string | undefined | null) {
+  if (!pageUrl) return undefined
+  try {
+    const url = new URL(pageUrl)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : undefined
+  } catch {
+    return undefined
+  }
 }
 
 function syncRemediation(work: ExternalWorkRecord) {
@@ -151,7 +168,6 @@ export function CommentDetail({
   const [createdExternalWork, setCreatedExternalWork] = useState<Record<string, ExternalWorkRecord[]>>({})
   const [pendingRecovery, setPendingRecovery] = useState(false)
   const [externalWorkDraft, setExternalWorkDraft] = useState<ExternalWorkDraft | null>(null)
-  const [selectorOpen, setSelectorOpen] = useState(false)
   const issueRequests = useRef(new Map<string, symbol>())
   const syncRequests = useRef(new Set<string>())
   const selectedId = selectedComment?.id ?? null
@@ -200,7 +216,6 @@ export function CommentDetail({
     setIssueError(null)
     setSyncBusy(selectedId !== null && syncRequests.current.has(selectedId))
     setExternalWorkDraft(null)
-    setSelectorOpen(false)
   }, [selectedId])
 
   const selectorContext = selectedComment?.targetType === 'text_range' && selectedComment.anchor
@@ -309,256 +324,208 @@ export function CommentDetail({
   }
 
   return (
-    <div className="dashboard-comment-detail flex-1 min-w-0 flex flex-col overflow-hidden bg-background">
+    <div className="dashboard-comment-detail flex-1 min-w-0 flex flex-col overflow-hidden bg-surface-0">
       {selectedComment ? (
         <>
-          <div className="flex items-center justify-between px-6 min-h-12 py-3 shrink-0 border-b border-border bg-card">
-            <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-              <span className="font-mono font-medium truncate max-w-32">#{selectedComment.id}</span>
-              {selectedComment.pageUrl ? (
-                <>
-                  <span>·</span>
-                  <span className="truncate" title={selectedComment.pageUrl}>{truncateUrl(selectedComment.pageUrl)}</span>
-                </>
-              ) : null}
-              {!personal && <span>·</span>}
-              {!personal && (() => {
-                const ds = getDisplayStatus(selectedComment)
-                return (
-                  <span className={cn(
-                    'font-semibold',
-                    ds === 'ready' && 'text-status-accepted',
-                    ds === 'ready_for_testing' && 'text-status-ready-for-testing',
-                    ds === 'rejected' && 'text-status-rejected',
-                    ds === 'done' && 'text-status-done',
-                    ds === 'open' && 'text-muted-foreground',
-                  )}>
-                    {DISPLAY_STATUS_LABELS[ds]}
-                  </span>
-                )
-              })()}
+          <header className="flex shrink-0 flex-wrap items-start gap-3 border-b border-border px-6 py-4">
+            <div className="flex min-w-0 flex-[1_1_16rem] flex-col gap-1">
+              <div className="flex min-w-0 items-center gap-2">
+                <h2 className="truncate text-lg font-semibold tracking-[-0.02em] text-text-strong" title={selectedComment.id}>
+                  Comment #{selectedIdx >= 0 ? selectedIdx + 1 : selectedComment.id}
+                </h2>
+                {!personal && <StatusBadge comment={selectedComment} />}
+                {!personal && selectedComment.visibility === 'internal' && (
+                  <span className="text-xs font-medium text-text-subtle">Internal</span>
+                )}
+              </div>
+              <p className="truncate font-mono text-xs text-text-subtle" title={selectedComment.pageUrl ?? undefined}>
+                {[selectedComment.pageUrl ? truncateUrl(selectedComment.pageUrl) : null, selectorContext, timeAgo(selectedComment.createdAt)].filter(Boolean).join(' · ')}
+              </p>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 px-6 py-3 border-b border-border">
-              {!personal && !readOnly && <><ActionBtn
-                active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
-                variant="accept"
-                onClick={() => toggleReview!(selectedComment, 'accepted')}
-                shortcut="A"
-              >
-                <BotIcon size={14} /> Send to Agent
-              </ActionBtn>
-              <ActionBtn
-                active={selectedComment.implementationStatus === 'done'}
-                variant="done"
-                onClick={() => handleToggleDone!(selectedComment.id)}
-                shortcut="M"
-              >
-                <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Done' : 'Mark Done'}
-              </ActionBtn>
+            {!personal && readOnly && (
+              <span className="inline-flex h-8 items-center rounded-lg px-3 text-xs font-medium text-text-subtle ring-1 ring-inset ring-border">
+                Shared with project
+              </span>
+            )}
+            {!personal && !readOnly && <div className="flex items-center gap-1">
               <ActionBtn
                 active={selectedComment.reviewStatus === 'rejected'}
+                ghost
                 variant="reject"
                 onClick={() => toggleReview!(selectedComment, 'rejected')}
                 shortcut="D"
               >
                 <XIcon size={14} /> Reject
               </ActionBtn>
-
-
-              </>}
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-y-auto">
-            <div key={selectedComment.id} className="dashboard-detail-content max-w-2xl mx-auto px-4 sm:px-8 py-8 detail-enter">
-              {selectedComment.screenshotUrl ? (
-                <div className="rounded-xl border border-border overflow-hidden mb-6 bg-muted/40 flex items-center justify-center">
-                  <a
-                    href={selectedComment.screenshotUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block"
-                  >
-                    <img
-                      src={selectedComment.screenshotUrl}
-                      alt={selectedComment.pageUrl
-                        ? `Screenshot of ${selectedComment.pageUrl}`
-                        : 'Feedback screenshot'}
-                      className="max-w-full max-h-[520px] w-auto h-auto object-contain"
-                      draggable={false}
-                    />
-                  </a>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-border bg-card p-5 mb-6">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center">
-                      <ImageOffIcon size={16} className="text-muted-foreground" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-semibold text-foreground">No screenshot captured</p>
-                      {Number.isFinite(selectedComment.x) && Number.isFinite(selectedComment.y) && (
-                        <p className="text-[11px] text-muted-foreground">
-                          Pin placed at ({selectedComment.x}, {selectedComment.y})
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div className="flex justify-end mb-6">
-              {selectedComment.pageUrl && (
-                <ActionBtn variant="neutral" onClick={() => {
-                  window.open(selectedComment.pageUrl!, '_blank', 'noopener,noreferrer')
-                }}>
-                  <ExternalLinkIcon size={13} /> Open page
-                </ActionBtn>
-              )}
-              </div>
-              <div className="dashboard-comment-body flex items-start gap-3 mb-8">
-                <div
-                  className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold text-white"
-                  style={{ background: selectedComment.authorColor }}
+              <ActionBtn
+                active={selectedComment.reviewStatus === 'accepted' && selectedComment.implementationStatus !== 'done'}
+                primary
+                variant="accept"
+                onClick={() => toggleReview!(selectedComment, 'accepted')}
+                shortcut="A"
+              >
+                <BotIcon size={14} /> Send to Agent
+              </ActionBtn>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  aria-label="More actions"
+                  className="inline-flex size-8 items-center justify-center rounded-lg text-text-subtle transition-colors hover:bg-surface-3 hover:text-text-strong data-popup-open:bg-surface-3 data-popup-open:text-text-strong"
                 >
-                  {selectedComment.authorInitial}
-                </div>
+                  <Ellipsis size={16} />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuItem onClick={() => handleToggleDone!(selectedComment.id)}>
+                    <DoneIcon size={14} /> {selectedComment.implementationStatus === 'done' ? 'Mark not done' : 'Mark Done'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onVisibilityChange?.(selectedComment.id, selectedComment.visibility === 'internal' ? 'shared' : 'internal')}>
+                    {selectedComment.visibility === 'internal' ? 'Share with project' : 'Make internal'}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>
+                      {selectedComment.reviewStatus === 'rejected' ? 'Send to · reopen to send' : 'Send to'}
+                    </DropdownMenuLabel>
+                    {(['github', 'linear', 'jira'] as const).map(provider => (
+                      <DropdownMenuItem
+                        key={provider}
+                        aria-label={`Send to ${providerLabel(provider)}`}
+                        disabled={!selectedProject || selectedComment.reviewStatus === 'rejected' || issueBusy}
+                        onClick={() => { void prepareExternalWork(selectedComment, provider) }}
+                      >
+                        <ExternalLinkIcon size={13} /> {providerLabel(provider)}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>}
+          </header>
+
+          <div className="dashboard-detail-scroll flex-1 min-h-0 overflow-y-auto">
+            <div key={selectedComment.id} className="dashboard-detail-content mx-auto flex max-w-3xl flex-col gap-6 px-6 py-6 detail-enter">
+              <article className="dashboard-comment-body flex items-start gap-3">
+                <Initials name={selectedComment.author} />
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm font-semibold text-foreground">{selectedComment.author}</span>
-                    <span className="text-xs text-muted-foreground">{timeAgo(selectedComment.createdAt)}</span>
-                  </div>
-                  {bodyEditor ?? <p className="text-[15px] leading-relaxed text-foreground whitespace-pre-wrap break-words">
+                  <p className="mb-1 flex items-baseline gap-2">
+                    <span className="text-sm font-medium text-text-strong">{selectedComment.author}</span>
+                    <span className="text-xs text-text-subtle">{timeAgo(selectedComment.createdAt)}</span>
+                  </p>
+                  {bodyEditor ?? <p className="text-[15px] leading-relaxed text-text-body whitespace-pre-wrap break-words">
                     {selectedComment.body}
                   </p>}
-                  {personal && <p className="mt-2 text-xs text-muted-foreground">Pin {selectedComment.x}%, {selectedComment.y}%</p>}
+                  {personal && <p className="mt-2 text-xs text-text-subtle">Pin {selectedComment.x}%, {selectedComment.y}%</p>}
                   {selectedComment.targetType === 'text_range' && selectedComment.anchor ? (
-                    <div className="mt-3">
-                      <p className="text-[13px] leading-relaxed border-l-2 border-primary bg-muted/60 px-3 py-2 rounded-md">
-                        <span className="text-muted-foreground">{selectedComment.anchor.prefix}</span>
-                        <span className="text-foreground font-medium">{selectedComment.anchor.selectedText}</span>
-                        <span className="text-muted-foreground">{selectedComment.anchor.suffix}</span>
-                      </p>
-                    </div>
+                    <p className="mt-3 rounded-md border-l-2 border-pin bg-surface-2 px-3 py-2 text-[13px] leading-relaxed">
+                      <span className="text-text-subtle">{selectedComment.anchor.prefix}</span>
+                      <span className="font-medium text-text-strong">{selectedComment.anchor.selectedText}</span>
+                      <span className="text-text-subtle">{selectedComment.anchor.suffix}</span>
+                    </p>
                   ) : null}
-                  {selectorContext && (
-                    <div className="mt-3">
-                      <button
-                        type="button"
-                        aria-expanded={selectorOpen}
-                        onClick={() => setSelectorOpen((open) => !open)}
-                        className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <SelectorIcon size={12} />
-                        {selectorOpen ? 'Hide selector' : 'Show selector'}
-                      </button>
-                      {selectorOpen && (
-                        <div className="mt-2 px-3 py-2 rounded-md bg-muted/60 border border-border text-xs font-mono text-muted-foreground break-all">
-                          <code>{selectorContext}</code>
-                          {selectedComment.targetType === 'text_range' && selectedComment.anchor && (
-                            <span> · chars {selectedComment.anchor.startOffset}–{selectedComment.anchor.endOffset}</span>
-                          )}
-                        </div>
-                      )}
+                </div>
+              </article>
+
+              {(linkedExternalWork.length > 0 || (issueError && !externalWorkDraft)) && (
+                <section aria-label="Linked work" className="flex flex-wrap items-center gap-2">
+                  {linkedExternalWork.map((work) => (
+                    <ActionBtn key={work.provider} variant="neutral" onClick={() => openExternalWork(work)}>
+                      <ExternalLinkIcon size={13} /> Open {providerLabel(work.provider)} {work.externalKey}{lifecycleLabel(work.lifecycleStatus)}
+                    </ActionBtn>
+                  ))}
+
+                  {selectedComment.reviewStatus === 'rejected' && linkedExternalWork
+                    .filter((work) => work.lifecycleStatus === 'blocked')
+                    .map((work) => (
+                      <span key={`${work.provider}-remediation`} className="text-xs text-status-rejected">
+                        {syncRemediation(work)}
+                      </span>
+                    ))}
+
+                  {selectedComment.reviewStatus === 'rejected' && linkedExternalWork.some((work) => work.lifecycleStatus === 'failed') && (
+                    <ActionBtn variant="neutral" disabled={syncBusy} onClick={() => { void retryExternalWork(selectedComment) }}>
+                      {syncBusy ? 'Retrying close…' : 'Retry closing'}
+                    </ActionBtn>
+                  )}
+
+                  {selectedComment.reviewStatus === 'rejected' && linkedExternalWork.some((work) => work.lifecycleStatus === 'blocked') && (
+                    <ActionBtn variant="neutral" disabled={syncBusy} onClick={() => { void retryExternalWork(selectedComment) }}>
+                      {syncBusy ? 'Retrying close…' : 'Retry after fixing'}
+                    </ActionBtn>
+                  )}
+
+                  {issueError && !externalWorkDraft && (
+                    <span role="alert" className="text-xs text-status-rejected">{issueError}</span>
+                  )}
+                </section>
+              )}
+
+              <div className="flex flex-col gap-2">
+                <PinnedPreview
+                  url={selectedComment.pageUrl ? truncateUrl(selectedComment.pageUrl) : 'Page unknown'}
+                  href={pageHref(selectedComment.pageUrl)}
+                  pin={selectedIdx + 1}
+                >
+                  {selectedComment.screenshotUrl ? (
+                    <a
+                      href={selectedComment.screenshotUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex justify-center bg-surface-1"
+                    >
+                      <img
+                        src={selectedComment.screenshotUrl}
+                        alt={selectedComment.pageUrl
+                          ? `Screenshot of ${selectedComment.pageUrl}`
+                          : 'Feedback screenshot'}
+                        className="max-w-full max-h-[520px] w-auto h-auto object-contain"
+                        draggable={false}
+                      />
+                    </a>
+                  ) : (
+                    <div className="flex items-center gap-3 px-5 py-8">
+                      <span className="flex size-8 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-inset ring-border">
+                        <ImageOffIcon size={16} className="text-text-subtle" />
+                      </span>
+                      <div>
+                        <p className="text-xs font-medium text-text-strong">No screenshot captured</p>
+                        {Number.isFinite(selectedComment.x) && Number.isFinite(selectedComment.y) && (
+                          <p className="font-mono text-[11px] text-text-subtle">
+                            Pin placed at ({selectedComment.x}, {selectedComment.y})
+                          </p>
+                        )}
+                      </div>
                     </div>
                   )}
-                </div>
+                </PinnedPreview>
               </div>
             </div>
+          </div>
 
-          <div className="dashboard-detail-actions border-t border-border bg-card">
-            <div className="flex flex-wrap items-center gap-2 max-w-2xl mx-auto">
+          {personal && <div className="dashboard-detail-actions shrink-0 border-t border-border bg-surface-1">
+            <div className="mx-auto flex max-w-3xl flex-wrap items-center gap-2">
               {personalActions}
-              {!personal && (
-                readOnly ? (
-                  <span className="inline-flex h-8 items-center rounded-full border border-border px-3 text-[11px] font-semibold text-muted-foreground">
-                    Shared with project
-                  </span>
-                ) : (
-                  <label className="inline-flex h-8 items-center gap-2 rounded-full border border-border px-3 text-[11px] font-semibold text-muted-foreground">
-                    Audience
-                    <select
-                      aria-label="Feedback audience"
-                      value={selectedComment.visibility ?? 'shared'}
-                      onChange={(event) => onVisibilityChange?.(selectedComment.id, event.target.value as 'shared' | 'internal')}
-                      className="bg-transparent text-foreground outline-none"
-                    >
-                      <option value="shared">Shared</option>
-                      <option value="internal">Internal</option>
-                    </select>
-                  </label>
-                )
-              )}
-
-
-
-
-              {linkedExternalWork.map((work) => (
-                <ActionBtn key={work.provider} variant="neutral" onClick={() => openExternalWork(work)}>
-                  <ExternalLinkIcon size={13} /> Open {providerLabel(work.provider)} {work.externalKey}{lifecycleLabel(work.lifecycleStatus)}
-                </ActionBtn>
-              ))}
-
-              {selectedComment.reviewStatus === 'rejected' && linkedExternalWork
-                .filter((work) => work.lifecycleStatus === 'blocked')
-                .map((work) => (
-                  <span key={`${work.provider}-remediation`} className="text-xs text-status-rejected">
-                    {syncRemediation(work)}
-                  </span>
-                ))}
-
-              {selectedComment.reviewStatus === 'rejected' && linkedExternalWork.some((work) => work.lifecycleStatus === 'failed') && (
-                <ActionBtn variant="neutral" disabled={syncBusy} onClick={() => { void retryExternalWork(selectedComment) }}>
-                  {syncBusy ? 'Retrying close…' : 'Retry closing'}
-                </ActionBtn>
-              )}
-
-              {selectedComment.reviewStatus === 'rejected' && linkedExternalWork.some((work) => work.lifecycleStatus === 'blocked') && (
-                <ActionBtn variant="neutral" disabled={syncBusy} onClick={() => { void retryExternalWork(selectedComment) }}>
-                  {syncBusy ? 'Retrying close…' : 'Retry after fixing'}
-                </ActionBtn>
-              )}
-
-              {!personal && !readOnly && <span
-                className="relative inline-flex flex-wrap items-center gap-3 w-full pt-4 mt-2 border-t border-border group"
-              >
-                {(['github', 'linear', 'jira'] as const).map(provider => <ActionBtn
-                  key={provider} variant="neutral"
-                  onClick={() => { void prepareExternalWork(selectedComment, provider) }}
-                  disabled={!selectedProject || selectedComment.reviewStatus === 'rejected' || issueBusy}
-                ><ExternalLinkIcon size={13} /> Send to {providerLabel(provider)}</ActionBtn>)}
-                {selectedComment.reviewStatus === 'rejected' && <span className="text-xs text-muted-foreground">Reopen to send.</span>}
-              </span>}
-
-              {issueError && !externalWorkDraft && (
-                <span role="alert" className="text-xs text-status-rejected">{issueError}</span>
-              )}
-
-              <div className="flex-1" />
-
-              <button
-                onClick={goPrev}
-                aria-label="Previous comment"
-                disabled={selectedIdx <= 0}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronLeftIcon size={16} />
-              </button>
-              <span className="text-xs font-mono text-muted-foreground tabular-nums">
-                {selectedIdx + 1}/{filteredComments.length}
-              </span>
-              <button
-                onClick={goNext}
-                aria-label="Next comment"
-                disabled={selectedIdx >= filteredComments.length - 1}
-                className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              >
-                <ChevronRightIcon size={16} />
-              </button>
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  onClick={goPrev}
+                  aria-label="Previous comment"
+                  disabled={selectedIdx <= 0}
+                  className="rounded-md p-1.5 text-text-subtle transition-colors hover:bg-surface-3 hover:text-text-strong disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronLeftIcon size={16} />
+                </button>
+                <span className="font-mono text-xs tabular-nums text-text-subtle">
+                  {selectedIdx + 1}/{filteredComments.length}
+                </span>
+                <button
+                  onClick={goNext}
+                  aria-label="Next comment"
+                  disabled={selectedIdx >= filteredComments.length - 1}
+                  className="rounded-md p-1.5 text-text-subtle transition-colors hover:bg-surface-3 hover:text-text-strong disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronRightIcon size={16} />
+                </button>
+              </div>
             </div>
-          </div>
-          </div>
+          </div>}
         </>
       ) : personal && !commentsLoading && !commentsError && projectComments.length === 0 ? (
         <div className="flex-1 overflow-y-auto px-8 py-8">

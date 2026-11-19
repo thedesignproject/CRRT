@@ -1,6 +1,6 @@
 import { useId, useRef, type ReactNode } from 'react'
 import { MessageSquare } from 'lucide-react'
-import { EmptyState, FilterTabs, Initials } from '@crrt/ui/crrt'
+import { EmptyState, FilterTabs, Initials, Pin } from '@crrt/ui/crrt'
 import { cn } from '../lib/utils'
 import { getDisplayStatus, isInactive } from '../lib/comment'
 import { timeAgo } from '../lib/format'
@@ -115,7 +115,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         />}
       </div>
 
-      {(controls || personalBulk) && (
+      {(personalBulk || (bulkMode && controls)) && (
         <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-2.5 text-xs">
           <button
             type="button"
@@ -165,14 +165,14 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
           )
         ) : (
           <div className="animate-stagger">
-            {filteredComments.map((comment) => {
+            {filteredComments.map((comment, index) => {
               const isActive = comment.id === selectedCommentId
               const isChecked = personalBulk?.isSelected(comment.id) ?? bulkSelectedIds.has(comment.id)
               const inactive = isInactive(comment)
 
               return (
                 <div key={comment.id} className="relative flex items-start border-b border-sidebar-border">
-                  {(controls || personalBulk) && <input
+                  {(personalBulk || (bulkMode && controls)) && <input
                     type="checkbox"
                     aria-label={`Select feedback: ${comment.body}`}
                     title="Shift-click to select a range"
@@ -201,6 +201,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     </span>
                     <span className={cn('line-clamp-2 break-words', inactive ? 'text-text-subtle' : 'text-text-body')}>{comment.body}</span>
                     <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-text-subtle">
+                      <Pin n={index + 1} className="size-4 text-[10px]" />
                       {comment.claimedByAgentId && (
                         <span className="inline-flex shrink-0 items-center gap-1 font-sans font-medium text-status-agent-fg">
                           {/* The status chip already pulses for claimed work; the Inbox has no chip, so it pulses here. */}
