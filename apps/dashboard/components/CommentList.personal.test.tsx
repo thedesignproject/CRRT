@@ -75,6 +75,7 @@ describe('shared feedback controls', () => {
 
   it('advertises only personal navigation shortcuts in My Comments', () => {
     const view = render(<StatusBar />)
+    fireEvent.keyDown(window, { key: '?' })
     expect(screen.queryByRole('button', { name: 'Show agent panel' })).toBeNull()
     expect(screen.getByText('send to agent')).toBeInTheDocument()
     view.rerender(<StatusBar agentAvailable={false} />)
