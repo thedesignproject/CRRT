@@ -7,7 +7,8 @@ vi.mock('./hooks/useProjects', () => ({ useProjects: () => ({ projects: data.pro
 vi.mock('./hooks/useComments', () => ({ useComments: () => ({ comments: data.comments, loading: false, error: null, refresh: data.refresh }) }))
 vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: false }) }))
 vi.mock('./hooks/useAgentSession', () => ({ useAgentSession: () => ({ session: null, shareState: null, events: [], error: null, copyPrompt: data.refresh, adoptSession: data.refresh }) }))
-vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: any) => <><nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button onClick={() => props.setSelectedProject('project')}>Project</button></nav>{props.children}{props.footer}</> }))
+vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: any) => <><nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button aria-pressed={props.brainActive} onClick={props.onOpenBrain}>Brain</button><button onClick={() => props.setSelectedProject('project')}>Project</button></nav>{props.children}{props.footer}</> }))
+vi.mock('./components/BrainPage', () => ({ BrainPage: () => <h1>Rules</h1> }))
 vi.mock('./components/RecordingsPage', () => ({ RecordingsPage: () => <h1>Recording library</h1> }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <h1>Personal Inbox</h1> }))
 vi.mock('./lib/supabase', () => ({ supabase: { auth: {} } }))
@@ -51,4 +52,15 @@ it('leaves private playback for project feedback without a stale recording query
   view.rerender(<App />)
   expect(screen.queryByText('Owner owner-token')).toBeNull()
   expect(screen.queryByText('Anonymous recording')).toBeNull()
+})
+
+it('opens Brain as a workspace page with shortcuts off', () => {
+  history.replaceState(null, '', '/')
+  auth.value = { session: { access_token: 'owner-token' }, user: { id: 'owner' }, loading: false, signOut: vi.fn() }
+  render(<App />)
+  fireEvent.click(screen.getByRole('button', { name: 'Brain' }))
+  expect(screen.getByRole('heading', { name: 'Rules' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Brain' })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.keyDown(window, { key: 'k', metaKey: true })
+  expect(screen.queryByRole('dialog')).toBeNull()
 })
