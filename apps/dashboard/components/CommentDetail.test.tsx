@@ -8,7 +8,6 @@ vi.mock('../api', () => ({
   sendExternalWork: vi.fn(),
   resolvePendingExternalWork: vi.fn(),
 }))
-vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: () => <div>Storybook setup</div> }))
 
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'
@@ -684,10 +683,9 @@ describe('<CommentDetail /> GitHub issue action', () => {
         selectedComment={null}
         projectComments={[]}
         filteredComments={[]}
-        canManageStorybook={false}
       />,
     )
-    expect(screen.getByText('Bring feedback into this project.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Bring feedback into this project' })).toBeInTheDocument()
   })
 
   it('explains when the selected provider is not connected', async () => {

@@ -127,6 +127,12 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     window.history.replaceState(null, '', `${route('/')}${query}`)
     window.dispatchEvent(new PopStateEvent('popstate'))
   }, [view])
+  // Set only when Settings is opened from the checklist's "Connect Storybook" step.
+  const [connectStorybook, setConnectStorybook] = useState(false)
+  const openStorybookSetup = useCallback(() => {
+    setConnectStorybook(true)
+    setView('settings')
+  }, [])
   const openAccessReview = useCallback((project: string) => {
     setSelectedProject(project)
     setView('settings')
@@ -844,7 +850,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         onNewProject={openNewProject}
         onLeaveNewProject={() => setAddProjectOpen(false)}
         onOpenCmd={() => setCmdOpen(true)}
-        onOpenSettings={() => setView((v) => (v === 'settings' ? 'feedback' : 'settings'))}
+        onOpenSettings={() => { setConnectStorybook(false); setView((v) => (v === 'settings' ? 'feedback' : 'settings')) }}
         canManageProject={canManageProject}
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
@@ -897,6 +903,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           currentUserId={user.id}
           onBack={() => setView('feedback')}
           onProjectsChanged={refreshProjects}
+          connectStorybook={connectStorybook}
         />
       ) : (
       <>
@@ -929,7 +936,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
         <CommentDetail
           readOnly={!canManageFeedback}
-          canManageStorybook={activeProject?.role === 'owner'}
+          onConnectStorybook={activeProject?.role === 'owner' ? openStorybookSetup : undefined}
           selectedComment={selectedComment}
           selectedProject={selectedProject}
           commentsLoading={commentsLoading}

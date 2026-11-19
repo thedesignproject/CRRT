@@ -340,6 +340,18 @@ it('only mounts company access controls for project managers', () => {
   vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
   rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
   expect(screen.getByText('Company access controls')).toBeInTheDocument()
+  expect(screen.queryByText('Storybook connection settings')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '+ Connect Storybook' }))
+  expect(screen.getByText('Storybook connection settings')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  expect(screen.queryByText('Storybook connection settings')).toBeNull()
+})
+
+it('opens straight into the Storybook setup from the checklist', () => {
+  vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+  render(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} connectStorybook />)
+  expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Where feedback comes from' })).toBeInTheDocument()
   expect(screen.getByText('Storybook connection settings')).toBeInTheDocument()
 })
 

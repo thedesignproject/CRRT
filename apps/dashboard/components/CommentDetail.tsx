@@ -111,7 +111,8 @@ interface CommentDetailProps {
   accessToken: string
   personal?: false
   readOnly?: boolean
-  canManageStorybook?: boolean
+  /** Opens Settings at the Storybook source; omitted for people who can't manage it. */
+  onConnectStorybook?: () => void
   bodyEditor?: ReactNode
   personalActions?: ReactNode
 }
@@ -135,7 +136,7 @@ export function CommentDetail({
   accessToken,
   personal = false,
   readOnly = false,
-  canManageStorybook = false,
+  onConnectStorybook,
   bodyEditor,
   personalActions,
 }: CommentDetailProps | PersonalDetailProps) {
@@ -567,12 +568,7 @@ export function CommentDetail({
           </div>
         </div>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
-        <ProjectEmptyState
-          projectId={selectedProject}
-          apiBase={apiBase}
-          accessToken={accessToken}
-          canManage={canManageStorybook}
-        />
+        <ProjectEmptyState projectId={selectedProject} onConnectStorybook={onConnectStorybook} />
       ) : (
         <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
           <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">

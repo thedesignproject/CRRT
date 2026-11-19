@@ -1,7 +1,8 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
-import { NewProjectPage, setupPrompt } from './NewProjectPage'
+import { NewProjectPage } from './NewProjectPage'
+import { setupPrompt } from '../lib/setup-prompt'
 import { route } from '../lib/routes'
 
 type Props = ComponentProps<typeof NewProjectPage>
