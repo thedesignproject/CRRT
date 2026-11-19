@@ -58,7 +58,7 @@ it.each([true, false])('routes the sidebar create action by plan (plan required=
   fixtures.gate = { planRequired, trialAvailable: true }
   render(<App />)
   await act(async () => {})
-  fireEvent.click(screen.getByRole('button', { name: 'Add project' }))
+  fireEvent.click(screen.getByRole('button', { name: 'New project' }))
   if (planRequired) {
     expect(assign).toHaveBeenCalledWith(route('/billing'))
     expect(screen.queryByRole('heading', { name: 'Create a project' })).not.toBeInTheDocument()

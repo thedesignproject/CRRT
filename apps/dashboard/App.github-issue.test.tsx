@@ -107,7 +107,7 @@ vi.mock('./components/CommentDetail', () => ({
     <button onClick={() => props.onVisibilityChange?.('missing-comment', 'internal')}>change missing audience</button>
   </div>,
 }))
-vi.mock('./components/Header', () => ({ Header: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button></> }))
+vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void; children?: ReactNode; footer?: ReactNode }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button>{props.children}{props.footer}</> }))
 vi.mock('./components/CommentList', () => ({
   CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null; updatedAt: string }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
@@ -176,7 +176,7 @@ beforeEach(() => {
   fixtures.comments.splice(0)
   fixtures.projects.splice(0, fixtures.projects.length, { publicKey: 'project-1', slug: 'project-1', name: 'Project', allowedOrigins: [], createdAt: '', updatedAt: '' })
   fixtures.superadmin = false
-  Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: vi.fn((key: string) => key === 'dashboard-theme' ? 'dark' : '1'), setItem: vi.fn() } })
+  Object.defineProperty(window, 'localStorage', { configurable: true, value: { getItem: vi.fn((key: string) => key === 'crrt-dashboard-theme' ? 'dark' : '1'), setItem: vi.fn() } })
 })
 afterEach(() => {
   vi.restoreAllMocks()
@@ -774,7 +774,7 @@ describe('<App /> GitHub issue wiring', () => {
 
   it('opens extension comments from zero-project onboarding', async () => {
     fixtures.projects.splice(0)
-    vi.mocked(window.localStorage.getItem).mockImplementation((key) => key === 'dashboard-theme' ? 'dark' : null)
+    vi.mocked(window.localStorage.getItem).mockImplementation((key) => key === 'crrt-dashboard-theme' ? 'dark' : null)
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: 'welcome comments' }))
     expect(screen.getByText('extension page')).toBeInTheDocument()

@@ -10,7 +10,10 @@
     "types": ["node"],
     "paths": {
       "feedback-widget": ["./src/index.ts"],
-      "@widget/*": ["./src/*"]
+      "@widget/*": ["./src/*"],
+      "@crrt/ui/*": ["./packages/ui/src/*"],
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"]
     }
   },
   "include": ["src", "api", "apps/dashboard", "apps/landing", "apps/extension", "workflows", "server"]
