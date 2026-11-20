@@ -238,13 +238,15 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByTestId('detail')).toHaveAttribute('data-comment-id', 'comment-1')
   })
 
-  it('toggles project settings from the header and returns to feedback', async () => {
+  it('opens project settings from the nav and returns to feedback from the project', async () => {
     render(<App />)
     await waitFor(() => expect(screen.getByRole('button', { name: 'project' })).toHaveAttribute('aria-pressed', 'true'))
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
     expect(screen.queryByTestId('status-filter')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
+    expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'project' }))
     expect(screen.queryByText('Settings for project-1')).not.toBeInTheDocument()
     expect(screen.getByTestId('status-filter')).toHaveTextContent('open')
   })
@@ -257,7 +259,6 @@ describe('<App /> GitHub issue wiring', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'project' })).toHaveAttribute('aria-pressed', 'true'))
     fireEvent.click(screen.getByRole('button', { name: 'connect storybook' }))
     expect(screen.getByText('Settings for project-1 at Storybook')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     fireEvent.click(screen.getByRole('button', { name: 'settings' }))
     expect(screen.getByText('Settings for project-1')).toBeInTheDocument()
   })
