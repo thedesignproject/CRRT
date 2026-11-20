@@ -9,6 +9,7 @@ import { InboxMoveUndo } from './components/InboxMoveUndo'
 import type { InboxUndoItem } from './api'
 import { acceptInvite as apiAcceptInvite, beginBillingCheckout, createShare, getPrompt, updateCommentVisibility as apiUpdateVisibility, updateImplementationStatus as apiUpdateImpl, updateReviewStatus as apiUpdateReview } from './api'
 import { useProjects } from './hooks/useProjects'
+import { useStorybookConnected } from './hooks/useStorybookConnected'
 import { useComments } from './hooks/useComments'
 import { useAgentSession } from './hooks/useAgentSession'
 import { useAuth } from './hooks/useAuth'
@@ -134,6 +135,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setView('settings')
   }, [])
   const openAccessReview = useCallback((project: string) => {
+    setConnectStorybook(false)
     setSelectedProject(project)
     setView('settings')
   }, [])
@@ -339,6 +341,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [serverComments, commentsProjectId, pendingBulkSelection, pendingCommentSelection, selectedProject])
 
   const projectComments = comments
+  // Only asked while the empty project's checklist is on screen, and only for owners.
+  const storybookConnected = useStorybookConnected(API_BASE, accessToken, selectedProject, activeProject?.role === 'owner' && !commentsLoading && !commentsError && commentsProjectId === selectedProject && projectComments.length === 0)
   const selectedBulkComments = useMemo(
     () => projectComments.filter((comment) => bulkSelectedIds.has(comment.id)),
     [bulkSelectedIds, projectComments],
@@ -906,7 +910,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           apiBase={API_BASE}
           accessToken={accessToken}
           currentUserId={user.id}
-          onBack={() => setView('feedback')}
+          onBack={() => { setConnectStorybook(false); setView('feedback') }}
           onProjectsChanged={refreshProjects}
           connectStorybook={connectStorybook}
         />
@@ -942,6 +946,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <CommentDetail
           readOnly={!canManageFeedback}
           onConnectStorybook={activeProject?.role === 'owner' ? openStorybookSetup : undefined}
+          storybookConnected={storybookConnected === true}
           selectedComment={selectedComment}
           selectedProject={selectedProject}
           commentsLoading={commentsLoading}

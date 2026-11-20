@@ -16,6 +16,12 @@ describe('ProjectEmptyState', () => {
     expect(screen.queryByRole('tab')).toBeNull()
   })
 
+  it('marks the Storybook step done once it is connected', () => {
+    render(<ProjectEmptyState projectId="project-1" onConnectStorybook={vi.fn()} storybookConnected />)
+    expect(screen.queryByRole('button', { name: 'Connect Storybook' })).toBeNull()
+    expect(screen.getByText('Connect Storybook').closest('li')).toHaveTextContent('(done)')
+  })
+
   it('leaves Storybook out for people who cannot manage it', () => {
     render(<ProjectEmptyState projectId="project-1" />)
     expect(screen.queryByText('Connect Storybook')).toBeNull()

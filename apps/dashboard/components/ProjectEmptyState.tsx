@@ -6,18 +6,20 @@ interface ProjectEmptyStateProps {
   projectId: string
   /** Opens Settings at the Storybook source. Omitted for people who can't manage the project. */
   onConnectStorybook?: () => void
+  /** Storybook is already connected, so its optional step shows as done. */
+  storybookConnected?: boolean
 }
 
 /**
  * Shown in the detail pane while a project has no feedback yet. The app is the one
  * required source; Storybook is an optional extra step, not an alternative to it.
  */
-export function ProjectEmptyState({ projectId, onConnectStorybook }: ProjectEmptyStateProps) {
+export function ProjectEmptyState({ projectId, onConnectStorybook, storybookConnected = false }: ProjectEmptyStateProps) {
   const steps: SetupStep[] = [
     { id: 'project', label: 'Create the project', done: true },
     { id: 'widget', label: 'Install the widget' },
     { id: 'pin', label: 'Leave the first pin' },
-    ...(onConnectStorybook ? [{ id: 'storybook', label: 'Connect Storybook', optional: true, onSelect: onConnectStorybook }] : []),
+    ...(onConnectStorybook ? [{ id: 'storybook', label: 'Connect Storybook', optional: true, done: storybookConnected, onSelect: onConnectStorybook }] : []),
   ]
 
   return (
