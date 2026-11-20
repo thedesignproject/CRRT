@@ -114,6 +114,8 @@ interface CommentDetailProps {
   readOnly?: boolean
   /** Opens Settings at the Storybook source; omitted for people who can't manage it. */
   onConnectStorybook?: () => void
+  /** Marks the empty project's Storybook step as done. */
+  storybookConnected?: boolean
   bodyEditor?: ReactNode
   personalActions?: ReactNode
 }
@@ -138,6 +140,7 @@ export function CommentDetail({
   personal = false,
   readOnly = false,
   onConnectStorybook,
+  storybookConnected,
   bodyEditor,
   personalActions,
 }: CommentDetailProps | PersonalDetailProps) {
@@ -569,7 +572,7 @@ export function CommentDetail({
           </div>
         </div>
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
-        <ProjectEmptyState projectId={selectedProject} onConnectStorybook={onConnectStorybook} />
+        <ProjectEmptyState projectId={selectedProject} onConnectStorybook={onConnectStorybook} storybookConnected={storybookConnected} />
       ) : (
         <EmptyState
           className="flex-1 justify-center"

@@ -1,9 +1,10 @@
 import posthog from '../../posthog'
 import { ProjectPrivacy } from './ProjectPrivacy'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
 import { ExportProjectFeedback } from './ExportProjectFeedback'
 import { useProjectSettings } from '../hooks/useProjectSettings'
+import { useStorybookConnected } from '../hooks/useStorybookConnected'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
 import { GitHubRepositorySettings } from './GitHubRepositorySettings'
@@ -52,12 +53,27 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [instructionsBusy, setInstructionsBusy] = useState(false)
   const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null)
   const [storybookOpen, setStorybookOpen] = useState(connectStorybook)
+  // What the open panel last reported wins over the check made when Settings opened.
+  const [storybookLive, setStorybookLive] = useState<boolean | null>(null)
+  const storybookChecked = useStorybookConnected(apiBase, accessToken, project.publicKey, isOwner)
+  const storybookConnected = storybookLive ?? storybookChecked
+  const storybookPanelId = useId()
+  const storybookToggleRef = useRef<HTMLButtonElement | null>(null)
+  const storybookFocused = useRef(false)
   const pendingAction = useRef(false)
   const actionSequence = useRef(0)
   const projectKeyRef = useRef(project.publicKey)
   const transferTriggerRef = useRef<HTMLSelectElement | null>(null)
   const teamHeadingRef = useRef<HTMLHeadingElement | null>(null)
   projectKeyRef.current = project.publicKey
+
+  // Opened from the checklist's "Connect Storybook" step: bring the expanded row into view.
+  useEffect(() => {
+    if (!connectStorybook || !isOwner || storybookFocused.current) return
+    storybookFocused.current = true
+    storybookToggleRef.current?.scrollIntoView?.({ block: 'center' })
+    storybookToggleRef.current?.focus()
+  }, [connectStorybook, isOwner])
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
@@ -233,81 +249,91 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
                   </p>
                 </div>
               </div>
-            <div className="divide-y divide-border rounded-lg ring-1 ring-border">
-              {domains.length === 0 ? (
-                <p className="px-4 py-6 text-center text-[12px] text-muted-foreground">
-                  No restrictions — feedback is accepted from any domain.
-                </p>
-              ) : (
-                domains.map((domain) => (
-                  <div key={domain} className="flex items-center gap-3 px-4 py-3">
-                    <span className="flex-1 min-w-0 font-mono text-[13px] text-foreground truncate">{domain}</span>
-                    {isAdmin && (
-                      <button
-                        onClick={() => run(() => saveDomains(domains.filter((d) => d !== domain)), domain)}
-                        disabled={pendingId === domain || domainBusy}
-                        aria-label={`Remove ${domain}`}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
-                      >
-                        {pendingId === domain ? <Spinner size={13} /> : <TrashIcon size={14} />}
-                      </button>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
+              <div className="divide-y divide-border rounded-lg ring-1 ring-border">
+                {domains.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-[12px] text-muted-foreground">
+                    No restrictions — feedback is accepted from any domain.
+                  </p>
+                ) : (
+                  domains.map((domain) => (
+                    <div key={domain} className="flex items-center gap-3 px-4 py-3">
+                      <span className="flex-1 min-w-0 font-mono text-[13px] text-foreground truncate">{domain}</span>
+                      {isAdmin && (
+                        <button
+                          onClick={() => run(() => saveDomains(domains.filter((d) => d !== domain)), domain)}
+                          disabled={pendingId === domain || domainBusy}
+                          aria-label={`Remove ${domain}`}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
+                        >
+                          {pendingId === domain ? <Spinner size={13} /> : <TrashIcon size={14} />}
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
 
-            {isAdmin && (
-              <form
-                onSubmit={(e) => { e.preventDefault(); addDomain() }}
-                className="flex items-center gap-2"
-              >
-                <input
-                  type="text"
-                  value={domainInput}
-                  onChange={(e) => setDomainInput(e.target.value)}
-                  placeholder="example.com"
-                  disabled={domainBusy}
-                  aria-label="Add allowed domain"
-                  className={inputField}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <button
-                  type="submit"
-                  disabled={!domainValid || domainBusy}
-                  className={submitBtn(domainValid && !domainBusy)}
+              {isAdmin && (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); addDomain() }}
+                  className="flex items-center gap-2"
                 >
-                  {domainBusy ? 'Saving…' : 'Add'}
-                </button>
-              </form>
-            )}
+                  <input
+                    type="text"
+                    value={domainInput}
+                    onChange={(e) => setDomainInput(e.target.value)}
+                    placeholder="example.com"
+                    disabled={domainBusy}
+                    aria-label="Add allowed domain"
+                    className={inputField}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!domainValid || domainBusy}
+                    className={submitBtn(domainValid && !domainBusy)}
+                  >
+                    {domainBusy ? 'Saving…' : 'Add'}
+                  </button>
+                </form>
+              )}
             </div>
             {isOwner && (
               <div className="flex flex-col gap-3 px-5 py-3.5">
                 <div className="flex items-start gap-3">
                   <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-subtle" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-text-strong">Storybook <span className="ml-1 text-xs font-normal text-text-subtle">Optional</span></p>
+                    <p className="text-sm font-medium text-text-strong">
+                      Storybook{' '}
+                      {storybookConnected
+                        ? <span className="ml-1 text-xs font-normal text-status-accepted">Connected</span>
+                        : <span className="ml-1 text-xs font-normal text-text-subtle">Optional</span>}
+                    </p>
                     <p className="text-xs text-text-subtle">Review components and send story feedback into this project, next to your app’s.</p>
                   </div>
                   <button
+                    ref={storybookToggleRef}
                     type="button"
                     aria-expanded={storybookOpen}
+                    aria-controls={storybookPanelId}
                     onClick={() => setStorybookOpen((open) => !open)}
                     className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-text-strong hover:bg-accent"
                   >
-                    {storybookOpen ? 'Close' : '+ Connect Storybook'}
+                    {storybookOpen ? 'Close' : storybookConnected ? 'Manage Storybook' : '+ Connect Storybook'}
                   </button>
                 </div>
-                {storybookOpen && (
-                  <StorybookIntegrationSettings
-                    appearance="setup"
-                    apiBase={apiBase}
-                    accessToken={accessToken}
-                    projectKey={project.publicKey}
-                  />
-                )}
+                <div id={storybookPanelId} hidden={!storybookOpen}>
+                  {storybookOpen && (
+                    <StorybookIntegrationSettings
+                      appearance="setup"
+                      apiBase={apiBase}
+                      accessToken={accessToken}
+                      projectKey={project.publicKey}
+                      onConnectedChange={setStorybookLive}
+                    />
+                  )}
+                </div>
               </div>
             )}
           </div>
