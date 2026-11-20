@@ -3,7 +3,7 @@
 Read only the guides relevant to the task:
 
 - Always: [engineering rules](rules/engineering.md).
-- UI: [UX rules](rules/ux.md), then [design direction](brain/design/DIRECTION.md) and [foundations](brain/design/foundations/). Build with `packages/ui` (`@crrt/ui`, tokens in `src/tokens/tokens.css`), never raw hex. `branding/CRRT-DESIGN-SYSTEM.md` is legacy.
+- UI: [UX rules](rules/ux.md), then [design direction](brain/design/DIRECTION.md) and [foundations](brain/design/foundations/). Build with `packages/ui` (`@crrt/ui`: tokens in `src/tokens/tokens.css`, CRRT patterns in `src/crrt`), never raw hex. `branding/CRRT-DESIGN-SYSTEM.md` is legacy.
 - Data or APIs: [security rules](rules/security.md). For schema changes, also read the [database guide](db/DRIZZLE-GUIDE.md).
 - Product or copy: [business rules](rules/business.md).
 - After code changes: run the [diff coverage checks](.agents/skills/diff-coverage/SKILL.md).
