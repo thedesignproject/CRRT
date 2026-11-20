@@ -86,6 +86,10 @@ describe('NewProjectPage', () => {
     expect(screen.queryByText(/Waiting for the first pin/)).toBeNull()
     expect(screen.getByLabelText('Project name')).not.toHaveAttribute('readonly')
     expect(screen.getByRole('alert')).toHaveTextContent('Plan limit reached. Nothing was copied.')
+    // A message that already ends in punctuation isn't given a second full stop.
+    view.rerender(page({ error: 'Plan limit reached!' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Plan limit reached! Nothing was copied.')
+    view.rerender(page({ error: 'Plan limit reached' }))
     await settle()
     // The ID is checked again, in case that's what changed.
     expect(props.checkAvailability).toHaveBeenCalledTimes(3)
