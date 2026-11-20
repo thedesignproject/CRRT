@@ -1,11 +1,11 @@
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BillingSummary } from '../api'
 
 const mocks = vi.hoisted(() => ({ enabled: vi.fn(), summary: vi.fn() }))
 vi.mock('../lib/billing-availability', () => ({ billingAvailabilityOnce: mocks.enabled }))
 vi.mock('../api', () => ({ getBillingSummary: mocks.summary }))
-import { planQuota, usePlanQuota } from './usePlanQuota'
+import { QUOTA_REFRESH_MS, planQuota, usePlanQuota } from './usePlanQuota'
 
 const summary = (overrides: Partial<BillingSummary> = {}) => ({
   plan: 'pro',
@@ -54,6 +54,38 @@ describe('usePlanQuota', () => {
     await waitFor(() => expect(mocks.summary).toHaveBeenCalled())
     await Promise.resolve()
     expect(failed.result.current).toBeNull()
+  })
+
+  it('reloads when people come back to the tab, at most once a minute', async () => {
+    let now = 1_000_000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    mocks.enabled.mockResolvedValue(true)
+    mocks.summary.mockReset().mockResolvedValue(summary())
+    const { result, unmount } = renderHook(() => usePlanQuota('/api', 'token', 'refresh'))
+    await waitFor(() => expect(result.current?.limit).toBe(500))
+    expect(mocks.summary).toHaveBeenCalledTimes(1)
+
+    // Too soon: nothing reloads.
+    act(() => { window.dispatchEvent(new Event('focus')) })
+    // Hidden tabs never reload.
+    now += QUOTA_REFRESH_MS
+    visibility.mockReturnValue('hidden')
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    expect(mocks.summary).toHaveBeenCalledTimes(1)
+
+    visibility.mockReturnValue('visible')
+    mocks.summary.mockResolvedValue(summary({ usage: { comments: { used: 9, limit: 600, resetAt: null } } as never }))
+    act(() => { document.dispatchEvent(new Event('visibilitychange')) })
+    await waitFor(() => expect(result.current?.limit).toBe(600))
+    expect(mocks.summary).toHaveBeenCalledTimes(2)
+
+    unmount()
+    now += QUOTA_REFRESH_MS
+    window.dispatchEvent(new Event('focus'))
+    expect(mocks.summary).toHaveBeenCalledTimes(2)
+    clock.mockRestore()
+    visibility.mockRestore()
   })
 
   it('ignores answers that arrive after unmount', async () => {

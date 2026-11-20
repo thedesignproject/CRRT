@@ -6,7 +6,7 @@ import { Kbd } from '@crrt/ui/components/kbd'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import type { Project } from '../api'
 import { usePlanQuota } from '../hooks/usePlanQuota'
-import { route } from '../lib/routes'
+import { landingRoute, route } from '../lib/routes'
 import type { StatusFilter } from '../lib/types'
 import { NotificationBell } from './NotificationBell'
 import { UserMenu } from './UserMenu'
@@ -133,6 +133,8 @@ export function DashboardShell({
   return (
     <AppShell
       className="dashboard-shell md:h-dvh md:overflow-hidden"
+      homeHref={landingRoute('?stay=1')}
+      homeLabel="CRRT marketing site"
       nav={nav}
       projects={projectItems}
       projectsEmpty={projectsLoading ? 'Loading projects…' : projectsError ? <span role="alert">{projectsError}</span> : 'No projects yet'}
@@ -140,7 +142,8 @@ export function DashboardShell({
       onNewProject={onNewProject}
       sidebarFooter={
         <div className="flex flex-col gap-4">
-          <nav aria-label="Workspace administration"><NavList items={admin} activeId={activeId} /></nav>
+          {/* A group, not a second <nav>: it already sits inside the shell's Workspace nav. */}
+          <div role="group" aria-label="Workspace administration"><NavList items={admin} activeId={activeId} /></div>
           {quota && (
             <QuotaMeter
               className="px-2"

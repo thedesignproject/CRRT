@@ -367,7 +367,6 @@
 
 /* CRRT Record — frontend demo surface. The recorder remains in the extension;
    this dashboard view demonstrates its library and launch handoff. */
-.recordings-new-dot { padding: 2px 5px; border-radius: var(--crrt-radius-pill); background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary); font-size: 8px; font-weight: 700; }
 .recordings-page { flex: 1; min-width: 0; overflow-y: auto; padding: 42px clamp(24px, 5vw, 72px) 80px; background: var(--background); }
 .recordings-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; }
 .recordings-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-size: 10px; font-weight: 650; }

@@ -18,6 +18,10 @@ export type NavItem = {
 
 type AppShellProps = {
   workspace?: string;
+  /** Makes the CRRT mark a link, e.g. back to the marketing site. */
+  homeHref?: string;
+  /** Accessible name for that link. */
+  homeLabel?: string;
   /** Workspace-level views: Inbox, Next steps, Agent runs, Recordings, Brain. */
   nav: NavItem[];
   /** Projects section. A live dot means an agent is working there right now. */
@@ -26,7 +30,7 @@ type AppShellProps = {
   /** Shown instead of the project list while it is empty: loading, error or "no projects". */
   projectsEmpty?: ReactNode;
   onNewProject?: () => void;
-  /** Pinned to the bottom of the sidebar (e.g. SetupChecklist). */
+  /** Pinned to the bottom of the sidebar (e.g. SetupChecklist); under the projects on small screens. */
   sidebarFooter?: ReactNode;
   /** Bar above the content (TopBar). */
   topBar?: ReactNode;
@@ -86,6 +90,8 @@ export function NavList({ items, activeId }: { items: NavItem[]; activeId: strin
 /** Dashboard frame: surface-1 sidebar + surface-2 main. Every dashboard screen uses it. */
 export function AppShell({
   workspace,
+  homeHref,
+  homeLabel = "CRRT home",
   nav,
   projects,
   projectsEmpty,
@@ -104,8 +110,21 @@ export function AppShell({
         className="flex w-full flex-col gap-5 border-b border-sidebar-border bg-sidebar px-3 py-4 md:max-h-dvh md:w-58 md:border-r md:border-b-0"
       >
         <div className="flex items-center gap-2.5 px-1.5">
-          <CarrotMark />
-          <span className="font-semibold">CRRT</span>
+          {homeHref ? (
+            <a
+              href={homeHref}
+              aria-label={homeLabel}
+              className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <CarrotMark />
+              <span aria-hidden="true" className="font-semibold">CRRT</span>
+            </a>
+          ) : (
+            <>
+              <CarrotMark />
+              <span className="font-semibold">CRRT</span>
+            </>
+          )}
           {workspace && <span className="ml-auto truncate text-xs text-text-subtle">{workspace}</span>}
         </div>
         <NavList items={nav} activeId={activeId} />
@@ -129,7 +148,8 @@ export function AppShell({
             {projects.length === 0 && projectsEmpty ? (
               <div className="px-2 text-xs text-text-subtle">{projectsEmpty}</div>
             ) : (
-              <ul className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
+              // Capped on small screens, where the sidebar sits above the content.
+              <ul className="flex max-h-48 min-h-0 flex-col gap-0.5 overflow-y-auto md:max-h-none">
                 {projects.map((item) => (
                   <li key={item.id}>
                     <NavLink item={item} active={item.id === activeId} />
@@ -139,7 +159,7 @@ export function AppShell({
             )}
           </section>
         )}
-        {sidebarFooter && <div className="mt-auto hidden md:block">{sidebarFooter}</div>}
+        {sidebarFooter && <div className="md:mt-auto">{sidebarFooter}</div>}
       </nav>
       <div className="flex min-h-0 min-w-0 flex-[999_1_560px] flex-col">
         {topBar}
