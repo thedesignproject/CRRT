@@ -38,7 +38,8 @@ export function StatusBadge({ comment, className }: { comment: Comment; classNam
   if (ds === 'rejected') {
     return <span className={cn('inline-flex h-5 items-center rounded-md bg-status-rejected-bg px-1.5 text-xs font-medium text-status-rejected', className)}>{DISPLAY_STATUS_LABELS.rejected}</span>
   }
-  return <StatusChip status={STUDIO_STATUS[ds]} className={className} />
+  // Only a claimed comment has an agent on it right now; a queued one stays still.
+  return <StatusChip status={STUDIO_STATUS[ds]} working={Boolean(comment.claimedByAgentId)} className={className} />
 }
 
 export function ActionBtn({ children, variant, active, onClick, shortcut, disabled }: {

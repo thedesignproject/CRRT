@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
 import { MessageSquare } from 'lucide-react'
 import { EmptyState, FilterTabs, Initials } from '@crrt/ui/crrt'
 import { cn } from '../lib/utils'
@@ -18,6 +18,8 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
   done: 'Done',
 }
 const FILTERS: StatusFilter[] = ['all', 'open', 'ready', 'ready_for_testing', 'done']
+// Where an empty filter points, by what needs a person first (not by size): testing, then
+// the agent queue, then untriaged, then done.
 const REDIRECT_ORDER: Exclude<StatusFilter, 'all'>[] = ['ready_for_testing', 'ready', 'open', 'done']
 
 interface CommentListProps {
@@ -68,6 +70,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   const bulkMode = controls?.bulkMode ?? personalBulk?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   const selectionAnchor = useRef<string | null>(null)
+  const listId = useId()
   function selectItem(id: string, extend: boolean, toggle: (id: string, range?: string[]) => void) {
     const start = filteredComments.findIndex(c => c.id === selectionAnchor.current)
     const end = filteredComments.findIndex(c => c.id === id)
@@ -79,7 +82,9 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   }
   const filter = controls?.statusFilter ?? 'all'
   // Where the work is when the current filter is empty, so the empty state can point at it.
-  const busiest = REDIRECT_ORDER.find((f) => f !== filter && counts[f] > 0)
+  // Rejected feedback has no tab of its own, so it can only be reached through All.
+  const nextWork = REDIRECT_ORDER.find((f) => f !== filter && counts[f] > 0)
+    ?? (filter !== 'all' && counts.all > 0 ? 'all' : undefined)
   return (
     <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-sidebar-border bg-surface-1', props.personal && 'h-[38vh] md:h-auto')}>
       <div className="flex flex-col gap-3 border-b border-sidebar-border px-4 pt-4 pb-3">
@@ -106,6 +111,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
           value={controls.statusFilter}
           onChange={controls.selectFilter}
           options={FILTERS.map((f) => ({ id: f, label: FILTER_LABELS[f], count: counts[f] }))}
+          controls={listId}
         />}
       </div>
 
@@ -133,7 +139,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
         </div>
       )}
 
-      <div className={cn('flex-1 overflow-y-auto', bulkMode && !props.personal && 'pb-24 dashboard-bulk-scroll')}>
+      <div id={listId} className={cn('flex-1 overflow-y-auto', bulkMode && !props.personal && 'pb-24 dashboard-bulk-scroll')}>
         {commentsLoading ? (
           <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
             <Spinner />
@@ -148,13 +154,13 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
             <EmptyState
               icon={<MessageSquare />}
               title={filter === 'all' ? 'No feedback yet' : `Nothing in ${FILTER_LABELS[filter]} yet`}
-              action={controls && busiest && (
-                <button type="button" onClick={() => controls.selectFilter(busiest)} className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-medium text-text-strong ring-1 ring-border hover:bg-surface-3">
-                  Show {counts[busiest]} in {FILTER_LABELS[busiest]}
+              action={controls && nextWork && (
+                <button type="button" onClick={() => controls.selectFilter(nextWork)} className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-medium text-text-strong ring-1 ring-border hover:bg-surface-3">
+                  {nextWork === 'all' ? `Show all ${counts.all}` : `Show ${counts[nextWork]} in ${FILTER_LABELS[nextWork]}`}
                 </button>
               )}
             >
-              {busiest ? 'The work is somewhere else right now.' : 'Share a review link and comments land here.'}
+              {nextWork === 'all' ? 'The rest of the feedback was rejected.' : nextWork ? 'The work is somewhere else right now.' : 'Share a review link and comments land here.'}
             </EmptyState>
           )
         ) : (
@@ -186,7 +192,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     !(bulkMode ? isChecked : isActive) && 'hover:bg-surface-3',
                   )}
                 >
-                  <Initials name={comment.author} />
+                  <Initials name={comment.author} decorative />
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
                     <span className="flex items-baseline gap-2">
                       <span className="font-medium text-text-strong">{comment.author}</span>
@@ -197,12 +203,13 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-text-subtle">
                       {comment.claimedByAgentId && (
                         <span className="inline-flex shrink-0 items-center gap-1 font-sans font-medium text-status-agent-fg">
-                          <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-agent-working motion-reduce:animate-none" />
+                          {/* The status chip already pulses for claimed work; the Inbox has no chip, so it pulses here. */}
+                          {props.personal && <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-agent-working motion-reduce:animate-none" />}
                           {comment.claimedByAgentId}
                         </span>
                       )}
                       {!props.personal && comment.visibility === 'internal' && <span className="shrink-0 font-sans">Internal ·</span>}
-                      <span className="truncate" title={location(comment)}>{location(comment)}</span>
+                      <span className="truncate" title={location(comment, props.personal)}>{location(comment, props.personal)}</span>
                     </span>
                   </span>
                 </button>
@@ -217,17 +224,21 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   )
 }
 
-/** Where the comment sits: quoted text for text ranges, else the page and the element. */
-function location(comment: Comment) {
+/**
+ * Where the comment sits: quoted text for text ranges, else the page and the element. The
+ * personal Inbox mixes sites, so it keeps the host; a project's list is one site, so it doesn't.
+ */
+function location(comment: Comment, withHost = false) {
   if (comment.targetType === 'text_range' && comment.anchor) return `“${comment.anchor.selectedText}”`
   const element = comment.selector?.split(' > ').pop()
-  const page = comment.pageUrl ? pagePath(comment.pageUrl) : null
+  const page = comment.pageUrl ? pagePath(comment.pageUrl, withHost) : null
   return [page, element].filter(Boolean).join(' · ') || 'No page context'
 }
 
-function pagePath(url: string) {
+function pagePath(url: string, withHost: boolean) {
   try {
-    return new URL(url).pathname
+    const { host, pathname } = new URL(url)
+    return withHost ? `${host}${pathname}` : pathname
   } catch {
     return url
   }

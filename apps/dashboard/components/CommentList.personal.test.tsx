@@ -38,6 +38,12 @@ describe('shared feedback controls', () => {
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull()
   })
 
+  it('keeps the site in Inbox rows, since the Inbox mixes sites, and pulses claimed work itself', () => {
+    render(<CommentList personal filteredComments={[{ ...comment, pageUrl: 'https://acme.com/pricing', selector: 'main > h1', claimedByAgentId: 'claude' }]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()} />)
+    expect(screen.getByText('acme.com/pricing · h1')).toBeInTheDocument()
+    expect(document.querySelectorAll('.animate-pulse')).toHaveLength(1)
+  })
+
   it('shows work waiting on the reviewer in its own testing filter', () => {
     const testing = {
       ...comment,

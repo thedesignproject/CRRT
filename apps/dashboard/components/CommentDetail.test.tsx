@@ -144,7 +144,7 @@ describe('dashboard shortcut hints', () => {
       selectedCommentId=""
     />)
     const actionHints = [
-      ['Toggle Ready for Agent', 'A'], ['Toggle Done', 'M'],
+      ['Toggle Send to Agent', 'A'], ['Toggle Done', 'M'],
       ['Toggle Reject', 'D'], ['Toggle agent panel', 'S'],
     ]
     for (const [label, key] of actionHints) {
@@ -600,7 +600,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       selectedComment={{ ...comment, screenshotUrl: 'https://cdn.example/image.png' }}
     />)
     expect(screen.getByAltText('Screenshot of https://example.com')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Ready for Agent/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Send to Agent/ }))
     fireEvent.click(screen.getByRole('button', { name: /Mark Done/ }))
     fireEvent.click(screen.getByRole('button', { name: /Reject/ }))
     fireEvent.click(screen.getByRole('button', { name: /Open page/ }))
@@ -624,7 +624,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       {...props}
       selectedComment={{ ...comment, implementationStatus: 'ready_for_testing' }}
     />)
-    expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
+    expect(screen.getByText('Testing')).toHaveClass('text-status-ready-for-testing')
     open.mockRestore()
   })
 

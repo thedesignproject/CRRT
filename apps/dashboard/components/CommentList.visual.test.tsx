@@ -68,6 +68,35 @@ describe('empty and located states', () => {
     expect(screen.getByText('Failed to load')).toBeInTheDocument()
   })
 
+  it('points at All when the only other feedback was rejected', () => {
+    const selectFilter = vi.fn()
+    const view = render(<CommentList {...base} selectFilter={selectFilter} counts={{ all: 2, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 2 }} filteredComments={[]} />)
+    expect(screen.getByText('The rest of the feedback was rejected.')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Show all 2' }))
+    expect(selectFilter).toHaveBeenCalledWith('all')
+    // All itself never points at All.
+    view.rerender(<CommentList {...base} statusFilter="all" counts={{ all: 0, open: 0, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }} filteredComments={[]} />)
+    expect(screen.queryByRole('button', { name: /^Show / })).toBeNull()
+  })
+
+  it('pulses the Agent chip only while an agent has the comment, with one dot per row', () => {
+    const ready = { ...comment, reviewStatus: 'accepted' as const }
+    const view = render(<CommentList {...base} filteredComments={[ready]} />)
+    expect(screen.getByRole('button', { name: /A long comment/ })).toHaveTextContent('Agent')
+    expect(document.querySelectorAll('.animate-pulse')).toHaveLength(0)
+    view.rerender(<CommentList {...base} filteredComments={[{ ...ready, claimedByAgentId: 'claude' }]} />)
+    expect(document.querySelectorAll('.animate-pulse')).toHaveLength(1)
+    expect(screen.getByText(', agent working')).toBeInTheDocument()
+  })
+
+  it('reads each row once and ties the filters to the list', () => {
+    render(<CommentList {...base} filteredComments={[comment]} />)
+    const row = screen.getByRole('button', { name: /A long comment/ })
+    expect(row).toHaveAccessibleName(expect.stringMatching(/^Reviewer /))
+    const list = document.getElementById(screen.getAllByRole('tab')[0].getAttribute('aria-controls')!)
+    expect(list).toContainElement(row)
+  })
+
   it('shows the page and element, or the quoted text', () => {
     const view = render(<CommentList {...base} filteredComments={[{ ...comment, pageUrl: 'https://acme.com/checkout?x=1', selector: 'main > button.pay' }]} />)
     expect(screen.getByText('/checkout · button.pay')).toBeInTheDocument()

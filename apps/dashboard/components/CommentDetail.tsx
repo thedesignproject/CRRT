@@ -347,7 +347,7 @@ export function CommentDetail({
                 onClick={() => toggleReview!(selectedComment, 'accepted')}
                 shortcut="A"
               >
-                <BotIcon size={14} /> Ready for Agent
+                <BotIcon size={14} /> Send to Agent
               </ActionBtn>
               <ActionBtn
                 active={selectedComment.implementationStatus === 'done'}
@@ -579,7 +579,7 @@ export function CommentDetail({
           icon={<MousePointer2 />}
           title={personal ? 'Select an Inbox item' : 'Select a comment'}
           action={!personal && shortcutsEnabled && <span className="flex items-center gap-1.5 font-mono text-xs text-text-subtle">
-            <Kbd>J</Kbd><Kbd>K</Kbd> navigate · <Kbd>A</Kbd> ready · <Kbd>D</Kbd> reject
+            <Kbd>J</Kbd><Kbd>K</Kbd> navigate · <Kbd>A</Kbd> send to agent · <Kbd>D</Kbd> reject
           </span>}
         >
           {personal

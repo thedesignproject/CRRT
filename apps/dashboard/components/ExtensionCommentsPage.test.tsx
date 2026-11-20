@@ -98,7 +98,7 @@ describe('ExtensionCommentsPage', () => {
     expect(screen.getByText('Pin 12.34%, 56.78%')).toBeInTheDocument()
     const open = vi.spyOn(window, 'open').mockImplementation(() => null)
     fireEvent.click(screen.getByRole('button', { name: 'Open page' })); expect(open).toHaveBeenCalledWith(first.pageUrl, '_blank', 'noopener,noreferrer')
-    for (const name of ['Ready for Agent', 'Mark Done', 'Reject', 'Accept to create issue']) expect(screen.queryByRole('button', { name })).toBeNull()
+    for (const name of ['Send to Agent', 'Mark Done', 'Reject', 'Accept to create issue']) expect(screen.queryByRole('button', { name })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Next' }))
     await waitFor(() => expect(listExtensionComments).toHaveBeenCalledWith('/api', 'token', 2))
