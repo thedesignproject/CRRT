@@ -14,7 +14,7 @@ const fn = vi.fn()
 type Props = ComponentProps<typeof DashboardShell>
 const props: Props = { projects: [], projectsLoading: false, projectsError: null, commentsLoading: false, selectedProject: '', commentCount: 0, setSelectedProject: fn, setStatusFilter: fn, setSelectedCommentId: fn, onNewProject: fn, onOpenCmd: fn, onOpenSettings: fn, settingsActive: false, onOpenExtensionComments: fn, extensionCommentsActive: false, apiBase: '/api', accessToken: 'token', onProjectsChanged: fn, onOpenCommentActivity: fn, theme: 'dark', toggleTheme: fn, user: { id: 'u' } as never, onSignOut: fn, superadmin: false, superAdminActive: false, onOpenSuperAdmin: fn, children: <p>View content</p> }
 const shell = (overrides: Partial<Props> = {}) => <DashboardShell {...props} {...overrides} />
-const admin = () => screen.getByRole('navigation', { name: 'Workspace administration' })
+const admin = () => screen.getByRole('group', { name: 'Workspace administration' })
 
 beforeEach(() => { fn.mockClear(); quota.value = null })
 

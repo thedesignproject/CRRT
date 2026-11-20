@@ -70,9 +70,25 @@ describe("AppShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New project" }));
     expect(onNewProject).toHaveBeenCalledOnce();
-    expect(screen.getByText("Footer")).toBeTruthy();
+    // The footer stays on small screens too; it only moves to the bottom from md up.
+    expect(screen.getByText("Footer").parentElement?.className).toBe("md:mt-auto");
     expect(screen.getByText("Body")).toBeTruthy();
     expect(screen.getByText("quota")).toBeTruthy();
+  });
+
+  it("links the CRRT mark when given a home", () => {
+    const { rerender } = render(
+      <AppShell nav={nav} activeId="inbox" homeHref="/?stay=1" homeLabel="CRRT marketing site">
+        <p>Body</p>
+      </AppShell>
+    );
+    expect(screen.getByRole("link", { name: "CRRT marketing site" }).getAttribute("href")).toBe("/?stay=1");
+    rerender(
+      <AppShell nav={nav} activeId="inbox" homeHref="/">
+        <p>Body</p>
+      </AppShell>
+    );
+    expect(screen.getByRole("link", { name: "CRRT home" })).toBeTruthy();
   });
 
   it("renders without projects, footer or new-project button", () => {

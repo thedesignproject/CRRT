@@ -11,11 +11,13 @@ describe('dashboard theme', () => {
   })
   it.each(['light', 'dark'] as const)('applies and persists %s', (theme) => {
     const setItem = vi.fn()
-    vi.stubGlobal('localStorage', { setItem })
+    const removeItem = vi.fn()
+    vi.stubGlobal('localStorage', { setItem, removeItem })
     applyDashboardTheme(theme)
     expect(document.documentElement.dataset.theme).toBe(theme)
     expect(document.documentElement.classList.contains('light')).toBe(theme === 'light')
     expect(setItem).toHaveBeenCalledWith('crrt-dashboard-theme', theme)
+    expect(removeItem).toHaveBeenCalledWith('dashboard-theme')
   })
   it('works when storage is blocked', () => {
     vi.stubGlobal('localStorage', { getItem: () => { throw Error('blocked') }, setItem: () => { throw Error('blocked') } })
