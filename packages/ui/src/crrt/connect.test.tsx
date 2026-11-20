@@ -74,6 +74,8 @@ describe("AppShell", () => {
     expect(screen.getByText("Footer").parentElement?.className).toBe("md:mt-auto");
     expect(screen.getByText("Body")).toBeTruthy();
     expect(screen.getByText("quota")).toBeTruthy();
+    // Side by side from md up: one flex line, so a fixed-height shell constrains the content column.
+    expect(screen.getByText("Body").closest("main")?.parentElement?.parentElement?.className).toContain("md:flex-nowrap");
   });
 
   it("links the CRRT mark when given a home", () => {
