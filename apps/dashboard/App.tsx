@@ -811,6 +811,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [claimProject])
 
   const handleOpenCommentActivity = useCallback((payload: { projectKey: string; latestCommentId?: string }) => {
+    // Opening a comment from the bell leaves the New project page, like the sidebar does.
+    setAddProjectOpen(false)
     setSelectedProject(payload.projectKey)
     setView('feedback')
     setStatusFilter('open')
@@ -821,6 +823,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       setSelectedCommentId('')
     }
   }, [refreshComments])
+
+  const checkFirstPin = useCallback(() => { void refreshComments() }, [refreshComments])
 
   // An account without projects lands on the New project page instead of an empty project.
   const noProjects = !projectsLoading && !projectsError && projects.length === 0
@@ -878,7 +882,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           planRequired={projectGate.planRequired ? { label: projectGate.trialAvailable ? 'Start free trial' : 'Choose a plan' } : undefined}
           firstPin={commentsProjectId === selectedProject && serverComments.length > 0}
           onOpenProject={() => setAddProjectOpen(false)}
-          suggestedProjects={noProjects ? <SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} /> : undefined}
+          onCheckFirstPin={checkFirstPin}
+          suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
         />
       ) : view === 'recording' ? (
         <div className="min-h-0 flex-1 overflow-y-auto"><RecordingSharePage apiBase={API_BASE} ownerToken={accessToken} /></div>
