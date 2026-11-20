@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 
 import {
@@ -91,6 +91,16 @@ describe("FilterTabs", () => {
     expect(screen.getByRole("tab", { name: /Open/ }).getAttribute("aria-selected")).toBe("true");
     // Zero counts are dimmed.
     expect(screen.getByText("0").className).toContain("text-agent-idle");
+    fireEvent.keyDown(list, { key: "End" });
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: /Done/ }));
+    fireEvent.keyDown(list, { key: "Home" });
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: /All/ }));
+  });
+
+  it("keeps the first tab reachable when the value matches no option", () => {
+    render(<FilterTabs label="Status" value={"gone" as "all"} onChange={() => {}} options={[{ id: "all", label: "All", count: 1 }, { id: "open", label: "Open", count: 0 }]} />);
+    expect(screen.getByRole("tab", { name: /All/ }).tabIndex).toBe(0);
+    expect(screen.getByRole("tab", { name: /Open/ }).tabIndex).toBe(-1);
   });
 });
 
@@ -171,19 +181,42 @@ describe("Thread", () => {
     expect(screen.queryByRole("textbox")).toBeNull();
   });
 
-  it("sends trimmed replies, clears, and ignores empty ones", () => {
+  it("sends trimmed replies, clears, and ignores empty ones", async () => {
     const onReply = vi.fn();
     render(<Thread messages={messages} onReply={onReply} />);
     const box = screen.getByRole("textbox", { name: "Reply" });
     const send = screen.getByRole("button", { name: "Send reply" });
 
     fireEvent.change(box, { target: { value: "   " } });
-    fireEvent.click(send);
+    await act(async () => fireEvent.click(send));
     expect(onReply).not.toHaveBeenCalled();
 
     fireEvent.change(box, { target: { value: "  Looks good  " } });
-    fireEvent.click(send);
+    await act(async () => fireEvent.click(send));
     expect(onReply).toHaveBeenCalledWith("Looks good");
     expect((box as HTMLTextAreaElement).value).toBe("");
+  });
+
+  it("keeps the draft until an async send lands, and after a failed one", async () => {
+    let settle!: { resolve: () => void; reject: (e: Error) => void };
+    const onReply = vi.fn(() => new Promise<void>((resolve, reject) => { settle = { resolve, reject }; }));
+    render(<Thread messages={messages} onReply={onReply} />);
+    const box = screen.getByRole("textbox", { name: "Reply" }) as HTMLTextAreaElement;
+    const send = screen.getByRole("button", { name: "Send reply" }) as HTMLButtonElement;
+
+    fireEvent.change(box, { target: { value: "First" } });
+    fireEvent.click(send);
+    expect(send.disabled).toBe(true);
+    fireEvent.submit(box.closest("form")!);
+    expect(onReply).toHaveBeenCalledOnce();
+    await act(async () => settle.reject(new Error("offline")));
+    expect(box.value).toBe("First");
+    expect(screen.getByRole("alert").textContent).toContain("Couldn’t send your reply");
+
+    fireEvent.click(send);
+    expect(screen.queryByRole("alert")).toBeNull();
+    await act(async () => settle.resolve());
+    expect(box.value).toBe("");
+    expect(send.disabled).toBe(false);
   });
 });
