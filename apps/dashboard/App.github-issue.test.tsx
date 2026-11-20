@@ -127,7 +127,7 @@ vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onCopySess
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
-vi.mock('./components/NewProjectPage', () => ({ NewProjectPage: (props: { first: boolean; error?: string | null; onCreate: (key: string, name: string) => Promise<boolean>; onOpenProject: () => void }) => <section aria-label={props.first ? 'first project' : 'new project'}>{props.error && <p>{props.error}</p>}<button onClick={() => { void props.onCreate('new-project', 'New project') }}>copy prompt</button><button onClick={props.onOpenProject}>open project</button></section> }))
+vi.mock('./components/NewProjectPage', () => ({ NewProjectPage: (props: { first: boolean; error?: string | null; onCreate: (key: string, name: string) => Promise<boolean>; onOpenProject: () => void; onCheckFirstPin?: () => void }) => <section aria-label={props.first ? 'first project' : 'new project'}>{props.error && <p>{props.error}</p>}<button onClick={() => { void props.onCreate('new-project', 'New project') }}>copy prompt</button><button onClick={props.onOpenProject}>open project</button><button onClick={props.onCheckFirstPin}>check first pin</button></section> }))
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project, connectStorybook }: { project: { publicKey: string }; connectStorybook?: boolean }) => <div>Settings for {project.publicKey}{connectStorybook && ' at Storybook'}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number, undo?: Array<{id:string;updatedAt:string}>) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 0, [{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])}>continue undoable move</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
@@ -276,6 +276,18 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.queryByTestId('status-filter')).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: 'open project' }))
     expect(screen.getByTestId('status-filter')).toHaveTextContent('open')
+  })
+
+  it('looks for the first pin and leaves the page when a notification opens a comment', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'create project' }))
+    fireEvent.click(screen.getByRole('button', { name: 'copy prompt' }))
+    await waitFor(() => expect(fixtures.claimProject).toHaveBeenCalled())
+    fixtures.fn.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'check first pin' }))
+    expect(fixtures.fn).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'activity' }))
+    expect(screen.queryByRole('region', { name: 'new project' })).toBeNull()
   })
 
   it('keeps the New project page open with the reason when creating fails', async () => {

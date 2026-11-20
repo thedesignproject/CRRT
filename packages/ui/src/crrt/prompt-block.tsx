@@ -64,7 +64,12 @@ export function PromptBlock({ header, prompt, highlight = [], onCopy, disabled =
           Your browser blocked copying. Select the prompt below and copy it.
         </p>
       )}
-      <pre onCopy={() => { if (!disabled) onCopy?.(); }} className="max-h-64 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-text-body">
+      {/* Not selectable while disabled, so nobody pastes a prompt with a placeholder ID. */}
+      <pre
+        onCopy={() => { if (!disabled) onCopy?.(); }}
+        aria-disabled={disabled || undefined}
+        className={cn("max-h-64 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-text-body", disabled && "opacity-60 select-none")}
+      >
         {withHighlights(prompt, highlight)}
       </pre>
     </div>
