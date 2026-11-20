@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { feedbackField, replyField, nameField, openNote, waitForPublication } from '../../../src/__tests__/conversationInteractions'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, afterEach, expect, it, vi } from 'vitest'
 import { useEffect, useState } from 'react'
 vi.mock('./client',async original=>({...await original<object>(),documentRequest:vi.fn()}))
@@ -16,8 +16,15 @@ const id='11111111-1111-4111-8111-111111111111'
 const initial:DocumentView={id,accessMode:'private',canComment:true,projectId:'p',title:'Proposal',body:'Original',version:1,publishedRevision:null,shareKey:id,sharing:false,passwordProtected:false,archived:false,updatedAt:'2026-11-06',canEdit:true,canPublish:true,canManage:true}
 const comment={id:'22222222-2222-4222-8222-222222222222',document_id:id,revision:1,parent_id:null,quote:'Original',prefix:'',suffix:'',body:'Improve this',author:'Reviewer',review_status:'open',implementation_status:'unassigned',version:1,created_at:'2026-11-06'} as DocumentComment
 const request=vi.mocked(documentRequest),onDirty=vi.fn()
+beforeEach(()=>{vi.useFakeTimers({ shouldAdvanceTime: true })})
 beforeEach(()=>{request.mockReset();onDirty.mockReset();Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:vi.fn().mockResolvedValue(undefined)}})})
-afterEach(()=>{vi.useRealTimers()})
+afterEach(()=>{
+  cleanup()
+  // Widget mutation-observer debounces can remain queued after unmount. Own
+  // those timers here so they cannot call React after jsdom removes window.
+  vi.clearAllTimers()
+  vi.useRealTimers()
+})
 it('orders access modes, requires passwords, assigns optional projects and manages invitations',async()=>{
   const action=vi.fn().mockResolvedValue(true),view=render(<DocumentSharing document={initial} disabled={false} onAction={action} projects={[{publicKey:'p',name:'Project'}]} invites={['reviewer@test.local']}/>),access=screen.getByLabelText('Who can open this document?')
   expect(Array.from(access.querySelectorAll('option')).map(o=>o.textContent)).toEqual(['Private','Project members only','Anyone with the link','Anyone with the link + password'])

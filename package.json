@@ -42,6 +42,8 @@
     "build:dashboard": "vite build --config apps/dashboard/vite.config.ts",
     "build:extension": "wxt build --config apps/extension/wxt.config.ts",
     "package:extension": "bun scripts/package-extension.ts",
+    "package:chatgpt-plugin": "python3 scripts/package-chatgpt-plugin.py",
+    "package:claude-plugin": "python3 scripts/package-chatgpt-plugin.py --claude",
     "preview": "vite preview",
     "preview:dashboard": "vite preview --config apps/dashboard/vite.config.ts",
     "prepublishOnly": "npm run build",
