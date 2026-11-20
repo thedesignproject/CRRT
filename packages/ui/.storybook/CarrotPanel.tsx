@@ -20,7 +20,7 @@ const CRRT_FONT = '"Geist Mono", ui-monospace, SFMono-Regular, Menlo, monospace'
  * Sending is where this panel's job ends. Nothing here opens a PR and nothing
  * here starts an agent: a reviewer accepts the comment in the CRRT dashboard,
  * creates a feedback share, and hands its prompt to an agent session running in
- * this repo. See LOOP.md for the full wiring and the pieces still missing.
+ * this repo.
  *
  * Configure via env (Storybook exposes `STORYBOOK_*` vars):
  *   STORYBOOK_CRRT_PROJECT_ID   the CRRT project public key (required to send)
@@ -176,7 +176,7 @@ export const CarrotPanel = ({ active }: CarrotPanelProps) => {
         </button>
 
         {/* Don't promise a PR: the handoff to an agent runs through the CRRT
-            dashboard, not from this panel. See LOOP.md. */}
+            dashboard, not from this panel. */}
         {status === "sent" && (
           <span style={{ color: "#2e7d32", fontSize: 12 }}>✓ Sent to CRRT — review it in the dashboard.</span>
         )}

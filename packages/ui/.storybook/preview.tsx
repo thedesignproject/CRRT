@@ -12,8 +12,6 @@ import "../src/styles/globals.css";
  *
  *   STORYBOOK_CRRT_PROJECT_ID   CRRT project public key (required to mount)
  *   STORYBOOK_CRRT_API_BASE     backend base URL (default https://crrt.ai/api)
- *
- * What happens to a comment after it lands: see LOOP.md.
  */
 function readEnv(key: string): string | undefined {
   try {
