@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { CommentList } from './CommentList'
 import type { Comment } from '../lib/types'
@@ -9,8 +9,13 @@ describe('comment list visual refresh', () => {
     const open = vi.fn(), toggle = vi.fn()
     const props = { filteredComments: [comment], counts: { all: 1, open: 1, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), toggleBulkSelect: toggle, commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: open }
     const view = render(<CommentList {...props} />)
+    expect(screen.queryByRole('button', { name: 'Select all' })).toBeNull()
+    expect(screen.queryByRole('checkbox')).toBeNull()
+    expect(within(screen.getByRole('button', { name: /A long comment/ })).getByText('1')).toBeInTheDocument()
+    view.rerender(<CommentList {...props} bulkMode />)
     fireEvent.click(screen.getByRole('button', { name: 'Select all' }))
     expect(props.toggleSelectAllVisible).toHaveBeenCalledOnce()
+    view.rerender(<CommentList {...props} />)
     fireEvent.click(screen.getByRole('tab', { name: /Testing/ }))
     expect(props.selectFilter).toHaveBeenCalledWith('ready_for_testing')
     fireEvent.click(screen.getByRole('button', { name: /A long comment/ }))
@@ -34,10 +39,10 @@ describe('comment list visual refresh', () => {
   })
 })
 
-it('selects directly and extends a visible range in either direction without opening feedback', () => {
+it('selects in Select mode and extends a visible range in either direction without opening feedback', () => {
  const toggle = vi.fn(), open = vi.fn()
  const props = { filteredComments: ['one','two','three'].map(id => ({...comment,id,body:id})), counts: { all: 3, open: 3, ready: 0, ready_for_testing: 0, done: 0, rejected: 0 }, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), toggleBulkSelect: toggle, commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: open }
- const view = render(<CommentList {...props} />)
+ const view = render(<CommentList {...props} bulkMode />)
  fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: one'}), {shiftKey:true})
  expect(toggle).toHaveBeenLastCalledWith('one',undefined)
  fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: three'}), {shiftKey:true})
@@ -47,7 +52,7 @@ it('selects directly and extends a visible range in either direction without ope
  fireEvent.click(screen.getByRole('checkbox', {name:'Select feedback: two'}))
  expect(toggle).toHaveBeenLastCalledWith('two',undefined)
  expect(open).not.toHaveBeenCalled()
- view.rerender(<CommentList {...props} readOnly />)
+ view.rerender(<CommentList {...props} bulkMode readOnly />)
  expect(screen.queryByRole('checkbox')).toBeNull()
 })
 

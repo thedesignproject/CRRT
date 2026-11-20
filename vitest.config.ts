@@ -9,7 +9,7 @@ export default defineConfig({
       '@widget': resolve(__dirname, 'src'),
       '@crrt/ui': resolve(__dirname, 'packages/ui/src'),
     },
-    dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge'],
+    dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge', '@base-ui/react'],
   },
   test: {
     environment: 'happy-dom',
