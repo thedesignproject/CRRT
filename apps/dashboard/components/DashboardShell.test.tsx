@@ -103,6 +103,19 @@ describe('DashboardShell', () => {
     expect(screen.queryByRole('button', { name: /^Next steps/ })).toBeNull()
   })
 
+  it('shows Brain as a workspace page', () => {
+    const onOpenBrain = vi.fn()
+    const view = render(shell({ projects: [project], selectedProject: 'one' }))
+    expect(screen.queryByRole('button', { name: 'Brain' })).toBeNull()
+    view.rerender(shell({ projects: [project], selectedProject: 'one', onOpenBrain, brainActive: true }))
+    const brain = screen.getByRole('button', { name: 'Brain' })
+    expect(brain).toHaveAttribute('aria-current', 'page')
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByText('Brain')).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).queryByText('Project One')).toBeNull()
+    fireEvent.click(brain)
+    expect(onOpenBrain).toHaveBeenCalledOnce()
+  })
+
   it('shows project Settings in the workspace nav and super admin in the account menu', () => {
     const view = render(shell({ projects: [project], selectedProject: 'one', settingsActive: true, superadmin: true }))
     const settings = screen.getByRole('button', { name: 'Settings' })

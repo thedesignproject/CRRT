@@ -44,6 +44,7 @@ import { McpAuthPage } from './components/McpAuthPage'
 import { ExtensionAuthPage } from './components/ExtensionAuthPage'
 import { RecordingSharePage } from './components/RecordingSharePage'
 import { RecordingsPage } from './components/RecordingsPage'
+import { BrainPage } from './components/BrainPage'
 import { DocumentUnlockPage } from './documents/DocumentUnlockPage'
 import { documentRoute } from './documents/DocumentRoute'
 import { DocumentRecoveryProvider } from './documents/DocumentRecovery'
@@ -118,7 +119,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [refreshProjects])
   const { superadmin } = useSuperAdmin(API_BASE, accessToken)
   const [selectedProject, setSelectedProject] = useState<string>('')
-  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording' | 'next-steps' | 'agent-runs'>(() => {
+  const [view, setView] = useState<'feedback' | 'settings' | 'super-admin' | 'extension-comments' | 'recordings' | 'recording' | 'brain' | 'next-steps' | 'agent-runs'>(() => {
     if (relPath(window.location.pathname) === '/recording') return 'recording'
     const requested = new URLSearchParams(window.location.search).get('view')
     return requested === 'extension-comments' || requested === 'recordings' ? requested : 'feedback'
@@ -296,7 +297,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }, [])
 
   useEffect(() => {
-    if (view !== 'extension-comments' && view !== 'recordings' && view !== 'recording' && !selectedProject && projects.length > 0) {
+    if (view !== 'extension-comments' && view !== 'recordings' && view !== 'recording' && view !== 'brain' && !selectedProject && projects.length > 0) {
       setSelectedProject(current => current || projects[0].publicKey)
     }
   }, [projects, selectedProject, view])
@@ -678,7 +679,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (view === 'extension-comments' || view === 'recordings') return
+      if (view === 'extension-comments' || view === 'recordings' || view === 'brain') return
       // ⌘K must run before the input-focus / palette-open guards below — it's the global escape hatch.
       if (shortcutsEnabled && (e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
@@ -777,8 +778,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     exitBulkMode()
   }, [exitBulkMode])
 
-  const openRecordings = useCallback(() => {
-    setView('recordings')
+  const openWorkspacePage = useCallback((page: 'recordings' | 'brain') => {
+    setView(page)
     setSelectedCommentId('')
     setPendingCommentSelection(null)
     setPendingBulkSelection(null)
@@ -873,7 +874,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         settingsActive={view === 'settings'}
         onOpenExtensionComments={openExtensionComments}
         extensionCommentsActive={view === 'extension-comments'}
-        onOpenRecordings={openRecordings}
+        onOpenRecordings={() => openWorkspacePage('recordings')}
+        onOpenBrain={() => openWorkspacePage('brain')}
+        brainActive={view === 'brain'}
         recordingsActive={view === 'recordings' || view === 'recording'}
         apiBase={API_BASE}
         accessToken={accessToken}
@@ -911,6 +914,8 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />
       ) : view === 'recordings' ? (
         <RecordingsPage apiBase={API_BASE} accessToken={accessToken} />
+      ) : view === 'brain' ? (
+        <BrainPage />
       ) : agentView === 'next-steps' ? (
         <NextStepsPage
           projectName={activeProject!.name}
