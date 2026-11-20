@@ -18,7 +18,11 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+        // The design system ships as source (packages/ui, see its README).
+        '@crrt/ui': path.resolve(__dirname, '../../packages/ui/src'),
       },
+      // packages/ui may have its own node_modules locally; keep one React and one icon set.
+      dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge'],
     },
     define: {
       __SUPABASE_URL__: JSON.stringify(env.SUPABASE_URL ?? ''),

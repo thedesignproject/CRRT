@@ -20,6 +20,15 @@
     "paths": {
       "@widget/*": [
         "../../src/*"
+      ],
+      "@crrt/ui/*": [
+        "../../packages/ui/src/*"
+      ],
+      "react": [
+        "../../node_modules/@types/react"
+      ],
+      "react/*": [
+        "../../node_modules/@types/react/*"
       ]
     }
   },

@@ -22,17 +22,17 @@ export default defineConfig({
       if (['apps/dashboard/lib/supabase', 'apps/landing/lib/supabase'].some(p => target === resolve(repo, p))) return resolve(root, 'supabase.ts')
     },
     transform(code, id) {
-      if (id === resolve(repo, 'apps/dashboard/globals.css')) return code.replace('@import \"tailwindcss\";', '@import \"tailwindcss\" source(\".\");')
+      if (id === resolve(repo, 'apps/dashboard/globals.css')) return `${code}\n@source ".";`
       if (id === resolve(repo, 'apps/dashboard/lib/routes.ts')) return code.replaceAll('import.meta.env.BASE_URL', JSON.stringify('/dashboard/'))
       if (id === resolve(repo, 'apps/dashboard/lib/mocks.ts')) return code.replace('const mockMode = import.meta.env.VITE_USE_MOCKS', "const mockMode = new URLSearchParams(location.search).get('mock') ?? '1'")
     },
   }, tailwindcss()],
   resolve: { alias: {
-    '@widget': resolve(repo, 'src'), '@branding': resolve(repo, 'branding'),
+    '@widget': resolve(repo, 'src'), '@branding': resolve(repo, 'branding'), '@crrt/ui': resolve(repo, 'packages/ui/src'),
     'wxt/browser': resolve(root, 'browser.ts'),
     'html2canvas-pro': resolve(root, 'capture.ts'),
     'storybook/manager-api': resolve(root, 'storybook.ts'),
-  } },
+  }, dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge'] },
   define: {
     'process.env.STORYBOOK_CRRT_CONNECTION_ID': 'undefined',
     'process.env.STORYBOOK_CRRT_PROJECT_KEY': 'undefined',

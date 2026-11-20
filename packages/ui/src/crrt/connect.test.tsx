@@ -8,6 +8,7 @@ import {
   CommandBlock,
   ConnectionStatus,
   InlineCode,
+  NavList,
   PromptBlock,
   QuotaMeter,
   SegmentedTabs,
@@ -69,9 +70,27 @@ describe("AppShell", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "New project" }));
     expect(onNewProject).toHaveBeenCalledOnce();
-    expect(screen.getByText("Footer")).toBeTruthy();
+    // The footer stays on small screens too; it only moves to the bottom from md up.
+    expect(screen.getByText("Footer").parentElement?.className).toBe("md:mt-auto");
     expect(screen.getByText("Body")).toBeTruthy();
     expect(screen.getByText("quota")).toBeTruthy();
+    // Side by side from md up: one flex line, so a fixed-height shell constrains the content column.
+    expect(screen.getByText("Body").closest("main")?.parentElement?.parentElement?.className).toContain("md:flex-nowrap");
+  });
+
+  it("links the CRRT mark when given a home", () => {
+    const { rerender } = render(
+      <AppShell nav={nav} activeId="inbox" homeHref="/?stay=1" homeLabel="CRRT marketing site">
+        <p>Body</p>
+      </AppShell>
+    );
+    expect(screen.getByRole("link", { name: "CRRT marketing site" }).getAttribute("href")).toBe("/?stay=1");
+    rerender(
+      <AppShell nav={nav} activeId="inbox" homeHref="/">
+        <p>Body</p>
+      </AppShell>
+    );
+    expect(screen.getByRole("link", { name: "CRRT home" })).toBeTruthy();
   });
 
   it("renders without projects, footer or new-project button", () => {
@@ -396,5 +415,53 @@ describe("UploadDropzone", () => {
     fireEvent.drop(container.querySelector("label")!, { dataTransfer: { files: [file] } });
     fireEvent.change(container.querySelector("input")!, { target: { files: [file] } });
     expect(screen.getByText("Drop an HTML file")).toBeTruthy();
+  });
+});
+
+describe("AppShell views without a URL", () => {
+  it("renders href-less items as buttons that call onSelect, and hides an empty workspace", () => {
+    const onSelect = vi.fn();
+    const { container } = render(
+      <AppShell nav={[{ id: "inbox", label: "Inbox", onSelect }]} activeId="inbox">
+        <p>Body</p>
+      </AppShell>
+    );
+    const item = screen.getByRole("button", { name: "Inbox" });
+    expect(item.getAttribute("type")).toBe("button");
+    expect(item.getAttribute("aria-current")).toBe("page");
+    fireEvent.click(item);
+    expect(onSelect).toHaveBeenCalledOnce();
+    expect(container.querySelector(".ml-auto.truncate")).toBeNull();
+  });
+});
+
+describe("QuotaMeter units", () => {
+  it("meters any unit and period", () => {
+    render(<QuotaMeter plan="Starter" used={120} limit={500} unit="comments" period="this month" />);
+    expect(screen.getByRole("meter", { name: "comments used this month" })).toBeTruthy();
+    expect(screen.getByText("380 of 500 comments left this month")).toBeTruthy();
+  });
+});
+
+describe("AppShell empty projects", () => {
+  it("shows the empty state only when there are no projects", () => {
+    const { rerender } = render(
+      <AppShell nav={[]} projects={[]} projectsEmpty="Loading projects…" activeId="">
+        <p>Body</p>
+      </AppShell>
+    );
+    expect(screen.getByText("Loading projects…")).toBeTruthy();
+    rerender(
+      <AppShell nav={[]} projects={[{ id: "a", label: "Acme", href: "#a" }]} projectsEmpty="Loading projects…" activeId="">
+        <p>Body</p>
+      </AppShell>
+    );
+    expect(screen.queryByText("Loading projects…")).toBeNull();
+    expect(screen.getByRole("link", { name: "Acme" })).toBeTruthy();
+  });
+
+  it("exports NavList for sidebar footers", () => {
+    render(<NavList items={[{ id: "docs", label: "Documents", href: "#/docs" }]} activeId="docs" />);
+    expect(screen.getByRole("link", { name: "Documents" }).getAttribute("aria-current")).toBe("page");
   });
 });

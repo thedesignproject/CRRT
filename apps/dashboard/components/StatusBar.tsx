@@ -1,26 +1,22 @@
+import { ShortcutBar, type Shortcut } from '@crrt/ui/crrt'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
-import { Kbd } from './primitives'
 
 interface StatusBarProps {
   agentAvailable?: boolean
   personal?: boolean
 }
 
+/** Keyboard legend under every dashboard view. Hidden when shortcuts are turned off. */
 export function StatusBar({ agentAvailable = true, personal = false }: StatusBarProps) {
   const [shortcutsEnabled] = useKeyboardShortcuts('dashboard')
-  return (
-    <footer className="flex items-center gap-5 px-5 h-[32px] shrink-0 border-t border-border bg-card text-[10px] font-mono text-muted-foreground">
-      {shortcutsEnabled && <>
-        {!personal && <><span><Kbd>A</Kbd> ready</span>
-        <span><Kbd>M</Kbd> done</span>
-        <span><Kbd>D</Kbd> reject</span></>}
-        <span><Kbd>Space</Kbd> next</span>
-        <span><Kbd>J</Kbd>/<Kbd>K</Kbd> nav</span>
-        {!personal && agentAvailable && <span><Kbd>S</Kbd> sidebar</span>}
-        {!personal && <>
-        <span><Kbd>⌘K</Kbd> search</span></>}
-      </>}
-      <div className="flex-1" />
-    </footer>
-  )
+  if (!shortcutsEnabled) return null
+  const project = !personal
+  const shortcuts: Shortcut[] = [
+    ...(project ? [{ keys: ['A'], label: 'ready' }, { keys: ['M'], label: 'done' }, { keys: ['D'], label: 'reject' }] : []),
+    { keys: ['Space'], label: 'next' },
+    { keys: ['J', 'K'], label: 'nav' },
+    ...(project && agentAvailable ? [{ keys: ['S'], label: 'sidebar' }] : []),
+    ...(project ? [{ keys: ['⌘K'], label: 'search' }] : []),
+  ]
+  return <ShortcutBar shortcuts={shortcuts} />
 }

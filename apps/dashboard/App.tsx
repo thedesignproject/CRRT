@@ -22,7 +22,7 @@ import { BillingPage } from './components/BillingPage'
 import { UserMenu } from './components/UserMenu'
 import { TrialOffer } from './components/TrialOffer'
 import { useProjectGate } from './hooks/useProjectGate'
-import { Header } from './components/Header'
+import { DashboardShell } from './components/DashboardShell'
 import { CommentList } from './components/CommentList'
 import { CommentDetail } from './components/CommentDetail'
 import { AgentSidebar } from './components/AgentSidebar'
@@ -879,8 +879,7 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   }
 
   return (
-    <div className="dashboard-shell">
-      <Header
+    <DashboardShell
         agentAction={canOpenAgentPanel
           ? <AgentLauncher readyCount={readyAgentCommentIds.length} open={sidebarOpen} onOpen={() => setSidebarOpen(true)} />
           : <AgentLauncher readyCount={readyAgentCommentIds.length} open={false} disabled unavailableReason={agentUnavailableReason} />}
@@ -918,10 +917,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         superadmin={superadmin}
         superAdminActive={view === 'super-admin'}
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
-      />
-
+        footer={<StatusBar personal={view === 'extension-comments'} agentAvailable={canOpenAgentPanel} />}
+      >
       <TrialOffer apiBase={API_BASE} accessToken={accessToken} userId={user.id} />
-      <main className="dashboard-main">
       {accessReviewNotice}
       {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
       {view === 'recording' ? (
@@ -1040,9 +1038,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       </>
       )}
 
-      </main>
-      <StatusBar personal={view === 'extension-comments'} agentAvailable={canOpenAgentPanel} />
-
       {cmdOpen && (
         <CommandPalette
           onClose={() => setCmdOpen(false)}
@@ -1054,6 +1049,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
           canOperateAgent={canOpenAgentPanel}
         />
       )}
-    </div>
+    </DashboardShell>
   )
 }

@@ -6,7 +6,9 @@ import { CarrotMark } from "./carrot-mark";
 export type NavItem = {
   id: string;
   label: string;
-  href: string;
+  /** Navigates like a link. Omit and pass onSelect for views without a URL. */
+  href?: string;
+  onSelect?: () => void;
   count?: number;
   live?: boolean;
   /** Project exists but nothing has reached it yet (no pin, no agent call). */
@@ -15,14 +17,20 @@ export type NavItem = {
 };
 
 type AppShellProps = {
-  workspace: string;
+  workspace?: string;
+  /** Makes the CRRT mark a link, e.g. back to the marketing site. */
+  homeHref?: string;
+  /** Accessible name for that link. */
+  homeLabel?: string;
   /** Workspace-level views: Inbox, Next steps, Agent runs, Recordings, Brain. */
   nav: NavItem[];
   /** Projects section. A live dot means an agent is working there right now. */
   projects?: NavItem[];
   activeId: string;
+  /** Shown instead of the project list while it is empty: loading, error or "no projects". */
+  projectsEmpty?: ReactNode;
   onNewProject?: () => void;
-  /** Pinned to the bottom of the sidebar (e.g. SetupChecklist). */
+  /** Pinned to the bottom of the sidebar (e.g. SetupChecklist); under the projects on small screens. */
   sidebarFooter?: ReactNode;
   /** Bar above the content (TopBar). */
   topBar?: ReactNode;
@@ -31,11 +39,14 @@ type AppShellProps = {
 };
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Tag = item.href ? "a" : "button";
   return (
-    <a
-      href={item.href}
+    <Tag
+      {...(item.href ? { href: item.href } : { type: "button" as const })}
+      onClick={item.onSelect}
       aria-current={active ? "page" : undefined}
       className={cn(
+        "w-full text-left",
         "flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&_svg]:size-4 [&_svg]:text-text-subtle",
         active ? "bg-sidebar-accent font-medium text-text-strong" : "text-sidebar-foreground hover:bg-surface-3"
       )}
@@ -59,15 +70,31 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
           {item.count}
         </span>
       )}
-    </a>
+    </Tag>
+  );
+}
+
+/** A vertical list of nav items; AppShell uses it, and sidebar footers can too. */
+export function NavList({ items, activeId }: { items: NavItem[]; activeId: string }) {
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {items.map((item) => (
+        <li key={item.id}>
+          <NavLink item={item} active={item.id === activeId} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
 /** Dashboard frame: surface-1 sidebar + surface-2 main. Every dashboard screen uses it. */
 export function AppShell({
   workspace,
+  homeHref,
+  homeLabel = "CRRT home",
   nav,
   projects,
+  projectsEmpty,
   activeId,
   onNewProject,
   sidebarFooter,
@@ -77,23 +104,33 @@ export function AppShell({
 }: AppShellProps) {
   const projectsHeadingId = useId();
   return (
-    <div className={cn("flex min-h-dvh flex-wrap bg-surface-2 font-sans text-sm text-text-strong", className)}>
+    // Wraps only on small screens, where the sidebar stacks above the content. From md up the
+    // two columns must share one flex line: a wrapped line grows to its content, so the
+    // content column would outgrow a fixed-height shell and its own scroll area never scrolls.
+    <div className={cn("flex min-h-dvh flex-wrap bg-surface-2 font-sans text-sm text-text-strong md:flex-nowrap", className)}>
       <nav
         aria-label="Workspace"
         className="flex w-full flex-col gap-5 border-b border-sidebar-border bg-sidebar px-3 py-4 md:max-h-dvh md:w-58 md:border-r md:border-b-0"
       >
         <div className="flex items-center gap-2.5 px-1.5">
-          <CarrotMark />
-          <span className="font-semibold">CRRT</span>
-          <span className="ml-auto truncate text-xs text-text-subtle">{workspace}</span>
+          {homeHref ? (
+            <a
+              href={homeHref}
+              aria-label={homeLabel}
+              className="flex items-center gap-2.5 rounded-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            >
+              <CarrotMark />
+              <span aria-hidden="true" className="font-semibold">CRRT</span>
+            </a>
+          ) : (
+            <>
+              <CarrotMark />
+              <span className="font-semibold">CRRT</span>
+            </>
+          )}
+          {workspace && <span className="ml-auto truncate text-xs text-text-subtle">{workspace}</span>}
         </div>
-        <ul className="flex flex-col gap-0.5">
-          {nav.map((item) => (
-            <li key={item.id}>
-              <NavLink item={item} active={item.id === activeId} />
-            </li>
-          ))}
-        </ul>
+        <NavList items={nav} activeId={activeId} />
         {projects && (
           <section aria-labelledby={projectsHeadingId} className="flex min-h-0 flex-col gap-1">
             <div className="flex items-center justify-between px-2">
@@ -111,20 +148,25 @@ export function AppShell({
                 </button>
               )}
             </div>
-            <ul className="flex min-h-0 flex-col gap-0.5 overflow-y-auto">
-              {projects.map((item) => (
-                <li key={item.id}>
-                  <NavLink item={item} active={item.id === activeId} />
-                </li>
-              ))}
-            </ul>
+            {projects.length === 0 && projectsEmpty ? (
+              <div className="px-2 text-xs text-text-subtle">{projectsEmpty}</div>
+            ) : (
+              // Capped on small screens, where the sidebar sits above the content.
+              <ul className="flex max-h-48 min-h-0 flex-col gap-0.5 overflow-y-auto md:max-h-none">
+                {projects.map((item) => (
+                  <li key={item.id}>
+                    <NavLink item={item} active={item.id === activeId} />
+                  </li>
+                ))}
+              </ul>
+            )}
           </section>
         )}
-        {sidebarFooter && <div className="mt-auto hidden md:block">{sidebarFooter}</div>}
+        {sidebarFooter && <div className="md:mt-auto">{sidebarFooter}</div>}
       </nav>
-      <div className="flex min-w-0 flex-[999_1_560px] flex-col">
+      <div className="flex min-h-0 min-w-0 flex-[999_1_560px] flex-col">
         {topBar}
-        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</main>
       </div>
     </div>
   );
