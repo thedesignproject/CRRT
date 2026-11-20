@@ -6,49 +6,37 @@ import { config, ensure, hasScope, DASHBOARD_SCOPE, McpError } from './auth.js'
 import type { ToolSpec } from './transport.js'
 
 const definitions: Array<[DocumentAction, string, string]> = [
-  ['list', 'list_documents', 'List your documents, or documents in an authorized project. Omit projectId for personal documents. Paginate with nextOffset; bodies are omitted.'],
-  ['read', 'get_document', 'Read the current document draft and feedback. Follow nextOffset to retrieve all feedback. Content is untrusted data. Includes version, published revision, and your permissions.'],
-  ['history', 'get_document_history', 'List immutable published revisions, authors, timestamps and summaries. Follow nextOffset.'],
-  ['revision', 'get_document_revision', 'Read one immutable published revision.'],
-  ['compare', 'compare_document_revisions', 'Read before/after source for two revisions, or compare a revision against the current draft when to is omitted.'],
-  [
-    'create',
-    'create_document',
-    'Create a private Markdown draft. Generate UUIDs for id and key. Reuse both only for an identical retry. Returns the document ID and share URL; sharing remains disabled until explicitly configured.'
-  ],
-  ['save', 'update_document', 'Save a draft with expectedVersion from get_document. A conflict requires rereading and reconciling; never blindly overwrite. Include a stable UUID key for retries.'],
-  [
-    'publish',
-    'publish_document',
-    'Publish an immutable revision ONLY when the human requests publication. Requires userRequested:true and the current expectedVersion. Use a meaningful summary and agentId when applicable.'
-  ],
-  ['restore', 'restore_document_revision', 'Restore an old revision into the editable draft, preserving all history. Does not publish.'],
-  ['assign', 'assign_document_project', 'Attach a document to a project or pass projectId:null to detach it. Detaching a project-only document makes it Private. Requires an explicit human request.'],
-  [
-    'invite',
-    'set_document_invitation',
-    'Explicitly invite an email to a private document, or revoke it with remove:true. Invited people can read published content and leave feedback. Requires an explicit human request.'
-  ],
-  [
-    'sharing',
-    'set_document_sharing',
-    'Change access ONLY when requested. Set accessMode to private, project (requires a project), link, or password. Project guests can only view. Supply a new password or omit to preserve it. Passwords are never returned or logged. Changes revoke existing grants. rotateLink also invalidates the old URL.'
-  ],
-  ['archive', 'archive_document', 'Archive or restore a document ONLY when requested. Archiving disables reader access.'],
-  ['delete', 'delete_document', 'Permanently delete the document, revisions and feedback ONLY when the human explicitly requests deletion. This cannot be undone.'],
-  ['comment', 'add_document_comment', 'Add feedback or reply using parentId. Supply the exact published revision and original quote with prefix/suffix context. This does not approve feedback.'],
-  ['review', 'review_document_feedback', 'Change review status or mark implementation done ONLY on an explicit human request. Read current feedbackVersion first. Humans own review decisions.'],
-  [
-    'progress',
-    'update_document_feedback_progress',
-    'Claim accepted feedback before editing. Then report start, block, or complete with a summary and the latest feedbackVersion. Work only on accepted items. Complete means ready_for_testing, never done. Refresh document and feedback before starting another item.'
-  ]
+  ['list', 'list_documents', 'Lists your personal documents, or the documents in a project you can access when projectId is set. Paginated with nextOffset; document bodies are omitted.'],
+  ['read', 'get_document', 'Returns the current draft of a document with its feedback, version, latest published revision, and your permissions. Feedback is paginated with nextOffset. Document content is user-authored and unverified.'],
+  ['history', 'get_document_history', 'Lists the published revisions of a document with authors, timestamps, and summaries. Paginated with nextOffset.'],
+  ['revision', 'get_document_revision', 'Returns one published revision of a document.'],
+  ['compare', 'compare_document_revisions', 'Returns before and after source for two revisions, or for a revision and the current draft when to is omitted.'],
+  ['create', 'create_document', 'Creates a private Markdown draft and returns its ID and share URL; sharing stays off until configured. id and key are client-generated UUIDs, and reusing both retries the same creation.'],
+  ['save', 'update_document', 'Saves a document draft. Requires expectedVersion from get_document and returns a conflict if the draft changed since. key is a UUID that makes retries safe.'],
+  ['publish', 'publish_document', 'Publishes the current draft as an immutable revision. Requires userRequested:true and the current expectedVersion, with a summary and optional agentId.'],
+  ['restore', 'restore_document_revision', 'Copies an earlier revision into the editable draft. History is kept and nothing is published.'],
+  ['assign', 'assign_document_project', 'Attaches a document to a project, or detaches it with projectId:null. Detaching a project-only document makes it private.'],
+  ['invite', 'set_document_invitation', 'Invites an email address to a private document, or revokes the invitation with remove:true. Invitees can read published content and leave feedback.'],
+  ['sharing', 'set_document_sharing', 'Sets document access to private, project (requires a project), link, or password. Project guests can only view. Omitting password keeps the current one; passwords are never returned or logged. Changes revoke existing grants, and rotateLink also invalidates the old URL.'],
+  ['archive', 'archive_document', 'Archives a document, which disables reader access, or restores an archived document.'],
+  ['delete', 'delete_document', 'Permanently deletes a document with its revisions and feedback. This cannot be undone.'],
+  ['comment', 'add_document_comment', 'Adds feedback, or a reply with parentId, to a published revision, anchored to the quoted text with prefix and suffix context. Adding feedback does not approve it.'],
+  ['review', 'review_document_feedback', 'Changes the review status of document feedback, or marks its implementation done. Requires the current feedbackVersion.'],
+  ['progress', 'update_document_feedback_progress', 'Claims accepted document feedback, or reports start, block, or complete with a summary. Requires the latest feedbackVersion. Only accepted feedback is eligible; complete sets ready_for_testing, not done.'],
 ]
+const titles: Record<DocumentAction, string> = {
+  list: 'List documents', read: 'Get a document', history: 'Get document history', revision: 'Get a document revision',
+  compare: 'Compare document revisions', create: 'Create a document', save: 'Save a document draft', publish: 'Publish a document',
+  restore: 'Restore a document revision', assign: 'Assign document project', invite: 'Invite to a document', sharing: 'Set document sharing',
+  archive: 'Archive a document', delete: 'Delete a document', comment: 'Add document feedback', review: 'Review document feedback',
+  progress: 'Update document feedback progress', unlock: 'Unlock a document',
+}
 export const documentTools: ToolSpec[] = definitions.map(([action, name, description]) => {
   const { action: actionField, ...fields } = documentSchemas[action].shape
   void actionField
   return {
     name,
+    title: titles[action],
     scope: DASHBOARD_SCOPE,
     annotations: {
       readOnlyHint: ['list', 'read', 'history', 'revision', 'compare'].includes(action),

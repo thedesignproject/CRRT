@@ -14,17 +14,17 @@ export async function requestDashboardAccess(actor: McpIdentity) {
 
 const statusInput = z.object({ requestId: uuid.optional() }).strict()
 export const dashboardAccessTools: ToolSpec[] = [{
-  name: 'connection_status',
-  description: 'Inspect this CRRT connection and its approved permissions before dashboard operations. Connection does not imply an editing executor is online. Existing MCP configuration remains reusable.',
+  name: 'connection_status', title: 'Check connection status',
+  description: 'Returns this connection ID, its approved scopes, and whether dashboard access is approved. Does not report whether a coding agent is online.',
   input: z.object({}).strict(), output: z.record(z.string(), z.unknown()),
   async run(_input, actor) {
     return { connectionId: actor.connection_id, scopes: (actor.scope ?? 'crrt:read').split(' '), dashboardBundle: hasScope(actor, DASHBOARD_SCOPE) ? DASHBOARD_BUNDLE : null,
       dashboardAccess: hasScope(actor, DASHBOARD_SCOPE) ? 'approved' : 'upgrade_required', executorReadiness: 'not_established',
-      nextAction: 'Use request_dashboard_access for one full-suite approval if needed. Use list_dashboard_operations to discover actions; writes require the user request and current dashboard permissions.' }
+      nextAction: 'Use request_dashboard_access for one full-suite approval if needed. Dashboard tools follow your current roles, ownership, and plan; changes require the user request.' }
   },
 }, {
-  name: 'request_dashboard_access',
-  description: 'Request one permission upgrade for the complete dashboard suite, or inspect an existing requestId. Works with old read-only connections. Approval preserves the connection/configuration and includes all dashboard-v1 operations, subject to actual roles/plans. Never repeat successful setup. If the client caches tools, use its supported refresh or explain any required reload without promising automatic continuation.',
+  name: 'request_dashboard_access', title: 'Request dashboard access',
+  description: 'Starts a one-time upgrade that adds dashboard access to this connection and returns a browser approval URL, or checks an existing request by requestId. Approval keeps the existing connection; actions still follow your roles and plan.',
   annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   input: statusInput, output: z.record(z.string(), z.unknown()),
   async run(raw, actor) {

@@ -45,8 +45,8 @@ export async function resolveProject(actor: McpIdentity, project: z.infer<typeof
   return { id: choices[0].publicKey, role: await access(actor, choices[0].publicKey) }
 }
 export const discoveryTools: ToolSpec[] = [{
-  name: 'list_projects',
-  description: 'Use when choosing a CRRT project. Lists only your memberships, with stable IDs and feedback-read capability. Exact duplicate names remain separate choices. Paginate using nextCursor; maximum 50 results.',
+  name: 'list_projects', title: 'List projects',
+  description: 'Lists the CRRT projects you are a member of, with stable IDs and whether you can read their feedback. Projects with identical names are listed separately. Paginated with nextCursor; up to 50 results per page.',
   input: listInput,
   output: z.object({ contractVersion: z.literal('1'), projects: z.array(projectSchema), nextCursor: z.string().nullable() }).strict(),
   async run(raw, actor) {
@@ -58,8 +58,8 @@ export const discoveryTools: ToolSpec[] = [{
     return { contractVersion: '1', projects: items.map(p => ({ id: p.publicKey, name: p.name, feedbackReadable: p.capabilities.includes('feedback:read') })), nextCursor: rows.length > input.limit ? encodeCursor({ scope, position: items[items.length - 1].publicKey }) : null }
   },
 }, {
-  name: 'list_feedback',
-  description: 'Use when reviewing feedback for one authorized project. Filter by review/implementation status and exact page URL. Use readyForAgent:true for Ready for Agent; accepted alone also includes testing and completed work. Returns short summaries; inspect details with get_feedback. Ambiguous project names return choices. Maximum 50 results.',
+  name: 'list_feedback', title: 'List feedback',
+  description: 'Lists feedback summaries for one project you can access, filtered by review status, implementation status, or exact page URL. readyForAgent:true returns accepted feedback that is not yet in testing or done; accepted alone also includes those. An ambiguous project name returns the matching choices. Up to 50 results per page.',
   input: feedbackInput,
   output: z.object({ contractVersion: z.literal('1'), projectId: z.string(), feedback: z.array(summarySchema), nextCursor: z.string().nullable() }).strict(),
   async run(raw, actor) {

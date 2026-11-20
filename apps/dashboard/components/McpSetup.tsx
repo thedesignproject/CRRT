@@ -52,7 +52,7 @@ export function McpSetup({ apiBase }: { apiBase: string }) {
     <aside className="space-y-6 py-1">
       <div className="space-y-3">
         <span className="inline-flex items-center gap-2 text-sm font-semibold"><ShieldIcon size={16} /> Permissions you approve</span>
-        <p className="text-sm leading-6 text-muted-foreground">New connections request the full dashboard suite in one approval, including projects, feedback, members, integrations, recordings, and billing flows. Your existing roles and plan limits still apply.</p>
+        <p className="text-sm leading-6 text-muted-foreground">New connections request the full dashboard suite in one approval, including projects, feedback, members, integrations, recordings, and a read-only billing summary. Billing changes stay in the dashboard. Your existing roles and plan limits still apply.</p>
         <p className="text-sm leading-6 text-muted-foreground">You can also ask your client to change review or completion status. These changes require your explicit request and current project permissions.</p>
       </div>
       <div className="space-y-3 border-t border-border pt-6">
