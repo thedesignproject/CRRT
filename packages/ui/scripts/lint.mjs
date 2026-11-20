@@ -18,8 +18,8 @@ const SRC_DIR = path.resolve(
   "src"
 );
 const REPO_ROOT = path.resolve(SRC_DIR, "..", "..", "..");
-// CRRT: patterns and screens are app-level code, so the anti-slop rules apply in full.
-const APP_DIRS = [path.join(SRC_DIR, "crrt"), path.join(SRC_DIR, "screens")];
+// Every component directory is checked: primitives, CRRT patterns and screens.
+const APP_DIRS = ["components", "crrt", "screens"].map((dir) => path.join(SRC_DIR, dir));
 
 async function listTsx(dir) {
   const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => []);
@@ -27,7 +27,7 @@ async function listTsx(dir) {
   for (const entry of entries) {
     const full = path.join(dir, entry.name);
     if (entry.isDirectory()) out.push(...(await listTsx(full)));
-    else if (entry.name.endsWith(".tsx") && !entry.name.endsWith(".stories.tsx")) out.push(full);
+    else if (entry.name.endsWith(".tsx") && !/\.(stories|test)\.tsx$/.test(entry.name)) out.push(full);
   }
   return out;
 }
@@ -44,7 +44,7 @@ const RULES = [
   {
     id: "foundations/color",
     // Hardcoded hex or rgb() color → not a token.
-    re: /#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b|\brgba?\([^)]*\)/g,
+    re: /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})\b|\brgba?\([^)]*\)/g,
     message: (m) =>
       `hardcoded color "${m}" — use a token (bg-primary, text-muted-foreground…). See brain/design/foundations/color.md`,
   },
@@ -89,6 +89,11 @@ async function main() {
       }
     });
     checkIconButtonA11y(source, rel, findings);
+  }
+
+  if (linted.length === 0) {
+    console.error(`[lint] no components found under ${APP_DIRS.map((d) => path.relative(REPO_ROOT, d)).join(", ")}; nothing was checked`);
+    process.exit(1);
   }
 
   if (findings.length > 0) {
