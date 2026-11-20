@@ -29,30 +29,23 @@
   --surface-4: #23262b; /* selected row, active nav */
 
   /* shadcn semantic set */
-  --background: var(--surface-0);
   --foreground: #edeef0;
-  --card: var(--surface-3);
   --card-foreground: #edeef0;
-  --popover: var(--surface-3);
   --popover-foreground: #edeef0;
   --primary: #ff7a33; /* carrot */
   --primary-foreground: #1a0b03; /* dark text on carrot (AA) */
-  --secondary: var(--surface-3);
   --secondary-foreground: #edeef0;
   --muted: #24272c;
   --muted-foreground: #9a9fa8;
-  --accent: var(--surface-4);
   --accent-foreground: #edeef0;
   --destructive: #ff6b6b;
   --border: #2a2d33;
   --input: #2a2d33;
   --ring: #ff7a33;
 
-  --sidebar: var(--surface-1);
   --sidebar-foreground: #c4c8cf;
   --sidebar-primary: #ff7a33;
   --sidebar-primary-foreground: #1a0b03;
-  --sidebar-accent: var(--surface-4);
   --sidebar-accent-foreground: #edeef0;
   --sidebar-border: #23262b;
   --sidebar-ring: #ff7a33;
@@ -101,7 +94,6 @@
   --tag-behavior-bg: #12291c;
 
   --shadow-panel: 0 24px 64px rgb(0 0 0 / 50%);
-  --shadow-primary: 0 4px 16px var(--carrot-glow);
 }
 
 [data-theme="light"] {
@@ -167,4 +159,21 @@
   --tag-behavior-bg: #e8f6ec;
 
   --shadow-panel: 0 1px 2px rgb(22 23 26 / 4%), 0 8px 24px rgb(22 23 26 / 6%);
+}
+
+/*
+ * Aliases of other tokens. They are declared on every theme root, not only :root, so a
+ * [data-theme="light"] subtree resolves them against its own surfaces instead of
+ * inheriting the dark values computed on :root.
+ */
+:root,
+[data-theme="light"] {
+  --background: var(--surface-0);
+  --card: var(--surface-3);
+  --popover: var(--surface-3);
+  --secondary: var(--surface-3);
+  --accent: var(--surface-4);
+  --sidebar: var(--surface-1);
+  --sidebar-accent: var(--surface-4);
+  --shadow-primary: 0 4px 16px var(--carrot-glow);
 }
