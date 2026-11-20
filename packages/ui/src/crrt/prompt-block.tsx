@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import { useRef, type ClipboardEvent, type ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "../lib/utils";
-import { useCopy } from "./use-copy";
+import { useCopy, type CopyGate } from "./use-copy";
 
 type PromptBlockProps = {
   /** Left side of the header: a framework picker, or a plain label. */
@@ -16,6 +16,12 @@ type PromptBlockProps = {
    * the prompt points at.
    */
   onCopy?: () => void;
+  /**
+   * Runs before the prompt reaches the clipboard, e.g. to create the project it names.
+   * Resolve false and nothing is copied; resolve a string to copy that text instead.
+   * Copying the text by hand goes through it too.
+   */
+  beforeCopy?: CopyGate;
   /** Blocks copying, e.g. while the project ID is still being checked. */
   disabled?: boolean;
   className?: string;
@@ -38,11 +44,29 @@ function withHighlights(text: string, highlight: string[]) {
 }
 
 /** "Just show me the prompt": a copyable agent prompt that replaces install snippets. */
-export function PromptBlock({ header, prompt, highlight = [], onCopy, disabled = false, className }: PromptBlockProps) {
+export function PromptBlock({ header, prompt, highlight = [], onCopy, beforeCopy, disabled = false, className }: PromptBlockProps) {
   const { state, copy } = useCopy();
+  // Once beforeCopy has said yes, copying by hand is safe and needs no gate.
+  const allowed = useRef(false);
+  const gate: CopyGate | undefined = beforeCopy && (async () => {
+    const result = await beforeCopy();
+    if (result !== false) allowed.current = true;
+    return result;
+  });
 
   async function copyPrompt() {
-    if (await copy(prompt)) onCopy?.();
+    if ((await copy(prompt, gate)) === "copied") onCopy?.();
+  }
+
+  function copyByHand(e: ClipboardEvent<HTMLPreElement>) {
+    if (disabled) return;
+    if (gate && !allowed.current) {
+      // Route it through the gate instead of letting the raw text out first.
+      e.preventDefault();
+      void copyPrompt();
+      return;
+    }
+    onCopy?.();
   }
 
   return (
@@ -66,7 +90,7 @@ export function PromptBlock({ header, prompt, highlight = [], onCopy, disabled =
       )}
       {/* Not selectable while disabled, so nobody pastes a prompt with a placeholder ID. */}
       <pre
-        onCopy={() => { if (!disabled) onCopy?.(); }}
+        onCopy={copyByHand}
         aria-disabled={disabled || undefined}
         className={cn("max-h-64 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-text-body", disabled && "opacity-60 select-none")}
       >
