@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "../lib/utils";
 import { CarrotMark } from "./carrot-mark";
@@ -58,7 +58,10 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
       {!item.pending && (item.count != null || item.live) && (
         <span className={cn("ml-auto flex items-center gap-1.5 font-mono text-xs", item.live ? "text-carrot" : "text-text-subtle")}>
           {item.live && (
-            <span aria-label="Agent working" className="size-1.5 rounded-full bg-carrot shadow-[0_0_8px_var(--carrot)]" />
+            <>
+              <span aria-hidden="true" className="size-1.5 rounded-full bg-carrot shadow-[0_0_8px_var(--carrot)]" />
+              <span className="sr-only">Agent working</span>
+            </>
           )}
           {item.count}
         </span>
@@ -93,6 +96,7 @@ export function AppShell({
   children,
   className,
 }: AppShellProps) {
+  const projectsHeadingId = useId();
   return (
     <div className={cn("flex min-h-dvh flex-wrap bg-surface-2 font-sans text-sm text-text-strong", className)}>
       <nav
@@ -106,9 +110,9 @@ export function AppShell({
         </div>
         <NavList items={nav} activeId={activeId} />
         {projects && (
-          <section aria-labelledby="nav-projects" className="flex min-h-0 flex-col gap-1">
+          <section aria-labelledby={projectsHeadingId} className="flex min-h-0 flex-col gap-1">
             <div className="flex items-center justify-between px-2">
-              <h2 id="nav-projects" className="text-xs font-medium text-text-subtle">
+              <h2 id={projectsHeadingId} className="text-xs font-medium text-text-subtle">
                 Projects
               </h2>
               {onNewProject && (
@@ -161,7 +165,7 @@ export function TopBar({ crumbs, children }: TopBarProps) {
           {crumbs.map((crumb, i) => {
             const last = i === crumbs.length - 1;
             return (
-              <li key={crumb} className="flex items-center gap-1.5">
+              <li key={i} className="flex items-center gap-1.5">
                 <span aria-current={last ? "page" : undefined} className={last ? "font-medium text-text-strong" : "text-text-subtle"}>
                   {crumb}
                 </span>

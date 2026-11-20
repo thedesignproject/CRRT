@@ -1,4 +1,5 @@
 import { cn } from "../lib/utils";
+import { focusableTab, onTabKeyDown } from "./roving-tabs";
 
 export type FilterOption<T extends string> = { id: T; label: string; count: number };
 
@@ -9,18 +10,12 @@ type FilterTabsProps<T extends string> = {
   onChange: (value: T) => void;
 };
 
-/** Status filter with counts (All / Open / Agent / Testing / Done). Arrow keys move. */
+/** Status filter with counts (All / Open / Agent / Testing / Done). Arrow keys, Home and End move. */
 export function FilterTabs<T extends string>({ label, options, value, onChange }: FilterTabsProps<T>) {
-  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    e.preventDefault();
-    const i = options.findIndex((o) => o.id === value);
-    const next = options[(i + (e.key === "ArrowRight" ? 1 : options.length - 1)) % options.length];
-    onChange(next.id);
-    e.currentTarget.querySelector<HTMLButtonElement>(`[data-value="${CSS.escape(next.id)}"]`)?.focus();
-  }
+  const ids = options.map((o) => o.id);
+  const focusable = focusableTab(ids, value);
   return (
-    <div role="tablist" aria-label={label} onKeyDown={onKeyDown} className="flex flex-wrap gap-0.5">
+    <div role="tablist" aria-label={label} onKeyDown={(e) => onTabKeyDown(e, ids, value, onChange)} className="flex flex-wrap gap-0.5">
       {options.map((o) => {
         const selected = o.id === value;
         return (
@@ -30,7 +25,7 @@ export function FilterTabs<T extends string>({ label, options, value, onChange }
             role="tab"
             data-value={o.id}
             aria-selected={selected}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={o.id === focusable ? 0 : -1}
             onClick={() => onChange(o.id)}
             className={cn(
               "flex h-7 items-center gap-1.5 rounded-md px-2.5 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none",
