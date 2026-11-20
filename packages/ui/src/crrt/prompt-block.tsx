@@ -1,6 +1,7 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useCopy } from "./use-copy";
 
 type PromptBlockProps = {
   /** Left side of the header: a framework picker, or a plain label. */
@@ -9,12 +10,18 @@ type PromptBlockProps = {
   prompt: string;
   /** Values to highlight inside the prompt (e.g. the project ID), so people see what's theirs. */
   highlight?: string[];
-  /** Fires on copy, e.g. to create the project the prompt points at. */
+  /**
+   * Fires once the prompt is on the clipboard: from the button when the browser allowed it,
+   * or when the person selects the text and copies it. Use it e.g. to create the project
+   * the prompt points at.
+   */
   onCopy?: () => void;
   className?: string;
 };
 
-function withHighlights(text: string, values: string[]) {
+function withHighlights(text: string, highlight: string[]) {
+  // Longest first, so "proj_12" wins over "proj_1"; empty values would match everywhere.
+  const values = highlight.filter(Boolean).sort((a, b) => b.length - a.length);
   if (!values.length) return text;
   const parts = text.split(new RegExp(`(${values.map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`));
   return parts.map((p, i) =>
@@ -30,17 +37,10 @@ function withHighlights(text: string, values: string[]) {
 
 /** "Just show me the prompt": a copyable agent prompt that replaces install snippets. */
 export function PromptBlock({ header, prompt, highlight = [], onCopy, className }: PromptBlockProps) {
-  const [copied, setCopied] = useState(false);
+  const { state, copy } = useCopy();
 
-  async function copy() {
-    try {
-      await navigator.clipboard?.writeText(prompt);
-    } catch {
-      /* clipboard can be blocked; the prompt stays selectable */
-    }
-    setCopied(true);
-    onCopy?.();
-    window.setTimeout(() => setCopied(false), 1600);
+  async function copyPrompt() {
+    if (await copy(prompt)) onCopy?.();
   }
 
   return (
@@ -49,14 +49,19 @@ export function PromptBlock({ header, prompt, highlight = [], onCopy, className 
         <div className="flex min-w-0 items-center text-xs text-text-subtle">{header}</div>
         <button
           type="button"
-          onClick={copy}
+          onClick={copyPrompt}
           className="ml-auto flex h-7 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-text-strong ring-1 ring-border hover:bg-surface-3 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          <span aria-live="polite">{copied ? "Copied" : "Copy prompt"}</span>
+          {state === "copied" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          <span aria-live="polite">{state === "copied" ? "Copied" : state === "failed" ? "Couldn’t copy" : "Copy prompt"}</span>
         </button>
       </div>
-      <pre className="max-h-64 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-text-body">
+      {state === "failed" && (
+        <p role="alert" className="border-b border-border px-4 py-2 text-xs text-text-body">
+          Your browser blocked copying. Select the prompt below and copy it.
+        </p>
+      )}
+      <pre onCopy={() => onCopy?.()} className="max-h-64 overflow-y-auto px-4 py-3 font-mono text-xs leading-relaxed whitespace-pre-wrap text-text-body">
         {withHighlights(prompt, highlight)}
       </pre>
     </div>

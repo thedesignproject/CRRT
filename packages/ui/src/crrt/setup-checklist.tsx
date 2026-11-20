@@ -36,7 +36,7 @@ export function SetupChecklist({ steps, currentId, className }: SetupChecklistPr
               aria-current={isCurrent ? "step" : undefined}
               className={cn(
                 "flex items-center gap-2 text-[13px]",
-                step.done ? "text-text-subtle line-through" : isCurrent ? "text-text-strong" : "text-text-subtle"
+                isCurrent && !step.done ? "text-text-strong" : "text-text-subtle"
               )}
             >
               <span
@@ -53,9 +53,10 @@ export function SetupChecklist({ steps, currentId, className }: SetupChecklistPr
                   {step.label}
                 </a>
               ) : (
-                step.label
+                <span className={cn(step.done && "line-through")}>{step.label}</span>
               )}
-              {step.optional && <span className="ml-auto text-xs text-text-subtle no-underline">Optional</span>}
+              {step.done && <span className="sr-only"> (done)</span>}
+              {step.optional && <span className="ml-auto text-xs text-text-subtle">Optional</span>}
             </li>
           );
         })}
