@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps } from 'react'
-import { NewProjectPage } from './NewProjectPage'
+import { FIRST_PIN_POLL_MS, NewProjectPage } from './NewProjectPage'
 import { setupPrompt } from '../lib/setup-prompt'
 import { route } from '../lib/routes'
 
@@ -37,9 +37,9 @@ describe('NewProjectPage', () => {
     expect(screen.getByText(/created, it’s in your sidebar/)).toBeInTheDocument()
     expect(screen.getByText(/Waiting for the first pin on/)).toBeInTheDocument()
 
-    // The ID is locked once created: renaming or copying again creates nothing new.
-    typeName('Renamed')
-    expect(screen.getAllByText('acme-marketing').length).toBeGreaterThan(0)
+    // The project is locked once created: copying again creates nothing new.
+    expect(screen.getByLabelText('Project name')).toHaveAttribute('readonly')
+    expect(screen.queryByText(/Renaming/)).toBeNull()
     await copy()
     expect(props.onCreate).toHaveBeenCalledOnce()
   })
@@ -57,15 +57,32 @@ describe('NewProjectPage', () => {
     expect(screen.queryByText(/created/)).toBeNull()
   })
 
-  it('stays editable and shows the error when creating fails', async () => {
+  it('warns that the copied prompt won’t work when creating fails, and checks the ID again', async () => {
     props.onCreate = vi.fn().mockResolvedValue(false)
-    render(page({ error: 'Name already used' }))
-    expect(screen.getByRole('alert')).toHaveTextContent('Name already used')
+    // A stale error from an earlier attempt isn't shown before this page tries anything.
+    const view = render(page({ error: 'Name already used' }))
+    expect(screen.queryByRole('alert')).toBeNull()
     typeName('Acme')
     await settle()
+    // Someone else took the ID between the check and the copy.
+    vi.mocked(props.checkAvailability).mockResolvedValue({ key: 'acme', available: false, suggestion: 'acme-2' })
     await copy()
     expect(screen.queryByText(/Waiting for the first pin/)).toBeNull()
     expect(screen.getByLabelText('Project name')).toHaveValue('Acme')
+    expect(screen.getByLabelText('Project name')).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('alert')).toHaveTextContent('Name already used The prompt you copied uses acme, which doesn’t exist yet')
+    await settle()
+    expect(props.checkAvailability).toHaveBeenCalledTimes(2)
+    expect(screen.getByRole('button', { name: /^(Copy prompt|Copied)$/ })).toBeDisabled()
+
+    // Moving to another ID clears the warning; a failure without a message still explains itself.
+    fireEvent.click(screen.getByRole('button', { name: 'Use acme-2' }))
+    expect(screen.queryByRole('alert')).toBeNull()
+    vi.mocked(props.checkAvailability).mockImplementation(available)
+    await settle()
+    view.rerender(page({ error: null }))
+    await copy()
+    expect(screen.getByRole('alert')).toHaveTextContent('We couldn’t create this project. The prompt you copied uses acme-2')
   })
 
   it('offers the server suggestion when the ID is taken', async () => {
@@ -92,6 +109,13 @@ describe('NewProjectPage', () => {
     typeName('down')
     await settle()
     expect(screen.queryByText(/checking…|taken/)).toBeNull()
+    // A failed check says so and can be retried without editing the name.
+    expect(screen.getByText(/couldn’t check if it’s free/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeDisabled()
+    vi.mocked(props.checkAvailability).mockImplementation(available)
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
+    await settle()
+    expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeEnabled()
     typeName('')
     expect(screen.getAllByText('your-project').length).toBeGreaterThan(0)
   })
@@ -124,6 +148,27 @@ describe('NewProjectPage', () => {
     expect(props.onCreate).toHaveBeenCalledWith('acme', 'Acme')
   })
 
+  it('looks for the first pin while waiting, only while the tab is visible', async () => {
+    const onCheckFirstPin = vi.fn()
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+    const view = render(page({ onCheckFirstPin }))
+    typeName('Acme')
+    await settle()
+    act(() => { vi.advanceTimersByTime(FIRST_PIN_POLL_MS) })
+    expect(onCheckFirstPin).not.toHaveBeenCalled()
+    await copy()
+    act(() => { vi.advanceTimersByTime(FIRST_PIN_POLL_MS) })
+    expect(onCheckFirstPin).toHaveBeenCalledOnce()
+    visibility.mockReturnValue('hidden')
+    act(() => { vi.advanceTimersByTime(FIRST_PIN_POLL_MS) })
+    expect(onCheckFirstPin).toHaveBeenCalledOnce()
+    visibility.mockReturnValue('visible')
+    view.rerender(page({ onCheckFirstPin, firstPin: true }))
+    act(() => { vi.advanceTimersByTime(FIRST_PIN_POLL_MS * 3) })
+    expect(onCheckFirstPin).toHaveBeenCalledOnce()
+    visibility.mockRestore()
+  })
+
   it('celebrates the first pin and opens the project', async () => {
     const view = render(page())
     typeName('Acme')
@@ -134,10 +179,12 @@ describe('NewProjectPage', () => {
     expect(props.onOpenProject).toHaveBeenCalledOnce()
   })
 
-  it('welcomes a first project with team suggestions', () => {
-    render(page({ first: true, suggestedProjects: <p>Team project</p> }))
+  it('welcomes a first project with team suggestions, and keeps the welcome after creating it', async () => {
+    const view = render(page({ first: true, suggestedProjects: <p>Team project</p> }))
     expect(screen.getByRole('heading', { name: 'Create your first project' })).toBeInTheDocument()
     expect(screen.getByText('Team project')).toBeInTheDocument()
+    view.rerender(page({ first: false, suggestedProjects: <p>Team project</p> }))
+    expect(screen.getByRole('heading', { name: 'Create your first project' })).toBeInTheDocument()
   })
 
   it('sends accounts without a plan to Billing instead of the form', () => {

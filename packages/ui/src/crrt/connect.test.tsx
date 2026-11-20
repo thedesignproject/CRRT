@@ -219,7 +219,9 @@ describe("PromptBlock", () => {
     const button = screen.getByRole("button", { name: "Copy prompt" });
     expect(button).toHaveProperty("disabled", true);
     fireEvent.click(button);
-    // Selecting and copying the placeholder prompt by hand doesn't count either.
+    // The placeholder prompt can't be selected, and copying it by hand doesn't count either.
+    expect(screen.getByText("Wait").className).toContain("select-none");
+    expect(screen.getByText("Wait").getAttribute("aria-disabled")).toBe("true");
     fireEvent.copy(screen.getByText("Wait"));
     expect(onCopy).not.toHaveBeenCalled();
   });
