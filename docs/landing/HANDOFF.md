@@ -45,7 +45,7 @@ Related work is deliberately not included:
 - The Widget and Chrome clips show an earlier pricing layout. Other recordings can also contain annual prices from that recording; these are recorded product footage, not the current checkout selector. Re-record if launch requires every frame to match the final page.
 - Reviews contains one real verbatim quote from @devonlamond and two invented layout examples (Sofia Bennett and Lucas Reed). The local visual review removed their visible labels; these are not verified customer endorsements. Replace them with approved quotes before a public launch.
 - Studio's proposed $39 price was not approved as a billing change. Do not advertise it while checkout still uses $492/year.
-- The Chrome URL uses VITE_CHROME_EXTENSION_URL when configured and otherwise falls back to /support#extension.
+- The Chrome URL uses VITE_CHROME_EXTENSION_URL when configured and otherwise links to the published Chrome Web Store listing.
 
 ## Files and preview
 

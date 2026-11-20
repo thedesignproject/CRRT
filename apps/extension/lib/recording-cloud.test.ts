@@ -7,7 +7,7 @@ vi.mock('../../../shared/record/client', () => ({ recordRequest: mocks.request }
 vi.mock('./recording-store', () => ({ saveLocalRecording: mocks.save, getLocalRecording: mocks.get }))
 vi.mock('./recording-upload', () => ({ uploadRecordingArtifact: mocks.upload }))
 vi.mock('./recording-multipart', () => ({ uploadMultipart: mocks.multipart }))
-import { isMissingCloudRecording, ownerRecordRequest, readRecordingPlayback, recordingManifest, recordingToken, syncRecording } from './recording-cloud'
+import { attachRecordingProject, isMissingCloudRecording, ownerRecordRequest, readRecordingPlayback, recordingManifest, recordingToken, syncRecording } from './recording-cloud'
 import { recordingManifestBytes } from './recording-manifest'
 afterAll(() => vi.unstubAllEnvs())
 const local = (): LocalRecording => ({ id: crypto.randomUUID(), title: 'Capture', source: 'tab', status: 'ready', durationMs: 3000, createdAt: '2026-10-30', authorName: 'You', transcript: [], transcriptionStatus: 'processing', screenBlob: new Blob(['video']), cameraBlob: new Blob(['camera']), audioBlob: new Blob(['audio']), hostedTranscription: true, marks: [{ id: crypto.randomUUID(), atMs: 1000, type: 'text', text: 'Note', pinNumber: 1, points: [{ x: 10, y: 50 }], target: { selector: '#save', pageUrl: 'https://page.test/secret?token=private' } }] })
@@ -113,7 +113,7 @@ it('persists create/share and upload checkpoints before idempotent finalization'
   const input = local(), changed = vi.fn()
   const completed = new Set<string>()
   mocks.request.mockImplementation(async (_base, path, _token, body) => {
-    if (path === 'recordings') return { recording: { id: 'server-id', authorId: 'owner' }, shareId: 'share' }
+    if (path === 'recordings') return { recording: { id: 'server-id', authorId: 'owner', projectKey: 'store' }, shareId: 'share' }
     if (path.endsWith('/complete') && !completed.has(body.artifactId)) throw new Error('incomplete')
     return { headers: {} }
   })
@@ -125,7 +125,8 @@ it('persists create/share and upload checkpoints before idempotent finalization'
   const first = syncRecording(input, changed)
   expect(syncRecording(input, changed)).toBe(first)
   const result = await first
-  expect(result.cloud).toMatchObject({ id: 'server-id', shareId: 'share', finalized: true })
+  // The server's project is recorded so the picker never re-sends an unchanged choice.
+  expect(result.cloud).toMatchObject({ id: 'server-id', shareId: 'share', finalized: true, projectKey: 'store' })
   expect(mocks.upload).toHaveBeenCalledTimes(3)
   expect(changed.mock.calls[0][0].cloud.shareId).toBe('share')
   expect(mocks.request).toHaveBeenCalledWith('https://record-api.test/api', 'recordings', 'owner-token', expect.objectContaining({ clientKey: input.id, consent: { policyVersion: 'record-v1', hostedTranscription: true, provider: 'deepgram', language: 'multi' } }))
@@ -287,4 +288,27 @@ it.each(['account-b', undefined])('does not replace a deleted cloud copy under a
   expect(mocks.save).not.toHaveBeenCalled()
   expect(input.cloud.id).toBe('deleted')
   expect(input.cloudClientKey).toBeUndefined()
+})
+
+it('attaches a cloud recording to a project only when the server copy differs', async () => {
+  mocks.request.mockResolvedValue({ recording: {} })
+  const base = { ...local(), cloud: { id: 'remote', authorId: 'owner', shareId: null, manifest: {} as never, uploads: {} } }
+  await expect(attachRecordingProject(base, 'store')).resolves.toMatchObject({ projectKey: 'store', cloud: { projectKey: 'store' } })
+  expect(mocks.request).toHaveBeenCalledWith('https://record-api.test/api', 'recordings/remote/project', 'owner-token', { projectKey: 'store' }, undefined)
+  mocks.request.mockClear()
+  await attachRecordingProject({ ...base, cloud: { ...base.cloud, projectKey: null } }, null)
+  expect(mocks.request).not.toHaveBeenCalled()
+  await expect(attachRecordingProject(local(), 'store')).resolves.toMatchObject({ projectKey: 'store' })
+  await expect(attachRecordingProject({ ...base, cloud: { ...base.cloud, deleted: true } }, 'store')).resolves.toMatchObject({ projectKey: 'store', cloud: { deleted: true } })
+  expect(mocks.request).not.toHaveBeenCalled()
+})
+
+it('records a new cloud copy as private when the server reports no project', async () => {
+  mocks.request.mockImplementation(async (_base, path) => {
+    if (path === 'recordings') return { recording: { id: 'private-id', authorId: 'owner' }, shareId: null }
+    if (path.endsWith('/complete')) return {}
+    return {}
+  })
+  const result = await syncRecording(local(), vi.fn())
+  expect(result.cloud).toMatchObject({ id: 'private-id', projectKey: null })
 })

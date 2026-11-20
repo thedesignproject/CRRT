@@ -272,3 +272,35 @@ it('rejects nested scrolling between measuring the target and requesting native 
   expect(captureNativeScreenshot).not.toHaveBeenCalled()
   expect(frame.style.opacity).toBe('')
 })
+it('returns keyboard focus to the comment frame after hiding it for a screenshot', async () => {
+  await receive({ kind: 'ready' })
+  document.body.append(frame)
+  frame.focus()
+  expect(document.activeElement).toBe(frame)
+  vi.mocked(captureNativeScreenshot).mockImplementationOnce(async () => {
+    // Chrome blurs a frame once it becomes hidden.
+    frame.blur(); document.body.focus()
+    return 'data:image/png;base64,eA=='
+  })
+  const focus = vi.spyOn(frame, 'focus')
+  const capture = receive({ kind: 'capture' })
+  await vi.advanceTimersByTimeAsync(32); await capture
+  expect(focus).toHaveBeenCalledWith({ preventScroll: true })
+  focus.mockClear(); frame.blur()
+  vi.mocked(captureNativeScreenshot).mockResolvedValueOnce('data:image/png;base64,eA==')
+  const unfocused = receive({ kind: 'capture' })
+  await vi.advanceTimersByTimeAsync(32); await unfocused
+  expect(focus).not.toHaveBeenCalled()
+  frame.remove()
+})
+it('never treats clicks on the Record controls as comment targets', async () => {
+  await receive({ kind: 'ready' })
+  await receive({ kind: 'selecting', value: true })
+  const recording = document.createElement('div'); recording.dataset.crrtRecording = 'true'
+  const start = document.createElement('button'); recording.append(start); document.body.append(recording)
+  channel.send.mockClear()
+  fireEvent.mouseMove(start); expect(start.style.outline).toBe('')
+  expect(fireEvent.click(start)).toBe(true)
+  expect(channel.send).not.toHaveBeenCalledWith(2, expect.objectContaining({ kind: 'target' }))
+  recording.remove()
+})
