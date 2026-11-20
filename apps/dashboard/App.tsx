@@ -31,8 +31,7 @@ import { StatusBar } from './components/StatusBar'
 import { CommandPalette } from './components/CommandPalette'
 import { LoginPage } from './components/LoginPage'
 import { ResetPasswordPage } from './components/ResetPasswordPage'
-import { WelcomeScreen } from './components/WelcomeScreen'
-import { AddProjectPopover } from './components/AddProjectPopover'
+import { NewProjectPage } from './components/NewProjectPage'
 import { ProjectSettings } from './components/ProjectSettings'
 import { SuperAdminPanel } from './components/SuperAdminPanel'
 import { ExtensionCommentsPage } from './components/ExtensionCommentsPage'
@@ -49,24 +48,6 @@ import { DocumentRecoveryProvider } from './documents/DocumentRecovery'
 import { DocumentsPage } from './documents/DocumentsPage'
 
 const API_BASE = import.meta.env.VITE_API_BASE || 'https://crrt.ai/api'
-const ONBOARDED_KEY = 'crrt:dashboard:onboarded'
-
-function isOnboarded() {
-  try {
-    return window.localStorage.getItem(ONBOARDED_KEY) === '1'
-  } catch {
-    return true
-  }
-}
-
-function markOnboarded() {
-  try {
-    window.localStorage.setItem(ONBOARDED_KEY, '1')
-  } catch {
-    /* localStorage unavailable */
-  }
-}
-
 export function App() {
   return <DocumentRecoveryProvider><AppRoutes /></DocumentRecoveryProvider>
 }
@@ -190,15 +171,19 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [cmdOpen, setCmdOpen] = useState(false)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
+  // Bumped on every New project click so the page starts blank again.
+  const [newProjectRun, setNewProjectRun] = useState(0)
   const projectGate = useProjectGate(API_BASE, user.id, accessToken)
   // Without a plan, project creation would fail; send owners to Billing instead.
-  const requestAddProject = (value: boolean | ((open: boolean) => boolean)) => {
-    const next = typeof value === 'function' ? value(addProjectOpen) : value
-    if (next && projectGate.planRequired) {
+  const openNewProject = () => {
+    if (projectGate.planRequired) {
       window.location.assign(route('/billing'))
       return
     }
-    setAddProjectOpen(next)
+    setAddProjectError(null)
+    setView('feedback')
+    setAddProjectOpen(true)
+    setNewProjectRun((run) => run + 1)
   }
   const [selectedAgent, setSelectedAgent] = useState('claude-code')
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false)
@@ -268,7 +253,6 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
   const [pendingBulkSelection, setPendingBulkSelection] = useState<{ projectKey: string; commentIds: string[] } | null>(null)
   const [bulkTransitionNotice, setBulkTransitionNotice] = useState('')
   const [addProjectError, setAddProjectError] = useState<string | null>(null)
-  const [addProjectBusy, setAddProjectBusy] = useState(false)
   const [theme, setTheme] = useState(getDashboardTheme)
   const [, setTick] = useState(0)
 
@@ -808,9 +792,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     setBulkTransitionNotice(`${commentIds.length} Inbox item${commentIds.length === 1 ? '' : 's'} moved${skippedCount ? `; ${skippedCount} skipped` : ''}.`)
   }, [user.id])
 
+  // The New project page stays open after creating, so it can show the first pin arriving.
   const handleAddProject = useCallback(async (projectKey: string, name: string) => {
     setAddProjectError(null)
-    setAddProjectBusy(true)
     try {
       const project = await claimProject(projectKey, name)
       posthog.capture('project_created')
@@ -818,15 +802,17 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
       setView('feedback')
       setStatusFilter('open')
       setSelectedCommentId('')
-      setAddProjectOpen(false)
+      setAddProjectOpen(true)
+      return true
     } catch (err) {
       setAddProjectError(err instanceof Error ? err.message : 'Failed to create project')
-    } finally {
-      setAddProjectBusy(false)
+      return false
     }
   }, [claimProject])
 
   const handleOpenCommentActivity = useCallback((payload: { projectKey: string; latestCommentId?: string }) => {
+    // Opening a comment from the bell leaves the New project page, like the sidebar does.
+    setAddProjectOpen(false)
     setSelectedProject(payload.projectKey)
     setView('feedback')
     setStatusFilter('open')
@@ -838,45 +824,11 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
     }
   }, [refreshComments])
 
-  // Onboarding gate: show the welcome screen when this account has no
-  // projects and hasn't been onboarded before. Once they click the CTA we
-  // mark the flag so the welcome doesn't reappear if they cancel out of
-  // the create-project modal.
-  const [onboarded, setOnboarded] = useState(() => (typeof window === 'undefined' ? true : isOnboarded()))
-  const showWelcome = !projectsLoading && projects.length === 0 && !onboarded && view !== 'extension-comments' && view !== 'recordings' && view !== 'recording'
+  const checkFirstPin = useCallback(() => { void refreshComments() }, [refreshComments])
 
-  if (showWelcome) {
-    return (
-      <>
-        {accessReviewNotice}
-        <div className="absolute top-4 right-5 z-50"><UserMenu user={user} onSignOut={onSignOut} apiBase={API_BASE} accessToken={accessToken} /></div>
-        <WelcomeScreen
-          suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
-          onOpenExtensionComments={openExtensionComments}
-          createLabel={projectGate.planRequired ? (projectGate.trialAvailable ? 'start free trial to create a project' : 'choose a plan to create a project') : undefined}
-          onCreateProject={() => {
-            if (projectGate.planRequired) {
-              window.location.assign(route('/billing'))
-              return
-            }
-            markOnboarded()
-            setOnboarded(true)
-            setAddProjectOpen(true)
-          }}
-        />
-        {addProjectOpen && (
-          <AddProjectPopover
-            suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
-            onAdd={handleAddProject}
-            onClose={() => setAddProjectOpen(false)}
-            checkAvailability={checkAvailability}
-            busy={addProjectBusy}
-            error={addProjectError}
-          />
-        )}
-      </>
-    )
-  }
+  // An account without projects lands on the New project page instead of an empty project.
+  const noProjects = !projectsLoading && !projectsError && projects.length === 0
+  const newProjectOpen = view === 'feedback' && (addProjectOpen || noProjects)
 
   return (
     <DashboardShell
@@ -892,12 +844,9 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         setSelectedProject={selectProject}
         setStatusFilter={setStatusFilter}
         setSelectedCommentId={setSelectedCommentId}
-        addProjectOpen={addProjectOpen}
-        setAddProjectOpen={requestAddProject}
-        onAddProject={handleAddProject}
-        onCheckAvailability={checkAvailability}
-        addProjectBusy={addProjectBusy}
-        addProjectError={addProjectError}
+        newProjectActive={newProjectOpen}
+        onNewProject={openNewProject}
+        onLeaveNewProject={() => setAddProjectOpen(false)}
         onOpenCmd={() => setCmdOpen(true)}
         onOpenSettings={() => setView((v) => (v === 'settings' ? 'feedback' : 'settings'))}
         canManageProject={canManageProject}
@@ -917,12 +866,26 @@ function AuthenticatedApp({ accessToken, user, onSignOut }: { accessToken: strin
         superadmin={superadmin}
         superAdminActive={view === 'super-admin'}
         onOpenSuperAdmin={() => setView((v) => (v === 'super-admin' ? 'feedback' : 'super-admin'))}
-        footer={<StatusBar personal={view === 'extension-comments'} agentAvailable={canOpenAgentPanel} />}
+        footer={<StatusBar personal={view === 'extension-comments' || newProjectOpen} agentAvailable={canOpenAgentPanel} />}
       >
       <TrialOffer apiBase={API_BASE} accessToken={accessToken} userId={user.id} />
       {accessReviewNotice}
       {mutation.error && <p role="alert" className="border-b border-border bg-card p-4 text-sm">{mutation.error}</p>}
-      {view === 'recording' ? (
+      {newProjectOpen ? (
+        <NewProjectPage
+          key={newProjectRun}
+          apiBase={API_BASE}
+          first={noProjects}
+          checkAvailability={checkAvailability}
+          onCreate={handleAddProject}
+          error={addProjectError}
+          planRequired={projectGate.planRequired ? { label: projectGate.trialAvailable ? 'Start free trial' : 'Choose a plan' } : undefined}
+          firstPin={commentsProjectId === selectedProject && serverComments.length > 0}
+          onOpenProject={() => setAddProjectOpen(false)}
+          onCheckFirstPin={checkFirstPin}
+          suggestedProjects={<SuggestedProjects apiBase={API_BASE} accessToken={accessToken} onProjectsChanged={refreshProjects} />}
+        />
+      ) : view === 'recording' ? (
         <div className="min-h-0 flex-1 overflow-y-auto"><RecordingSharePage apiBase={API_BASE} ownerToken={accessToken} /></div>
       ) : view === 'extension-comments' ? (
         <ExtensionCommentsPage apiBase={API_BASE} accessToken={accessToken} projects={projects} onMovedToProject={continueMovedInboxSelection} />

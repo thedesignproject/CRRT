@@ -107,7 +107,7 @@ vi.mock('./components/CommentDetail', () => ({
     <button onClick={() => props.onVisibilityChange?.('missing-comment', 'internal')}>change missing audience</button>
   </div>,
 }))
-vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: { agentAction?: ReactNode; onAddProject: (key: string, name: string) => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void; children?: ReactNode; footer?: ReactNode }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={() => props.onAddProject('new-project', 'New project')}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button>{props.children}{props.footer}</> }))
+vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: { agentAction?: ReactNode; onNewProject: () => void; onOpenExtensionComments: () => void; onOpenRecordings?: () => void; recordingsActive?: boolean; onOpenSuperAdmin: () => void; selectedProject: string; extensionCommentsActive: boolean; setSelectedProject: (id: string) => void; onOpenCmd: () => void; onOpenSettings: () => void; toggleTheme: () => void; onOpenCommentActivity: (payload: { projectKey: string; latestCommentId: string }) => void; children?: ReactNode; footer?: ReactNode }) => <>{props.agentAction}<button aria-pressed={props.extensionCommentsActive} onClick={props.onOpenExtensionComments}>my comments</button><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>recordings</button><button aria-pressed={props.selectedProject === 'project-1'} onClick={() => props.setSelectedProject('project-1')}>project</button><button onClick={() => props.setSelectedProject('project-2')}>other project</button><button onClick={props.onNewProject}>create project</button><button onClick={props.onOpenSuperAdmin}>super admin</button><button onClick={props.onOpenCmd}>search</button><button onClick={props.onOpenSettings}>settings</button><button onClick={props.toggleTheme}>theme</button><button onClick={() => props.onOpenCommentActivity({ projectKey: 'project-1', latestCommentId: 'comment-1' })}>activity</button>{props.children}{props.footer}</> }))
 vi.mock('./components/CommentList', () => ({
   CommentList: (props: { statusFilter: string; filteredComments: Array<{ claimedByAgentId: string | null; updatedAt: string }>; selectFilter: (filter: 'all') => void; enterBulkMode: () => void; toggleBulkSelect: (id: string) => void; toggleSelectAllVisible: () => void; setSelectedCommentId: (id: string) => void; bulkMode: boolean; bulkSelectedIds: Set<string> }) => <>
     <span data-testid="status-filter">{props.statusFilter}</span>
@@ -125,8 +125,7 @@ vi.mock('./components/AgentSidebar', () => ({ AgentSidebar: (props: { onCopySess
 vi.mock('./components/StatusBar', () => ({ StatusBar: (props: { personal: boolean }) => <div>{props.personal ? 'personal footer' : 'project footer'}</div> }))
 vi.mock('./components/LoginPage', () => ({ LoginPage: () => <div>sign in first</div> }))
 vi.mock('./components/ResetPasswordPage', () => ({ ResetPasswordPage: () => null }))
-vi.mock('./components/WelcomeScreen', () => ({ WelcomeScreen: (props: { onOpenExtensionComments: () => void }) => <button onClick={props.onOpenExtensionComments}>welcome comments</button> }))
-vi.mock('./components/AddProjectPopover', () => ({ AddProjectPopover: () => null }))
+vi.mock('./components/NewProjectPage', () => ({ NewProjectPage: (props: { first: boolean; error?: string | null; onCreate: (key: string, name: string) => Promise<boolean>; onOpenProject: () => void; onCheckFirstPin?: () => void }) => <section aria-label={props.first ? 'first project' : 'new project'}>{props.error && <p>{props.error}</p>}<button onClick={() => { void props.onCreate('new-project', 'New project') }}>copy prompt</button><button onClick={props.onOpenProject}>open project</button><button onClick={props.onCheckFirstPin}>check first pin</button></section> }))
 vi.mock('./components/ProjectSettings', () => ({ ProjectSettings: ({ project }: { project: { publicKey: string } }) => <div>Settings for {project.publicKey}</div> }))
 vi.mock('./components/SuperAdminPanel', () => ({ SuperAdminPanel: () => null }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: (props: { onMovedToProject?: (project: string, ids: string[], skipped: number, undo?: Array<{id:string;updatedAt:string}>) => void }) => <div>extension page<button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 0, [{id:'moved-1',updatedAt:'2026-10-30T12:00:00Z'}])}>continue undoable move</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1'], 1)}>continue moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', ['moved-1', 'moved-2'], 0)}>continue two moved Inbox</button><button onClick={() => props.onMovedToProject?.('project-1', fixtures.comments.map(c => c.id as string), 0)}>continue oversized moved Inbox</button></div> }))
@@ -257,8 +256,34 @@ describe('<App /> GitHub issue wiring', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'show all' }))
     expect(screen.getByTestId('status-filter')).toHaveTextContent('all')
     fireEvent.click(screen.getByRole('button', { name: 'create project' }))
+    fireEvent.click(screen.getByRole('button', { name: 'copy prompt' }))
     await waitFor(() => expect(fixtures.claimProject).toHaveBeenCalledWith('new-project', 'New project'))
-    await waitFor(() => expect(screen.getByTestId('status-filter')).toHaveTextContent('open'))
+    expect(screen.queryByTestId('status-filter')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'open project' }))
+    expect(screen.getByTestId('status-filter')).toHaveTextContent('open')
+  })
+
+  it('looks for the first pin and leaves the page when a notification opens a comment', async () => {
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'create project' }))
+    fireEvent.click(screen.getByRole('button', { name: 'copy prompt' }))
+    await waitFor(() => expect(fixtures.claimProject).toHaveBeenCalled())
+    fixtures.fn.mockClear()
+    fireEvent.click(screen.getByRole('button', { name: 'check first pin' }))
+    expect(fixtures.fn).toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: 'activity' }))
+    expect(screen.queryByRole('region', { name: 'new project' })).toBeNull()
+  })
+
+  it('keeps the New project page open with the reason when creating fails', async () => {
+    fixtures.claimProject.mockRejectedValueOnce(new Error('Key taken')).mockRejectedValueOnce('boom')
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'create project' }))
+    fireEvent.click(screen.getByRole('button', { name: 'copy prompt' }))
+    expect(await screen.findByText('Key taken')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'copy prompt' }))
+    expect(await screen.findByText('Failed to create project')).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'new project' })).toBeInTheDocument()
   })
 
   it('accepts a pending invitation and removes its continuation parameters', async () => {
@@ -724,7 +749,7 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByText('sign in first')).toBeInTheDocument()
     fixtures.signedIn = true; view.rerender(<App />)
     expect(screen.getByText('extension page')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'welcome comments' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'first project' })).toBeNull()
   })
 
   it('continues a moved Inbox selection in its destination project', async () => {
@@ -772,11 +797,11 @@ describe('<App /> GitHub issue wiring', () => {
     expect(screen.getByRole('button', { name: 'my comments' })).toHaveAttribute('aria-pressed', 'false')
   })
 
-  it('opens extension comments from zero-project onboarding', async () => {
+  it('lands a zero-project account on the first project page and still reaches the Inbox', async () => {
     fixtures.projects.splice(0)
-    vi.mocked(window.localStorage.getItem).mockImplementation((key) => key === 'crrt-dashboard-theme' ? 'dark' : null)
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'welcome comments' }))
+    expect(await screen.findByRole('region', { name: 'first project' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'my comments' }))
     expect(screen.getByText('extension page')).toBeInTheDocument()
   })
 
