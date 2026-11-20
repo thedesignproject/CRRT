@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
-import { Inbox, Search, Settings, Video } from 'lucide-react'
+import { Bot, Inbox, ListChecks, Search, Settings, Video } from 'lucide-react'
 import { AppShell, QuotaMeter, TopBar, type NavItem } from '@crrt/ui/crrt'
 import { Kbd } from '@crrt/ui/components/kbd'
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
@@ -31,6 +31,14 @@ interface DashboardShellProps {
   onOpenSettings: () => void
   canManageProject?: boolean
   settingsActive: boolean
+  /** Next steps and Agent runs for the selected project; absent without agent access. */
+  agentNav?: {
+    readyCount: number
+    live: boolean
+    active: 'next-steps' | 'agent-runs' | null
+    onOpenNextSteps: () => void
+    onOpenAgentRuns: () => void
+  }
   onOpenExtensionComments: () => void
   extensionCommentsActive: boolean
   onOpenRecordings?: () => void
@@ -77,6 +85,7 @@ export function DashboardShell({
   onOpenSettings,
   canManageProject = true,
   settingsActive,
+  agentNav,
   onOpenExtensionComments,
   extensionCommentsActive,
   onOpenRecordings,
@@ -108,10 +117,15 @@ export function DashboardShell({
     : recordingsActive ? 'recordings'
     : superAdminActive ? 'super-admin'
     : settingsActive ? 'settings'
+    : agentNav?.active ? agentNav.active
     : selectedProject
 
   const nav: NavItem[] = [
     { id: 'inbox', label: 'Inbox', icon: <Inbox />, onSelect: leave(onOpenExtensionComments) },
+    ...(agentNav ? [
+      { id: 'next-steps', label: 'Next steps', icon: <ListChecks />, count: agentNav.readyCount || undefined, onSelect: leave(agentNav.onOpenNextSteps) },
+      { id: 'agent-runs', label: 'Agent runs', icon: <Bot />, live: agentNav.live, onSelect: leave(agentNav.onOpenAgentRuns) },
+    ] : []),
     ...(onOpenRecordings ? [{ id: 'recordings', label: 'Recordings', icon: <Video />, onSelect: leave(onOpenRecordings) }] : []),
     ...(selected && canManageProject ? [{ id: 'settings', label: 'Settings', icon: <Settings />, onSelect: leave(onOpenSettings) }] : []),
   ]
@@ -127,7 +141,10 @@ export function DashboardShell({
     : extensionCommentsActive ? ['Inbox']
     : recordingsActive ? ['Recordings']
     : superAdminActive ? ['Super admin']
-    : project ? (settingsActive ? [project.name, 'Settings'] : [project.name])
+    : project ? (settingsActive ? [project.name, 'Settings']
+      : agentNav?.active === 'next-steps' ? [project.name, 'Next steps']
+      : agentNav?.active === 'agent-runs' ? [project.name, 'Agent runs']
+      : [project.name])
     : ['Workspace']
 
   const projectQuery = selectedProject ? `?project=${encodeURIComponent(selectedProject)}` : ''
