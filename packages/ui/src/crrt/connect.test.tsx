@@ -248,6 +248,99 @@ describe("PromptBlock", () => {
     expect(onCopy).toHaveBeenCalledOnce();
   });
 
+  describe("with a step before copying", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    // A clipboard that takes a pending item, like Chrome and Safari.
+    function stubAsyncClipboard(fail = false) {
+      const written: string[] = [];
+      vi.stubGlobal("ClipboardItem", class { constructor(public items: Record<string, Promise<Blob>>) {} });
+      vi.stubGlobal("navigator", {
+        clipboard: {
+          writeText: vi.fn(),
+          write: vi.fn(async (items: Array<{ items: Record<string, Promise<Blob>> }>) => {
+            const blob = await items[0].items["text/plain"];
+            if (fail) throw new Error("denied");
+            written.push(await blob.text());
+          }),
+        },
+      });
+      return written;
+    }
+
+    it("copies only after the step allows it, or what the step hands back", async () => {
+      const written = stubAsyncClipboard();
+      const onCopy = vi.fn();
+      const beforeCopy = vi.fn<() => Promise<boolean | string>>().mockResolvedValueOnce(true).mockResolvedValueOnce("Use project acme-2");
+      render(<PromptBlock header="Paste" prompt="Use project acme" beforeCopy={beforeCopy} onCopy={onCopy} />);
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+      expect(written).toEqual(["Use project acme"]);
+      expect(screen.getByText("Copied")).toBeTruthy();
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copied" })));
+      expect(written).toEqual(["Use project acme", "Use project acme-2"]);
+      expect(onCopy).toHaveBeenCalledTimes(2);
+    });
+
+    it("copies nothing and stays quiet when the step says no", async () => {
+      const written = stubAsyncClipboard();
+      const onCopy = vi.fn();
+      const beforeCopy = vi.fn<() => Promise<boolean | string>>().mockResolvedValueOnce(false).mockRejectedValueOnce(new Error("offline"));
+      render(<PromptBlock header="Paste" prompt="Use project acme" beforeCopy={beforeCopy} onCopy={onCopy} />);
+      for (let i = 0; i < 2; i += 1) {
+        await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+        expect(screen.queryByRole("alert")).toBeNull();
+      }
+      expect(written).toEqual([]);
+      expect(onCopy).not.toHaveBeenCalled();
+    });
+
+    it("reports a blocked clipboard after the step allowed the copy", async () => {
+      stubAsyncClipboard(true);
+      render(<PromptBlock header="Paste" prompt="Use project acme" beforeCopy={async () => true} />);
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+      expect(screen.getByText("Couldn’t copy")).toBeTruthy();
+    });
+
+    it("falls back to waiting for the step, then writing text, without ClipboardItem", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const beforeCopy = vi.fn<() => Promise<boolean | string>>().mockResolvedValueOnce(false).mockResolvedValueOnce("Use project acme-2").mockResolvedValueOnce(true);
+      render(<PromptBlock header="Paste" prompt="Use project acme" beforeCopy={beforeCopy} />);
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+      expect(writeText).not.toHaveBeenCalled();
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+      expect(writeText).toHaveBeenLastCalledWith("Use project acme-2");
+      act(() => vi.advanceTimersByTime(1600));
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+      expect(writeText).toHaveBeenLastCalledWith("Use project acme");
+      // A failing step copies nothing.
+      beforeCopy.mockRejectedValueOnce(new Error("offline"));
+      act(() => vi.advanceTimersByTime(1600));
+      await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
+      expect(writeText).toHaveBeenCalledTimes(2);
+    });
+
+    it("sends a copy by hand through the step until it has passed", async () => {
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      stubClipboard(writeText);
+      const onCopy = vi.fn();
+      const beforeCopy = vi.fn(async () => true);
+      render(<PromptBlock header="Paste" prompt="Use project acme" beforeCopy={beforeCopy} onCopy={onCopy} />);
+      const text = screen.getByText("Use project acme");
+      const first = createEvent.copy(text);
+      await act(async () => { fireEvent(text, first); });
+      expect(first.defaultPrevented).toBe(true);
+      expect(beforeCopy).toHaveBeenCalledOnce();
+      expect(writeText).toHaveBeenCalledWith("Use project acme");
+      // Now the text is safe to copy as is.
+      const second = createEvent.copy(text);
+      fireEvent(text, second);
+      expect(second.defaultPrevented).toBe(false);
+      expect(beforeCopy).toHaveBeenCalledOnce();
+      expect(onCopy).toHaveBeenCalledTimes(2);
+    });
+  });
+
   it("tolerates a manual copy without a handler", () => {
     render(<PromptBlock header="Plain" prompt="Hello" />);
     fireEvent.copy(screen.getByText("Hello"));

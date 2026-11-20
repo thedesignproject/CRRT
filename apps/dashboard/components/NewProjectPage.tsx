@@ -59,6 +59,8 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
   // The ID whose create failed. Its error only shows while that ID is still the one on screen.
   const [failedId, setFailedId] = useState<string | null>(null)
   const [recheck, setRecheck] = useState(0)
+  // Set when the page picked another ID for the person, so it can say why.
+  const [switched, setSwitched] = useState<{ from: string; to: string } | null>(null)
   const creating = useRef(false)
   const latestKey = useRef('')
   const key = createdId ?? override ?? slugify(name)
@@ -76,13 +78,20 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
         (result) => {
           if (latestKey.current !== key) return
           setSuggestion(result.suggestion)
+          // The ID can't be typed, so a taken one just becomes the server's free suggestion.
+          // Only from the name's own ID: if a suggestion is taken too, offer the next one.
+          if (!result.available && result.suggestion && override === null) {
+            setOverride(result.suggestion)
+            setSwitched({ from: key, to: result.suggestion })
+            return
+          }
           setStatus(result.available ? 'available' : 'taken')
         },
         () => { if (latestKey.current === key) setStatus('unchecked') },
       )
     }, 400)
     return () => clearTimeout(timer)
-  }, [key, createdId, checkAvailability, recheck])
+  }, [key, createdId, checkAvailability, recheck, override])
 
   // Look for the first pin while waiting, so it appears even with the dashboard in view.
   useEffect(() => {
@@ -93,23 +102,39 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
 
   const ready = createdId !== null || (status === 'available' && name.trim() !== '')
 
-  async function create() {
-    if (createdId || creating.current || !ready) return
+  // Runs before the prompt reaches the clipboard and returns the ID it may name: nothing
+  // is copied unless the project exists, so a pasted prompt never names someone else's ID.
+  async function create(): Promise<string | null> {
+    if (createdId) return createdId
+    if (creating.current || !ready) return null
     creating.current = true
-    const ok = await onCreate(key, name.trim())
-    creating.current = false
-    if (ok) {
-      setCreatedId(key)
-      setFailedId(null)
-      return
+    try {
+      const projectName = name.trim()
+      if (await onCreate(key, projectName)) {
+        setCreatedId(key)
+        setFailedId(null)
+        return key
+      }
+      // Someone took the ID between the check and the copy: take the next free one, once.
+      const retry = await checkAvailability(key).catch(() => null)
+      const next = retry && !retry.available ? retry.suggestion : ''
+      if (next && await onCreate(next, projectName)) {
+        setOverride(next)
+        setCreatedId(next)
+        setFailedId(null)
+        setSwitched({ from: key, to: next })
+        return next
+      }
+      setFailedId(key)
+      setRecheck((n) => n + 1)
+      return null
+    } finally {
+      creating.current = false
     }
-    // The prompt is already on the clipboard with an ID that doesn't exist. Say so, and
-    // check the ID again: if someone else just took it, the page offers another one.
-    setFailedId(key)
-    setRecheck((n) => n + 1)
   }
+  const copyWith = (text: (id: string) => string) => () => create().then((id) => (id ? text(id) : false))
 
-  const ask = `Set up CRRT here as project ${projectId}.`
+  const ask = askAgent(projectId)
   const mcpUrl = new URL(`${apiBase.replace(/\/$/, '')}/mcp/v1`, window.location.origin).href
   const promptHeader = (text: string) => <span className="px-1.5 font-medium text-text-body">{text}</span>
 
@@ -130,7 +155,7 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
           <>
             <div className="flex flex-col gap-1.5">
               <label htmlFor="project-name" className="text-sm font-medium text-text-strong">Project name</label>
-              <input id="project-name" className={inputClass} aria-invalid={status === 'invalid' || status === 'taken'} autoFocus readOnly={createdId !== null} value={name} placeholder="Acme Marketing" onChange={(e) => { setName(e.target.value); setOverride(null) }} />
+              <input id="project-name" className={inputClass} aria-invalid={status === 'invalid' || status === 'taken'} autoFocus readOnly={createdId !== null} value={name} placeholder="Acme Marketing" onChange={(e) => { setName(e.target.value); setOverride(null); setSwitched(null) }} />
               <p className="text-xs text-text-subtle" aria-live="polite">
                 Project ID <span className="font-mono text-text-body">{projectId}</span>
                 {createdId ? <> · created, it’s in your sidebar.</>
@@ -140,9 +165,14 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
                   : status === 'unchecked' ? <> · couldn’t check if it’s free. <button type="button" className="font-medium text-text-strong hover:underline" onClick={() => setRecheck((n) => n + 1)}>Try again</button></>
                   : null}
               </p>
+              {switched && switched.to === key && (
+                <p role="status" className="text-xs text-text-body">
+                  <span className="font-mono">{switched.from}</span> is taken, so this project uses <span className="font-mono">{switched.to}</span>{createdId ? <>. That’s the ID in the copied prompt.</> : '.'}
+                </p>
+              )}
               {failedId !== null && failedId === key && (
                 <p role="alert" className="text-xs text-destructive">
-                  {error ?? 'We couldn’t create this project.'} The prompt you copied uses <span className="font-mono">{failedId}</span>, which doesn’t exist yet, so don’t paste it. Copy again once the ID is free.
+                  {sentence(error ?? 'We couldn’t create this project')} Nothing was copied.
                 </p>
               )}
             </div>
@@ -150,7 +180,7 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
             <section aria-label="Install" className="flex flex-col gap-3">
               <SegmentedTabs label="Setup method" options={METHODS} value={method} onChange={setMethod} />
               {method === 'Prompt' ? (
-                <PromptBlock highlight={[projectId]} prompt={setupPrompt(projectId)} disabled={!ready} onCopy={() => { void create() }} header={promptHeader('Paste this into your coding agent')} />
+                <PromptBlock highlight={[projectId]} prompt={setupPrompt(projectId)} disabled={!ready} beforeCopy={copyWith(setupPrompt)} header={promptHeader('Paste this into your coding agent')} />
               ) : (
                 <>
                   <CommandBlock
@@ -160,7 +190,7 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
                       <>Ask it: <InlineCode>{ask}</InlineCode></>,
                     ]}
                   />
-                  <PromptBlock highlight={[projectId]} prompt={ask} disabled={!ready} onCopy={() => { void create() }} header={promptHeader('Ask your agent')} />
+                  <PromptBlock highlight={[projectId]} prompt={ask} disabled={!ready} beforeCopy={copyWith(askAgent)} header={promptHeader('Ask your agent')} />
                 </>
               )}
               {createdId && (firstPin ? (
@@ -187,4 +217,15 @@ export function NewProjectPage({ apiBase, first = false, checkAvailability, onCr
       </div>
     </div>
   )
+}
+
+/** Server messages may lack a full stop; add one so the next sentence doesn't run on. */
+function sentence(text: string) {
+  const trimmed = text.trim()
+  return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`
+}
+
+/** What to ask an agent that already has CRRT's MCP server. */
+function askAgent(projectId: string) {
+  return `Set up CRRT here as project ${projectId}.`
 }

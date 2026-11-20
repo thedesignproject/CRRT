@@ -19,7 +19,7 @@ export function CommandBlock({ command, steps, onCopy, className }: CommandBlock
   const copied = state === "copied";
 
   async function copyCommand() {
-    if (await copy(command)) onCopy?.(command);
+    if ((await copy(command)) === "copied") onCopy?.(command);
   }
 
   return (

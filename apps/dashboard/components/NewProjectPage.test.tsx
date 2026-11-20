@@ -56,43 +56,78 @@ describe('NewProjectPage', () => {
     expect(screen.queryByText(/created/)).toBeNull()
   })
 
-  it('warns that the copied prompt won’t work when creating fails, and checks the ID again', async () => {
-    props.onCreate = vi.fn().mockResolvedValue(false)
+  it('creates the next free ID within the same copy when the ID was taken a moment ago', async () => {
     // A stale error from an earlier attempt isn't shown before this page tries anything.
-    const view = render(page({ error: 'Name already used' }))
+    props.onCreate = vi.fn((key: string) => Promise.resolve(key !== 'acme'))
+    render(page({ error: 'Name already used' }))
     expect(screen.queryByRole('alert')).toBeNull()
     typeName('Acme')
     await settle()
-    // Someone else took the ID between the check and the copy.
+    // Someone else takes "acme" between the check and the copy.
     vi.mocked(props.checkAvailability).mockResolvedValue({ key: 'acme', available: false, suggestion: 'acme-2' })
     await copy()
-    expect(screen.queryByText(/Waiting for the first pin/)).toBeNull()
-    expect(screen.getByLabelText('Project name')).toHaveValue('Acme')
-    expect(screen.getByLabelText('Project name')).not.toHaveAttribute('readonly')
-    expect(screen.getByRole('alert')).toHaveTextContent('Name already used The prompt you copied uses acme, which doesn’t exist yet')
-    await settle()
-    expect(props.checkAvailability).toHaveBeenCalledTimes(2)
-    expect(screen.getByRole('button', { name: /^(Copy prompt|Copied)$/ })).toBeDisabled()
-
-    // Moving to another ID clears the warning; a failure without a message still explains itself.
-    fireEvent.click(screen.getByRole('button', { name: 'Use acme-2' }))
+    expect(props.onCreate).toHaveBeenNthCalledWith(1, 'acme', 'Acme')
+    expect(props.onCreate).toHaveBeenNthCalledWith(2, 'acme-2', 'Acme')
+    expect(writeText).toHaveBeenCalledWith(setupPrompt('acme-2'))
+    expect(screen.getByText(/is taken, so this project uses/)).toHaveTextContent('acme is taken, so this project uses acme-2. That’s the ID in the copied prompt.')
+    expect(screen.getByText(/Waiting for the first pin on/)).toHaveTextContent('acme-2')
     expect(screen.queryByRole('alert')).toBeNull()
-    vi.mocked(props.checkAvailability).mockImplementation(available)
-    await settle()
-    view.rerender(page({ error: null }))
-    await copy()
-    expect(screen.getByRole('alert')).toHaveTextContent('We couldn’t create this project. The prompt you copied uses acme-2')
   })
 
-  it('offers the server suggestion when the ID is taken', async () => {
+  it('copies nothing and says why when creating fails for another reason', async () => {
+    props.onCreate = vi.fn().mockResolvedValue(false)
+    const view = render(page({ error: 'Plan limit reached' }))
+    typeName('Acme')
+    await settle()
+    await copy()
+    expect(writeText).not.toHaveBeenCalled()
+    expect(props.onCreate).toHaveBeenCalledOnce()
+    expect(screen.queryByText(/Waiting for the first pin/)).toBeNull()
+    expect(screen.getByLabelText('Project name')).not.toHaveAttribute('readonly')
+    expect(screen.getByRole('alert')).toHaveTextContent('Plan limit reached. Nothing was copied.')
+    await settle()
+    // The ID is checked again, in case that's what changed.
+    expect(props.checkAvailability).toHaveBeenCalledTimes(3)
+
+    // The retry can fail too, and a failure without a message still explains itself.
+    vi.mocked(props.checkAvailability).mockResolvedValueOnce({ key: 'acme', available: false, suggestion: 'acme-2' })
+    view.rerender(page({ error: null }))
+    await copy()
+    expect(props.onCreate).toHaveBeenLastCalledWith('acme-2', 'Acme')
+    expect(screen.getByRole('alert')).toHaveTextContent('We couldn’t create this project. Nothing was copied.')
+    expect(writeText).not.toHaveBeenCalled()
+
+    // A check that fails during the retry copies nothing either; editing the name clears the alert.
+    vi.mocked(props.checkAvailability).mockRejectedValueOnce(new Error('offline'))
+    await copy()
+    expect(writeText).not.toHaveBeenCalled()
+    typeName('Acme two')
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('switches a taken ID to the free suggestion and says so', async () => {
     props.checkAvailability = vi.fn((key: string) => Promise.resolve(key === 'acme' ? { key, available: false, suggestion: 'acme-2' } : { key, available: true, suggestion: '' }))
     render(page())
     typeName('Acme')
     await settle()
-    expect(screen.getByLabelText('Project name')).toHaveAttribute('aria-invalid', 'true')
-    fireEvent.click(screen.getByRole('button', { name: 'Use acme-2' }))
+    expect(screen.getByRole('status')).toHaveTextContent('acme is taken, so this project uses acme-2.')
     await settle()
-    expect(screen.getAllByText('acme-2').length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeEnabled()
+    await copy()
+    expect(writeText).toHaveBeenCalledWith(setupPrompt('acme-2'))
+    expect(props.onCreate).toHaveBeenCalledWith('acme-2', 'Acme')
+  })
+
+  it('offers the next suggestion when the suggested ID is taken too', async () => {
+    props.checkAvailability = vi.fn((key: string) => Promise.resolve(key === 'acme' ? { key, available: false, suggestion: 'acme-2' } : key === 'acme-2' ? { key, available: false, suggestion: 'acme-3' } : { key, available: true, suggestion: '' }))
+    render(page())
+    typeName('Acme')
+    await settle()
+    await settle()
+    expect(screen.getByLabelText('Project name')).toHaveAttribute('aria-invalid', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Use acme-3' }))
+    await settle()
+    expect(screen.getAllByText('acme-3').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeEnabled()
   })
 
