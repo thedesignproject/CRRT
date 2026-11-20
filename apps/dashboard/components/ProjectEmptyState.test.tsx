@@ -1,30 +1,29 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-
-vi.mock('./StorybookIntegrationSettings', () => ({
-  StorybookIntegrationSettings: (props: Record<string, unknown>) => (
-    <div data-testid="storybook-settings">{JSON.stringify(props)}</div>
-  ),
-}))
-
 import { ProjectEmptyState } from './ProjectEmptyState'
+import { setupPrompt } from '../lib/setup-prompt'
 
 describe('ProjectEmptyState', () => {
-  it('switches from the website instructions to the integrated Storybook setup', () => {
-    render(<ProjectEmptyState projectId="project-1" apiBase="/api" accessToken="session" canManage={false} />)
+  it('gives one setup prompt and keeps Storybook an optional step', () => {
+    const onConnectStorybook = vi.fn()
+    render(<ProjectEmptyState projectId="project-1" onConnectStorybook={onConnectStorybook} />)
+    expect(screen.getByRole('heading', { name: 'Bring feedback into this project' })).toBeInTheDocument()
+    expect(document.querySelector('pre')).toHaveTextContent(setupPrompt('project-1').replace(/\s+/g, ' '), { normalizeWhitespace: true })
+    expect(screen.getByText('1/3')).toBeInTheDocument()
+    expect(screen.getByText('Install the widget').closest('li')).toHaveAttribute('aria-current', 'step')
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Storybook' }))
+    expect(onConnectStorybook).toHaveBeenCalledOnce()
+    expect(screen.queryByRole('tab')).toBeNull()
+  })
 
-    expect(screen.getByText('pnpm add @thedesignproject/crrt')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Website / App' })).toHaveAttribute('aria-selected', 'true')
+  it('marks the Storybook step done once it is connected', () => {
+    render(<ProjectEmptyState projectId="project-1" onConnectStorybook={vi.fn()} storybookConnected />)
+    expect(screen.queryByRole('button', { name: 'Connect Storybook' })).toBeNull()
+    expect(screen.getByText('Connect Storybook').closest('li')).toHaveTextContent('(done)')
+  })
 
-    fireEvent.click(screen.getByRole('tab', { name: 'Storybook' }))
-
-    expect(screen.queryByText('pnpm add @thedesignproject/crrt')).toBeNull()
-    expect(screen.getByRole('tab', { name: 'Storybook' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByTestId('storybook-settings')).toHaveTextContent('"appearance":"setup"')
-    expect(screen.getByTestId('storybook-settings')).toHaveTextContent('"projectKey":"project-1"')
-    expect(screen.getByTestId('storybook-settings')).toHaveTextContent('"canManage":false')
-
-    fireEvent.click(screen.getByRole('tab', { name: 'Website / App' }))
-    expect(screen.getByText('pnpm add @thedesignproject/crrt')).toBeInTheDocument()
+  it('leaves Storybook out for people who cannot manage it', () => {
+    render(<ProjectEmptyState projectId="project-1" />)
+    expect(screen.queryByText('Connect Storybook')).toBeNull()
   })
 })

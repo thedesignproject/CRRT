@@ -469,6 +469,14 @@ describe("SetupChecklist", () => {
     expect(screen.getByText("Install the widget").closest("li")?.textContent).not.toContain("(done)");
   });
 
+  it("runs in-app steps as buttons", () => {
+    const onSelect = vi.fn();
+    render(<SetupChecklist steps={[{ id: "pin", label: "Leave the first pin", done: true, onSelect }, { id: "storybook", label: "Connect Storybook", optional: true, onSelect }]} />);
+    expect(screen.queryByRole("button", { name: "Leave the first pin" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Connect Storybook" }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
   it("honours an explicit current step", () => {
     render(<SetupChecklist steps={steps} currentId="team" />);
     expect(screen.getByText("Invite your team").closest("li")?.getAttribute("aria-current")).toBe("step");

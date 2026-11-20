@@ -79,10 +79,12 @@ describe('StorybookIntegrationSettings', () => {
     vi.mocked(getStorybookIntegration)
       .mockResolvedValueOnce({ state: 'waiting', command: 'npx connect' })
       .mockResolvedValueOnce({ state: 'connected', storybookUrl: 'https://storybook.example.com' })
-    const rendered = render(<StorybookIntegrationSettings {...props} />)
+    const onConnectedChange = vi.fn()
+    const rendered = render(<StorybookIntegrationSettings {...props} onConnectedChange={onConnectedChange} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Check connection' }))
     expect(await screen.findByText('Storybook connected')).toBeInTheDocument()
+    expect(onConnectedChange.mock.calls).toEqual([[false], [true]])
     expect(screen.getByRole('link', { name: /Open Storybook/ })).toHaveAttribute('href', 'https://storybook.example.com/')
 
     vi.mocked(getStorybookIntegration).mockResolvedValue({ state: 'connected', storybookUrl: 'http://example.com' })

@@ -1,15 +1,17 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { Project, ProjectMember } from '../api'
 
 vi.mock('../hooks/useProjectSettings', () => ({ useProjectSettings: vi.fn() }))
+vi.mock('../hooks/useStorybookConnected', () => ({ useStorybookConnected: vi.fn((..._args: unknown[]) => null as boolean | null) }))
 vi.mock('./ProjectDomainAccess', () => ({ ProjectDomainAccess: () => <div>Company access controls</div> }))
 vi.mock('./GitHubRepositorySettings', () => ({ GitHubRepositorySettings: () => null }))
 vi.mock('./LinearIntegrationSettings', () => ({ LinearIntegrationSettings: () => null }))
 vi.mock('./JiraIntegrationSettings', () => ({ JiraIntegrationSettings: () => null }))
-vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: () => <div>Storybook connection settings</div> }))
+vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: ({ onConnectedChange }: { onConnectedChange?: (connected: boolean) => void }) => <div>Storybook connection settings<button onClick={() => onConnectedChange?.(true)}>finish pairing</button></div> }))
 
 import { useProjectSettings } from '../hooks/useProjectSettings'
+import { useStorybookConnected } from '../hooks/useStorybookConnected'
 import { ProjectSettings } from './ProjectSettings'
 
 const project: Project = {
@@ -340,7 +342,59 @@ it('only mounts company access controls for project managers', () => {
   vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
   rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
   expect(screen.getByText('Company access controls')).toBeInTheDocument()
+  expect(screen.queryByText('Storybook connection settings')).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '+ Connect Storybook' }))
   expect(screen.getByText('Storybook connection settings')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  expect(screen.queryByText('Storybook connection settings')).toBeNull()
+})
+
+it('opens straight into the Storybook setup from the checklist and brings it into view', () => {
+  vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+  const scrollIntoView = vi.fn()
+  Element.prototype.scrollIntoView = scrollIntoView
+  onTestFinished(() => { delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView })
+  const { rerender } = render(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} connectStorybook />)
+  expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+  expect(screen.getByRole('region', { name: 'Where feedback comes from' })).toBeInTheDocument()
+  expect(screen.getByText('Storybook connection settings')).toBeInTheDocument()
+  const toggle = screen.getByRole('button', { name: 'Close' })
+  expect(document.activeElement).toBe(toggle)
+  expect(scrollIntoView).toHaveBeenCalledOnce()
+  expect(document.getElementById(toggle.getAttribute('aria-controls')!)).toHaveTextContent('Storybook connection settings')
+  // Only once: later renders don't steal focus back.
+  rerender(<ProjectSettings project={{ ...project, name: 'Renamed' }} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} connectStorybook />)
+  expect(scrollIntoView).toHaveBeenCalledOnce()
+})
+
+it('waits for owner access before focusing, and tolerates a browser without scrollIntoView', () => {
+  vi.mocked(useProjectSettings).mockReturnValue(settings({ isOwner: false }) as never)
+  const { rerender } = render(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} connectStorybook />)
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull()
+  vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+  rerender(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} connectStorybook />)
+  expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Close' }))
+})
+
+it('shows a connected Storybook while collapsed, and updates after pairing', () => {
+  vi.mocked(useProjectSettings).mockReturnValue(settings() as never)
+  vi.mocked(useStorybookConnected).mockReturnValue(true)
+  const { unmount } = render(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
+  expect(screen.getByText('Connected')).toBeInTheDocument()
+  const manage = screen.getByRole('button', { name: 'Manage Storybook' })
+  expect(manage).toHaveAttribute('aria-expanded', 'false')
+  expect(document.getElementById(manage.getAttribute('aria-controls')!)).not.toBeVisible()
+  unmount()
+
+  vi.mocked(useStorybookConnected).mockReturnValue(false)
+  render(<ProjectSettings project={project} apiBase="/api" accessToken="token" currentUserId="owner" onBack={vi.fn()} onProjectsChanged={vi.fn()} />)
+  expect(screen.getByText('Optional')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '+ Connect Storybook' }))
+  fireEvent.click(screen.getByRole('button', { name: 'finish pairing' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+  expect(screen.getByText('Connected')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Manage Storybook' })).toBeInTheDocument()
+  vi.mocked(useStorybookConnected).mockReturnValue(null)
 })
 
 it('keeps company access singular across repeated settings edits',()=>{

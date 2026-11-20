@@ -1,7 +1,15 @@
 import { Check } from "lucide-react";
 import { cn } from "../lib/utils";
 
-export type SetupStep = { id: string; label: string; done?: boolean; optional?: boolean; href?: string };
+export type SetupStep = {
+  id: string;
+  label: string;
+  done?: boolean;
+  optional?: boolean;
+  href?: string;
+  /** In-app navigation for steps that aren't a URL. Ignored when `href` is set. */
+  onSelect?: () => void;
+};
 
 type SetupChecklistProps = {
   steps: SetupStep[];
@@ -48,12 +56,18 @@ export function SetupChecklist({ steps, currentId, className }: SetupChecklistPr
               >
                 {step.done && <Check className="size-2.5 text-surface-0" strokeWidth={3} />}
               </span>
-              {step.href && !step.done ? (
+              {step.done ? (
+                <span className="line-through">{step.label}</span>
+              ) : step.href ? (
                 <a href={step.href} className="hover:text-text-strong hover:underline">
                   {step.label}
                 </a>
+              ) : step.onSelect ? (
+                <button type="button" onClick={step.onSelect} className="text-left hover:text-text-strong hover:underline">
+                  {step.label}
+                </button>
               ) : (
-                <span className={cn(step.done && "line-through")}>{step.label}</span>
+                step.label
               )}
               {step.done && <span className="sr-only"> (done)</span>}
               {step.optional && <span className="ml-auto text-xs text-text-subtle">Optional</span>}
