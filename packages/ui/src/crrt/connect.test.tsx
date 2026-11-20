@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, cleanup, createEvent, fireEvent, render, screen, within } from "@testing-library/react";
 import { useState } from "react";
 
 import {
@@ -64,7 +64,7 @@ describe("AppShell", () => {
     expect(screen.getAllByText("Waiting for first pin")).toHaveLength(2);
     expect(screen.queryByText("9")).toBeNull();
     // Live items show the dot, with or without a count.
-    expect(screen.getAllByLabelText("Agent working")).toHaveLength(2);
+    expect(screen.getAllByText("Agent working", { selector: ".sr-only" })).toHaveLength(2);
     expect(within(screen.getByRole("link", { name: /Acme/ })).getByText("2")).toBeTruthy();
     expect(within(screen.getByRole("link", { name: /Inbox/ })).getByText("3")).toBeTruthy();
 
@@ -132,18 +132,36 @@ describe("CommandBlock", () => {
     expect(screen.getByRole("button", { name: "Copy command" })).toBeTruthy();
   });
 
-  it("still confirms when the clipboard is blocked or missing", async () => {
+  it("says so instead of confirming when the clipboard is blocked or missing", async () => {
+    const failed = "Couldn’t copy, select the command instead";
     stubClipboard(() => Promise.reject(new Error("denied")));
-    const { unmount } = render(<CommandBlock command="a" />);
+    const onCopy = vi.fn();
+    const { unmount } = render(<CommandBlock command="a" onCopy={onCopy} />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy command" })));
-    expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: failed }).textContent).toBe("Select to copy");
+    // The failure stays until the next try.
+    act(() => vi.advanceTimersByTime(5000));
+    expect(screen.getByRole("button", { name: failed })).toBeTruthy();
+    expect(onCopy).not.toHaveBeenCalled();
     unmount();
 
     stubClipboard();
     render(<CommandBlock command="b" steps={[]} />);
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy command" })));
-    expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: failed })).toBeTruthy();
     expect(screen.queryByRole("list")).toBeNull();
+  });
+
+  it("restarts the reset timer on a second copy and clears it on unmount", async () => {
+    stubClipboard(vi.fn().mockResolvedValue(undefined));
+    const { unmount } = render(<CommandBlock command="a" />);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy command" })));
+    act(() => vi.advanceTimersByTime(1000));
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copied" })));
+    act(() => vi.advanceTimersByTime(1000));
+    expect(screen.getByRole("button", { name: "Copied" })).toBeTruthy();
+    unmount();
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("exports InlineCode and a standalone StepList", () => {
@@ -185,15 +203,35 @@ describe("PromptBlock", () => {
     const button = screen.getByRole("button", { name: "Copy prompt" });
     expect(button).toHaveProperty("disabled", true);
     fireEvent.click(button);
+    // Selecting and copying the placeholder prompt by hand doesn't count either.
+    fireEvent.copy(screen.getByText("Wait"));
     expect(onCopy).not.toHaveBeenCalled();
   });
 
-  it("renders plain text without highlights and survives a blocked clipboard", async () => {
+  it("prefers the longest highlight and ignores empty ones", () => {
+    render(<PromptBlock header="Ids" prompt="proj_12 then proj_1" highlight={["", "proj_1", "proj_12"]} />);
+    expect([...document.querySelectorAll("mark")].map((m) => m.textContent)).toEqual(["proj_12", "proj_1"]);
+  });
+
+  it("renders plain text without highlights and reports a blocked clipboard without firing onCopy", async () => {
     stubClipboard(() => Promise.reject(new Error("denied")));
-    render(<PromptBlock header="Plain" prompt="Hello" />);
+    const onCopy = vi.fn();
+    render(<PromptBlock header="Plain" prompt="Hello" highlight={[""]} onCopy={onCopy} />);
     expect(document.querySelector("mark")).toBeNull();
     await act(async () => fireEvent.click(screen.getByRole("button", { name: "Copy prompt" })));
-    expect(screen.getByText("Copied")).toBeTruthy();
+    expect(screen.getByText("Couldn’t copy")).toBeTruthy();
+    expect(screen.getByRole("alert").textContent).toContain("Select the prompt below and copy it.");
+    expect(onCopy).not.toHaveBeenCalled();
+
+    // Copying the selected text by hand still counts as a copy.
+    fireEvent.copy(screen.getByText("Hello"));
+    expect(onCopy).toHaveBeenCalledOnce();
+  });
+
+  it("tolerates a manual copy without a handler", () => {
+    render(<PromptBlock header="Plain" prompt="Hello" />);
+    fireEvent.copy(screen.getByText("Hello"));
+    expect(screen.getByText("Copy prompt")).toBeTruthy();
   });
 });
 
@@ -237,7 +275,23 @@ describe("QuotaMeter", () => {
   it("clamps when over the limit and hides upgrade without a link", () => {
     render(<QuotaMeter plan="Free" used={30} limit={25} />);
     expect(screen.getByText("0 of 25 agent calls left this week")).toBeTruthy();
+    const meter = screen.getByRole("meter");
+    expect(meter.getAttribute("aria-valuenow")).toBe("25");
+    expect(meter.getAttribute("aria-valuetext")).toBe("30 of 25 used");
     expect(screen.queryByRole("link")).toBeNull();
+  });
+
+  it("shows a full bar instead of NaN when the limit is zero or below", () => {
+    const { container, rerender } = render(<QuotaMeter plan="Free" used={0} limit={0} />);
+    const bar = () => (container.querySelector('[role="meter"] > div') as HTMLElement).style.width;
+    expect(bar()).toBe("100%");
+    expect(screen.getByRole("meter").getAttribute("aria-valuemax")).toBe("0");
+    expect(screen.getByText("0 of 0 agent calls left this week")).toBeTruthy();
+    rerender(<QuotaMeter plan="Free" used={-3} limit={-1} />);
+    expect(bar()).toBe("100%");
+    expect(screen.getByRole("meter").getAttribute("aria-valuenow")).toBe("0");
+    rerender(<QuotaMeter plan="Free" used={-3} limit={10} />);
+    expect(bar()).toBe("0%");
   });
 });
 
@@ -257,6 +311,19 @@ describe("SegmentedTabs", () => {
     expect(screen.getByRole("tab", { name: "A" }).getAttribute("aria-selected")).toBe("true");
     fireEvent.keyDown(list, { key: "Enter" });
     expect(screen.getByRole("tab", { name: "A" }).getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(list, { key: "End" });
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "C" }));
+    fireEvent.keyDown(list, { key: "Home" });
+    expect(document.activeElement).toBe(screen.getByRole("tab", { name: "A" }));
+  });
+
+  it("keeps the first tab reachable when the value matches no option", () => {
+    const onChange = vi.fn();
+    render(<SegmentedTabs label="Pick" options={["A", "B"] as const} value={"Z" as "A"} onChange={onChange} />);
+    expect(screen.getByRole("tab", { name: "A" }).tabIndex).toBe(0);
+    expect(screen.getByRole("tab", { name: "B" }).tabIndex).toBe(-1);
+    fireEvent.keyDown(screen.getByRole("tablist"), { key: "ArrowRight" });
+    expect(onChange).toHaveBeenCalledWith("B");
   });
 
   it("selects on click in the small size", () => {
@@ -282,7 +349,11 @@ describe("SetupChecklist", () => {
     // Done steps are not links even with an href; open ones are.
     expect(screen.queryByRole("link", { name: "Connect your agent" })).toBeNull();
     expect(screen.getByRole("link", { name: "Connect Storybook" })).toBeTruthy();
-    expect(screen.getByText("Optional")).toBeTruthy();
+    expect(screen.getByText("Optional").className).not.toContain("line-through");
+    // Done is announced, not only drawn.
+    expect(screen.getByText("Connect your agent").className).toContain("line-through");
+    expect(screen.getByText("Connect your agent").closest("li")?.textContent).toContain("(done)");
+    expect(screen.getByText("Install the widget").closest("li")?.textContent).not.toContain("(done)");
   });
 
   it("runs in-app steps as buttons", () => {
@@ -310,7 +381,15 @@ describe("UploadDropzone", () => {
 
     fireEvent.dragOver(zone);
     expect(zone.className).toContain("border-carrot");
-    fireEvent.dragLeave(zone);
+    // Moving over a child keeps the highlight; leaving the zone clears it.
+    const leaveTo = (target: Element | null) => {
+      const event = createEvent.dragLeave(zone);
+      Object.defineProperty(event, "relatedTarget", { value: target });
+      fireEvent(zone, event);
+    };
+    leaveTo(zone.querySelector("span"));
+    expect(zone.className).toContain("border-carrot");
+    leaveTo(document.body);
     expect(zone.className).not.toContain("border-carrot");
 
     fireEvent.drop(zone, { dataTransfer: { files: [file] } });
@@ -318,6 +397,18 @@ describe("UploadDropzone", () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.change(input, { target: { files: [] } });
     expect(onFile).toHaveBeenCalledTimes(2);
+  });
+
+  it("rejects files that aren't HTML, by drop or by picker", () => {
+    const onFile = vi.fn();
+    const { container } = render(<UploadDropzone onFile={onFile} />);
+    const png = new File(["x"], "shot.png", { type: "image/png" });
+    fireEvent.drop(container.querySelector("label")!, { dataTransfer: { files: [png] } });
+    expect(screen.getByRole("alert").textContent).toBe("shot.png isn’t an HTML file.");
+    // An .htm file with no type still counts, and clears the error.
+    fireEvent.change(container.querySelector("input")!, { target: { files: [new File(["x"], "old.HTM")] } });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(onFile).toHaveBeenCalledOnce();
   });
 
   it("works without a handler", () => {

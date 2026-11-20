@@ -1,4 +1,5 @@
 import { cn } from "../lib/utils";
+import { focusableTab, onTabKeyDown } from "./roving-tabs";
 
 type SegmentedTabsProps<T extends string> = {
   label: string;
@@ -10,23 +11,14 @@ type SegmentedTabsProps<T extends string> = {
   className?: string;
 };
 
-/** Compact segmented control (filters, agent client picker). Arrow keys move selection. */
+/** Compact segmented control (filters, agent client picker). Arrow keys, Home and End move selection. */
 export function SegmentedTabs<T extends string>({ label, options, value, onChange, size = "md", className }: SegmentedTabsProps<T>) {
-  function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
-    if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-    e.preventDefault();
-    const i = options.indexOf(value);
-    const next = options[(i + (e.key === "ArrowRight" ? 1 : options.length - 1)) % options.length];
-    onChange(next);
-    const el = e.currentTarget.querySelector<HTMLButtonElement>(`[data-value="${CSS.escape(next)}"]`);
-    el?.focus();
-  }
-
+  const focusable = focusableTab(options, value);
   return (
     <div
       role="tablist"
       aria-label={label}
-      onKeyDown={onKeyDown}
+      onKeyDown={(e) => onTabKeyDown(e, options, value, onChange)}
       className={cn("inline-flex self-start gap-0.5 rounded-[9px] border border-sidebar-border bg-surface-0 p-0.75", className)}
     >
       {options.map((option) => {
@@ -38,7 +30,7 @@ export function SegmentedTabs<T extends string>({ label, options, value, onChang
             role="tab"
             data-value={option}
             aria-selected={selected}
-            tabIndex={selected ? 0 : -1}
+            tabIndex={option === focusable ? 0 : -1}
             onClick={() => onChange(option)}
             className={cn(
               size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-[13px]",
