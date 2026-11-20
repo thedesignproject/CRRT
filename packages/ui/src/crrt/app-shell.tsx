@@ -104,7 +104,10 @@ export function AppShell({
 }: AppShellProps) {
   const projectsHeadingId = useId();
   return (
-    <div className={cn("flex min-h-dvh flex-wrap bg-surface-2 font-sans text-sm text-text-strong", className)}>
+    // Wraps only on small screens, where the sidebar stacks above the content. From md up the
+    // two columns must share one flex line: a wrapped line grows to its content, so the
+    // content column would outgrow a fixed-height shell and its own scroll area never scrolls.
+    <div className={cn("flex min-h-dvh flex-wrap bg-surface-2 font-sans text-sm text-text-strong md:flex-nowrap", className)}>
       <nav
         aria-label="Workspace"
         className="flex w-full flex-col gap-5 border-b border-sidebar-border bg-sidebar px-3 py-4 md:max-h-dvh md:w-58 md:border-r md:border-b-0"
