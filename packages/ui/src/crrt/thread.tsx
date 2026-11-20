@@ -13,8 +13,11 @@ export type ThreadMessage = {
 
 type ThreadProps = {
   messages: ThreadMessage[];
-  /** Called with the trimmed reply. Omit to render the thread read-only. */
-  onReply?: (body: string) => void;
+  /**
+   * Called with the trimmed reply. Return a promise to keep the draft until it resolves;
+   * a rejection keeps the draft and shows an error. Omit to render the thread read-only.
+   */
+  onReply?: (body: string) => void | Promise<unknown>;
   className?: string;
 };
 
@@ -60,42 +63,60 @@ export function Thread({ messages, onReply, className }: ThreadProps) {
   );
 }
 
-/** Reply box under a thread. Sends the trimmed text and clears; empty replies are ignored. */
-function ReplyForm({ onReply }: { onReply: (body: string) => void }) {
+/** Reply box under a thread. Sends the trimmed text and clears once sent; empty replies are ignored. */
+function ReplyForm({ onReply }: { onReply: (body: string) => void | Promise<unknown> }) {
   const replyId = useId();
   const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+  const [failed, setFailed] = useState(false);
 
-  function submit(e: React.FormEvent<HTMLFormElement>) {
+  async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const body = draft.trim();
-    if (!body) return;
-    onReply(body);
-    setDraft("");
+    if (!body || sending) return;
+    setSending(true);
+    setFailed(false);
+    try {
+      await onReply(body);
+      setDraft("");
+    } catch {
+      setFailed(true);
+    } finally {
+      setSending(false);
+    }
   }
 
   return (
-    <form
-      className="flex items-end gap-2 rounded-lg bg-surface-1 p-2 ring-1 ring-border focus-within:ring-ring"
-      onSubmit={submit}
-    >
-      <label className="sr-only" htmlFor={replyId}>
-        Reply
-      </label>
-      <textarea
-        id={replyId}
-        rows={1}
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        placeholder="Reply, or @agent to hand it off…"
-        className="min-h-7 flex-1 resize-none bg-transparent px-1.5 py-1 text-sm text-text-strong outline-none placeholder:text-text-subtle"
-      />
-      <button
-        type="submit"
-        aria-label="Send reply"
-        className="flex size-7 items-center justify-center rounded-md bg-surface-4 text-text-body hover:text-text-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    <>
+      <form
+        className="flex items-end gap-2 rounded-lg bg-surface-1 p-2 ring-1 ring-border focus-within:ring-ring"
+        onSubmit={submit}
       >
-        <ArrowUp className="size-4" />
-      </button>
-    </form>
+        <label className="sr-only" htmlFor={replyId}>
+          Reply
+        </label>
+        <textarea
+          id={replyId}
+          rows={1}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Reply, or @agent to hand it off…"
+          className="min-h-7 flex-1 resize-none bg-transparent px-1.5 py-1 text-sm text-text-strong outline-none placeholder:text-text-subtle"
+        />
+        <button
+          type="submit"
+          aria-label="Send reply"
+          disabled={sending}
+          className="flex size-7 items-center justify-center rounded-md bg-surface-4 text-text-body hover:text-text-strong focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none disabled:opacity-50"
+        >
+          <ArrowUp className="size-4" />
+        </button>
+      </form>
+      {failed && (
+        <p role="alert" className="text-xs text-destructive">
+          Couldn’t send your reply. It’s still in the box, so try again.
+        </p>
+      )}
+    </>
   );
 }

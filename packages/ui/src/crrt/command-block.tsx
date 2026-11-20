@@ -1,29 +1,25 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Check, Copy } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useCopy } from "./use-copy";
 
 type CommandBlockProps = {
   /** The exact command the user (or their agent) runs. */
   command: string;
   /** Optional numbered steps shown under the command. */
   steps?: ReactNode[];
+  /** Fires only when the command actually reached the clipboard. */
   onCopy?: (command: string) => void;
   className?: string;
 };
 
 /** A copyable shell command with optional follow-up steps. Used in Connect and docs. */
 export function CommandBlock({ command, steps, onCopy, className }: CommandBlockProps) {
-  const [copied, setCopied] = useState(false);
+  const { state, copy } = useCopy();
+  const copied = state === "copied";
 
-  async function copy() {
-    try {
-      await navigator.clipboard?.writeText(command);
-    } catch {
-      /* clipboard can be blocked; the command stays selectable */
-    }
-    onCopy?.(command);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+  async function copyCommand() {
+    if (await copy(command)) onCopy?.(command);
   }
 
   return (
@@ -33,12 +29,12 @@ export function CommandBlock({ command, steps, onCopy, className }: CommandBlock
         <code className="min-w-0 flex-1 text-text-strong">{command}</code>
         <button
           type="button"
-          onClick={copy}
-          aria-label={copied ? "Copied" : "Copy command"}
+          onClick={copyCommand}
+          aria-label={copied ? "Copied" : state === "failed" ? "Couldn’t copy, select the command instead" : "Copy command"}
           className="inline-flex h-7 items-center gap-1.5 rounded-md border border-border bg-surface-3 px-2.5 font-sans text-xs text-text-strong transition-colors hover:bg-surface-4 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
           {copied ? <Check className="size-3.5 text-agent-done" /> : <Copy className="size-3.5" />}
-          {copied ? "Copied" : "Copy"}
+          {copied ? "Copied" : state === "failed" ? "Select to copy" : "Copy"}
         </button>
       </div>
       {steps && steps.length > 0 && <StepList steps={steps} className="border-t border-sidebar-border" />}
