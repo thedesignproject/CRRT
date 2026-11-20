@@ -50,11 +50,16 @@ describe("CommentRow", () => {
 });
 
 describe("StatusChip", () => {
-  it("labels every status and pulses only for the agent", () => {
+  it("labels every status and pulses only while an agent is working", () => {
     const { container, rerender } = render(<StatusChip status="agent" />);
+    // Queued for an agent: static.
+    expect(container.querySelector(".animate-pulse")).toBeNull();
+    expect(container.textContent).toBe("Agent");
+    rerender(<StatusChip status="agent" working />);
     expect(container.querySelector(".animate-pulse")).not.toBeNull();
+    expect(container.textContent).toBe("Agent, agent working");
     for (const status of ["open", "testing", "fixed"] as const) {
-      rerender(<StatusChip status={status} />);
+      rerender(<StatusChip status={status} working />);
       expect(screen.getByText(STATUS_LABEL[status])).toBeTruthy();
       expect(container.querySelector(".animate-pulse")).toBeNull();
     }
@@ -101,6 +106,12 @@ describe("FilterTabs", () => {
     render(<FilterTabs label="Status" value={"gone" as "all"} onChange={() => {}} options={[{ id: "all", label: "All", count: 1 }, { id: "open", label: "Open", count: 0 }]} />);
     expect(screen.getByRole("tab", { name: /All/ }).tabIndex).toBe(0);
     expect(screen.getByRole("tab", { name: /Open/ }).tabIndex).toBe(-1);
+    expect(screen.getByRole("tab", { name: /All/ }).getAttribute("aria-controls")).toBeNull();
+  });
+
+  it("points every tab at the list it filters", () => {
+    render(<FilterTabs label="Status" value="all" onChange={() => {}} controls="feedback-list" options={[{ id: "all", label: "All", count: 1 }, { id: "open", label: "Open", count: 0 }]} />);
+    for (const tab of screen.getAllByRole("tab")) expect(tab.getAttribute("aria-controls")).toBe("feedback-list");
   });
 });
 
@@ -129,6 +140,11 @@ describe("Initials", () => {
     expect(screen.getByText("ana maría pérez").className).toContain("sr-only");
     rerender(<Initials name="Bo" size="sm" />);
     expect(screen.getByTitle("Bo").className).toContain("size-5");
+    expect(screen.getByTitle("Bo").getAttribute("aria-hidden")).toBeNull();
+    // Decorative initials sit next to the written name, so screen readers skip them.
+    rerender(<Initials name="Bo" decorative />);
+    expect(screen.getByTitle("Bo").getAttribute("aria-hidden")).toBe("true");
+    expect(screen.queryByText("Bo", { selector: ".sr-only" })).toBeNull();
   });
 });
 

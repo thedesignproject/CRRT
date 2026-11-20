@@ -12,7 +12,7 @@ export function StatusBar({ agentAvailable = true, personal = false }: StatusBar
   if (!shortcutsEnabled) return null
   const project = !personal
   const shortcuts: Shortcut[] = [
-    ...(project ? [{ keys: ['A'], label: 'ready' }, { keys: ['M'], label: 'done' }, { keys: ['D'], label: 'reject' }] : []),
+    ...(project ? [{ keys: ['A'], label: 'send to agent' }, { keys: ['M'], label: 'done' }, { keys: ['D'], label: 'reject' }] : []),
     { keys: ['Space'], label: 'next' },
     { keys: ['J', 'K'], label: 'nav' },
     ...(project && agentAvailable ? [{ keys: ['S'], label: 'sidebar' }] : []),

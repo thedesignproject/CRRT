@@ -1,9 +1,11 @@
-import { useRef, type ReactNode } from 'react'
+import { useId, useRef, type ReactNode } from 'react'
+import { MessageSquare } from 'lucide-react'
+import { EmptyState, FilterTabs, Initials } from '@crrt/ui/crrt'
 import { cn } from '../lib/utils'
 import { getDisplayStatus, isInactive } from '../lib/comment'
 import { timeAgo } from '../lib/format'
 import type { Comment, StatusFilter } from '../lib/types'
-import { ChatIcon, CheckboxIcon } from './icons'
+import { CheckboxIcon } from './icons'
 import { Spinner, StatusBadge } from './primitives'
 
 type Counts = { all: number; open: number; ready: number; ready_for_testing: number; done: number; rejected: number }
@@ -15,6 +17,10 @@ const FILTER_LABELS: Record<StatusFilter, string> = {
   ready_for_testing: 'Testing',
   done: 'Done',
 }
+const FILTERS: StatusFilter[] = ['all', 'open', 'ready', 'ready_for_testing', 'done']
+// Where an empty filter points, by what needs a person first (not by size): testing, then
+// the agent queue, then untriaged, then done.
+const REDIRECT_ORDER: Exclude<StatusFilter, 'all'>[] = ['ready_for_testing', 'ready', 'open', 'done']
 
 interface CommentListProps {
   personal?: false
@@ -64,6 +70,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
   const bulkMode = controls?.bulkMode ?? personalBulk?.bulkMode ?? false
   const bulkSelectedIds = controls?.bulkSelectedIds ?? EMPTY_SELECTION
   const selectionAnchor = useRef<string | null>(null)
+  const listId = useId()
   function selectItem(id: string, extend: boolean, toggle: (id: string, range?: string[]) => void) {
     const start = filteredComments.findIndex(c => c.id === selectionAnchor.current)
     const end = filteredComments.findIndex(c => c.id === id)
@@ -73,12 +80,17 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
     selectionAnchor.current = id
     toggle(id, range)
   }
+  const filter = controls?.statusFilter ?? 'all'
+  // Where the work is when the current filter is empty, so the empty state can point at it.
+  // Rejected feedback has no tab of its own, so it can only be reached through All.
+  const nextWork = REDIRECT_ORDER.find((f) => f !== filter && counts[f] > 0)
+    ?? (filter !== 'all' && counts.all > 0 ? 'all' : undefined)
   return (
-    <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-border bg-card', props.personal && 'h-[38vh] md:h-auto')}>
-      <div className="px-4 pt-4 pb-2.5 border-b border-border">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base font-medium text-foreground tracking-tight">
-            {counts.all} {props.personal ? 'Inbox Items' : 'Feedback Items'}
+    <div className={cn('dashboard-comment-list w-full shrink-0 flex flex-col border-r border-sidebar-border bg-surface-1', props.personal && 'h-[38vh] md:h-auto')}>
+      <div className="flex flex-col gap-3 border-b border-sidebar-border px-4 pt-4 pb-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-text-strong">
+            {props.personal ? 'Inbox' : 'Feedback'} <span className="font-mono text-xs font-normal text-text-subtle">{counts.all}</span>
           </h2>
           {(controls || personalBulk) && <button
             type="button"
@@ -87,95 +99,70 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               ? (controls?.exitBulkMode ?? personalBulk?.exitBulkMode)?.()
               : (controls?.enterBulkMode ?? personalBulk?.enterBulkMode)?.()}
             className={cn(
-              'text-[11px] font-medium transition-colors flex items-center gap-1',
-              bulkMode ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+              'flex items-center gap-1 text-xs font-medium transition-colors',
+              bulkMode ? 'text-text-strong' : 'text-text-subtle hover:text-text-strong'
             )}
           >
             <CheckboxIcon /> {bulkMode ? 'Cancel' : 'Select'}
           </button>}
         </div>
-        {controls && <div className="grid grid-cols-5 gap-1 pb-1">
-          {(['all', 'open', 'ready', 'ready_for_testing', 'done'] as StatusFilter[]).map((f) => {
-            const count = counts[f as keyof Counts] ?? 0
-            return (
-              <button
-                type="button"
-                key={f}
-                aria-pressed={controls.statusFilter === f}
-                onClick={() => controls.selectFilter(f)}
-                className={cn(
-                  'min-w-0 px-0.5 py-1 rounded-md text-[11px] font-semibold whitespace-nowrap transition-all',
-                  controls.statusFilter === f
-                    ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-accent'
-                )}
-              >
-                {FILTER_LABELS[f]}
-                <span className={cn(
-                  'ml-1.5 text-[10px] font-medium min-w-[18px] text-center py-0.5 px-1 rounded-full',
-                  controls.statusFilter === f
-                    ? 'bg-muted text-foreground'
-                    : 'bg-muted text-muted-foreground'
-                )}>{count}</span>
-              </button>
-            )
-          })}
-        </div>}
+        {controls && <FilterTabs
+          label="Status"
+          value={controls.statusFilter}
+          onChange={controls.selectFilter}
+          options={FILTERS.map((f) => ({ id: f, label: FILTER_LABELS[f], count: counts[f] }))}
+          controls={listId}
+        />}
       </div>
 
-      {controls && (
-        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
+      {(controls || personalBulk) && (
+        <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-2.5 text-xs">
           <button
             type="button"
-            onClick={controls.toggleSelectAllVisible}
-            className="text-[11px] font-semibold text-muted-foreground hover:text-foreground transition-colors"
+            onClick={(controls ?? personalBulk)!.toggleSelectAllVisible}
+            className="font-medium text-text-subtle transition-colors hover:text-text-strong"
           >
-            {filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id)) ? 'Deselect all' : 'Select all'}
+            {personalBulk
+              ? personalBulk.allVisibleSelected ? 'Deselect page' : 'Select page'
+              : filteredComments.length > 0 && filteredComments.every((c) => bulkSelectedIds.has(c.id)) ? 'Deselect all' : 'Select all'}
           </button>
-          <span className="text-[11px] text-muted-foreground">
-            {bulkSelectedIds.size} selected
-          </span>
-        </div>
-      )}
-
-      {personalBulk && (
-        <div className="flex items-center justify-between border-b border-border bg-card px-4 py-2.5">
-          <button type="button" onClick={personalBulk.toggleSelectAllVisible}
-            className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-foreground">
-            {personalBulk.allVisibleSelected ? 'Deselect page' : 'Select page'}
-          </button>
-          <span className="text-[11px] text-muted-foreground">{personalBulk.selectedCount} selected</span>
+          <span className="text-text-subtle">{personalBulk?.selectedCount ?? bulkSelectedIds.size} selected</span>
         </div>
       )}
 
       {personalBulk && (personalBulk.canSelectAllMatching || personalBulk.allMatchingSelected) && (
-        <div className="border-b border-border bg-muted/35 px-4 py-2 text-center text-[11px] text-muted-foreground" role="status">
+        <div className="border-b border-sidebar-border bg-surface-2 px-4 py-2 text-center text-xs text-text-subtle" role="status">
           {personalBulk.allMatchingSelected ? <>
             All {counts.all} Inbox items are selected.{' '}
-            <button type="button" onClick={personalBulk.clearSelection} className="font-semibold text-foreground hover:underline">Clear selection</button>
-          </> : <button type="button" onClick={personalBulk.selectAllMatching} className="font-semibold text-foreground hover:underline">Select all {counts.all} in Inbox</button>}
+            <button type="button" onClick={personalBulk.clearSelection} className="font-medium text-text-strong hover:underline">Clear selection</button>
+          </> : <button type="button" onClick={personalBulk.selectAllMatching} className="font-medium text-text-strong hover:underline">Select all {counts.all} in Inbox</button>}
         </div>
       )}
 
-      <div className={cn('flex-1 overflow-y-auto', bulkMode && !props.personal && 'pb-24 dashboard-bulk-scroll')}>
+      <div id={listId} className={cn('flex-1 overflow-y-auto', bulkMode && !props.personal && 'pb-24 dashboard-bulk-scroll')}>
         {commentsLoading ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-8 gap-3">
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
             <Spinner />
-            <p className="text-xs text-muted-foreground">Loading comments…</p>
+            <p className="text-xs text-text-subtle">Loading comments…</p>
           </div>
         ) : commentsError ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <p className="text-sm font-semibold text-status-rejected mb-1">Failed to load</p>
-            <p className="text-xs text-muted-foreground">{commentsError}</p>
-          </div>
+          <EmptyState icon={<MessageSquare />} title="Failed to load">{commentsError}</EmptyState>
         ) : filteredComments.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-center px-8">
-            <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center mb-3">
-              <ChatIcon className="text-muted-foreground" />
-            </div>
-            <p className="text-sm font-semibold text-foreground mb-1">No comments</p>
-            <p className="text-xs text-muted-foreground">{props.personal ? 'Your Inbox is empty.' : 'Nothing here yet for this filter.'}</p>
-          </div>
+          props.personal ? (
+            <EmptyState icon={<MessageSquare />} title="Your Inbox is empty">Comments you leave with the browser extension land here.</EmptyState>
+          ) : (
+            <EmptyState
+              icon={<MessageSquare />}
+              title={filter === 'all' ? 'No feedback yet' : `Nothing in ${FILTER_LABELS[filter]} yet`}
+              action={controls && nextWork && (
+                <button type="button" onClick={() => controls.selectFilter(nextWork)} className="inline-flex h-7 items-center rounded-md px-2.5 text-[13px] font-medium text-text-strong ring-1 ring-border hover:bg-surface-3">
+                  {nextWork === 'all' ? `Show all ${counts.all}` : `Show ${counts[nextWork]} in ${FILTER_LABELS[nextWork]}`}
+                </button>
+              )}
+            >
+              {nextWork === 'all' ? 'The rest of the feedback was rejected.' : nextWork ? 'The work is somewhere else right now.' : 'Share a review link and comments land here.'}
+            </EmptyState>
+          )
         ) : (
           <div className="animate-stagger">
             {filteredComments.map((comment) => {
@@ -184,7 +171,7 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
               const inactive = isInactive(comment)
 
               return (
-                <div key={comment.id} className="relative flex items-start">
+                <div key={comment.id} className="relative flex items-start border-b border-sidebar-border">
                   {(controls || personalBulk) && <input
                     type="checkbox"
                     aria-label={`Select feedback: ${comment.body}`}
@@ -200,63 +187,31 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
                     ? (controls?.toggleBulkSelect ?? personalBulk?.toggleBulkSelect)?.(comment.id)
                     : setSelectedCommentId(comment.id)}
                   className={cn(
-                    'relative w-full text-left px-4 py-3 border-b border-border/50 card-hover transition-colors',
-                    isActive && !bulkMode && 'bg-accent',
-                    bulkMode && isChecked ? 'bg-muted' : !isActive && 'hover:bg-accent/70',
-                    inactive && !isChecked && 'bg-muted/30'
+                    'flex w-full min-w-0 items-start gap-3 px-4 py-3 text-left transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-inset',
+                    bulkMode ? isChecked && 'bg-surface-4' : isActive && 'bg-surface-4 shadow-[inset_2px_0_0_var(--carrot)]',
+                    !(bulkMode ? isChecked : isActive) && 'hover:bg-surface-3',
                   )}
                 >
-                  <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-[18px] h-[18px] rounded-full shrink-0 flex items-center justify-center text-[8px] font-medium text-white"
-                        style={{ background: comment.authorColor }} aria-hidden="true"
-                      >{comment.authorInitial}</div>
-                      <span className="text-[13px] font-medium text-foreground">{comment.author}</span>
-                    </div>
-                    <span className="text-[10px] text-muted-foreground">{timeAgo(comment.createdAt)}</span>
-                  </div>
-
-                  <p className={cn(
-                    'text-sm leading-relaxed mb-2 line-clamp-2 pl-[26px] break-words',
-                    inactive
-                      ? 'text-muted-foreground'
-                      : isActive && !bulkMode
-                        ? 'text-foreground/85'
-                        : 'text-muted-foreground'
-                  )}>
-                    {comment.body}
-                  </p>
-
-                  <div className="flex items-center gap-1.5 pl-[26px] flex-wrap">
-                    {!props.personal && <StatusBadge comment={comment} />}
-                    {!props.personal && (
-                      <span className={cn(
-                        'rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide',
-                        comment.visibility === 'internal'
-                          ? 'bg-muted text-muted-foreground'
-                          : 'bg-muted text-muted-foreground',
-                      )}>
-                        {comment.visibility ?? 'shared'}
-                      </span>
-                    )}
-                    {props.personal && <span className="text-[10px] text-muted-foreground truncate" title={comment.pageUrl ?? ''}>{comment.pageUrl}</span>}
-                    {comment.claimedByAgentId && (
-                      <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-status-in-progress">
-                        <span className="w-1.5 h-1.5 rounded-full bg-status-in-progress animate-pulse-dot" />
-                        {comment.claimedByAgentId}
-                      </span>
-                    )}
-                    {comment.targetType === 'text_range' && comment.anchor ? (
-                      <span className="text-[10px] text-muted-foreground italic ml-auto truncate max-w-[140px]">
-                        &ldquo;{comment.anchor.selectedText}&rdquo;
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-muted-foreground font-mono ml-auto truncate max-w-[140px]">
-                        {comment.selector?.split(' > ').pop() || 'No page context'}
-                      </span>
-                    )}
-                  </div>
+                  <Initials name={comment.author} decorative />
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="flex items-baseline gap-2">
+                      <span className="font-medium text-text-strong">{comment.author}</span>
+                      <span className="text-xs text-text-subtle">{timeAgo(comment.createdAt)}</span>
+                      {!props.personal && <StatusBadge comment={comment} className="ml-auto" />}
+                    </span>
+                    <span className={cn('line-clamp-2 break-words', inactive ? 'text-text-subtle' : 'text-text-body')}>{comment.body}</span>
+                    <span className="flex min-w-0 items-center gap-1.5 font-mono text-xs text-text-subtle">
+                      {comment.claimedByAgentId && (
+                        <span className="inline-flex shrink-0 items-center gap-1 font-sans font-medium text-status-agent-fg">
+                          {/* The status chip already pulses for claimed work; the Inbox has no chip, so it pulses here. */}
+                          {props.personal && <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-agent-working motion-reduce:animate-none" />}
+                          {comment.claimedByAgentId}
+                        </span>
+                      )}
+                      {!props.personal && comment.visibility === 'internal' && <span className="shrink-0 font-sans">Internal ·</span>}
+                      <span className="truncate" title={location(comment, props.personal)}>{location(comment, props.personal)}</span>
+                    </span>
+                  </span>
                 </button>
                 </div>
               )
@@ -267,6 +222,26 @@ export function CommentList(props: CommentListProps | PersonalListProps) {
       {props.personal && props.footer}
     </div>
   )
+}
+
+/**
+ * Where the comment sits: quoted text for text ranges, else the page and the element. The
+ * personal Inbox mixes sites, so it keeps the host; a project's list is one site, so it doesn't.
+ */
+function location(comment: Comment, withHost = false) {
+  if (comment.targetType === 'text_range' && comment.anchor) return `“${comment.anchor.selectedText}”`
+  const element = comment.selector?.split(' > ').pop()
+  const page = comment.pageUrl ? pagePath(comment.pageUrl, withHost) : null
+  return [page, element].filter(Boolean).join(' · ') || 'No page context'
+}
+
+function pagePath(url: string, withHost: boolean) {
+  try {
+    const { host, pathname } = new URL(url)
+    return withHost ? `${host}${pathname}` : pathname
+  } catch {
+    return url
+  }
 }
 
 export type { Counts }

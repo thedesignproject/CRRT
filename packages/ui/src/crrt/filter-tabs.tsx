@@ -8,10 +8,12 @@ type FilterTabsProps<T extends string> = {
   options: FilterOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** Id of the list these tabs filter, for aria-controls. */
+  controls?: string;
 };
 
 /** Status filter with counts (All / Open / Agent / Testing / Done). Arrow keys, Home and End move. */
-export function FilterTabs<T extends string>({ label, options, value, onChange }: FilterTabsProps<T>) {
+export function FilterTabs<T extends string>({ label, options, value, onChange, controls }: FilterTabsProps<T>) {
   const ids = options.map((o) => o.id);
   const focusable = focusableTab(ids, value);
   return (
@@ -25,6 +27,7 @@ export function FilterTabs<T extends string>({ label, options, value, onChange }
             role="tab"
             data-value={o.id}
             aria-selected={selected}
+            aria-controls={controls}
             tabIndex={o.id === focusable ? 0 : -1}
             onClick={() => onChange(o.id)}
             className={cn(

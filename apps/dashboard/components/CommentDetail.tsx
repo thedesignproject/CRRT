@@ -11,7 +11,6 @@ import {
   BotIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CursorIcon,
   DoneIcon,
   ExternalLinkIcon,
   ImageOffIcon,
@@ -20,6 +19,8 @@ import {
 } from './icons'
 import { ActionBtn, Kbd } from './primitives'
 import { ProjectEmptyState } from './ProjectEmptyState'
+import { EmptyState } from '@crrt/ui/crrt'
+import { MousePointer2 } from 'lucide-react'
 import { ExternalWorkDialog } from './ExternalWorkDialog'
 
 const providerLabel = (provider: ExternalWorkProvider) =>
@@ -346,7 +347,7 @@ export function CommentDetail({
                 onClick={() => toggleReview!(selectedComment, 'accepted')}
                 shortcut="A"
               >
-                <BotIcon size={14} /> Ready for Agent
+                <BotIcon size={14} /> Send to Agent
               </ActionBtn>
               <ActionBtn
                 active={selectedComment.implementationStatus === 'done'}
@@ -573,24 +574,18 @@ export function CommentDetail({
       ) : selectedProject && !commentsLoading && !commentsError && projectComments.length === 0 ? (
         <ProjectEmptyState projectId={selectedProject} onConnectStorybook={onConnectStorybook} storybookConnected={storybookConnected} />
       ) : (
-        <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
-          <div className="w-12 h-12 rounded-2xl bg-muted flex items-center justify-center mb-4">
-            <CursorIcon className="text-muted-foreground" />
-          </div>
-          <p className="text-base font-semibold text-foreground mb-1">{personal ? 'Select an Inbox item' : 'Select a comment'}</p>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            {personal
-              ? 'Pick an Inbox item to see its page context and screenshot.'
-              : 'Pick a feedback item from the list to see the full context, screenshot, and actions.'}
-          </p>
-          {!personal && shortcutsEnabled && <div className="flex gap-3 mt-6 text-xs text-muted-foreground font-mono">
-            <Kbd>J</Kbd><Kbd>K</Kbd> navigate
-            <span className="mx-1">·</span>
-            <Kbd>A</Kbd> ready
-            <span className="mx-1">·</span>
-            <Kbd>D</Kbd> reject
-          </div>}
-        </div>
+        <EmptyState
+          className="flex-1 justify-center"
+          icon={<MousePointer2 />}
+          title={personal ? 'Select an Inbox item' : 'Select a comment'}
+          action={!personal && shortcutsEnabled && <span className="flex items-center gap-1.5 font-mono text-xs text-text-subtle">
+            <Kbd>J</Kbd><Kbd>K</Kbd> navigate · <Kbd>A</Kbd> send to agent · <Kbd>D</Kbd> reject
+          </span>}
+        >
+          {personal
+            ? 'Pick an Inbox item to see its page context and screenshot.'
+            : 'See the pinned element, what the agent did and the thread.'}
+        </EmptyState>
       )}
       {externalWorkDraft && <ExternalWorkDialog
         key={selectedId}
