@@ -1,5 +1,5 @@
 // In-memory stand-in for the CRRT public API, mounted into the visual-test
-// harness by harness.vite.config.ts. Local experiment only.
+// harness by harness.vite.config.ts. Used by the Bombadil suites and repro scripts.
 //
 // MOCK_FAIL_RATE (0..1): share of write requests (POST/PATCH/DELETE) that
 // answer 500 on purpose, to exercise the widget's error handling.

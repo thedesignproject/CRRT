@@ -5,7 +5,7 @@ import { createRequire } from 'node:module'
 const require = createRequire(new URL('../package.json', import.meta.url))
 const { chromium } = require('playwright')
 
-const URL_ = process.argv[2] ?? 'http://127.0.0.1:4380/widget?state=idle'
+const URL_ = process.argv[2] ?? 'http://127.0.0.1:4390/widget?state=idle'
 const N = Number(process.argv[3] ?? 50)
 
 const browser = await chromium.launch({ channel: 'chrome', headless: true })

@@ -10,6 +10,7 @@ set -uo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd .. && pwd)"
 LIMIT="${1:-10m}"
+[[ "$LIMIT" =~ ^[0-9]+[smhd]$ ]] || { echo "invalid time limit '$LIMIT' (expected e.g. 30s, 10m, 2h)"; exit 1; }
 mkdir -p out out/failed
 rm -f out/ci-*.txt out/ci-*.code out/failed/*.bin
 

@@ -53,12 +53,13 @@ jobs:
           BOMBADIL_FLAGS: --no-sandbox
         run: bombadil/ci.sh "$TIME_LIMIT"
       - name: Upload failing trace
-        if: failure()
+        if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
           name: bombadil-${{ matrix.suite }}
           path: |
             bombadil/out/failed/
+            bombadil/out/*.bin
             bombadil/out/ci-*.txt
             bombadil/out/mock-*.log
           retention-days: 7
@@ -67,7 +68,7 @@ jobs:
   # scheduled run reach everyone watching the repo, not just the last editor.
   report:
     needs: explore
-    if: failure() && github.event_name == 'schedule'
+    if: (failure() || cancelled()) && github.event_name == 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:

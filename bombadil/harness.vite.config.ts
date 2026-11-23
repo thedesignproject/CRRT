@@ -1,4 +1,4 @@
-// The visual-test harness plus the in-memory mock API (local experiment).
+// The visual-test harness plus the in-memory mock API, for the Bombadil suites.
 // PORT picks the port so a failing-API server can run beside a healthy one.
 import { mergeConfig } from 'vite'
 import base from '../tests/visual/harness/vite.config'

@@ -92,11 +92,16 @@ Widget (`widget.ts`):
   an error is shown (public mode only).
 - **noDuplicateAlerts:** the same error message is never shown twice at once.
 - **sendReachesServer:** after Send, the server receives the comment, or an
-  error or the name prompt is shown ("Saved" on screen is not enough).
+  error or the name prompt is shown ("Saved" on screen is not enough). Like the
+  approve/delete rules, it only judges actions taken while no error is already
+  showing, so an old error can't hide a new silent failure.
 - **pinsMatchServerAfterReload:** after a reload settles, the pins on screen
   match the comments the server holds (public mode only).
-- **escapeAlwaysCloses:** while something is open, Escape closes the topmost
-  layer (dialog › pin popover › composer › pin placing › sidebar › launcher menu) within 1s.
+- **escapeAlwaysCloses:** while a dialog, pin popover or composer is open,
+  Escape closes the topmost of them (the launcher menu, sidebar and pin-placing
+  hint animate out, so they aren't judged).
+- **popoverOpensInsideWindow / popoverMenuOpensInsideWindow:** a pin's popover
+  and its action menu open inside the window, so every action is reachable.
 
 Dashboard (`dashboard.ts`):
 
@@ -133,5 +138,6 @@ runs against the old code:
   cause false `neverStuckBlank` failures or extractor timeouts; rerun the suite
   alone before treating those as bugs.
 - `edit-repro.mjs`, `send-failure-repro.mjs` and `approve-delete-repro.mjs` are
-  scripted repros for the bugs fixed in #486.
-  Run them against a preview server started with `MOCK_FAIL_RATE=1`.
+  scripted repros for the bugs fixed in #486; each exits 1 if its bug comes back.
+  `edit-repro.mjs` runs against the healthy server (default :4390); the other two
+  need a preview server started with `MOCK_FAIL_RATE=1` (default :4392).

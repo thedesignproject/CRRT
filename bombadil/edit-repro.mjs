@@ -49,3 +49,4 @@ console.log(shownAfterSave && !shownAfterReload
   : 'Edit persisted (or the flow did not run as expected).')
 if (!before) console.log('(warning: widget text was empty before edit)')
 await browser.close()
+if (shownAfterSave && !shownAfterReload) process.exitCode = 1

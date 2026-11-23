@@ -1,4 +1,4 @@
-// Bombadil spec for the CRRT feedback widget (local experiment).
+// Bombadil spec for the CRRT feedback widget.
 //
 // Target: the visual-test harness at /widget, which mounts <FeedbackWidget>
 // on a fake host page with an in-memory comments adapter. No backend, so
@@ -136,13 +136,14 @@ export const modalNeverDropsFocus = always(
     .implies(next(() => widget.current.clickMissedControl)),
 );
 
-// Escape never does nothing while something is open: the topmost open layer
-// (same priority as the widget's Escape handler) must close within 1 second.
+// Escape never does nothing while a dialog, pin popover or composer is open:
+// the topmost of them (same priority as the widget's Escape handler) closes.
 const layers = extract((state) => {
   const doc = state.document;
   const win = state.window;
-  // Closed layers stay in the DOM (transparent or slid off screen), so "open"
-  // means: present, not transparent, and at least partly inside the window.
+  // The launcher menu, sidebar and hover frame stay in the DOM when closed
+  // (transparent or slid off screen): for those, "open" means present, not
+  // transparent, and at least partly inside the window.
   const shown = (el: Element | null | undefined) => {
     if (!el) return false;
     for (let n: Element | null = el; n; n = n.parentElement) {
@@ -152,9 +153,11 @@ const layers = extract((state) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < win.innerWidth && r.top < win.innerHeight;
   };
-  const dialog = Array.from(doc.querySelectorAll('[data-fw-crrt] [role="dialog"][aria-modal="true"]')).some(shown);
-  const pinPopover = shown(doc.querySelector("[data-fw-pin-backdrop]"));
-  const composerOpen = shown(doc.querySelector('textarea[placeholder="Leave your comment…"]'));
+  // Dialogs, the pin popover and the composer unmount when closed, so being in
+  // the DOM means open (they may still be fading in from opacity 0).
+  const dialog = doc.querySelector('[data-fw-crrt] [role="dialog"][aria-modal="true"]') !== null;
+  const pinPopover = doc.querySelector("[data-fw-pin-backdrop]") !== null;
+  const composerOpen = doc.querySelector('textarea[placeholder="Leave your comment…"]') !== null;
   // Pin-placing mode has no permanent marker: count it only while its hover
   // frame or hint bar is showing (may miss it, never invents it).
   const selecting = shown(doc.querySelector("[data-fw-selector-frame]"))
@@ -164,22 +167,65 @@ const layers = extract((state) => {
   const launcherMenu = shown(doc.querySelector("[data-fw-launcher-menu]"));
   const open = [dialog, pinPopover, composerOpen, selecting, sidebar, launcherMenu];
   const top = open.findIndex(Boolean);
+  // Only these unmount the moment they close; the others fade or slide out.
+  const unmounting = [dialog, pinPopover, composerOpen];
+  const topUnmounting = unmounting.findIndex(Boolean);
   const a = state.lastAction as unknown;
   const pressedEscape = !!a && typeof a === "object" && "PressKey" in a && (a as { PressKey: { code: number } }).PressKey.code === 27;
   return {
     // 6 = dialog … 1 = launcher menu, 0 = nothing open
     top: top === -1 ? 0 : open.length - top,
+    // 3 = dialog, 2 = pin popover, 1 = composer, 0 = none of them open
+    topUnmounting: topUnmounting === -1 ? 0 : unmounting.length - topUnmounting,
     names: ["dialog", "pin popover", "composer", "pin placing", "sidebar", "launcher menu"].filter((_, i) => open[i]),
     pressedEscape,
   };
 });
 
+// Judged on the state right after Escape (so a later action that opens
+// something new can't count against it), and only for the layers that unmount
+// the moment they close: dialogs, the pin popover and the composer. The
+// launcher menu, sidebar and pin-placing hint fade or slide out, so a
+// next-state check would catch them mid-animation.
 export const escapeAlwaysCloses = always(() => {
   const before = layers.current;
-  return now(() => before.top > 0)
+  return now(() => before.topUnmounting > 0)
     .and(next(() => layers.current.pressedEscape))
-    .implies(next(eventually(() => layers.current.top < before.top).within(1, "seconds")));
+    .implies(next(() => layers.current.topUnmounting < before.topUnmounting));
 });
+
+// The pin popover and its action menu open inside the window, so every action
+// is reachable without scrolling. Judged when each one opens: scrolling the pin
+// away afterwards rightly takes its popover with it.
+const popover = extract((state) => {
+  const doc = state.document;
+  const win = state.window;
+  const tolerance = 8; // the open animation nudges the box a few pixels
+  const inside = (r: DOMRect) =>
+    r.top >= -tolerance && r.bottom <= win.innerHeight + tolerance && r.left >= -tolerance && r.right <= win.innerWidth + tolerance;
+  const box = doc.querySelector("[data-fw-pin-backdrop]")?.nextElementSibling as HTMLElement | null | undefined;
+  const menu = box
+    ? Array.from(box.querySelectorAll("button")).find((b) => (b.textContent ?? "").trim() === "Delete")?.closest('div[style*="absolute"]')
+    : null;
+  return {
+    open: !!box,
+    inside: box ? inside(box.getBoundingClientRect()) : true,
+    menuOpen: !!menu,
+    menuInside: menu ? inside(menu.getBoundingClientRect()) : true,
+  };
+});
+
+export const popoverOpensInsideWindow = always(
+  now(() => !popover.current.open)
+    .and(next(() => popover.current.open))
+    .implies(next(() => popover.current.inside)),
+);
+
+export const popoverMenuOpensInsideWindow = always(
+  now(() => !popover.current.menuOpen)
+    .and(next(() => popover.current.menuOpen))
+    .implies(next(() => popover.current.menuInside)),
+);
 
 // Pin numbers must be unique (no two "3" pins after add/delete churn).
 export const pinNumbersUnique = always(() => {
@@ -225,6 +271,8 @@ export const sendNeverSilent = always(() => {
 
 // --- Correctness: actions reach the server (public mode + mock API only) ---
 // harness.vite.config.ts publishes the mock server's state into #__mock_state.
+// These rules only judge actions taken while no error is showing, so an older
+// error still on screen can't make a later silent failure look handled.
 const server = extract((state) => {
   const doc = state.document;
   const publicMode = state.window.location.search.includes("public=1");
@@ -256,7 +304,7 @@ const server = extract((state) => {
 // Clicking Delete either reaches the server (its delete counter goes up) or shows an error.
 export const deleteReachesServer = always(() => {
   const before = server.current;
-  return now(() => before.tracked)
+  return now(() => before.tracked && before.alerts === 0)
     .and(next(() => server.current.clicked === "Delete"))
     .implies(
       next(eventually(() => server.current.deletes > before.deletes || server.current.alerts > 0).within(3, "seconds")),
@@ -266,7 +314,7 @@ export const deleteReachesServer = always(() => {
 // Clicking Approve either reaches the server (its approval counter goes up) or shows an error.
 export const approveReachesServer = always(() => {
   const before = server.current;
-  return now(() => before.tracked)
+  return now(() => before.tracked && before.alerts === 0)
     .and(next(() => server.current.clicked === "Approve"))
     .implies(
       next(eventually(() => server.current.approvals > before.approvals || server.current.alerts > 0).within(3, "seconds")),
@@ -278,7 +326,7 @@ export const approveReachesServer = always(() => {
 export const sendReachesServer = always(() => {
   const before = server.current;
   const draft = composer.current.text;
-  return now(() => before.tracked && composer.current.open && draft.trim() !== "")
+  return now(() => before.tracked && before.alerts === 0 && composer.current.open && draft.trim() !== "")
     .and(next(() => composer.current.clickedSend))
     .implies(
       next(

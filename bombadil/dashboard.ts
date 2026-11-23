@@ -1,4 +1,4 @@
-// Bombadil spec for the CRRT dashboard in mock mode (local experiment).
+// Bombadil spec for the CRRT dashboard in mock mode.
 // Target: harness route /dashboard/?mock=1 (fixtures from apps/dashboard/lib/mocks.ts,
 // plus the in-memory /api from mock-api.ts for calls the hooks don't mock).
 

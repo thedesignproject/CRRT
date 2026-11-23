@@ -35,3 +35,4 @@ console.log(!alertShown && !savedHint
   : 'User was informed.')
 console.log(consoleLines.filter((l) => l.includes('FeedbackWidget')).join('\n'))
 await browser.close()
+if (!alertShown && !savedHint) process.exitCode = 1

@@ -44,3 +44,4 @@ console.log(rows.every((r) => !r.alertShown && !r.savedOnServer) && pinsAfter < 
   ? 'SILENT FAILURE: the screen says it worked, the server refused, and the user is not told.'
   : 'User was informed (or the flow did not run as expected).')
 await browser.close()
+if (rows.every((r) => !r.alertShown && !r.savedOnServer)) process.exitCode = 1
