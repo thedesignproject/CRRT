@@ -83,8 +83,9 @@ Widget (`widget.ts`):
 - **modalNeverDropsFocus:** while a modal is open, focus never falls to `<body>`
   unless the user clicked blank space (mouse-only browser behaviour).
 - **pinNumbersUnique:** no two pins show the same number.
-- **sendNeverSilent:** within 3s of Send, the widget shows "Saved", an error
-  with the draft kept, or the name prompt.
+- **sendNeverSilent:** within 3s of Send, the widget shows "Saved", an error,
+  or the name prompt. (Draft retention on failure is covered by unit tests and
+  `send-failure-repro.mjs`; Bombadil acts faster than the composer re-renders.)
 - **deleteReachesServer:** after Delete, the server receives the delete or an
   error is shown (public mode only).
 - **approveReachesServer:** after Approve, the server receives the approval or
