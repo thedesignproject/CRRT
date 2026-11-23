@@ -1,0 +1,51 @@
+name: Bombadil
+
+# Nightly property-based UI exploration of the widget and dashboard against
+# the visual-test harness and an in-memory mock API. See bombadil/README.md.
+on:
+  schedule:
+    - cron: '17 3 * * *' # daily, 03:17 UTC, on the default branch
+  workflow_dispatch:
+    inputs:
+      time-limit:
+        description: Time per suite (e.g. 5m, 10m, 30m)
+        default: 10m
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bombadil
+  cancel-in-progress: false
+
+jobs:
+  explore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: bombadil
+      - name: Run Bombadil suites
+        env:
+          TIME_LIMIT: ${{ inputs.time-limit || '10m' }}
+          # Ubuntu 24.04 runners block Chrome's user-namespace sandbox.
+          BOMBADIL_FLAGS: --no-sandbox
+        run: bombadil/ci.sh "$TIME_LIMIT"
+      - name: Upload failing traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bombadil-traces
+          path: |
+            bombadil/out/failed/
+            bombadil/out/ci-*.txt
+            bombadil/out/mock-*.log
+          retention-days: 7

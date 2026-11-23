@@ -1,0 +1,15 @@
+{
+  "name": "crrt-bombadil-experiment",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@antithesishq/bombadil": "0.8.0",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "harness": "cd .. && bunx vite --config tests/visual/harness/vite.config.ts",
+    "widget": "bash ./run-widget.sh",
+    "inspect": "bombadil browser inspect"
+  }
+}

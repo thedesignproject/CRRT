@@ -15,7 +15,7 @@ export function WidgetHarness() {
     async create(payload) {
       if (state === 'sending') return new Promise<never>(() => {})
       if (state === 'send-error') throw new Error('Could not send feedback. Try again.')
-      const next = { ...comments[0], ...payload, id: 'created', pageUrl: location.href, createdAt: fixedTime } as Comment
+      const next = { ...comments[0], ...payload, id: `created-${items.length}-${Math.random().toString(36).slice(2, 8)}`, pageUrl: location.href, createdAt: fixedTime } as Comment
       setItems([...items, next]); return next
     },
     async update(id, body) { setItems(items.map(c => c.id === id ? { ...c, body } : c)) },
