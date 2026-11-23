@@ -40,15 +40,15 @@ const page = extract((state) => {
   )
     .filter(visible)
     .map((el) => (el.getAttribute("aria-label") ?? el.textContent ?? "").trim())
-    .filter((t) => /^Loading/i.test(t) || t === "");
+    .filter((t) => /^Loading/i.test(t) || t === "").length;
   return {
     path: state.window.location.pathname,
     textLength: (root?.innerText ?? "").trim().length,
     loading,
+    // Counts only: page text can hold characters that fail to decode in Bombadil.
     alerts: Array.from(doc.querySelectorAll('[role="alert"]'))
       .filter(visible)
-      .map((el) => (el.textContent ?? "").trim().slice(0, 120))
-      .filter((t) => !t.includes("Not mocked")),
+      .filter((el) => !(el.textContent ?? "").includes("Not mocked")).length,
   };
 });
 
@@ -62,13 +62,13 @@ export const neverStuckBlank = always(
 
 // Loading indicators always finish (mocked data is instant).
 export const loadingAlwaysFinishes = always(
-  now(() => page.current.loading.length > 0).implies(
-    eventually(() => page.current.loading.length === 0).within(10, "seconds"),
+  now(() => page.current.loading > 0).implies(
+    eventually(() => page.current.loading === 0).within(10, "seconds"),
   ),
 );
 
 // Error alerts never pile up.
-export const atMostOneAlert = always(() => page.current.alerts.length <= 1);
+export const atMostOneAlert = always(() => page.current.alerts <= 1);
 
 // The selected status tab's count matches the rows listed under it.
 const inbox = extract((state) => {

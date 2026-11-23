@@ -6,7 +6,9 @@
 // harness mode with ?state= (idle, send-error, ...). Nothing touches real data.
 //
 // Note: extract() callbacks run inside the page. Keep them self-contained
-// (no references to module-level variables other than imported helpers).
+// (no references to module-level variables other than imported helpers), and
+// return booleans and counts, not page text: text Bombadil typed can contain
+// characters that fail to decode on the way back.
 
 import { always, eventually, next, now } from "@antithesishq/bombadil";
 import {
@@ -268,7 +270,7 @@ const composer = extract((state) => {
   let serverPosts = 0;
   try { serverPosts = JSON.parse(doc.getElementById("__mock_state")?.textContent || "{}").postAttempts ?? 0; } catch { serverPosts = 0; }
   const adapterCalls = (state.window as unknown as { __crrtCreateCalls?: number }).__crrtCreateCalls ?? 0;
-  return { open: box !== null, text: box?.value ?? "", alert, nameDialog, saved, clickedSend, sendAttempts: adapterCalls + serverPosts };
+  return { open: box !== null, hasText: !!box?.value.trim(), alert, nameDialog, saved, clickedSend, sendAttempts: adapterCalls + serverPosts };
 });
 
 // An action's outcome is only judged if the action reached the backend. A click
@@ -280,7 +282,7 @@ const toldIfSent = (sent: () => boolean, told: () => boolean) =>
 
 export const sendNeverSilent = always(() => {
   const before = composer.current;
-  return now(() => before.open && before.text.trim() !== "" && !before.alert)
+  return now(() => before.open && before.hasText && !before.alert)
     .and(next(() => composer.current.clickedSend))
     .implies(
       toldIfSent(
@@ -309,6 +311,8 @@ const server = extract((state) => {
     const fp = (a as { Click: { fingerprint: Record<string, unknown> } }).Click.fingerprint;
     clicked = String(fp.accessibleName ?? fp.accessible_name ?? fp.textContent ?? fp.text_content ?? "").trim();
   }
+  const clickedDelete = clicked === "Delete";
+  const clickedApprove = clicked === "Approve";
   const alertTexts = Array.from(doc.querySelectorAll('[data-fw-crrt] [role="alert"]'))
     .filter((el) => isVisible(state.window, el))
     .map((el) => (el.textContent ?? "").trim());
@@ -322,7 +326,8 @@ const server = extract((state) => {
     postAttempts: parsed?.postAttempts ?? 0,
     patchAttempts: parsed?.patchAttempts ?? 0,
     deleteAttempts: parsed?.deleteAttempts ?? 0,
-    clicked,
+    clickedDelete,
+    clickedApprove,
     alerts: alertTexts.length,
     duplicateAlerts: alertTexts.length - new Set(alertTexts).size,
   };
@@ -332,7 +337,7 @@ const server = extract((state) => {
 export const deleteReachesServer = always(() => {
   const before = server.current;
   return now(() => before.tracked && before.alerts === 0)
-    .and(next(() => server.current.clicked === "Delete"))
+    .and(next(() => server.current.clickedDelete))
     .implies(
       toldIfSent(
         () => server.current.deleteAttempts > before.deleteAttempts,
@@ -345,7 +350,7 @@ export const deleteReachesServer = always(() => {
 export const approveReachesServer = always(() => {
   const before = server.current;
   return now(() => before.tracked && before.alerts === 0)
-    .and(next(() => server.current.clicked === "Approve"))
+    .and(next(() => server.current.clickedApprove))
     .implies(
       toldIfSent(
         () => server.current.patchAttempts > before.patchAttempts,
@@ -358,8 +363,7 @@ export const approveReachesServer = always(() => {
 // shows an error, or asks for a name first. "Saved" on screen is not enough.
 export const sendReachesServer = always(() => {
   const before = server.current;
-  const draft = composer.current.text;
-  return now(() => before.tracked && before.alerts === 0 && composer.current.open && draft.trim() !== "")
+  return now(() => before.tracked && before.alerts === 0 && composer.current.open && composer.current.hasText)
     .and(next(() => composer.current.clickedSend))
     .implies(
       toldIfSent(
@@ -432,7 +436,7 @@ const pressEscape = actions(() => [{ PressKey: { code: 27 } }]);
 const flowTargets = extract((state) => {
   const FLOW =
     /^(Send|Save|Approve|Accept|Reject|Done|Edit|Delete|Retry|Try again|Cancel|↗ Send to)/;
-  const out: { fingerprint: ReturnType<typeof getFingerprint>; point: { x: number; y: number }; name: string }[] = [];
+  const out: { fingerprint: ReturnType<typeof getFingerprint>; point: { x: number; y: number } }[] = [];
   const els = state.document.querySelectorAll(
     'button:not(:disabled), [role="menuitem"], [role="button"]',
   );
@@ -442,12 +446,12 @@ const flowTargets = extract((state) => {
     if (!isVisible(state.window, el)) continue;
     const point = clickablePoint(el);
     if (!point || !inViewport(state.window, point)) continue;
-    out.push({ fingerprint: getFingerprint(el), point, name });
+    out.push({ fingerprint: getFingerprint(el), point });
   }
   return out;
 });
 
-const clickFlow = actions(() => flowTargets.current.map(({ fingerprint, point }) => ({ Click: { fingerprint, point } })));
+const clickFlow = actions(() => flowTargets.current.map((t) => ({ Click: t })));
 
 // What the user is currently doing: typing in a field, with or without text.
 const editing = extract((state) => {
