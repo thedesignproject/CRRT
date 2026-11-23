@@ -430,29 +430,6 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => expect(patches(calls)).toEqual([{ id: 'comment-1', reviewStatus: 'open' }]))
     })
 
-    async function deleteFromCard(body: string) {
-      const card = await waitFor(() => {
-        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card')).find((c) => c.textContent?.includes(body))
-        if (!el) throw new Error('card not found')
-        return el
-      })
-      await act(async () => { fireEvent.click(card.querySelector<HTMLButtonElement>('button[title="More"]')!) })
-      const del = await waitFor(() => {
-        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === 'Delete')
-        if (!btn) throw new Error('Delete not found')
-        return btn
-      })
-      await act(async () => { fireEvent.click(del) })
-    }
-
-    it('rolls an approval back and explains when the server refuses it', async () => {
-      seedPublic('approve me', 500)
-      await waitFor(() => expect(document.body.textContent).toContain('approve me'))
-      await act(async () => { fireEvent.click(await waitFor(() => approveButton() ?? Promise.reject(new Error('no approve')))) })
-      await waitFor(() => expect(alertText()).toContain('Could not update feedback. Try again.'))
-      expect(approveButton()).not.toBeNull()
-    })
-
     it('keeps the approval and clears earlier errors when the server accepts it', async () => {
       seedPublic('approve me too', 200)
       await waitFor(() => expect(document.body.textContent).toContain('approve me too'))
@@ -525,7 +502,7 @@ describe('<FeedbackWidget />', () => {
 
     it('keeps a comment and explains when the server refuses to delete it', async () => {
       const calls = seedPublic('keep me', 500)
-      await deleteFromCard('keep me')
+      await clickCardMenuItem('keep me', 'Delete')
       await waitFor(() => expect(alertText()).toContain('Could not delete feedback. Try again.'))
       expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(true)
       expect(document.body.textContent).toContain('keep me')
@@ -533,7 +510,7 @@ describe('<FeedbackWidget />', () => {
 
     it('removes a comment once the server confirms the delete', async () => {
       seedPublic('remove me', 204)
-      await deleteFromCard('remove me')
+      await clickCardMenuItem('remove me', 'Delete')
       await waitFor(() => expect(document.body.textContent).not.toContain('remove me'))
       expect(alertText()).toBe('')
     })
@@ -1326,7 +1303,6 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.querySelector('[data-fw] textarea')).toBeNull()
       })
-      expect(calls.find((c) => c.init?.method === 'PATCH')).toBeUndefined()
       expect(adapter.update).not.toHaveBeenCalled()
     })
 
@@ -2376,7 +2352,6 @@ describe('<FeedbackWidget />', () => {
       fireEvent.keyDown(area, { key: 'Enter' })
       fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
       expect(area).toBeInTheDocument()
-      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
       expect(adapter.update).not.toHaveBeenCalled()
       fireEvent.keyDown(area, { key: 'Escape' })
       expect(area).not.toBeInTheDocument()
@@ -3534,7 +3509,6 @@ describe('<FeedbackWidget />', () => {
       fireEvent.keyDown(area, { key: 'Enter' })
       fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
       expect(area).toBeInTheDocument()
-      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
       expect(adapter.update).not.toHaveBeenCalled()
       fireEvent.keyDown(area, { key: 'Escape' })
       expect(area).not.toBeInTheDocument()

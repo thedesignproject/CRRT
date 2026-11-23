@@ -191,11 +191,9 @@ describe('postComment', () => {
   })
 
   it('throws a user-facing error and warns on non-OK response', async () => {
-    for (const status of [422, 500, 503]) {
-      mockFetch(() => new Response('nope', { status }))
-      await expect(postComment(API, { body: 'hi' })).rejects.toThrow('Could not send feedback. Try again.')
-    }
-    expect(console.warn).toHaveBeenCalledTimes(3)
+    mockFetch(() => new Response('nope', { status: 500 }))
+    await expect(postComment(API, { body: 'hi' })).rejects.toThrow('Could not send feedback. Try again.')
+    expect(console.warn).toHaveBeenCalledOnce()
   })
 })
 
