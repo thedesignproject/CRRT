@@ -1,0 +1,62 @@
+name: Bombadil smoke
+
+# A short Bombadil run on pull requests that touch the widget, dashboard or the
+# Bombadil setup: 2 minutes per suite, each on its own runner, hard-capped at
+# 6 minutes. Not a required check yet; the nightly run explores for longer.
+on:
+  pull_request:
+    paths:
+      - src/**
+      - apps/dashboard/**
+      - packages/ui/**
+      - shared/**
+      - tests/visual/harness/**
+      - tests/visual/fixtures/**
+      - bombadil/**
+      - .github/workflows/bombadil*.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bombadil-smoke-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - widget-public
+          - widget-public-failing-api
+          - dashboard-populated
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: bombadil
+      - name: Run ${{ matrix.suite }} for 2 minutes
+        env:
+          BOMBADIL_SUITES: ${{ matrix.suite }}
+          BOMBADIL_FLAGS: --no-sandbox
+        run: bombadil/ci.sh 2m
+      - name: Upload failing trace
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bombadil-smoke-${{ matrix.suite }}
+          path: |
+            bombadil/out/failed/
+            bombadil/out/ci-*.txt
+            bombadil/out/mock-*.log
+          retention-days: 7

@@ -14,6 +14,7 @@ Nothing touches real data.
 ```bash
 cd bombadil && bun install          # once; the repo root also needs `bun install`
 ./ci.sh 2m                          # every suite, 2 minutes each (nightly uses 10m)
+BOMBADIL_SUITES=widget-public ./ci.sh 2m   # just one suite
 ```
 
 Single suites (start a server first, see `ci.sh` for the exact commands):
@@ -26,6 +27,30 @@ ORIGIN=http://127.0.0.1:4390 ./run-dashboard.sh 1 5m
 
 Inspect a trace: `./node_modules/.bin/bombadil browser inspect out/<trace>.bin`.
 Replay it: use the `--reproduce` command Bombadil prints at the end of a run.
+
+## In CI
+
+| Workflow | When | Suites | Time |
+|---|---|---|---|
+| `bombadil-smoke.yml` | pull requests touching `src/`, `apps/dashboard/`, `packages/ui/`, `shared/`, the harness or `bombadil/` | `widget-public`, `widget-public-failing-api`, `dashboard-populated` | 2 min each, 6 min hard cap |
+| `bombadil.yml` | nightly on `trunk` (03:17 UTC) and on demand | all six | 10 min each (adjustable when run by hand) |
+
+Each suite runs on its own runner (`BOMBADIL_SUITES=<suite> ./ci.sh <time>`), so
+a busy machine can't cause false failures. Failing suites upload their trace as
+an artifact. A failing nightly run opens (or comments on) a GitHub issue
+labelled `bombadil`. The smoke check is informational, not required, until it
+has proven reliable.
+
+### When the app changes
+
+New UI is explored automatically and the general rules apply to it. Three
+things still need a person:
+
+- **New behaviour needs a new rule:** Bombadil only checks what a rule says.
+- **New endpoints need a mock** in `mock-api.ts`; `ci.sh` lists anything unmocked.
+- **Renamed markup can silently switch a rule off.** Rules find things by
+  selectors and text (for example the composer's "Leave your comment…"
+  placeholder). If those change, update the rule.
 
 ## Suites (`ci.sh`)
 

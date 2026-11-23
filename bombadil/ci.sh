@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Runs every Bombadil suite against a production build of the visual-test
-# harness backed by the in-memory mock API. Used by the nightly workflow and
-# runnable locally: ./ci.sh [time-limit-per-suite]   (default 10m)
+# Runs Bombadil suites against a production build of the visual-test harness
+# backed by the in-memory mock API. Used by the nightly and PR smoke workflows
+# and runnable locally: ./ci.sh [time-limit-per-suite]   (default 10m)
+# BOMBADIL_SUITES=widget-public,dashboard-populated limits it to those suites.
 #
 # Exit code: 0 when every suite is clean, 2 when any suite found a violation,
 # 1 on other errors. Traces of failing suites are kept in out/failed/.
@@ -45,6 +46,15 @@ SUITES=(
   "dashboard-populated|ORIGIN=http://127.0.0.1:4390 ./run-dashboard.sh 1 $LIMIT"
   "dashboard-empty|ORIGIN=http://127.0.0.1:4390 ./run-dashboard.sh empty $LIMIT"
 )
+
+if [ -n "${BOMBADIL_SUITES:-}" ]; then
+  SELECTED=()
+  for suite in "${SUITES[@]}"; do
+    case ",$BOMBADIL_SUITES," in *",${suite%%|*},"*) SELECTED+=("$suite") ;; esac
+  done
+  [ "${#SELECTED[@]}" -gt 0 ] || { echo "no suites match BOMBADIL_SUITES=$BOMBADIL_SUITES"; exit 1; }
+  SUITES=("${SELECTED[@]}")
+fi
 
 RUNS=()
 for suite in "${SUITES[@]}"; do
