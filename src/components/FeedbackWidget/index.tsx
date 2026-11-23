@@ -885,7 +885,13 @@ function FeedbackWidgetInner({
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || element.isContentEditable
 
       if (e.key === 'Escape') {
-        if (showNameModal) {
+        // The "Send to…" dialogs sit above the pin popover, so they close first.
+        // A send in progress can't be dismissed (its Cancel button is disabled too).
+        if (externalWork) {
+          if (!externalWork.busy) setExternalWork(null)
+        } else if (externalProviderCommentId) {
+          setExternalProviderCommentId(null)
+        } else if (showNameModal) {
           handleNameCancel()
         } else if (selectedPin) {
           setSelectedPin(null)
@@ -943,7 +949,7 @@ function FeedbackWidgetInner({
       }
     }
     return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
-  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment])
+  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment, externalWork, externalProviderCommentId])
 
   function exitFeedbackMode() {
     if (conversation && comment) { setMode('commenting'); return }

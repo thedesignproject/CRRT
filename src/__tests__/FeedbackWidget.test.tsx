@@ -468,11 +468,15 @@ describe('<FeedbackWidget />', () => {
     const popoverButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(`[data-fw] button[aria-label="${label}"]`))
       .find((b) => !b.closest('.fw-sidebar-card'))
 
-    it('opens the pin popover upward when the pin is in the lower half of the window', async () => {
+    it('keeps the pin popover inside the window near the bottom and right edges', async () => {
       const height = window.innerHeight
+      const width = window.innerWidth
       const scrollHeight = Object.getOwnPropertyDescriptor(document.documentElement, 'scrollHeight')
+      const scrollWidth = Object.getOwnPropertyDescriptor(document.documentElement, 'scrollWidth')
       Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 1000 })
+      Object.defineProperty(document.documentElement, 'scrollWidth', { configurable: true, value: 1000 })
       Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 })
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 300 })
       try {
         seedPublic('low pin', 200)
         await openPinPopover()
@@ -481,10 +485,16 @@ describe('<FeedbackWidget />', () => {
         // the popover's bottom edge sits 20px below the pin (400 - 300 - 20 = 80).
         expect(popover.style.top).toBe('')
         expect(popover.style.bottom).toBe('80px')
+        // Pin at 20% of a 1000px page = 200px: too close to the right edge of a
+        // 300px window, so it flips left (200 - 280 - 16) and is held at the 16px margin.
+        expect(popover.style.left).toBe('16px')
       } finally {
         Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
-        if (scrollHeight) Object.defineProperty(document.documentElement, 'scrollHeight', scrollHeight)
-        else delete (document.documentElement as unknown as Record<string, unknown>).scrollHeight
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+        for (const [key, original] of [['scrollHeight', scrollHeight], ['scrollWidth', scrollWidth]] as const) {
+          if (original) Object.defineProperty(document.documentElement, key, original)
+          else delete (document.documentElement as unknown as Record<string, unknown>)[key]
+        }
       }
     })
 
@@ -2553,6 +2563,51 @@ describe('<FeedbackWidget />', () => {
       })
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       await expectNoEditInMenus('↗ Send to…')
+    })
+
+    it('Escape closes the Send to… dialogs before anything behind them, but not while sending', async () => {
+      mockFetch()
+      let finishSend: (value: { issueUrl: string }) => void = () => {}
+      const adapter = personalCommentsAdapter([seedComment()], {
+        externalWork: {
+          providers: ['github'],
+          prepare: async () => ({ destination: 'acme/app', title: 't', body: 'b' }),
+          send: () => new Promise((resolve) => { finishSend = resolve }),
+        },
+      })
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
+      const dialogText = () => Array.from(document.querySelectorAll('[data-fw] [role="dialog"]')).map((d) => d.textContent ?? '').join('|')
+      const clickButton = async (label: string) => {
+        const btn = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === label) ?? Promise.reject(new Error(`${label} not found`)))
+        await act(async () => { fireEvent.click(btn) })
+      }
+      const pressEscape = () => act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+
+      // Provider picker closes, the sidebar behind it stays open.
+      await openCardMenu()
+      await clickButton('↗ Send to…')
+      await waitFor(() => expect(dialogText()).toContain('Send feedback to…'))
+      await pressEscape()
+      expect(dialogText()).not.toContain('Send feedback to…')
+      expect(document.querySelector('[data-fw] .fw-sidebar-card')).not.toBeNull()
+
+      // Draft dialog closes too.
+      await openCardMenu()
+      await clickButton('↗ Send to…')
+      await clickButton('GitHub')
+      await waitFor(() => expect(dialogText()).toContain('Send to GitHub'))
+      await pressEscape()
+      expect(dialogText()).not.toContain('Send to GitHub')
+
+      // While the issue is being created, Escape leaves the dialog alone.
+      await openCardMenu()
+      await clickButton('↗ Send to…')
+      await clickButton('GitHub')
+      await clickButton('Create issue')
+      await waitFor(() => expect(dialogText()).toContain('Sending…'))
+      await pressEscape()
+      expect(dialogText()).toContain('Send to GitHub')
+      await act(async () => { finishSend({ issueUrl: 'https://example.test/1' }) })
     })
 
     it('clicking "Delete" in the dropdown removes the comment from the sidebar', async () => {
