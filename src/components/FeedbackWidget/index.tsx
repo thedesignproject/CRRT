@@ -1001,7 +1001,7 @@ function FeedbackWidgetInner({
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
     try { await apiPatchReviewStatus(apiBase, commentId, reviewStatus); setApiError('') }
     catch (error) {
-      setComments((prev) => prev.map((c) => c.id === commentId && c.reviewStatus === reviewStatus ? { ...c, reviewStatus: previous } : c))
+      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus: previous } : c))
       setApiError((error as Error).message)
     }
   }

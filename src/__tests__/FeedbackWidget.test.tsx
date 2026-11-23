@@ -390,20 +390,46 @@ describe('<FeedbackWidget />', () => {
   })
 
   describe('public review and delete failures', () => {
-    function seedPublic(body: string, writeStatus: number, reviewStatus = 'open') {
+    function seedPublic(body: string, writeStatus: number, reviewStatus = 'open', others: { id: string; body: string; reviewStatus: string }[] = []) {
       vi.spyOn(console, 'warn').mockImplementation(() => {})
       const pageUrl = window.location.href.split('#')[0]
       const calls: FetchCall[] = []
       vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
         calls.push({ url: String(url), init })
         if (init?.method === 'PATCH' || init?.method === 'DELETE') return new Response(writeStatus === 204 ? null : '{}', { status: writeStatus })
-        return new Response(JSON.stringify([{ id: 'comment-1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body, reviewStatus, createdAt: '2026-04-22T00:00:00Z' }]), { status: 200 })
+        return new Response(JSON.stringify([{ id: 'comment-1', body, reviewStatus }, ...others].map((c) => ({ projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', createdAt: '2026-04-22T00:00:00Z', ...c }))), { status: 200 })
       }))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       return calls
     }
     const approveButton = () => document.querySelector<HTMLButtonElement>('button[title="Approve"]')
     const alertText = () => document.querySelector('[data-fw] [role="alert"]')?.textContent ?? ''
+    async function clickCardMenuItem(body: string, item: string) {
+      const card = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card')).find((c) => c.textContent?.includes(body))
+        if (!el) throw new Error('card not found')
+        return el
+      })
+      await act(async () => { fireEvent.click(card.querySelector<HTMLButtonElement>('button[title="More"]')!) })
+      const button = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === item) ?? Promise.reject(new Error(`${item} not found`)))
+      await act(async () => { fireEvent.click(button) })
+    }
+    const patches = (calls: FetchCall[]) => calls.filter((c) => c.init?.method === 'PATCH').map((c) => JSON.parse(String(c.init?.body)))
+
+    it('rolls back only the comment whose approval failed', async () => {
+      seedPublic('approve fails', 500, 'open', [{ id: 'comment-2', body: 'stays approved', reviewStatus: 'accepted' }])
+      await waitFor(() => expect(document.body.textContent).toContain('stays approved'))
+      await act(async () => { fireEvent.click(await waitFor(() => approveButton() ?? Promise.reject(new Error('no approve')))) })
+      await waitFor(() => expect(alertText()).toContain('Could not update feedback. Try again.'))
+      expect(document.querySelectorAll('button[title="Approve"]')).toHaveLength(1)
+    })
+
+    it('reopens an approved comment from the sidebar menu through the server', async () => {
+      const calls = seedPublic('sidebar reopen', 200, 'accepted')
+      await clickCardMenuItem('sidebar reopen', 'Reopen')
+      await waitFor(() => expect(patches(calls)).toEqual([{ id: 'comment-1', reviewStatus: 'open' }]))
+    })
+
     async function deleteFromCard(body: string) {
       const card = await waitFor(() => {
         const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card')).find((c) => c.textContent?.includes(body))
@@ -447,6 +473,15 @@ describe('<FeedbackWidget />', () => {
       await openPinPopover()
       await act(async () => { fireEvent.click(await waitFor(() => popoverButton('Approve') ?? Promise.reject(new Error('no popover approve')))) })
       await waitFor(() => expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')?.init?.body))).toEqual({ id: 'comment-1', reviewStatus: 'accepted' }))
+    })
+
+    it('approves an open comment from the pin popover menu through the server', async () => {
+      const calls = seedPublic('pin menu approve', 200)
+      await openPinPopover()
+      await act(async () => { fireEvent.click(await waitFor(() => popoverButton('More options') ?? Promise.reject(new Error('no more options')))) })
+      const approve = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === 'Approve' && !b.closest('.fw-sidebar-card')) ?? Promise.reject(new Error('no menu approve')))
+      await act(async () => { fireEvent.click(approve) })
+      await waitFor(() => expect(patches(calls)).toEqual([{ id: 'comment-1', reviewStatus: 'accepted' }]))
     })
 
     it('reopens an approved comment from the pin popover menu through the server', async () => {
