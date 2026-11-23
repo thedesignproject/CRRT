@@ -65,6 +65,12 @@ Widget (`widget.ts`):
 - **approveReachesServer:** after Approve, the server receives the approval or
   an error is shown (public mode only).
 - **noDuplicateAlerts:** the same error message is never shown twice at once.
+- **sendReachesServer:** after Send, the server receives the comment, or an
+  error or the name prompt is shown ("Saved" on screen is not enough).
+- **pinsMatchServerAfterReload:** after a reload settles, the pins on screen
+  match the comments the server holds (public mode only).
+- **escapeAlwaysCloses:** while something is open, Escape closes the topmost
+  layer (dialog › pin popover › composer › pin placing › sidebar › launcher menu) within 1s.
 
 Dashboard (`dashboard.ts`):
 

@@ -132,6 +132,51 @@ export const modalNeverDropsFocus = always(
     .implies(next(() => widget.current.clickMissedControl)),
 );
 
+// Escape never does nothing while something is open: the topmost open layer
+// (same priority as the widget's Escape handler) must close within 1 second.
+const layers = extract((state) => {
+  const doc = state.document;
+  const win = state.window;
+  // Closed layers stay in the DOM (transparent or slid off screen), so "open"
+  // means: present, not transparent, and at least partly inside the window.
+  const shown = (el: Element | null | undefined) => {
+    if (!el) return false;
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      const cs = win.getComputedStyle(n);
+      if (cs.opacity === "0" || cs.visibility === "hidden" || cs.display === "none") return false;
+    }
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 && r.right > 0 && r.bottom > 0 && r.left < win.innerWidth && r.top < win.innerHeight;
+  };
+  const dialog = Array.from(doc.querySelectorAll('[data-fw-crrt] [role="dialog"][aria-modal="true"]')).some(shown);
+  const pinPopover = shown(doc.querySelector("[data-fw-pin-backdrop]"));
+  const composerOpen = shown(doc.querySelector('textarea[placeholder="Leave your comment…"]'));
+  // Pin-placing mode has no permanent marker: count it only while its hover
+  // frame or hint bar is showing (may miss it, never invents it).
+  const selecting = shown(doc.querySelector("[data-fw-selector-frame]"))
+    || (doc.body?.innerText ?? "").includes("Click an element or select text");
+  const sidebar = Array.from(doc.querySelectorAll('[data-fw-crrt] button[aria-label="Close"]'))
+    .some((b) => !b.closest('[role="dialog"]') && shown(b));
+  const launcherMenu = shown(doc.querySelector("[data-fw-launcher-menu]"));
+  const open = [dialog, pinPopover, composerOpen, selecting, sidebar, launcherMenu];
+  const top = open.findIndex(Boolean);
+  const a = state.lastAction as unknown;
+  const pressedEscape = !!a && typeof a === "object" && "PressKey" in a && (a as { PressKey: { code: number } }).PressKey.code === 27;
+  return {
+    // 6 = dialog … 1 = launcher menu, 0 = nothing open
+    top: top === -1 ? 0 : open.length - top,
+    names: ["dialog", "pin popover", "composer", "pin placing", "sidebar", "launcher menu"].filter((_, i) => open[i]),
+    pressedEscape,
+  };
+});
+
+export const escapeAlwaysCloses = always(() => {
+  const before = layers.current;
+  return now(() => before.top > 0)
+    .and(next(() => layers.current.pressedEscape))
+    .implies(next(eventually(() => layers.current.top < before.top).within(1, "seconds")));
+});
+
 // Pin numbers must be unique (no two "3" pins after add/delete churn).
 export const pinNumbersUnique = always(() => {
   const labels = widget.current.pinLabels.filter((l) => l !== "");
@@ -178,7 +223,7 @@ const server = extract((state) => {
   const doc = state.document;
   const publicMode = state.window.location.search.includes("public=1");
   const raw = doc.getElementById("__mock_state")?.textContent ?? "";
-  let parsed: { count: number; accepted: number; approvals: number; deletes: number } | null = null;
+  let parsed: { count: number; accepted: number; posts: number; approvals: number; deletes: number } | null = null;
   try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
   const a = state.lastAction as unknown;
   let clicked = "";
@@ -191,6 +236,9 @@ const server = extract((state) => {
     .map((el) => (el.textContent ?? "").trim());
   return {
     tracked: publicMode && parsed !== null,
+    count: parsed?.count ?? 0,
+    posts: parsed?.posts ?? 0,
+    reloaded: state.lastAction === "Reload",
     approvals: parsed?.approvals ?? 0,
     deletes: parsed?.deletes ?? 0,
     clicked,
@@ -218,6 +266,29 @@ export const approveReachesServer = always(() => {
       next(eventually(() => server.current.approvals > before.approvals || server.current.alerts > 0).within(3, "seconds")),
     );
 });
+
+// Clicking Send with text either reaches the server (its post counter goes up),
+// shows an error, or asks for a name first. "Saved" on screen is not enough.
+export const sendReachesServer = always(() => {
+  const before = server.current;
+  const draft = composer.current.text;
+  return now(() => before.tracked && composer.current.open && draft.trim() !== "")
+    .and(next(() => composer.current.clickedSend))
+    .implies(
+      next(
+        eventually(() => server.current.posts > before.posts || server.current.alerts > 0 || composer.current.nameDialog)
+          .within(3, "seconds"),
+      ),
+    );
+});
+
+// After a reload settles, the pins on screen match the comments the server
+// holds (reload resets the widget to "all comments, pins visible").
+export const pinsMatchServerAfterReload = always(() =>
+  now(() => server.current.tracked)
+    .and(next(() => server.current.reloaded))
+    .implies(next(eventually(() => widget.current.pinLabels.length === server.current.count).within(4, "seconds"))),
+);
 
 // The same error message is never shown twice at once. (Different messages in
 // different places, e.g. a dialog's own error over a page toast, are fine.)

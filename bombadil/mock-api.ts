@@ -17,7 +17,7 @@ export function mockApi(): Plugin {
   let rows: Row[] = seed.map((c) => ({ ...c, pageUrl: '' }))
   let nextId = 1
   // Only ever go up, so a stale read can delay a rule's verdict but never hide a write.
-  const stats = { approvals: 0, deletes: 0 }
+  const stats = { posts: 0, approvals: 0, deletes: 0 }
   const log = (line: string) => { if (LOG) appendFileSync(LOG, `${new Date().toISOString()} ${line}\n`) }
 
   const send = (res: ServerResponse, status: number, body?: unknown) => {
@@ -65,6 +65,7 @@ export function mockApi(): Plugin {
             const body = await readJson(req)
             const row: Row = { ...body, id: `mock-${nextId++}`, body: String(body.body ?? ''), reviewStatus: 'open', createdAt: fixedTime, editable: true }
             rows = [row, ...rows]
+            stats.posts++
             log(`POST comment ${row.id} "${row.body.slice(0, 40)}"`)
             return send(res, 201, row)
           }
@@ -123,7 +124,7 @@ export function mockApi(): Plugin {
         if (url.pathname === '/__mock/stats') {
           return send(res, 200, { count: rows.length, accepted: rows.filter((r) => r.reviewStatus === 'accepted').length, ...stats })
         }
-        if (url.pathname === '/__mock/reset') { rows = seed.map((c) => ({ ...c, pageUrl: '' })); nextId = 1; stats.approvals = 0; stats.deletes = 0; return send(res, 204) }
+        if (url.pathname === '/__mock/reset') { rows = seed.map((c) => ({ ...c, pageUrl: '' })); nextId = 1; stats.posts = 0; stats.approvals = 0; stats.deletes = 0; return send(res, 204) }
 
         log(`${method} ${url.pathname} -> 404 (not mocked)`)
         return send(res, 404, { error: 'Not mocked' })
