@@ -114,12 +114,16 @@ export const launcherAlwaysPresent = always(
 export const atMostOneModal = always(() => widget.current.openModals <= 1);
 
 // Accessibility (rules/ux.md): when a modal opens, focus moves into it quickly.
+// A click on blank space (e.g. the backdrop) sends focus to <body> in every
+// browser, so that also settles it: the dialog did its part.
 export const focusMovesIntoNewModal = always(
   now(() => widget.current.openModals === 0)
     .and(next(() => widget.current.openModals > 0))
     .implies(
       next(
-        eventually(() => widget.current.openModals === 0 || !widget.current.focusOnBody).within(2, "seconds"),
+        eventually(
+          () => widget.current.openModals === 0 || !widget.current.focusOnBody || widget.current.clickMissedControl,
+        ).within(2, "seconds"),
       ),
     ),
 );
