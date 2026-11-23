@@ -17,7 +17,7 @@ export function mockApi(): Plugin {
   let rows: Row[] = seed.map((c) => ({ ...c, pageUrl: '' }))
   let nextId = 1
   // Only ever go up, so a stale read can delay a rule's verdict but never hide a write.
-  const stats = { posts: 0, approvals: 0, deletes: 0 }
+  const stats = { posts: 0, approvals: 0, deletes: 0, postAttempts: 0, patchAttempts: 0, deleteAttempts: 0 }
   const log = (line: string) => { if (LOG) appendFileSync(LOG, `${new Date().toISOString()} ${line}\n`) }
 
   const send = (res: ServerResponse, status: number, body?: unknown) => {
@@ -50,6 +50,13 @@ export function mockApi(): Plugin {
         const url = new URL(req.url ?? '/', 'http://mock')
         const method = req.method ?? 'GET'
         const isWrite = method !== 'GET'
+        // Count every comment write that reaches the server, rejected or not, so rules
+        // can tell "the widget sent it" apart from "the click never landed".
+        if (url.pathname === '/v1/public/comments') {
+          if (method === 'POST') stats.postAttempts++
+          else if (method === 'PATCH') stats.patchAttempts++
+          else if (method === 'DELETE') stats.deleteAttempts++
+        }
         if (isWrite && !url.pathname.startsWith('/__mock/') && Math.random() < FAIL_RATE) {
           log(`${method} ${url.pathname} -> 500 (injected)`)
           return send(res, 500, { error: 'Injected failure' })
@@ -124,7 +131,7 @@ export function mockApi(): Plugin {
         if (url.pathname === '/__mock/stats') {
           return send(res, 200, { count: rows.length, accepted: rows.filter((r) => r.reviewStatus === 'accepted').length, ...stats })
         }
-        if (url.pathname === '/__mock/reset') { rows = seed.map((c) => ({ ...c, pageUrl: '' })); nextId = 1; stats.posts = 0; stats.approvals = 0; stats.deletes = 0; return send(res, 204) }
+        if (url.pathname === '/__mock/reset') { rows = seed.map((c) => ({ ...c, pageUrl: '' })); nextId = 1; Object.keys(stats).forEach((k) => { stats[k as keyof typeof stats] = 0 }); return send(res, 204) }
 
         log(`${method} ${url.pathname} -> 404 (not mocked)`)
         return send(res, 404, { error: 'Not mocked' })

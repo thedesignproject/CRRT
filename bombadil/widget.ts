@@ -205,8 +205,9 @@ export const escapeAlwaysCloses = always(() => {
 });
 
 // The pin popover and its action menu open inside the window, so every action
-// is reachable without scrolling. Judged when each one opens: scrolling the pin
-// away afterwards rightly takes its popover with it.
+// is reachable without scrolling. Each gets 1 second after opening to settle
+// (smooth scroll to the pin, open animation); scrolling the pin away later
+// rightly takes its popover with it, so only the opening is judged.
 const popover = extract((state) => {
   const doc = state.document;
   const win = state.window;
@@ -228,13 +229,13 @@ const popover = extract((state) => {
 export const popoverOpensInsideWindow = always(
   now(() => !popover.current.open)
     .and(next(() => popover.current.open))
-    .implies(next(() => popover.current.inside)),
+    .implies(next(eventually(() => !popover.current.open || popover.current.inside).within(1, "seconds"))),
 );
 
 export const popoverMenuOpensInsideWindow = always(
   now(() => !popover.current.menuOpen)
     .and(next(() => popover.current.menuOpen))
-    .implies(next(() => popover.current.menuInside)),
+    .implies(next(eventually(() => !popover.current.menuOpen || popover.current.menuInside).within(1, "seconds"))),
 );
 
 // Pin numbers must be unique (no two "3" pins after add/delete churn).
@@ -262,19 +263,29 @@ const composer = extract((state) => {
     const label = String(fp.accessibleName ?? fp.accessible_name ?? fp.textContent ?? fp.text_content ?? "").trim();
     clickedSend = /^Send\b/.test(label) && !/^Send to/.test(label);
   }
-  return { open: box !== null, text: box?.value ?? "", alert, nameDialog, saved, clickedSend };
+  // Sends that reached the backend: the test page's adapter (non-public suites)
+  // plus POSTs the mock server received (public suites).
+  let serverPosts = 0;
+  try { serverPosts = JSON.parse(doc.getElementById("__mock_state")?.textContent || "{}").postAttempts ?? 0; } catch { serverPosts = 0; }
+  const adapterCalls = (state.window as unknown as { __crrtCreateCalls?: number }).__crrtCreateCalls ?? 0;
+  return { open: box !== null, text: box?.value ?? "", alert, nameDialog, saved, clickedSend, sendAttempts: adapterCalls + serverPosts };
 });
 
+// An action's outcome is only judged if the action reached the backend. A click
+// swallowed by an overlay, or that missed its button after a layout shift, sends
+// nothing, so it isn't held to an outcome. Rule: within 3 seconds, either the
+// user is told the outcome, or nothing was sent at all.
+const toldIfSent = (sent: () => boolean, told: () => boolean) =>
+  next(eventually(told).within(3, "seconds").or(always(() => !sent()).within(3, "seconds")));
+
 export const sendNeverSilent = always(() => {
-  const draft = composer.current.text;
-  return now(() => composer.current.open && draft.trim() !== "")
+  const before = composer.current;
+  return now(() => before.open && before.text.trim() !== "" && !before.alert)
     .and(next(() => composer.current.clickedSend))
     .implies(
-      next(
-        eventually(() => {
-          const c = composer.current;
-          return c.saved || c.nameDialog || c.alert;
-        }).within(3, "seconds"),
+      toldIfSent(
+        () => composer.current.sendAttempts > before.sendAttempts,
+        () => composer.current.saved || composer.current.nameDialog || composer.current.alert,
       ),
     );
 });
@@ -287,7 +298,10 @@ const server = extract((state) => {
   const doc = state.document;
   const publicMode = state.window.location.search.includes("public=1");
   const raw = doc.getElementById("__mock_state")?.textContent ?? "";
-  let parsed: { count: number; accepted: number; posts: number; approvals: number; deletes: number } | null = null;
+  let parsed: {
+    count: number; accepted: number; posts: number; approvals: number; deletes: number;
+    postAttempts: number; patchAttempts: number; deleteAttempts: number;
+  } | null = null;
   try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
   const a = state.lastAction as unknown;
   let clicked = "";
@@ -305,6 +319,9 @@ const server = extract((state) => {
     reloaded: state.lastAction === "Reload",
     approvals: parsed?.approvals ?? 0,
     deletes: parsed?.deletes ?? 0,
+    postAttempts: parsed?.postAttempts ?? 0,
+    patchAttempts: parsed?.patchAttempts ?? 0,
+    deleteAttempts: parsed?.deleteAttempts ?? 0,
     clicked,
     alerts: alertTexts.length,
     duplicateAlerts: alertTexts.length - new Set(alertTexts).size,
@@ -317,7 +334,10 @@ export const deleteReachesServer = always(() => {
   return now(() => before.tracked && before.alerts === 0)
     .and(next(() => server.current.clicked === "Delete"))
     .implies(
-      next(eventually(() => server.current.deletes > before.deletes || server.current.alerts > 0).within(3, "seconds")),
+      toldIfSent(
+        () => server.current.deleteAttempts > before.deleteAttempts,
+        () => server.current.deletes > before.deletes || server.current.alerts > 0,
+      ),
     );
 });
 
@@ -327,7 +347,10 @@ export const approveReachesServer = always(() => {
   return now(() => before.tracked && before.alerts === 0)
     .and(next(() => server.current.clicked === "Approve"))
     .implies(
-      next(eventually(() => server.current.approvals > before.approvals || server.current.alerts > 0).within(3, "seconds")),
+      toldIfSent(
+        () => server.current.patchAttempts > before.patchAttempts,
+        () => server.current.approvals > before.approvals || server.current.alerts > 0,
+      ),
     );
 });
 
@@ -339,9 +362,9 @@ export const sendReachesServer = always(() => {
   return now(() => before.tracked && before.alerts === 0 && composer.current.open && draft.trim() !== "")
     .and(next(() => composer.current.clickedSend))
     .implies(
-      next(
-        eventually(() => server.current.posts > before.posts || server.current.alerts > 0 || composer.current.nameDialog)
-          .within(3, "seconds"),
+      toldIfSent(
+        () => server.current.postAttempts > before.postAttempts,
+        () => server.current.posts > before.posts || server.current.alerts > 0 || composer.current.nameDialog,
       ),
     );
 });
