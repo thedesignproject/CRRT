@@ -1,9 +1,22 @@
 name: Bombadil
 
-# Nightly property-based UI exploration of the widget and dashboard against
-# the visual-test harness and an in-memory mock API. See bombadil/README.md.
+# Property-based UI exploration of the widget and dashboard against the
+# visual-test harness and an in-memory mock API. See bombadil/README.md.
+#   - Pull requests touching the UI: 3 suites, 2 minutes each, 6-minute cap.
+#     Informational (not a required check) until it proves reliable.
+#   - Nightly on trunk and on demand: all 6 suites, 10 minutes each.
 # Each suite gets its own runner so a busy machine can't cause false failures.
 on:
+  pull_request:
+    paths:
+      - src/**
+      - apps/dashboard/**
+      - packages/ui/**
+      - shared/**
+      - tests/visual/harness/**
+      - tests/visual/fixtures/**
+      - bombadil/**
+      - .github/workflows/bombadil.yml
   schedule:
     - cron: '17 3 * * *' # daily, 03:17 UTC, on the default branch
   workflow_dispatch:
@@ -16,24 +29,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: bombadil-nightly
-  cancel-in-progress: false
+  group: bombadil-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   explore:
     name: ${{ matrix.suite }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 6 || 45 }}
     strategy:
       fail-fast: false
       matrix:
-        suite:
-          - widget-idle
-          - widget-send-error
-          - widget-public
-          - widget-public-failing-api
-          - dashboard-populated
-          - dashboard-empty
+        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["widget-public","widget-public-failing-api","dashboard-populated"]' || '["widget-idle","widget-send-error","widget-public","widget-public-failing-api","dashboard-populated","dashboard-empty"]') }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
@@ -47,12 +54,12 @@ jobs:
         working-directory: bombadil
       - name: Run ${{ matrix.suite }}
         env:
-          TIME_LIMIT: ${{ inputs.time-limit || '10m' }}
+          TIME_LIMIT: ${{ github.event_name == 'pull_request' && '2m' || inputs.time-limit || '10m' }}
           BOMBADIL_SUITES: ${{ matrix.suite }}
           # Ubuntu 24.04 runners block Chrome's user-namespace sandbox.
           BOMBADIL_FLAGS: --no-sandbox
         run: bombadil/ci.sh "$TIME_LIMIT"
-      - name: Upload failing trace
+      - name: Upload trace
         if: failure() || cancelled()
         uses: actions/upload-artifact@v7
         with:
@@ -60,7 +67,7 @@ jobs:
           path: |
             bombadil/out/failed/
             bombadil/out/*.bin
-            bombadil/out/ci-*.txt
+            bombadil/out/*.txt
             bombadil/out/mock-*.log
           retention-days: 7
 

@@ -1,35 +1,54 @@
 #!/usr/bin/env bash
 # Runs Bombadil suites against a production build of the visual-test harness
-# backed by the in-memory mock API. Used by the nightly and PR smoke workflows
-# and runnable locally: ./ci.sh [time-limit-per-suite]   (default 10m)
-# BOMBADIL_SUITES=widget-public,dashboard-populated limits it to those suites.
+# backed by the in-memory mock API (see README.md).
 #
-# Exit code: 0 when every suite is clean, 2 when any suite found a violation,
-# 1 on other errors. Traces of failing suites are kept in out/failed/.
+#   ./ci.sh [time-limit]                          every suite, 10m each by default
+#   BOMBADIL_SUITES=widget-public ./ci.sh 2m      selected suites (comma-separated)
+#
+# Exit code: 0 when every suite is clean, 2 when any rule was violated, 1 on
+# other errors. Traces are written to out/<suite>.bin; failing ones are moved
+# to out/failed/.
 set -uo pipefail
 cd "$(dirname "$0")"
 ROOT="$(cd .. && pwd)"
+BOMBADIL=./node_modules/.bin/bombadil
 LIMIT="${1:-10m}"
 [[ "$LIMIT" =~ ^[0-9]+[smhd]$ ]] || { echo "invalid time limit '$LIMIT' (expected e.g. 30s, 10m, 2h)"; exit 1; }
-mkdir -p out out/failed
-rm -f out/ci-*.txt out/ci-*.code out/failed/*.bin
+
+ALL="widget-idle,widget-send-error,widget-public,widget-public-failing-api,dashboard-populated,dashboard-empty"
+IFS=',' read -r -a SUITES <<< "${BOMBADIL_SUITES:-$ALL}"
+
+# Sets URL, SPEC and EXTRA (bombadil flags) for a suite; fails for unknown names.
+suite() {
+  local widget="--width 1280 --height 800"
+  local dashboard="--width 1440 --height 900 --allow-url http://127.0.0.1/dashboard*"
+  case "$1" in
+    widget-idle)               URL="http://127.0.0.1:4390/widget?state=idle";             SPEC=widget.ts;    EXTRA="$widget" ;;
+    widget-send-error)         URL="http://127.0.0.1:4390/widget?state=send-error";       SPEC=widget.ts;    EXTRA="$widget" ;;
+    widget-public)             URL="http://127.0.0.1:4390/widget?state=idle&public=1";    SPEC=widget.ts;    EXTRA="$widget" ;;
+    widget-public-failing-api) URL="http://127.0.0.1:4391/widget?state=idle&public=1";    SPEC=widget.ts;    EXTRA="$widget" ;;
+    dashboard-populated)       URL="http://127.0.0.1:4390/dashboard/?mock=1";             SPEC=dashboard.ts; EXTRA="$dashboard" ;;
+    dashboard-empty)           URL="http://127.0.0.1:4390/dashboard/?mock=empty";         SPEC=dashboard.ts; EXTRA="$dashboard" ;;
+    *) return 1 ;;
+  esac
+}
+for name in "${SUITES[@]}"; do suite "$name" || { echo "unknown suite '$name' (known: $ALL)"; exit 1; }; done
+
+mkdir -p out/failed
+rm -f out/*.bin out/*.txt out/failed/*.bin
 
 echo "Building the harness with the mock API…"
 (cd "$ROOT" && bunx vite build --config bombadil/harness.vite.config.ts) >/dev/null || { echo "build failed"; exit 1; }
 
-PIDS=()
 set +m # no job-control notices when the servers are stopped
+SERVERS=()
 serve() { # port fail-rate
+  : >"out/mock-$1.log"
   (cd "$ROOT" && PORT="$1" MOCK_FAIL_RATE="$2" MOCK_LOG="$ROOT/bombadil/out/mock-$1.log" \
     bunx vite preview --config bombadil/harness.vite.config.ts >"$ROOT/bombadil/out/server-$1.log" 2>&1) &
-  PIDS+=($!)
+  SERVERS+=($!)
 }
-cleanup() {
-  { for pid in "${PIDS[@]}"; do pkill -P "$pid"; kill "$pid"; done; wait "${PIDS[@]}"; } 2>/dev/null
-}
-trap cleanup EXIT
-
-: >out/mock-4390.log; : >out/mock-4391.log
+trap '{ for pid in "${SERVERS[@]}"; do pkill -P "$pid"; kill "$pid"; done; wait "${SERVERS[@]}"; } 2>/dev/null' EXIT
 serve 4390 0     # healthy API
 serve 4391 0.3   # 30% of writes fail on purpose
 for _ in $(seq 1 60); do
@@ -37,50 +56,31 @@ for _ in $(seq 1 60); do
   sleep 1
 done
 
-# name | command (each suite gets its own browser; public-mode suites get their
-# own server so their comment state doesn't interfere)
-SUITES=(
-  "widget-idle|ORIGIN=http://127.0.0.1:4390 TAG=ci-idle ./run-widget.sh idle $LIMIT"
-  "widget-send-error|ORIGIN=http://127.0.0.1:4390 TAG=ci-send-error ./run-widget.sh send-error $LIMIT"
-  "widget-public|ORIGIN=http://127.0.0.1:4390 EXTRA='&public=1' TAG=ci-public ./run-widget.sh idle $LIMIT"
-  "widget-public-failing-api|ORIGIN=http://127.0.0.1:4391 EXTRA='&public=1' TAG=ci-public-failing ./run-widget.sh idle $LIMIT"
-  "dashboard-populated|ORIGIN=http://127.0.0.1:4390 ./run-dashboard.sh 1 $LIMIT"
-  "dashboard-empty|ORIGIN=http://127.0.0.1:4390 ./run-dashboard.sh empty $LIMIT"
-)
-
-if [ -n "${BOMBADIL_SUITES:-}" ]; then
-  SELECTED=()
-  for suite in "${SUITES[@]}"; do
-    case ",$BOMBADIL_SUITES," in *",${suite%%|*},"*) SELECTED+=("$suite") ;; esac
-  done
-  [ "${#SELECTED[@]}" -gt 0 ] || { echo "no suites match BOMBADIL_SUITES=$BOMBADIL_SUITES"; exit 1; }
-  SUITES=("${SELECTED[@]}")
-fi
-
+# One browser per suite, all in parallel.
 RUNS=()
-for suite in "${SUITES[@]}"; do
-  name="${suite%%|*}"; cmd="${suite#*|}"
-  (eval "$cmd" >"out/ci-$name.txt" 2>&1; echo $? >"out/ci-$name.code") &
+for name in "${SUITES[@]}"; do
+  suite "$name"
+  # EXTRA and BOMBADIL_FLAGS are intentionally split into separate flags.
+  # shellcheck disable=SC2086
+  "$BOMBADIL" browser test "$URL" "$SPEC" --headless ${BOMBADIL_FLAGS:-} $EXTRA \
+    --time-limit "$LIMIT" --output-path "out/$name.bin" >"out/$name.txt" 2>&1 &
   RUNS+=($!)
 done
-wait "${RUNS[@]}"
 
 worst=0
 echo
 printf '%-28s %s\n' SUITE RESULT
-for suite in "${SUITES[@]}"; do
-  name="${suite%%|*}"; code="$(cat "out/ci-$name.code" 2>/dev/null || echo 1)"
-  trace="$(grep -oE 'out/(widget|dashboard)-[A-Za-z0-9-]+-[0-9]{8}-[0-9]{6}\.bin' "out/ci-$name.txt" | tail -1)"
+for i in "${!SUITES[@]}"; do
+  name="${SUITES[$i]}"
+  wait "${RUNS[$i]}"; code=$?
   case "$code" in
-    0) result="clean" ;;
-    2) result="VIOLATIONS"; [ -n "$trace" ] && mv "$trace" out/failed/ ;;
-    *) result="ERROR (exit $code)" ;;
+    0) printf '%-28s %s\n' "$name" clean ;;
+    2) printf '%-28s %s\n' "$name" VIOLATIONS
+       mv "out/$name.bin" out/failed/
+       "$BOMBADIL" trace "out/failed/$name.bin" --json 2>/dev/null \
+         | jq -r '(.metadata.violations // [])[] | .name' | sort | uniq -c | sed 's/^/    /' ;;
+    *) printf '%-28s %s\n' "$name" "ERROR (exit $code, see out/$name.txt)" ;;
   esac
-  printf '%-28s %s\n' "$name" "$result"
-  if [ "$code" = 2 ]; then
-    ./node_modules/.bin/bombadil trace "out/failed/$(basename "$trace")" --json 2>/dev/null \
-      | jq -r '(.metadata.violations // [])[] | .name' | sort | uniq -c | sed 's/^/    /'
-  fi
   if [ "$code" = 2 ] || { [ "$code" != 0 ] && [ "$worst" = 0 ]; }; then worst=$code; fi
 done
 grep -h 'not mocked' out/mock-4390.log out/mock-4391.log 2>/dev/null | awk '{print $2, $3}' | sort | uniq -c | sed 's/^/  unmocked: /' || true

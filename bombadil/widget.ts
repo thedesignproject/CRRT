@@ -67,14 +67,14 @@ const widget = extract((state) => {
     launchers: doc.querySelectorAll("[data-fw-launcher-root]").length,
     openModals: modals.length,
     focusOnBody: !active || active === doc.body || active === doc.documentElement,
-    // Did the last click land on blank space (not a control)? Clicking blank
-    // space moves focus to <body> in every browser; that's mouse-only and fine.
+    // Did the last click land on blank space or a disabled control? Either moves
+    // focus to <body> in every browser; that's mouse-only and fine.
     clickMissedControl: (() => {
       const a = state.lastAction as unknown;
       if (!a || typeof a !== "object" || !("Click" in a)) return false;
       const { x, y } = (a as { Click: { point: { x: number; y: number } } }).Click.point;
       const hit = doc.elementFromPoint(x, y);
-      return !hit?.closest('button, a[href], input, textarea, select, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]');
+      return !hit?.closest('button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"]), [contenteditable="true"]');
     })(),
     pinLabels: Array.from(doc.querySelectorAll("[data-fw-pin]")).map(
       (el) => (el.textContent ?? "").trim(),

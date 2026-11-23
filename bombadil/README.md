@@ -1,143 +1,43 @@
 # Bombadil UI exploration
 
 [Bombadil](https://github.com/antithesishq/bombadil) drives a real Chrome like a
-fast, random, impatient user and checks rules ("properties") after every step.
-When a rule breaks, it saves a trace with a screenshot of every step that you
-can replay and inspect.
-
-Everything here runs against the **visual-test harness** (`tests/visual/harness`)
-served from a production build, with an **in-memory mock API** (`mock-api.ts`).
-Nothing touches real data.
+fast, random user and checks rules after every step. It runs against a
+production build of the visual-test harness with an in-memory mock API
+(`mock-api.ts`, `MOCK_FAIL_RATE` rejects a share of writes), so nothing touches
+real data. The rules live in `widget.ts` and `dashboard.ts`, each with a comment
+saying what it checks and why.
 
 ## Run it
 
 ```bash
-cd bombadil && bun install          # once; the repo root also needs `bun install`
-./ci.sh 2m                          # every suite, 2 minutes each (nightly uses 10m)
-BOMBADIL_SUITES=widget-public ./ci.sh 2m   # just one suite
+cd bombadil && bun install                     # once; the repo root needs `bun install` too
+./ci.sh 2m                                     # all six suites, 2 minutes each
+BOMBADIL_SUITES=widget-public ./ci.sh 5m       # selected suites
+./node_modules/.bin/bombadil browser inspect out/failed/<suite>.bin   # replay a failure
 ```
 
-Single suites (start a server first, see `ci.sh` for the exact commands):
+The suites are listed at the top of `ci.sh`. CI (`.github/workflows/bombadil.yml`)
+runs 3 of them for 2 minutes on UI pull requests and all 6 for 10 minutes
+nightly, one runner each. A failing nightly run opens or updates an issue
+labelled `bombadil`, and failing traces are uploaded as artifacts.
 
-```bash
-PORT=4390 bunx vite preview --config bombadil/harness.vite.config.ts   # from repo root, after a build
-ORIGIN=http://127.0.0.1:4390 EXTRA='&public=1' ./run-widget.sh idle 5m
-ORIGIN=http://127.0.0.1:4390 ./run-dashboard.sh 1 5m
-```
+## When the app changes
 
-Inspect a trace: `./node_modules/.bin/bombadil browser inspect out/<trace>.bin`.
-Replay it: use the `--reproduce` command Bombadil prints at the end of a run.
+New UI is explored automatically and the general rules (no crashes, no stuck
+screens, dialogs keep focus) apply to it. Three things need a person:
 
-## In CI
-
-| Workflow | When | Suites | Time |
-|---|---|---|---|
-| `bombadil-smoke.yml` | pull requests touching `src/`, `apps/dashboard/`, `packages/ui/`, `shared/`, the harness or `bombadil/` | `widget-public`, `widget-public-failing-api`, `dashboard-populated` | 2 min each, 6 min hard cap |
-| `bombadil.yml` | nightly on `trunk` (03:17 UTC) and on demand | all six | 10 min each (adjustable when run by hand) |
-
-Each suite runs on its own runner (`BOMBADIL_SUITES=<suite> ./ci.sh <time>`), so
-a busy machine can't cause false failures. Failing suites upload their trace as
-an artifact. A failing nightly run opens (or comments on) a GitHub issue
-labelled `bombadil`. The smoke check is informational, not required, until it
-has proven reliable.
-
-### When the app changes
-
-New UI is explored automatically and the general rules apply to it. Three
-things still need a person:
-
-- **New behaviour needs a new rule:** Bombadil only checks what a rule says.
+- **New behaviour needs a rule**: Bombadil only checks what a rule says.
 - **New endpoints need a mock** in `mock-api.ts`; `ci.sh` lists anything unmocked.
-- **Renamed markup can silently switch a rule off.** Rules find things by
-  selectors and text (for example the composer's "Leave your comment…"
-  placeholder). If those change, update the rule.
+- **Renamed markup can switch a rule off silently**: rules find things by
+  selectors and text (e.g. the composer's "Leave your comment…" placeholder).
 
-## Suites (`ci.sh`)
+## Other tools
 
-| Suite | Page | API |
-|---|---|---|
-| `widget-idle` | `/widget` with an in-memory comments adapter | none |
-| `widget-send-error` | same, adapter rejects sends | none |
-| `widget-public` | `/widget?public=1` (no adapter, talks to `/api`) | healthy mock |
-| `widget-public-failing-api` | same | mock fails 30% of writes |
-| `dashboard-populated` | `/dashboard/?mock=1` | dashboard mocks + mock API |
-| `dashboard-empty` | `/dashboard/?mock=empty` | dashboard mocks + mock API |
-
-`MOCK_FAIL_RATE` (0..1) controls injected write failures. The harness build
-publishes the mock server's counters (comments, approvals and deletes received)
-into a hidden `#__mock_state` element so rules can check that actions actually
-reached the server. The counters only go up, so a stale read can delay a verdict
-but never hide a write.
-
-## Rules
-
-Widget (`widget.ts`):
-
-- **Built-in:** no uncaught exceptions, no unhandled promise rejections, no
-  `console.error`, no 4xx/5xx page loads.
-- **hostPageUntouched:** the widget never changes the host page's text.
-- **singleWidgetMount / launcherAlwaysPresent:** exactly one widget, and its
-  launcher never disappears.
-- **atMostOneModal:** never two modal dialogs at once.
-- **focusMovesIntoNewModal:** when a modal opens, focus moves into it within 2s.
-- **modalNeverDropsFocus:** while a modal is open, focus never falls to `<body>`
-  unless the user clicked blank space (mouse-only browser behaviour).
-- **pinNumbersUnique:** no two pins show the same number.
-- **sendNeverSilent:** within 3s of Send, the widget shows "Saved", an error,
-  or the name prompt. (Draft retention on failure is covered by unit tests and
-  `send-failure-repro.mjs`; Bombadil acts faster than the composer re-renders.)
-- **deleteReachesServer:** after Delete, the server receives the delete or an
-  error is shown (public mode only).
-- **approveReachesServer:** after Approve, the server receives the approval or
-  an error is shown (public mode only).
-- **noDuplicateAlerts:** the same error message is never shown twice at once.
-- **sendReachesServer:** after Send, the server receives the comment, or an
-  error or the name prompt is shown ("Saved" on screen is not enough). Like the
-  approve/delete rules, it only judges actions taken while no error is already
-  showing, so an old error can't hide a new silent failure.
-- **pinsMatchServerAfterReload:** after a reload settles, the pins on screen
-  match the comments the server holds (public mode only).
-- **escapeAlwaysCloses:** while a dialog, pin popover or composer is open,
-  Escape closes the topmost of them (the launcher menu, sidebar and pin-placing
-  hint animate out, so they aren't judged).
-- **popoverOpensInsideWindow / popoverMenuOpensInsideWindow:** a pin's popover
-  and its action menu open inside the window, so every action is reachable.
-
-Dashboard (`dashboard.ts`):
-
-- **Built-in** rules as above; console errors and alerts caused by endpoints
-  the mock doesn't implement ("Not mocked") are ignored.
-- **neverStuckBlank:** a blank screen never lasts more than 5s.
-- **loadingAlwaysFinishes:** loading indicators clear within 10s.
-- **atMostOneAlert:** error alerts never pile up.
-- **staysInDashboard:** exploration stays under `/dashboard`.
-- **tabCountMatchesRows:** the selected status tab's count equals the rows listed.
-- **headingMatchesAllTab:** the "Feedback N" heading equals the All tab count.
-
-Leaks are checked separately by `leak-probe.mjs`, which forces garbage
-collection (Bombadil can't, so raw DOM/listener counts give false alarms).
-
-## Findings so far
-
-All fixed in #486 (widget 0.3.27) and confirmed with these suites plus control
-runs against the old code:
-
-- A rejected Send failed silently (`sendNeverSilent`).
-- A rejected Approve or Delete looked successful until reload (`approveReachesServer`, `deleteReachesServer`).
-- Edit in public mode never saved (found while building the mock; Edit is now hidden there).
-- "Log in to CRRT" dropped keyboard focus out of the name dialog (`modalNeverDropsFocus`).
-
-## Known gaps
-
-- Endpoints the mocks don't cover are logged in `out/mock-*.log` as
-  `not mocked` and listed at the end of `ci.sh`. Today that's only hosted
-  documents (`POST /v1/documents`), so document screens are lightly tested.
-- Random exploration can miss bugs; it complements unit tests, it doesn't
-  replace them.
-- Running all six suites in parallel on a slow machine can starve Chrome and
-  cause false `neverStuckBlank` failures or extractor timeouts; rerun the suite
-  alone before treating those as bugs.
-- `edit-repro.mjs`, `send-failure-repro.mjs` and `approve-delete-repro.mjs` are
-  scripted repros for the bugs fixed in #486; each exits 1 if its bug comes back.
-  `edit-repro.mjs` runs against the healthy server (default :4390); the other two
-  need a preview server started with `MOCK_FAIL_RATE=1` (default :4392).
+- `edit-repro.mjs`, `send-failure-repro.mjs`, `approve-delete-repro.mjs`: scripted
+  repros for the bugs fixed in #486; each exits 1 if its bug comes back.
+  `edit-repro.mjs` uses the healthy server (:4390), the others a server started
+  with `MOCK_FAIL_RATE=1` (:4392).
+- `leak-probe.mjs`: repeats widget interactions with forced garbage collection
+  and reports DOM node and listener growth (Bombadil can't force GC).
+- Running many suites at once on a slow machine can starve Chrome and cause
+  false `neverStuckBlank` or extractor timeouts; rerun the suite alone first.
