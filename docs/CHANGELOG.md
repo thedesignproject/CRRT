@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pin popovers near the bottom of the window open upward, and their action menu opens above the button when there is no room below, so Approve, Edit and Delete stay reachable.
 - Escape closes the "Send feedback to…" and "Send to GitHub/Linear/Jira" dialogs, instead of closing the pin popover behind them. A send in progress can't be dismissed.
 - The widget keeps you signed in across reloads and when opening the agent.
+- Avatar initials keep emoji and other non-basic characters whole, instead of showing a broken character for names that start with one.
 
 This version is prepared for review. Publishing requires the reviewed release commit, release tag, and successful npm workflow.
 
