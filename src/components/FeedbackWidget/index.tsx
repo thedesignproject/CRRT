@@ -1110,9 +1110,13 @@ function FeedbackWidgetInner({
     const popW = 280
     const { fixedX, fixedY } = pagePoint(c.x, c.y, c)
     let leftFixed = fixedX + pad
-    let topFixed = fixedY - 20
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
     if (leftFixed < pad) leftFixed = pad
+    // Pins in the lower half open upward so the popover and its actions stay on screen.
+    if (fixedY > window.innerHeight / 2) {
+      return { position: 'fixed', left: leftFixed, bottom: Math.max(pad, window.innerHeight - fixedY - 20), zIndex: 2147483646 }
+    }
+    let topFixed = fixedY - 20
     if (topFixed < pad) topFixed = fixedY + 40
     return {
       position: 'fixed',

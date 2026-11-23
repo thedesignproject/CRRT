@@ -36,6 +36,21 @@ describe('PinActionCluster', () => {
     expect(queryByText('Edit')).toBeNull()
   })
 
+  it('opens the menu upward when there is no room below the button', () => {
+    const { getByLabelText, getByText } = render(<PinActionCluster {...makeProps()} />)
+    const more = getByLabelText('More options')
+    const menuOf = () => getByText('Delete').closest('div[style*="position: absolute"]') as HTMLElement
+    more.getBoundingClientRect = () => ({ bottom: window.innerHeight - 20 } as DOMRect)
+    fireEvent.click(more)
+    expect(menuOf().style.bottom).toBe('30px')
+    expect(menuOf().style.top).toBe('')
+    fireEvent.click(more)
+    more.getBoundingClientRect = () => ({ bottom: 100 } as DOMRect)
+    fireEvent.click(more)
+    expect(menuOf().style.top).toBe('30px')
+    expect(menuOf().style.bottom).toBe('')
+  })
+
   it('renders Reopen when resolved and fires onToggleResolve', () => {
     const props = makeProps({ isResolved: true })
     const { getByLabelText, getByText } = render(<PinActionCluster {...props} />)

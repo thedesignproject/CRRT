@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Public widgets now show an error and undo the change when the server rejects an approval, instead of showing it as approved until the next reload.
 - Public widgets keep a comment and show an error when the server rejects a delete, instead of hiding it until the next reload.
 - The feedback name dialog keeps keyboard focus on "Log in to CRRT" while it connects, instead of dropping focus out of the dialog.
+- Pin popovers near the bottom of the window open upward, and their action menu opens above the button when there is no room below, so Approve, Edit and Delete stay reachable.
 
 This version is prepared for review. Publishing requires the reviewed release commit, release tag, and successful npm workflow.
 

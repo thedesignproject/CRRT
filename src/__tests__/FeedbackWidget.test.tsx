@@ -468,6 +468,26 @@ describe('<FeedbackWidget />', () => {
     const popoverButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(`[data-fw] button[aria-label="${label}"]`))
       .find((b) => !b.closest('.fw-sidebar-card'))
 
+    it('opens the pin popover upward when the pin is in the lower half of the window', async () => {
+      const height = window.innerHeight
+      const scrollHeight = Object.getOwnPropertyDescriptor(document.documentElement, 'scrollHeight')
+      Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 1000 })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 })
+      try {
+        seedPublic('low pin', 200)
+        await openPinPopover()
+        const popover = await waitFor(() => (document.querySelector('[data-fw-pin-backdrop]')?.nextElementSibling as HTMLElement | null) ?? Promise.reject(new Error('no popover')))
+        // Pin at 30% of a 1000px page = 300px, below the middle of a 400px window:
+        // the popover's bottom edge sits 20px below the pin (400 - 300 - 20 = 80).
+        expect(popover.style.top).toBe('')
+        expect(popover.style.bottom).toBe('80px')
+      } finally {
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
+        if (scrollHeight) Object.defineProperty(document.documentElement, 'scrollHeight', scrollHeight)
+        else delete (document.documentElement as unknown as Record<string, unknown>).scrollHeight
+      }
+    })
+
     it('approves from the pin popover through the server', async () => {
       const calls = seedPublic('pin approve', 200)
       await openPinPopover()
