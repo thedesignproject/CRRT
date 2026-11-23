@@ -16,6 +16,8 @@ const LOG = process.env.MOCK_LOG ?? ''
 export function mockApi(): Plugin {
   let rows: Row[] = seed.map((c) => ({ ...c, pageUrl: '' }))
   let nextId = 1
+  // Only ever go up, so a stale read can delay a rule's verdict but never hide a write.
+  const stats = { approvals: 0, deletes: 0 }
   const log = (line: string) => { if (LOG) appendFileSync(LOG, `${new Date().toISOString()} ${line}\n`) }
 
   const send = (res: ServerResponse, status: number, body?: unknown) => {
@@ -72,12 +74,14 @@ export function mockApi(): Plugin {
             if (!row) return send(res, 404, { error: 'Not found' })
             // Mirrors api/v1/public/comments.ts: only reviewStatus can change.
             if (typeof body.reviewStatus === 'string') row.reviewStatus = body.reviewStatus
+            if (row.reviewStatus === 'accepted') stats.approvals++
             log(`PATCH ${row.id} reviewStatus=${row.reviewStatus}${'body' in body ? ' (body ignored)' : ''}`)
             return send(res, 200, row)
           }
           if (method === 'DELETE') {
             const id = url.searchParams.get('id')
             rows = rows.filter((r) => r.id !== id)
+            stats.deletes++
             log(`DELETE ${id}`)
             return send(res, 204)
           }
@@ -116,7 +120,10 @@ export function mockApi(): Plugin {
           return send(res, 200, { id: status[1], ...body, updatedAt: new Date().toISOString() })
         }
         if (url.pathname === '/__mock/state') return send(res, 200, rows)
-        if (url.pathname === '/__mock/reset') { rows = seed.map((c) => ({ ...c, pageUrl: '' })); nextId = 1; return send(res, 204) }
+        if (url.pathname === '/__mock/stats') {
+          return send(res, 200, { count: rows.length, accepted: rows.filter((r) => r.reviewStatus === 'accepted').length, ...stats })
+        }
+        if (url.pathname === '/__mock/reset') { rows = seed.map((c) => ({ ...c, pageUrl: '' })); nextId = 1; stats.approvals = 0; stats.deletes = 0; return send(res, 204) }
 
         log(`${method} ${url.pathname} -> 404 (not mocked)`)
         return send(res, 404, { error: 'Not mocked' })

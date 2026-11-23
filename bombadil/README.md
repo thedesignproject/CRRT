@@ -39,8 +39,10 @@ Replay it: use the `--reproduce` command Bombadil prints at the end of a run.
 | `dashboard-empty` | `/dashboard/?mock=empty` | dashboard mocks + mock API |
 
 `MOCK_FAIL_RATE` (0..1) controls injected write failures. The harness build
-publishes the mock server's comment state into a hidden `#__mock_state`
-element so rules can check that actions actually reached the server.
+publishes the mock server's counters (comments, approvals and deletes received)
+into a hidden `#__mock_state` element so rules can check that actions actually
+reached the server. The counters only go up, so a stale read can delay a verdict
+but never hide a write.
 
 ## Rules
 
@@ -52,15 +54,17 @@ Widget (`widget.ts`):
 - **singleWidgetMount / launcherAlwaysPresent:** exactly one widget, and its
   launcher never disappears.
 - **atMostOneModal:** never two modal dialogs at once.
-- **modalHoldsFocus:** when a modal opens, focus leaves `<body>` within 2s.
+- **focusMovesIntoNewModal:** when a modal opens, focus moves into it within 2s.
+- **modalNeverDropsFocus:** while a modal is open, focus never falls to `<body>`
+  unless the user clicked blank space (mouse-only browser behaviour).
 - **pinNumbersUnique:** no two pins show the same number.
 - **sendNeverSilent:** within 3s of Send, the widget shows "Saved", an error
   with the draft kept, or the name prompt.
-- **deleteReachesServer:** after Delete, the server has one comment fewer or
+- **deleteReachesServer:** after Delete, the server receives the delete or an
+  error is shown (public mode only).
+- **approveReachesServer:** after Approve, the server receives the approval or
   an error is shown (public mode only).
-- **approveReachesServer:** after Approve, the server has one more approved
-  comment or an error is shown (public mode only).
-- **atMostOneWidgetAlert:** error messages never stack.
+- **noDuplicateAlerts:** the same error message is never shown twice at once.
 
 Dashboard (`dashboard.ts`):
 
@@ -76,13 +80,15 @@ Dashboard (`dashboard.ts`):
 Leaks are checked separately by `leak-probe.mjs`, which forces garbage
 collection (Bombadil can't, so raw DOM/listener counts give false alarms).
 
-## Open findings (the nightly run stays red until these are fixed)
+## Findings so far
 
-| Rule | Suite | What happens | Repro |
-|---|---|---|---|
-| `approveReachesServer` | widget-public-failing-api | In public mode, a rejected Approve still shows as approved; no error; reverts on reload. `patchReviewStatus` ignores failed responses. | `approve-delete-repro.mjs` |
-| `deleteReachesServer` | widget-public-failing-api | In public mode, a rejected Delete still removes the pin; no error; the pin returns on reload. `deleteComment` ignores failed responses. | `approve-delete-repro.mjs` |
-| `modalHoldsFocus` | widget-public | Clicking "Log in to CRRT" in the name dialog disables that button while connecting, so keyboard focus drops out of the dialog to `<body>`. | trace in the nightly artifact |
+All fixed in #486 (widget 0.3.27) and confirmed with these suites plus control
+runs against the old code:
+
+- A rejected Send failed silently (`sendNeverSilent`).
+- A rejected Approve or Delete looked successful until reload (`approveReachesServer`, `deleteReachesServer`).
+- Edit in public mode never saved (found while building the mock; Edit is now hidden there).
+- "Log in to CRRT" dropped keyboard focus out of the name dialog (`modalNeverDropsFocus`).
 
 ## Known gaps
 
@@ -91,6 +97,9 @@ collection (Bombadil can't, so raw DOM/listener counts give false alarms).
   documents (`POST /v1/documents`), so document screens are lightly tested.
 - Random exploration can miss bugs; it complements unit tests, it doesn't
   replace them.
-- `edit-repro.mjs` and `send-failure-repro.mjs` are scripted repros for the
-  bugs fixed in #486; `approve-delete-repro.mjs` covers the open findings above.
+- Running all six suites in parallel on a slow machine can starve Chrome and
+  cause false `neverStuckBlank` failures or extractor timeouts; rerun the suite
+  alone before treating those as bugs.
+- `edit-repro.mjs`, `send-failure-repro.mjs` and `approve-delete-repro.mjs` are
+  scripted repros for the bugs fixed in #486.
   Run them against a preview server started with `MOCK_FAIL_RATE=1`.

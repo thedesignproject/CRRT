@@ -15,8 +15,8 @@ const publishServerState = {
     injectTo: 'body' as const,
     children: `(() => {
       const el = document.createElement('pre'); el.id = '__mock_state'; el.hidden = true; document.body.appendChild(el)
-      const poll = () => fetch('/api/__mock/state').then(r => r.json()).then(rows => {
-        el.textContent = JSON.stringify({ count: rows.length, accepted: rows.filter(r => r.reviewStatus === 'accepted').length })
+      const poll = () => fetch('/api/__mock/stats').then(r => r.json()).then(stats => {
+        el.textContent = JSON.stringify(stats)
       }).catch(() => {})
       poll(); setInterval(poll, 250)
     })()`,

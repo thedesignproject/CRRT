@@ -67,6 +67,15 @@ const widget = extract((state) => {
     launchers: doc.querySelectorAll("[data-fw-launcher-root]").length,
     openModals: modals.length,
     focusOnBody: !active || active === doc.body || active === doc.documentElement,
+    // Did the last click land on blank space (not a control)? Clicking blank
+    // space moves focus to <body> in every browser; that's mouse-only and fine.
+    clickMissedControl: (() => {
+      const a = state.lastAction as unknown;
+      if (!a || typeof a !== "object" || !("Click" in a)) return false;
+      const { x, y } = (a as { Click: { point: { x: number; y: number } } }).Click.point;
+      const hit = doc.elementFromPoint(x, y);
+      return !hit?.closest('button, a[href], input, textarea, select, [tabindex]:not([tabindex="-1"]), [contenteditable="true"]');
+    })(),
     pinLabels: Array.from(doc.querySelectorAll("[data-fw-pin]")).map(
       (el) => (el.textContent ?? "").trim(),
     ),
@@ -104,16 +113,23 @@ export const launcherAlwaysPresent = always(
 // Never two modal dialogs stacked at once (name modal + provider modal...).
 export const atMostOneModal = always(() => widget.current.openModals <= 1);
 
-// Accessibility: when a modal is open, focus must move into the page's
-// controls quickly, not stay stranded on <body> (rules/ux.md).
-export const modalHoldsFocus = always(
-  now(
-    () => widget.current.openModals > 0 && widget.current.focusOnBody,
-  ).implies(
-    eventually(
-      () => !(widget.current.openModals > 0 && widget.current.focusOnBody),
-    ).within(2, "seconds"),
-  ),
+// Accessibility (rules/ux.md): when a modal opens, focus moves into it quickly.
+export const focusMovesIntoNewModal = always(
+  now(() => widget.current.openModals === 0)
+    .and(next(() => widget.current.openModals > 0))
+    .implies(
+      next(
+        eventually(() => widget.current.openModals === 0 || !widget.current.focusOnBody).within(2, "seconds"),
+      ),
+    ),
+);
+
+// Accessibility: while a modal stays open, focus never falls out of it to
+// <body>, unless the user clicked blank space (mouse-only, browser default).
+export const modalNeverDropsFocus = always(
+  now(() => widget.current.openModals > 0 && !widget.current.focusOnBody)
+    .and(next(() => widget.current.openModals > 0 && widget.current.focusOnBody))
+    .implies(next(() => widget.current.clickMissedControl)),
 );
 
 // Pin numbers must be unique (no two "3" pins after add/delete churn).
@@ -162,7 +178,7 @@ const server = extract((state) => {
   const doc = state.document;
   const publicMode = state.window.location.search.includes("public=1");
   const raw = doc.getElementById("__mock_state")?.textContent ?? "";
-  let parsed: { count: number; accepted: number } | null = null;
+  let parsed: { count: number; accepted: number; approvals: number; deletes: number } | null = null;
   try { parsed = raw ? JSON.parse(raw) : null; } catch { parsed = null; }
   const a = state.lastAction as unknown;
   let clicked = "";
@@ -170,32 +186,42 @@ const server = extract((state) => {
     const fp = (a as { Click: { fingerprint: Record<string, unknown> } }).Click.fingerprint;
     clicked = String(fp.accessibleName ?? fp.accessible_name ?? fp.textContent ?? fp.text_content ?? "").trim();
   }
-  const alerts = Array.from(doc.querySelectorAll('[data-fw-crrt] [role="alert"]')).filter((el) => isVisible(state.window, el)).length;
-  return { tracked: publicMode && parsed !== null, count: parsed?.count ?? 0, accepted: parsed?.accepted ?? 0, clicked, alerts };
+  const alertTexts = Array.from(doc.querySelectorAll('[data-fw-crrt] [role="alert"]'))
+    .filter((el) => isVisible(state.window, el))
+    .map((el) => (el.textContent ?? "").trim());
+  return {
+    tracked: publicMode && parsed !== null,
+    approvals: parsed?.approvals ?? 0,
+    deletes: parsed?.deletes ?? 0,
+    clicked,
+    alerts: alertTexts.length,
+    duplicateAlerts: alertTexts.length - new Set(alertTexts).size,
+  };
 });
 
-// Clicking Delete either removes the comment on the server or shows an error.
+// Clicking Delete either reaches the server (its delete counter goes up) or shows an error.
 export const deleteReachesServer = always(() => {
   const before = server.current;
   return now(() => before.tracked)
     .and(next(() => server.current.clicked === "Delete"))
     .implies(
-      next(eventually(() => server.current.count < before.count || server.current.alerts > 0).within(3, "seconds")),
+      next(eventually(() => server.current.deletes > before.deletes || server.current.alerts > 0).within(3, "seconds")),
     );
 });
 
-// Clicking Approve either approves the comment on the server or shows an error.
+// Clicking Approve either reaches the server (its approval counter goes up) or shows an error.
 export const approveReachesServer = always(() => {
   const before = server.current;
   return now(() => before.tracked)
     .and(next(() => server.current.clicked === "Approve"))
     .implies(
-      next(eventually(() => server.current.accepted > before.accepted || server.current.alerts > 0).within(3, "seconds")),
+      next(eventually(() => server.current.approvals > before.approvals || server.current.alerts > 0).within(3, "seconds")),
     );
 });
 
-// Error messages never pile up on top of each other.
-export const atMostOneWidgetAlert = always(() => server.current.alerts <= 1);
+// The same error message is never shown twice at once. (Different messages in
+// different places, e.g. a dialog's own error over a page toast, are fine.)
+export const noDuplicateAlerts = always(() => server.current.duplicateAlerts === 0);
 
 // Leaks are checked by leak-probe.mjs instead: Chrome's live listener/DOM
 // counts include garbage not yet collected, and Bombadil can't force a GC,
