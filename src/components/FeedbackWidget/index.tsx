@@ -1726,6 +1726,7 @@ function FeedbackWidgetInner({
                         key={c.id}
                         reviewEnabled={!personalComments}
                         mutationEnabled={!personalComments || c.editable !== false}
+                        editEnabled={Boolean(personalComments) && c.editable !== false}
                         onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
                           ? () => { setExternalProviderCommentId(c.id) }
                           : undefined}
@@ -2237,7 +2238,8 @@ function FeedbackWidgetInner({
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         {c.reviewStatus === 'accepted' ? 'Reopen' : 'Approve'}
                       </button>}
-                      <button
+                      {/* Public widgets cannot save body edits, so only adapters offer Edit. */}
+                      {personalComments && c.editable !== false && <button
                         onClick={() => { setEditingId(c.id); setEditText(c.body); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
@@ -2245,7 +2247,7 @@ function FeedbackWidgetInner({
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                         Edit
-                      </button>
+                      </button>}
                       <div style={{ height: 1, background: 'var(--fw-surface-divider)', margin: '4px 0' }} />
                       <button
                         onClick={() => { deleteComment(c.id); setMenuOpenId(null) }}

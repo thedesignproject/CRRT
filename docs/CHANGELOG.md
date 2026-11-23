@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.27] - Unreleased
+
+### Fixed
+- Public widgets now show an error when the server rejects a new comment, keeping the draft so it can be sent again. Previously the send failed silently.
+- Public widgets no longer offer Edit, which only changed the text on screen and was lost on reload. Widgets with a comments adapter keep Edit.
+
+This version is prepared for review. Publishing requires the reviewed release commit, release tag, and successful npm workflow.
+
 ## [0.3.26] - Unreleased
 
 ### Fixed

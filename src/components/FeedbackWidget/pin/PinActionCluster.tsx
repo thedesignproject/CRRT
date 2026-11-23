@@ -10,9 +10,11 @@ export interface PinActionClusterProps {
   onSendTo?: () => void
   reviewEnabled?: boolean
   mutationEnabled?: boolean
+  /** Defaults to `mutationEnabled`; false when edits cannot be saved (public widgets). */
+  editEnabled?: boolean
 }
 
-export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, onSendTo, reviewEnabled = true, mutationEnabled = true }: PinActionClusterProps) {
+export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, onSendTo, reviewEnabled = true, mutationEnabled = true, editEnabled = mutationEnabled }: PinActionClusterProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, position: 'relative', flexShrink: 0 }}>
@@ -87,7 +89,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             >
               <span aria-hidden="true">↗</span> Send to…
             </button>}
-            {mutationEnabled && <button
+            {editEnabled && <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}

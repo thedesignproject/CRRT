@@ -189,11 +189,12 @@ describe('postComment', () => {
     expect(JSON.parse(init.body as string)).toEqual({ body: 'hi' })
   })
 
-  it('returns null and warns on non-OK response', async () => {
-    mockFetch(() => new Response('nope', { status: 422 }))
-    const result = await postComment(API, { body: 'hi' })
-    expect(result).toBeNull()
-    expect(console.warn).toHaveBeenCalled()
+  it('throws a user-facing error and warns on non-OK response', async () => {
+    for (const status of [422, 500, 503]) {
+      mockFetch(() => new Response('nope', { status }))
+      await expect(postComment(API, { body: 'hi' })).rejects.toThrow('Could not send feedback. Try again.')
+    }
+    expect(console.warn).toHaveBeenCalledTimes(3)
   })
 })
 
@@ -239,6 +240,6 @@ it('surfaces Cloud plan errors from public widgets instead of silently dropping 
   }
   mockFetch(() => new Response(JSON.stringify({code:'plan_limit'}),{status:409}))
   await expect(postComment(API,{})).rejects.toThrow('Cloud plan limit')
-  mockFetch(() => new Response('{}',{status:409}));expect(await postComment(API,{})).toBeNull()
-  mockFetch(() => new Response('invalid',{status:409}));expect(await postComment(API,{})).toBeNull()
+  mockFetch(() => new Response('{}',{status:409}));await expect(postComment(API,{})).rejects.toThrow('Could not send feedback')
+  mockFetch(() => new Response('invalid',{status:409}));await expect(postComment(API,{})).rejects.toThrow('Could not send feedback')
 })

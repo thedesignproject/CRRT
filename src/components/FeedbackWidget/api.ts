@@ -141,14 +141,17 @@ export async function postComment(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (res.status === 401) onLoginRequired?.()
+  if (res.status === 401) {
+    onLoginRequired?.()
+    return null
+  }
   if (!res.ok) {
     if (res.status === 402 || res.status === 409) {
       const failure = await res.json().catch(() => null) as { code?: string; error?: string } | null
       if (failure?.code === 'plan_limit') throw new Error(failure.error || 'The project owner has reached a Cloud plan limit')
     }
     console.warn('[FeedbackWidget] API returned', res.status)
-    return null
+    throw new Error('Could not send feedback. Try again.')
   }
   return (await res.json()) as Partial<Comment>
 }
