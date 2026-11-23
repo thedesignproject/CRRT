@@ -7,6 +7,7 @@ import {
   mutateWidgetFeedback,
   patchReviewStatus,
   postComment,
+  deleteComment,
   startWidgetAgentUpgrade,
 } from '../components/FeedbackWidget/api'
 
@@ -216,10 +217,42 @@ describe('patchReviewStatus', () => {
     expect(JSON.parse(init!.body as string)).toEqual({ id: 'abc', reviewStatus: 'accepted' })
   })
 
-  it('swallows fetch errors and warns', async () => {
+  it('throws a user-facing error when the request fails or the server refuses', async () => {
     mockFetch(() => { throw new Error('boom') })
-    await expect(patchReviewStatus(API, 'abc', 'accepted')).resolves.toBeUndefined()
-    expect(console.warn).toHaveBeenCalled()
+    await expect(patchReviewStatus(API, 'abc', 'accepted')).rejects.toThrow('Could not update feedback. Try again.')
+    mockFetch(() => new Response('{}', { status: 500 }))
+    await expect(patchReviewStatus(API, 'abc', 'accepted')).rejects.toThrow('Could not update feedback. Try again.')
+    expect(console.warn).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('deleteComment', () => {
+  beforeEach(() => {
+    vi.unstubAllGlobals()
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('DELETEs by id and projectKey and resolves on success or when already gone', async () => {
+    for (const status of [204, 404]) {
+      const spy = mockFetch(() => new Response(null, { status }))
+      await expect(deleteComment(API, 'abc', 'proj')).resolves.toBeUndefined()
+      const [url, init] = spy.mock.calls[0]!
+      expect(init!.method).toBe('DELETE')
+      expect(String(url)).toContain('id=abc')
+      expect(String(url)).toContain('projectKey=proj')
+    }
+  })
+
+  it('throws a user-facing error when the request fails or the server refuses', async () => {
+    mockFetch(() => { throw new Error('boom') })
+    await expect(deleteComment(API, 'abc', 'proj')).rejects.toThrow('Could not delete feedback. Try again.')
+    mockFetch(() => new Response('{}', { status: 500 }))
+    await expect(deleteComment(API, 'abc', 'proj')).rejects.toThrow('Could not delete feedback. Try again.')
+    expect(console.warn).toHaveBeenCalledTimes(2)
   })
 })
 

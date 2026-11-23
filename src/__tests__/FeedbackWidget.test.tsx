@@ -389,6 +389,91 @@ describe('<FeedbackWidget />', () => {
     )
   })
 
+  describe('public review and delete failures', () => {
+    function seedPublic(body: string, writeStatus: number, reviewStatus = 'open') {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const pageUrl = window.location.href.split('#')[0]
+      const calls: FetchCall[] = []
+      vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), init })
+        if (init?.method === 'PATCH' || init?.method === 'DELETE') return new Response(writeStatus === 204 ? null : '{}', { status: writeStatus })
+        return new Response(JSON.stringify([{ id: 'comment-1', projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', body, reviewStatus, createdAt: '2026-04-22T00:00:00Z' }]), { status: 200 })
+      }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      return calls
+    }
+    const approveButton = () => document.querySelector<HTMLButtonElement>('button[title="Approve"]')
+    const alertText = () => document.querySelector('[data-fw] [role="alert"]')?.textContent ?? ''
+    async function deleteFromCard(body: string) {
+      const card = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card')).find((c) => c.textContent?.includes(body))
+        if (!el) throw new Error('card not found')
+        return el
+      })
+      await act(async () => { fireEvent.click(card.querySelector<HTMLButtonElement>('button[title="More"]')!) })
+      const del = await waitFor(() => {
+        const btn = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === 'Delete')
+        if (!btn) throw new Error('Delete not found')
+        return btn
+      })
+      await act(async () => { fireEvent.click(del) })
+    }
+
+    it('rolls an approval back and explains when the server refuses it', async () => {
+      seedPublic('approve me', 500)
+      await waitFor(() => expect(document.body.textContent).toContain('approve me'))
+      await act(async () => { fireEvent.click(await waitFor(() => approveButton() ?? Promise.reject(new Error('no approve')))) })
+      await waitFor(() => expect(alertText()).toContain('Could not update feedback. Try again.'))
+      expect(approveButton()).not.toBeNull()
+    })
+
+    it('keeps the approval and clears earlier errors when the server accepts it', async () => {
+      seedPublic('approve me too', 200)
+      await waitFor(() => expect(document.body.textContent).toContain('approve me too'))
+      await act(async () => { fireEvent.click(await waitFor(() => approveButton() ?? Promise.reject(new Error('no approve')))) })
+      await waitFor(() => expect(approveButton()).toBeNull())
+      expect(alertText()).toBe('')
+    })
+
+    async function openPinPopover() {
+      const pin = await waitFor(() => document.querySelector<HTMLDivElement>('[data-fw-pin]') ?? Promise.reject(new Error('pin not rendered')))
+      await act(async () => { fireEvent.click(pin) })
+    }
+    const popoverButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(`[data-fw] button[aria-label="${label}"]`))
+      .find((b) => !b.closest('.fw-sidebar-card'))
+
+    it('approves from the pin popover through the server', async () => {
+      const calls = seedPublic('pin approve', 200)
+      await openPinPopover()
+      await act(async () => { fireEvent.click(await waitFor(() => popoverButton('Approve') ?? Promise.reject(new Error('no popover approve')))) })
+      await waitFor(() => expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')?.init?.body))).toEqual({ id: 'comment-1', reviewStatus: 'accepted' }))
+    })
+
+    it('reopens an approved comment from the pin popover menu through the server', async () => {
+      const calls = seedPublic('pin reopen', 200, 'accepted')
+      await openPinPopover()
+      await act(async () => { fireEvent.click(await waitFor(() => popoverButton('More options') ?? Promise.reject(new Error('no more options')))) })
+      const reopen = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === 'Reopen') ?? Promise.reject(new Error('no reopen')))
+      await act(async () => { fireEvent.click(reopen) })
+      await waitFor(() => expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')?.init?.body))).toEqual({ id: 'comment-1', reviewStatus: 'open' }))
+    })
+
+    it('keeps a comment and explains when the server refuses to delete it', async () => {
+      const calls = seedPublic('keep me', 500)
+      await deleteFromCard('keep me')
+      await waitFor(() => expect(alertText()).toContain('Could not delete feedback. Try again.'))
+      expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(true)
+      expect(document.body.textContent).toContain('keep me')
+    })
+
+    it('removes a comment once the server confirms the delete', async () => {
+      seedPublic('remove me', 204)
+      await deleteFromCard('remove me')
+      await waitFor(() => expect(document.body.textContent).not.toContain('remove me'))
+      expect(alertText()).toBe('')
+    })
+  })
+
   it('PATCHes review status through the public comments endpoint', async () => {
     const pageUrl = window.location.href.split('#')[0]
     const calls = mockFetch(undefined, () => new Response(JSON.stringify([
