@@ -1,5 +1,5 @@
 {
-  "name": "crrt-bombadil-experiment",
+  "name": "crrt-bombadil",
   "private": true,
   "type": "module",
   "devDependencies": {
@@ -8,8 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p .",
-    "harness": "cd .. && bunx vite --config tests/visual/harness/vite.config.ts",
-    "widget": "bash ./run-widget.sh",
+    "ci": "bash ./ci.sh",
     "inspect": "bombadil browser inspect"
   }
 }

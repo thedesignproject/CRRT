@@ -35,8 +35,9 @@ screens, dialogs keep focus) apply to it. Three things need a person:
 
 - `edit-repro.mjs`, `send-failure-repro.mjs`, `approve-delete-repro.mjs`: scripted
   repros for the bugs fixed in #486; each exits 1 if its bug comes back.
-  `edit-repro.mjs` uses the healthy server (:4390), the others a server started
-  with `MOCK_FAIL_RATE=1` (:4392).
+  `edit-repro.mjs` uses the healthy server (:4390), the others a server that
+  rejects every write, started from the repo root after a `./ci.sh` build:
+  `PORT=4392 MOCK_FAIL_RATE=1 bunx vite preview --config bombadil/harness.vite.config.ts`.
 - `leak-probe.mjs`: repeats widget interactions with forced garbage collection
   and reports DOM node and listener growth (Bombadil can't force GC).
 - Running many suites at once on a slow machine can starve Chrome and cause

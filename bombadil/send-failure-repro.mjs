@@ -35,4 +35,6 @@ console.log(!alertShown && !savedHint
   : 'User was informed.')
 console.log(consoleLines.filter((l) => l.includes('FeedbackWidget')).join('\n'))
 await browser.close()
-if (!alertShown && !savedHint) process.exitCode = 1
+// Against a server that rejects the send, anything but an error is the bug
+// (including a "Saved" hint for a comment the server refused).
+if (res.status() >= 400 && !alertShown) process.exitCode = 1

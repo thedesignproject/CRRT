@@ -52,6 +52,8 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun install --frozen-lockfile
         working-directory: bombadil
+      - run: bun run typecheck
+        working-directory: bombadil
       - name: Run ${{ matrix.suite }}
         env:
           TIME_LIMIT: ${{ github.event_name == 'pull_request' && '2m' || inputs.time-limit || '10m' }}

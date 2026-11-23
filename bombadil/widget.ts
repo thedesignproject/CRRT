@@ -1,9 +1,9 @@
 // Bombadil spec for the CRRT feedback widget.
 //
-// Target: the visual-test harness at /widget, which mounts <FeedbackWidget>
-// on a fake host page with an in-memory comments adapter. No backend, so
-// random clicks can't hurt real data. Pick a harness mode with ?state=
-// (idle, empty, send-error, load-error, tracker-error, sending, guest...).
+// Target: the visual-test harness at /widget, which mounts <FeedbackWidget> on
+// a fake host page. Without ?public=1 it uses an in-memory comments adapter;
+// with it, the widget talks to the in-memory mock API (mock-api.ts). Pick a
+// harness mode with ?state= (idle, send-error, ...). Nothing touches real data.
 //
 // Note: extract() callbacks run inside the page. Keep them self-contained
 // (no references to module-level variables other than imported helpers).
@@ -67,6 +67,7 @@ const widget = extract((state) => {
     launchers: doc.querySelectorAll("[data-fw-launcher-root]").length,
     openModals: modals.length,
     focusOnBody: !active || active === doc.body || active === doc.documentElement,
+    focusInModal: !!active && modals.some((m) => m.contains(active)),
     // Did the last click land on blank space or a disabled control? Either moves
     // focus to <body> in every browser; that's mouse-only and fine.
     clickMissedControl: (() => {
@@ -114,22 +115,27 @@ export const launcherAlwaysPresent = always(
 export const atMostOneModal = always(() => widget.current.openModals <= 1);
 
 // Accessibility (rules/ux.md): when a modal opens, focus moves into it quickly.
-// A click on blank space (e.g. the backdrop) sends focus to <body> in every
-// browser, so that also settles it: the dialog did its part.
+// A later click on blank space (e.g. the backdrop) sends focus to <body> in
+// every browser, so that also settles it: the dialog did its part.
+// Focus must land inside the dialog. The click that opened it doesn't excuse
+// anything; only a later click on blank space or a disabled control does.
+const focusSettled = () => widget.current.openModals === 0 || widget.current.focusInModal;
 export const focusMovesIntoNewModal = always(
   now(() => widget.current.openModals === 0)
     .and(next(() => widget.current.openModals > 0))
     .implies(
       next(
-        eventually(
-          () => widget.current.openModals === 0 || !widget.current.focusOnBody || widget.current.clickMissedControl,
-        ).within(2, "seconds"),
+        now(focusSettled).or(
+          next(eventually(() => focusSettled() || widget.current.clickMissedControl).within(2, "seconds")),
+        ),
       ),
     ),
 );
 
 // Accessibility: while a modal stays open, focus never falls out of it to
-// <body>, unless the user clicked blank space (mouse-only, browser default).
+// <body>, unless the user clicked blank space or a disabled control (mouse-only,
+// browser default). Known limit: the point is checked after the click, so a
+// clicked button that unmounts looks like blank space and is excused.
 export const modalNeverDropsFocus = always(
   now(() => widget.current.openModals > 0 && !widget.current.focusOnBody)
     .and(next(() => widget.current.openModals > 0 && widget.current.focusOnBody))
@@ -156,6 +162,9 @@ const layers = extract((state) => {
   // Dialogs, the pin popover and the composer unmount when closed, so being in
   // the DOM means open (they may still be fading in from opacity 0).
   const dialog = doc.querySelector('[data-fw-crrt] [role="dialog"][aria-modal="true"]') !== null;
+  // A "Send to…" dialog that is creating an issue ignores Escape on purpose.
+  const busyDialog = Array.from(doc.querySelectorAll('[data-fw-crrt] [role="dialog"] button'))
+    .some((b) => (b.textContent ?? "").trim() === "Sending…");
   const pinPopover = doc.querySelector("[data-fw-pin-backdrop]") !== null;
   const composerOpen = doc.querySelector('textarea[placeholder="Leave your comment…"]') !== null;
   // Pin-placing mode has no permanent marker: count it only while its hover
@@ -177,6 +186,7 @@ const layers = extract((state) => {
     top: top === -1 ? 0 : open.length - top,
     // 3 = dialog, 2 = pin popover, 1 = composer, 0 = none of them open
     topUnmounting: topUnmounting === -1 ? 0 : unmounting.length - topUnmounting,
+    busyDialog,
     names: ["dialog", "pin popover", "composer", "pin placing", "sidebar", "launcher menu"].filter((_, i) => open[i]),
     pressedEscape,
   };
@@ -189,7 +199,7 @@ const layers = extract((state) => {
 // next-state check would catch them mid-animation.
 export const escapeAlwaysCloses = always(() => {
   const before = layers.current;
-  return now(() => before.topUnmounting > 0)
+  return now(() => before.topUnmounting > 0 && !before.busyDialog)
     .and(next(() => layers.current.pressedEscape))
     .implies(next(() => layers.current.topUnmounting < before.topUnmounting));
 });
