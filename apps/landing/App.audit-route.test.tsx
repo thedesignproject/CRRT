@@ -22,6 +22,7 @@ vi.mock('./product-audit/ProductAuditWorkspace', () => ({ ProductAuditWorkspace:
 vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing product audit</section> }))
 vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
 vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
+vi.mock('./legal/TermsPage', () => ({ TermsPage: () => <main>Public terms page</main> }))
 vi.mock('./resources/ResourcesPage', () => ({ ResourcesPage: ({ children }: { children?: ReactNode }) => <div>Public resource library{children}</div> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
@@ -117,4 +118,11 @@ it('updates account navigation without redirecting on auth changes and unsubscri
   expect(replace).not.toHaveBeenCalled()
   view.unmount()
   expect(auth.unsubscribe).toHaveBeenCalledOnce()
+})
+
+it('routes direct terms loads without mounting the marketing site', () => {
+  window.history.pushState({}, '', '/terms')
+  render(<App />)
+  expect(screen.getByText('Public terms page')).toBeInTheDocument()
+  expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
 })

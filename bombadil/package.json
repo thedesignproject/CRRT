@@ -1,0 +1,14 @@
+{
+  "name": "crrt-bombadil",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@antithesishq/bombadil": "0.8.0",
+    "typescript": "5.9.3"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "ci": "bash ./ci.sh",
+    "inspect": "bombadil browser inspect"
+  }
+}

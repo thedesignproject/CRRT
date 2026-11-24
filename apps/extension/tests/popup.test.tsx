@@ -1,5 +1,15 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const bootstrap = vi.hoisted(() => ({ root: undefined as { unmount: () => void } | undefined }))
+vi.mock('react-dom/client', async importOriginal => {
+  const actual = await importOriginal<typeof import('react-dom/client')>()
+  return { ...actual, createRoot: (...args: Parameters<typeof actual.createRoot>) => {
+    const root = actual.createRoot(...args)
+    bootstrap.root ??= root
+    return root
+  } }
+})
 
 vi.mock('../lib/local-workspace-panel',()=>({LocalWorkspacePanel:({billingUrl}:{billingUrl:string})=><a href={billingUrl}>Local billing</a>}))
 const sendMessage = vi.fn()
@@ -21,7 +31,12 @@ vi.mock('../lib/disclosure', () => ({
 }))
 
 document.body.innerHTML = '<div id="root"></div>'
-const { Popup } = await import('../entrypoints/popup/main')
+// The entrypoint mounts immediately. Finish and dispose that bootstrap render
+// before individual tests reset its mocks and render their own popup.
+hasAcceptedDisclosure.mockResolvedValue(false)
+let Popup: typeof import('../entrypoints/popup/main')['Popup']
+await act(async () => { ({ Popup } = await import('../entrypoints/popup/main')) })
+act(() => bootstrap.root!.unmount())
 
 beforeEach(() => {
   sendMessage.mockReset()
@@ -188,6 +203,39 @@ describe('extension popup', () => {
     await waitFor(() => expect(setActiveProject).toHaveBeenCalledWith({ publicKey: 'store', name: 'Storefront' }))
     expect(setProjectForPage).not.toHaveBeenCalled()
     view.unmount()
+  })
+
+  it('shows the page and a loading state instead of empty-project notices while projects load', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    let finish!: (value: unknown[]) => void
+    listExtensionProjects.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const view = render(<Popup />)
+    expect(await screen.findByText('store.example.com')).toBeInTheDocument()
+    expect(screen.getByText('Checking projects…')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Loading projects…' })).toBeInTheDocument()
+    expect(screen.queryByText('Unavailable in Chrome')).not.toBeInTheDocument()
+    expect(screen.queryByText(/No shared projects yet/)).not.toBeInTheDocument()
+    finish([])
+    expect(await screen.findByText('No shared projects yet. You can still leave private feedback.')).toBeInTheDocument()
+    view.unmount()
+  })
+
+  it('keeps private feedback usable when the project list fails to load', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockRejectedValueOnce(new Error('Network down'))
+    const view = render(<Popup />)
+    expect(await screen.findByText('Network down')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toBeEnabled()
+    expect(screen.getByText('Only you')).toBeInTheDocument()
+    view.unmount()
+
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    getCurrentTabUrl.mockResolvedValueOnce(null)
+    listExtensionProjects.mockRejectedValueOnce(new Error('Network down'))
+    const restricted = render(<Popup />)
+    expect(await screen.findByText('Open a regular website to start commenting.')).toBeInTheDocument()
+    restricted.unmount()
   })
 
   it('explains empty and ambiguous project resolution without guessing', async () => {
