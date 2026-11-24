@@ -7,7 +7,7 @@ vi.mock('./hooks/useProjects', () => ({ useProjects: () => ({ projects: data.pro
 vi.mock('./hooks/useComments', () => ({ useComments: () => ({ comments: data.comments, loading: false, error: null, refresh: data.refresh }) }))
 vi.mock('./hooks/useSuperAdmin', () => ({ useSuperAdmin: () => ({ superadmin: false }) }))
 vi.mock('./hooks/useAgentSession', () => ({ useAgentSession: () => ({ session: null, shareState: null, events: [], error: null, copyPrompt: data.refresh, adoptSession: data.refresh }) }))
-vi.mock('./components/Header', () => ({ Header: (props: any) => <nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button onClick={() => props.setSelectedProject('project')}>Project</button></nav> }))
+vi.mock('./components/DashboardShell', () => ({ DashboardShell: (props: any) => <><nav aria-label="Dashboard"><button aria-pressed={props.recordingsActive} onClick={props.onOpenRecordings}>Recordings</button><button onClick={props.onOpenExtensionComments}>Inbox</button><button onClick={() => props.setSelectedProject('project')}>Project</button></nav>{props.children}{props.footer}</> }))
 vi.mock('./components/RecordingsPage', () => ({ RecordingsPage: () => <h1>Recording library</h1> }))
 vi.mock('./components/ExtensionCommentsPage', () => ({ ExtensionCommentsPage: () => <h1>Personal Inbox</h1> }))
 vi.mock('./lib/supabase', () => ({ supabase: { auth: {} } }))

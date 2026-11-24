@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "crrt": {
+      "type": "http",
+      "url": "https://crrt.ai/api/mcp/v1"
+    }
+  }
+}

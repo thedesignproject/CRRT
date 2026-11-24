@@ -10,10 +10,17 @@ export interface PinActionClusterProps {
   onSendTo?: () => void
   reviewEnabled?: boolean
   mutationEnabled?: boolean
+  /** Defaults to `mutationEnabled`; false when edits cannot be saved (public widgets). */
+  editEnabled?: boolean
 }
 
-export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, onSendTo, reviewEnabled = true, mutationEnabled = true }: PinActionClusterProps) {
+// Tallest the menu gets (Approve, Send to, Edit, View list, Delete) plus a gap.
+const MENU_HEIGHT = 220
+
+export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdit, onDelete, onViewList, onSendTo, reviewEnabled = true, mutationEnabled = true, editEnabled = mutationEnabled }: PinActionClusterProps) {
   const [menuOpen, setMenuOpen] = useState(false)
+  // Open the menu upward when there isn't room for it below the button.
+  const [menuUp, setMenuUp] = useState(false)
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, position: 'relative', flexShrink: 0 }}>
       {reviewEnabled && !isResolved && (
@@ -35,7 +42,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
         </button>
       )}
       {(reviewEnabled || mutationEnabled || onViewList || onSendTo) && <button
-        onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
+        onClick={(e) => { e.stopPropagation(); setMenuUp(e.currentTarget.getBoundingClientRect().bottom + MENU_HEIGHT > window.innerHeight); setMenuOpen((v) => !v) }}
         aria-label="More options"
         style={{
           width: 24, height: 24, borderRadius: 6,
@@ -61,7 +68,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              position: 'absolute', top: 30, right: 0, zIndex: 99999,
+              position: 'absolute', ...(menuUp ? { bottom: 30 } : { top: 30 }), right: 0, zIndex: 99999,
               background: 'var(--fw-surface)',
               border: '1px solid var(--fw-contrast-08)',
               borderRadius: 10,
@@ -87,7 +94,7 @@ export function PinActionCluster({ isResolved, onResolve, onToggleResolve, onEdi
             >
               <span aria-hidden="true">↗</span> Send to…
             </button>}
-            {mutationEnabled && <button
+            {editEnabled && <button
               onClick={() => { onEdit(); setMenuOpen(false) }}
               style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-soft)', fontSize: 13, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'inherit' }}
               onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-contrast-04)')}

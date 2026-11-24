@@ -9,14 +9,14 @@ import { Kbd } from './primitives'
 type CmdItem = { id: string; type: 'comment' | 'action'; label: string; detail: string; icon: CmdIconType }
 
 const CMD_ACTIONS: CmdItem[] = [
-  { id: 'accept', type: 'action', label: 'Toggle Ready for Agent', detail: 'A', icon: 'check' },
+  { id: 'accept', type: 'action', label: 'Toggle Send to Agent', detail: 'A', icon: 'check' },
   { id: 'done', type: 'action', label: 'Toggle Done', detail: 'M', icon: 'check' },
   { id: 'reject', type: 'action', label: 'Toggle Reject', detail: 'D', icon: 'x' },
   { id: 'toggle-sidebar', type: 'action', label: 'Toggle agent panel', detail: 'S', icon: 'sidebar' },
   { id: 'filter-all', type: 'action', label: 'Filter: All', detail: '', icon: 'filter' },
   { id: 'filter-open', type: 'action', label: 'Filter: Open', detail: '', icon: 'filter' },
-  { id: 'filter-ready', type: 'action', label: 'Filter: Ready for Agent', detail: '', icon: 'filter' },
-  { id: 'filter-ready-for-testing', type: 'action', label: 'Filter: Ready for testing', detail: '', icon: 'filter' },
+  { id: 'filter-ready', type: 'action', label: 'Filter: Agent', detail: '', icon: 'filter' },
+  { id: 'filter-ready-for-testing', type: 'action', label: 'Filter: Testing', detail: '', icon: 'filter' },
   { id: 'filter-done', type: 'action', label: 'Filter: Done', detail: '', icon: 'filter' },
 ]
 

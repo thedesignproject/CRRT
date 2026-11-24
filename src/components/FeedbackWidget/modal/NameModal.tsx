@@ -126,8 +126,9 @@ export function NameModal({ value, onChange, onSubmit, onCancel, existingName, o
         >
           {onLogin ? 'Continue as guest' : existingName ? 'Save' : 'Continue'}
         </button>}
-        {onLogin && <button type="button" disabled={busy} onClick={signedIn ? onLogout : onLogin}
-          style={{ padding: 12, borderRadius: 8, border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-contrast-04)', color: 'var(--fw-foreground)', font: 'inherit', cursor: 'pointer' }}>
+        {/* aria-disabled, not disabled: a disabled button drops keyboard focus out of the dialog. */}
+        {onLogin && <button type="button" aria-disabled={busy || undefined} onClick={busy ? undefined : signedIn ? onLogout : onLogin}
+          style={{ padding: 12, borderRadius: 8, border: '1px solid var(--fw-contrast-08)', background: 'var(--fw-contrast-04)', color: 'var(--fw-foreground)', font: 'inherit', cursor: busy ? 'progress' : 'pointer' }}>
           {busy ? 'Connecting…' : signedIn ? 'Sign out of this widget' : 'Log in to CRRT'}
         </button>}
         {error && <p role="alert" style={{ margin: 0, color: 'var(--fw-foreground-muted)', fontSize: 13 }}>{error}</p>}

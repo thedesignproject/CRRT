@@ -7,6 +7,9 @@ export const publicPages = [
   { path: '/docs/agent-handoff', title: 'CRRT Agent API — Authentication and developer guide', description: 'CRRT Agent API documentation: scoped share tokens, presence, state, operations, events, and the OpenAPI specification.' },
   { path: '/docs/self-host', title: 'Self-host CRRT — Developer documentation', description: 'Run CRRT with your own frontend, API, and database infrastructure.' },
   { path: '/resources', title: 'Design systems, agent workflows & AI prototyping | CRRT', description: 'Practical guides and tools for designers and founders: review design systems, prototype with AI, and turn visual feedback into reviewed coding-agent fixes.' },
+  { path: '/privacy', title: 'Privacy at CRRT', description: 'What CRRT handles when you capture, review, and route visual feedback, including AI assistant connections.' },
+  { path: '/terms', title: 'CRRT terms of service', description: 'The terms for using CRRT Cloud, the CRRT browser extension, and CRRT connections to AI assistants.' },
+  { path: '/support', title: 'CRRT support', description: 'Get from installation to shared, contextual feedback, and recover cleanly when something gets in the way.' },
   ...resourcePages,
 ] as const
 

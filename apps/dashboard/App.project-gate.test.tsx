@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 
 const fixtures = vi.hoisted(() => ({
@@ -6,6 +6,8 @@ const fixtures = vi.hoisted(() => ({
   gate: { planRequired: false, trialAvailable: false },
   comments: [] as Array<Record<string, unknown>>,
   fn: vi.fn(),
+  check: vi.fn(),
+  claim: vi.fn(),
 }))
 vi.mock('../posthog', () => ({ default: { capture: vi.fn(), logger: { info: vi.fn() } } }))
 vi.mock('./lib/supabase', () => ({ supabase: {} }))
@@ -16,7 +18,7 @@ vi.mock('./hooks/useAuth', () => ({
   useAuth: () => ({ session: { access_token: 'session-token' }, user: { id: 'user-1', email: 'ada@example.com' }, loading: false, signOut: fixtures.fn }),
 }))
 vi.mock('./hooks/useProjects', () => ({
-  useProjects: () => ({ projects: fixtures.projects, loading: false, error: null, claimProject: fixtures.fn, checkAvailability: fixtures.fn, refresh: fixtures.fn }),
+  useProjects: () => ({ projects: fixtures.projects, loading: false, error: null, claimProject: fixtures.claim, checkAvailability: fixtures.check, refresh: fixtures.fn }),
 }))
 vi.mock('./hooks/useComments', () => ({
   useComments: () => ({ comments: fixtures.comments, commentsProjectId: null, loading: false, error: null, refresh: fixtures.fn }),
@@ -30,26 +32,34 @@ beforeEach(() => {
   window.history.replaceState({}, '', '/')
   fixtures.projects = []
   fixtures.gate = { planRequired: false, trialAvailable: false }
+  fixtures.check.mockReset().mockResolvedValue({ key: '', available: false, suggestion: '' })
+  fixtures.claim.mockReset()
   assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {})
   vi.stubGlobal('fetch', vi.fn(async () => new Response('[]')))
 })
 afterEach(() => { vi.unstubAllGlobals(); assign.mockRestore() })
 
 it.each([
-  [true, 'start free trial to create a project'],
-  [false, 'choose a plan to create a project'],
-])('sends owners without a plan from the welcome screen to Billing (trial available=%s)', async (trialAvailable, label) => {
+  [true, 'Start free trial'],
+  [false, 'Choose a plan'],
+])('sends owners without a plan from the first project page to Billing (trial available=%s)', async (trialAvailable, label) => {
   fixtures.gate = { planRequired: true, trialAvailable }
   render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: `▸ ${label}` }))
-  expect(assign).toHaveBeenCalledWith(route('/billing'))
-  expect(screen.queryByRole('heading', { name: 'Create a project' })).not.toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Create your first project' })).toBeInTheDocument()
+  expect(screen.getByRole('link', { name: label })).toHaveAttribute('href', route('/billing'))
+  expect(screen.queryByLabelText('Project name')).not.toBeInTheDocument()
 })
 
-it('opens the create-project form from the welcome screen when no plan is needed', async () => {
+it('creates the first project when its prompt is copied', async () => {
+  vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  fixtures.check.mockResolvedValue({ key: 'acme', available: true, suggestion: '' })
+  fixtures.claim.mockResolvedValue({ publicKey: 'acme' })
   render(<App />)
-  fireEvent.click(await screen.findByRole('button', { name: '▸ create your first project' }))
-  expect(await screen.findByRole('heading', { name: 'Create a project' })).toBeInTheDocument()
+  fireEvent.change(await screen.findByLabelText('Project name'), { target: { value: 'Acme' } })
+  await waitFor(() => expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeEnabled(), { timeout: 2000 })
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Copy prompt' })))
+  expect(fixtures.claim).toHaveBeenCalledWith('acme', 'Acme')
+  expect(await screen.findByText(/Waiting for the first pin on/)).toBeInTheDocument()
   expect(assign).not.toHaveBeenCalled()
 })
 
@@ -58,14 +68,14 @@ it.each([true, false])('routes the sidebar create action by plan (plan required=
   fixtures.gate = { planRequired, trialAvailable: true }
   render(<App />)
   await act(async () => {})
-  fireEvent.click(screen.getByRole('button', { name: 'Add project' }))
+  fireEvent.click(screen.getByRole('button', { name: 'New project' }))
   if (planRequired) {
     expect(assign).toHaveBeenCalledWith(route('/billing'))
-    expect(screen.queryByRole('heading', { name: 'Create a project' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'New project' })).not.toBeInTheDocument()
   } else {
-    expect(await screen.findByRole('heading', { name: 'Create a project' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('heading', { name: 'Create a project' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'New project' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Project' }))
+    expect(screen.queryByRole('heading', { name: 'New project' })).not.toBeInTheDocument()
     expect(assign).not.toHaveBeenCalled()
   }
 })

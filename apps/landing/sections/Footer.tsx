@@ -59,6 +59,7 @@ export function Footer() {
       <div className="landing-footer-legal">
         <span>© {new Date().getFullYear()} CRRT</span>
         <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
         <a href="/support">Support</a>
         <span>Made by <a href="https://designproject.io" target="_blank" rel="noreferrer">The Design Project</a></span>
       </div>

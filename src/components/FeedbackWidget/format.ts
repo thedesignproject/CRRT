@@ -11,8 +11,10 @@ export function getInitials(name: string | null | undefined): string | null {
   if (!name) return null
   const parts = name.trim().split(/\s+/).filter(Boolean)
   if (parts.length === 0) return null
-  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase()
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase()
+  // Whole characters, not UTF-16 halves: names can start with an emoji.
+  const first = (part: string) => Array.from(part)[0]!
+  if (parts.length === 1) return first(parts[0]!).toUpperCase()
+  return (first(parts[0]!) + first(parts[parts.length - 1]!)).toUpperCase()
 }
 
 export function timeAgo(date: string): string {

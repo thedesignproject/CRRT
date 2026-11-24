@@ -59,8 +59,8 @@ async function unlock(raw: unknown, actor: McpIdentity) {
 }
 
 export const documentUnlockTool: ToolSpec = {
-  name: 'unlock_document', scope: DASHBOARD_SCOPE, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
-  description: 'Unlock a password-protected document. If the user already supplied the password, pass shareKey and password directly; do not launch browser approval. Otherwise pass shareKey alone and follow the returned method: by default open browserUrl for the user to enter the password privately. Never ask the user to paste a password by default. Poll with requestId and pollToken after approval. Use the returned accessToken with get_document and add_document_comment, including shareKey. Grants are restricted to this MCP connection and published content; access changes invalidate them.',
+  name: 'unlock_document', title: 'Unlock a password-protected document', scope: DASHBOARD_SCOPE, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+  description: 'Unlocks a password-protected document for this connection. With shareKey and password, unlocks directly. With shareKey alone, returns a browserUrl where the user enters the password privately, plus requestId and pollToken for checking the result. Returns an accessToken for get_document and add_document_comment. Access is limited to this connection and published content, and ends when document access changes.',
   input: unlockInput, output: z.record(z.string(), z.unknown()), maxResultBytes: 16777216,
   async run(raw, actor) {
     try { return await unlock(raw, actor) }

@@ -49,8 +49,8 @@ export const AUTHOR_COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B9
 
 export const DISPLAY_STATUS_LABELS: Record<DisplayStatus, string> = {
   open: 'Open',
-  ready: 'Ready for Agent',
-  ready_for_testing: 'Ready for testing',
+  ready: 'Agent',
+  ready_for_testing: 'Testing',
   done: 'Done',
   rejected: 'Rejected',
 }

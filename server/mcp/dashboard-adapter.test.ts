@@ -21,7 +21,7 @@ import type { DashboardOperation } from './dashboard-operations.js'
 const actor = { user_id: 'user', email: 'user@test.local', connection_id: 'connection' }
 const ok = (data: unknown = null) => ({ data, error: null })
 const handler = vi.fn()
-const operation: DashboardOperation = { name: 'test', description: 'Test', method: 'GET', query: ['projectId'], required: ['projectId'], body: '', load: async () => ({ default: handler }) }
+const operation: DashboardOperation = { name: 'test', tool: 'test_tool', title: 'Test', description: 'Test', method: 'GET', query: ['projectId'], required: ['projectId'], body: {}, destructive: false, openWorld: false, superAdmin: false, load: async () => ({ default: handler }) }
 const key = 'one-request-key-123'
 beforeEach(() => {
   fake.results = []; fake.calls = []; handler.mockReset(); promptReader.mockReset()
@@ -148,4 +148,11 @@ it('routes recovery through the allowlisted prompt reader with the authenticated
   promptReader.mockImplementationOnce((_req,res)=>res.status(200).json({tokenUrl:'https://crrt.test/state?token=renewed'}))
   expect(await run(create,undefined,{},key)).toMatchObject({ok:true,data:{shareId:'share',token:'renewed'}})
   expect(handler).toHaveBeenCalledTimes(1)
+})
+
+it('removes internal row fields and raw 500 error text from dashboard results', async () => {
+  handler.mockImplementation((_req, res) => res.status(200).json({ comments: [{ id: 'one', github_issue_lease_token: 'lease', screenshotStoragePath: 'path', nested: [{ screenshot_storage_path: 'path', keep: 1 }] }] }))
+  expect(await runDashboardOperation(operation, { projectId: 'project' }, {}, actor)).toEqual({ ok: true, status: 200, data: { comments: [{ id: 'one', nested: [{ keep: 1 }] }] } })
+  handler.mockImplementation((_req, res) => res.status(500).json({ error: 'relation "comments" violates constraint' }))
+  expect(await runDashboardOperation(operation, { projectId: 'project' }, {}, actor)).toMatchObject({ ok: false, status: 500, code: 'service_unavailable', data: { error: 'The CRRT service could not complete this request.' } })
 })

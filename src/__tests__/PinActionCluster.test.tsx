@@ -36,6 +36,21 @@ describe('PinActionCluster', () => {
     expect(queryByText('Edit')).toBeNull()
   })
 
+  it('opens the menu upward when there is no room below the button', () => {
+    const { getByLabelText, getByText } = render(<PinActionCluster {...makeProps()} />)
+    const more = getByLabelText('More options')
+    const menuOf = () => getByText('Delete').closest('div[style*="position: absolute"]') as HTMLElement
+    more.getBoundingClientRect = () => ({ bottom: window.innerHeight - 20 } as DOMRect)
+    fireEvent.click(more)
+    expect(menuOf().style.bottom).toBe('30px')
+    expect(menuOf().style.top).toBe('')
+    fireEvent.click(more)
+    more.getBoundingClientRect = () => ({ bottom: 100 } as DOMRect)
+    fireEvent.click(more)
+    expect(menuOf().style.top).toBe('30px')
+    expect(menuOf().style.bottom).toBe('')
+  })
+
   it('renders Reopen when resolved and fires onToggleResolve', () => {
     const props = makeProps({ isResolved: true })
     const { getByLabelText, getByText } = render(<PinActionCluster {...props} />)
@@ -166,6 +181,27 @@ describe('PinActionCluster', () => {
     expect(getByText('View list')).toBeInTheDocument()
     expect(queryByText('Edit')).toBeNull()
     expect(queryByText('Delete')).toBeNull()
+  })
+
+  it('hides Edit but keeps Delete when editEnabled is false', () => {
+    const { getByLabelText, getByText, queryByText } = render(
+      <PinActionCluster {...makeProps({ mutationEnabled: true, editEnabled: false })} />,
+    )
+    fireEvent.click(getByLabelText('More options'))
+    expect(queryByText('Edit')).toBeNull()
+    expect(getByText('Delete')).toBeInTheDocument()
+  })
+
+  it('defaults editEnabled to mutationEnabled', () => {
+    const enabled = render(<PinActionCluster {...makeProps({ mutationEnabled: true })} />)
+    fireEvent.click(enabled.getByLabelText('More options'))
+    expect(enabled.queryByText('Edit')).not.toBeNull()
+    enabled.unmount()
+
+    const disabled = render(<PinActionCluster {...makeProps({ mutationEnabled: false })} />)
+    fireEvent.click(disabled.getByLabelText('More options'))
+    expect(disabled.queryByText('Edit')).toBeNull()
+    expect(disabled.queryByText('Delete')).toBeNull()
   })
 
   it('hides the menu when no action is available', () => {

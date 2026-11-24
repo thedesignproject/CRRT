@@ -1,0 +1,18 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "crrt-bombadil-experiment",
+      "devDependencies": {
+        "@antithesishq/bombadil": "0.8.0",
+        "typescript": "5.9.3",
+      },
+    },
+  },
+  "packages": {
+    "@antithesishq/bombadil": ["@antithesishq/bombadil@0.8.0", "", { "bin": { "bombadil": "bin/bombadil.js" } }, "sha512-BVMjC4vDR2wOhSS0uWMiS3KqVWb8Y9BdN+KiJwBSXi7+vZ5HkLkBfTCk83Dal5E0Evb3wSOT46SFxLgNCGXbmQ=="],
+
+    "typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+  }
+}

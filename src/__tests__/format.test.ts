@@ -29,6 +29,12 @@ describe('getInitials', () => {
     expect(getInitials('  bob  ')).toBe('B')
   })
 
+  it('keeps emoji and other astral characters whole', () => {
+    expect(getInitials('😀Tester')).toBe('😀')
+    expect(getInitials('Ada 🦐Lovelace')).toBe('A🦐')
+    expect(getInitials('𝒜lice')).toBe('𝒜')
+  })
+
   it('returns first + last initials for multi-word names', () => {
     expect(getInitials('Ada Lovelace')).toBe('AL')
     expect(getInitials('grace b hopper')).toBe('GH')

@@ -1,28 +1,11 @@
-@import "tailwindcss";
+/* Studio: Tailwind, the token set and its theme mapping come from @crrt/ui. */
+@import "../../packages/ui/src/styles/globals.css";
+@source "../../packages/ui/src";
 
-/* Opt in here, never in shared widget/landing styles. */
+/* Legacy --crrt-* fonts still used by screens not yet on Studio. */
 :root {
   --crrt-font-sans: var(--crrt-dashboard-font);
   --crrt-font-body: var(--crrt-dashboard-font);
-}
-:root[data-theme="light"] {
-  --background: var(--crrt-dashboard-white);
-  --foreground: var(--crrt-dashboard-ink);
-  --card: var(--crrt-dashboard-white);
-  --card-foreground: var(--crrt-dashboard-ink);
-  --popover: var(--crrt-dashboard-white);
-  --popover-foreground: var(--crrt-dashboard-ink);
-  --muted: var(--crrt-dashboard-sidebar);
-  --muted-foreground: var(--crrt-dashboard-muted);
-  --secondary: var(--crrt-dashboard-sidebar);
-  --secondary-foreground: var(--crrt-dashboard-ink);
-  --border: var(--crrt-dashboard-border);
-  --input: var(--crrt-dashboard-border);
-  --primary: var(--crrt-dashboard-orange);
-  --primary-foreground: var(--crrt-dashboard-white);
-  --ring: var(--crrt-dashboard-orange);
-  --accent: var(--crrt-dashboard-hover);
-  --accent-foreground: var(--crrt-dashboard-ink);
 }
 
 /* Light-mode override — mirrors tokens.css [data-theme="light"] selector */
@@ -30,8 +13,6 @@
 
 /* Status colors — not in tokens.css, dashboard-specific */
 :root {
-  --status-open: oklch(0.60 0.01 90);
-  --status-open-bg: oklch(0.24 0.005 90);
   --status-accepted: oklch(0.65 0.17 155);
   --status-accepted-bg: oklch(0.22 0.03 155);
   --status-rejected: oklch(0.65 0.2 25);
@@ -50,19 +31,9 @@
 
   --scrollbar-thumb: oklch(0.30 0.005 90);
   --scrollbar-thumb-hover: oklch(0.40 0.005 90);
-
-  /* Dashboard override: --accent is for chrome hovers (filters, tabs, dropdown
-     rows, theme toggle, etc.). Brand phosphor amber (--crrt-phosphor) reads as
-     a status signal and is too loud for default hover surfaces. Map --accent
-     to a quiet elevated neutral instead; phosphor stays available where it
-     belongs via --crrt-phosphor and --color-status-* tokens. */
-  --accent: oklch(0.26 0.005 90);
-  --accent-foreground: var(--crrt-white);
 }
 
 [data-theme="light"] {
-  --status-open: oklch(0.45 0.01 90);
-  --status-open-bg: oklch(0.94 0.005 90);
   --status-accepted: oklch(0.50 0.17 155);
   --status-accepted-bg: oklch(0.94 0.05 155);
   --status-rejected: oklch(0.55 0.20 25);
@@ -79,47 +50,13 @@
 
   --scrollbar-thumb: oklch(0.85 0.005 90);
   --scrollbar-thumb-hover: oklch(0.75 0.005 90);
-
-  --accent: oklch(0.94 0.005 90);
-  --accent-foreground: var(--crrt-ink);
 }
 
+/* Legacy feedback statuses, until the inbox moves to Studio StatusChip. */
 @theme inline {
-  --radius: var(--crrt-radius-xl);
-  --font-sans: var(--crrt-font-sans);
-  --font-mono: var(--crrt-font-mono);
-  --font-crt: var(--crrt-font-crt);
-
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-
-  --color-sidebar: var(--card);
-  --color-sidebar-foreground: var(--card-foreground);
-  --color-sidebar-primary: var(--primary);
-  --color-sidebar-primary-foreground: var(--primary-foreground);
-  --color-sidebar-accent: var(--accent);
-  --color-sidebar-accent-foreground: var(--accent-foreground);
-  --color-sidebar-border: var(--border);
-  --color-sidebar-ring: var(--ring);
-
-  --color-status-open: var(--status-open);
+  /* Open shares Studio's --status-open-* so the two never disagree. */
+  --color-status-open: var(--status-open-fg);
   --color-status-open-bg: var(--status-open-bg);
   --color-status-accepted: var(--status-accepted);
   --color-status-accepted-bg: var(--status-accepted-bg);
@@ -139,12 +76,7 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
   body {
-    @apply bg-background text-foreground;
-    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -372,49 +304,16 @@
   animation-delay: 0.3s;
 }
 
-/* Button press */
-.dashboard-shell {
-  display: grid;
-  grid-template-columns: 192px minmax(0, 1fr);
-  grid-template-rows: 64px minmax(0, 1fr) auto;
-  height: 100dvh;
-  overflow: hidden;
-}
-.dashboard-navigation {
-  display: flex;
-  flex-direction: column;
-  grid-row: 1 / -1;
-  background: var(--muted);
-  border-right: 1px solid var(--border);
-  padding: var(--crrt-space-7) var(--crrt-space-4);
-  min-height: 0;
-  overflow-y: auto;
-}
-.dashboard-navigation > a, .dashboard-nav-label { flex-shrink: 0; }
-.dashboard-navigation-footer { margin-top: auto; padding-top: var(--crrt-space-7); display: flex; flex-direction: column; gap: var(--crrt-space-2); flex-shrink: 0; }
-.dashboard-navigation-footer:empty { display: none; }
-.dashboard-navigation-action { display: flex; align-items: center; gap: var(--crrt-space-3); min-height: 36px; padding: var(--crrt-space-3) var(--crrt-space-4); border-radius: var(--crrt-radius-md); font-size: 13px; font-weight: 500; text-align: left; color: var(--muted-foreground); }
-.dashboard-navigation-action svg { flex-shrink: 0; }
-.dashboard-navigation-action:hover { background: var(--dashboard-row-hover); color: var(--foreground); }
-.dashboard-navigation-action[aria-pressed="true"] { background: var(--accent); color: var(--foreground); }
-.dashboard-nav-label { color: var(--muted-foreground); font-size: 12px; margin: var(--crrt-space-8) var(--crrt-space-3) var(--crrt-space-4); }
-.dashboard-projects { display: flex; flex-direction: column; align-items: stretch; gap: var(--crrt-space-2); }
-.dashboard-projects > button { display: flex; align-items: center; text-align: left; min-height: 36px; font-weight: 500; font-size: 13px; max-width: 100%; }
-.dashboard-projects > button[aria-label="Add project"] { width: 100%; gap: var(--crrt-space-3); justify-content: flex-start; padding-left: var(--crrt-space-4); }
-.dashboard-projects > button[aria-label="Add project"]::after { content: 'Create project'; }
-.dashboard-toolbar { min-width: 0; display: flex; align-items: center; gap: var(--crrt-space-5); justify-content: space-between; padding: var(--crrt-space-4) var(--crrt-space-7); border-bottom: 1px solid var(--border); }
-.dashboard-tools { display: flex; align-items: center; gap: var(--crrt-space-3); min-width: 0; }
 .dashboard-agent-launcher-open { background: var(--accent); color: var(--foreground); }
 .dashboard-agent-ready-count { border: 1px solid color-mix(in srgb, var(--status-accepted) 24%, transparent); background: var(--status-accepted-bg); color: var(--status-accepted); animation: dashboard-agent-ready-pulse var(--crrt-duration-slow) ease-out both; }
 @keyframes dashboard-agent-ready-pulse { from { box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-accepted) 38%, transparent); } to { box-shadow: 0 0 0 6px transparent; } }
-.dashboard-main { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.dashboard-main { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .dashboard-feedback { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
-.dashboard-comment-list { width: 340px; min-height: 0; }
+.dashboard-comment-list { width: 384px; min-height: 0; }
 .dashboard-comment-detail { min-height: 0; }
 .dashboard-detail-content { display: flex; flex-direction: column; width: 100%; }
 .dashboard-comment-body { order: -1; }
 .dashboard-comment-body > div > p { font-size: 17px; line-height: 1.65; }
-.dashboard-shell > footer { grid-column: 2; font-family: var(--crrt-dashboard-font); gap: var(--crrt-space-4); height: 36px; }
 .dashboard-shell :is(button, a, input, select, summary):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 .dashboard-shell .card-hover:hover { transform: none; background: var(--accent); }
 .dashboard-shell .font-bold { font-weight: 600; }
@@ -442,30 +341,13 @@
 .dashboard-bulk-danger, .dashboard-bulk-menu button.dashboard-bulk-danger { color: var(--status-rejected); }
 .dashboard-bulk-danger:hover, .dashboard-bulk-menu button.dashboard-bulk-danger:hover { background: var(--status-rejected-bg); }
 @media (max-width: 1100px) {
-  .dashboard-shell { grid-template-columns: 160px minmax(0,1fr); }
   .dashboard-comment-list { width: 290px; }
-  .dashboard-toolbar { padding: var(--crrt-space-4) var(--crrt-space-5); }
-  .dashboard-toolbar h1 { display: none; }
-  .dashboard-tools { flex: 1; justify-content: flex-end; }
 }
 @media (max-width: 767px) {
-  .dashboard-shell { display: flex; flex-direction: column; }
-  .dashboard-navigation { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--crrt-space-4); padding: var(--crrt-space-4); border-right: 0; border-bottom: 1px solid var(--border); overflow: visible; }
-  .dashboard-navigation-footer { flex-basis: 100%; flex-direction: row; margin-top: 0; padding-top: 0; }
-  .dashboard-navigation > a { flex-shrink: 0; }
-  .dashboard-nav-label { display: none; }
-  .dashboard-projects { flex: 1; flex-direction: row; overflow-x: auto; min-width: 0; }
-  .dashboard-projects > button { flex-shrink: 0; max-width: 160px; }
-  .dashboard-projects > button[aria-label="Add project"] { width: 36px; }
-  .dashboard-projects > button[aria-label="Add project"]::after { content: none; }
-  .dashboard-toolbar { flex-shrink: 0; padding: var(--crrt-space-3) var(--crrt-space-4); }
-  .dashboard-tools { flex-wrap: wrap; }
   .dashboard-main { flex: 1; overflow-y: auto; }
   .dashboard-feedback { flex-direction: column; overflow-y: auto; }
   .dashboard-comment-list { width: 100%; height: 34dvh; min-height: 180px; border-right: 0; border-bottom: 1px solid var(--border); }
   .dashboard-comment-detail { flex: 1 0 380px; overflow: visible; }
-  .dashboard-shell > footer { flex-wrap: wrap; height: auto; min-height: 36px; padding: var(--crrt-space-3); gap: var(--crrt-space-3); }
-  .dashboard-shell > footer > span { display: none; }
   .dashboard-detail-actions { padding: var(--crrt-space-5); }
   .dashboard-bulk-bar { --dashboard-bulk-x: 0; position: fixed; right: var(--crrt-space-4); bottom: calc(52px + env(safe-area-inset-bottom)); left: var(--crrt-space-4); width: auto; max-width: none; transform: none; border-radius: var(--crrt-radius-2xl); flex-wrap: wrap; }
   .dashboard-bulk-divider { display: none; }
@@ -485,7 +367,6 @@
 
 /* CRRT Record — frontend demo surface. The recorder remains in the extension;
    this dashboard view demonstrates its library and launch handoff. */
-.recordings-new-dot { padding: 2px 5px; border-radius: var(--crrt-radius-pill); background: color-mix(in srgb, var(--primary) 13%, transparent); color: var(--primary); font-size: 8px; font-weight: 700; }
 .recordings-page { flex: 1; min-width: 0; overflow-y: auto; padding: 42px clamp(24px, 5vw, 72px) 80px; background: var(--background); }
 .recordings-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 28px; }
 .recordings-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--primary); font-size: 10px; font-weight: 650; }

@@ -75,9 +75,8 @@ export function SupportPage() {
         <H3>Payment or subscription needs attention</H3>
         <P>
           The project owner opens <Strong>Billing &amp; usage</Strong> in the dashboard. Use <Strong>Manage billing</Strong>
-          to update the payment method, download invoices, cancel, or restore service through Stripe. During the
-          seven-day recovery period, existing work remains available. After paid access ends, existing Cloud data
-          remains readable and exportable while new paid operations stay blocked.
+          to update the payment method, download invoices, cancel, or restore service through Stripe. After paid
+          access ends, existing Cloud data remains readable and exportable while new paid operations stay blocked.
         </P>
       </Section>
 

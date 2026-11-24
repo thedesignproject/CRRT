@@ -55,6 +55,11 @@ async function result<T>(query: PromiseLike<{ data: T | null; error: { message: 
   }
   return data as T
 }
+export function maskEmail(author: string | null): string | null {
+  if (!author) return author
+  const at = author.indexOf('@')
+  return at > 0 ? author.slice(0, at) : author
+}
 function view(d: Row, role: string | null): DocumentView {
   return {
     id: d.id,
@@ -64,7 +69,8 @@ function view(d: Row, role: string | null): DocumentView {
     body: d.body,
     version: d.version,
     publishedRevision: d.published_revision,
-    shareKey: d.share_key,
+    // Only managers share the link; readers and guests already reach it by URL or invitation.
+    shareKey: role === 'admin' ? d.share_key : '',
     sharing: d.sharing,
     passwordProtected: Boolean(d.password_hash),
     archived: d.archived,
@@ -200,7 +206,10 @@ export async function executeDocument(raw: unknown, actor: Actor): Promise<Docum
       .order('id')
     if (input.feedbackId) query = query.eq('id', input.feedbackId)
     else query = query.range(input.offset, input.offset + 49)
-    const feedback = await result(query)
+    const rows = await result<{ author: string | null }[]>(query)
+    // Signed-in commenters are stored by email. Only project editors see full addresses;
+    // invited readers, guests, and link or password readers see the name before the @.
+    const feedback = role === 'admin' || role === 'member' ? rows : rows.map((row) => ({ ...row, author: maskEmail(row.author) }))
     const invites = role === 'admin' && !byShare ? await result<{ email: string }[]>(db.from('document_invites').select('email').eq('document_id', d.id)) : []
     return { document: view(shown, role), feedback: feedback as DocumentResult['feedback'], invites: invites.map((i) => i.email), nextOffset: !input.feedbackId && feedback.length === 50 ? input.offset + 50 : null }
   }

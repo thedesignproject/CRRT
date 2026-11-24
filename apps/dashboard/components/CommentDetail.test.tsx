@@ -8,7 +8,6 @@ vi.mock('../api', () => ({
   sendExternalWork: vi.fn(),
   resolvePendingExternalWork: vi.fn(),
 }))
-vi.mock('./StorybookIntegrationSettings', () => ({ StorybookIntegrationSettings: () => <div>Storybook setup</div> }))
 
 import { getExternalWorkDraft, retryExternalWorkSync, resolvePendingExternalWork, sendExternalWork } from '../api'
 import type { CommentRecord } from '../api'
@@ -145,7 +144,7 @@ describe('dashboard shortcut hints', () => {
       selectedCommentId=""
     />)
     const actionHints = [
-      ['Toggle Ready for Agent', 'A'], ['Toggle Done', 'M'],
+      ['Toggle Send to Agent', 'A'], ['Toggle Done', 'M'],
       ['Toggle Reject', 'D'], ['Toggle agent panel', 'S'],
     ]
     for (const [label, key] of actionHints) {
@@ -601,7 +600,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       selectedComment={{ ...comment, screenshotUrl: 'https://cdn.example/image.png' }}
     />)
     expect(screen.getByAltText('Screenshot of https://example.com')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Ready for Agent/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Send to Agent/ }))
     fireEvent.click(screen.getByRole('button', { name: /Mark Done/ }))
     fireEvent.click(screen.getByRole('button', { name: /Reject/ }))
     fireEvent.click(screen.getByRole('button', { name: /Open page/ }))
@@ -625,7 +624,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
       {...props}
       selectedComment={{ ...comment, implementationStatus: 'ready_for_testing' }}
     />)
-    expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
+    expect(screen.getByText('Testing')).toHaveClass('text-status-ready-for-testing')
     open.mockRestore()
   })
 
@@ -673,7 +672,7 @@ describe('<CommentDetail /> GitHub issue action', () => {
   it('renders the no-selection state safely', () => {
     render(<CommentDetail {...props} selectedComment={null} />)
     expect(screen.getByText('Select a comment')).toBeInTheDocument()
-    expect(screen.getByText('Pick a feedback item from the list to see the full context, screenshot, and actions.')).toBeInTheDocument()
+    expect(screen.getByText('See the pinned element, what the agent did and the thread.')).toBeInTheDocument()
     expect(screen.queryByText('Select an extension comment')).toBeNull()
   })
 
@@ -684,10 +683,9 @@ describe('<CommentDetail /> GitHub issue action', () => {
         selectedComment={null}
         projectComments={[]}
         filteredComments={[]}
-        canManageStorybook={false}
       />,
     )
-    expect(screen.getByText('Bring feedback into this project.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Bring feedback into this project' })).toBeInTheDocument()
   })
 
   it('explains when the selected provider is not connected', async () => {

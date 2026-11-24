@@ -60,10 +60,10 @@ describe('<AgentSidebar /> testing queue', () => {
     const queueItems = within(queue).getAllByRole('button')
     expect(queueItems.map((item) => item.textContent)).toEqual([
       expect.stringContaining('Ready'),
-      expect.stringContaining('Ready for testing'),
+      expect.stringContaining('Testing'),
       expect.stringContaining('Done'),
     ])
-    expect(within(queue).getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
+    expect(within(queue).getByText('Testing')).toHaveClass('text-status-ready-for-testing')
     const active = within(queue).getByRole('button', { current: true })
     expect(active).toHaveClass('bg-accent')
     expect(active.className).not.toContain('border-l')

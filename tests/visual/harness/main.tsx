@@ -12,7 +12,7 @@ style.textContent = tokens.replace(/@import\s+url\([^)]*\)\s*;/g, '')
 document.head.prepend(style)
 const theme = new URLSearchParams(location.search).get('theme') ?? 'dark'
 document.documentElement.dataset.theme = theme
-localStorage.setItem('dashboard-theme', theme)
+localStorage.setItem('crrt-dashboard-theme', theme)
 localStorage.setItem('crrt-landing-theme', theme)
 const path = location.pathname
 if (path.startsWith('/widget-agent')) {
