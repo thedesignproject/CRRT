@@ -43,8 +43,8 @@ function callback(raw: string) {
   const url = new URL(z.url().max(2048).parse(raw))
   // Native clients finish OAuth on their own loopback listener. This is safe
   // in production too: callbacks remain registered exactly and PKCE-bound.
-  const loopback = ['127.0.0.1', '[::1]'].includes(url.hostname)
-  const local = url.protocol === 'http:' && (loopback || (process.env.NODE_ENV !== 'production' && url.hostname === 'localhost'))
+  // Claude Code registers http://localhost:<port>/callback; Codex uses 127.0.0.1.
+  const local = url.protocol === 'http:' && ['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)
   const trusted = (process.env.MCP_CALLBACK_ORIGINS ?? '').split(',').includes(url.origin)
   ensure(!url.username && !url.password && !url.hash && (local || (url.protocol === 'https:' && trusted)), 400, 'invalid_redirect_uri')
   return raw

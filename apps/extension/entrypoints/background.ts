@@ -426,6 +426,19 @@ export async function activateCurrentTab(): Promise<void> {
   }
 }
 
+// A same-origin reload keeps both the tab activation and Chrome's activeTab grant,
+// so pins come back without reopening comment mode. Other pages stay untouched.
+export async function restoreCommenting(tabId: number, pageUrl: string | undefined): Promise<boolean> {
+  if (!await tabActivation(tabId, pageUrl)) return false
+  try {
+    await browser.scripting.executeScript({ target: { tabId }, files: ['comment-restore.js'] })
+    return true
+  } catch {
+    // Chrome revokes activeTab after a restart; the next Start commenting restores access.
+    return false
+  }
+}
+
 export default defineBackground(() => {
   const captureRevisions = new Map<string, number>()
   const invalidateCapture = (key: string) => captureRevisions.set(key, (captureRevisions.get(key) ?? 0) + 1)
@@ -572,9 +585,10 @@ export default defineBackground(() => {
       await cancelIntegratedRecording(current)
     })
   })
-  browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+  browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
     if (changeInfo.url || changeInfo.status === 'loading') invalidateCapture(`tab:${tabId}`)
     if (changeInfo.url) void clearNavigatedTab(tabId, changeInfo.url)
+    if (changeInfo.status === 'complete') void restoreCommenting(tabId, tab?.url)
     if (changeInfo.status === 'complete') void recordingSession().then(async (current) => {
       if (current?.tabId !== tabId) return
       await injectRecordingSurface(tabId).catch(() => browser.runtime.sendMessage({

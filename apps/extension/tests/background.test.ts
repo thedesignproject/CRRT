@@ -4,7 +4,7 @@ const state = vi.hoisted(() => ({
   listener: undefined as ((message: unknown, sender: unknown, respond: (response: unknown) => void) => boolean) | undefined,
   removed: undefined as ((tabId: number) => void) | undefined,
   activated: undefined as ((info: { windowId: number }) => void) | undefined,
-  updated: undefined as ((tabId: number, changeInfo: { url?: string; status?: string }) => void) | undefined,
+  updated: undefined as ((tabId: number, changeInfo: { url?: string; status?: string }, tab?: { url?: string }) => void) | undefined,
   command: undefined as ((command: string) => void) | undefined,
   session: {} as Record<string, unknown>,
 }))
@@ -46,7 +46,7 @@ const hasAcceptedDisclosure = vi.hoisted(() => vi.fn())
 vi.mock('../lib/disclosure', () => ({ hasAcceptedDisclosure }))
 vi.mock('../lib/frame-channel', () => ({ relayFrameMessage: vi.fn() }))
 
-import background, { activateCurrentTab, tabActivation } from '../entrypoints/background'
+import background, { activateCurrentTab, restoreCommenting, tabActivation } from '../entrypoints/background'
 import { createExtensionSupabase, handleAuthMessage, isAuthMessage } from '../lib/auth'
 import { relayFrameMessage } from '../lib/frame-channel'
 import { startHostedSignIn } from '../lib/hosted-auth'
@@ -274,6 +274,19 @@ describe('extension background', () => {
     await vi.waitFor(() => expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'record:controller-warning', sessionId: 'session-nav' })))
     state.removed!(7)
     await vi.waitFor(() => expect(state.session).not.toHaveProperty('crrt:recording-session'))
+  })
+
+  it('restores pins after a same-origin reload without reopening comment mode', async () => {
+    ;(background as unknown as () => void)()
+    state.session['crrt:active-tab:7'] = activation('https://example.com', 'kept')
+    state.updated!(7, { status: 'complete' }, { url: 'https://example.com/page' })
+    await vi.waitFor(() => expect(browser.scripting.executeScript).toHaveBeenCalledWith({ target: { tabId: 7 }, files: ['comment-restore.js'] }))
+    browser.scripting.executeScript.mockClear()
+    state.updated!(8, { status: 'complete' }, { url: 'https://example.com/page' })
+    await expect(restoreCommenting(8, 'https://example.com/page')).resolves.toBe(false)
+    browser.scripting.executeScript.mockRejectedValueOnce(new Error('activeTab revoked'))
+    await expect(restoreCommenting(7, 'https://example.com/page')).resolves.toBe(false)
+    expect(browser.scripting.executeScript).toHaveBeenCalledTimes(1)
   })
 
   it('activates regular pages using temporary tab access', async () => {

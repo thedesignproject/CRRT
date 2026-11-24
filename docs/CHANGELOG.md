@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.27] - Unreleased
+
+### Fixed
+- Public widgets now show an error when the server rejects a new comment, keeping the draft so it can be sent again. Previously the send failed silently.
+- Public widgets no longer offer Edit, which only changed the text on screen and was lost on reload. Widgets with a comments adapter keep Edit.
+- Public widgets now show an error and undo the change when the server rejects an approval, instead of showing it as approved until the next reload.
+- Public widgets keep a comment and show an error when the server rejects a delete, instead of hiding it until the next reload.
+- The feedback name dialog keeps keyboard focus on "Log in to CRRT" while it connects, instead of dropping focus out of the dialog.
+- Pin popovers near the bottom of the window open upward, and their action menu opens above the button when there is no room below, so Approve, Edit and Delete stay reachable.
+- Escape closes the "Send feedback to…" and "Send to GitHub/Linear/Jira" dialogs, instead of closing the pin popover behind them. A send in progress can't be dismissed.
+- The widget keeps you signed in across reloads and when opening the agent.
+- Avatar initials keep emoji and other non-basic characters whole, instead of showing a broken character for names that start with one.
+
+This version is prepared for review. Publishing requires the reviewed release commit, release tag, and successful npm workflow.
+
 ## [0.3.26] - Unreleased
 
 ### Fixed

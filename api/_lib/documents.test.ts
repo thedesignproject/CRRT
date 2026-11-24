@@ -10,7 +10,7 @@ vi.mock('./supabase.js', () => {
   return { getServiceSupabase: () => ({ ...q, rpc: (...args: unknown[]) => { fake.calls.push(args); return Promise.resolve(fake.queue.shift()) } }) }
 })
 vi.mock('./store.js', () => ({ getProjectMember: fake.member }))
-import { executeDocument } from './documents.js'
+import { executeDocument, maskEmail } from './documents.js'
 const id = randomUUID(), key = randomUUID(), actor = { userId: randomUUID(), email: 'reviewer@test.local' }
 const doc = { id, created_by:actor.userId, access_mode:'link', project_id: 'p', title: 'Draft title', body: 'Draft secret', version: 2, published_revision: 1, share_key: randomUUID(), sharing: true, password_hash: null as string | null, access_version: 1, archived: false, updated_at: 'now' }
 const ok = (data: unknown) => ({ data, error: null })
@@ -50,6 +50,24 @@ it('shows drafts to members, published content to readers, and does not expose s
   }
   fake.member.mockResolvedValue({ role: 'admin', feedbackAllowed: false })
   fake.queue.push(ok(doc), ok({ title: 'Public', body: '' }), ok([])); await run('read',{shareKey:doc.share_key})
+})
+it('limits share keys to managers and hides commenter emails from non-editors', async () => {
+  const comments = [{ id: 'a', author: 'ana@client.test' }, { id: 'b', author: 'Guest name' }]
+  fake.queue.push(ok(doc), ok(comments), ok([]))
+  const own = await run('read')
+  expect(own.document!.shareKey).toBe(doc.share_key)
+  expect(own.feedback!.map((f) => f.author)).toEqual(['ana@client.test', 'Guest name'])
+  fake.member.mockResolvedValue({ role: 'member' }); fake.queue.push(ok({ ...doc, created_by: 'other', access_mode: 'project' }), ok(comments))
+  const member = await run('read')
+  expect(member.document!.shareKey).toBe('')
+  expect(member.feedback![0].author).toBe('ana@client.test')
+  fake.member.mockResolvedValue({ role: 'guest' }); fake.queue.push(ok({ ...doc, created_by: 'other', access_mode: 'project' }), ok({ title: 'Published', body: 'Body' }), ok(comments))
+  expect((await run('read')).feedback!.map((f) => f.author)).toEqual(['ana', 'Guest name'])
+  fake.queue.push(ok(doc), ok({ title: 'Published', body: 'Body' }), ok(comments))
+  const link = await run('read', { shareKey: doc.share_key }, null)
+  expect(link.document!.shareKey).toBe('')
+  expect(link.feedback!.map((f) => f.author)).toEqual(['ana', 'Guest name'])
+  expect(maskEmail(null)).toBeNull()
 })
 it('fails closed for missing, disabled, unpublished and archived public documents', async () => {
   fake.queue.push(ok(null)); await expect(run('read')).rejects.toMatchObject({ status: 404 })

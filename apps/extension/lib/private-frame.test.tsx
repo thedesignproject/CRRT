@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 const channel = vi.hoisted(() => ({ receive: vi.fn(), send: vi.fn(), stop: vi.fn(), widget: vi.fn() }))
 vi.mock('./frame-channel', () => ({ receiveFrameMessages: channel.receive, sendFrameMessage: channel.send }))
-import { usePrivateFrame, frameBounds } from './private-frame'
+import { usePrivateFrame, frameBounds, restoreComposerFocus } from './private-frame'
 function PrivateFrame() {
   const value = usePrivateFrame()
   if (!value.page) return null
@@ -79,4 +79,29 @@ it('publishes only visible interactive rectangles, including launcher popovers a
   expect(frameBounds()).toEqual([[2, 12, 116, 66], [0, 0, 28, 28]])
   expect(frameBounds(128)).toEqual([[0, 0, 238, 198], [0, 0, 148, 148]])
   root.remove()
+})
+it('puts focus back in the composer after the page hides the frame for a screenshot', async () => {
+  const view = render(<PrivateFrame />); await act(async () => {})
+  const composer = document.querySelector('[data-fw-crrt]')!
+  const textarea = document.createElement('textarea'); composer.append(textarea)
+  // The textarea focused before capture loses focus while the frame is hidden.
+  textarea.focus()
+  channel.send.mockImplementationOnce(async () => { textarea.blur(); return null })
+  await act(async () => { await props().page.capture() })
+  expect(document.activeElement).toBe(textarea)
+  // Autofocus that ran while hidden falls back to the composer.
+  textarea.blur()
+  channel.send.mockResolvedValueOnce(null)
+  await act(async () => { await props().page.capture() })
+  expect(document.activeElement).toBe(textarea)
+  // Never steal focus the user already moved elsewhere.
+  const other = document.createElement('input'); document.body.append(other)
+  channel.send.mockImplementationOnce(async () => { other.focus(); return null })
+  await act(async () => { await props().page.capture() })
+  expect(document.activeElement).toBe(other)
+  other.remove(); view.unmount()
+})
+it('leaves focus alone when there is no composer to restore', () => {
+  restoreComposerFocus(null)
+  expect(document.activeElement).toBe(document.body)
 })

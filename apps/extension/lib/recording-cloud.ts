@@ -11,6 +11,8 @@ import { uploadMultipart, type MultipartAuthorization } from './recording-multip
 export type CloudRecording = {
   id: string; shareId: string | null; authorId: string; manifest: Manifest
   uploads: Record<string, UploadCheckpoint>; finalized?: boolean; deleted?: boolean
+  /** The project last confirmed by the server. */
+  projectKey?: string | null
 }
 export const recordingApi = import.meta.env.WXT_API_BASE
 async function recordingSession() {
@@ -77,7 +79,7 @@ async function sync(input: LocalRecording, changed: (recording: LocalRecording) 
       clientKey: recording.cloudClientKey || recording.id, title: recording.title, source: recording.source,
       consent: { policyVersion: 'record-v1', hostedTranscription: recording.hostedTranscription === true, provider: 'deepgram', language: 'multi' },
     })
-    recording = { ...recording, cloud: { id: created.recording.id, authorId: created.recording.authorId, shareId: created.shareId, manifest, uploads: {} } }
+    recording = { ...recording, cloud: { id: created.recording.id, authorId: created.recording.authorId, shareId: created.shareId, manifest, uploads: {}, projectKey: created.recording.projectKey ?? null } }
     await persist()
   }
   const cloud = recording.cloud!
@@ -115,6 +117,12 @@ async function sync(input: LocalRecording, changed: (recording: LocalRecording) 
     await persist()
   }
   return recording
+}
+export async function attachRecordingProject(recording: LocalRecording, projectKey: string | null): Promise<LocalRecording> {
+  const cloud = recording.cloud
+  if (!cloud || cloud.deleted) return { ...recording, projectKey }
+  if (cloud.projectKey !== projectKey) await ownerRecordRequest(`recordings/${cloud.id}/project`, { projectKey })
+  return { ...recording, projectKey, cloud: { ...cloud, projectKey } }
 }
 export const readRecordingPlayback = (id: string) => ownerRecordRequest<RecordingPlayback>(`recordings/${id}/playback`)
 

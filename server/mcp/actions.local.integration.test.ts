@@ -9,6 +9,7 @@ import { createProof, hashProof, pkceChallenge } from '../../api/_lib/extension-
 import { nodeMcp } from './http.js'
 import { startMcpGithubFlow, completeMcpGithubFlow } from '../../api/_lib/mcp-github-flow.js'
 import { ALL_SCOPES } from './auth.js'
+import { tools } from './tools.js'
 
 const enabled = process.env.MCP_TEST_LOCAL === '1'
 ;(enabled ? describe : describe.skip)('scoped MCP writes through a real HTTP client and local Docker', () => {
@@ -83,9 +84,9 @@ const enabled = process.env.MCP_TEST_LOCAL === '1'
     await sql.end(); vi.unstubAllEnvs()
   })
   it('exposes writes only for granted scopes and filters completed items before pagination', async () => {
-    expect((await client.listTools()).tools).toHaveLength(31)
+    expect((await client.listTools()).tools).toHaveLength(tools.filter(tool => !tool.superAdmin).length)
     const read = (await connect('crrt:read')).connected
-    expect((await read.listTools()).tools).toHaveLength(8)
+    expect((await read.listTools()).tools).toHaveLength(tools.filter(tool => !tool.scope && !tool.superAdmin).length)
     await expect(call('set_feedback_status', {}, read)).rejects.toThrow('not found')
     const listed = await call('list_feedback', { project: { id: project }, readyForAgent: true, limit: 50 })
     expect((listed.structuredContent as { feedback: { id: string }[] }).feedback.map(item => item.id).sort()).toEqual([first, second, internal].sort())
@@ -97,21 +98,21 @@ const enabled = process.env.MCP_TEST_LOCAL === '1'
     const target = granted.connected
     const before = await call('connection_status', {}, target)
     expect(before.structuredContent?.dashboardAccess).toBe('upgrade_required')
-    const request = await call('run_dashboard_operation', { operation: 'projects.list' }, target)
+    const request = await call('list_dashboard_projects', {}, target)
     expect(request.structuredContent).toMatchObject({ code: 'permission_upgrade_required', state: 'pending' })
     const requestId = request.structuredContent!.requestId as string
     const approval = await post('dashboard-upgrade', { requestId, decision: 'approve' }, session)
     expect(approval.state).toBe('approved')
     expect((await call('request_dashboard_access', { requestId }, target)).structuredContent).toMatchObject({ state: 'approved', granted: true })
     expect((await call('connection_status', {}, target)).structuredContent).toMatchObject({ connectionId: before.structuredContent!.connectionId, dashboardAccess: 'approved' })
-    const operation = { operation: 'projects.update', query: { projectId: project }, body: { name: 'Renamed through MCP' }, userRequested: true, idempotencyKey: randomUUID() }
-    const renamed = await call('run_dashboard_operation', operation, target)
+    const operation = { projectId: project, name: 'Renamed through MCP', userRequested: true, idempotencyKey: randomUUID() }
+    const renamed = await call('update_project_settings', operation, target)
     expect(renamed.structuredContent, JSON.stringify(renamed)).toMatchObject({ ok: true, status: 200, data: { name: 'Renamed through MCP' } })
-    expect((await call('run_dashboard_operation', operation, target)).structuredContent).toMatchObject({ ok: true, code: 'operation_already_recorded', data: null })
+    expect((await call('update_project_settings', operation, target)).structuredContent).toMatchObject({ ok: true, code: 'operation_already_recorded', data: null })
     const receipt = await sql`select response from mcp_dashboard_operations where connection_id=${String(before.structuredContent!.connectionId)} and request_key=${operation.idempotencyKey}`
     expect(JSON.stringify(receipt)).not.toContain('Renamed through MCP')
-    expect((await call('run_dashboard_operation', { operation: 'members.list', query: { projectId: project } }, target)).structuredContent).toMatchObject({ ok: true })
-    const notified = await call('run_dashboard_operation', { operation: 'notifications.read_all', userRequested: true, idempotencyKey: randomUUID() }, target)
+    expect((await call('list_project_members', { projectId: project }, target)).structuredContent).toMatchObject({ ok: true })
+    const notified = await call('mark_all_notifications_read', { userRequested: true, idempotencyKey: randomUUID() }, target)
     expect(notified.structuredContent, JSON.stringify(notified)).toMatchObject({ ok: true })
     const refreshed = await post('token', { client_id: granted.clientId, grant_type: 'refresh_token', refresh_token: granted.tokens.refresh_token, resource })
     expect(refreshed.scope).toBe(ALL_SCOPES)
@@ -119,7 +120,7 @@ const enabled = process.env.MCP_TEST_LOCAL === '1'
     await resumed.connect(new StreamableHTTPClientTransport(new URL(resource), { requestInit: { headers: { authorization: `Bearer ${refreshed.access_token}` } } }))
     clients.push(resumed)
     expect((await call('connection_status', {}, resumed)).structuredContent).toMatchObject({ connectionId: before.structuredContent!.connectionId, dashboardAccess: 'approved' })
-    expect((await resumed.listTools()).tools).toHaveLength(31)
+    expect((await resumed.listTools()).tools).toHaveLength(tools.filter(tool => !tool.superAdmin).length)
   })
   it('keeps dashboard role and private feedback boundaries after full-suite consent', async () => {
     const email = `mcp-guest-${randomUUID()}@test.local`, password = `Local-${randomUUID()}!`
@@ -133,35 +134,35 @@ const enabled = process.env.MCP_TEST_LOCAL === '1'
     let target: Client
     try { session = login.data.session!.access_token; target = (await connect(ALL_SCOPES)).connected }
     finally { session = previousSession }
-    const response = await call('run_dashboard_operation', { operation: 'feedback.list', query: { projectId: project } }, target!)
+    const response = await call('list_dashboard_feedback', { projectId: project }, target!)
     expect(response.structuredContent, JSON.stringify(response)).toMatchObject({ ok: true })
     expect(JSON.stringify(response.structuredContent!.data)).not.toContain(internal)
-    for (const [operation, query, body] of [
-      ['repository.update', { projectId: project }, { agentInstructions: 'Not allowed' }],
-      ['feedback.visibility', { commentId: first }, { visibility: 'internal' }],
+    for (const [name, input] of [
+      ['update_repository_settings', { projectId: project, agentInstructions: 'Not allowed' }],
+      ['set_feedback_visibility', { commentId: first, visibility: 'internal' }],
     ] as const) {
-      const result = await call('run_dashboard_operation', { operation, query, body, userRequested: true, idempotencyKey: randomUUID() }, target!)
+      const result = await call(name, { ...input, userRequested: true, idempotencyKey: randomUUID() }, target!)
       expect(result.structuredContent, JSON.stringify(result)).toMatchObject({ ok: false, status: 403, code: 'permission_denied' })
     }
-    expect((await call('run_dashboard_operation', { operation: 'admin.stats' }, target!)).structuredContent).toMatchObject({ ok: false, status: 403 })
+    await expect(call('admin_get_stats', {}, target!)).rejects.toThrow('not found')
     await sql`delete from project_members where project_key=${project} and user_id=${guest}`
-    expect((await call('run_dashboard_operation', { operation: 'feedback.list', query: { projectId: project } }, target!)).structuredContent).toMatchObject({ ok: false, status: 403 })
+    expect((await call('list_dashboard_feedback', { projectId: project }, target!)).structuredContent).toMatchObject({ ok: false, status: 403 })
   })
   it('recovers a lost Storybook code and reads persisted GitHub browser completion without duplicate work', async () => {
-    const input = { operation:'storybook.pair', body:{projectKey:project}, userRequested:true, idempotencyKey:randomUUID() }
-    const created = await call('run_dashboard_operation',input)
+    const input = { projectKey:project, userRequested:true, idempotencyKey:randomUUID() }
+    const created = await call('create_storybook_pairing_code',input)
     expect(created.structuredContent,JSON.stringify(created)).toMatchObject({ok:true})
-    const recovered = await call('run_dashboard_operation',input)
+    const recovered = await call('create_storybook_pairing_code',input)
     expect(recovered.structuredContent).toMatchObject({ok:true,code:'operation_recovered',data:created.structuredContent!.data})
     const rows=await sql`select id from storybook_connections where project_key=${project}`
     expect(rows).toHaveLength(1)
     const flow=await startMcpGithubFlow(connection,owner,project)
-    const request={operation:'repository.completion',query:{projectId:project,flowId:flow.flowId}}
-    expect((await call('run_dashboard_operation',request)).structuredContent).toMatchObject({ok:true,data:{state:'pending'}})
+    const request={projectId:project,flowId:flow.flowId}
+    expect((await call('get_github_verification',request)).structuredContent).toMatchObject({ok:true,data:{state:'pending'}})
     await completeMcpGithubFlow({connectionId:connection,requestKey:flow.flowId},owner,project,{installationToken:'local-fixture-proof',repositories:[]})
-    expect((await call('run_dashboard_operation',request)).structuredContent).toMatchObject({ok:true,data:{state:'verified',installationToken:'local-fixture-proof'}})
+    expect((await call('get_github_verification',request)).structuredContent).toMatchObject({ok:true,data:{state:'verified',installationToken:'local-fixture-proof'}})
     const outsider=(await connect(ALL_SCOPES)).connected
-    expect((await call('run_dashboard_operation',request,outsider)).structuredContent).toMatchObject({ok:false,status:409})
+    expect((await call('get_github_verification',request,outsider)).structuredContent).toMatchObject({ok:false,status:409})
   })
   it('prepares an idempotent tracked selection without exposing private share credentials', async () => {
     const input = { projectId: project, feedbackIds: [first, second, internal], idempotencyKey: randomUUID(), promptVersion: '1' }
