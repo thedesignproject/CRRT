@@ -1,7 +1,7 @@
 import posthog from '../../posthog'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, Check, CreditCard, RefreshCw } from 'lucide-react'
-import { getBillingSummary, runBillingAction, type BillingAction, type BillingPlan, type BillingPlanKey, type BillingSummary, type BillingUsageItem } from '../api'
+import { ArrowUpRight, Check, CreditCard, Gift, RefreshCw } from 'lucide-react'
+import { getBillingSummary, redeemAppsumoCode, runBillingAction, type BillingAction, type BillingPlan, type BillingPlanKey, type BillingSummary, type BillingUsageItem } from '../api'
 import { landingRoute, route } from '../lib/routes'
 import { cn } from '../lib/utils'
 import { Spinner } from './primitives'
@@ -19,6 +19,10 @@ function date(value: string | null | undefined) {
 
 function lifecycleCopy(summary: BillingSummary) {
   const lifecycle = summary.lifecycle ?? summary.status ?? 'none'
+  if (summary.appsumo) {
+    if (summary.paidSubscriptionActive) return { label: 'Cloud active', detail: 'Your Stripe subscription is still active and keeps renewing. AppSumo lifetime Pro takes over when it ends.' }
+    return { label: 'AppSumo lifetime · Cloud Pro', detail: 'Cloud Pro is included for life with your AppSumo deal. Upgrade to Studio whenever you need more capacity.' }
+  }
   if (summary.isLegacy) {
     if (summary.plan === 'pro') return { label: 'Cloud Pro included', detail: 'Your early-user Pro access is included at no charge. Upgrade to Studio whenever you need more capacity.' }
     if (summary.cancelAtPeriodEnd) return { label: 'Cloud active', detail: `Studio ends ${date(summary.currentPeriodEnd ?? summary.periodEnd)}. Your included Pro access continues.` }
@@ -91,6 +95,99 @@ function PlanOption({ plan, price, current, included, scheduled, selected, disab
   )
 }
 
+function AppsumoRedeemCard({ apiBase, accessToken, summary, focusOnLoad, justRedeemed, onRedeemed }: {
+  apiBase: string
+  accessToken: string
+  summary: BillingSummary
+  focusOnLoad: boolean
+  justRedeemed: boolean
+  onRedeemed: () => void
+}) {
+  const [code, setCode] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const sectionRef = useRef<HTMLElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!focusOnLoad) return
+    sectionRef.current?.scrollIntoView?.({ block: 'center' })
+    inputRef.current?.focus()
+  }, [focusOnLoad])
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault()
+    // The input and button are disabled while a request is in flight.
+    const value = code.trim()
+    if (!value) { setError('Enter your AppSumo code.'); inputRef.current?.focus(); return }
+    setBusy(true)
+    setError('')
+    try {
+      await redeemAppsumoCode(apiBase, accessToken, value)
+      posthog.capture('appsumo_code_redeemed')
+      onRedeemed()
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'AppSumo redemption is temporarily unavailable.')
+      inputRef.current?.focus()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const stripeWarning = summary.paidSubscriptionActive
+    ? <p role="note" className="mt-4 rounded-md bg-muted px-4 py-3 text-sm leading-6 text-foreground">You also have an active Stripe subscription, and it will keep charging you. To stop it, cancel in <strong>Manage billing</strong>. AppSumo lifetime Pro continues after it ends.</p>
+    : null
+
+  return (
+    <section ref={sectionRef} id="appsumo" aria-labelledby="appsumo-heading" className="rounded-xl border border-border bg-card p-6 lg:p-8">
+      <div className="flex items-start gap-3">
+        <Gift size={18} className="mt-0.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <h2 id="appsumo-heading" className="text-base font-semibold">Redeem AppSumo code</h2>
+          {summary.appsumo ? (
+            <div role="status">
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                {justRedeemed ? 'Code redeemed. ' : ''}Your AppSumo lifetime deal is active: Cloud Pro with 10 projects, 10 collaborators, 2,000 comments and 5 audits per month.
+              </p>
+              {stripeWarning}
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">Bought CRRT on AppSumo? Paste your code to unlock Cloud Pro for life. One code per account.</p>
+              <form className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start" onSubmit={(event) => { void submit(event) }} noValidate>
+                <div className="min-w-0 flex-1 sm:max-w-sm">
+                  <label htmlFor="appsumo-code" className="sr-only">AppSumo code</label>
+                  <input
+                    ref={inputRef}
+                    id="appsumo-code"
+                    name="appsumo-code"
+                    value={code}
+                    onChange={(event) => { setCode(event.target.value); if (error) setError('') }}
+                    placeholder="AppSumo code"
+                    autoComplete="off"
+                    autoCapitalize="off"
+                    spellCheck={false}
+                    maxLength={200}
+                    disabled={busy}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? 'appsumo-error' : undefined}
+                    className="min-h-10 w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:font-sans placeholder:text-muted-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring disabled:opacity-60"
+                  />
+                </div>
+                <button type="submit" className={primaryButton} disabled={busy}>
+                  {busy ? <Spinner size={15} className="text-primary-foreground" /> : null}{busy ? 'Redeeming…' : 'Redeem'}
+                </button>
+              </form>
+              {error ? <p id="appsumo-error" role="alert" className="mt-3 text-sm text-status-rejected">{error}</p> : null}
+              {summary.paidSubscriptionActive ? <p className="mt-4 text-xs leading-5 text-muted-foreground">You have an active Stripe subscription. Redeeming does not cancel it; cancel it in Manage billing to stop being charged.</p> : null}
+            </>
+          )}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function safeStripeUrl(value: unknown) {
   if (typeof value !== 'string') throw new Error('Billing did not return a destination')
   const destination = new URL(value)
@@ -104,6 +201,8 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
   const [error, setError] = useState('')
   const [busyAction, setBusyAction] = useState<BillingAction | null>(null)
   const [refresh, setRefresh] = useState(0)
+  const [appsumoRedeemed, setAppsumoRedeemed] = useState(false)
+  const [focusAppsumo] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('appsumo') === '1')
   const actionRef = useRef<symbol | null>(null)
   const continuationRef = useRef<string | null>(null)
   const lifetime = useRef(0)
@@ -230,6 +329,14 @@ export function BillingSettings({ apiBase, accessToken, checkoutState, initialPl
           </div>
         </div>
       </div>
+      <AppsumoRedeemCard
+        apiBase={apiBase}
+        accessToken={accessToken}
+        summary={summary}
+        focusOnLoad={focusAppsumo && !appsumoRedeemed}
+        justRedeemed={appsumoRedeemed}
+        onRedeemed={() => { setAppsumoRedeemed(true); setRefresh((value) => value + 1) }}
+      />
       {error ? <p role="alert" className="rounded-md border border-border bg-card px-4 py-3 text-sm text-status-rejected">{error} <button type="button" className="font-semibold underline underline-offset-4" onClick={() => setRefresh((value) => value + 1)}>Retry</button></p> : null}
       <p className="flex items-center gap-2 text-xs text-muted-foreground"><Check size={13} />Checkout and payment details are handled securely by Stripe.</p>
     </section>

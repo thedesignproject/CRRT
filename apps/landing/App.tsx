@@ -7,6 +7,7 @@ import { DocsApp } from './docs/DocsApp'
 import { ProductAuditWorkspace } from './product-audit/ProductAuditWorkspace'
 import { PrivacyPage } from './legal/PrivacyPage'
 import { SupportPage } from './legal/SupportPage'
+import { AppsumoPage } from './legal/AppsumoPage'
 import { ThemeProvider } from '../../src/design-system'
 import { ResourcesPage } from './resources/ResourcesPage'
 import { ResourceTool } from './resources/ResourceTool'
@@ -49,6 +50,10 @@ function RoutedApp() {
 
   if (publicPath === '/support') {
     return <SupportPage />
+  }
+
+  if (publicPath === '/appsumo') {
+    return <AppsumoPage />
   }
 
   const projectId = 'crrt-landing-demo'

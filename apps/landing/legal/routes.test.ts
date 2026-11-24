@@ -4,14 +4,15 @@ import { expect, it } from 'vitest'
 
 const repositoryFile = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf8')
 
-it('keeps privacy and support direct-load routes in both Vercel build paths', () => {
+it('keeps privacy, support and AppSumo direct-load routes in both Vercel build paths', () => {
   const generatedOutput = repositoryFile('scripts/build-vercel-output.ts')
   const vercel = JSON.parse(repositoryFile('vercel.json')) as { rewrites: Array<{ source: string; destination: string }> }
 
   expect(generatedOutput).toContain('...applicationFallbackRoutes')
-  expect(repositoryFile('scripts/public-pages.ts')).toContain("{ src: '^/(?:privacy|support)/?$', dest: '/app-shell.html' }")
+  expect(repositoryFile('scripts/public-pages.ts')).toContain("{ src: '^/(?:privacy|support|appsumo)/?$', dest: '/app-shell.html' }")
   expect(vercel.rewrites).toEqual(expect.arrayContaining([
     { source: '/privacy', destination: '/index.html' },
     { source: '/support', destination: '/index.html' },
+    { source: '/appsumo', destination: '/index.html' },
   ]))
 })

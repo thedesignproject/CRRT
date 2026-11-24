@@ -22,6 +22,7 @@ vi.mock('./product-audit/ProductAuditWorkspace', () => ({ ProductAuditWorkspace:
 vi.mock('./sections/ProductAudit', () => ({ ProductAudit: () => <section>Landing product audit</section> }))
 vi.mock('./legal/PrivacyPage', () => ({ PrivacyPage: () => <main>Public privacy policy</main> }))
 vi.mock('./legal/SupportPage', () => ({ SupportPage: () => <main>Public support page</main> }))
+vi.mock('./legal/AppsumoPage', () => ({ AppsumoPage: () => <main>Public AppSumo page</main> }))
 vi.mock('./resources/ResourcesPage', () => ({ ResourcesPage: ({ children }: { children?: ReactNode }) => <div>Public resource library{children}</div> }))
 vi.mock('@widget/components/FeedbackWidget', () => ({ FeedbackWidget: () => null }))
 import { App } from './App'
@@ -75,6 +76,13 @@ it('routes direct support loads without mounting the marketing site', () => {
   window.history.pushState({}, '', '/support')
   render(<App />)
   expect(screen.getByText('Public support page')).toBeInTheDocument()
+  expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
+})
+
+it('routes direct AppSumo loads without mounting the marketing site', () => {
+  window.history.pushState({}, '', '/appsumo/')
+  render(<App />)
+  expect(screen.getByText('Public AppSumo page')).toBeInTheDocument()
   expect(screen.queryByText('Landing product audit')).not.toBeInTheDocument()
 })
 

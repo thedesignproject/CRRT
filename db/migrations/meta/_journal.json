@@ -372,6 +372,13 @@
       "when": 1794469906021,
       "tag": "0052_hosted_documents",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1795535780534,
+      "tag": "0053_appsumo_codes",
+      "breakpoints": true
     }
   ]
 }
