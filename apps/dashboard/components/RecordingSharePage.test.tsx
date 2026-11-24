@@ -296,3 +296,10 @@ it('discards requests completing after unmount', async () => {
   const second = render(<RecordingSharePage apiBase="/api" />)
   second.unmount(); await act(async () => { reject(new Error('late')) })
 })
+
+it('shows a loading state over the player until the first video frame arrives', async () => {
+  render(<RecordingSharePage apiBase="/api" />)
+  expect(await screen.findByRole('status')).toHaveTextContent('Loading video…')
+  fireEvent.loadedData(screen.getByLabelText('Recording video'))
+  await waitFor(() => expect(screen.queryByText('Loading video…')).not.toBeInTheDocument())
+})

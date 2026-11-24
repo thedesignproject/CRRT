@@ -1,8 +1,9 @@
 import { ChromeLogo } from '../components/ChromeLogo'
 import { CTAGroup } from '../../../src/design-system'
 import { DASHBOARD_HREF } from './Hero'
+import { chromeExtensionHref } from '../lib/chromeExtension'
 
-const CHROME_HREF = import.meta.env.VITE_CHROME_EXTENSION_URL ?? '/support#extension'
+const CHROME_HREF = chromeExtensionHref()
 
 export function Closing() {
   return (

@@ -205,6 +205,39 @@ describe('extension popup', () => {
     view.unmount()
   })
 
+  it('shows the page and a loading state instead of empty-project notices while projects load', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    let finish!: (value: unknown[]) => void
+    listExtensionProjects.mockReturnValueOnce(new Promise((resolve) => { finish = resolve }))
+    const view = render(<Popup />)
+    expect(await screen.findByText('store.example.com')).toBeInTheDocument()
+    expect(screen.getByText('Checking projects…')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toBeDisabled()
+    expect(screen.getByRole('option', { name: 'Loading projects…' })).toBeInTheDocument()
+    expect(screen.queryByText('Unavailable in Chrome')).not.toBeInTheDocument()
+    expect(screen.queryByText(/No shared projects yet/)).not.toBeInTheDocument()
+    finish([])
+    expect(await screen.findByText('No shared projects yet. You can still leave private feedback.')).toBeInTheDocument()
+    view.unmount()
+  })
+
+  it('keeps private feedback usable when the project list fails to load', async () => {
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    listExtensionProjects.mockRejectedValueOnce(new Error('Network down'))
+    const view = render(<Popup />)
+    expect(await screen.findByText('Network down')).toBeInTheDocument()
+    expect(screen.getByRole('combobox', { name: 'Feedback destination' })).toBeEnabled()
+    expect(screen.getByText('Only you')).toBeInTheDocument()
+    view.unmount()
+
+    sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
+    getCurrentTabUrl.mockResolvedValueOnce(null)
+    listExtensionProjects.mockRejectedValueOnce(new Error('Network down'))
+    const restricted = render(<Popup />)
+    expect(await screen.findByText('Open a regular website to start commenting.')).toBeInTheDocument()
+    restricted.unmount()
+  })
+
   it('explains empty and ambiguous project resolution without guessing', async () => {
     sendMessage.mockResolvedValueOnce({ ok: true, data: { email: 'u@example.com', accessToken: 't' } })
     let view = render(<Popup />)
