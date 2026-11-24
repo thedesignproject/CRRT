@@ -40,6 +40,14 @@ describe("NextStepRow", () => {
     expect(screen.getByText("· agent working")).toBeTruthy();
     expect(view.container.querySelector("li")!.className).toContain("bg-surface-3");
   });
+
+  it("shows a delivery status in place of the default", () => {
+    const view = render(<ul><NextStepRow step={{ ...step, status: "Agent working", active: true }} /></ul>);
+    expect(screen.getByText("· Agent working").className).toContain("text-agent-working");
+    expect(screen.queryByText("· agent working")).toBeNull();
+    view.rerender(<ul><NextStepRow step={{ ...step, status: "Queued" }} /></ul>);
+    expect(screen.getByText("· Queued").className).toBe("");
+  });
 });
 
 describe("AgentRunCard", () => {

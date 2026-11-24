@@ -11,6 +11,8 @@ export type NextStep = {
   doneBy?: string;
   /** The agent is on it right now. */
   active?: boolean;
+  /** Delivery status from a direct send, such as "Queued". */
+  status?: string;
 };
 
 type NextStepRowProps = {
@@ -67,7 +69,11 @@ export function NextStepRow({ step, checked = false, onToggle, onOpen }: NextSte
             {step.comments} {step.comments === 1 ? "comment" : "comments"}
           </span>
           {done && <span className="text-agent-done">· completed by {step.doneBy}</span>}
-          {step.active && <span className="text-agent-working">· agent working</span>}
+          {step.status ? (
+            <span className={step.active ? "text-agent-working" : undefined}>· {step.status}</span>
+          ) : (
+            step.active && <span className="text-agent-working">· agent working</span>
+          )}
         </div>
       </div>
     </li>

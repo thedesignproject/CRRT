@@ -1172,3 +1172,52 @@ export function restoreInboxComments(apiBase:string, accessToken:string, project
     method:'POST', headers:{'Content-Type':'application/json',...authHeaders(accessToken)}, body:JSON.stringify({projectId,items}),
   })
 }
+
+/** A terminal running the CRRT MCP listener for this project. */
+export interface AgentListener {
+  listenerId: string
+  label: string
+  repoUrl: string
+  online: boolean
+  stopped: boolean
+}
+
+/** One comment sent straight to a listening terminal. */
+export interface AgentDispatch {
+  dispatchId: string
+  commentId: string
+  listenerId: string
+  state: string
+  reason: string | null
+}
+
+export interface AgentDelivery {
+  listeners: AgentListener[]
+  dispatches: AgentDispatch[]
+}
+
+function agentDispatchUrl(apiBase: string, projectKey: string) {
+  return `${apiBase.replace(/\/$/, '')}/v1/projects/${encodeURIComponent(projectKey)}/agent/dispatch`
+}
+
+export async function getAgentDelivery(apiBase: string, accessToken: string, projectKey: string): Promise<AgentDelivery> {
+  const result = await requestJson<AgentDelivery>(agentDispatchUrl(apiBase, projectKey), {
+    cache: 'no-store',
+    headers: { ...authHeaders(accessToken) },
+  })
+  if (!Array.isArray(result?.listeners) || !Array.isArray(result?.dispatches)) throw new Error('Invalid delivery state')
+  return result
+}
+
+export function sendAgentDispatch(apiBase: string, accessToken: string, projectKey: string, input: {
+  listenerId: string
+  commentId: string
+  expectedUpdatedAt: string
+  idempotencyKey: string
+}) {
+  return requestJson<{ dispatchId: string; state: string }>(agentDispatchUrl(apiBase, projectKey), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(accessToken) },
+    body: JSON.stringify(input),
+  })
+}
