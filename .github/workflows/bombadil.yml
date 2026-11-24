@@ -1,0 +1,101 @@
+name: Bombadil
+
+# Property-based UI exploration of the widget and dashboard against the
+# visual-test harness and an in-memory mock API. See bombadil/README.md.
+#   - Pull requests touching the UI: 3 suites, 2 minutes each, 6-minute cap.
+#     Informational (not a required check) until it proves reliable.
+#   - Nightly on trunk and on demand: all 6 suites, 10 minutes each.
+# Each suite gets its own runner so a busy machine can't cause false failures.
+on:
+  pull_request:
+    paths:
+      - src/**
+      - apps/dashboard/**
+      - packages/ui/**
+      - shared/**
+      - tests/visual/harness/**
+      - tests/visual/fixtures/**
+      - bombadil/**
+      - .github/workflows/bombadil.yml
+  schedule:
+    - cron: '17 3 * * *' # daily, 03:17 UTC, on the default branch
+  workflow_dispatch:
+    inputs:
+      time-limit:
+        description: Time per suite (e.g. 5m, 10m, 30m)
+        default: 10m
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bombadil-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  explore:
+    name: ${{ matrix.suite }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: ${{ github.event_name == 'pull_request' && 6 || 45 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(github.event_name == 'pull_request' && '["widget-public","widget-public-failing-api","dashboard-populated"]' || '["widget-idle","widget-send-error","widget-public","widget-public-failing-api","dashboard-populated","dashboard-empty"]') }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - run: bun install --frozen-lockfile
+        working-directory: bombadil
+      - run: bun run typecheck
+        working-directory: bombadil
+      - name: Run ${{ matrix.suite }}
+        env:
+          TIME_LIMIT: ${{ github.event_name == 'pull_request' && '2m' || inputs.time-limit || '10m' }}
+          BOMBADIL_SUITES: ${{ matrix.suite }}
+          # Ubuntu 24.04 runners block Chrome's user-namespace sandbox.
+          BOMBADIL_FLAGS: --no-sandbox
+        run: bombadil/ci.sh "$TIME_LIMIT"
+      - name: Upload trace
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bombadil-${{ matrix.suite }}
+          path: |
+            bombadil/out/failed/
+            bombadil/out/*.bin
+            bombadil/out/*.txt
+            bombadil/out/mock-*.log
+          retention-days: 7
+
+  # One issue per failing night (or a comment on the open one) so failures of a
+  # scheduled run reach everyone watching the repo, not just the last editor.
+  report:
+    needs: explore
+    if: (failure() || cancelled()) && github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      - name: Open or update the Bombadil issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body="Bombadil found a rule violation (or a suite errored) in the nightly run: $RUN_URL
+
+          Open the failing suite's job for the rule names, and download its \`bombadil-<suite>\` artifact to replay the trace (see bombadil/README.md)."
+          gh label create bombadil --color D93F0B --description "Nightly Bombadil UI exploration" 2>/dev/null || true
+          existing="$(gh issue list --label bombadil --state open --json number --jq '.[0].number')"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "Nightly Bombadil run failed" --label bombadil --body "$body"
+          fi
