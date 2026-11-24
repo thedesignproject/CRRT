@@ -1,7 +1,8 @@
 import { Wordmark } from '../components/Wordmark'
 import { DASHBOARD_HREF } from '../components/Navigation'
+import { chromeExtensionHref } from '../lib/chromeExtension'
 
-const CHROME_HREF = import.meta.env.VITE_CHROME_EXTENSION_URL ?? '/support#extension'
+const CHROME_HREF = chromeExtensionHref()
 
 const groups = [
   {
@@ -58,6 +59,7 @@ export function Footer() {
       <div className="landing-footer-legal">
         <span>© {new Date().getFullYear()} CRRT</span>
         <a href="/privacy">Privacy</a>
+        <a href="/terms">Terms</a>
         <a href="/support">Support</a>
         <span>Made by <a href="https://designproject.io" target="_blank" rel="noreferrer">The Design Project</a></span>
       </div>

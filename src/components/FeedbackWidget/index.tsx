@@ -885,7 +885,13 @@ function FeedbackWidgetInner({
       const isTyping = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || element.isContentEditable
 
       if (e.key === 'Escape') {
-        if (showNameModal) {
+        // The "Send to…" dialogs sit above the pin popover, so they close first.
+        // A send in progress can't be dismissed (its Cancel button is disabled too).
+        if (externalWork) {
+          if (!externalWork.busy) setExternalWork(null)
+        } else if (externalProviderCommentId) {
+          setExternalProviderCommentId(null)
+        } else if (showNameModal) {
           handleNameCancel()
         } else if (selectedPin) {
           setSelectedPin(null)
@@ -943,7 +949,7 @@ function FeedbackWidgetInner({
       }
     }
     return listenForWidgetEvent(widgetRef.current!, 'keydown', onKey)
-  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment])
+  }, [shortcutsEnabled, mode, handleSend, launcherOpen, openAgentBridge, sidebarOpen, selectedPin, showNameModal, conversation, comment, externalWork, externalProviderCommentId])
 
   function exitFeedbackMode() {
     if (conversation && comment) { setMode('commenting'); return }
@@ -996,18 +1002,23 @@ function FeedbackWidgetInner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode])
 
-  function updateStatus(commentId: string, reviewStatus: ReviewStatus) {
+  // Optimistic: show the new status now, roll back and explain if the server refuses.
+  async function updateStatus(commentId: string, reviewStatus: ReviewStatus, previous: ReviewStatus) {
     setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus } : c))
-    apiPatchReviewStatus(apiBase, commentId, reviewStatus)
+    try { await apiPatchReviewStatus(apiBase, commentId, reviewStatus); setApiError('') }
+    catch (error) {
+      setComments((prev) => prev.map((c) => c.id === commentId ? { ...c, reviewStatus: previous } : c))
+      setApiError((error as Error).message)
+    }
   }
 
   async function deleteComment(commentId: string) {
-    if (personalComments) {
-      try { await personalComments.remove(commentId); setApiError('') }
-      catch (error) { setApiError(String((error as Error).message)); return }
-    }
+    try {
+      if (personalComments) await personalComments.remove(commentId)
+      else await apiDeleteComment(apiBase, commentId, projectId)
+      setApiError('')
+    } catch (error) { setApiError(String((error as Error).message)); return }
     setComments((prev) => prev.filter((c) => c.id !== commentId))
-    if (!personalComments) apiDeleteComment(apiBase, commentId, projectId)
   }
 
   async function saveEdit(commentId: string) {
@@ -1105,9 +1116,13 @@ function FeedbackWidgetInner({
     const popW = 280
     const { fixedX, fixedY } = pagePoint(c.x, c.y, c)
     let leftFixed = fixedX + pad
-    let topFixed = fixedY - 20
     if (leftFixed + popW > window.innerWidth) leftFixed = fixedX - popW - pad
     if (leftFixed < pad) leftFixed = pad
+    // Pins in the lower half open upward so the popover and its actions stay on screen.
+    if (fixedY > window.innerHeight / 2) {
+      return { position: 'fixed', left: leftFixed, bottom: Math.max(pad, window.innerHeight - fixedY - 20), zIndex: 2147483646 }
+    }
+    let topFixed = fixedY - 20
     if (topFixed < pad) topFixed = fixedY + 40
     return {
       position: 'fixed',
@@ -1726,12 +1741,13 @@ function FeedbackWidgetInner({
                         key={c.id}
                         reviewEnabled={!personalComments}
                         mutationEnabled={!personalComments || c.editable !== false}
+                        editEnabled={Boolean(personalComments) && c.editable !== false}
                         onSendTo={personalComments?.externalWork && c.reviewStatus !== 'rejected'
                           ? () => { setExternalProviderCommentId(c.id) }
                           : undefined}
                         isResolved={isResolved}
-                        onResolve={() => { updateStatus(c.id, 'accepted'); setSelectedPin(null) }}
-                        onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted'); setSelectedPin(null) }}
+                        onResolve={() => { updateStatus(c.id, 'accepted', c.reviewStatus); setSelectedPin(null) }}
+                        onToggleResolve={() => { updateStatus(c.id, isResolved ? 'open' : 'accepted', c.reviewStatus); setSelectedPin(null) }}
                         onViewList={() => { setSelectedPin(null); setSidebarOpen(true) }}
                         onEdit={() => { setEditingId(c.id); setEditText(c.body) }}
                         onDelete={() => { deleteComment(c.id); setSelectedPin(null) }}
@@ -2086,7 +2102,7 @@ function FeedbackWidgetInner({
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
                       {!personalComments && isPending && (
                         <button
-                          onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted') }}
+                          onClick={(e) => { e.stopPropagation(); updateStatus(c.id, 'accepted', c.reviewStatus) }}
                           title="Approve"
                           aria-label="Approve"
                           style={{
@@ -2229,7 +2245,7 @@ function FeedbackWidgetInner({
                         <span aria-hidden="true">↗</span> Send to…
                       </button>}
                       {!personalComments && <button
-                        onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted'); setMenuOpenId(null) }}
+                        onClick={() => { updateStatus(c.id, c.reviewStatus === 'accepted' ? 'open' : 'accepted', c.reviewStatus); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
                         onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
@@ -2237,7 +2253,8 @@ function FeedbackWidgetInner({
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5" /></svg>
                         {c.reviewStatus === 'accepted' ? 'Reopen' : 'Approve'}
                       </button>}
-                      <button
+                      {/* Public widgets cannot save body edits, so only adapters offer Edit. */}
+                      {personalComments && c.editable !== false && <button
                         onClick={() => { setEditingId(c.id); setEditText(c.body); setMenuOpenId(null) }}
                         style={{ width: '100%', padding: '8px 14px', background: 'none', border: 'none', color: 'var(--fw-foreground-subtle)', fontSize: 12, textAlign: 'left', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
                         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--fw-surface-hover)')}
@@ -2245,7 +2262,7 @@ function FeedbackWidgetInner({
                       >
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
                         Edit
-                      </button>
+                      </button>}
                       <div style={{ height: 1, background: 'var(--fw-surface-divider)', margin: '4px 0' }} />
                       <button
                         onClick={() => { deleteComment(c.id); setMenuOpenId(null) }}

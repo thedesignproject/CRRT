@@ -4,6 +4,7 @@ export type RecordingSummary = {
   id: string; title: string; source: 'tab' | 'window' | 'screen'; state: RecordingState
   durationMs: number | null; authorId: string; markCount: number; createdAt: string
   failure: Failure | null
+  projectKey?: string | null
   thumbnailUrl?: string | null
 }
 export type RecordingPlayback = {

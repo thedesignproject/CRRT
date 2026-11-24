@@ -112,6 +112,40 @@ function syncRemediation(work: ExternalWorkRecord) {
   return `Resolve the ${provider} issue configuration, then retry.`
 }
 
+// Signed screenshot links expire after a few minutes; never leave an empty frame behind.
+export function CommentScreenshot({ url, pageUrl, onRetry }: { url: string; pageUrl?: string | null; onRetry?: () => void | Promise<void> }) {
+  const [failedUrl, setFailedUrl] = useState<string | null>(null)
+  if (failedUrl === url) {
+    return (
+      <div className="flex items-center gap-3 px-5 py-8" role="status">
+        <span className="flex size-8 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-inset ring-border">
+          <ImageOffIcon size={16} className="text-text-subtle" />
+        </span>
+        <div className="flex-1">
+          <p className="text-xs font-medium text-text-strong">Screenshot didn’t load</p>
+          <p className="text-[11px] text-text-subtle">The secure link may have expired or the connection dropped.</p>
+        </div>
+        {onRetry && (
+          <button type="button" onClick={() => { void onRetry() }} className="text-xs font-medium text-text-strong underline underline-offset-2">
+            Reload screenshot
+          </button>
+        )}
+      </div>
+    )
+  }
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" className="flex justify-center bg-surface-1">
+      <img
+        src={url}
+        alt={pageUrl ? `Screenshot of ${pageUrl}` : 'Feedback screenshot'}
+        className="max-w-full max-h-[520px] w-auto h-auto object-contain"
+        draggable={false}
+        onError={() => setFailedUrl(url)}
+      />
+    </a>
+  )
+}
+
 interface CommentDetailProps {
   selectedComment: Comment | null
   selectedProject: string
@@ -135,6 +169,8 @@ interface CommentDetailProps {
   storybookConnected?: boolean
   bodyEditor?: ReactNode
   personalActions?: ReactNode
+  /** Fetches fresh signed screenshot links after one fails to load. */
+  onScreenshotRetry?: () => void | Promise<void>
 }
 
 type PersonalDetailProps = Omit<CommentDetailProps, 'personal' | 'toggleReview' | 'handleToggleDone'> & { personal: true; toggleReview?: never; handleToggleDone?: never }
@@ -152,6 +188,7 @@ export function CommentDetail({
   toggleReview,
   handleToggleDone,
   onVisibilityChange,
+  onScreenshotRetry,
   apiBase,
   accessToken,
   personal = false,
@@ -465,21 +502,7 @@ export function CommentDetail({
                   pin={selectedIdx + 1}
                 >
                   {selectedComment.screenshotUrl ? (
-                    <a
-                      href={selectedComment.screenshotUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex justify-center bg-surface-1"
-                    >
-                      <img
-                        src={selectedComment.screenshotUrl}
-                        alt={selectedComment.pageUrl
-                          ? `Screenshot of ${selectedComment.pageUrl}`
-                          : 'Feedback screenshot'}
-                        className="max-w-full max-h-[520px] w-auto h-auto object-contain"
-                        draggable={false}
-                      />
-                    </a>
+                    <CommentScreenshot url={selectedComment.screenshotUrl} pageUrl={selectedComment.pageUrl} onRetry={onScreenshotRetry} />
                   ) : (
                     <div className="flex items-center gap-3 px-5 py-8">
                       <span className="flex size-8 items-center justify-center rounded-lg bg-surface-2 ring-1 ring-inset ring-border">

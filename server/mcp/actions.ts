@@ -46,8 +46,8 @@ async function workProject(actor: McpIdentity, workId: string) {
 }
 const operationArgs = (actor: McpIdentity) => ({ p_connection: actor.connection_id, p_actor: actor.user_id })
 export const actionTools: ToolSpec[] = [{
-  name: 'prepare_feedback_work', scope: 'crrt:implement',
-  description: 'Required before editing or delegating accepted CRRT feedback. First retrieve get_handoff_context and read its full implementationPrompt. Prepares an authorized selection of 1–20 Ready for Agent items and returns the same full prompt and a tracked workId. Pass the complete prompt, workId, project and assigned IDs to every subagent. Do not start if preparation fails. Never exposes share credentials. Reuse idempotencyKey only for an identical selection.',
+  name: 'prepare_feedback_work', title: 'Prepare feedback work', scope: 'crrt:implement',
+  description: 'Creates a tracked work session for 1-20 accepted, Ready for Agent feedback items and returns its workId with the full implementationPrompt. Does not modify any repository or expose share credentials. Retrying with the same idempotencyKey and selection returns the same session.',
   input: prepareInput,
   output: z.object({ workId: uuid, projectId: z.string(), feedbackIds: z.array(uuid), promptVersion: z.literal('1'), implementationPrompt: z.string() }).strict(),
   async run(raw, actor) {
@@ -62,8 +62,8 @@ export const actionTools: ToolSpec[] = [{
     return { workId, projectId: input.projectId, feedbackIds: input.feedbackIds, promptVersion: '1', implementationPrompt: z.string().parse(context.implementationPrompt) }
   },
 }, {
-  name: 'report_agent_presence', scope: 'crrt:implement',
-  description: 'Use after preparation to announce reading/idle and whenever this agent/subagent starts, blocks or finishes work. Requires the prepared workId and full prompt acknowledgement. Keep the reviewer informed with a concise summary. Each subagent uses a unique stable agentId.',
+  name: 'report_agent_presence', title: 'Report agent presence', scope: 'crrt:implement',
+  description: 'Reports an agent status (reading, idle, working, or blocked) with a short summary for a prepared work session. Reviewers see it in CRRT. Each agent or subagent uses its own stable agentId.',
   input: presenceInput, output: operationOutput,
   async run(raw, actor) {
     const input = presenceInput.parse(raw)
@@ -71,8 +71,8 @@ export const actionTools: ToolSpec[] = [{
     return operationOutput.parse(await rpc('mcp_work_operation', { ...operationArgs(actor), p_work: input.workId, p_agent: input.agentId, p_comment: null, p_op: input.status, p_key: null, p_summary: input.summary, p_request_hash: null }))
   },
 }, {
-  name: 'update_feedback_progress', scope: 'crrt:implement',
-  description: 'Use to claim before editing and report start/note/block/complete through the existing CRRT workflow. Read get_feedback first and follow the complete implementationPrompt. Requires a prepared workId, promptVersion, stable agentId and unique retry key. Claim conflicts stop work. Only accepted feedback is eligible. Complete marks ready_for_testing, never Done; cannot reopen reviewer-owned completed work or change review status.',
+  name: 'update_feedback_progress', title: 'Update feedback progress', scope: 'crrt:implement',
+  description: 'Claims an accepted feedback item, or reports start, note, block, or complete for it, within a prepared work session. Complete sets ready_for_testing, not done. Fails on claim conflicts, and cannot reopen reviewer-completed work or change review status.',
   input: progressInput, output: operationOutput,
   async run(raw, actor) {
     const input = progressInput.parse(raw)
@@ -82,8 +82,8 @@ export const actionTools: ToolSpec[] = [{
     }))
   },
 }, {
-  name: 'set_feedback_status', scope: 'crrt:review',
-  description: 'Use ONLY when the human explicitly asks to change feedback status, never as an automatic implementation step. Read get_feedback immediately first and send its exact updatedAt as expectedUpdatedAt; stale changes fail. ready_for_agent accepts and resets implementation to unassigned; open/rejected remove it from Ready for Agent; ready_for_testing/done are explicit reviewer decisions. Requires userRequested:true, a reason, review scope and current feedback-management permission.',
+  name: 'set_feedback_status', title: 'Set feedback review status', scope: 'crrt:review',
+  description: 'Records a human review decision on a feedback item: ready_for_agent, open, rejected, ready_for_testing, or done. Requires the current updatedAt as expectedUpdatedAt (stale updates fail), userRequested:true, a reason, review scope, and feedback-management permission. ready_for_agent accepts the item and resets implementation to unassigned; open and rejected remove it from Ready for Agent.',
   input: statusInput,
   output: z.object({ projectId: z.string(), feedbackId: uuid, reviewStatus: z.enum(['open', 'accepted', 'rejected']), implementationStatus: z.string(), updatedAt: z.string() }).strict(),
   async run(raw, actor) {
