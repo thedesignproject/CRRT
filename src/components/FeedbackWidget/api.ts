@@ -141,37 +141,53 @@ export async function postComment(
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   })
-  if (res.status === 401) onLoginRequired?.()
+  if (res.status === 401) {
+    onLoginRequired?.()
+    return null
+  }
   if (!res.ok) {
     if (res.status === 402 || res.status === 409) {
       const failure = await res.json().catch(() => null) as { code?: string; error?: string } | null
       if (failure?.code === 'plan_limit') throw new Error(failure.error || 'The project owner has reached a Cloud plan limit')
     }
     console.warn('[FeedbackWidget] API returned', res.status)
-    return null
+    throw new Error('Could not send feedback. Try again.')
   }
   return (await res.json()) as Partial<Comment>
 }
 
 export async function patchReviewStatus(apiBase: string, id: string, reviewStatus: string): Promise<void> {
+  let res: Response
   try {
-    await fetch(`${apiBase}/v1/public/comments`, {
+    res = await fetch(`${apiBase}/v1/public/comments`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, reviewStatus }),
     })
   } catch (err) {
     console.warn('[FeedbackWidget] PATCH failed:', err)
+    throw new Error('Could not update feedback. Try again.')
+  }
+  if (!res.ok) {
+    console.warn('[FeedbackWidget] PATCH returned', res.status)
+    throw new Error('Could not update feedback. Try again.')
   }
 }
 
 export async function deleteComment(apiBase: string, id: string, projectKey: string): Promise<void> {
+  const url = new URL(`${apiBase}/v1/public/comments`, window.location.origin)
+  url.searchParams.set('id', id)
+  url.searchParams.set('projectKey', projectKey)
+  let res: Response
   try {
-    const url = new URL(`${apiBase}/v1/public/comments`, window.location.origin)
-    url.searchParams.set('id', id)
-    url.searchParams.set('projectKey', projectKey)
-    await fetch(url.toString(), { method: 'DELETE' })
+    res = await fetch(url.toString(), { method: 'DELETE' })
   } catch (err) {
     console.warn('[FeedbackWidget] DELETE failed:', err)
+    throw new Error('Could not delete feedback. Try again.')
+  }
+  // 404: already gone, which is what the user asked for.
+  if (!res.ok && res.status !== 404) {
+    console.warn('[FeedbackWidget] DELETE returned', res.status)
+    throw new Error('Could not delete feedback. Try again.')
   }
 }
