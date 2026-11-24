@@ -21,7 +21,7 @@ beforeEach(()=>{
 })
 afterEach(()=>vi.unstubAllEnvs())
 async function connect(name='recordings.agent_payload'){
-  const spec:ToolSpec={name:'recover',description:'Recover an authorized cached result.',input:z.object({}).strict(),output:z.record(z.string(),z.unknown()),
+  const spec:ToolSpec={name:'recover',title:'Recover',description:'Recover an authorized cached result.',input:z.object({}).strict(),output:z.record(z.string(),z.unknown()),
     run:async()=>({...await recoverDashboardReceipt({name} as DashboardOperation,{id:'record'},{projectKey:'project'},actor,cached,vi.fn())})}
   const handler=mcpHandler([spec])
   const client=new Client({name:'recovery-verifier',version:'1'})

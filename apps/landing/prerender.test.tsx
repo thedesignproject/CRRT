@@ -14,6 +14,12 @@ it('renders the shared marketing composition and existing documentation on the s
   expect(docs).toContain('Authorization: Bearer')
 })
 
+it('server-renders the legal pages so crawlers and directory reviewers read them without JavaScript', () => {
+  expect(render('/privacy')).toContain('AI assistant connections')
+  expect(render('/terms')).toContain('CRRT terms of service')
+  expect(render('/support')).toContain('CRRT support')
+})
+
 it('loads the canonical design tokens into HTML in development and production', () => {
   const plugin = (config as any)({ mode: 'production', command: 'build' }).plugins.find((plugin: any) => plugin.name === 'crrt-static-tokens')
   const [style] = plugin.transformIndexHtml()

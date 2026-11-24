@@ -17,7 +17,7 @@ it('discloses the entire suite once and confirms approval without redirecting or
   fetcher.mockResolvedValueOnce(response())
   mount(); expect(screen.getByRole('status', { name: 'Loading permission request' })).toBeInTheDocument()
   await screen.findByText('Connected client')
-  expect(screen.getByText(/Read and manage your projects/)).toHaveTextContent('billing flows')
+  expect(screen.getByText(/Read and manage your projects/)).toHaveTextContent('read-only billing summary')
   expect(fetcher.mock.calls[0][1]).toMatchObject({ headers: expect.objectContaining({ Authorization: 'Bearer session' }), body: JSON.stringify({ requestId: id, decision: 'inspect' }) })
   fetcher.mockResolvedValueOnce(response('approved'))
   fireEvent.click(screen.getByRole('button', { name: 'Approve full dashboard access' }))

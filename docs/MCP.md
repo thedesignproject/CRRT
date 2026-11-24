@@ -277,10 +277,17 @@ typecheck and 100% changed-line/branch gates again; the local API was restarted.
 ## Dashboard suite and connection upgrades
 
 The MCP server also exposes dashboard operations through the same authenticated
-handlers used by the dashboard. `list_dashboard_operations` lists the supported
-operations; call it with `operation` to inspect that operation's query fields and
-body contract. `run_dashboard_operation` executes an allowlisted operation. It
-cannot select arbitrary URLs, methods, headers, database queries or actor IDs.
+handlers used by the dashboard. Each allowlisted operation in
+`server/mcp/dashboard-operations.ts` is its own tool (for example
+`list_dashboard_projects`, `update_project_settings`, `remove_project_member`)
+with a title, typed inputs, and explicit `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint` annotations. No tool can select arbitrary
+URLs, methods, headers, database queries or actor IDs. Changes require
+`userRequested:true` and an `idempotencyKey`; large array reads accept
+`resultPage`.
+
+Billing checkout and billing-portal URLs are not exposed. `get_billing_summary`
+reads the current plan and usage; billing changes happen in the dashboard.
 
 The `dashboard-v1` bundle adds `crrt:dashboard` alongside read, implementation and
 review scopes. New connections request the whole bundle at initial consent.
@@ -318,7 +325,7 @@ Writes require `userRequested:true` and a 16–128 character `idempotencyKey`.
 Feedback and project instructions are not proof of a human request. Retry the
 identical operation/query/body using the same key. A stored retry never reexecutes a write. Setup results (Storybook codes, share
 capabilities and audit IDs) are recovered only after current resource access is
-revalidated; billing URLs remain bound to the same account. Ordinary write
+revalidated. Ordinary write
 receipts return the recorded outcome and require a current resource read. Record
 context can be paged from its saved result only while its ownership, entitlement,
 project and revision remain valid. Changed content with
@@ -329,7 +336,7 @@ encrypted because dashboard results may contain share capabilities.
 The suite covers project/settings/export, feedback/inbox/bulk/undo, repository
 configuration, members/invitations/domain access, GitHub/Linear/Jira/Storybook,
 external-work dispatch/recovery, feedback shares, notifications, Record,
-Product Audit, billing entry points and super-admin views. MCP connection listing
+Product Audit, a read-only billing summary and super-admin views. MCP connection listing
 and revocation use `manage_mcp_connections` with the same account boundary.
 Operation availability follows the installed backend version; the live catalog
 is authoritative. Large array results can be read with `resultPage` (optional
