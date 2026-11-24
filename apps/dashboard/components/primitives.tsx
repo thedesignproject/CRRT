@@ -1,7 +1,8 @@
 import { useKeyboardShortcuts } from '../../../src/lib/useKeyboardShortcuts'
 import { cn } from '../lib/utils'
 import { getDisplayStatus } from '../lib/comment'
-import { DISPLAY_STATUS_LABELS, type Comment } from '../lib/types'
+import { DISPLAY_STATUS_LABELS, type Comment, type DisplayStatus } from '../lib/types'
+import { StatusChip, type CommentStatus } from '@crrt/ui/crrt'
 
 export function Spinner({ size = 20, strokeWidth = 2.5, className = 'text-muted-foreground' }: {
   size?: number
@@ -24,20 +25,21 @@ export function Kbd({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function StatusBadge({ comment }: { comment: Comment }) {
+/** Studio lifecycle status for each feedback state; rejected has no Studio chip yet. */
+export const STUDIO_STATUS: Record<Exclude<DisplayStatus, 'rejected'>, CommentStatus> = {
+  open: 'open',
+  ready: 'agent',
+  ready_for_testing: 'testing',
+  done: 'fixed',
+}
+
+export function StatusBadge({ comment, className }: { comment: Comment; className?: string }) {
   const ds = getDisplayStatus(comment)
-  return (
-    <span className={cn(
-      'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold',
-      ds === 'ready' && 'bg-status-accepted-bg text-status-accepted',
-      ds === 'ready_for_testing' && 'bg-status-ready-for-testing-bg text-status-ready-for-testing',
-      ds === 'rejected' && 'bg-status-rejected-bg text-status-rejected',
-      ds === 'open' && 'bg-status-open-bg text-status-open',
-      ds === 'done' && 'bg-status-done-bg text-status-done',
-    )}>
-      {DISPLAY_STATUS_LABELS[ds]}
-    </span>
-  )
+  if (ds === 'rejected') {
+    return <span className={cn('inline-flex h-5 items-center rounded-md bg-status-rejected-bg px-1.5 text-xs font-medium text-status-rejected', className)}>{DISPLAY_STATUS_LABELS.rejected}</span>
+  }
+  // Only a claimed comment has an agent on it right now; a queued one stays still.
+  return <StatusChip status={STUDIO_STATUS[ds]} working={Boolean(comment.claimedByAgentId)} className={className} />
 }
 
 export function ActionBtn({ children, variant, active, onClick, shortcut, disabled }: {

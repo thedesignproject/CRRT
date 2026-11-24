@@ -1,9 +1,10 @@
 import posthog from '../../posthog'
 import { ProjectPrivacy } from './ProjectPrivacy'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { AGENT_INSTRUCTIONS_MAX, type Project, type ProjectMember, type ProjectMemberRole } from '../api'
 import { ExportProjectFeedback } from './ExportProjectFeedback'
 import { useProjectSettings } from '../hooks/useProjectSettings'
+import { useStorybookConnected } from '../hooks/useStorybookConnected'
 import { cn } from '../lib/utils'
 import { ChevronLeftIcon, TrashIcon } from './icons'
 import { GitHubRepositorySettings } from './GitHubRepositorySettings'
@@ -12,6 +13,7 @@ import { JiraIntegrationSettings } from './JiraIntegrationSettings'
 import { ProjectDomainAccess } from './ProjectDomainAccess'
 import { Spinner } from './primitives'
 import { StorybookIntegrationSettings } from './StorybookIntegrationSettings'
+import { BookOpen, Globe } from 'lucide-react'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
@@ -29,9 +31,11 @@ interface ProjectSettingsProps {
   currentUserId: string
   onBack: () => void
   onProjectsChanged: () => void
+  /** Open with the Storybook setup expanded, e.g. from the Get started checklist. */
+  connectStorybook?: boolean
 }
 
-export function ProjectSettings({ project, apiBase, accessToken, currentUserId, onBack, onProjectsChanged }: ProjectSettingsProps) {
+export function ProjectSettings({ project, apiBase, accessToken, currentUserId, onBack, onProjectsChanged, connectStorybook = false }: ProjectSettingsProps) {
   const settings = useProjectSettings(apiBase, accessToken, project.publicKey, currentUserId, onProjectsChanged)
   const { members, invites, loading, error, isAdmin, isOwner } = settings
 
@@ -48,12 +52,28 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
   const [instructions, setInstructions] = useState('')
   const [instructionsBusy, setInstructionsBusy] = useState(false)
   const [transferTarget, setTransferTarget] = useState<ProjectMember | null>(null)
+  const [storybookOpen, setStorybookOpen] = useState(connectStorybook)
+  // What the open panel last reported wins over the check made when Settings opened.
+  const [storybookLive, setStorybookLive] = useState<boolean | null>(null)
+  const storybookChecked = useStorybookConnected(apiBase, accessToken, project.publicKey, isOwner)
+  const storybookConnected = storybookLive ?? storybookChecked
+  const storybookPanelId = useId()
+  const storybookToggleRef = useRef<HTMLButtonElement | null>(null)
+  const storybookFocused = useRef(false)
   const pendingAction = useRef(false)
   const actionSequence = useRef(0)
   const projectKeyRef = useRef(project.publicKey)
   const transferTriggerRef = useRef<HTMLSelectElement | null>(null)
   const teamHeadingRef = useRef<HTMLHeadingElement | null>(null)
   projectKeyRef.current = project.publicKey
+
+  // Opened from the checklist's "Connect Storybook" step: bring the expanded row into view.
+  useEffect(() => {
+    if (!connectStorybook || !isOwner || storybookFocused.current) return
+    storybookFocused.current = true
+    storybookToggleRef.current?.scrollIntoView?.({ block: 'center' })
+    storybookToggleRef.current?.focus()
+  }, [connectStorybook, isOwner])
 
   // Re-sync the name field when switching to a different project.
   useEffect(() => { setName(project.name) }, [project.publicKey, project.name])
@@ -200,10 +220,13 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
           Back to feedback
         </button>
 
-        <h1 className="text-lg font-bold text-foreground tracking-tight">Project settings</h1>
-        <p className="mt-1 text-[12px] text-muted-foreground">
-          {isAdmin ? 'Manage details, team, and invites.' : 'You have read-only access to this project.'}
-        </p>
+        <header className="flex flex-col gap-1">
+          <h1 className="text-2xl leading-tight font-semibold tracking-tight text-text-strong">Settings</h1>
+          <p className="text-sm text-text-subtle">
+            Project ID <span className="font-mono text-text-body">{project.publicKey}</span>
+            {!isAdmin && ' · You have read-only access to this project.'}
+          </p>
+        </header>
 
         <ExportProjectFeedback apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} />
 
@@ -211,6 +234,110 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
         {actionError && <p className="mt-4 text-[12px] text-status-rejected" role="alert">{actionError}</p>}
 
         {isAdmin && <ProjectDomainAccess key={`domains:${project.publicKey}`} apiBase={apiBase} accessToken={accessToken} projectKey={project.publicKey} onMembersChanged={settings.refresh} />}
+
+        {/* Where feedback comes from: the app is required, Storybook is an optional extra. */}
+        <section className="mt-8" aria-labelledby="sources-heading">
+          <h2 id="sources-heading" className={sectionTitle}>Where feedback comes from</h2>
+          <div className="mt-3 divide-y divide-border border-y border-border">
+            <div className="flex flex-col gap-3 px-5 py-3.5">
+              <div className="flex items-start gap-3">
+                <Globe aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-subtle" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-text-strong">Your app</p>
+                  <p className="text-xs text-text-subtle">
+                    Allowed domains{domains.length > 0 && ` (${domains.length})`}. Feedback is only accepted from pages on these domains (subdomains included). Leave the list empty to accept feedback from anywhere.
+                  </p>
+                </div>
+              </div>
+              <div className="divide-y divide-border rounded-lg ring-1 ring-border">
+                {domains.length === 0 ? (
+                  <p className="px-4 py-6 text-center text-[12px] text-muted-foreground">
+                    No restrictions — feedback is accepted from any domain.
+                  </p>
+                ) : (
+                  domains.map((domain) => (
+                    <div key={domain} className="flex items-center gap-3 px-4 py-3">
+                      <span className="flex-1 min-w-0 font-mono text-[13px] text-foreground truncate">{domain}</span>
+                      {isAdmin && (
+                        <button
+                          onClick={() => run(() => saveDomains(domains.filter((d) => d !== domain)), domain)}
+                          disabled={pendingId === domain || domainBusy}
+                          aria-label={`Remove ${domain}`}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
+                        >
+                          {pendingId === domain ? <Spinner size={13} /> : <TrashIcon size={14} />}
+                        </button>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {isAdmin && (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); addDomain() }}
+                  className="flex items-center gap-2"
+                >
+                  <input
+                    type="text"
+                    value={domainInput}
+                    onChange={(e) => setDomainInput(e.target.value)}
+                    placeholder="example.com"
+                    disabled={domainBusy}
+                    aria-label="Add allowed domain"
+                    className={inputField}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!domainValid || domainBusy}
+                    className={submitBtn(domainValid && !domainBusy)}
+                  >
+                    {domainBusy ? 'Saving…' : 'Add'}
+                  </button>
+                </form>
+              )}
+            </div>
+            {isOwner && (
+              <div className="flex flex-col gap-3 px-5 py-3.5">
+                <div className="flex items-start gap-3">
+                  <BookOpen aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-text-subtle" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-text-strong">
+                      Storybook{' '}
+                      {storybookConnected
+                        ? <span className="ml-1 text-xs font-normal text-status-accepted">Connected</span>
+                        : <span className="ml-1 text-xs font-normal text-text-subtle">Optional</span>}
+                    </p>
+                    <p className="text-xs text-text-subtle">Review components and send story feedback into this project, next to your app’s.</p>
+                  </div>
+                  <button
+                    ref={storybookToggleRef}
+                    type="button"
+                    aria-expanded={storybookOpen}
+                    aria-controls={storybookPanelId}
+                    onClick={() => setStorybookOpen((open) => !open)}
+                    className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-text-strong hover:bg-accent"
+                  >
+                    {storybookOpen ? 'Close' : storybookConnected ? 'Manage Storybook' : '+ Connect Storybook'}
+                  </button>
+                </div>
+                <div id={storybookPanelId} hidden={!storybookOpen}>
+                  {storybookOpen && (
+                    <StorybookIntegrationSettings
+                      appearance="setup"
+                      apiBase={apiBase}
+                      accessToken={accessToken}
+                      projectKey={project.publicKey}
+                      onConnectedChange={setStorybookLive}
+                    />
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Details */}
         <section className="mt-8">
@@ -256,71 +383,6 @@ export function ProjectSettings({ project, apiBase, accessToken, currentUserId, 
         </section>
 
         <ProjectPrivacy key={`privacy:${project.publicKey}`} project={project} apiBase={apiBase} accessToken={accessToken} canEdit={isAdmin} onSaved={onProjectsChanged} />
-        {/* Allowed domains */}
-        <section className="mt-8">
-          <h2 className={sectionTitle}>Allowed domains{domains.length > 0 && ` (${domains.length})`}</h2>
-          <p className="mt-1 text-[11px] text-muted-foreground">
-            Feedback is only accepted from pages on these domains (subdomains included). Leave the list empty to accept feedback from anywhere.
-          </p>
-          <div className={cn(card, 'mt-3 divide-y divide-border')}>
-            {domains.length === 0 ? (
-              <p className="px-4 py-6 text-center text-[12px] text-muted-foreground">
-                No restrictions — feedback is accepted from any domain.
-              </p>
-            ) : (
-              domains.map((domain) => (
-                <div key={domain} className="flex items-center gap-3 px-4 py-3">
-                  <span className="flex-1 min-w-0 font-mono text-[13px] text-foreground truncate">{domain}</span>
-                  {isAdmin && (
-                    <button
-                      onClick={() => run(() => saveDomains(domains.filter((d) => d !== domain)), domain)}
-                      disabled={pendingId === domain || domainBusy}
-                      aria-label={`Remove ${domain}`}
-                      className="p-1.5 rounded-md text-muted-foreground hover:text-status-rejected hover:bg-accent transition-colors disabled:opacity-50"
-                    >
-                      {pendingId === domain ? <Spinner size={13} /> : <TrashIcon size={14} />}
-                    </button>
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-
-          {isAdmin && (
-            <form
-              onSubmit={(e) => { e.preventDefault(); addDomain() }}
-              className="mt-3 flex items-center gap-2"
-            >
-              <input
-                type="text"
-                value={domainInput}
-                onChange={(e) => setDomainInput(e.target.value)}
-                placeholder="example.com"
-                disabled={domainBusy}
-                aria-label="Add allowed domain"
-                className={inputField}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <button
-                type="submit"
-                disabled={!domainValid || domainBusy}
-                className={submitBtn(domainValid && !domainBusy)}
-              >
-                {domainBusy ? 'Saving…' : 'Add'}
-              </button>
-            </form>
-          )}
-        </section>
-
-        {isOwner && (
-          <StorybookIntegrationSettings
-            apiBase={apiBase}
-            accessToken={accessToken}
-            projectKey={project.publicKey}
-          />
-        )}
-
         {isAdmin && (
           <GitHubRepositorySettings
             apiBase={apiBase}

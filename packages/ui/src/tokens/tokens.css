@@ -1,0 +1,179 @@
+/*
+ * CRRT design tokens: "Studio" direction (chosen 2026-11-17).
+ *
+ * Dark-first pro creative tool. The product under review is the brightest thing on screen,
+ * and carrot marks only pins, the primary action and live agent activity.
+ *
+ * Layers:
+ *   1. shadcn semantic set (what packages/ui components consume)
+ *   2. CRRT extensions: surfaces, comment status, agent run state
+ * Components never use raw hex values, only these variables.
+ * Light theme = [data-theme="light"], derived from the same semantic names.
+ * Rules: brain/design/foundations/color.md
+ */
+
+:root {
+  color-scheme: dark;
+
+  --radius: 0.625rem; /* 10px: cards, panels */
+  --font-body: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --font-crt: "VT323", monospace; /* rare: agent voice moments only */
+  --spacing-unit: 0.25rem;
+
+  /* Surfaces, darkest to most raised */
+  --surface-0: #0e0f11; /* app canvas */
+  --surface-1: #121417; /* sidebar, toolbars */
+  --surface-2: #16181b; /* main panel */
+  --surface-3: #1d2024; /* raised: cards, agent run */
+  --surface-4: #23262b; /* selected row, active nav */
+
+  /* shadcn semantic set */
+  --foreground: #edeef0;
+  --card-foreground: #edeef0;
+  --popover-foreground: #edeef0;
+  --primary: #ff7a33; /* carrot */
+  --primary-foreground: #1a0b03; /* dark text on carrot (AA) */
+  --secondary-foreground: #edeef0;
+  --muted: #24272c;
+  --muted-foreground: #9a9fa8;
+  --accent-foreground: #edeef0;
+  --destructive: #ff6b6b;
+  --border: #2a2d33;
+  --input: #2a2d33;
+  --ring: #ff7a33;
+
+  --sidebar-foreground: #c4c8cf;
+  --sidebar-primary: #ff7a33;
+  --sidebar-primary-foreground: #1a0b03;
+  --sidebar-accent-foreground: #edeef0;
+  --sidebar-border: #23262b;
+  --sidebar-ring: #ff7a33;
+
+  --chart-1: #ff7a33;
+  --chart-2: #b9a6ff;
+  --chart-3: #6fd69a;
+  --chart-4: #ffc266;
+  --chart-5: #8cc8ff;
+
+  /* CRRT: text tiers */
+  --text-strong: #edeef0;
+  --text-body: #c4c8cf;
+  --text-subtle: #9a9fa8;
+
+  /* CRRT: carrot (brand signal) */
+  --carrot: #ff7a33;
+  --carrot-glow: rgb(255 122 51 / 25%);
+  --carrot-line: rgb(255 122 51 / 40%);
+  --pin: var(--carrot);
+  --pin-foreground: #1a0b03;
+  --leaf: #5fc27a;
+
+  /* CRRT: comment status (fg on bg) */
+  --status-open-fg: #c9ccd2;
+  --status-open-bg: #24272c;
+  --status-agent-fg: #c9bcff;
+  --status-agent-bg: #241e3d;
+  --status-testing-fg: #ffc266;
+  --status-testing-bg: #33270f;
+  --status-fixed-fg: #6fd69a;
+  --status-fixed-bg: #12291c;
+
+  /* CRRT: agent run state */
+  --agent-working: #b9a6ff;
+  --agent-paused: #ffc266; /* needs a human, for example a Brain rule conflict */
+  --agent-done: #6fd69a;
+  --agent-idle: #4a4e56;
+
+  /* CRRT: next-step tags */
+  --tag-copy-fg: #c9bcff;
+  --tag-copy-bg: #241e3d;
+  --tag-layout-fg: #8cc8ff;
+  --tag-layout-bg: #13263a;
+  --tag-behavior-fg: #6fd69a;
+  --tag-behavior-bg: #12291c;
+
+  --shadow-panel: 0 24px 64px rgb(0 0 0 / 50%);
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-0: #ffffff;
+  --surface-1: #f7f7f8;
+  --surface-2: #ffffff;
+  --surface-3: #ffffff;
+  --surface-4: #f1f1f3;
+
+  --foreground: #16171a;
+  --card-foreground: #16171a;
+  --popover-foreground: #16171a;
+  --primary: #c2410c; /* deeper carrot so white text passes AA */
+  --primary-foreground: #ffffff;
+  --secondary-foreground: #16171a;
+  --muted: #f1f1f3;
+  --muted-foreground: #62656d;
+  --accent-foreground: #16171a;
+  --destructive: #c62828;
+  --border: #e6e6e9;
+  --input: #e6e6e9;
+  --ring: #c2410c;
+
+  --sidebar-foreground: #3a3c42;
+  --sidebar-primary: #c2410c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent-foreground: #16171a;
+  --sidebar-border: #e6e6e9;
+  --sidebar-ring: #c2410c;
+
+  --text-strong: #16171a;
+  --text-body: #3a3c42;
+  --text-subtle: #62656d;
+
+  --carrot: #c2410c;
+  --carrot-glow: rgb(194 65 12 / 18%);
+  --carrot-line: rgb(194 65 12 / 35%);
+  --pin: #e8853d;
+  --pin-foreground: #16171a;
+  --leaf: #3f8f4e;
+
+  --status-open-fg: #3a3c42;
+  --status-open-bg: #f1f1f3;
+  --status-agent-fg: #5b3cc4;
+  --status-agent-bg: #f1edfd;
+  --status-testing-fg: #a15c00;
+  --status-testing-bg: #fff4e0;
+  --status-fixed-fg: #1f7a3f;
+  --status-fixed-bg: #e8f6ec;
+
+  --agent-working: #5b3cc4;
+  --agent-paused: #a15c00;
+  --agent-done: #1f7a3f;
+  --agent-idle: #c9cad0;
+
+  --tag-copy-fg: #5b3cc4;
+  --tag-copy-bg: #f1edfd;
+  --tag-layout-fg: #0b5cad;
+  --tag-layout-bg: #e6f0fb;
+  --tag-behavior-fg: #1f7a3f;
+  --tag-behavior-bg: #e8f6ec;
+
+  --shadow-panel: 0 1px 2px rgb(22 23 26 / 4%), 0 8px 24px rgb(22 23 26 / 6%);
+}
+
+/*
+ * Aliases of other tokens. They are declared on every theme root, not only :root, so a
+ * [data-theme="light"] subtree resolves them against its own surfaces instead of
+ * inheriting the dark values computed on :root.
+ */
+:root,
+[data-theme="light"] {
+  --background: var(--surface-0);
+  --card: var(--surface-3);
+  --popover: var(--surface-3);
+  --secondary: var(--surface-3);
+  --accent: var(--surface-4);
+  --sidebar: var(--surface-1);
+  --sidebar-accent: var(--surface-4);
+  --shadow-primary: 0 4px 16px var(--carrot-glow);
+}

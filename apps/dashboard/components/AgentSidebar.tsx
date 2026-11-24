@@ -122,7 +122,7 @@ function EmptyNoReady() {
       <p className="text-[13px] text-muted-foreground/80 mb-4">crrts ready for handoff</p>
       <p className="text-[11px] text-muted-foreground/60 leading-relaxed max-w-[230px]">
         <span aria-hidden="true" className="text-foreground/40 mr-1">←</span>
-        Mark crrts <span className="text-status-accepted font-semibold">Ready for Agent</span> in the list and they queue here.
+        Use <span className="text-status-accepted font-semibold">Send to Agent</span> on crrts in the list and they queue here.
       </p>
     </div>
   )
@@ -557,7 +557,7 @@ function stagePriority(c: Comment) {
 
 function stageLabel(c: Comment) {
   if (c.implementationStatus === 'done') return 'Done'
-  if (c.implementationStatus === 'ready_for_testing') return 'Ready for testing'
+  if (c.implementationStatus === 'ready_for_testing') return 'Testing'
   if (c.implementationStatus === 'in_progress') return 'Working'
   if (c.implementationStatus === 'claimed') return 'Claimed'
   if (c.implementationStatus === 'blocked') return 'Blocked'

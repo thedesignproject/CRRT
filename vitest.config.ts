@@ -7,7 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@widget': resolve(__dirname, 'src'),
+      '@crrt/ui': resolve(__dirname, 'packages/ui/src'),
     },
+    dedupe: ['react', 'react-dom', 'lucide-react', 'clsx', 'tailwind-merge'],
   },
   test: {
     environment: 'happy-dom',
@@ -19,7 +21,8 @@ export default defineConfig({
     coverage: {
       reporter: ['text', 'text-summary', 'lcov'],
       include: ['apps/posthog.ts', 'apps/speed-insights.ts', 'src/**/*.{ts,tsx}', 'api/**/*.ts', 'apps/dashboard/**/*.{ts,tsx}', 'apps/landing/**/*.{ts,tsx}', 'apps/extension/**/*.{ts,tsx}', 'shared/product-audit/**/*.{ts,tsx}', 'shared/record/**/*.{ts,tsx}', 'workflows/**/*.ts', 'server/**/*.ts'],
-      exclude: ['src/__tests__/**', '**/*.test.*', '**/*.d.ts', 'server/public-site-entry.ts'],
+      // packages/ui is loaded through the @crrt/ui alias but measured by its own CI.
+      exclude: ['src/__tests__/**', '**/*.test.*', '**/*.d.ts', 'server/public-site-entry.ts', 'packages/**'],
     },
   },
 })

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { act, fireEvent, render, waitFor } from '@testing-library/react'
 import { FeedbackWidget } from '../components/FeedbackWidget'
+import type { Comment, PersonalComments } from '../components/FeedbackWidget/types'
 
 const screenshotMock = vi.hoisted(() => ({
   result: 'ready' as 'ready' | 'capturing' | 'failed',
@@ -68,6 +69,30 @@ function mockFetch(
   })
   vi.stubGlobal('fetch', impl)
   return calls
+}
+
+// In-memory `personalComments` adapter. Public widgets cannot save body
+// edits, so Edit only appears (and saves) when an adapter is supplied.
+// `update` is a spy so tests can assert the save went through the adapter.
+function personalCommentsAdapter(
+  seed: Array<Record<string, unknown>>,
+  extra: Partial<PersonalComments> = {},
+) {
+  let items = seed.map((c) => ({ ...c })) as unknown as Comment[]
+  return {
+    label: 'Test comments',
+    async list() { return items },
+    async create(payload: Record<string, unknown>) {
+      const next = { ...payload, id: `created-${items.length}` } as unknown as Comment
+      items = [...items, next]
+      return next
+    },
+    update: vi.fn(async (id: string, body: string) => {
+      items = items.map((c) => (c.id === id ? { ...c, body } : c))
+    }),
+    async remove(id: string) { items = items.filter((c) => c.id !== id) },
+    ...extra,
+  } satisfies PersonalComments
 }
 
 function findWidgetSidebar() {
@@ -364,6 +389,133 @@ describe('<FeedbackWidget />', () => {
     )
   })
 
+  describe('public review and delete failures', () => {
+    function seedPublic(body: string, writeStatus: number, reviewStatus = 'open', others: { id: string; body: string; reviewStatus: string }[] = []) {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const pageUrl = window.location.href.split('#')[0]
+      const calls: FetchCall[] = []
+      vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({ url: String(url), init })
+        if (init?.method === 'PATCH' || init?.method === 'DELETE') return new Response(writeStatus === 204 ? null : '{}', { status: writeStatus })
+        return new Response(JSON.stringify([{ id: 'comment-1', body, reviewStatus }, ...others].map((c) => ({ projectId: 'proj', pageUrl, x: 20, y: 30, selector: 'body', createdAt: '2026-04-22T00:00:00Z', ...c }))), { status: 200 })
+      }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      return calls
+    }
+    const approveButton = () => document.querySelector<HTMLButtonElement>('button[title="Approve"]')
+    const alertText = () => document.querySelector('[data-fw] [role="alert"]')?.textContent ?? ''
+    async function clickCardMenuItem(body: string, item: string) {
+      const card = await waitFor(() => {
+        const el = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] .fw-sidebar-card')).find((c) => c.textContent?.includes(body))
+        if (!el) throw new Error('card not found')
+        return el
+      })
+      await act(async () => { fireEvent.click(card.querySelector<HTMLButtonElement>('button[title="More"]')!) })
+      const button = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === item) ?? Promise.reject(new Error(`${item} not found`)))
+      await act(async () => { fireEvent.click(button) })
+    }
+    const patches = (calls: FetchCall[]) => calls.filter((c) => c.init?.method === 'PATCH').map((c) => JSON.parse(String(c.init?.body)))
+
+    it('rolls back only the comment whose approval failed', async () => {
+      seedPublic('approve fails', 500, 'open', [{ id: 'comment-2', body: 'stays approved', reviewStatus: 'accepted' }])
+      await waitFor(() => expect(document.body.textContent).toContain('stays approved'))
+      await act(async () => { fireEvent.click(await waitFor(() => approveButton() ?? Promise.reject(new Error('no approve')))) })
+      await waitFor(() => expect(alertText()).toContain('Could not update feedback. Try again.'))
+      expect(document.querySelectorAll('button[title="Approve"]')).toHaveLength(1)
+    })
+
+    it('reopens an approved comment from the sidebar menu through the server', async () => {
+      const calls = seedPublic('sidebar reopen', 200, 'accepted')
+      await clickCardMenuItem('sidebar reopen', 'Reopen')
+      await waitFor(() => expect(patches(calls)).toEqual([{ id: 'comment-1', reviewStatus: 'open' }]))
+    })
+
+    it('keeps the approval and clears earlier errors when the server accepts it', async () => {
+      seedPublic('approve me too', 200)
+      await waitFor(() => expect(document.body.textContent).toContain('approve me too'))
+      await act(async () => { fireEvent.click(await waitFor(() => approveButton() ?? Promise.reject(new Error('no approve')))) })
+      await waitFor(() => expect(approveButton()).toBeNull())
+      expect(alertText()).toBe('')
+    })
+
+    async function openPinPopover() {
+      const pin = await waitFor(() => document.querySelector<HTMLDivElement>('[data-fw-pin]') ?? Promise.reject(new Error('pin not rendered')))
+      await act(async () => { fireEvent.click(pin) })
+    }
+    const popoverButton = (label: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(`[data-fw] button[aria-label="${label}"]`))
+      .find((b) => !b.closest('.fw-sidebar-card'))
+
+    it('keeps the pin popover inside the window near the bottom and right edges', async () => {
+      const height = window.innerHeight
+      const width = window.innerWidth
+      const scrollHeight = Object.getOwnPropertyDescriptor(document.documentElement, 'scrollHeight')
+      const scrollWidth = Object.getOwnPropertyDescriptor(document.documentElement, 'scrollWidth')
+      Object.defineProperty(document.documentElement, 'scrollHeight', { configurable: true, value: 1000 })
+      Object.defineProperty(document.documentElement, 'scrollWidth', { configurable: true, value: 1000 })
+      Object.defineProperty(window, 'innerHeight', { configurable: true, value: 400 })
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 300 })
+      try {
+        seedPublic('low pin', 200)
+        await openPinPopover()
+        const popover = await waitFor(() => (document.querySelector('[data-fw-pin-backdrop]')?.nextElementSibling as HTMLElement | null) ?? Promise.reject(new Error('no popover')))
+        // Pin at 30% of a 1000px page = 300px, below the middle of a 400px window:
+        // the popover's bottom edge sits 20px below the pin (400 - 300 - 20 = 80).
+        expect(popover.style.top).toBe('')
+        expect(popover.style.bottom).toBe('80px')
+        // Pin at 20% of a 1000px page = 200px: too close to the right edge of a
+        // 300px window, so it flips left (200 - 280 - 16) and is held at the 16px margin.
+        expect(popover.style.left).toBe('16px')
+      } finally {
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: height })
+        Object.defineProperty(window, 'innerWidth', { configurable: true, value: width })
+        for (const [key, original] of [['scrollHeight', scrollHeight], ['scrollWidth', scrollWidth]] as const) {
+          if (original) Object.defineProperty(document.documentElement, key, original)
+          else delete (document.documentElement as unknown as Record<string, unknown>)[key]
+        }
+      }
+    })
+
+    it('approves from the pin popover through the server', async () => {
+      const calls = seedPublic('pin approve', 200)
+      await openPinPopover()
+      await act(async () => { fireEvent.click(await waitFor(() => popoverButton('Approve') ?? Promise.reject(new Error('no popover approve')))) })
+      await waitFor(() => expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')?.init?.body))).toEqual({ id: 'comment-1', reviewStatus: 'accepted' }))
+    })
+
+    it('approves an open comment from the pin popover menu through the server', async () => {
+      const calls = seedPublic('pin menu approve', 200)
+      await openPinPopover()
+      await act(async () => { fireEvent.click(await waitFor(() => popoverButton('More options') ?? Promise.reject(new Error('no more options')))) })
+      const approve = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === 'Approve' && !b.closest('.fw-sidebar-card')) ?? Promise.reject(new Error('no menu approve')))
+      await act(async () => { fireEvent.click(approve) })
+      await waitFor(() => expect(patches(calls)).toEqual([{ id: 'comment-1', reviewStatus: 'accepted' }]))
+    })
+
+    it('reopens an approved comment from the pin popover menu through the server', async () => {
+      const calls = seedPublic('pin reopen', 200, 'accepted')
+      await openPinPopover()
+      await act(async () => { fireEvent.click(await waitFor(() => popoverButton('More options') ?? Promise.reject(new Error('no more options')))) })
+      const reopen = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === 'Reopen') ?? Promise.reject(new Error('no reopen')))
+      await act(async () => { fireEvent.click(reopen) })
+      await waitFor(() => expect(JSON.parse(String(calls.find((c) => c.init?.method === 'PATCH')?.init?.body))).toEqual({ id: 'comment-1', reviewStatus: 'open' }))
+    })
+
+    it('keeps a comment and explains when the server refuses to delete it', async () => {
+      const calls = seedPublic('keep me', 500)
+      await clickCardMenuItem('keep me', 'Delete')
+      await waitFor(() => expect(alertText()).toContain('Could not delete feedback. Try again.'))
+      expect(calls.some((c) => c.init?.method === 'DELETE')).toBe(true)
+      expect(document.body.textContent).toContain('keep me')
+    })
+
+    it('removes a comment once the server confirms the delete', async () => {
+      seedPublic('remove me', 204)
+      await clickCardMenuItem('remove me', 'Delete')
+      await waitFor(() => expect(document.body.textContent).not.toContain('remove me'))
+      expect(alertText()).toBe('')
+    })
+  })
+
   it('PATCHes review status through the public comments endpoint', async () => {
     const pageUrl = window.location.href.split('#')[0]
     const calls = mockFetch(undefined, () => new Response(JSON.stringify([
@@ -445,6 +597,25 @@ describe('<FeedbackWidget />', () => {
         if (!document.querySelector('textarea')) throw new Error('textarea not mounted for next pin')
       })
       expect(document.body.textContent).not.toContain('Click an element or select text to leave feedback')
+    })
+
+    it('shows an error and keeps the draft when the public API rejects a send', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {})
+      mockFetch(() => new Response('{"error":"boom"}', { status: 500 }))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+
+      const { textarea, getSendButton } = await enterCommentingMode()
+      fireEvent.change(textarea, { target: { value: 'keep this draft' } })
+      await act(async () => { fireEvent.click(getSendButton()) })
+
+      const alert = await waitFor(() => {
+        const el = document.querySelector('[data-fw] [role="alert"]')
+        if (!el) throw new Error('error alert not shown')
+        return el
+      })
+      expect(alert.textContent).toContain('Could not send feedback. Try again.')
+      expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe('keep this draft')
+      expect(document.body.textContent).not.toContain('Saved. Drop another')
     })
 
     it('duplicate Send clicks in the same tick produce exactly one POST', async () => {
@@ -1086,8 +1257,9 @@ describe('<FeedbackWidget />', () => {
     }
 
     it('opening Edit from the 3-dot menu switches to inline edit mode and Save updates the comment text', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const editArea = await openCardEditByBody('sidebar entry')
 
@@ -1097,7 +1269,7 @@ describe('<FeedbackWidget />', () => {
       expect(cancel).toBeDefined()
       expect(save).toBeDefined()
 
-      // saveEdit is local-only: it mutates the in-memory comment state and
+      // saveEdit persists through the adapter, then updates local state and
       // exits edit mode. The text node should reflect the new body.
       fireEvent.change(editArea, { target: { value: 'edited body' } })
       fireEvent.click(save!)
@@ -1107,13 +1279,15 @@ describe('<FeedbackWidget />', () => {
           throw new Error('still in edit mode')
         }
       })
+      expect(adapter.update).toHaveBeenCalledWith('c1', 'edited body')
       expect(document.body.textContent).toContain('edited body')
       expect(document.body.textContent).not.toContain('sidebar entry')
     })
 
     it('Cancel exits inline edit without dispatching a PATCH', async () => {
-      const calls = mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const calls = mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       await openCardEditByBody('sidebar entry')
 
@@ -1129,7 +1303,7 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.querySelector('[data-fw] textarea')).toBeNull()
       })
-      expect(calls.find((c) => c.init?.method === 'PATCH')).toBeUndefined()
+      expect(adapter.update).not.toHaveBeenCalled()
     })
 
     it('clicking the card surface opens the pin detail popover with the meta line', async () => {
@@ -2134,8 +2308,9 @@ describe('<FeedbackWidget />', () => {
     }
 
     it('pin detail popover edit textarea onFocus/onBlur update border color', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const editArea = await openPinEditMode()
 
@@ -2149,8 +2324,9 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('pin detail popover Edit → Escape key cancels edit (line 1037)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const editArea = await openPinEditMode()
 
@@ -2163,25 +2339,28 @@ describe('<FeedbackWidget />', () => {
         const areas = document.querySelectorAll<HTMLTextAreaElement>('[data-fw] textarea')
         expect(areas.length).toBe(0)
       })
+      expect(adapter.update).not.toHaveBeenCalled()
     })
 
     it('keeps edit text unsaved when shortcuts are disabled', async () => {
-      const calls = mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const calls = mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       const area = await openPinEditMode()
       act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
       fireEvent.change(area, { target: { value: 'keep editing' } })
       fireEvent.keyDown(area, { key: 'Enter' })
       fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
       expect(area).toBeInTheDocument()
-      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
+      expect(adapter.update).not.toHaveBeenCalled()
       fireEvent.keyDown(area, { key: 'Escape' })
       expect(area).not.toBeInTheDocument()
     })
 
     it('pin detail popover Edit → Enter key saves edit (line 1036)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const editArea = await openPinEditMode()
 
@@ -2193,6 +2372,7 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain('edited via enter')
       })
+      expect(adapter.update).toHaveBeenCalledWith('c1', 'edited via enter')
     })
 
     it('comment with imageUrl shows thumbnail in sidebar card (line 1371-1375)', async () => {
@@ -2234,12 +2414,13 @@ describe('<FeedbackWidget />', () => {
       mockFetch(undefined, commentsResponse([seedComment()]))
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await openCardMenu()
-      // The dropdown should contain Edit, Approve, and Delete items.
+      // Public dropdown offers Approve and Delete; Edit needs an adapter.
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         const menuItems = btns.map((b) => b.textContent?.trim())
-        expect(menuItems).toContain('Edit')
+        expect(menuItems).toContain('Approve')
         expect(menuItems).toContain('Delete')
+        expect(menuItems).not.toContain('Edit')
       })
     })
 
@@ -2248,7 +2429,7 @@ describe('<FeedbackWidget />', () => {
       render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
       await openCardMenu()
 
-      for (const label of ['Approve', 'Edit', 'Delete']) {
+      for (const label of ['Approve', 'Delete']) {
         const item = await waitFor(() => {
           const button = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
             .find((candidate) => candidate.textContent?.trim() === label)
@@ -2259,6 +2440,23 @@ describe('<FeedbackWidget />', () => {
         expect(item.style.background).toBe('var(--fw-surface-hover)')
         fireEvent.mouseLeave(item)
       }
+    })
+
+    it('applies themed hover styles to the adapter-only Edit action', async () => {
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
+      await openCardMenu()
+
+      const item = await waitFor(() => {
+        const button = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+          .find((candidate) => candidate.textContent?.trim() === 'Edit')
+        if (!button) throw new Error('Edit menu item not found')
+        return button
+      })
+      fireEvent.mouseEnter(item)
+      expect(item.style.background).toBe('var(--fw-surface-hover)')
+      fireEvent.mouseLeave(item)
     })
 
     it('clicking "Approve" in the dropdown PATCHes the status', async () => {
@@ -2281,8 +2479,9 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('clicking "Edit" in the dropdown opens the inline edit textarea in the card', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       await openCardMenu()
 
       const editItem = await waitFor(() => {
@@ -2297,6 +2496,93 @@ describe('<FeedbackWidget />', () => {
         const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
         expect(ta).not.toBeNull()
       })
+    })
+
+    // Edit is hidden in both the card menu and the pin "More options" menu
+    // unless an adapter can persist the change and the comment is editable.
+    async function expectNoEditInMenus(signal: string) {
+      const { card, moreBtn } = await openCardMenu()
+      const menuLabels = () => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
+        .map((b) => b.textContent?.trim())
+      await waitFor(() => { expect(menuLabels()).toContain(signal) })
+      expect(menuLabels()).not.toContain('Edit')
+      await act(async () => { fireEvent.click(moreBtn) })
+      await waitFor(() => { expect(menuLabels()).not.toContain(signal) })
+
+      fireEvent.click(card)
+      const pinMore = await waitFor(() => {
+        const el = document.querySelector<HTMLButtonElement>('[data-fw] button[aria-label="More options"]')
+        if (!el) throw new Error('More options not mounted')
+        return el
+      })
+      await act(async () => { fireEvent.click(pinMore) })
+      await waitFor(() => { expect(menuLabels()).toContain('View list') })
+      expect(menuLabels()).not.toContain('Edit')
+    }
+
+    it('public mode offers no Edit in the card or pin menus', async () => {
+      mockFetch(undefined, commentsResponse([seedComment()]))
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      await expectNoEditInMenus('Delete')
+    })
+
+    it('adapter mode offers no Edit for a non-editable comment', async () => {
+      mockFetch()
+      // externalWork keeps both menus available so Edit's absence is observable.
+      const adapter = personalCommentsAdapter([seedComment({ editable: false })], {
+        externalWork: {
+          providers: ['github'],
+          prepare: async () => ({ destination: 'acme/app', title: 't', body: 'b' }),
+          send: async () => ({ issueUrl: 'https://example.test/1' }),
+        },
+      })
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
+      await expectNoEditInMenus('↗ Send to…')
+    })
+
+    it('Escape closes the Send to… dialogs before anything behind them, but not while sending', async () => {
+      mockFetch()
+      let finishSend: (value: { issueUrl: string }) => void = () => {}
+      const adapter = personalCommentsAdapter([seedComment()], {
+        externalWork: {
+          providers: ['github'],
+          prepare: async () => ({ destination: 'acme/app', title: 't', body: 'b' }),
+          send: () => new Promise((resolve) => { finishSend = resolve }),
+        },
+      })
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
+      const dialogText = () => Array.from(document.querySelectorAll('[data-fw] [role="dialog"]')).map((d) => d.textContent ?? '').join('|')
+      const clickButton = async (label: string) => {
+        const btn = await waitFor(() => Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button')).find((b) => b.textContent?.trim() === label) ?? Promise.reject(new Error(`${label} not found`)))
+        await act(async () => { fireEvent.click(btn) })
+      }
+      const pressEscape = () => act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+
+      // Provider picker closes, the sidebar behind it stays open.
+      await openCardMenu()
+      await clickButton('↗ Send to…')
+      await waitFor(() => expect(dialogText()).toContain('Send feedback to…'))
+      await pressEscape()
+      expect(dialogText()).not.toContain('Send feedback to…')
+      expect(document.querySelector('[data-fw] .fw-sidebar-card')).not.toBeNull()
+
+      // Draft dialog closes too.
+      await openCardMenu()
+      await clickButton('↗ Send to…')
+      await clickButton('GitHub')
+      await waitFor(() => expect(dialogText()).toContain('Send to GitHub'))
+      await pressEscape()
+      expect(dialogText()).not.toContain('Send to GitHub')
+
+      // While the issue is being created, Escape leaves the dialog alone.
+      await openCardMenu()
+      await clickButton('↗ Send to…')
+      await clickButton('GitHub')
+      await clickButton('Create issue')
+      await waitFor(() => expect(dialogText()).toContain('Sending…'))
+      await pressEscape()
+      expect(dialogText()).toContain('Send to GitHub')
+      await act(async () => { finishSend({ issueUrl: 'https://example.test/1' }) })
     })
 
     it('clicking "Delete" in the dropdown removes the comment from the sidebar', async () => {
@@ -2350,8 +2636,9 @@ describe('<FeedbackWidget />', () => {
     }
 
     it('Cmd+Enter in sidebar card textarea saves edit (line 1337)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const ta = await openCardEditByBody('inline edit body')
 
@@ -2369,11 +2656,13 @@ describe('<FeedbackWidget />', () => {
       await waitFor(() => {
         expect(document.body.textContent).toContain('keyboard saved')
       })
+      expect(adapter.update).toHaveBeenCalledWith('c1', 'keyboard saved')
     })
 
     it('Escape in sidebar card textarea cancels edit (line 1338)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const ta = await openCardEditByBody('inline edit body')
 
@@ -2387,6 +2676,7 @@ describe('<FeedbackWidget />', () => {
       })
       expect(document.body.textContent).toContain('inline edit body')
       expect(document.body.textContent).not.toContain('do not save')
+      expect(adapter.update).not.toHaveBeenCalled()
     })
   })
 
@@ -3210,47 +3500,54 @@ describe('<FeedbackWidget />', () => {
     }
 
     it('keeps edit text unsaved when shortcuts are disabled', async () => {
-      const calls = mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      const calls = mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       const area = await openEditMode()
       act(() => window.dispatchEvent(new CustomEvent('crrt:keyboard-shortcuts', { detail: { surface: 'widget', enabled: false } })))
       fireEvent.change(area, { target: { value: 'keep editing' } })
       fireEvent.keyDown(area, { key: 'Enter' })
       fireEvent.keyDown(area, { key: 'Enter', metaKey: true })
       expect(area).toBeInTheDocument()
-      expect(calls.some(c => c.init?.method === 'PATCH')).toBe(false)
+      expect(adapter.update).not.toHaveBeenCalled()
       fireEvent.keyDown(area, { key: 'Escape' })
       expect(area).not.toBeInTheDocument()
     })
 
     it('Cmd+Enter in edit textarea saves the edit (L1353 metaKey branch)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       const editArea = await openEditMode()
       fireEvent.change(editArea, { target: { value: 'cmd enter saved' } })
       await act(async () => { fireEvent.keyDown(editArea, { key: 'Enter', metaKey: true }) })
       await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
       expect(document.body.textContent).toContain('cmd enter saved')
+      expect(adapter.update).toHaveBeenCalledWith('edit1', 'cmd enter saved')
     })
 
     it('Ctrl+Enter in edit textarea saves the edit (L1353 ctrlKey branch)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       const editArea = await openEditMode()
       fireEvent.change(editArea, { target: { value: 'ctrl enter saved' } })
       await act(async () => { fireEvent.keyDown(editArea, { key: 'Enter', ctrlKey: true }) })
       await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
       expect(document.body.textContent).toContain('ctrl enter saved')
+      expect(adapter.update).toHaveBeenCalledWith('edit1', 'ctrl enter saved')
     })
 
     it('Escape in edit textarea cancels without saving', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       const editArea = await openEditMode()
       fireEvent.change(editArea, { target: { value: 'discarded' } })
       await act(async () => { fireEvent.keyDown(editArea, { key: 'Escape' }) })
       await waitFor(() => { expect(document.querySelector('[data-fw] textarea')).toBeNull() })
       expect(document.body.textContent).not.toContain('discarded')
+      expect(adapter.update).not.toHaveBeenCalled()
     })
   })
 
@@ -3277,13 +3574,13 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(moreBtn) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+        if (!btns.some((b) => b.textContent?.trim() === 'Delete')) throw new Error('menu not open')
       })
       // Second click: close menu
       await act(async () => { fireEvent.click(moreBtn) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
+        expect(btns.some((b) => b.textContent?.trim() === 'Delete')).toBe(false)
       })
     })
   })
@@ -3363,8 +3660,9 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('saveEdit with only whitespace returns early without mutating (L493)', async () => {
-      mockFetch(undefined, commentsResponse([seedComment()]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment()])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const editArea = await openCardEditByBody('gap test')
       fireEvent.change(editArea, { target: { value: '   ' } })
@@ -3376,14 +3674,16 @@ describe('<FeedbackWidget />', () => {
       const stillEditing = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
       expect(stillEditing).not.toBeNull()
       expect(stillEditing!.value).toBe('   ')
+      expect(adapter.update).not.toHaveBeenCalled()
     })
 
     it('saveEdit leaves non-matching comments unchanged when multiple exist (L495 false arm)', async () => {
-      mockFetch(undefined, commentsResponse([
+      mockFetch()
+      const adapter = personalCommentsAdapter([
         seedComment({ id: 'a', body: 'keep me' }),
         seedComment({ id: 'b', body: 'edit me' }),
-      ]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      ])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       const editArea = await openCardEditByBody('edit me')
       fireEvent.change(editArea, { target: { value: 'edited' } })
@@ -3396,6 +3696,8 @@ describe('<FeedbackWidget />', () => {
       })
       expect(document.body.textContent).toContain('edited')
       expect(document.body.textContent).toContain('keep me')
+      expect(adapter.update).toHaveBeenCalledTimes(1)
+      expect(adapter.update).toHaveBeenCalledWith('b', 'edited')
     })
 
     it('Send button hover paints/reverts when comment has text and idle (L871 all branches)', async () => {
@@ -3470,10 +3772,11 @@ describe('<FeedbackWidget />', () => {
     })
 
     it('editing a pin-popover comment with imageUrl uses the image-margin branch (L1045)', async () => {
-      mockFetch(undefined, commentsResponse([
+      mockFetch()
+      const adapter = personalCommentsAdapter([
         seedComment({ body: 'with image', imageUrl: 'https://x.example/img.png' }),
-      ]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      ])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
 
       // Select the pin to open the popover (which contains PinActionCluster).
       const pin = await waitFor(() => {
@@ -3545,7 +3848,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(moreBtn!) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+        if (!btns.some((b) => b.textContent?.trim() === 'Delete')) throw new Error('menu not open')
       })
       // Click the card — the guard `!isMenuOpen` should short-circuit, no edit mode.
       fireEvent.click(card)
@@ -3577,7 +3880,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(moreBtn) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+        if (!btns.some((b) => b.textContent?.trim() === 'Delete')) throw new Error('menu not open')
       })
       const bgBefore = moreBtn.style.background
       fireEvent.mouseEnter(moreBtn)
@@ -3598,7 +3901,7 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(moreBtn!) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        if (!btns.some((b) => b.textContent?.trim() === 'Edit')) throw new Error('menu not open')
+        if (!btns.some((b) => b.textContent?.trim() === 'Delete')) throw new Error('menu not open')
       })
       // Backdrop is the fixed inset:0 div with zIndex 99998.
       const backdrop = Array.from(document.querySelectorAll<HTMLDivElement>('[data-fw] div'))
@@ -3607,15 +3910,16 @@ describe('<FeedbackWidget />', () => {
       await act(async () => { fireEvent.click(backdrop!) })
       await waitFor(() => {
         const btns = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
-        expect(btns.some((b) => b.textContent?.trim() === 'Edit')).toBe(false)
+        expect(btns.some((b) => b.textContent?.trim() === 'Delete')).toBe(false)
       })
     })
 
     async function openPinPopoverEditMode(body = 'pop edit', imageUrl?: string) {
       const seed: Record<string, unknown> = { body }
       if (imageUrl) seed.imageUrl = imageUrl
-      mockFetch(undefined, commentsResponse([seedComment(seed)]))
-      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" />)
+      mockFetch()
+      const adapter = personalCommentsAdapter([seedComment(seed)])
+      render(<FeedbackWidget projectId="proj" apiBase="https://x.example/api" personalComments={adapter} />)
       const pin = await waitFor(() => {
         const el = document.querySelector<HTMLDivElement>('[data-fw-pin]')
         if (!el) throw new Error('pin not mounted')
@@ -3635,15 +3939,16 @@ describe('<FeedbackWidget />', () => {
         return el
       })
       await act(async () => { fireEvent.click(editItem) })
-      return await waitFor(() => {
+      const editArea = await waitFor(() => {
         const ta = document.querySelector<HTMLTextAreaElement>('[data-fw] textarea')
         if (!ta) throw new Error('edit textarea not mounted')
         return ta
       })
+      return { editArea, adapter }
     }
 
     it('pin popover edit: Cancel exits without persisting (L1069)', async () => {
-      const editArea = await openPinPopoverEditMode('pop edit cancel')
+      const { editArea, adapter } = await openPinPopoverEditMode('pop edit cancel')
       fireEvent.change(editArea, { target: { value: 'discarded body' } })
       const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         .find((b) => b.textContent === 'Cancel')
@@ -3653,10 +3958,11 @@ describe('<FeedbackWidget />', () => {
       })
       expect(document.body.textContent).toContain('pop edit cancel')
       expect(document.body.textContent).not.toContain('discarded body')
+      expect(adapter.update).not.toHaveBeenCalled()
     })
 
     it('pin popover edit: Save persists the edit (L1073)', async () => {
-      const editArea = await openPinPopoverEditMode('pop edit save')
+      const { editArea, adapter } = await openPinPopoverEditMode('pop edit save')
       fireEvent.change(editArea, { target: { value: 'saved body' } })
       const save = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-fw] button'))
         .find((b) => b.textContent === 'Save')
@@ -3665,6 +3971,7 @@ describe('<FeedbackWidget />', () => {
         if (document.querySelector('[data-fw] textarea')) throw new Error('still editing')
       })
       expect(document.body.textContent).toContain('saved body')
+      expect(adapter.update).toHaveBeenCalledWith('c1', 'saved body')
     })
 
     it('pin popover image click opens the image in a new tab (L1088)', async () => {

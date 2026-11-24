@@ -12,13 +12,12 @@ describe('shared feedback controls', () => {
     const props = { filteredComments: [comment], counts, statusFilter: 'all' as const, selectFilter: vi.fn(), bulkMode: false, enterBulkMode: vi.fn(), exitBulkMode: vi.fn(), bulkSelectedIds: new Set<string>(), toggleSelectAllVisible: vi.fn(), toggleBulkSelect: vi.fn(), commentsLoading: false, commentsError: null, selectedCommentId: '', setSelectedCommentId: vi.fn() }
     const view = render(<CommentList {...props} />)
     fireEvent.click(screen.getByRole('button', { name: 'Select' })); expect(props.enterBulkMode).toHaveBeenCalledOnce()
-    expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).toHaveClass('grid', 'grid-cols-5')
-    expect(screen.getByRole('button', { name: 'Testing 0' }).parentElement).not.toHaveClass('overflow-x-auto')
-    expect(screen.getByRole('button', { name: 'Agent 0' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Open 1' })); expect(props.selectFilter).toHaveBeenCalledWith('open')
+    expect(screen.getByRole('tablist', { name: 'Status' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Agent 0' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('tab', { name: 'Open 1' })); expect(props.selectFilter).toHaveBeenCalledWith('open')
     fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.setSelectedCommentId).toHaveBeenCalledWith('c1')
     view.rerender(<CommentList {...props} filteredComments={[{ ...comment, visibility: 'internal' }]} />)
-    expect(screen.getByText('internal')).toHaveClass('bg-muted')
+    expect(screen.getByText('Internal ·')).toBeInTheDocument()
     view.rerender(<CommentList {...props} bulkMode />)
     fireEvent.click(screen.getByRole('button', { name: /Project feedback/ })); expect(props.toggleBulkSelect).toHaveBeenCalledWith('c1')
     fireEvent.click(screen.getByRole('button', { name: 'Select all' })); expect(props.toggleSelectAllVisible).toHaveBeenCalledOnce()
@@ -34,9 +33,15 @@ describe('shared feedback controls', () => {
 
   it('has no status controls in personal mode, including missing page context', () => {
     render(<CommentList personal filteredComments={[comment]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()} />)
-    expect(screen.getByText('1 Inbox Items')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Inbox 1' })).toBeInTheDocument()
     expect(screen.queryByText('Open')).toBeNull()
     expect(screen.queryByRole('button', { name: 'Select' })).toBeNull()
+  })
+
+  it('keeps the site in Inbox rows, since the Inbox mixes sites, and pulses claimed work itself', () => {
+    render(<CommentList personal filteredComments={[{ ...comment, pageUrl: 'https://acme.com/pricing', selector: 'main > h1', claimedByAgentId: 'claude' }]} counts={counts} commentsLoading={false} commentsError={null} selectedCommentId="" setSelectedCommentId={vi.fn()} />)
+    expect(screen.getByText('acme.com/pricing · h1')).toBeInTheDocument()
+    expect(document.querySelectorAll('.animate-pulse')).toHaveLength(1)
   })
 
   it('shows work waiting on the reviewer in its own testing filter', () => {
@@ -63,19 +68,19 @@ describe('shared feedback controls', () => {
       setSelectedCommentId={vi.fn()}
     />)
 
-    expect(screen.getByText('Ready for testing')).toHaveClass('text-status-ready-for-testing')
-    fireEvent.click(screen.getByRole('button', { name: 'Testing 1' }))
+    expect(screen.getByText('Testing', { selector: 'span' })).toHaveClass('text-status-testing-fg')
+    fireEvent.click(screen.getByRole('tab', { name: 'Testing 1' }))
     expect(selectFilter).toHaveBeenCalledWith('ready_for_testing')
   })
 
   it('advertises only personal navigation shortcuts in My Comments', () => {
     const view = render(<StatusBar />)
     expect(screen.queryByRole('button', { name: 'Show agent panel' })).toBeNull()
-    expect(screen.getByText('ready')).toBeInTheDocument()
+    expect(screen.getByText('send to agent')).toBeInTheDocument()
     view.rerender(<StatusBar agentAvailable={false} />)
     expect(screen.queryByText('sidebar')).toBeNull()
     view.rerender(<StatusBar personal />)
-    for (const label of ['ready', 'done', 'reject', 'sidebar', 'search']) expect(screen.queryByText(label)).toBeNull()
+    for (const label of ['send to agent', 'done', 'reject', 'sidebar', 'search']) expect(screen.queryByText(label)).toBeNull()
     expect(screen.getByText('Space')).toBeInTheDocument()
     expect(screen.getByText('J')).toBeInTheDocument()
     expect(screen.getByText('K')).toBeInTheDocument()

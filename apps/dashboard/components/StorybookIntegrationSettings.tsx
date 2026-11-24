@@ -22,6 +22,8 @@ interface StorybookIntegrationSettingsProps {
   appearance?: 'settings' | 'setup'
   canManage?: boolean
   navigateToCheckout?: (url: string) => void
+  /** Reports whether Storybook is connected each time that changes, e.g. after pairing. */
+  onConnectedChange?: (connected: boolean) => void
 }
 
 const button = 'inline-flex items-center justify-center rounded-md px-3 py-2 text-xs font-semibold transition-[color,background-color,border-color,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50'
@@ -73,6 +75,7 @@ export function StorybookIntegrationSettings({
   appearance = 'settings',
   canManage = true,
   navigateToCheckout = (url) => window.location.assign(url),
+  onConnectedChange,
 }: StorybookIntegrationSettingsProps) {
   const [integration, setIntegration] = useState<LocalState | null>(null)
   const [busy, setBusy] = useState(false)
@@ -115,6 +118,11 @@ export function StorybookIntegrationSettings({
       if (request === sequence.current) setBusy(false)
     }
   }, [accessToken, apiBase, canManage, projectKey])
+
+  const connected = integration ? integration.state === 'connected' : null
+  useEffect(() => {
+    if (connected !== null) onConnectedChange?.(connected)
+  }, [connected, onConnectedChange])
 
   useEffect(() => {
     sequence.current += 1
