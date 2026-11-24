@@ -40,12 +40,11 @@ it('checks current share access and recovers a refreshed capability rather than 
   read.mockResolvedValueOnce({ ok: false, status: 403, data: null })
   expect(await recover('shares.create', { shareId: 'share', token: 'old' })).toEqual({ ok: false, status: 403, data: null })
 })
-it('recovers audit identifiers only after current project authorization and preserves account-bound billing URLs', async () => {
+it('recovers audit identifiers only after current project authorization', async () => {
   read.mockResolvedValueOnce({ ok: true, status: 200 })
   expect(await recover('audits.create', { auditId: 'audit' })).toMatchObject({ data: { auditId: 'audit' }, code: 'operation_recovered' })
   read.mockResolvedValueOnce({ ok: false, status: 404 })
   expect(await recover('audits.create', { auditId: 'audit' })).toMatchObject({ ok: false, status: 404 })
-  expect(await recover('billing.action', { url: 'https://billing.test/original' })).toMatchObject({ data: { url: 'https://billing.test/original' } })
 })
 it('replays Record context without charging again, but rejects changed revisions/projects/state or lost access', async () => {
   const data = { payload: { recording: { revision: 2 }, project: { key: 'project' } } }

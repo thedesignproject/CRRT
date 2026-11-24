@@ -7,7 +7,7 @@ import { identity, reserve, McpError } from './auth.js'
 import { mcpHandler, type ToolSpec } from './transport.js'
 const actor = { user_id: 'user', email: 'a@test.local', connection_id: 'connection' }
 const run = vi.fn()
-const spec: ToolSpec = { name: 'read', description: 'Use when reading test data.', input: z.object({ value: z.string() }).strict(), output: z.object({ value: z.string() }), run }
+const spec: ToolSpec = { name: 'read', title: 'Read', description: 'Use when reading test data.', input: z.object({ value: z.string() }).strict(), output: z.object({ value: z.string() }), run }
 beforeEach(() => { vi.stubEnv('MCP_ORIGIN', 'http://127.0.0.1:3001'); vi.mocked(identity).mockResolvedValue(actor); run.mockReset() })
 afterEach(() => vi.unstubAllEnvs())
 async function connect(specs: ToolSpec[] = [spec]) {

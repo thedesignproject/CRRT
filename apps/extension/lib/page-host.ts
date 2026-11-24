@@ -8,6 +8,11 @@ function hasValidCoordinates(x: number, y: number) {
   return Number.isFinite(x) && Number.isFinite(y) && x >= 0 && x <= 100 && y >= 0 && y <= 100
 }
 
+// CRRT's own overlays (comments and the Record controls) are never feedback targets.
+function isCrrtSurface(element: Element) {
+  return Boolean(element.closest?.('[data-crrt-extension],[data-crrt-recording]'))
+}
+
 export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, deactivate: () => void) {
   let frameId = 0, selecting = false, lastState = '', target: HTMLElement | null = null
   let captureTail = Promise.resolve<string | null>(null), disconnected = false, capturing = false
@@ -80,6 +85,8 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
         window.addEventListener('scroll', invalidateViewport, true)
         window.addEventListener('resize', invalidateViewport)
         const previousHighlight = highlighted
+        // Hiding a focused frame moves keyboard focus to the page; give it back afterwards.
+        const frameHadFocus = (frame.getRootNode() as Document | ShadowRoot).activeElement === frame
         capturing = true
         highlight(null)
         const restoreHighlightRevision = highlightRevision
@@ -108,6 +115,7 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
           }
           window.removeEventListener('scroll', invalidateViewport, true)
           window.removeEventListener('resize', invalidateViewport)
+          if (frameHadFocus && !disconnected) frame.focus({ preventScroll: true })
           capturing = false
           if (!disconnected && highlightRevision === restoreHighlightRevision) highlight(previousHighlight)
         }
@@ -129,11 +137,11 @@ export function connectPageHost(frame: HTMLIFrameElement, activate: boolean, dea
     pointer(event.clientX, event.clientY)
     if (!selecting || capturing) return
     const element = event.target as HTMLElement
-    highlight(element.closest('[data-crrt-extension]') ? null : element)
+    highlight(isCrrtSurface(element) ? null : element)
   }
   function click(event: MouseEvent) {
     const element = event.target as HTMLElement
-    if (element.closest('[data-crrt-extension]')) return
+    if (isCrrtSurface(element)) return
     if (!selecting) { send({ kind: 'outside' }); return }
     event.preventDefault(); event.stopPropagation(); highlight(null)
     selecting = false; document.body.style.cursor = originalCursor

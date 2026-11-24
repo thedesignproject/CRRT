@@ -17,6 +17,15 @@ function canonical(value: unknown): string {
   return JSON.stringify(value)
 }
 
+// Dashboard handlers can return internal row fields that only server code uses.
+// MCP clients never need them, so they are removed from every dashboard result.
+const INTERNAL_FIELDS = new Set(['github_issue_lease_token', 'githubIssueLeaseToken', 'screenshot_storage_path', 'screenshotStoragePath'])
+export function redactInternal(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(redactInternal)
+  if (value !== null && typeof value === 'object') return Object.fromEntries(Object.entries(value).filter(([key]) => !INTERNAL_FIELDS.has(key)).map(([key, entry]) => [key, redactInternal(entry)]))
+  return value
+}
+
 async function invoke(operation: DashboardOperation, query: Record<string, string>, body: Record<string, unknown>, actor: McpIdentity, idempotencyKey?: string): Promise<DashboardResult> {
   const origin = new URL(config().origin)
   const req = {
@@ -37,6 +46,9 @@ async function invoke(operation: DashboardOperation, query: Record<string, strin
   await withTrustedUser(req, { userId: actor.user_id, email: actor.email, mcpConnectionId: actor.connection_id }, async () => { await handler.default(req, res) })
   ensure(finished, 503, 'dashboard_response_unavailable')
   const ok = status >= 200 && status < 300
+  // Unhandled 500s can carry raw database or provider text; curated 503s keep their message.
+  if (status === 500) data = { error: 'The CRRT service could not complete this request.' }
+  data = redactInternal(data)
   return ok ? { ok, status, data } : {
     ok, status, data, code: status === 401 ? 'login_required' : status === 403 ? 'permission_denied' : status === 402 ? 'plan_required' : status === 409 ? 'state_conflict' : status === 429 ? 'rate_limited' : status >= 500 ? 'service_unavailable' : 'invalid_request',
     retryable: operation.method === 'GET' && (status === 429 || status >= 500),
